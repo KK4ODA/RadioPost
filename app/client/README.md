@@ -36,6 +36,9 @@ API, `ws://127.0.0.1:8515/v1` as Aether runs it, for which the client runs the A
 `--session-id` and `--challenge` fix the clock and the random draws, so that a session can be
 replayed exactly (the conformance tester's §2.4).
 
+For a test on the air between two stations with Aether HF, see
+[on-air tests](../../docs/user/on-air-tests.md).
+
 ## The panel
 
 `radiopost panel` serves the page in `app/ui/` (plain HTML, CSS and JavaScript, no build step,

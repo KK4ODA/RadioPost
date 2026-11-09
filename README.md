@@ -39,7 +39,8 @@ runs RP-3's sessions, and its modem interface (RP-4) carries them between two st
 simulated channel or through two [Aether HF](https://github.com/KK4ODA/aether-hf) modems and the
 Aether adapter, each checked against the test vectors. The `radiopost` client carries mail between
 two stations, on the command line, from its panel in a browser, or as a desktop application
-([`app/client`](app/client/README.md)). The specifications are **drafts**:
+([`app/client`](app/client/README.md)); [on-air tests](docs/user/on-air-tests.md) between two
+stations with Aether HF can begin. The specifications are **drafts**:
 anything may change, and nothing is ready to deploy. The project's own post office will be `radiopost.org`. The first modem is
 [Aether HF](https://github.com/KK4ODA/aether-hf), an open-source HF modem; VARA, ARDOP and AX.25
 packet follow through adapters.
