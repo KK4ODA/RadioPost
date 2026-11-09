@@ -343,6 +343,7 @@ dependencies = [
  "getrandom 0.3.4",
  "radiopost",
  "radiopost-aether",
+ "radiopost-tester",
  "rpmi",
  "serde_json",
  "tiny_http",
@@ -356,6 +357,17 @@ dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
  "radiopost",
+ "serde_json",
+]
+
+[[package]]
+name = "radiopost-tester"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "getrandom 0.3.4",
+ "radiopost",
+ "rpmi",
  "serde_json",
 ]
 

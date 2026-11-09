@@ -45,6 +45,16 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   modem given as `ws://…` is Aether's control API: the client runs the Aether adapter in-process.
   `core/issuer` (`radiopost-issue`) makes a post office key and issues credentials for on-air
   tests before Phase 2's post office; the vectors' keys never go on the air.
+  `core/tester` (`radiopost-tester`) is the conformance tester's first half: it plays a gateway or
+  a station against a client through its own RPMI adapter (`rpmi::tcp::Server::attach`, a host in
+  the adapter's process), scripted from RP-3's tables with the core encodings and none of the
+  session engines, and drives the program by a driver file (`drivers/radiopost.json`; the
+  client's `conformance --adapter` mode). `app/client/tests/conformance.rs` runs C-01 to C-08 in
+  CI; C-11 takes five minutes (`--slow`). `tools/tester/plant.py` builds the client with one fault
+  a test and shows each test failing. Writing it found that RP-3 §2 never said what a frame over
+  `max_pdu` gets (`too-large`, RP-3 0.10.0), and that a station called answers the caller's last
+  turn with a `RECEIPT` alone (session-03), so a turn ends on a `RECEIPT` that covers what was
+  sent, not only on `DONE` or `REQUEST`.
   Station-to-station mail moves to `sent` and its RP-5 §6.6 report is kept (D30), from the proofs
   the engines now keep (`Client::proofs`, `Called::proofs`); the replay test matches session-03
   byte for byte and `direct.json`'s two reports. The engines report their own refusals

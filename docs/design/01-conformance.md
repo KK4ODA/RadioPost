@@ -3,14 +3,15 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.0 |
+| **Version** | 0.2.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §7 |
 
 An outline of the program that tells an implementer whether their program does what the
-specifications require. It is Phase 0's last part; Phase 1 builds its first half (§6).
+specifications require. It was Phase 0's last part; Phase 1 builds its first half (§6), as
+`core/tester` (`radiopost-tester`).
 
 ---
 
@@ -64,6 +65,13 @@ To be tested, a program offers a mode that:
 * refuses every adapter but the test one, so test keys never reach the air.
 
 It needs nothing else. The program keeps its own clock and random numbers and makes its own keys.
+
+A **driver file** tells the tester how to run the program: a JSON object naming each command it
+needs (`conformance`, `key`, `init`, `trust`, `compose`, `call`, `call_station`, `listen`, `inbox`,
+`outbox`) as a list of words, with `{bin}`, `{home}`, `{adapter}` and the test's values put in.
+Each test runs the program in a fresh home, which it puts in conformance mode first. The
+`radiopost` client's is `core/tester/drivers/radiopost.json`; its conformance mode is
+`radiopost conformance --adapter HOST:PORT`.
 The tester issues its credentials as the test post office, through enrollment (RP-5 §6.1) or
 gateway registration (RP-5 §6.4), and signs fresh statements on its own clock. So the checks are
 semantic: each PDU, line and request is decoded and checked field by field against the
@@ -96,7 +104,7 @@ RP-0 §3: RP-1 §4, §5, §6, RP-2, RP-3 client side.
 | C-03 | The credential by hash, then the full credential when asked (RP-3 §5.1, §5.8). | `pdus` |
 | C-04 | Uploads and downloads broken at chosen bytes and resumed, through the same gateway and another; the same air form kept (RP-3 §7). | `session-02` |
 | C-05 | Refusals: `decline` codes, `ERROR`, failed messages; nothing sent that was not accepted (RP-3 §5.2, §5.4, §5.9). | `api-exchanges` |
-| C-06 | Bad frames from the gateway (too long, an unknown type, not CBOR) answered `ERROR` `malformed` (RP-3 §2, §4). | `pdus` `invalid` |
+| C-06 | Bad frames from the gateway (an unknown type, not CBOR) answered `ERROR` `malformed`, and one over the program's `max_pdu` `ERROR` `too-large` (RP-3 §2, §4). | `pdus` `invalid` |
 | C-07 | Station to station, calling: the station called's proof checked before anything is taken; a bad one answered `ERROR` and the call ended (RP-3 §10, RP-1 §6.5). | `session-03`, `statements` |
 | C-08 | Station to station, called: only mail for its own account taken, its own proof given (RP-3 §10). | `session-03` |
 | C-09 | A cut-off gateway: mail kept as queued and offered again until an online gateway confirms it (RP-7 §3.6). | `queued` |
@@ -210,8 +218,6 @@ RP-0 §3: RP-4, the adapter's side.
   trials, with the keys it would use.
 * Tables for countries other than the United States (RP-6 §5.1, RP-7 §5.1): the tester checks US
   gateways first.
-* How a program turns conformance mode on (a command-line option, a configuration file): each
-  program's choice, as long as it is documented.
 
 ---
 
@@ -220,3 +226,4 @@ RP-0 §3: RP-4, the adapter's side.
 | Version | Date | Change |
 |---|---|---|
 | 0.1.0 | 2026-11-09 | First outline: what the tester is for, how it plays the other side through its own adapter, conformance mode, the tests by role, what it reports, how it is built and tested, and the order of work. |
+| 0.2.0 | 2026-11-09 | Phase 1's client tests built (`core/tester`): how a program is driven (a driver file, §2.3), which settles how conformance mode is turned on (§7). C-06 asks `too-large` for a frame over `max_pdu`, as RP-3 0.10.0 now says. |

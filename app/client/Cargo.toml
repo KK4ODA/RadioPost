@@ -25,5 +25,8 @@ serde_json = { version = "1", features = ["preserve_order"] }
 tiny_http = "0.12"
 unicode-normalization = "0.1"
 
+[dev-dependencies]
+radiopost-tester = { path = "../../core/tester" }
+
 [lints]
 workspace = true

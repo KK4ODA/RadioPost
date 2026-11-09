@@ -125,6 +125,60 @@ impl Server {
         inner.route();
         t
     }
+
+    /// A host inside this process on one of the channel's stations, as if it had connected: the
+    /// conformance tester's own side of the air.
+    #[must_use]
+    pub fn attach(&self, station: usize, name: &str) -> Local {
+        let (tx, rx) = channel::<ToWrite>();
+        let mut inner = lock(&self.inner);
+        inner.channel.open(station, name);
+        inner.writers.insert((station, name.to_owned()), tx);
+        Local {
+            server: self.clone(),
+            station,
+            name: name.to_owned(),
+            rx,
+        }
+    }
+}
+
+/// A host inside the adapter's own process ([`Server::attach`]).
+pub struct Local {
+    server: Server,
+    station: usize,
+    name: String,
+    rx: std::sync::mpsc::Receiver<ToWrite>,
+}
+
+impl Local {
+    /// Sends a request, as a host's line.
+    pub fn send(&self, m: &Message) {
+        let mut inner = lock(&self.server.inner);
+        inner.channel.request(self.station, &self.name, m);
+        inner.route();
+    }
+
+    /// The adapter's next message to this host, waiting at most `timeout`; `None` when none came.
+    #[must_use]
+    pub fn next(&self, timeout: Duration) -> Option<Message> {
+        match self.rx.recv_timeout(timeout) {
+            Ok(ToWrite::Line(line)) => match serde_json::from_str(&line) {
+                Ok(serde_json::Value::Object(m)) => Some(m),
+                _ => None,
+            },
+            Ok(ToWrite::Close) | Err(_) => None,
+        }
+    }
+}
+
+impl Drop for Local {
+    fn drop(&mut self) {
+        let mut inner = lock(&self.server.inner);
+        inner.writers.remove(&(self.station, self.name.clone()));
+        inner.channel.close(self.station, &self.name);
+        inner.route();
+    }
 }
 
 fn give_up_late_calls(inner: &Weak<Mutex<Inner>>, timeout: Duration) {

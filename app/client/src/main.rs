@@ -29,6 +29,8 @@ usage: radiopost [--home DIR] COMMAND ...
   outbox | inbox | sent    list a folder
   show ID                  show a message (ID: the start of its content ID)
   reports                  the station-to-station sessions waiting to be reported (RP-5 §6.6)
+  conformance --adapter HOST:PORT | conformance off
+                           conformance mode: reach only the conformance tester's test adapter
   call CALLSIGN [--station] [--fetch all|none|BYTES] [SESSION OPTIONS]
                            call a gateway, or with --station another client's station (RP-3 §10)
   listen [SESSION OPTIONS] answer one station's call (RP-3 §10)
@@ -385,6 +387,16 @@ fn run(words: &[String]) -> Result<(), Error> {
         "inbox" => {
             for a in &store.inbox {
                 println!("{}  via {}", line_of(&store, &a.id), a.station);
+            }
+        }
+        "conformance" => {
+            if args.rest.first().map(String::as_str) == Some("off") {
+                store.set_conformance(None)?;
+            } else {
+                let at = args
+                    .one("--adapter")
+                    .ok_or("conformance --adapter HOST:PORT, or conformance off")?;
+                store.set_conformance(Some(&at))?;
             }
         }
         "reports" => {

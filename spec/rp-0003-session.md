@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.9.0 |
+| **Version** | 0.10.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -50,7 +50,8 @@ knows it, it MUST NOT send a PDU larger than **1 024 bytes**. Every station MUST
 least 1 024 bytes.
 
 A PDU that does not decode, or whose type is unknown, is answered with `ERROR` `malformed` and the
-session ends.
+session ends. A frame whose length is over the receiver's own `max_pdu` is answered with `ERROR`
+`too-large` and the session ends; the receiver can tell from the length, before the PDU arrives.
 
 **Why small PDUs:** a link that breaks loses at most the PDU in flight; everything received in
 complete PDUs counts toward resuming next time (§7).
@@ -457,3 +458,4 @@ has one example of each PDU, and frames that must be refused.
 | 0.7.0 | 2026-11-09 | The waiting flag `third-party` (8), for RP-6 §5.1 (§5.2). |
 | 0.8.0 | 2026-11-09 | Station to station (§10): the station called cannot tell from an offer whom a message is for, so it accepts what it has room for and the caller sends only messages for its account; one addressed elsewhere is refused in `RECEIPT`. Found by writing the session engines. |
 | 0.9.0 | 2026-11-09 | A gateway always ends `WELCOME`'s transmission with `DONE` (§5.2), and how a station knows its turn has come (§5.7): `session-01` and the example (§12) had left that `DONE` out, so the client could not tell the gateway's turn was over. The example's credential hash and third-party flags brought up to date. Found by writing the session engines. |
+| 0.10.0 | 2026-11-09 | A frame over the receiver's `max_pdu` is answered `ERROR` `too-large` (§2): the section named only frames that do not decode. A `pdus.json` case. Found by writing the conformance tester. |

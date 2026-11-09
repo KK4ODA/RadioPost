@@ -1,6 +1,6 @@
 # RadioPost core
 
-The Rust workspace of RadioPost's programs (design D27, D28). So far it holds five crates; the
+The Rust workspace of RadioPost's programs (design D27, D28). So far it holds six crates; the
 adapter in `../adapters/` and the client in `../app/` are members here, so that one lockfile and one
 CI job hold them all:
 
@@ -10,13 +10,13 @@ CI job hold them all:
 | `radiopost-client` (`../app/client`) | The client ([its README](../app/client/README.md)): the device key and credential, the trusted post offices, the mail and its folders, and RP-3 sessions over any RPMI adapter, as the `radiopost` program, on the command line or as a panel in a browser (`../app/ui`). A station-to-station session's report (RP-5 §6.6) is kept for when there is a post office to send it to. |
 | `radiopost-aether` (`../adapters/aether`) | The RPMI adapter for Aether HF (RP-4 §9.1): each host that connects gets its own WebSocket to Aether's control API, and its callsigns are a claim there, so several hosts share one station. `bridge` maps one host onto one Aether connection with no input or output; `serve` and the `radiopost-aether` program put it on a port. |
 | `radiopost-issue` (`issuer`) | A post office's key and the credentials it issues (RP-1 §4), for on-air tests before the post office service exists (Phase 2): `radiopost-issue key`, `issue`, `trust`. The vectors' keys are published and never go on the air. |
-| `rpmi` | The modem interface (RP-4): its lines and requests (`wire`, standard base64 in `base64`), the host's side (`host`: requests numbered on a connection, the adapter's lines read as events, and `Carrier`, which joins one RP-3 session to one link), a simulated channel of stations and their adapters (`channel`: the loopback adapter, and the start of the conformance tester's test adapter), and that channel served on loopback TCP ports, with a host's connection to any adapter (`tcp`); `rpmi-loopback` is that channel as a program. |
+| `radiopost-tester` (`tester`) | The conformance tester ([its outline](../docs/design/01-conformance.md)): it plays a gateway, or another client's station, against a client through its own RPMI adapter (`harness::TestAdapter`), scripted from RP-3's tables with this workspace's encodings and none of its session engines, and says test by test whether the client did what RP-3 and RP-1 require (C-01 to C-08, and C-11, which takes five minutes). A driver file says how to run the program under test; `drivers/radiopost.json` is this client's. |
+| `rpmi` | The modem interface (RP-4): its lines and requests (`wire`, standard base64 in `base64`), the host's side (`host`: requests numbered on a connection, the adapter's lines read as events, and `Carrier`, which joins one RP-3 session to one link), a simulated channel of stations and their adapters (`channel`: the loopback adapter, and the conformance tester's test adapter), and that channel served on loopback TCP ports, with a host's connection to any adapter and a host inside the adapter's own process (`tcp`); `rpmi-loopback` is that channel as a program. |
 
 The engines and the channel take bytes or lines and give back bytes, lines and events, with no
 input or output, clock or random numbers of their own: the program that drives them brings the
 link, the time, the nonces and the user's choices. Only `rpmi::tcp` and the adapter's `serve` do
-input and output, besides the programs. Phase 1 still adds the conformance tester's first half
-([its outline](../docs/design/01-conformance.md)).
+input and output, besides the programs and the tester.
 
 ## Checks
 
@@ -53,6 +53,18 @@ AETHERD=/path/to/aetherd cargo test -p radiopost-aether --test aetherd -- --igno
 In `radiopost-client`, `tests/two_clients.rs` has two clients replay session-03 byte for byte
 through the loopback adapter, ending with the folders the session says and the reports
 `direct.json` has, and runs the `radiopost` program itself between two homes.
+
+In `radiopost-client`, `tests/conformance.rs` runs the conformance tester's client tests against
+the `radiopost` program (all but C-11). `tools/tester/plant.py` shows each of those tests failing:
+it builds the client once for each with a fault planted, and runs the test against it. Run it by
+hand after changing a test or the client; and C-11, which takes five minutes:
+
+```
+cargo build -p radiopost-tester -p radiopost-client
+target/debug/radiopost-tester client --driver tester/drivers/radiopost.json \
+    --bin target/debug/radiopost --slow
+python3 ../tools/tester/plant.py
+```
 
 A mismatch is a bug here, never a reason to change a vector (`vectors/README.md`). A new check is shown to
 fail on a planted fault before it is trusted, as `make.py`'s are.

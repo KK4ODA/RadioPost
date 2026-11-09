@@ -386,7 +386,18 @@ fn pdus_frame_and_refuse_as_rp3_says() {
         );
     }
     for bad in file["invalid"].as_array().expect("invalid") {
-        let got = pdu::unframe(&bytes(bad, "frame_hex"));
+        let frame = bytes(bad, "frame_hex");
+        let got = match bad["max_pdu"].as_u64() {
+            // a receiver with a limit reads the frame as it arrives (RP-3 §2)
+            Some(max) => {
+                let mut stream = pdu::Deframer::new();
+                stream.push(&frame);
+                stream
+                    .next(usize::try_from(max).expect("a size"))
+                    .expect("the length is known from the first two bytes")
+            }
+            None => pdu::unframe(&frame),
+        };
         assert_eq!(verdict(&got), text(bad, "expect"), "{}", text(bad, "why"));
     }
     assert_eq!(hex(&[0x0a, 0xff]), "0aff");

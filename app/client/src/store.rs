@@ -498,6 +498,35 @@ impl Store {
         let _ = fs::remove_file(self.home.join("partials").join(id.text()));
     }
 
+    // -- conformance mode ---------------------------------------------------------------------------
+
+    /// The test adapter, when the client is in conformance mode (the conformance tester's outline,
+    /// §2.3): it then reaches no other modem, so the published test keys never reach the air.
+    #[must_use]
+    pub fn conformance(&self) -> Option<String> {
+        fs::read_to_string(self.home.join("conformance"))
+            .ok()
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())
+    }
+
+    /// Enters conformance mode with the test adapter at `adapter`, or leaves it with `None`.
+    ///
+    /// # Errors
+    ///
+    /// The file cannot be written or removed.
+    pub fn set_conformance(&self, adapter: Option<&str>) -> Result<(), Error> {
+        let path = self.home.join("conformance");
+        match adapter {
+            Some(a) => write(&path, a.as_bytes()),
+            None => match fs::remove_file(&path) {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(format!("{}: {e}", path.display())),
+            },
+        }
+    }
+
     // -- the replay cache and gateways -------------------------------------------------------------
 
     /// The (address, nonce) pairs seen within RP-1 §6.3's twenty minutes of `now`.

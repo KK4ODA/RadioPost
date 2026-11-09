@@ -26,6 +26,9 @@ use serde_json::{Value, json};
 
 use crate::store::{Error, Store};
 
+/// RP-3 §8: nothing heard for this long ends the session.
+pub const QUIET: Duration = Duration::from_secs(300);
+
 /// How compressible messages go on the air (RP-2 §4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Packing {
@@ -92,7 +95,7 @@ impl Options {
             fetch: Fetch::All,
             auto: 1000,
             bandwidth: None,
-            quiet: Duration::from_secs(600),
+            quiet: QUIET,
             stop: None,
         }
     }
@@ -237,6 +240,14 @@ struct Modem {
 impl Modem {
     fn open(store: &Store, opts: &Options) -> Result<(Modem, String), Error> {
         let me = store.me()?;
+        if let Some(test) = store.conformance()
+            && opts.adapter != test
+        {
+            return Err(format!(
+                "in conformance mode this client reaches only the test adapter at {test}; \
+                 `radiopost conformance off` ends it"
+            ));
+        }
         let adapter = adapter_for(&opts.adapter)?;
         let conn = Connection::open(adapter.as_str())
             .map_err(|e| format!("cannot reach the modem's adapter at {}: {e}", opts.adapter))?;
@@ -358,8 +369,8 @@ fn carry<E: Engine<Event = SessionEvent>>(
             Err(why) => {
                 // RP-3 §8: nothing heard for too long; drop the link and keep what was held
                 if let Some(link) = carrier.link() {
-                    let abort = modem.host.abort(Some(link));
-                    let _ = modem.send(&abort);
+                    let hang_up = modem.host.disconnect(link);
+                    let _ = modem.send(&hang_up);
                 }
                 for e in carrier.engine_mut().link_lost() {
                     apply(e, store, report, stats, say)?;

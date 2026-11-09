@@ -29,12 +29,19 @@ radiopost [--home DIR] COMMAND
 | `call CALLSIGN [--station] [--fetch all\|none\|BYTES]` | Calls a gateway, or with `--station` another client's station. |
 | `listen` | Answers one station's call. |
 | `panel [--port N] [--ui DIR]` | Serves the panel on this computer (port 8620) and says where to open it. |
+| `conformance --adapter HOST:PORT`, `conformance off` | Conformance mode (below). |
 
 `call` and `listen` take `--adapter MODEM` and `--bandwidth HZ`. The modem is Aether HF's control
 API, `ws://127.0.0.1:8515/v1` as Aether runs it, for which the client runs the Aether adapter (RP-4
 §9.1) itself; or an RPMI adapter's `HOST:PORT` (`127.0.0.1:8600` by default, as RP-4 §2 has it). `--plain` sends messages uncompressed; `--clock`, `--nonce`,
 `--session-id` and `--challenge` fix the clock and the random draws, so that a session can be
 replayed exactly (the conformance tester's §2.4).
+
+**Conformance mode.** `conformance --adapter HOST:PORT` turns it on for this home: `call` and
+`listen` then reach only that modem adapter, the conformance tester's, and refuse every other, so
+the published test keys the tester issues credentials with never reach the air
+([the tester's outline](../../docs/design/01-conformance.md), §2.3). `conformance off` ends it.
+The tester runs the client through `core/tester/drivers/radiopost.json`.
 
 For a test on the air between two stations with Aether HF, see
 [on-air tests](../../docs/user/on-air-tests.md).

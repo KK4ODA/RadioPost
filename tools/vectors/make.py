@@ -1836,6 +1836,17 @@ def make_station() -> dict[str, Any]:
 # -- other PDUs ----------------------------------------------------------------------------------
 
 
+def pdu_of_size(n: int) -> dict[int, Any]:
+    """A `MSG` PDU whose encoding is exactly `n` bytes: the first piece of a longer message."""
+    data = n
+    while True:
+        pdu = {0: 4, 1: encoded("maria-421")[1], 2: 0, 3: 4000, 4: stream("too-large", data)}
+        size = len(cbor.encode(pdu))
+        if size == n:
+            return pdu
+        data -= size - n
+
+
 def make_pdus() -> dict[str, Any]:
     session = {name: pdu for _, pdus in session_pdus() for name, pdu in pdus}
     station = {name: pdu for _, pdus in station_pdus() for name, pdu in pdus}
@@ -1907,12 +1918,18 @@ def make_pdus() -> dict[str, Any]:
             "expect": "malformed",
         },
         {"why": "a frame of length 0", "frame_hex": "0000", "expect": "malformed"},
+        {
+            "why": "a MSG of 1 025 bytes to a station whose `max_pdu` is 1 024",
+            "frame_hex": rp.frame(pdu_of_size(1025)).hex(),
+            "max_pdu": 1024,
+            "expect": "too-large",
+        },
     ]
     out = header("One example of each PDU", {"RP-3": "§2, §4, §5"})
     out["rule"] = (
         "From `diagnostic`, an encoder produces exactly `pdu_hex`, framed as `frame_hex` "
-        "(two bytes of length, big-endian). Every `invalid` frame is answered with ERROR "
-        "`malformed` (RP-3 §2)."
+        "(two bytes of length, big-endian). Every `invalid` frame is answered with ERROR `expect` "
+        "(RP-3 §2), at a receiver whose `max_pdu` is the case's, or 65 535 where it has none."
     )
     out["pdus"] = [pdu_entry(name, p) for name, p in examples]
     out["invalid"] = invalid
@@ -5628,7 +5645,7 @@ def self_check(name: str, data: dict[str, Any]) -> None:
             )
         for bad in data["invalid"]:
             try:
-                rp.unframe(bytes.fromhex(bad["frame_hex"]))
+                rp.unframe(bytes.fromhex(bad["frame_hex"]), bad.get("max_pdu", 0xFFFF))
             except ValueError as err:
                 assert str(err) == bad["expect"]
                 continue
