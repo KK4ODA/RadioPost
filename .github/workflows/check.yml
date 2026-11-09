@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+#
+# Every push to main and every pull request: the Python is linted and formatted, the test vectors
+# are what the reference makes, the figures are what their generators draw, and the documents'
+# versions, links and cross-references agree. Standard library only, so nothing is installed but
+# Python and ruff. A run takes well under a minute.
+name: Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check · py${{ matrix.python }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 is the oldest the code is written for (ruff.toml); 3.13 checks that a newer
+        # standard library (zlib above all) makes the same vectors.
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Set up Python ${{ matrix.python }}
+        run: uv python install ${{ matrix.python }}
+
+      # ruff is pinned: ruff.toml turns on preview rules, which change between versions.
+      - name: Lint
+        run: uvx ruff@0.16.9 check --output-format github .
+
+      - name: Format
+        run: uvx ruff@0.16.9 format --check .
+
+      - name: Test vectors match the reference
+        run: uv run --no-project --python ${{ matrix.python }} tools/vectors/make.py --check
+
+      - name: Figures match their generators
+        run: |
+          uv run --no-project --python ${{ matrix.python }} tools/figures/concept.py
+          uv run --no-project --python ${{ matrix.python }} tools/figures/design.py
+          git status --porcelain
+          git diff --stat --exit-code
+          test -z "$(git status --porcelain)"
+
+      - name: Versions, links and cross-references
+        run: uv run --no-project --python ${{ matrix.python }} tools/check_docs.py

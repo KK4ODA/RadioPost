@@ -17,6 +17,11 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`
   from `tools/vectors/rpref/` (deterministic CBOR, Ed25519 after RFC 8032, RadioPost's objects;
   standard library only, self-tested against RFC 8032 §7.1 and RFC 8949 Appendix A at every run).
+- `tools/check_docs.py` — headers against change logs and the index, relative links, `RP-n §x.y`
+  references, SPDX lines. `.github/workflows/check.yml` runs it with ruff (pinned 0.16.9: preview
+  rules), `make.py --check` and the figure generators (no diff), on Python 3.12 and 3.13, for
+  pushes to `main` and pull requests. Run the same locally before pushing (CONTRIBUTING.md
+  *Checks*).
 
 ## Conventions
 - **Living documents.** Every spec has a status, a version (`MAJOR.MINOR.PATCH`, RP-0 §8.2) and a

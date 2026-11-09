@@ -43,19 +43,29 @@ Edit the script, run it, and commit the script and the SVGs together.
 ## Test vectors
 
 `vectors/` is made by `tools/vectors/make.py` from a small reference (Python, standard library
-only). Before a pull request:
-
-```
-python tools/vectors/make.py --check    # rebuild in memory; fail if a file differs
-```
-
-`vectors/README.md` says what each file holds and how an implementation uses it.
+only). `vectors/README.md` says what each file holds and how an implementation uses it.
 
 ## Code
 
-The only code so far is the figures and the test vectors' reference. Code is checked with
-`ruff check` and `ruff format --check` (settings in `ruff.toml`). When there are programs, each
-will say how to build and test it.
+The only code so far is the figures, the test vectors' reference and a checker for the documents.
+When there are programs, each will say how to build and test it.
+
+## Checks
+
+Every pull request and every push to `main` runs `.github/workflows/check.yml`. Run the same
+before you open a pull request (Python 3.12 or later; ruff 0.16.9, because `ruff.toml` turns on
+preview rules):
+
+```
+ruff check . && ruff format --check .
+python tools/vectors/make.py --check    # the vectors are what the reference makes
+python tools/figures/concept.py         # the figures are what their generators draw:
+python tools/figures/design.py          #   git status shows no change after these
+python tools/check_docs.py              # versions, change logs, the index, links, RP-n §x.y
+```
+
+`check_docs.py` holds each specification's header to the last row of its change log and to the
+index, follows every relative link, and checks that every `RP-n §x.y` names a section that exists.
 
 ## Licences of contributions
 
