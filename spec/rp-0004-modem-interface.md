@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.4.0 |
+| **Version** | 0.4.1 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -261,21 +261,21 @@ end of this section.
 
 | RPMI | Aether control API |
 |---|---|
-| `hello` | `status` and `capabilities`: `caps.shared` is true when `status.claims` is present, and `caps.bandwidths` is the one Aether runs (`capabilities.bandwidth_hz`). `delivery`, `broadcast`, `quality`, `busy` and `regulatory` are true, and `max_links` is 1. |
+| `hello` | `status` and `capabilities`: `caps.shared` is true when `status.claims` is present, and `caps.bandwidths` is the one Aether runs (`capabilities.bandwidth_hz`). `delivery`, `broadcast`, `quality`, `busy` and `regulatory` are true, and `max_links` is 1. `modem` is `Aether HF` and `status.version`. |
 | `callsigns` | `claim {callsigns, app}`, with the host's `app`. Aether takes the callsigns it can and lists each one another program holds in `refused`. RPMI keeps the host's list whole, so on a refusal the adapter claims the host's earlier list again and answers `error` `claimed` naming the refused callsigns. |
 | `listen` | `listen {enabled}` on that claim. A claim starts with it off, as RPMI's does. |
 | `connect` | `connect {remote, callsign}`, with `callsign` set to `as`. The call and its session are the host's. Aether's `claimed`, and `bad_params` for a callsign the claim does not hold, are RPMI's `not-authorized`. `already_connected` is `busy`. `refused` (an answer-only station) and `regulatory` are `refused`. |
 | `connected` | A `state` event `connected` whose `owner` is the claim's `id`. A `detail` of `<remote> (master)` is a call the host placed (`direction` `out`), and `<remote> (slave)` one it answered (`in`). The event's `callsign` is `local`. |
 | `failed` | A `state` event `disconnected` with the claim's `owner` before any `connected`: `no answer` is `timeout`, `aborted` after the host's `abort` is `aborted`, and anything else `refused`. |
 | `disconnected` | The same event after `connected`. `peer disconnected` is `remote`. The end of the host's own `disconnect` or `abort` (`closed`, `aborted`, `closed (no DISC_ACK)`) is `local`. `link timeout` and `no response` are `timeout`, and anything else is `failure`. |
-| `send` with `ref` | `send {data, ref}`. The `sent` event with `delivered: true` and the same `ref` is RPMI's `delivered`. Aether's `not_owner` and `not_connected` are `not-connected`. |
+| `send` with `ref` | `send {data, ref}`. The `sent` event with `delivered: true` and the same `ref` is RPMI's `delivered`. Aether's `ref` is 1 to 64 printable ASCII characters with no spaces, and RPMI's a string or an integer (§4), so the adapter gives Aether a reference of its own and remembers which `ref` it stands for. Aether's `not_owner` and `not_connected` are `not-connected`. |
 | `disconnect` / `abort` | `disconnect` / `abort`. Aether refuses either `not_owner` on another program's session (RPMI's `not-connected`). It answers an `abort` with nothing under way as done, so the adapter answers RPMI's `not-connected` itself. |
 | `received` | The `data` events while the host's session is up. Aether runs one session at a time, so they are the host's link. |
 | `queued` | `metrics.queued_bytes` while the host's session is up: the host's own bytes not yet acknowledged, counted before compression. |
 | `quality` | `metrics` (`snr_db`, `throughput_bps`, `receiving`). |
-| `busy` | `metrics.channel_busy`, and true while a session whose `owner` is not the host's is up (`status.owner`, or a `metrics.link` during another's session). |
-| `broadcast` | `datagram.send`; the `datagram` and `datagram-sent` events. |
-| `bandwidth` (in `connect`) | Not mapped yet. How programs sharing a station choose its bandwidth is open (ADR-0106 §5). The adapter offers the bandwidth Aether runs and refuses another with `unsupported`, as §4 says. |
+| `busy` | `metrics.channel_busy`, and true while a session whose `owner` is not the host's is up (`status.owner`, or a `metrics.link` during another's session). While the host's own link is up, `channel_busy` is mostly the other station's signal and is not reported; when that link ends, the readings taken during it are dropped and the next `metrics` says how the channel stands. |
+| `broadcast` | `datagram.send` with `frame_type` 2, Aether's unformatted datagram; the `datagram` and `datagram-sent` events. |
+| `bandwidth` (in `connect`) | Not mapped yet. How programs sharing a station choose its bandwidth is open (ADR-0106 §5). The adapter offers the bandwidth Aether runs and refuses another with `unsupported`, as §4 says. A `connect` that names that bandwidth is sent with `keep_bandwidth`, so Aether does not move for the call (its ADR-0102). Aether may move between calls (a `bandwidth` event): `caps.bandwidths` is the bandwidth at `hello`, and `connected` carries the one in use. |
 
 Aether checks the band rules before every transmission, and ends each session with the Morse
 identifier itself. A future Aether may speak RPMI natively.
@@ -350,3 +350,4 @@ as by radio.
 | 0.3.0 | 2026-11-09 | What a bad line gets (`malformed`), and that a host ignores what it does not know (§2); `refused` before `hello` (§3); which `connect` errors come at once and what `ok` carries (§4); `failed`'s codes and `aborted` (§5, §7); `received` keeps no `send` boundaries (§5); test vectors. |
 | 0.3.1 | 2026-11-09 | §9.1: Aether shareable from 0.2.0-beta.146 (its ADR-0106): claims, `listen` on the claim, links by `owner`, and how Aether's answers and end reasons map to RPMI's; the WebSocket path is `/v1`. |
 | 0.4.0 | 2026-11-09 | Found by writing the Rust adapter and host: a request missing a member it needs, or with one of the wrong type, is `malformed`, and the order of the checks (§2); the members' types, `ref` a string or an integer, and a `connect` needs its `id` (§4); an adapter that is not shared turns a second host away `busy` (§1.1, §3, §7). Test vectors for each. |
+| 0.4.1 | 2026-11-09 | §9.1, found by writing the Aether adapter and running it against Aether 0.2.0-beta.146: `modem`'s name; the adapter's own references for `send`; `busy` while the host's own link is up; broadcasts as unformatted datagrams; a named bandwidth kept with `keep_bandwidth`, and `connected` carrying the one in use. |

@@ -75,6 +75,10 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test                              # the library against vectors/
 ```
 
+`rustup update stable` first: CI lints with the newest stable clippy. The Aether adapter's tests
+against real daemons run only when `AETHERD` names an `aetherd` of 0.2.0-beta.146 or later
+(`core/README.md`).
+
 `check_docs.py` holds each specification's header to the last row of its change log and to the
 index, follows every relative link, and checks that every `RP-n §x.y` names a section that exists.
 

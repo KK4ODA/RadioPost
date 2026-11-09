@@ -30,6 +30,15 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   request missing a member, or with one of the wrong type, gets (`malformed`), and what an adapter
   that is not shared does with a second host (`busy`, closed). RP-4 §9.5's TCP adapter, whose
   links are TLS connections between machines, is not built yet.
+  `adapters/aether` (`radiopost-aether`, a member of the core workspace) is RP-4 §9.1: each host
+  its own WebSocket to Aether's control API and its callsigns a claim there (Aether's ADR-0106);
+  `bridge` is the sans-IO mapping, tested row by row against a stand-in and with `rpmi-lines`.
+  `tests/aetherd.rs` runs real daemons (`AETHERD=<aetherd> cargo test -p radiopost-aether --test
+  aetherd -- --ignored`): session-03 crosses two `aetherd` joined by `[sim]` byte for byte, and two
+  hosts share one station. Build an `aetherd` from a worktree of `KK4ODA/aether-hf` (`cargo build
+  --release -p aetherd`, which needs `libasound2-dev`). Writing it settled five details of §9.1
+  (RP-4 0.4.1). `clippy.toml` is at the repository's root, so every crate finds it. CI's clippy is
+  the newest stable (1.99 added `assert_is_empty`): run `rustup update stable` before linting.
 - `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`. Standard
   library only; `ruff.toml` holds the lint settings.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`

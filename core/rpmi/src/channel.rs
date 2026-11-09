@@ -12,7 +12,9 @@
 use serde_json::Value;
 
 use crate::base64;
-use crate::wire::{Caps, Message, Request, VERSION, answer, answer_with, error, op_of, parse_line};
+use crate::wire::{
+    Caps, Message, Request, VERSION, admit, answer, answer_with, error, parse_line, speaks,
+};
 
 /// One station's adapter and modem.
 #[derive(Clone, Debug)]
@@ -199,25 +201,12 @@ impl Channel {
         let Some(h) = self.host_index(station, host) else {
             return;
         };
-        let op = op_of(m).to_owned();
         let id = m.get("id").cloned();
         let id = id.as_ref();
-        if !self.stations[station].hosts[h].hello && op != "hello" {
-            self.emit(station, host, error(id, "refused", "hello first"));
-            return;
-        }
-        let request = match Request::read(m) {
-            Ok(Some(r)) => r,
-            Ok(None) => {
-                self.emit(
-                    station,
-                    host,
-                    error(id, "unsupported", &format!("no op {op}")),
-                );
-                return;
-            }
-            Err(why) => {
-                self.emit(station, host, error(id, "malformed", &why));
+        let request = match admit(m, self.stations[station].hosts[h].hello) {
+            Ok(r) => r,
+            Err(refusal) => {
+                self.emit(station, host, refusal);
                 return;
             }
         };
@@ -438,7 +427,7 @@ impl Channel {
 
     fn on_hello(&mut self, station: usize, h: usize, low: i128, high: i128, id: Option<&Value>) {
         let name = self.stations[station].hosts[h].name.clone();
-        if !(low..=high).contains(&i128::from(VERSION)) {
+        if !speaks(low, high) {
             let m = error(
                 id,
                 "unsupported-version",

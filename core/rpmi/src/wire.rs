@@ -265,6 +265,32 @@ impl Request {
     }
 }
 
+/// RP-4 §2, §3: what an adapter checks of a message [`parse_line`] read before it acts on it, in
+/// order: `hello` first (`refused`), an `op` it knows (`unsupported`), and the members its request
+/// needs, of their types (`malformed`).
+///
+/// # Errors
+///
+/// The `error` to answer the message with.
+pub fn admit(m: &Message, hello_said: bool) -> Result<Request, Message> {
+    let op = op_of(m);
+    let id = m.get("id");
+    if !hello_said && op != "hello" {
+        return Err(error(id, "refused", "hello first"));
+    }
+    match Request::read(m) {
+        Ok(Some(request)) => Ok(request),
+        Ok(None) => Err(error(id, "unsupported", &format!("no op {op}"))),
+        Err(why) => Err(error(id, "malformed", &why)),
+    }
+}
+
+/// Whether a host speaking versions `low` to `high` and this crate have one in common (§3).
+#[must_use]
+pub fn speaks(low: i128, high: i128) -> bool {
+    (low..=high).contains(&i128::from(VERSION))
+}
+
 /// What a modem can do (RP-4 §3).
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[allow(clippy::struct_excessive_bools, reason = "RP-4 §3's own flags")]
