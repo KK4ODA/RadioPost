@@ -173,7 +173,7 @@
       }
     },
     {
-      "note": "Atlanta loses the Internet. Shelter 3 and Facundo exchange a message through N2CALL-5 (session-05.json). In N1CALL-10's next window N2CALL-5 forwards both records (as in session-04.json), and N1CALL-10 reports them."
+      "note": "Atlanta loses the Internet. Shelter 3 and Facundo exchange a message through N2CALL-5 (session-05.json). In one of N1CALL-10's windows N2CALL-5 forwards both records (as in session-04.json), and N1CALL-10 reports them."
     },
     {
       "at": 1794496700,

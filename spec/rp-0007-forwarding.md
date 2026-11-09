@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.4.0 |
+| **Version** | 0.5.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -88,7 +88,7 @@ a forwarding session.
 
 | Key | Name | Type | Req. | Meaning |
 |---|---|---|---|---|
-| 1 | `credential` | bstr | yes | The user's credential. |
+| 1 | `credential` | bstr | one of 1, 9 | The user's credential. |
 | 2 | `statement` | bstr | yes | The user's statement's encoding. |
 | 3 | `signature` | bstr .size 64 | yes | Its signature. |
 | 4 | `started` | uint | yes | When the user's session started. |
@@ -96,21 +96,32 @@ a forwarding session.
 | 6 | `path` | array of text | yes | The record's path, ending with the caller. |
 | 7 | `pickups` | array of uint | no | The serials picked up. |
 | 8 | `local` | array of bstr .size 12 | no | The content IDs picked up by local delivery (§4.4). |
+| 9 | `credential_hash` | bstr .size 8 | one of 1, 9 | The credential's hash (RP-1 §4.3), when the partner holds the credential. |
 
 The caller offers, in `HELLO`, every message of every record it forwards that the partner has not
 yet receipted. In its third transmission it sends, before the `MSG` PDUs, one `PROOF` for each
 record whose messages it sends, and one for each record with no messages (pickups or local pickups
 only).
 
+The credential is about half of a `PROOF` (§9), and one user's records often travel together. A
+partner keeps each credential that verifies in a `PROOF` until it expires, as a gateway keeps a
+client's (RP-3 §5.2, `cached`). So the caller sends `credential_hash` in place of `credential` when
+an earlier `PROOF` to the same partner carried that credential: in the same transmission, or in an
+earlier session whose `RECEIPT` listed that record in `records`.
+
 ### 3.3 What the partner checks
 
 For each `PROOF`, the partner checks, and refuses the record at the first failure:
 
-1. The proof, as RP-1 §6.3 says for a statement relayed later: the credential (RP-1 §5) as it was
+1. The credential: exactly one of `credential` and `credential_hash`, or `malformed`. With
+   `credential_hash`, the one the partner holds with that hash, or `credential-required`. A caller
+   that sent a record by its hash and does not find it in `records` sends it with its credential
+   the next time.
+2. The proof, as RP-1 §6.3 says for a statement relayed later: the credential (RP-1 §5) as it was
    at `started`, with `send` if the statement lists messages and `receive` if the record has
-   pickups or local pickups; steps 2 and 4; and the statement's `time` within 600 seconds of `started`. As RP-5 §5.6
-   checks a report.
-2. The path: its first callsign is the statement's `gateway`, its last is the caller, it holds at
+   pickups or local pickups; steps 2 and 4; and the statement's `time` within 600 seconds of
+   `started`. As RP-5 §5.6 checks a report.
+3. The path: its first callsign is the statement's `gateway`, its last is the caller, it holds at
    most 8 callsigns, and it does not hold the partner's own (a loop). Otherwise
    `refused-by-policy`.
 
@@ -321,8 +332,6 @@ it among their partners: they call it, inside its windows, to collect the mail.
 
 * **Routing.** Gateways publishing what they reach; choosing among partners by more than their
   operators' lists.
-* **Size.** Sending a credential's hash in `PROOF` when the partner holds it, as RP-3 `HELLO`
-  key 14 does: the credential is about half of every `PROOF` (§9).
 * **Bands.** A table, per country, of the segments open to unattended forwarding.
 
 ---
@@ -335,6 +344,8 @@ it among their partners: they call it, inside its windows, to collect the mail.
 | `PROOF`, a record with one message | 342 bytes |
 | `PROOF`, a pickup only | 332 bytes |
 | `PROOF`, a local pickup only | 342 bytes |
+| `PROOF`, a record with one message, the credential by its hash | 186 bytes |
+| `PROOF`, a pickup only, the credential by its hash | 177 bytes |
 | `REQUEST` for one local message by content ID | 20 bytes |
 | A placement, in `MSG` key 6 | 136 bytes |
 | `RECEIPT` for one message and two records | 48 bytes |
@@ -349,7 +360,7 @@ All with framing, from `vectors/session-04.json`, `vectors/forwarding.json`,
 `vectors/session-04.json` is a forwarding session byte for byte: N2CALL-5, cut off, calls N1CALL-10
 in its window, sends two records and Shelter 3's message, and receives Ana's message with its
 placement. `vectors/forwarding.json` has the placement and seven checks of it, the records and
-seven checks of a `PROOF`, and the post office's side: the forward item placed when N2CALL-5 fell
+eleven checks of a `PROOF` (four of them with the credential's hash), and the post office's side: the forward item placed when N2CALL-5 fell
 silent, N1CALL-10's report with its path, and the drop when N2CALL-5 came back.
 
 `vectors/session-05.json` is local delivery byte for byte: Shelter 3 hands N2CALL-5, cut off, a
@@ -375,3 +386,4 @@ online, which declines the message `already-have` because the post office alread
 | 0.2.0 | 2026-11-09 | From the test vectors: the caller's credential needs `gateway` and `send`, not `receive` (§2); the user's credential is checked with `send` and `receive` as the record needs (§3.3); copies still wait for a cut-off gateway (§4.1); the placement's checks in order, with their codes, and forward items flagged as copies (§4.3); sizes (§9); test vectors (§10). |
 | 0.3.0 | 2026-11-09 | Local delivery (§4.4): local users, keeping, listing with serial 0 and the flag `local`, local pickups in the record and in `PROOF` key 8 (§3.1, §3.2), checked with `receive` (§3.3); its sizes (§9) and test vectors (§10). |
 | 0.4.0 | 2026-11-09 | Mail dropped unsent (§3.6): a message a cut-off gateway takes is queued, and the sender's client keeps it, offers it again and tells the sender; a cut-off gateway declines what it holds or passed on in the last 30 days (§3.5), and forgets a record it drops (§7); test vectors (§10). |
+| 0.5.0 | 2026-11-09 | Size: `PROOF` key 9 `credential_hash` in place of the credential when the partner holds it, which halves a `PROOF` (§3.2); the partner's checks begin with the credential, `credential-required` for a hash it does not hold (§3.3); sizes (§9); test vectors (§10). |

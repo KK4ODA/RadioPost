@@ -3120,28 +3120,49 @@ def make_forwarding() -> dict[str, Any]:
     stmt = cbor.decode(good[2])
     stmt[6] = []
     changed[2] = cbor.encode(stmt)
+    hashed = fwd.proof_pdu(records[0], hashed=True)
+    kept: dict[bytes, bytes] = {}
+    assert fwd.check_proof(good, "N2CALL-5", "N1CALL-10", keys, {}, held=kept)[0] == "ok"
+    assert list(kept.values()) == [records[0]["credential"]]
     proof_cases_in = [
-        ("Shelter 3's record, as N2CALL-5 sends it", good, "N2CALL-5"),
-        ("Facundo's record, a pickup only", fwd.proof_pdu(records[1]), "N2CALL-5"),
+        ("Shelter 3's record, as N2CALL-5 sends it", good, "N2CALL-5", []),
+        ("Facundo's record, a pickup only", fwd.proof_pdu(records[1]), "N2CALL-5", []),
         (
             "a path that does not start at the gateway the user called",
             good | {6: ["KK4ODA-1", "N2CALL-5"]},
             "N2CALL-5",
+            [],
         ),
-        ("a path that does not end at the caller", good | {6: ["N2CALL-5"]}, "KK4ODA-1"),
-        ("a path through the partner already: a loop", loop, "N2CALL-5"),
-        ("a path of nine gateways", far, "N2CALL-5"),
-        ("the statement changed after signing", changed, "N2CALL-5"),
+        ("a path that does not end at the caller", good | {6: ["N2CALL-5"]}, "KK4ODA-1", []),
+        ("a path through the partner already: a loop", loop, "N2CALL-5", []),
+        ("a path of nine gateways", far, "N2CALL-5", []),
+        ("the statement changed after signing", changed, "N2CALL-5", []),
+        (
+            "Facundo's record by his credential's hash, which N1CALL-10 holds",
+            fwd.proof_pdu(records[1], hashed=True),
+            "N2CALL-5",
+            [records[1]["credential"]],
+        ),
+        (
+            "Shelter 3's record by hash, after a PROOF with its credential",
+            hashed,
+            "N2CALL-5",
+            list(kept.values()),
+        ),
+        ("Shelter 3's record by a hash N1CALL-10 does not hold", hashed, "N2CALL-5", []),
+        ("both the credential and its hash", good | {9: hashed[9]}, "N2CALL-5", []),
     ]
     proof_cases = []
-    for what, pdu, caller in proof_cases_in:
-        result, _ = fwd.check_proof(pdu, caller, "N1CALL-10", keys, {})
+    for what, pdu, caller, held in proof_cases_in:
+        holds = {rp.credential_hash(c): c for c in held}
+        result, _ = fwd.check_proof(pdu, caller, "N1CALL-10", keys, {}, held=holds)
         proof_cases.append(
             {
                 "what": what,
                 "proof_hex": cbor.encode(pdu).hex(),
                 "caller": caller,
                 "me": "N1CALL-10",
+                "held_hex": [c.hex() for c in held],
                 "expect": result,
             }
         )
@@ -3155,6 +3176,10 @@ def make_forwarding() -> dict[str, Any]:
             "a path through the partner already: a loop": "refused-by-policy",
             "a path of nine gateways": "refused-by-policy",
             "the statement changed after signing": "signature-invalid",
+            "Facundo's record by his credential's hash, which N1CALL-10 holds": "ok",
+            "Shelter 3's record by hash, after a PROOF with its credential": "ok",
+            "Shelter 3's record by a hash N1CALL-10 does not hold": "credential-required",
+            "both the credential and its hash": "malformed",
         },
     )
     out = header(
@@ -3165,9 +3190,9 @@ def make_forwarding() -> dict[str, Any]:
         "A placement made from `placement_body` with radiopost.org's key is exactly "
         "`placement_hex`; a gateway checking a placement case with `me` and `now`, and the post "
         "office keys of keys.json, returns `expect` (RP-7 §4.3). A record's ID is SHA-256 of its "
-        "statement, cut to 12 bytes (RP-7 §3.1). A partner (`me`) checking a PROOF case from "
-        "`caller` returns `expect` (RP-7 §3.3). The post office's exchanges read as in "
-        "api-exchanges.json."
+        "statement, cut to 12 bytes (RP-7 §3.1). A partner (`me`) holding the credentials "
+        "`held_hex` and checking a PROOF case from `caller` returns `expect` (RP-7 §3.2, §3.3). "
+        "The post office's exchanges read as in api-exchanges.json."
     )
     out["context"] = {
         "cut_off_at": T_CUT,
@@ -3346,7 +3371,7 @@ def local_report(records: list[dict[str, Any]]) -> tuple[Exchanges, str, int]:
     ex.call(T_CUT - 59, "N2CALL-5", "POST", "/copies/ack", {"cursor": copies["cursor"]}, n2)
     ex.note(
         "Atlanta loses the Internet. Shelter 3 and Facundo exchange a message through N2CALL-5 "
-        "(session-05.json). In N1CALL-10's next window N2CALL-5 forwards both records "
+        "(session-05.json). In one of N1CALL-10's windows N2CALL-5 forwards both records "
         "(as in session-04.json), and N1CALL-10 reports them."
     )
     window = T_WINDOW + 3600
@@ -4959,6 +4984,11 @@ def check_forwarding(data: dict[str, Any]) -> None:
     for sent, r in zip(reports[0]["request"]["body"]["sessions"], data["records"], strict=True):
         pdu = cbor.decode(bytes.fromhex(r["proof"]["pdu_hex"]))
         assert jws.unb64u(sent["statement"]) == pdu[2] and sent["path"] == [*pdu[6], "N1CALL-10"]
+    for case in data["proof_cases"]:  # RP-7 §3.2: a hash names a credential the partner holds
+        pdu = cbor.decode(bytes.fromhex(case["proof_hex"]))
+        if 9 in pdu and case["expect"] == "ok":
+            held = [hashlib.sha256(bytes.fromhex(c)).digest()[:8] for c in case["held_hex"]]
+            assert 1 not in pdu and pdu[9] in held
 
 
 def check_local_session(data: dict[str, Any]) -> None:

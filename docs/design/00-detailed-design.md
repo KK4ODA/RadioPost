@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.13 |
+| **Version** | 0.1.14 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -74,7 +74,7 @@ reasoning; the specifications hold the result.
 | D3 | **Content IDs**: 12 bytes of SHA-256 of the message (RP-0 §6.3, RP-2 §3). | Names a message by what it is: duplicates and resumes work across gateways, and a signed list of IDs signs the messages. 12 bytes is safe for the life of the network. | Sequence numbers (not global, no deduplication); 16 or 32 bytes (bytes on every list). |
 | D4 | **A compact credential** of our own: a signed CBOR pair, about 160 bytes (RP-1 §4). | Small enough to send over HF on a first visit; trivial to parse in a small program. | X.509 certificates (several times larger, complex parsing); COSE_Sign1 (close, a few bytes more; to be reconsidered before Candidate). |
 | D5 | **The first transmission is signed with the time**; a challenge only if the clocks disagree (RP-1 §6, RP-3 §5.1). | Saves a whole exchange on every session: tens of seconds on a weak path. Clocks are usually right (GPS, the Internet). | Always a challenge (one more exchange every time). |
-| D6 | **A gateway keeps credentials**; the client sends a hash on later visits (RP-3 §5.1). | About 160 bytes saved on every return visit: 35 seconds at 36 bit/s. | Sending the credential every time. |
+| D6 | **A gateway keeps credentials**; the client sends a hash on later visits (RP-3 §5.1), and a forwarding gateway in each `PROOF` after the first of a user's (RP-7 §3.2). | About 160 bytes saved on every return visit and every such record: 35 seconds at 36 bit/s. | Sending the credential every time. |
 | D7 | **The caller hangs up** (RP-3 §8). | Someone must, by rule. Winlink's sessions through RMS Trimode waited 30 s at every end because the program that should hang up did not. | Either side; the server side. |
 | D8 | **Small PDUs** (1 kB unless both sides agree to more) (RP-3 §2). | A broken link loses at most one PDU; everything before it counts toward resuming. | Whole messages (a break loses it all). |
 | D9 | **Post office keys in DNS** and in signed JWS documents (RP-1 §7). | Every post office publishes its own; DNS is already how mail is found; no registry to run. | A central key registry (central); a web of trust (hard to explain and operate). |
@@ -292,7 +292,7 @@ Collected from the specifications and the concept, each to be settled in the doc
 | ARDOP's host interface, checked against its specification. | RP-4 §9.3 |
 | Third-party traffic: the table of agreements, and knowing a sender's country. | RP-6 §5 |
 | Stalwart: MTA hooks or milter; AGPL for operators; clustering's edition. | Concept §13 |
-| Forwarding: routing beyond partners, the size of `PROOF`, the bands per country. | RP-7 §8 |
+| Forwarding: routing beyond partners, the bands per country. | RP-7 §8 |
 | The reference implementations' languages and packaging. | §6 here |
 
 ---
@@ -315,3 +315,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.11 | 2026-11-09 | RP-7's test vectors (§7). |
 | 0.1.12 | 2026-11-09 | D24: local delivery at a cut-off gateway (RP-7 0.3.0); the forwarder's part; its vectors (§7). |
 | 0.1.13 | 2026-11-09 | D25: mail dropped unsent is the sender's client's to track (RP-7 0.4.0). |
+| 0.1.14 | 2026-11-09 | D6 covers `PROOF` (RP-7 0.5.0). |

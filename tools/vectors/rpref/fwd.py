@@ -25,17 +25,20 @@ def record_id(statement: bytes) -> bytes:
     return hashlib.sha256(statement).digest()[:12]
 
 
-def proof_pdu(record: dict[str, Any]) -> dict[int, Any]:
-    """RP-7 §3.2: one session record, without its messages."""
+def proof_pdu(record: dict[str, Any], *, hashed: bool = False) -> dict[int, Any]:
+    """RP-7 §3.2: one session record, without its messages; the credential by its hash if held."""
     pdu: dict[int, Any] = {
         0: PROOF,
-        1: record["credential"],
         2: record["statement"],
         3: record["signature"],
         4: record["started"],
         5: record["session"],
         6: list(record["path"]),
     }
+    if hashed:
+        pdu[9] = rp.credential_hash(record["credential"])
+    else:
+        pdu[1] = record["credential"]
     if record.get("pickups"):
         pdu[7] = list(record["pickups"])
     if record.get("local"):
@@ -49,20 +52,31 @@ def check_proof(
     me: str,
     post_offices: dict[str, list[dict[str, Any]]],
     revoked: dict[str, dict[str, list[Any]]],
+    *,
+    held: dict[bytes, bytes] | None = None,
 ) -> tuple[str, dict[int, Any]]:
     """RP-7 §3.3: the proof as a statement relayed later, then the path.
 
-    Returns the verdict and the statement (empty when it does not decode).
+    `held` maps the hashes of the credentials the partner holds to them; a credential that
+    verifies joins it (§3.2). Returns the verdict and the statement (empty when it does not
+    decode).
     """
     try:
         stmt = cbor.decode(pdu[2])
-        credential, signature, started, path = pdu[1], pdu[3], pdu[4], pdu[6]
+        signature, started, path = pdu[3], pdu[4], pdu[6]
     except (cbor.NotCanonical, KeyError):
         return "malformed", {}
+    if (1 in pdu) == (9 in pdu):
+        return "malformed", stmt
+    held = {} if held is None else held
+    credential = pdu[1] if 1 in pdu else held.get(pdu[9])
+    if credential is None:
+        return "credential-required", stmt
     need = (["send"] if stmt.get(6) else []) + (["receive"] if pdu.get(7) or pdu.get(8) else [])
     result, body = rp.verify_credential(credential, post_offices, revoked, started, need)
     if result != "ok" or body is None:
         return result, stmt
+    held[rp.credential_hash(credential)] = credential
     if stmt.get(1) != body[3] or stmt.get(2) != body[4]:
         return "not-authorized", stmt
     if not rp.verify(rp.CTX_SESSION, pdu[2], signature, body[5]):
