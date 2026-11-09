@@ -40,9 +40,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   three more, the modem interface's conversations seven unwritten rules, the post office's
   exchanges most of RP-5's error behaviour and JWS's missing context rule, the email vectors that
   bounces were refused at the door and `Radio-Path` lacked its session ID, renewal that a gateway
-  could not renew its own credential, forwarding the flags and the placement's checks. Where a
-  case's verdict is written in a spec, `make.py` asserts it in the case list, so the reference is
-  tested rather than trusted.
+  could not renew its own credential, forwarding the flags and the placement's checks.
+- **Every case's verdict is written out** in `make.py` (`confirm`, by case name; tables for the
+  RPMI conversations, the API story and the accept list), as the spec states it, so the reference
+  is tested rather than trusted. Work a new case's verdict out from the spec, never copy it from
+  the reference's output. When changing a reference, plant a fault in a scratch copy and check
+  `make.py` stops: a check that cannot fail tests nothing.
 - **Numbers are measured.** Sizes and times in the specs come from encoding the examples, not
   estimates.
 - **Cross-references** are written `RP-n §x.y`; check them when sections move.

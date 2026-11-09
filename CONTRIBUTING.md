@@ -43,7 +43,9 @@ Edit the script, run it, and commit the script and the SVGs together.
 ## Test vectors
 
 `vectors/` is made by `tools/vectors/make.py` from a small reference (Python, standard library
-only). `vectors/README.md` says what each file holds and how an implementation uses it.
+only). `vectors/README.md` says what each file holds and how an implementation uses it. A new case
+comes with its verdict, read from the specification and written in `make.py`'s table for that
+list; never copy it from what the reference answers.
 
 ## Code
 

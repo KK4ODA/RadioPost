@@ -101,6 +101,12 @@ A change that alters a vector changes a specification. The pull request updates 
 its version and change log, and these files together (RP-0 §8.4, §8.6). Where a vector and a
 specification disagree, the specification is right and the reference has a bug.
 
+**Every verdict is written out.** Each case list in `make.py` comes with a table of the verdicts its
+specification states, by case name (`confirm`), and `make.py` stops if the reference gives another.
+So a bug in the reference fails the build instead of becoming the expected answer. A new case needs
+its verdict in that table, worked out from the specification, not copied from the reference's
+output.
+
 ## Not yet covered
 
 DKIM signing (the mail server's) and photo re-encoding (RP-6 §2.4 step 5, a SHOULD this reference

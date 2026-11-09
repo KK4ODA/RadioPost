@@ -311,6 +311,22 @@ def frame(pdu: dict[int, Any]) -> bytes:
     return len(raw).to_bytes(2, "big") + raw
 
 
+def unframe(data: bytes) -> dict[int, Any]:
+    """RP-3 §2: one framed PDU back to its map; ValueError("malformed") when it is not one."""
+    if len(data) < 2:
+        raise ValueError("malformed")
+    n = int.from_bytes(data[:2], "big")
+    if n == 0 or len(data) != 2 + n:
+        raise ValueError("malformed")
+    try:
+        pdu = cbor.decode(data[2:])
+    except cbor.NotCanonical as err:
+        raise ValueError("malformed") from err
+    if not isinstance(pdu, dict) or pdu.get(0) not in {*PDU_TYPES.values(), 11}:
+        raise ValueError("malformed")
+    return pdu
+
+
 def statement_from_hello(hello: dict[int, Any]) -> dict[int, Any]:
     """RP-3 §5.1: the statement a called station rebuilds from HELLO."""
     return statement(

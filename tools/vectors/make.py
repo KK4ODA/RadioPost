@@ -18,6 +18,7 @@ import email.utils
 import hashlib
 import json
 import sys
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from email.header import Header
 from pathlib import Path
@@ -129,6 +130,31 @@ def header(purpose: str, specs: dict[str, str]) -> dict[str, Any]:
         "specs": specs,
         "made_by": "tools/vectors/make.py",
     }
+
+
+def confirm(
+    cases: list[dict[str, Any]],
+    wanted: dict[str, Any],
+    verdict: Callable[[dict[str, Any]], Any] = lambda c: c["expect"],
+    by: str = "what",
+) -> None:
+    """Each case's verdict as the specifications state it, written out next to its name.
+
+    The reference is then tested, not trusted: a wrong reference fails here, where otherwise it
+    would quietly write its own mistake into the vectors as the expected answer.
+    """
+    got = {c[by]: verdict(c) for c in cases}
+    unmatched = set(got) ^ set(wanted)
+    assert not unmatched, f"cases and written verdicts do not match: {sorted(unmatched)}"
+    for what, want in wanted.items():
+        assert got[what] == want, f"{what}: the reference says {got[what]!r}, the spec {want!r}"
+
+
+def answer_of(e: dict[str, Any]) -> str:
+    """An API answer in a few words: the status, and the error's name if it is one."""
+    body = e["response"].get("body") or {}
+    status = str(e["response"]["status"])
+    return f"{status} {body['name']}" if "name" in body and "status" in body else status
 
 
 # -- keys.json -----------------------------------------------------------------------------------
@@ -780,6 +806,27 @@ def make_credentials() -> dict[str, Any]:
                 "expect": result,
             }
         )
+    confirm(  # RP-1 §5, step by step
+        cases,
+        {
+            "valid": "ok",
+            "one second before expiry": "ok",
+            "at expiry": "credential-expired",
+            "serial revoked": "credential-revoked",
+            "post office key revoked": "credential-revoked",
+            "address changed after signing": "credential-invalid",
+            "post office not known to this verifier": "unknown-post-office",
+            "signed by a key outside its validity period": "credential-invalid",
+            "issued an hour ahead of the verifier's clock": "credential-invalid",
+            "issued ten minutes ahead: within the allowance": "ok",
+            "receive-only device asked to send": "not-authorized",
+            "receive-only device picking up": "ok",
+            "role mailbox operator": "ok",
+            "gateway acting as a gateway": "ok",
+            "a user's credential asked to act as a gateway": "not-authorized",
+            "not a two-item array": "credential-invalid",
+        },
+    )
     out = header("Credentials and how they verify", {"RP-1": "§4–§5, §8", "RP-0": "§5, §9.3"})
     out["rule"] = (
         "From `body` and the signing key, an issuer produces exactly `payload_hex`, "
@@ -1029,6 +1076,25 @@ def make_statements() -> dict[str, Any]:
                 "expect": result,
             }
         )
+    confirm(  # RP-1 §6.3 in its order; §6.5 for the station called
+        cases,
+        {
+            "valid, 41 s after the client's clock": "ok",
+            "exactly 600 s apart: still inside": "ok",
+            "601 s apart: sign a challenge instead": "time-skew",
+            "nonce seen before: sign a challenge instead": "time-skew",
+            "verified by a gateway that was not the one called": "not-authorized",
+            "a message removed from the list after signing": "signature-invalid",
+            "operator not the credential's": "not-authorized",
+            "challenge form, the challenge issued": "ok",
+            "challenge form, another challenge issued": "signature-invalid",
+            "pickup only, no messages offered": "ok",
+            "called station, checked by the caller with the nonce it sent": "ok",
+            "called station, its clock two hours ahead: the clocks are not compared": "ok",
+            "called station, the nonce of another session": "signature-invalid",
+            "called station, checked by a caller it was not made for": "not-authorized",
+        },
+    )
     out = header(
         "Session statements and how they verify", {"RP-1": "§6", "RP-3": "§5.1, §5.3, §10"}
     )
@@ -1908,6 +1974,35 @@ def rpmi_broadcast() -> list[dict[str, Any]]:
     return w.log
 
 
+def rpmi_answers(steps: list[dict[str, Any]]) -> dict[str, str]:
+    """Each request with an `id`, and what came of it: its answer, and for a call its end."""
+    out = {}
+    for i, step in enumerate(steps):
+        m = step.get("message")
+        if step.get("to") != "adapter" or m is None or "id" not in m:
+            continue
+        mine = [
+            t["message"]
+            for t in steps[i + 1 :]
+            if t.get("to") == "host"
+            and (t["station"], t["host"]) == (step["station"], step["host"])
+        ]
+        first = next(x for x in mine if x.get("id") == m["id"] and x["op"] in RPMI_ANSWERS)
+        said = first["code"] if first["op"] == "error" else first["op"]
+        if m["op"] == "connect" and said == "ok":
+            end = next(
+                x for x in mine if x.get("id") == m["id"] and x["op"] in {"connected", "failed"}
+            )
+            said += (
+                ", then connected" if end["op"] == "connected" else f", then failed {end['code']}"
+            )
+        out[f"{step['station']} {step['host']} {m['op']} {m['id']}"] = said
+    return out
+
+
+RPMI_ANSWERS = {"ok", "error", "hello", "status"}
+
+
 def make_rpmi_conversations() -> dict[str, Any]:
     out = header("Conversations between hosts and adapters", {"RP-4": "§1–§7"})
     out["rule"] = (
@@ -1924,6 +2019,77 @@ def make_rpmi_conversations() -> dict[str, Any]:
         "received_bytes_at_most": RPMI_FRAME,
         "link_ids": "each adapter's own: a letter for the station and a count from 1",
     }
+    session, errors, shared, broadcast = (
+        rpmi_session(),
+        rpmi_errors(),
+        rpmi_shared(),
+        rpmi_broadcast(),
+    )
+    gateway_start = {
+        "N1CALL-10 gateway hello 1": "hello",
+        "N1CALL-10 gateway callsigns 2": "ok",
+        "N1CALL-10 gateway listen 3": "ok",
+    }
+    client_start = {"KK4ODA client hello 1": "hello", "KK4ODA client callsigns 2": "ok"}
+    for steps, wanted in [
+        (
+            session,
+            gateway_start
+            | client_start
+            | {"KK4ODA client connect 3": "ok, then connected", "KK4ODA client disconnect 4": "ok"},
+        ),
+        (
+            errors,
+            gateway_start
+            | {
+                "KK4ODA client connect 1": "refused",  # before hello (RP-4 §3)
+                "KK4ODA client hello 2": "unsupported-version",
+                "KK4ODA client hello 3": "hello",
+                "KK4ODA client listen 4": "refused",  # no callsigns yet (§4)
+                "KK4ODA client connect 5": "refused",
+                "KK4ODA client callsigns 6": "ok",
+                "KK4ODA client connect 7": "not-authorized",  # `as` not its own
+                "KK4ODA client connect 8": "unsupported",  # a bandwidth the modem lacks
+                "KK4ODA client tune 9": "unsupported",
+                "KK4ODA client send 10": "not-connected",
+                "KK4ODA client abort 11": "not-connected",  # nothing to abort
+                "KK4ODA client connect 12": "ok, then failed aborted",
+                "KK4ODA client abort 13": "ok",
+                "KK4ODA client connect 14": "ok, then failed timeout",
+                "KK4ODA client connect 15": "ok, then connected",
+                "KK4ODA client connect 16": "busy",  # max_links is 1
+                "KK4ODA client abort 17": "ok",
+            },
+        ),
+        (
+            shared,
+            {  # RP-4 §1.1
+                "N1CALL radiopost hello 1": "hello",
+                "N1CALL radiopost callsigns 2": "ok",
+                "N1CALL radiopost listen 3": "ok",
+                "N1CALL other hello 1": "hello",
+                "N1CALL other callsigns 2": "claimed",
+                "N1CALL other callsigns 3": "ok",
+                "N3CALL client hello 1": "hello",
+                "N3CALL client callsigns 2": "ok",
+                "N3CALL client connect 3": "ok, then failed timeout",
+                "N1CALL other listen 4": "ok",
+                "N3CALL client connect 4": "ok, then connected",
+                "N1CALL radiopost status 4": "status",
+                "N1CALL radiopost send 5": "not-connected",
+                "N1CALL radiopost connect 6": "busy",
+                "N3CALL client disconnect 5": "ok",
+                "N3CALL client connect 6": "ok, then failed timeout",
+            },
+        ),
+        (broadcast, gateway_start | client_start | {"KK4ODA client broadcast 3": "ok"}),
+    ]:
+        got = rpmi_answers(steps)
+        assert got == wanted, {
+            k: (got.get(k), wanted.get(k))
+            for k in got.keys() | wanted.keys()
+            if got.get(k) != wanted.get(k)
+        }
     out["conversations"] = [
         {
             "name": "session-01 over RPMI",
@@ -1933,7 +2099,7 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "part of the other station's stream; a host joins them, since `received` keeps no "
                 "`send` boundaries. The bytes received are session-01.json's streams."
             ),
-            "steps": rpmi_session(),
+            "steps": session,
         },
         {
             "name": "errors",
@@ -1945,7 +2111,7 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "calls to a station nobody answers for, one aborted and one given up, a call that "
                 "connects, a second call while that link is up, and the link aborted."
             ),
-            "steps": rpmi_errors(),
+            "steps": errors,
         },
         {
             "name": "a shared modem",
@@ -1958,12 +2124,12 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "call is refused `busy`. When the other program's connection closes, its "
                 "callsign goes with it."
             ),
-            "steps": rpmi_shared(),
+            "steps": shared,
         },
         {
             "name": "a broadcast",
             "story": "The client sends a broadcast; the gateway's host hears it with its source.",
-            "steps": rpmi_broadcast(),
+            "steps": broadcast,
         },
     ]
     return out
@@ -1994,6 +2160,23 @@ def make_rpmi_lines() -> dict[str, Any]:
         adapter.request_line("client", line)
         answers = [e["message"] for e in w.log[before + 1 :]]
         cases.append({"what": what, "line": line, "answers": answers})
+    confirm(  # RP-4 §2: (the answer's op, its code, its id)
+        cases,
+        {
+            "a string id, an unknown member": ("status", None, "s1"),
+            "not JSON": ("error", "malformed", None),
+            "not a JSON object": ("error", "malformed", None),
+            "no op": ("error", "malformed", 4),
+            "an op that is not a string": ("error", "malformed", 5),
+            "an id that is neither a string nor an integer": ("error", "malformed", None),
+            "an id that is a boolean": ("error", "malformed", None),
+            "base64url, not standard base64": ("error", "malformed", 8),
+            "base64 without its padding": ("error", "malformed", 9),
+            "an op this adapter does not know": ("error", "unsupported", 10),
+            "good base64, but no such link": ("error", "not-connected", 11),
+        },
+        lambda c: (c["answers"][0]["op"], c["answers"][0].get("code"), c["answers"][0].get("id")),
+    )
     out = header("RPMI lines: read, or answered with an error", {"RP-4": "§2, §4, §7"})
     out["rule"] = (
         "An adapter that has said `hello` to a host with the callsign KK4ODA, and has no links, "
@@ -2152,6 +2335,20 @@ def make_jws() -> dict[str, Any]:
                 "expect": result,
             }
         )
+    confirm(  # RP-0 §5 and RP-1 §7.2
+        cases,
+        {
+            "info, signed by the key in DNS": "ok",
+            "revocations, signed by the new key that the info document lists": "ok",
+            "revocations, checked with the DNS key alone": "signature-invalid",
+            "post-offices, its payload changed after signing": "signature-invalid",
+            "gateways, `alg` none and no signature": "signature-invalid",
+            "an info document signed by a key DNS does not list, naming itself; then a "
+            "document signed by that key": "signature-invalid",
+            "two parts, not three": "malformed",
+            "a header that is not JSON": "malformed",
+        },
+    )
     out = header(
         "Signed documents (JWS) and how they verify",
         {"RP-0": "§5", "RP-1": "§7.2", "RP-5": "§1, §4"},
@@ -2366,6 +2563,26 @@ def case_office() -> tuple[po.PostOffice, Exchanges, dict[str, str]]:
     return office, Exchanges(office), tokens
 
 
+HANDED_IN = (
+    "messages handed in: accepted; the same again, a duplicate; an air form that is not its "
+    "message; a message from someone else; a message not in the statement. Then a pickup and a "
+    "fetch of a serial the session did not list."
+)
+
+
+def answers(c: dict[str, Any]) -> list[str]:
+    """A case's API answers in a few words, and a handed-in message's result after its status."""
+    out = []
+    for e in c["exchanges"]:
+        if "request" not in e:
+            continue
+        said = answer_of(e)
+        for r in (e["response"].get("body") or {}).get("results", []):
+            said += f"; {r['status']}" + (f" {r['name']}" if "name" in r else "")
+        out.append(said)
+    return out
+
+
 def api_cases() -> list[dict[str, Any]]:
     hello = session_pdus()[0][1][0][1]
     good = session_request(hello, T_SESSION + 40)
@@ -2452,11 +2669,7 @@ def api_cases() -> list[dict[str, Any]]:
     ex.call(T_SESSION + 97, gw, "GET", f"/sessions/{sid}/messages/999", None, tokens[gw])
     cases.append(
         {
-            "what": (
-                "messages handed in: accepted; the same again, a duplicate; an air form that "
-                "is not its message; a message from someone else; a message not in the "
-                "statement. Then a pickup and a fetch of a serial the session did not list."
-            ),
+            "what": HANDED_IN,
             "exchanges": ex.log,
         }
     )
@@ -2522,9 +2735,43 @@ def make_api_exchanges() -> dict[str, Any]:
         "next_serial_after_it": 1051,
         "randomness": "post office values are stream('post office <what> <n>', bytes)",
     }
-    out["story"] = api_story()
-    out["cases"] = api_cases()
-    out["report"] = api_report()
+    story, cases, report = api_story(), api_cases(), api_report()
+    confirm(  # RP-5 §1, §2, §5.2–§5.5
+        cases,
+        {
+            "session-01, opened 40 s after the client's clock": ["201"],
+            "the post office's clock 601 s after `started`": ["422 time-skew"],
+            "`started` 601 s after the statement's time": ["422 time-skew"],
+            "the same statement twice: a replay": ["201", "422 time-skew"],
+            "a message removed from the statement after signing": ["422 signature-invalid"],
+            "the user's credential revoked": ["422 credential-revoked"],
+            "carried by a gateway the statement does not name": ["403 not-authorized"],
+            "no token": ["401 not-authorized"],
+            "a user's token on a gateway endpoint": ["403 not-authorized"],
+            HANDED_IN: [
+                "201",
+                "200; accepted; duplicate; refused malformed; refused not-authorized; "
+                "refused not-authorized",
+                "404 unknown-message",
+                "404 unknown-message",
+            ],
+        },
+        answers,
+    )
+    failed = [
+        (e["who"], e["request"]["path"], answer_of(e))
+        for e in story
+        if "request" in e and e["response"]["status"] >= 300
+    ]
+    assert failed == [("KK4ODA-1", "/copies?after=c_3&wait=60", "401 not-authorized")]
+    reported = [e for e in report if "request" in e][-1]["response"]["body"]["sessions"]
+    assert [s.get("name") or [r["status"] for r in s["results"]] for s in reported] == [
+        ["accepted", "accepted"],
+        "signature-invalid",
+    ]  # RP-5 §5.6: one answer a session; a statement that fails takes nothing
+    out["story"] = story
+    out["cases"] = cases
+    out["report"] = report
     return out
 
 
@@ -2834,16 +3081,18 @@ def make_forwarding() -> dict[str, Any]:
                 "expect": result,
             }
         )
-    # What RP-7 §4.3 says each case gets, written out so that the reference is tested, not trusted.
-    assert [c["expect"] for c in placement_cases] == [
-        "ok",
-        "signature-invalid",
-        "signature-invalid",
-        "not-authorized",
-        "not-authorized",
-        "refused-by-policy",
-        "malformed",
-    ]
+    confirm(  # RP-7 §4.3, in its order
+        placement_cases,
+        {
+            "as placed, checked by N2CALL-5 in session-04": "ok",
+            "signed by a key radiopost.org does not have": "signature-invalid",
+            "its signature changed": "signature-invalid",
+            "for another gateway": "not-authorized",
+            "for another message": "not-authorized",
+            "past its `expires`": "refused-by-policy",
+            "not a placement": "malformed",
+        },
+    )
     records = offline_records()
     entries = []
     for r in records:
@@ -2887,16 +3136,18 @@ def make_forwarding() -> dict[str, Any]:
                 "expect": result,
             }
         )
-    # RP-7 §3.3, written out.
-    assert [c["expect"] for c in proof_cases] == [
-        "ok",
-        "ok",
-        "refused-by-policy",
-        "refused-by-policy",
-        "refused-by-policy",
-        "refused-by-policy",
-        "signature-invalid",
-    ]
+    confirm(  # RP-7 §3.3
+        proof_cases,
+        {
+            "Shelter 3's record, as N2CALL-5 sends it": "ok",
+            "Facundo's record, a pickup only": "ok",
+            "a path that does not start at the gateway the user called": "refused-by-policy",
+            "a path that does not end at the caller": "refused-by-policy",
+            "a path through the partner already: a loop": "refused-by-policy",
+            "a path of nine gateways": "refused-by-policy",
+            "the statement changed after signing": "signature-invalid",
+        },
+    )
     out = header(
         "Forwarding: placements, session records, and the post office's side",
         {"RP-7": "§3, §4, §6", "RP-5": "§5.6, §5.8"},
@@ -3149,9 +3400,41 @@ def make_api_account() -> dict[str, Any]:
             "shelter3@radiopost.org": ["@redcross.example"],
         },
     }
+    accept_list = account_accept_list()
+    assert all(e["response"]["status"] < 300 for e in story if "request" in e)
+    confirm(  # RP-5 §3.2, §6.2
+        cases,
+        {
+            "at its expiry a credential cannot log in, so cannot renew: the device enrolls "
+            "again with a new code": ["200", "422 credential-expired"],
+            "a revoked credential cannot log in": ["200", "422 credential-revoked"],
+            "renewal by radio, asked for in HELLO": ["200", "200", "201"],
+        },
+        answers,
+    )
+    seen: list[Any] = []
+    for e in accept_list:
+        if e.get("request", {}).get("path") == "/accept-list":
+            body = e["response"]["body"]
+            seen.append(body["entries"] if "entries" in body else answer_of(e))
+        if "smtp" in e:
+            seen.append((e["smtp"]["expect"]["rcpt"], e["smtp"]["expect"]["data"]))
+    facundo = ["maria@example.com", "ana.lopez@example.org", "@weather.example"]
+    shelter = ["@redcross.example", "@fema.example"]
+    assert seen == [  # RP-5 §6.5, RP-6 §2.2
+        ["maria@example.com", "@redcross.example"],
+        facundo,  # lowercase, a duplicate not added, a domain removed in other capitals
+        "400 malformed",
+        shelter,  # N3CALL adds,
+        shelter,  # and N4CALL sees the same list
+        ("550 5.7.1", None),  # José on no list
+        [*facundo, "jose@example.net"],  # written to, so added, in lowercase
+        ("250 2.1.5", "250 2.0.0"),
+        shelter,  # accept_on_send off: nothing added
+    ]
     out["renewal"] = story
     out["renewal_cases"] = cases
-    out["accept_list"] = account_accept_list()
+    out["accept_list"] = accept_list
     return out
 
 
@@ -3458,7 +3741,58 @@ def make_email_in() -> dict[str, Any]:
             }
         )
     assert between[0]["canonical_hex"] == encoded("facundo-to-ana")[0].hex()
-    assert all(b["message_from"] == "email" for b in between[1:])
+    confirm(  # RP-6 §4: the part used only when every check passes, recipient included
+        between,
+        {
+            "the part as sent: its message is used, priority and content ID kept": ("ok", "part"),
+            "the part carries another message of the same session, not addressed to Ana": (
+                "not-authorized",
+                "email",
+            ),
+            "the statement's signature changed": ("signature-invalid", "email"),
+            "the part's message changed: its content ID is not in the statement": (
+                "not-authorized",
+                "email",
+            ),
+        },
+        lambda c: (c["part_check"], c["message_from"]),
+    )
+    arrival = T_SESSION + 10800
+
+    def made(c: dict[str, Any]) -> tuple[int, bool, bool, str]:
+        m = c["message"]
+        date = "arrival" if m["date"] == arrival else "header"
+        return (m.get("flags", 0), "files" in m, "reply_to_hex" in m, date)
+
+    confirm(  # RP-6 §2.4: (flags, files carried, reply_to set, where the date came from)
+        cases,
+        {
+            "maria-419": (0, False, False, "header"),
+            "maria-421": (0, True, False, "header"),  # 6 122 bytes: within attach_bytes
+            "maria-reply": (1, False, True, "header"),  # trimmed; In-Reply-To one of ours
+            "jorge-outlook": (1, False, False, "header"),
+            "redcross-alternative": (0, False, False, "arrival"),  # Date unreadable
+            "redcross-html": (0, False, False, "header"),
+            "maria-held": (2, False, False, "header"),  # 40 kB over attach_bytes: held
+        },
+        made,
+        by="name",
+    )
+    named = {c["name"]: c["message"] for c in cases}
+    assert named["maria-reply"]["body"] == (
+        "¡Qué alivio! So glad to hear it. Tell us if you need anything.\n\nMaria\n"
+    )  # quoted-printable decoded, NFC, the quotation after `On … wrote:` cut (step 4)
+    assert named["jorge-outlook"]["body"] == (
+        "Facundo, the list is in the next mail. Shelters 3 and 7 have room.\n\nJorge\n"
+    )
+    assert named["jorge-outlook"]["to"] == ["facundo@radiopost.org", "eoc@radiopost.org"]
+    assert named["jorge-outlook"]["cc"] == ["shelter3@radiopost.org"]  # domains in lowercase
+    held = named["maria-held"]["held"][0]
+    assert (held["name"], held["type"], held["size"]) == ("policy.pdf", "application/pdf", 40000)
+    assert bounce["from"] == "postmaster@radiopost.org"  # RP-6 §3.3
+    assert bounce["subject"] == "Not delivered: Re: Are you safe?"
+    assert bounce["body"] == "maria@example.com: 552 5.2.2 Mailbox full\n"
+    assert bounce["reply_to"] == encoded("facundo-reply")[1]
     out = header("Email in: what an email becomes", {"RP-6": "§2.4, §3.3, §4"})
     out["rule"] = (
         "A post office given `email` (and, for a case, its `context`) makes `message`: exactly "
@@ -3782,6 +4116,34 @@ def make_email_door() -> dict[str, Any]:
         if "max_email_bytes" in verdicts:
             case["max_email_bytes"] = verdicts["max_email_bytes"]
         cases.append(case | {"expect": replies})
+    taken, at_data = ("250 2.1.5", "250 2.0.0"), "250 2.1.5"
+    confirm(  # RP-6 §2.1, in the table's order; §2.2 for the list
+        cases,
+        {
+            "Maria, on Facundo's list, DMARC pass": taken,
+            "an address that does not exist": ("550 5.1.1", None),
+            "a sender not on the list": ("550 5.7.1", None),
+            "on the list with other capitals": taken,
+            "a domain on the list (`@redcross.example`)": taken,
+            "a subdomain of a listed domain is not that domain": ("550 5.7.1", None),
+            "a user of a known RadioPost post office, DKIM pass for its domain": taken,
+            "claims a known post office's domain, but no DKIM signature passes for it": (
+                at_data,
+                "550 5.7.1",
+            ),
+            "envelope sender on the list, header sender not": (at_data, "550 5.7.1"),
+            "DMARC fails for the `From:` domain": (at_data, "550 5.7.1"),
+            "over the post office's `max_email_bytes` (here 100)": (at_data, "552 5.3.4"),
+            "inline PGP": (at_data, "554 5.7.1"),
+            "PGP/MIME, multipart/encrypted": (at_data, "554 5.7.1"),
+            "S/MIME enveloped-data": (at_data, "554 5.7.1"),
+            "S/MIME signed, not encrypted": taken,
+            "an executable attachment": (at_data, "554 5.7.1"),
+            "a delivery report about a message this post office sent, null sender": taken,
+            "null sender, not a delivery report": (at_data, "550 5.7.1"),
+        },
+        lambda c: (c["expect"]["rcpt"], c["expect"]["data"]),
+    )
     out = header("Email at the door: taken or refused", {"RP-6": "§2.1, §2.2"})
     out["rule"] = (
         "A post office with `context`'s accounts, accept lists and known post offices, given the "
@@ -3802,20 +4164,41 @@ def make_dns() -> dict[str, Any]:
     b64 = base64.b64encode(pub).decode()
     kid = rp.kid(pub).hex()
     texts = [
-        f"v=RP1; t=api; url={PO_RADIOPOST}",
-        f"v=RP1; t=key; kid={kid}; p={b64}",
-        f"v=RP1;t=key;kid={kid};p={b64}",
-        f"  v=RP1 ; t=key ; kid={kid} ; p={b64} ;",
-        f"v=RP1; t=key; kid={kid}; p={b64}; note=rotated 2026",
-        f"v=RP2; t=key; kid={kid}; p={b64}",
-        f"v=RP1; t=key; kid=00000000; p={b64}",
-        f"v=RP1; t=key; kid={kid}; p={base64.b64encode(pub[:31]).decode()}",
-        f"v=RP1; t=key; kid={kid}; kid={kid}; p={b64}",
-        "v=RP1; t=api; url=http://po.radiopost.org/rp/v1",
-        f"v=RP1; kid={kid}; p={b64}",
-        "v=spf1 mx -all",
+        ("an API record", f"v=RP1; t=api; url={PO_RADIOPOST}"),
+        ("a key record", f"v=RP1; t=key; kid={kid}; p={b64}"),
+        ("no spaces", f"v=RP1;t=key;kid={kid};p={b64}"),
+        ("spaces around everything, a `;` at the end", f"  v=RP1 ; t=key ; kid={kid} ; p={b64} ;"),
+        ("an unknown tag", f"v=RP1; t=key; kid={kid}; p={b64}; note=rotated 2026"),
+        ("another version", f"v=RP2; t=key; kid={kid}; p={b64}"),
+        ("a `kid` that is not the key's", f"v=RP1; t=key; kid=00000000; p={b64}"),
+        (
+            "a key of 31 bytes",
+            f"v=RP1; t=key; kid={kid}; p={base64.b64encode(pub[:31]).decode()}",
+        ),
+        ("a tag twice", f"v=RP1; t=key; kid={kid}; kid={kid}; p={b64}"),
+        ("an API URL that is not https", "v=RP1; t=api; url=http://po.radiopost.org/rp/v1"),
+        ("no `t`", f"v=RP1; kid={kid}; p={b64}"),
+        ("not RadioPost's: an SPF record", "v=spf1 mx -all"),
     ]
-    cases = [{"txt": t, "result": rp.parse_txt(t)} for t in texts]
+    cases = [{"what": w, "txt": t, "result": rp.parse_txt(t)} for w, t in texts]
+    confirm(  # RP-1 §7.1: unknown tags are ignored; these records are ignored whole
+        cases,
+        {
+            "an API record": "read",
+            "a key record": "read",
+            "no spaces": "read",
+            "spaces around everything, a `;` at the end": "read",
+            "an unknown tag": "read",
+            "another version": "ignored",
+            "a `kid` that is not the key's": "ignored",
+            "a key of 31 bytes": "ignored",
+            "a tag twice": "ignored",
+            "an API URL that is not https": "ignored",
+            "no `t`": "ignored",
+            "not RadioPost's: an SPF record": "ignored",
+        },
+        lambda c: "read" if c["result"] else "ignored",
+    )
     out = header("`_radiopost` TXT records: which are read and which ignored", {"RP-1": "§7.1"})
     out["rule"] = (
         "Parsing `txt` gives `result`: the record's tags, or null when it must be ignored."
@@ -3938,6 +4321,18 @@ def self_check(name: str, data: dict[str, Any]) -> None:
         check_resumed(data)
     if name == "session-03.json":
         check_station(data)
+    if name == "pdus.json":
+        for pdu in data["pdus"]:
+            assert rp.unframe(bytes.fromhex(pdu["frame_hex"])) == cbor.decode(
+                bytes.fromhex(pdu["pdu_hex"])
+            )
+        for bad in data["invalid"]:
+            try:
+                rp.unframe(bytes.fromhex(bad["frame_hex"]))
+            except ValueError as err:
+                assert str(err) == bad["expect"]
+                continue
+            raise AssertionError(f"took a frame RP-3 §2 refuses: {bad['why']}")
     if name == "rpmi-conversations.json":
         check_rpmi(data)
     if name == "jws.json":
