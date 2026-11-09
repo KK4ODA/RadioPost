@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.5.1 |
+| **Version** | 0.6.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -367,11 +367,13 @@ call** and takes the called station's part.
   answering client lists every such message not yet receipted, whatever `cursor` says.
 * Messages received this way, in either direction, keep their proof (RP-1 §6.4): the other
   station's credential, statement and signature. With it, each user's post office can be told of
-  them once there is Internet, and both mailboxes agree. *(How a client reports them is to be
-  added to RP-5.)*
+  them once there is Internet, and both mailboxes agree: each client reports the session to its own
+  post office (RP-5 §6.6), which files what its user received as picked up and sends what its user
+  sent on to the message's other recipients.
 
-Test vectors: `vectors/session-03.json` is a station-to-station session byte for byte, and
-`vectors/statements.json` has the called station's statement and how it verifies.
+Test vectors: `vectors/session-03.json` is a station-to-station session byte for byte,
+`vectors/statements.json` has the called station's statement and how it verifies, and
+`vectors/direct.json` how both stations report it.
 
 ---
 
@@ -438,3 +440,4 @@ has one example of each PDU, and frames that must be refused.
 | 0.4.0 | 2026-11-09 | Local delivery (RP-7 §4.4): the waiting flag `local` (§5.2), `REQUEST` key 4 `ids` (§5.6), no serial in a local message's `MSG` (§5.4). |
 | 0.5.0 | 2026-11-09 | Mail sent through a cut-off gateway is queued, not sent, and offered again (§5.5, RP-7 §3.6); a cut-off gateway's `already-have` (§5.2). |
 | 0.5.1 | 2026-11-09 | Sizes with credentials as COSE_Sign1 (RP-1 0.4.0) (§11). |
+| 0.6.0 | 2026-11-09 | Station-to-station mail is reported to each user's post office (§10, RP-5 §6.6). |

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.9.0 |
+| **Version** | 0.10.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -436,6 +436,57 @@ A licensed user registers a gateway they operate:
 
 How the accept list is used at the door is RP-6's.
 
+### 6.6 `POST /direct`: station-to-station mail
+
+Mail two users exchange station to station (RP-3 §10) reaches no post office on the air. Each
+client reports those sessions to its own post office when it has the Internet, oldest first, so
+that its mailbox and sent mail agree with what crossed the air, and the message reaches its other
+recipients:
+
+```json
+{"sessions": [{
+  "started": 1794249647, "role": "caller",
+  "mine":   {"statement": "pgF1…", "signature": "XT2U…", "credential": "hFgj…"},
+  "theirs": {"statement": "pgF2…", "signature": "8kq1…", "credential": "hFgk…"},
+  "sent":     [{"id": "haxmp4foh4557vtwhzlq", "air": "AKcB…"}],
+  "received": [{"id": "bnidnck4opwdqyelsa4a", "air": "AKYB…"}]
+}]}
+```
+
+* `started`: the station called's clock when the session started (its `WELCOME` `time`).
+* `role`: `caller` or `called`, this user's part.
+* `mine`, `theirs`: each station's proof (RP-1 §6.4): the caller's statement as its `HELLO` gave it,
+  the station called's as RP-1 §6.5 builds it, each with its signature and credential, base64url.
+* `sent`: the messages this user handed over and the other station listed `complete`.
+* `received`: the messages this user received and listed `complete`.
+
+The post office checks each session in this order and, at the first failure, answers it
+`{"code", "name"}` and takes nothing of it:
+
+1. Both proofs decode, and `role` is one of the two. Otherwise `malformed`.
+2. `mine`'s credential (RP-1 §5) as it was at `started`, with `send` if `sent` is not empty and
+   `receive` if `received` is not empty; then `theirs`', with `send` if `received` is not empty.
+3. `mine`'s credential is for the token's account, an account of this post office. Otherwise
+   `not-authorized`.
+4. The statements, as RP-1 §6.3 checks a statement relayed later: the caller's with the station
+   called as the station it names and `time` against `started`; the station called's with the
+   caller as the station it names and the caller's `nonce` (RP-1 §6.5).
+
+Then, one result per message, `sent` first, each in the order given:
+
+* A sent message must be in `mine`'s statement and from its address, and a received one in
+  `theirs`' and from its address, addressed (`to` or `cc`) to this user. Otherwise it is refused,
+  `not-authorized`, as in §5.4.
+* **Sent:** taken as mail the user sent (§5.4; the accept list fills as §6.5 says), and sent on to
+  every recipient but the other station's account, which has it: `{"id", "status": "accepted",
+  "sent_on": [...]}`, or `duplicate` when the post office already had it.
+* **Received:** filed in the user's mailbox with the next serial, already picked up, so no gateway
+  offers it again: `{"id", "status": "accepted", "serial"}`, or `duplicate` when the mailbox holds
+  it.
+
+The answer is `{"sessions": [...]}`, one entry per session, in order. Sending the same report again
+changes nothing: every message is a `duplicate`.
+
 ---
 
 ## 7. Security considerations *(informative)*
@@ -451,7 +502,8 @@ How the accept list is used at the door is RP-6's.
 
 ## 8. Test vectors
 
-`vectors/api-account.json` (renewal over the Internet and by radio, a gateway's, an expired and a
+`vectors/direct.json` (§6.6: session-03 reported by both stations, sent again, refused to a
+gateway, and nine cases), `vectors/api-account.json` (renewal over the Internet and by radio, a gateway's, an expired and a
 revoked credential; the accept list read and changed, shared by a role mailbox's operators, filled
 by mail sent, and its effect at the door), `vectors/api-exchanges.json` (enrollment, a gateway registered, logins, session-01
 at the post office, copies placed ahead and dropped, an offline gateway's report, and the
@@ -474,3 +526,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.7.0 | 2026-11-09 | For forwarding (RP-7): `forwarding` windows in a gateway's record (§4.4), routes (§4.5), `path` in a report (§5.6), `forward` items (§5.8). |
 | 0.8.0 | 2026-11-09 | §5.6: a report whose path does not end at the reporting gateway is refused, `not-authorized`. |
 | 0.9.0 | 2026-11-09 | `local_pickups` in a report (§5.6), for RP-7's local delivery. |
+| 0.10.0 | 2026-11-09 | `POST /direct`: a client reports its station-to-station sessions with both proofs; received mail is filed as picked up, sent mail sent on to every recipient but the other station (§6.6); test vectors (§8). |

@@ -405,6 +405,7 @@ def messages() -> dict[str, dict[str, Any]]:
         "v": 1,
         "from": "facundo@radiopost.org",
         "to": ["ana@hampost.org"],
+        "cc": ["maria@example.com"],
         "date": T_STATION - 300,
         "subject": "Direct",
         "body": "Ana, no gateway hears me from here, so I am calling you direct. All well; on the "
@@ -2454,7 +2455,7 @@ class Exchanges:
         nonce = self.call(at, who, "POST", "/auth/challenge")["nonce"]
         raw = jws.unb64u(nonce)
         assert raw is not None
-        signature = rp.sign(rp.CTX_LOGIN, raw + PO_RADIOPOST.encode(), SECRET[device])
+        signature = rp.sign(rp.CTX_LOGIN, raw + self.po.base_url.encode(), SECRET[device])
         body = {"credential": jws.b64u(cred), "nonce": nonce, "signature": jws.b64u(signature)}
         return self.call(at, who, "POST", "/auth/token", body).get("token", "")
 
@@ -3907,6 +3908,267 @@ def make_queued() -> dict[str, Any]:
     return out
 
 
+# -- direct.json ---------------------------------------------------------------------------------
+
+
+T_DIRECT = T_STATION + 2 * 3600  # 20:40Z: Facundo, then Ana, reach the Internet
+
+
+def direct_proofs() -> tuple[dict[str, str], dict[str, str]]:
+    """Facundo's proof and Ana's, from session-03's HELLO and WELCOME (RP-1 §6.4)."""
+    t = station_pdus()
+    hello, welcome = t[0][1][0][1], t[1][1][0][1]
+    facundo = {
+        "credential": jws.b64u(hello[13]),
+        "statement": jws.b64u(cbor.encode(rp.statement_from_hello(hello))),
+        "signature": jws.b64u(hello[15]),
+    }
+    ana = {
+        "credential": jws.b64u(welcome[13]),
+        "statement": jws.b64u(cbor.encode(rp.statement_from_welcome(hello, welcome))),
+        "signature": jws.b64u(welcome[15]),
+    }
+    return facundo, ana
+
+
+def direct_report(who: str, **changes: Any) -> dict[str, Any]:
+    """RP-5 §6.6's entry for session-03, as Facundo or Ana reports it."""
+    facundo, ana = direct_proofs()
+    if who == "facundo":
+        entry = {"role": "caller", "mine": facundo, "theirs": ana}
+        sent, received = ["facundo-direct"], ["ana-to-facundo"]
+    else:
+        entry = {"role": "called", "mine": ana, "theirs": facundo}
+        sent, received = ["ana-to-facundo"], ["facundo-direct"]
+    entry = {"started": STATION_CLOCK, **entry}
+    entry["sent"] = handed_in(sent)["messages"]
+    entry["received"] = handed_in(received)["messages"]
+    return entry | changes
+
+
+def direct_office() -> tuple[po.PostOffice, Exchanges]:
+    """radiopost.org with Facundo's mail, #419-#421."""
+    office = post_office()
+    deliver_waiting(office, None)
+    return office, Exchanges(office)
+
+
+def make_direct() -> dict[str, Any]:
+    """RP-5 §6.6: session-03 reported by both stations, and the checks."""
+    office, ex = direct_office()
+    ex.note(
+        "Session-03 took place at 18:40. At 20:40 Facundo's laptop reaches the Internet and "
+        "reports it: he sent Ana his message (cc Maria) and received hers. radiopost.org files "
+        "Ana's as picked up, and sends his on to Maria, but not to Ana, who has it."
+    )
+    token = ex.login(T_DIRECT, "Facundo's laptop", "facundo")
+    body = {"sessions": [direct_report("facundo")]}
+    answer = ex.call(T_DIRECT + 5, "Facundo's laptop", "POST", "/direct", body, token)
+    assert [w.serial for w in office.mailboxes["facundo@radiopost.org"] if not w.picked] == [
+        419,
+        420,
+        421,
+    ]
+    ex.note("The connection dropped before the answer came; the laptop sends the report again.")
+    again = ex.call(T_DIRECT + 65, "Facundo's laptop", "POST", "/direct", body, token)
+    ex.note("A gateway's token may not report a station's direct mail (RP-5 §2).")
+    gw = ex.login(T_DIRECT + 70, "KK4ODA-1", "gateway-kk4oda-1")
+    ex.call(T_DIRECT + 75, "KK4ODA-1", "POST", "/direct", body, gw)
+    hampost = po.PostOffice(
+        domains=["hampost.org"],
+        base_url=PO_HAMPOST,
+        secret=SECRET["po:hampost.org"],
+        public=PUBLIC["po:hampost.org"],
+        known=po_keys(),
+        draw=stream,
+    )
+    ex_ana = Exchanges(hampost)
+    ex_ana.note("Ana's laptop reports the same session to hampost.org, from her side.")
+    ana = ex_ana.login(T_DIRECT + 600, "Ana's laptop", "ana")
+    body_ana = {"sessions": [direct_report("ana")]}
+    ex_ana.call(T_DIRECT + 605, "Ana's laptop", "POST", "/direct", body_ana, ana)
+
+    facundo, ana_proof = direct_proofs()
+    stmt = cbor.decode(jws.unb64u(ana_proof["statement"]) or b"")
+    stmt[6] = []
+    changed = ana_proof | {"statement": jws.b64u(cbor.encode(stmt))}
+    late = rp.statement(
+        "facundo@radiopost.org",
+        "KK4ODA",
+        "N0CALL",
+        [encoded(n)[1] for n in STATION_OFFERS],
+        time=T_STATION + 3600,
+        nonce=STATION_NONCE,
+    )
+    other_nonce = rp.statement(
+        "ana@hampost.org",
+        "N0CALL",
+        "KK4ODA",
+        [encoded(n)[1] for _, n in STATION_WAITING],
+        time=STATION_CLOCK,
+        nonce=stream("another nonce", 8),
+    )
+    other_nonce_proof = ana_proof | {
+        "statement": jws.b64u(cbor.encode(other_nonce)),
+        "signature": jws.b64u(
+            rp.sign(rp.CTX_SESSION, cbor.encode(other_nonce), SECRET["device:ana"])
+        ),
+    }
+    for_shelter = rp.statement(
+        "ana@hampost.org",
+        "N0CALL",
+        "KK4ODA",
+        [encoded(n)[1] for n in ["ana-to-facundo", "ana-to-shelter3"]],
+        time=STATION_CLOCK,
+        nonce=STATION_NONCE,
+    )
+    for_shelter_proof = ana_proof | {
+        "statement": jws.b64u(cbor.encode(for_shelter)),
+        "signature": jws.b64u(
+            rp.sign(rp.CTX_SESSION, cbor.encode(for_shelter), SECRET["device:ana"])
+        ),
+    }
+    late_proof = facundo | {
+        "statement": jws.b64u(cbor.encode(late)),
+        "signature": jws.b64u(rp.sign(rp.CTX_SESSION, cbor.encode(late), SECRET["device:facundo"])),
+    }
+    cases_in = [
+        ("as Facundo reports it", direct_report("facundo"), "facundo"),
+        (
+            "Ana's statement changed after signing",
+            direct_report("facundo", theirs=changed),
+            "facundo",
+        ),
+        (
+            "Ana's statement over another nonce",
+            direct_report("facundo", theirs=other_nonce_proof),
+            "facundo",
+        ),
+        (
+            "Ana's proof given as his own",
+            direct_report("facundo", mine=ana_proof, theirs=facundo),
+            "facundo",
+        ),
+        (
+            "his statement made an hour after `started`",
+            direct_report("facundo", mine=late_proof),
+            "facundo",
+        ),
+        (
+            "a received message Ana's statement does not list",
+            direct_report("facundo", received=handed_in(["ana-to-shelter3"])["messages"]),
+            "facundo",
+        ),
+        (
+            "a received message Ana signed for, addressed to Shelter 3",
+            direct_report(
+                "facundo",
+                theirs=for_shelter_proof,
+                received=handed_in(["ana-to-shelter3"])["messages"],
+            ),
+            "facundo",
+        ),
+        (
+            "a sent message not his",
+            direct_report("facundo", sent=handed_in(["ana-to-facundo"])["messages"]),
+            "facundo",
+        ),
+        ("Ana's own report, sent to radiopost.org", direct_report("ana"), "ana"),
+    ]
+    cases = []
+    for what, entry, cred in cases_in:
+        _, case_ex = direct_office()
+        by = f"{CREDENTIALS[cred]['address'].split('@')[0].capitalize()}'s laptop"
+        case_token = case_ex.login(T_DIRECT, by, cred)
+        result = case_ex.call(
+            T_DIRECT + 5, by, "POST", "/direct", {"sessions": [entry]}, case_token
+        )
+        cases.append({"what": what, "by": by, "session": entry, "expect": result["sessions"][0]})
+    ids = {n: rp.id_text(encoded(n)[1]) for n in ["facundo-direct", "ana-to-facundo"]}
+
+    def refusal(name: str, code: str) -> dict[str, Any]:
+        return {
+            "id": rp.id_text(encoded(name)[1]),
+            "status": "refused",
+            "code": rp.ERRORS[code],
+            "name": code,
+        }
+
+    taken = {
+        "results": [
+            {"id": ids["facundo-direct"], "status": "accepted", "sent_on": ["maria@example.com"]},
+            {"id": ids["ana-to-facundo"], "status": "accepted", "serial": 422},
+        ]
+    }
+
+    def without_text(answer: dict[str, Any]) -> dict[str, Any]:
+        """`text` is for people and need not match (vectors/README.md)."""
+        if "results" not in answer:
+            return answer
+        return {"results": [{k: v for k, v in r.items() if k != "text"} for r in answer["results"]]}
+
+    confirm(  # RP-5 §6.6, in its order
+        cases,
+        {
+            "as Facundo reports it": taken,
+            "Ana's statement changed after signing": {
+                "code": rp.ERRORS["signature-invalid"],
+                "name": "signature-invalid",
+            },
+            "Ana's statement over another nonce": {
+                "code": rp.ERRORS["signature-invalid"],
+                "name": "signature-invalid",
+            },
+            "Ana's own report, sent to radiopost.org": {
+                "code": rp.ERRORS["not-authorized"],
+                "name": "not-authorized",
+            },
+            "Ana's proof given as his own": {
+                "code": rp.ERRORS["not-authorized"],
+                "name": "not-authorized",
+            },
+            "his statement made an hour after `started`": {
+                "code": rp.ERRORS["time-skew"],
+                "name": "time-skew",
+            },
+            "a received message Ana's statement does not list": {
+                "results": [taken["results"][0], refusal("ana-to-shelter3", "not-authorized")]
+            },
+            "a received message Ana signed for, addressed to Shelter 3": {
+                "results": [taken["results"][0], refusal("ana-to-shelter3", "not-authorized")]
+            },
+            "a sent message not his": {
+                "results": [refusal("ana-to-facundo", "not-authorized"), taken["results"][1]]
+            },
+        },
+        verdict=lambda c: without_text(c["expect"]),
+    )
+    assert answer["sessions"][0] == taken
+    assert again["sessions"][0] == {
+        "results": [
+            {"id": ids[n], "status": "duplicate"} for n in ["facundo-direct", "ana-to-facundo"]
+        ]
+    }
+    out = header(
+        "Station-to-station mail reported to the post offices",
+        {"RP-5": "§6.6", "RP-3": "§10", "RP-1": "§6.3, §6.4"},
+    )
+    out["rule"] = (
+        "radiopost.org, as in `radiopost` before the report, given a case's `session` by `by` "
+        "(logged in with that laptop's credential) answers `expect` for it (RP-5 §6.6). The "
+        "exchanges read as in api-exchanges.json."
+    )
+    out["context"] = {
+        "session": "session-03.json: Facundo (caller) and Ana (called), 18:40Z",
+        "started": STATION_CLOCK,
+        "facundo_mailbox": "#419-#421 waiting at radiopost.org (api-exchanges.json)",
+    }
+    out["radiopost"] = ex.log
+    out["hampost"] = ex_ana.log
+    out["cases"] = cases
+    return out
+
+
 # -- api-account.json ----------------------------------------------------------------------------
 
 
@@ -4993,6 +5255,7 @@ FILES = {
     "forwarding.json": make_forwarding,
     "local-delivery.json": make_local_delivery,
     "queued.json": make_queued,
+    "direct.json": make_direct,
 }
 
 
@@ -5076,6 +5339,8 @@ def self_check(name: str, data: dict[str, Any]) -> None:
         check_local_delivery(data)
     if name == "queued.json":
         check_queued(data)
+    if name == "direct.json":
+        check_direct(data)
 
 
 def check_rpmi(data: dict[str, Any]) -> None:
@@ -5338,6 +5603,35 @@ def check_queued(data: dict[str, Any]) -> None:
     assert jws.unb64u(opened["request"]["body"]["statement"]) == cbor.encode(stmt)
     declined = [[rp.id_bytes(d["id"]), d["code"]] for d in opened["response"]["body"]["decline"]]
     assert declined == welcome[6]
+
+
+def check_direct(data: dict[str, Any]) -> None:
+    """RP-5 §6.6 from the reports alone: who sent mail goes on to; received mail was the user's."""
+    pairs = [(c["session"], c["expect"]) for c in data["cases"]]
+    for log in (data["radiopost"], data["hampost"]):
+        for e in log:
+            if e.get("request", {}).get("path") == "/direct" and e["response"]["status"] == 200:
+                sessions = e["request"]["body"]["sessions"]
+                pairs += zip(sessions, e["response"]["body"]["sessions"], strict=True)
+
+    def address(proof: dict[str, str]) -> str:
+        cose = cbor.decode(jws.unb64u(proof["credential"]) or b"")
+        return cbor.decode(cose[2])[3]
+
+    for session, answer in pairs:
+        if "results" not in answer:
+            continue
+        given = {m["id"]: (kind, m) for kind in ("sent", "received") for m in session[kind]}
+        for r in answer["results"]:
+            if r["status"] != "accepted":
+                continue
+            kind, m = given[r["id"]]
+            message = cbor.decode(rp.air_decode(jws.unb64u(m["air"]) or b""))
+            to = message.get(3, []) + message.get(4, [])
+            if kind == "sent":
+                assert r["sent_on"] == [a for a in to if a != address(session["theirs"])]
+            else:
+                assert address(session["mine"]) in to and r["serial"] > 0
 
 
 def check_account(data: dict[str, Any]) -> None:

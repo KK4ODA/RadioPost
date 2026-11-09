@@ -241,6 +241,8 @@ class PostOffice:
             return self.register(user, body or {})
         if (method, route) == ("POST", "/credentials"):
             return 200, {"credential": jws.b64u(self.renewed(user))}
+        if (method, route) == ("POST", "/direct"):
+            return self.direct(user, body or {})
         if route == "/accept-list":
             return self.accept_list(user[3], method, body or {})
         return problem("unknown-message", 404)
@@ -409,12 +411,12 @@ class PostOffice:
             results.append({"id": text, "status": status})
         return results
 
-    def _deliver_here(self, canonical: bytes) -> None:
+    def _deliver_here(self, canonical: bytes, has_it: str = "") -> None:
         """Mail between this post office's own accounts goes to their mailboxes at once."""
         message = cbor.decode(canonical)
         air = rp.air_form(canonical, 0)
         for address in message.get(3, []) + message.get(4, []):
-            if address.rpartition("@")[2] not in self.domains:
+            if address.rpartition("@")[2] not in self.domains or address == has_it:
                 continue
             serial = max((w.serial for w in self.mailboxes.get(address, [])), default=0) + 1
             fields = {"sender": message[2], "subject": message[6], "priority": message.get(9, 0)}
@@ -426,6 +428,124 @@ class PostOffice:
         cids = self.picked_locally.get(address, set())
         serials = [w.serial for w in self.mailboxes.get(address, []) if w.cid in cids]
         self.picked_up(address, serials)
+
+    def direct(self, user: dict[int, Any], body: dict[str, Any]) -> Response:
+        """RP-5 §6.6: the user's station-to-station sessions (RP-3 §10), checked, then filed."""
+        out: list[dict[str, Any]] = []
+        for s in body.get("sessions", []):
+            checked = self._check_direct(user, s)
+            if isinstance(checked, str):
+                out.append({"code": rp.ERRORS[checked], "name": checked})
+                continue
+            mine, theirs = checked
+            results = [self._sent_direct(mine, theirs, m) for m in s.get("sent", [])]
+            results += [self._received_direct(mine, theirs, m) for m in s.get("received", [])]
+            out.append({"results": results})
+        return 200, {"sessions": out}
+
+    def _check_direct(
+        self, user: dict[int, Any], s: dict[str, Any]
+    ) -> str | tuple[dict[int, Any], dict[int, Any]]:
+        """RP-5 §6.6's checks, in order: the error name, or the two statements."""
+        started, role = s.get("started", 0), s.get("role")
+        proofs = self._direct_proofs(s)
+        if proofs is None or role not in {"caller", "called"}:
+            return "malformed"
+        need = (["send"] if s.get("sent") else []) + (["receive"] if s.get("received") else [])
+        bodies = []
+        for (credential, _, _), flags in zip(
+            proofs, [need, ["send"] if s.get("received") else []], strict=True
+        ):
+            result, cbody = rp.verify_credential(
+                credential, self.known, self.revoked, started, flags
+            )
+            if result != "ok" or cbody is None:
+                return result
+            bodies.append(cbody)
+        if bodies[0][3] != user[3] or user[3].rpartition("@")[2] not in self.domains:
+            return "not-authorized"
+        caller, called = (0, 1) if role == "caller" else (1, 0)
+        (_, cstmt, csig), (_, dstmt, dsig) = proofs[caller], proofs[called]
+        result = rp.verify_statement(cstmt, csig, bodies[caller], me=bodies[called][4], now=started)
+        if result == "ok":
+            result = rp.verify_statement(
+                dstmt,
+                dsig,
+                bodies[called],
+                me=bodies[caller][4],
+                now=started,
+                sent_nonce=cstmt.get(5),
+            )
+        if result != "ok":
+            return result
+        return proofs[0][1], proofs[1][1]
+
+    @staticmethod
+    def _direct_proofs(s: dict[str, Any]) -> list[tuple[bytes, dict[int, Any], bytes]] | None:
+        """Each side's credential, statement and signature, decoded; None if one does not."""
+        proofs = []
+        for side in ("mine", "theirs"):
+            p = s.get(side, {})
+            raw = [jws.unb64u(p.get(k, "")) for k in ("credential", "statement", "signature")]
+            if raw[0] is None or raw[1] is None or raw[2] is None:
+                return None
+            try:
+                proofs.append((raw[0], cbor.decode(raw[1]), raw[2]))
+            except cbor.NotCanonical:
+                return None
+        return proofs
+
+    @staticmethod
+    def _direct_message(stmt: dict[int, Any], m: dict[str, Any]) -> tuple[str, bytes] | None:
+        """The message's text ID and canonical encoding, if its statement lists it and it is it."""
+        cid = rp.id_bytes(m.get("id", ""))
+        try:
+            canonical = rp.air_decode(jws.unb64u(m.get("air", "")) or b"")
+        except ValueError:
+            return None
+        if cid is None or cid not in stmt.get(6, []) or rp.content_id(canonical) != cid:
+            return None
+        if cbor.decode(canonical).get(2) != stmt[1]:
+            return None
+        return m["id"], canonical
+
+    def _sent_direct(
+        self, mine: dict[int, Any], theirs: dict[int, Any], m: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Sent by the user: taken as mail it sent, sent on to all but the station that has it."""
+        found = self._direct_message(mine, m)
+        if found is None:
+            return refused(m.get("id", ""), "not-authorized", "not this user's, in its statement")
+        text, canonical = found
+        cid = rp.content_id(canonical)
+        if cid in self.had:
+            return {"id": text, "status": "duplicate"}
+        self.had.add(cid)
+        message = cbor.decode(canonical)
+        self.written_to(mine[1], message)
+        self._deliver_here(canonical, has_it=theirs[1])
+        others = [a for a in message.get(3, []) + message.get(4, []) if a != theirs[1]]
+        return {"id": text, "status": "accepted", "sent_on": others}
+
+    def _received_direct(
+        self, mine: dict[int, Any], theirs: dict[int, Any], m: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Received by the user: filed in its mailbox, picked up already."""
+        found = self._direct_message(theirs, m)
+        if found is None:
+            return refused(m.get("id", ""), "not-authorized", "not the other station's, signed")
+        text, canonical = found
+        message = cbor.decode(canonical)
+        if mine[1] not in message.get(3, []) + message.get(4, []):
+            return refused(text, "not-authorized", "not addressed to this user")
+        box = self.mailboxes.setdefault(mine[1], [])
+        if any(w.cid == rp.content_id(canonical) for w in box):
+            return {"id": text, "status": "duplicate"}
+        serial = max((w.serial for w in box), default=0) + 1
+        air = rp.air_form(canonical, 0)
+        waiting = Waiting(serial, air, message[2], message[6], message.get(9, 0), picked=True)
+        box.append(waiting)
+        return {"id": text, "status": "accepted", "serial": serial}
 
     def written_to(self, address: str, message: dict[int, Any]) -> None:
         """RP-5 §6.5: the recipients of mail a user sent join the user's accept list."""

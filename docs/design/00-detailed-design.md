@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.18 |
+| **Version** | 0.1.19 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -98,6 +98,7 @@ reasoning; the specifications hold the result.
 | D27 | **Rust throughout**: the core library, the gateway, the RadioPost service and the client (Tauri), each a single binary (§6). | One language with Aether: one toolchain, one release pipeline, and one core library shared by every program, so the vectors test the same code everywhere. Small binaries suit a gateway on a Raspberry Pi. | A Python service over Rust bindings (two toolchains and a binding layer); Go services (the core written twice, or reached through C). |
 | D28 | **Specs, vectors and code in one repository** (§6). | A spec change and the code change it causes go in one pull request, and CI runs every program against the vectors on every push, as in Aether's repository. | A separate code repository pinned to a vector version (two places to keep in step); a repository per program (four release and CI setups). |
 | D29 | **The door answers Stalwart's MTA hooks** (RP-6 §2.1). | HTTP and JSON, in the same stack as the RP-5 API: the simplest to build and test. The door's rules live in the service, so a milter front can be added for a post office that runs Postfix. | Milter from the start (a binary protocol, for portability the pilot does not need); both at once (two doors to test before Phase 2). |
+| D30 | **Station-to-station mail is reported over the Internet** (RP-5 §6.6, RP-3 §10): each client, with both stations' proofs; the post office files what was received as picked up and sends what was sent on to the other recipients. | Mailboxes and sent mail agree with what crossed the air, and a cc'd recipient gets the message, at no cost in air time. The proofs make the report checkable like a gateway's. | Sending each message again through a gateway (every message crosses the air twice); not reporting (mailboxes differ, cc'd recipients never get it). |
 
 ---
 
@@ -299,7 +300,6 @@ Collected from the specifications and the concept, each to be settled in the doc
 | How a new post office comes to be trusted by gateways that have never met its users. | RP-1 §7.3 |
 | Proof of callsign at enrollment: LoTW, the sysop's check, or both. | RP-1 §1 |
 | The Zstandard dictionary: training data, publication. | RP-2 §4 |
-| How a client reports station-to-station mail to its post office. | RP-3 §10, RP-5 |
 | ARDOP's host interface, checked against its specification. | RP-4 §9.3 |
 | Third-party traffic: the table of agreements, and knowing a sender's country. | RP-6 §5 |
 | Forwarding: segment tables for other countries, and the US bands of shorter wavelength than 6 m. | RP-7 §8 |
@@ -329,3 +329,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.16 | 2026-11-09 | D26: the bands open to unattended forwarding (RP-7 0.7.0). |
 | 0.1.17 | 2026-11-09 | The author's decisions: D27 Rust throughout, D28 one repository, D29 MTA hooks; §6 decided; Stalwart's edition and AGPL (§5.3). |
 | 0.1.18 | 2026-11-09 | D4: credentials and placements as COSE_Sign1 (RP-0 0.5.0, RP-1 0.4.0, RP-7 0.8.0). |
+| 0.1.19 | 2026-11-09 | D30: station-to-station mail reported over the Internet (RP-5 0.10.0). |

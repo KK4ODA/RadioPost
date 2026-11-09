@@ -1,0 +1,735 @@
+{
+  "radiopost_vectors": "Station-to-station mail reported to the post offices",
+  "format": 1,
+  "specs": {
+    "RP-5": "§6.6",
+    "RP-3": "§10",
+    "RP-1": "§6.3, §6.4"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "radiopost.org, as in `radiopost` before the report, given a case's `session` by `by` (logged in with that laptop's credential) answers `expect` for it (RP-5 §6.6). The exchanges read as in api-exchanges.json.",
+  "context": {
+    "session": "session-03.json: Facundo (caller) and Ana (called), 18:40Z",
+    "started": 1794249647,
+    "facundo_mailbox": "#419-#421 waiting at radiopost.org (api-exchanges.json)"
+  },
+  "radiopost": [
+    {
+      "note": "Session-03 took place at 18:40. At 20:40 Facundo's laptop reaches the Internet and reports it: he sent Ana his message (cc Maria) and received hers. radiopost.org files Ana's as picked up, and sends his on to Maria, but not to Ana, who has it."
+    },
+    {
+      "at": 1794256800,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+          "expires": 1794257100
+        }
+      }
+    },
+    {
+      "at": 1794256800,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+          "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+          "signature": "vvj6g6S7gFT7vifjFwtWwx2-YYalvH8gz_4rtIkx7ThOC1f8gixxmqZVBTsuyKZiY-etB4a_oFYpRFqJyIX6Cw"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+          "expires": 1794260400,
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA",
+          "flags": 3
+        }
+      }
+    },
+    {
+      "at": 1794256805,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/direct",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+        "body": {
+          "sessions": [
+            {
+              "started": 1794249647,
+              "role": "caller",
+              "mine": {
+                "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+                "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDZk4wQ0FMTAQaavITgAVIDbDD2f0zACMGgkw4Lsfwrj8739Z2PldMo7TaPkcbe-oGk10W",
+                "signature": "D0RgUIC4VRl2Worpab_hv7FnOb87VPA8ODEJIn4L3PqXrXNZuXmc3xkrYGAyXUEBmvh8eWU69ut2-TY0L9UHAg"
+              },
+              "theirs": {
+                "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+                "statement": "pgFvYW5hQGhhbXBvc3Qub3JnAmZOMENBTEwDZktLNE9EQQQaavITrwVIDbDD2f0zACMGgUwLUDaJXHPsOGCLkDg",
+                "signature": "FG1FFR5MiESIq6-4T5py7y0cq4I242Vp9JyGSYNPgnQVtjpMkj-5Ve5J1-6jwhErDm1zFq_WbHyan5rRl0uBAg"
+              },
+              "sent": [
+                {
+                  "id": "haxmp4foh4557vtwhzlq",
+                  "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBIFxbWFyaWFAZXhhbXBsZS5jb20FGmryElQGZkRpcmVjdAd4cEFuYSwgbm8gZ2F0ZXdheSBoZWFycyBtZSBmcm9tIGhlcmUsIHNvIEkgYW0gY2FsbGluZyB5b3UgZGlyZWN0LiBBbGwgd2VsbDsgb24gdGhlIHJvYWQgdW50aWwgRnJpZGF5LiA3MywgRmFjdW5kbwo"
+                }
+              ],
+              "received": [
+                {
+                  "id": "bnidnck4opwdqyelsa4a",
+                  "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sessions": [
+            {
+              "results": [
+                {
+                  "id": "haxmp4foh4557vtwhzlq",
+                  "status": "accepted",
+                  "sent_on": [
+                    "maria@example.com"
+                  ]
+                },
+                {
+                  "id": "bnidnck4opwdqyelsa4a",
+                  "status": "accepted",
+                  "serial": 422
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "note": "The connection dropped before the answer came; the laptop sends the report again."
+    },
+    {
+      "at": 1794256865,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/direct",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+        "body": {
+          "sessions": [
+            {
+              "started": 1794249647,
+              "role": "caller",
+              "mine": {
+                "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+                "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDZk4wQ0FMTAQaavITgAVIDbDD2f0zACMGgkw4Lsfwrj8739Z2PldMo7TaPkcbe-oGk10W",
+                "signature": "D0RgUIC4VRl2Worpab_hv7FnOb87VPA8ODEJIn4L3PqXrXNZuXmc3xkrYGAyXUEBmvh8eWU69ut2-TY0L9UHAg"
+              },
+              "theirs": {
+                "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+                "statement": "pgFvYW5hQGhhbXBvc3Qub3JnAmZOMENBTEwDZktLNE9EQQQaavITrwVIDbDD2f0zACMGgUwLUDaJXHPsOGCLkDg",
+                "signature": "FG1FFR5MiESIq6-4T5py7y0cq4I242Vp9JyGSYNPgnQVtjpMkj-5Ve5J1-6jwhErDm1zFq_WbHyan5rRl0uBAg"
+              },
+              "sent": [
+                {
+                  "id": "haxmp4foh4557vtwhzlq",
+                  "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBIFxbWFyaWFAZXhhbXBsZS5jb20FGmryElQGZkRpcmVjdAd4cEFuYSwgbm8gZ2F0ZXdheSBoZWFycyBtZSBmcm9tIGhlcmUsIHNvIEkgYW0gY2FsbGluZyB5b3UgZGlyZWN0LiBBbGwgd2VsbDsgb24gdGhlIHJvYWQgdW50aWwgRnJpZGF5LiA3MywgRmFjdW5kbwo"
+                }
+              ],
+              "received": [
+                {
+                  "id": "bnidnck4opwdqyelsa4a",
+                  "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sessions": [
+            {
+              "results": [
+                {
+                  "id": "haxmp4foh4557vtwhzlq",
+                  "status": "duplicate"
+                },
+                {
+                  "id": "bnidnck4opwdqyelsa4a",
+                  "status": "duplicate"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "note": "A gateway's token may not report a station's direct mail (RP-5 §2)."
+    },
+    {
+      "at": 1794256870,
+      "who": "KK4ODA-1",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "qDHrLf-NrMWfaCOoClbU8mMP7XQDR4U4H9sfHd1VrCw",
+          "expires": 1794257170
+        }
+      }
+    },
+    {
+      "at": 1794256870,
+      "who": "KK4ODA-1",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "hEmiATIERPu9X1ygWFmoAQECGQQbA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEaEtLNE9EQS0xBVggL2s9kPkHedoS8O1-BJo5ldNc8ngoQyraV2NU22EELJsGGmrmnSAHGmtdRCAJCVhAnaMKb4t0WaorLA7yyD3ph2yYQilUl_b2sVTzUIOmLavcuGSYPcGX2kYz68-txE8WMaWJEhR4o6aSg6YLUIdvAg",
+          "nonce": "qDHrLf-NrMWfaCOoClbU8mMP7XQDR4U4H9sfHd1VrCw",
+          "signature": "NjLEJ_J3IE09m-QB4QshqVcUJ31IAVJuPYmTXXDMqU8RqsxUdEy39ykQ0WhyahmHsPWYXVWNZ677X8DLEr_jDw"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_nrAE4HmjRoMr3kBoGs0KWXrc",
+          "expires": 1794260470,
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA-1",
+          "flags": 9
+        }
+      }
+    },
+    {
+      "at": 1794256875,
+      "who": "KK4ODA-1",
+      "request": {
+        "method": "POST",
+        "path": "/direct",
+        "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc",
+        "body": {
+          "sessions": [
+            {
+              "started": 1794249647,
+              "role": "caller",
+              "mine": {
+                "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+                "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDZk4wQ0FMTAQaavITgAVIDbDD2f0zACMGgkw4Lsfwrj8739Z2PldMo7TaPkcbe-oGk10W",
+                "signature": "D0RgUIC4VRl2Worpab_hv7FnOb87VPA8ODEJIn4L3PqXrXNZuXmc3xkrYGAyXUEBmvh8eWU69ut2-TY0L9UHAg"
+              },
+              "theirs": {
+                "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+                "statement": "pgFvYW5hQGhhbXBvc3Qub3JnAmZOMENBTEwDZktLNE9EQQQaavITrwVIDbDD2f0zACMGgUwLUDaJXHPsOGCLkDg",
+                "signature": "FG1FFR5MiESIq6-4T5py7y0cq4I242Vp9JyGSYNPgnQVtjpMkj-5Ve5J1-6jwhErDm1zFq_WbHyan5rRl0uBAg"
+              },
+              "sent": [
+                {
+                  "id": "haxmp4foh4557vtwhzlq",
+                  "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBIFxbWFyaWFAZXhhbXBsZS5jb20FGmryElQGZkRpcmVjdAd4cEFuYSwgbm8gZ2F0ZXdheSBoZWFycyBtZSBmcm9tIGhlcmUsIHNvIEkgYW0gY2FsbGluZyB5b3UgZGlyZWN0LiBBbGwgd2VsbDsgb24gdGhlIHJvYWQgdW50aWwgRnJpZGF5LiA3MywgRmFjdW5kbwo"
+                }
+              ],
+              "received": [
+                {
+                  "id": "bnidnck4opwdqyelsa4a",
+                  "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 403,
+        "body": {
+          "type": "about:blank",
+          "title": "Not authorized",
+          "status": 403,
+          "code": 10,
+          "name": "not-authorized"
+        }
+      }
+    }
+  ],
+  "hampost": [
+    {
+      "note": "Ana's laptop reports the same session to hampost.org, from her side."
+    },
+    {
+      "at": 1794257400,
+      "who": "Ana's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+          "expires": 1794257700
+        }
+      }
+    },
+    {
+      "at": 1794257400,
+      "who": "Ana's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+          "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+          "signature": "YnEiDalYXP2Y4-YEPnSjqsrPhK7f7vuSnsZcBIx_LW7e352Jsb-66VMfX2a_WZ2-lnRaZAV55_CutO2qo0FKBg"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+          "expires": 1794261000,
+          "address": "ana@hampost.org",
+          "operator": "N0CALL",
+          "flags": 3
+        }
+      }
+    },
+    {
+      "at": 1794257405,
+      "who": "Ana's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/direct",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+        "body": {
+          "sessions": [
+            {
+              "started": 1794249647,
+              "role": "called",
+              "mine": {
+                "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+                "statement": "pgFvYW5hQGhhbXBvc3Qub3JnAmZOMENBTEwDZktLNE9EQQQaavITrwVIDbDD2f0zACMGgUwLUDaJXHPsOGCLkDg",
+                "signature": "FG1FFR5MiESIq6-4T5py7y0cq4I242Vp9JyGSYNPgnQVtjpMkj-5Ve5J1-6jwhErDm1zFq_WbHyan5rRl0uBAg"
+              },
+              "theirs": {
+                "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+                "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDZk4wQ0FMTAQaavITgAVIDbDD2f0zACMGgkw4Lsfwrj8739Z2PldMo7TaPkcbe-oGk10W",
+                "signature": "D0RgUIC4VRl2Worpab_hv7FnOb87VPA8ODEJIn4L3PqXrXNZuXmc3xkrYGAyXUEBmvh8eWU69ut2-TY0L9UHAg"
+              },
+              "sent": [
+                {
+                  "id": "bnidnck4opwdqyelsa4a",
+                  "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg"
+                }
+              ],
+              "received": [
+                {
+                  "id": "haxmp4foh4557vtwhzlq",
+                  "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBIFxbWFyaWFAZXhhbXBsZS5jb20FGmryElQGZkRpcmVjdAd4cEFuYSwgbm8gZ2F0ZXdheSBoZWFycyBtZSBmcm9tIGhlcmUsIHNvIEkgYW0gY2FsbGluZyB5b3UgZGlyZWN0LiBBbGwgd2VsbDsgb24gdGhlIHJvYWQgdW50aWwgRnJpZGF5LiA3MywgRmFjdW5kbwo"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sessions": [
+            {
+              "results": [
+                {
+                  "id": "bnidnck4opwdqyelsa4a",
+                  "status": "accepted",
+                  "sent_on": []
+                },
+                {
+                  "id": "haxmp4foh4557vtwhzlq",
+                  "status": "accepted",
+                  "serial": 1
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "cases": [
+    {
+      "what": "as Facundo reports it",
+      "by": "Facundo's laptop",
+      "session": {
+        "started": 1794249647,
+        "role": "caller",
+        "mine": {
+          "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+          "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDZk4wQ0FMTAQaavITgAVIDbDD2f0zACMGgkw4Lsfwrj8739Z2PldMo7TaPkcbe-oGk10W",
+          "signature": "D0RgUIC4VRl2Worpab_hv7FnOb87VPA8ODEJIn4L3PqXrXNZuXmc3xkrYGAyXUEBmvh8eWU69ut2-TY0L9UHAg"
+        },
+        "theirs": {
+          "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+          "statement": "pgFvYW5hQGhhbXBvc3Qub3JnAmZOMENBTEwDZktLNE9EQQQaavITrwVIDbDD2f0zACMGgUwLUDaJXHPsOGCLkDg",
+          "signature": "FG1FFR5MiESIq6-4T5py7y0cq4I242Vp9JyGSYNPgnQVtjpMkj-5Ve5J1-6jwhErDm1zFq_WbHyan5rRl0uBAg"
+        },
+        "sent": [
+          {
+            "id": "haxmp4foh4557vtwhzlq",
+            "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBIFxbWFyaWFAZXhhbXBsZS5jb20FGmryElQGZkRpcmVjdAd4cEFuYSwgbm8gZ2F0ZXdheSBoZWFycyBtZSBmcm9tIGhlcmUsIHNvIEkgYW0gY2FsbGluZyB5b3UgZGlyZWN0LiBBbGwgd2VsbDsgb24gdGhlIHJvYWQgdW50aWwgRnJpZGF5LiA3MywgRmFjdW5kbwo"
+          }
+        ],
+        "received": [
+          {
+            "id": "bnidnck4opwdqyelsa4a",
+            "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg"
+          }
+        ]
+      },
+      "expect": {
+        "results": [
+          {
+            "id": "haxmp4foh4557vtwhzlq",
+            "status": "accepted",
+            "sent_on": [
+              "maria@example.com"
+            ]
+          },
+          {
+            "id": "bnidnck4opwdqyelsa4a",
+            "status": "accepted",
+            "serial": 422
+          }
+        ]
+      }
+    },
+    {
+      "what": "Ana's statement changed after signing",
+      "by": "Facundo's laptop",
+      "session": {
+        "started": 1794249647,
+        "role": "caller",
+        "mine": {
+          "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+          "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDZk4wQ0FMTAQaavITgAVIDbDD2f0zACMGgkw4Lsfwrj8739Z2PldMo7TaPkcbe-oGk10W",
+          "signature": "D0RgUIC4VRl2Worpab_hv7FnOb87VPA8ODEJIn4L3PqXrXNZuXmc3xkrYGAyXUEBmvh8eWU69ut2-TY0L9UHAg"
+        },
+        "theirs": {
+          "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+          "statement": "pgFvYW5hQGhhbXBvc3Qub3JnAmZOMENBTEwDZktLNE9EQQQaavITrwVIDbDD2f0zACMGgA",
+          "signature": "FG1FFR5MiESIq6-4T5py7y0cq4I242Vp9JyGSYNPgnQVtjpMkj-5Ve5J1-6jwhErDm1zFq_WbHyan5rRl0uBAg"
+        },
+        "sent": [
+          {
+            "id": "haxmp4foh4557vtwhzlq",
+            "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBIFxbWFyaWFAZXhhbXBsZS5jb20FGmryElQGZkRpcmVjdAd4cEFuYSwgbm8gZ2F0ZXdheSBoZWFycyBtZSBmcm9tIGhlcmUsIHNvIEkgYW0gY2FsbGluZyB5b3UgZGlyZWN0LiBBbGwgd2VsbDsgb24gdGhlIHJvYWQgdW50aWwgRnJpZGF5LiA3MywgRmFjdW5kbwo"
+          }
+        ],
+        "received": [
+          {
+            "id": "bnidnck4opwdqyelsa4a",
+            "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg"
+          }
+        ]
+      },
+      "expect": {
+        "code": 8,
+        "name": "signature-invalid"
+      }
+    },
+    {
+      "what": "Ana's statement over another nonce",
+      "by": "Facundo's laptop",
+      "session": {
+        "started": 1794249647,
+        "role": "caller",
+        "mine": {
+          "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+          "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDZk4wQ0FMTAQaavITgAVIDbDD2f0zACMGgkw4Lsfwrj8739Z2PldMo7TaPkcbe-oGk10W",
+          "signature": "D0RgUIC4VRl2Worpab_hv7FnOb87VPA8ODEJIn4L3PqXrXNZuXmc3xkrYGAyXUEBmvh8eWU69ut2-TY0L9UHAg"
+        },
+        "theirs": {
+          "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+          "statement": "pgFvYW5hQGhhbXBvc3Qub3JnAmZOMENBTEwDZktLNE9EQQQaavITrwVImV4ujXoBZNkGgUwLUDaJXHPsOGCLkDg",
+          "signature": "s8689nhMt_Fz6Dqq_RxGbfCSFJ8X7OT3WsS7bgwoy4z2TBTsxParmBgqqxqoqCJhRFNuxcDsA0adgEkXOpcFAQ"
+        },
+        "sent": [
+          {
+            "id": "haxmp4foh4557vtwhzlq",
+            "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBIFxbWFyaWFAZXhhbXBsZS5jb20FGmryElQGZkRpcmVjdAd4cEFuYSwgbm8gZ2F0ZXdheSBoZWFycyBtZSBmcm9tIGhlcmUsIHNvIEkgYW0gY2FsbGluZyB5b3UgZGlyZWN0LiBBbGwgd2VsbDsgb24gdGhlIHJvYWQgdW50aWwgRnJpZGF5LiA3MywgRmFjdW5kbwo"
+          }
+        ],
+        "received": [
+          {
+            "id": "bnidnck4opwdqyelsa4a",
+            "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg"
+          }
+        ]
+      },
+      "expect": {
+        "code": 8,
+        "name": "signature-invalid"
+      }
+    },
+    {
+      "what": "Ana's proof given as his own",
+      "by": "Facundo's laptop",
+      "session": {
+        "started": 1794249647,
+        "role": "caller",
+        "mine": {
+          "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+          "statement": "pgFvYW5hQGhhbXBvc3Qub3JnAmZOMENBTEwDZktLNE9EQQQaavITrwVIDbDD2f0zACMGgUwLUDaJXHPsOGCLkDg",
+          "signature": "FG1FFR5MiESIq6-4T5py7y0cq4I242Vp9JyGSYNPgnQVtjpMkj-5Ve5J1-6jwhErDm1zFq_WbHyan5rRl0uBAg"
+        },
+        "theirs": {
+          "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+          "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDZk4wQ0FMTAQaavITgAVIDbDD2f0zACMGgkw4Lsfwrj8739Z2PldMo7TaPkcbe-oGk10W",
+          "signature": "D0RgUIC4VRl2Worpab_hv7FnOb87VPA8ODEJIn4L3PqXrXNZuXmc3xkrYGAyXUEBmvh8eWU69ut2-TY0L9UHAg"
+        },
+        "sent": [
+          {
+            "id": "haxmp4foh4557vtwhzlq",
+            "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBIFxbWFyaWFAZXhhbXBsZS5jb20FGmryElQGZkRpcmVjdAd4cEFuYSwgbm8gZ2F0ZXdheSBoZWFycyBtZSBmcm9tIGhlcmUsIHNvIEkgYW0gY2FsbGluZyB5b3UgZGlyZWN0LiBBbGwgd2VsbDsgb24gdGhlIHJvYWQgdW50aWwgRnJpZGF5LiA3MywgRmFjdW5kbwo"
+          }
+        ],
+        "received": [
+          {
+            "id": "bnidnck4opwdqyelsa4a",
+            "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg"
+          }
+        ]
+      },
+      "expect": {
+        "code": 10,
+        "name": "not-authorized"
+      }
+    },
+    {
+      "what": "his statement made an hour after `started`",
+      "by": "Facundo's laptop",
+      "session": {
+        "started": 1794249647,
+        "role": "caller",
+        "mine": {
+          "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+          "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDZk4wQ0FMTAQaavIhkAVIDbDD2f0zACMGgkw4Lsfwrj8739Z2PldMo7TaPkcbe-oGk10W",
+          "signature": "CstnFxWxUaD27GuUW9TJdZ_8VuLUntY15Bm00JRQYiVfgNNaGMxJftkQdVb_YX_xRgeui4G9JWPnHAkSvpnzCg"
+        },
+        "theirs": {
+          "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+          "statement": "pgFvYW5hQGhhbXBvc3Qub3JnAmZOMENBTEwDZktLNE9EQQQaavITrwVIDbDD2f0zACMGgUwLUDaJXHPsOGCLkDg",
+          "signature": "FG1FFR5MiESIq6-4T5py7y0cq4I242Vp9JyGSYNPgnQVtjpMkj-5Ve5J1-6jwhErDm1zFq_WbHyan5rRl0uBAg"
+        },
+        "sent": [
+          {
+            "id": "haxmp4foh4557vtwhzlq",
+            "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBIFxbWFyaWFAZXhhbXBsZS5jb20FGmryElQGZkRpcmVjdAd4cEFuYSwgbm8gZ2F0ZXdheSBoZWFycyBtZSBmcm9tIGhlcmUsIHNvIEkgYW0gY2FsbGluZyB5b3UgZGlyZWN0LiBBbGwgd2VsbDsgb24gdGhlIHJvYWQgdW50aWwgRnJpZGF5LiA3MywgRmFjdW5kbwo"
+          }
+        ],
+        "received": [
+          {
+            "id": "bnidnck4opwdqyelsa4a",
+            "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg"
+          }
+        ]
+      },
+      "expect": {
+        "code": 9,
+        "name": "time-skew"
+      }
+    },
+    {
+      "what": "a received message Ana's statement does not list",
+      "by": "Facundo's laptop",
+      "session": {
+        "started": 1794249647,
+        "role": "caller",
+        "mine": {
+          "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+          "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDZk4wQ0FMTAQaavITgAVIDbDD2f0zACMGgkw4Lsfwrj8739Z2PldMo7TaPkcbe-oGk10W",
+          "signature": "D0RgUIC4VRl2Worpab_hv7FnOb87VPA8ODEJIn4L3PqXrXNZuXmc3xkrYGAyXUEBmvh8eWU69ut2-TY0L9UHAg"
+        },
+        "theirs": {
+          "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+          "statement": "pgFvYW5hQGhhbXBvc3Qub3JnAmZOMENBTEwDZktLNE9EQQQaavITrwVIDbDD2f0zACMGgUwLUDaJXHPsOGCLkDg",
+          "signature": "FG1FFR5MiESIq6-4T5py7y0cq4I242Vp9JyGSYNPgnQVtjpMkj-5Ve5J1-6jwhErDm1zFq_WbHyan5rRl0uBAg"
+        },
+        "sent": [
+          {
+            "id": "haxmp4foh4557vtwhzlq",
+            "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBIFxbWFyaWFAZXhhbXBsZS5jb20FGmryElQGZkRpcmVjdAd4cEFuYSwgbm8gZ2F0ZXdheSBoZWFycyBtZSBmcm9tIGhlcmUsIHNvIEkgYW0gY2FsbGluZyB5b3UgZGlyZWN0LiBBbGwgd2VsbDsgb24gdGhlIHJvYWQgdW50aWwgRnJpZGF5LiA3MywgRmFjdW5kbwo"
+          }
+        ],
+        "received": [
+          {
+            "id": "toqspq3c62h3je2simkq",
+            "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F2c2hlbHRlcjNAcmFkaW9wb3N0Lm9yZwUaavWeiAZrV2F0ZXIgdHJ1Y2sHeGRTaGVsdGVyIDMsIG91ciBjbHViIGNhbiBicmluZyBhIDIgMDAwIGxpdHJlIHdhdGVyIHRydWNrIG9uIFRodXJzZGF5LiBUZWxsIHVzIHdoZXJlIHRvIHBhcmsuIDczLCBBbmEK"
+          }
+        ]
+      },
+      "expect": {
+        "results": [
+          {
+            "id": "haxmp4foh4557vtwhzlq",
+            "status": "accepted",
+            "sent_on": [
+              "maria@example.com"
+            ]
+          },
+          {
+            "id": "toqspq3c62h3je2simkq",
+            "status": "refused",
+            "code": 10,
+            "name": "not-authorized",
+            "text": "not the other station's, signed"
+          }
+        ]
+      }
+    },
+    {
+      "what": "a received message Ana signed for, addressed to Shelter 3",
+      "by": "Facundo's laptop",
+      "session": {
+        "started": 1794249647,
+        "role": "caller",
+        "mine": {
+          "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+          "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDZk4wQ0FMTAQaavITgAVIDbDD2f0zACMGgkw4Lsfwrj8739Z2PldMo7TaPkcbe-oGk10W",
+          "signature": "D0RgUIC4VRl2Worpab_hv7FnOb87VPA8ODEJIn4L3PqXrXNZuXmc3xkrYGAyXUEBmvh8eWU69ut2-TY0L9UHAg"
+        },
+        "theirs": {
+          "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+          "statement": "pgFvYW5hQGhhbXBvc3Qub3JnAmZOMENBTEwDZktLNE9EQQQaavITrwVIDbDD2f0zACMGgkwLUDaJXHPsOGCLkDhMm6Enw2L2j7STUkMV",
+          "signature": "d2fcguatGq9Y27PzTJ5dhO_RQkmE7wWFhBW6zw3A0hcyA7gNSrONMhhzCf2mVQvg9qxxJA0_juRyHlcoKVF_Dw"
+        },
+        "sent": [
+          {
+            "id": "haxmp4foh4557vtwhzlq",
+            "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBIFxbWFyaWFAZXhhbXBsZS5jb20FGmryElQGZkRpcmVjdAd4cEFuYSwgbm8gZ2F0ZXdheSBoZWFycyBtZSBmcm9tIGhlcmUsIHNvIEkgYW0gY2FsbGluZyB5b3UgZGlyZWN0LiBBbGwgd2VsbDsgb24gdGhlIHJvYWQgdW50aWwgRnJpZGF5LiA3MywgRmFjdW5kbwo"
+          }
+        ],
+        "received": [
+          {
+            "id": "toqspq3c62h3je2simkq",
+            "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F2c2hlbHRlcjNAcmFkaW9wb3N0Lm9yZwUaavWeiAZrV2F0ZXIgdHJ1Y2sHeGRTaGVsdGVyIDMsIG91ciBjbHViIGNhbiBicmluZyBhIDIgMDAwIGxpdHJlIHdhdGVyIHRydWNrIG9uIFRodXJzZGF5LiBUZWxsIHVzIHdoZXJlIHRvIHBhcmsuIDczLCBBbmEK"
+          }
+        ]
+      },
+      "expect": {
+        "results": [
+          {
+            "id": "haxmp4foh4557vtwhzlq",
+            "status": "accepted",
+            "sent_on": [
+              "maria@example.com"
+            ]
+          },
+          {
+            "id": "toqspq3c62h3je2simkq",
+            "status": "refused",
+            "code": 10,
+            "name": "not-authorized",
+            "text": "not addressed to this user"
+          }
+        ]
+      }
+    },
+    {
+      "what": "a sent message not his",
+      "by": "Facundo's laptop",
+      "session": {
+        "started": 1794249647,
+        "role": "caller",
+        "mine": {
+          "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+          "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDZk4wQ0FMTAQaavITgAVIDbDD2f0zACMGgkw4Lsfwrj8739Z2PldMo7TaPkcbe-oGk10W",
+          "signature": "D0RgUIC4VRl2Worpab_hv7FnOb87VPA8ODEJIn4L3PqXrXNZuXmc3xkrYGAyXUEBmvh8eWU69ut2-TY0L9UHAg"
+        },
+        "theirs": {
+          "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+          "statement": "pgFvYW5hQGhhbXBvc3Qub3JnAmZOMENBTEwDZktLNE9EQQQaavITrwVIDbDD2f0zACMGgUwLUDaJXHPsOGCLkDg",
+          "signature": "FG1FFR5MiESIq6-4T5py7y0cq4I242Vp9JyGSYNPgnQVtjpMkj-5Ve5J1-6jwhErDm1zFq_WbHyan5rRl0uBAg"
+        },
+        "sent": [
+          {
+            "id": "bnidnck4opwdqyelsa4a",
+            "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg"
+          }
+        ],
+        "received": [
+          {
+            "id": "bnidnck4opwdqyelsa4a",
+            "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg"
+          }
+        ]
+      },
+      "expect": {
+        "results": [
+          {
+            "id": "bnidnck4opwdqyelsa4a",
+            "status": "refused",
+            "code": 10,
+            "name": "not-authorized",
+            "text": "not this user's, in its statement"
+          },
+          {
+            "id": "bnidnck4opwdqyelsa4a",
+            "status": "accepted",
+            "serial": 422
+          }
+        ]
+      }
+    },
+    {
+      "what": "Ana's own report, sent to radiopost.org",
+      "by": "Ana's laptop",
+      "session": {
+        "started": 1794249647,
+        "role": "called",
+        "mine": {
+          "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+          "statement": "pgFvYW5hQGhhbXBvc3Qub3JnAmZOMENBTEwDZktLNE9EQQQaavITrwVIDbDD2f0zACMGgUwLUDaJXHPsOGCLkDg",
+          "signature": "FG1FFR5MiESIq6-4T5py7y0cq4I242Vp9JyGSYNPgnQVtjpMkj-5Ve5J1-6jwhErDm1zFq_WbHyan5rRl0uBAg"
+        },
+        "theirs": {
+          "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+          "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDZk4wQ0FMTAQaavITgAVIDbDD2f0zACMGgkw4Lsfwrj8739Z2PldMo7TaPkcbe-oGk10W",
+          "signature": "D0RgUIC4VRl2Worpab_hv7FnOb87VPA8ODEJIn4L3PqXrXNZuXmc3xkrYGAyXUEBmvh8eWU69ut2-TY0L9UHAg"
+        },
+        "sent": [
+          {
+            "id": "bnidnck4opwdqyelsa4a",
+            "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg"
+          }
+        ],
+        "received": [
+          {
+            "id": "haxmp4foh4557vtwhzlq",
+            "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBIFxbWFyaWFAZXhhbXBsZS5jb20FGmryElQGZkRpcmVjdAd4cEFuYSwgbm8gZ2F0ZXdheSBoZWFycyBtZSBmcm9tIGhlcmUsIHNvIEkgYW0gY2FsbGluZyB5b3UgZGlyZWN0LiBBbGwgd2VsbDsgb24gdGhlIHJvYWQgdW50aWwgRnJpZGF5LiA3MywgRmFjdW5kbwo"
+          }
+        ]
+      },
+      "expect": {
+        "code": 10,
+        "name": "not-authorized"
+      }
+    }
+  ]
+}
