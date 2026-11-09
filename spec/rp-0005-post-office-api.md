@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.6.0 |
+| **Version** | 0.7.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -175,12 +175,13 @@ The gateways registered with this post office (§6.4), for clients' gateway list
    "updated": 1794300000}]}
 ```
 
-`modem` names the modem in RPMI terms (`aether`, `vara-hf`, `vara-fm`, `ardop`, `ax25`, `tcp`).
+`modem` names the modem in RPMI terms (`aether`, `vara-hf`, `vara-fm`, `ardop`, `ax25`, `tcp`). A
+gateway that takes calls from cut-off partners lists its windows in `forwarding` (RP-7 §5).
 
 ### 4.5 `GET /routes`
 
 This post office's radio routes, for forwarding when the Internet is down. The format is RP-7's
-(*outline*).
+(§6).
 
 ---
 
@@ -294,12 +295,17 @@ oldest first:
   "statement": "pgF2…", "signature": "9b1f…", "credential": "gqNk…",
   "started": 1794326441, "gateway_session": "ec7b31841ec47c47",
   "messages": [{"id": "a3f9…", "air": "AXic…"}],
-  "pickups": [419, 420]
+  "pickups": [419, 420],
+  "path": ["N2CALL-5", "N1CALL-10"]
 }]}
 ```
 
-The post office verifies each statement as in §5.2, with the reporting gateway as the station
-called, but checks the credential and `time` against `started` only, not its own clock. It takes
+`path` is there when the session reached the reporting gateway by forwarding (RP-7 §3.4): the
+gateways that held it, from the one the user called to the reporting gateway.
+
+The post office verifies each statement as in §5.2, with the station called being the path's first
+callsign (without a path, the reporting gateway), and the path's last being the reporting gateway.
+It checks the credential and `time` against `started` only, not its own clock. It takes
 the messages as in §5.4 and the pickups as in §5.5, and answers one entry per session, in order:
 `{"results": [...]}` as in §5.4, or `{"code", "name"}` when the session's statement fails, in which
 case nothing of it is taken. Messages for other post offices go there (§5.4 applies at each).
@@ -331,6 +337,10 @@ A post office places copies of a user's waiting mail at each gateway the user na
 * A `copy` carries `air` when the message fits the gateway's `copies.max_air_bytes`; otherwise only
   its list entry, and the gateway lists it with the `held` flag while offline.
 * A `drop` means the message was picked up elsewhere, or expired: the gateway deletes its copy.
+* A `forward` item is a copy for a cut-off gateway, placed at the gateway its route names (RP-7
+  §4.1): as a `copy`, with `gateway`, the cut-off gateway's callsign, and `placement`, the post
+  office's signed placement (RP-7 §4.2). The gateway holds it for that gateway's next call, and a
+  `drop` naming the same address and serial ends it.
 
 **`POST /copies/ack`** `{"cursor": "c_9…"}`: the gateway holds everything up to the cursor. The
 post office sends nothing twice after an acknowledged cursor.
@@ -456,3 +466,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.4.0 | 2026-11-09 | The HTTP status of each code, 401 and 403 (§1, §2); login and enrollment failures (§3.2, §6.1); public documents checked by RP-0 §5 and RP-1 §7.2 (§4); the order of a session's checks, `decline` entries, `waiting`'s order (§5.2); unknown serials (§5.3, §5.5); the codes of a refused message (§5.4); a report's answer (§5.6); test vectors. |
 | 0.5.0 | 2026-11-09 | `gateway_session` in a session and a report, for RP-6's `Radio-Path` (§5.2, §5.6); the setting `attach_bytes` (§6.3). |
 | 0.6.0 | 2026-11-09 | Renewal (§6.2): what a renewed credential holds, gateways renew too (§2), the old one stays valid, a device's serials revoked together, expired or revoked means enrolling again, by radio (§5.2). The accept list (§6.5): `POST`'s answer, lowercase entries in order, `malformed`, one list for a role mailbox, recipients added when mail is sent; the setting `accept_on_send` (§6.3). Test vectors. |
+| 0.7.0 | 2026-11-09 | For forwarding (RP-7): `forwarding` windows in a gateway's record (§4.4), routes (§4.5), `path` in a report (§5.6), `forward` items (§5.8). |

@@ -101,7 +101,7 @@ specification disagree, the specification is right and the reference has a bug.
 
 ## Not yet covered
 
-Forwarding (RP-7, an outline), DKIM signing (the mail server's) and photo re-encoding (RP-6 §2.4
+Forwarding (RP-7, a first draft: its vectors come next), DKIM signing (the mail server's) and photo re-encoding (RP-6 §2.4
 step 5, a SHOULD this reference skips). The modem interface's mapping to real modems (RP-4 §9) is
 informative and has none.
 

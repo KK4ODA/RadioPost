@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.1 |
+| **Version** | 0.2.2 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -170,8 +170,8 @@ Radio-Path: KK4ODA via N1CALL-10; at=2026-11-09T14:40:41Z; session=d4a91c07e2b35
 ```
 
 * first, the operator's callsign from the session statement;
-* `via`, the gateway's callsign (and, after forwarding, `via` the further gateways in order,
-  RP-7);
+* `via`, the gateway's callsign and, after forwarding, `via` each further gateway of the path
+  in order (RP-7 §3.1, RP-5 §5.6);
 * `at`, the session's start (`started`, RP-5 §5.2), ISO 8601 in UTC;
 * `session`, the gateway's session ID (RP-3 `WELCOME` key 2) in hex, as the gateway gave it in
   `gateway_session` (RP-5 §5.2).
@@ -236,3 +236,4 @@ drops the part. Test vectors: `vectors/email-in.json`, `between`.
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.2.0 | 2026-11-09 | The door (§2.1): checks in order, the null sender and delivery reports, what is encrypted, which attachments are executable; how accept lists match (§2.2). Making the message (§2.4): addresses and dates, normalised text, a precise rule for quoted history, attachments by `attach_bytes`, held files. Mail out (§3): the date's form, the transfer encoding, the signature line `-- `, `Radio-Path`'s session from RP-5's `gateway_session`; a bounce's form (§3.3). Between post offices (§4): the part's types, and the checks, recipient included. Test vectors. |
 | 0.2.1 | 2026-11-09 | §2.2: how writing to an address adds it, and how that is turned off, are RP-5 §6.5 and §6.3. |
+| 0.2.2 | 2026-11-09 | §3.2: after forwarding, `Radio-Path` names each gateway of the path (RP-7). |

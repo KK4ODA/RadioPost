@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.0 |
+| **Version** | 0.3.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -86,7 +86,7 @@ for that turn at once, and the modem sends it in one go.
 | 8 | `ERROR` | Both | §5.9 |
 | 9 | `CREDENTIAL` | Both | §5.8 |
 | 10 | `NOTICE` | Called | §5.10 |
-| 11 | `PROOF` | Both, when forwarding | Reserved for RP-7 |
+| 11 | `PROOF` | Caller, when forwarding | RP-7 §3.2 |
 
 Types 12–63 are reserved for this specification; 64 and up for experiments (RP-0 §4.1).
 
@@ -103,7 +103,7 @@ The caller's first PDU, sent as soon as the link is up.
 | Key | Name | Type | Req. | Meaning |
 |---|---|---|---|---|
 | 1 | `versions` | [uint, uint] | yes | Lowest and highest protocol version supported. This document is version 1. |
-| 2 | `role` | uint | yes | 0 client; 1 gateway (forwarding, RP-7). |
+| 2 | `role` | uint | yes | 0 client; 1 gateway forwarding (RP-7 §2). |
 | 3 | `address` | text | yes | The account (RP-1 §1). |
 | 4 | `operator` | text | yes | The operator's callsign, as on the air. |
 | 5 | `gateway` | text | yes | The callsign of the station called. |
@@ -190,7 +190,8 @@ A message, or a piece of one.
 | 2 | `offset` | uint | yes | Where in the air form this piece starts. |
 | 3 | `total` | uint | yes | The air form's whole length. |
 | 4 | `data` | bstr | yes | The bytes from `offset`. |
-| 5 | `serial` | uint | from the gateway | The mailbox serial of a waiting message. |
+| 5 | `serial` | uint | from the gateway | The mailbox serial of a waiting message (a forwarding serial between gateways, RP-7 §4.3). |
+| 6 | `placement` | bstr | when forwarding inward | The post office's placement of the message (RP-7 §4.2, §4.3). |
 
 A station sends a message's pieces in order, without gaps. When it has all `total` bytes, the
 receiver decompresses the air form, checks the canonical encoding and the content ID (RP-2 §3), and
@@ -209,6 +210,7 @@ What the sender of the `RECEIPT` now holds.
 | 1 | `complete` | array of id | Received whole, checked and stored. |
 | 2 | `partial` | array of [id, offset] | Received in part; this many bytes held. |
 | 3 | `failed` | array of [id, code] | Could not be taken, and why. |
+| 4 | `records` | array of bstr .size 12 | When forwarding: the session records taken (RP-7 §3.3). |
 
 A station SHOULD send a `RECEIPT` in each transmission in which it has received `MSG` pieces since
 its last one. A message counts as **delivered** only when listed `complete`: for mail picked up,
@@ -429,3 +431,4 @@ has one example of each PDU, and frames that must be refused.
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.1.2 | 2026-11-09 | The example is the test vector's session, its `auto` and sizes made consistent with §5.2; test vectors. |
 | 0.2.0 | 2026-11-09 | Resuming (§7): a message in `partials` is sent unasked; a resumed air form is the same bytes; a message that fails after resuming starts over. Station to station (§10): the station called proves itself (`WELCOME` keys 13 and 15, RP-1 §6.5), and the caller sends `cursor` 0. Test vectors `session-02.json` and `session-03.json`. |
+| 0.3.0 | 2026-11-09 | Forwarding (RP-7): `PROOF` defined there (§4), `role` 1, `MSG` key 6 `placement`, `RECEIPT` key 4 `records`. |

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.9 |
+| **Version** | 0.1.10 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -30,7 +30,7 @@ messages (RP-2) run through all of them.
 | Program | What it does | Implements |
 |---|---|---|
 | **Client** | Holds the user's mail and key; talks to gateways by radio; manages the account when there is Internet. | RP-1, RP-2, RP-3 client side; RP-4 as host; RP-5 §6 |
-| **Gateway** | A radio station that carries users' sessions to their post offices, checks them offline, queues mail and holds copies when the Internet is down. | RP-1, RP-2, RP-3 gateway side, RP-5 §5; RP-4 as host; RP-7 later |
+| **Gateway** | A radio station that carries users' sessions to their post offices, checks them offline, queues mail and holds copies when the Internet is down. | RP-1, RP-2, RP-3 gateway side, RP-5 §5; RP-4 as host; RP-7 when cut off |
 | **Post office** | Holds mailboxes, issues credentials, serves gateways and clients, meets ordinary email. An off-the-shelf mail server plus the RadioPost service. | RP-1 issuing, RP-2, RP-5 serving, RP-6 |
 | **Modem adapter** | Lets a client or gateway use a modem: Aether, VARA, ARDOP, AX.25 packet, or TCP. | RP-4 adapter side |
 
@@ -89,6 +89,9 @@ reasoning; the specifications hold the result.
 | D18 | **Forwarding uses the same session protocol** (RP-7). | One protocol to implement and test; proofs travel with messages. | A separate store-and-forward protocol. |
 | D19 | **A modem may be shared**: each host holds its own callsigns, answering switch and links (RP-4 §1.1). | During the move from Winlink, a gateway runs both systems on one radio, and two modems cannot share one sound card. A call names a callsign, so the callsign decides whose call it is, as AGWPE already does. | One program at a time (the operator must choose a system); routing by an SSID convention (callsigns are the operator's choice); a switchboard program between them (one more program to run). |
 | D20 | **In a station-to-station session the station called proves itself too**, with a statement over the caller's nonce (RP-1 §6.5, RP-3 §10). | Anyone can transmit any callsign, so the caller has no other way to know who answered, or whose mail it is taking. The caller's own nonce makes the statement fresh with no clock to compare. | Trusting the callsign (forged with a microphone); a challenge from the caller (one more exchange); a time-form statement checked against the clock (fails when the clocks disagree, with no way to ask again). |
+| D21 | **A cut-off gateway calls its partner, and one session carries both directions** (RP-7 §1, §2). | Only the partner's windows need agreeing, and only the station that needs the link starts transmitting. The cut-off gateway is the partner's client: its queue goes out as offers, its users' mail comes back as the partner's waiting list, in the five transmissions of RP-3. | Both gateways calling each other on schedules (two schedules, twice the transmissions); the partner pushing inward mail (the cut-off gateway must listen at agreed times, and the partner start transmissions it may not be allowed to). |
+| D22 | **Inward mail carries the post office's signature** (a placement, RP-7 §4.2). | A forwarding gateway could otherwise hand a cut-off area mail "from the post office" that it made up. The cut-off gateway already holds the post office's keys, and mail from the Internet has no sender's proof to carry. | Trusting the partner (any station can transmit any callsign); end-to-end proof only (Internet mail has none). |
+| D23 | **Partners are configured and routes published; no routing protocol yet** (RP-7 §5, §6). | An area has a few gateways, and their operators know each other. A routing protocol is hard to get right and harder to secure, and nothing yet shows it is needed. | Gateways announcing what they reach (open: RP-7 §8). |
 
 ---
 
@@ -147,7 +150,7 @@ client sees the same protocol, with `online` false and a `NOTICE` saying why.
 | Store | The outgoing queue, copies placed ahead, partial uploads, the replay cache, credentials seen. | RP-3 §7 |
 | Modem host | Talks RPMI to one adapter per radio. | RP-4 |
 | Rules check | Bands and segments for automatic control, when the modem does not check them. | RP-4 §8 |
-| Forwarder | Later: scheduled forwarding by radio. | RP-7 |
+| Forwarder | When cut off: calls partners in their windows, offers session records with `PROOF`, takes inward mail and checks its placements. As a partner: takes records, reports them or forwards them on, holds forward items. | RP-7 |
 
 ### 5.3 The post office
 
@@ -229,7 +232,7 @@ To be confirmed:
   accept list found RP-5 0.6.0's: a gateway could not renew its own credential (gateways were kept
   off client endpoints), what a renewed credential holds and what becomes of the old one, the
   accept list's answer and spelling, and no setting turned off the list's filling by mail sent.
-  Owed: RP-7, once it is more than an outline.
+  Owed: RP-7's, now that it is a draft.
 * **A conformance tester** that plays the other side: a client to test a gateway, a gateway to
   test a client, over the TCP adapter, including broken links, resumes and wrong signatures.
 * **A loopback adapter** joining two hosts through RPMI with delays and losses, for tests with no
@@ -281,7 +284,7 @@ Collected from the specifications and the concept, each to be settled in the doc
 | ARDOP's host interface, checked against its specification. | RP-4 §9.3 |
 | Third-party traffic: the table of agreements, and knowing a sender's country. | RP-6 §5 |
 | Stalwart: MTA hooks or milter; AGPL for operators; clustering's edition. | Concept §13 |
-| Forwarding: routing, schedules, expiry, reporting. | RP-7 §4 |
+| Forwarding: local delivery in a cut-off area, telling a sender of mail dropped unsent, routing beyond partners, the bands per country. | RP-7 §8 |
 | The reference implementations' languages and packaging. | §6 here |
 
 ---
@@ -300,3 +303,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.7 | 2026-11-09 | The email test vectors (§7). |
 | 0.1.8 | 2026-11-09 | §5.4: Aether is shareable from 0.2.0-beta.146 (its ADR-0106). |
 | 0.1.9 | 2026-11-09 | Renewal and accept-list test vectors (§7). |
+| 0.1.10 | 2026-11-09 | D21–D23: forwarding (RP-7 0.1.0); the forwarder's part; open questions moved to RP-7 §8. |

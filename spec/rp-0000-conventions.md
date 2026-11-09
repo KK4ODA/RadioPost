@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.1 |
+| **Version** | 0.4.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -35,7 +35,7 @@ Sections marked *informative* explain and give examples; they set no requirement
 | RP-4 | Modem interface | How a RadioPost program drives a modem through an adapter. |
 | RP-5 | Post office API | HTTPS between gateways or clients and a post office. |
 | RP-6 | Email interoperation | How a post office meets ordinary email in both directions. |
-| RP-7 | Forwarding | Store-and-forward between gateways by radio. *Outline only.* |
+| RP-7 | Forwarding | Store-and-forward between gateways by radio. |
 
 ---
 
@@ -264,6 +264,7 @@ As in §2. Numbers are never reused.
 | `RadioPost-api-login-v1` | A post office API login | RP-5 §3.2 |
 | `RadioPost-api-enroll-v1` | A new device's enrollment | RP-5 §6.1 |
 | `RadioPost-api-gateway-v1` | A gateway's registration | RP-5 §6.4 |
+| `RadioPost-placement-v1` | A post office's placement of mail for a cut-off gateway | RP-7 §4.2 |
 
 ### 9.3 Error codes
 
@@ -304,3 +305,4 @@ means the same thing wherever it appears.
 | 0.2.1 | 2026-11-09 | §8.6: the vectors cover RP-4 too. |
 | 0.3.0 | 2026-11-09 | Signed JSON documents are plain JWS, with no context, and how one is checked (§5); `signature-invalid` covers them (§9.3); §8.6: the vectors cover RP-5. |
 | 0.3.1 | 2026-11-09 | §8.6: the vectors cover RP-6 too. |
+| 0.4.0 | 2026-11-09 | The context `RadioPost-placement-v1` (§9.2); RP-7 is a draft (§2). |
