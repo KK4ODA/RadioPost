@@ -59,13 +59,64 @@ def parse_line(line: str) -> tuple[Message | None, Message | None]:
     if not isinstance(obj, dict):
         return None, error(None, "malformed", "not a JSON object")
     rid = obj.get("id")
-    if "id" in obj and (isinstance(rid, bool) or not isinstance(rid, str | int)):
+    if "id" in obj and not is_id(rid):
         return None, error(None, "malformed", "`id` is neither a string nor an integer")
     if not isinstance(obj.get("op"), str):
         return None, error(rid, "malformed", "no `op`")
     if "data" in obj and decode_data(obj["data"]) is None:
         return None, error(rid, "malformed", "`data` is not standard base64 with padding")
     return obj, None
+
+
+def is_id(value: Any) -> bool:
+    """A string or an integer, as `id` and `ref` are (RP-4 §2, §4)."""
+    return not isinstance(value, bool) and isinstance(value, str | int)
+
+
+def is_text_list(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(c, str) for c in value)
+
+
+def is_version(value: Any) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) == 2
+        and all(isinstance(v, int) and not isinstance(v, bool) for v in value)
+    )
+
+
+# RP-4 §4: each request's members, those without a `?` in its table needed, with their types.
+MEMBERS: dict[str, list[tuple[str, bool, Any]]] = {
+    "hello": [("version", True, is_version), ("app", True, lambda v: isinstance(v, str))],
+    "callsigns": [("callsigns", True, is_text_list)],
+    "listen": [("on", True, lambda v: isinstance(v, bool))],
+    "connect": [
+        ("id", True, is_id),
+        ("remote", True, lambda v: isinstance(v, str)),
+        ("as", False, lambda v: isinstance(v, str)),
+        ("bandwidth", False, lambda v: isinstance(v, int) and not isinstance(v, bool)),
+    ],
+    "send": [
+        ("link", True, lambda v: isinstance(v, str)),
+        ("data", True, lambda v: isinstance(v, str)),
+        ("ref", False, is_id),
+    ],
+    "disconnect": [("link", True, lambda v: isinstance(v, str))],
+    "abort": [("link", False, lambda v: isinstance(v, str))],
+    "broadcast": [("data", True, lambda v: isinstance(v, str)), ("ref", False, is_id)],
+    "status": [],
+}
+
+
+def member_problem(message: Message) -> str | None:
+    """RP-4 §2, §4: what makes a known request `malformed`, or None."""
+    for name, needed, good in MEMBERS[message["op"]]:
+        if name not in message:
+            if needed:
+                return f"no `{name}`"
+        elif not good(message[name]):
+            return f"`{name}` is not of its type"
+    return None
 
 
 @dataclass
@@ -215,12 +266,12 @@ class Adapter:
     def close(self, host: str) -> None:
         """The host's connection closes: its calls, links and callsigns go with it (RP-4 §1.1)."""
         self.world.record(self.station, host, {"connection": "closed"})
+        del self.hosts[host]  # nothing more is said on a closed connection
         for end in [e for e in self.ends if e.host == host]:
             self.world.end(end, "failure")
         self.world.calls = [
             c for c in self.world.calls if not (c.adapter is self and c.host == host)
         ]
-        del self.hosts[host]
 
     def emit(self, host: str, message: Message) -> None:
         if host in self.hosts:
@@ -263,6 +314,10 @@ class Adapter:
         if handler is None:
             self.emit(host, error(rid, "unsupported", f"no op {op}"))
             return
+        problem = member_problem(message)
+        if problem is not None:
+            self.emit(host, error(rid, "malformed", problem))
+            return
         handler(h, message, rid)
 
     def ok(self, h: Host, rid: Any) -> None:
@@ -284,9 +339,15 @@ class Adapter:
         return end
 
     def on_hello(self, h: Host, m: Message, rid: Any) -> None:
-        low, high = m.get("version", [0, 0])
+        low, high = m["version"]
         if not low <= VERSION <= high:
             self.emit(h.name, error(rid, "unsupported-version", f"this adapter speaks {VERSION}"))
+            self.close(h.name)
+            return
+        if not self.caps.get("shared") and any(
+            o.hello for o in self.hosts.values() if o is not h
+        ):  # RP-4 §1.1, §3: a modem that is not shared serves one host
+            self.emit(h.name, error(rid, "busy", "another program has this modem"))
             self.close(h.name)
             return
         h.hello = True

@@ -37,7 +37,7 @@ pub struct CalledConfig {
 }
 
 /// The messages its user addressed to an account, each with a serial of its own (RP-3 §10).
-pub type MailFor = Box<dyn FnMut(&str) -> Vec<(u64, Outgoing)>>;
+pub type MailFor = Box<dyn FnMut(&str) -> Vec<(u64, Outgoing)> + Send>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum State {

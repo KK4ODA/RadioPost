@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.1 |
+| **Version** | 0.4.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -60,7 +60,8 @@ callsign. The adapter keeps each host to its own business:
   closes, calls to its callsigns are no longer answered for it.
 
 An adapter that cannot keep these rules reports `caps.shared` false and serves one host with the
-modem to itself. The rules above then hold trivially: everything the modem does is this host's.
+modem to itself: while that host is connected, a second host is turned away at its `hello` (§3).
+The rules above then hold trivially: everything the modem does is this host's.
 
 ---
 
@@ -80,8 +81,10 @@ unless they answer a request.
 An adapter MUST ignore members it does not know, and answer an unknown `op` with `error`
 `unsupported`. It answers `error` `malformed` (RP-0 §9.3) to a line that is not a JSON object with
 a string `op`, whose `id` is neither a string nor an integer, or whose `data` is not standard
-base64 with padding; the `error` carries the request's `id` when it could be read. A host MUST
-ignore events and members it does not know, so that adapters can add them.
+base64 with padding, and to a request that lacks a member §4 gives it without a `?` or has one of
+the wrong type (§4, *Types*); the `error` carries the request's `id` when it could be read. It
+checks a request in that order: the line, then `hello` first (§3), then the `op`, then the
+members. A host MUST ignore events and members it does not know, so that adapters can add them.
 
 Test vectors: `vectors/rpmi-lines.json`: lines an adapter reads, and lines it answers with an
 error.
@@ -116,8 +119,10 @@ The adapter answers:
 | `max_queue` | The most bytes the host should have queued on a link at once (§4, `send`). |
 | `shared` | Other programs may use the modem at the same time, under §1.1's rules. Absent means false: this host has the modem to itself. |
 
-If no version is in common the adapter answers `error` `unsupported-version` and closes. Until it
-has answered `hello`, it answers any other request with `error` `refused`.
+If no version is in common the adapter answers `error` `unsupported-version` and closes. An adapter
+that is not shared (§1.1) answers the `hello` of a second host, while a host that has said `hello`
+is still connected, with `error` `busy` and closes that connection. Until it has answered `hello`,
+it answers any other request with `error` `refused`.
 
 ---
 
@@ -134,6 +139,12 @@ has answered `hello`, it answers any other request with `error` `refused`.
 | `abort` | `link`? | Ends this host's link, or its call under way, now. Queued bytes are dropped. A call ended this way ends with `failed` `aborted`; with no call under way, `error` `not-connected`. |
 | `broadcast` | `data`, `ref`? | §6. |
 | `status` | — | The adapter answers `status` (below). |
+
+**Types.** `version` is a list of two integers, the lowest and the highest version the host
+speaks; `callsigns` is a list of strings; `on` is true or false; `bandwidth` is an integer; `app`,
+`remote`, `as` and `link` are strings. `ref`, like `id`, is a string or an integer, and the adapter
+copies it unchanged into `delivered` or `broadcast-sent`. A `connect` needs its `id`, which its
+`connected` or `failed` carries: one without is `malformed`.
 
 **Answers.** `ok` carries only `op` and the request's `id`. A request the adapter turns down at once
 is answered with `error` instead, and nothing more follows from it. For `connect` these are: no
@@ -208,7 +219,7 @@ Adapters use RP-0 §9.3's codes where one fits, and these words in `code` otherw
 | `no-modem` | The adapter cannot reach its modem. |
 | `not-connected` | No such link of this host's. |
 | `refused` | The modem refused (a rule, a setting, the band, no callsigns yet). `text` says why. |
-| `busy` | The modem is doing something else (a call or a link already up, or another program's link). |
+| `busy` | The modem is doing something else: a call or a link already up, another program's link, or another host on a modem that is not shared. |
 | `claimed` | Another program on a shared modem holds the callsign (§1.1). `text` names it. |
 | `aborted` | The host's `abort` ended its call under way (in `failed`). |
 
@@ -338,3 +349,4 @@ as by radio.
 | 0.2.0 | 2026-11-09 | A shared modem (§1.1): callsigns, answering and links are each host's; `caps.shared`; error `claimed`; `callsigns` before `listen` and `connect` (§4); §9 says which modems can be shared, and how Aether would be (its ADR-0106). |
 | 0.3.0 | 2026-11-09 | What a bad line gets (`malformed`), and that a host ignores what it does not know (§2); `refused` before `hello` (§3); which `connect` errors come at once and what `ok` carries (§4); `failed`'s codes and `aborted` (§5, §7); `received` keeps no `send` boundaries (§5); test vectors. |
 | 0.3.1 | 2026-11-09 | §9.1: Aether shareable from 0.2.0-beta.146 (its ADR-0106): claims, `listen` on the claim, links by `owner`, and how Aether's answers and end reasons map to RPMI's; the WebSocket path is `/v1`. |
+| 0.4.0 | 2026-11-09 | Found by writing the Rust adapter and host: a request missing a member it needs, or with one of the wrong type, is `malformed`, and the order of the checks (§2); the members' types, `ref` a string or an integer, and a `connect` needs its `id` (§4); an adapter that is not shared turns a second host away `busy` (§1.1, §3, §7). Test vectors for each. |

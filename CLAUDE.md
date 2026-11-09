@@ -23,6 +23,13 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   from an offer whom a message is for (§10), and `session-01` left out the `DONE` that ends a
   gateway's turn after `WELCOME` (§5.2, §5.7). The engines are sans-IO: clock, nonces and the
   user's choices come in through their configuration, so the replays are byte for byte.
+  `core/rpmi` is RP-4: the lines, the host's side (`host::Carrier` joins one session to one link,
+  each `send` a transmission with `ref` `t<n>`), the simulated channel of `rpref/rpmi.py` (the
+  loopback adapter) and that channel on TCP ports; its tests replay both RPMI vector files and
+  carry session-03 between its engines. Writing it found two gaps, fixed in RP-4 0.4.0: what a
+  request missing a member, or with one of the wrong type, gets (`malformed`), and what an adapter
+  that is not shared does with a second host (`busy`, closed). RP-4 §9.5's TCP adapter, whose
+  links are TLS connections between machines, is not built yet.
 - `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`. Standard
   library only; `ruff.toml` holds the lint settings.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`

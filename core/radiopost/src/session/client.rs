@@ -49,7 +49,7 @@ pub struct ClientConfig {
 /// Which waiting messages to ask for, from those that will not come unasked. The client cannot
 /// stop to ask its user mid-turn, so this is the user's standing choice (for example: everything
 /// up to some size, or what the user marked in the last listing).
-pub type Chooser = Box<dyn FnMut(&[WaitingEntry]) -> Vec<u64>>;
+pub type Chooser = Box<dyn FnMut(&[WaitingEntry]) -> Vec<u64> + Send>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum State {

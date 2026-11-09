@@ -708,7 +708,7 @@
     },
     {
       "name": "errors",
-      "story": "A client meets every error in turn: a request before `hello`; no version in common (the adapter closes, and the host connects again); `listen` and `connect` before `callsigns`; an `as` that is not its own; a bandwidth the modem lacks; an unknown op; a link that is not its; an `abort` with nothing to abort. Then two calls to a station nobody answers for, one aborted and one given up, a call that connects, a second call while that link is up, and the link aborted.",
+      "story": "A client meets every error in turn: a request before `hello`; no version in common (the adapter closes, and the host connects again); `listen` and `connect` before `callsigns`; an `as` that is not its own; a bandwidth the modem lacks; an unknown op; a link that is not its; an `abort` with nothing to abort. Then two calls to a station nobody answers for, one aborted and one given up, a call that connects, two sends on it (with no `ref`, and with an integer `ref`), a second call while that link is up, and the link aborted. Last, a second program connects to the client's adapter, which is not shared: it is turned away `busy`, and the adapter closes its connection.",
       "steps": [
         {
           "station": "N1CALL-10",
@@ -1199,6 +1199,100 @@
           }
         },
         {
+          "note": "A `send` with no `ref` is never reported `delivered`; a `ref` may be an integer."
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "send",
+            "link": "c1",
+            "data": "bm8gcmVm"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "queued",
+            "link": "c1",
+            "bytes": 6
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "g1",
+            "data": "bm8gcmVm"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "queued",
+            "link": "c1",
+            "bytes": 0
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "send",
+            "link": "c1",
+            "data": "cmVmIDc=",
+            "ref": 7
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "queued",
+            "link": "c1",
+            "bytes": 5
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "g1",
+            "data": "cmVmIDc="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "delivered",
+            "link": "c1",
+            "ref": 7
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "queued",
+            "link": "c1",
+            "bytes": 0
+          }
+        },
+        {
           "station": "KK4ODA",
           "host": "client",
           "to": "adapter",
@@ -1257,6 +1351,44 @@
             "link": "g1",
             "reason": "remote"
           }
+        },
+        {
+          "note": "A second program tries the client's adapter, which is not shared, and is turned away."
+        },
+        {
+          "station": "KK4ODA",
+          "host": "other",
+          "connection": "opened"
+        },
+        {
+          "station": "KK4ODA",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "Other mail 2.3"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 1,
+            "code": "busy",
+            "text": "another program has this modem"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "other",
+          "connection": "closed"
         }
       ]
     },
