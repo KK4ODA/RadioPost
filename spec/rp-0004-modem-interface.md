@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.0 |
+| **Version** | 0.3.1 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -235,34 +235,51 @@ own documentation is the authority on its interface.
 
 ### 9.1 Aether
 
-Aether's control API (JSON over WebSocket, `ws://127.0.0.1:8515/`) maps one to one:
+Aether's control API (JSON over WebSocket, `ws://127.0.0.1:8515/v1`) carries RPMI one to one. From
+0.2.0-beta.146 Aether can be shared (its
+[ADR-0106](https://github.com/KK4ODA/aether-hf/blob/master/docs/adr/0106-each-program-answers-for-its-own-callsigns.md)):
+
+* Each program **claims** the callsigns it answers for, and the first claim on a callsign holds it.
+* A claim starts with answering off, and lasts as long as the WebSocket connection that made it.
+* Every `state` event says whose call or session it is (`owner`, the claim's `id`).
+
+The adapter opens **one WebSocket connection to Aether for each RPMI host**, and closes it when the
+host's connection closes; Aether then lets that host's claim go. A one-shot `POST /v1/<method>`
+holds no claim. Aether says it has claims by `status.claims`; for an Aether without them, see the
+end of this section.
 
 | RPMI | Aether control API |
 |---|---|
-| `callsigns` | `callsigns.set {callsigns}`, which replaces the station's whole list. |
-| `listen` | `listen {enabled: true}`. Aether answers every call to its callsigns while no host program is attached, and refuses `enabled: false` today (`unsupported`); until it can, the adapter answers `listen off` with `error` `unsupported`. |
-| `connect` | `connect {remote, callsign}`; `state` events `connected` / `disconnected`. |
-| `send` with `ref` | `send {data, ref}`; the `sent` event with `delivered: true` is RPMI's `delivered`. |
-| `disconnect` / `abort` | `disconnect` / `abort`. |
-| `received` | The `data` event. |
-| `queued` | `metrics.queued_bytes`. |
+| `hello` | `status` and `capabilities`: `caps.shared` is true when `status.claims` is present, and `caps.bandwidths` is the one Aether runs (`capabilities.bandwidth_hz`). `delivery`, `broadcast`, `quality`, `busy` and `regulatory` are true, and `max_links` is 1. |
+| `callsigns` | `claim {callsigns, app}`, with the host's `app`. Aether takes the callsigns it can and lists each one another program holds in `refused`. RPMI keeps the host's list whole, so on a refusal the adapter claims the host's earlier list again and answers `error` `claimed` naming the refused callsigns. |
+| `listen` | `listen {enabled}` on that claim. A claim starts with it off, as RPMI's does. |
+| `connect` | `connect {remote, callsign}`, with `callsign` set to `as`. The call and its session are the host's. Aether's `claimed`, and `bad_params` for a callsign the claim does not hold, are RPMI's `not-authorized`. `already_connected` is `busy`. `refused` (an answer-only station) and `regulatory` are `refused`. |
+| `connected` | A `state` event `connected` whose `owner` is the claim's `id`. A `detail` of `<remote> (master)` is a call the host placed (`direction` `out`), and `<remote> (slave)` one it answered (`in`). The event's `callsign` is `local`. |
+| `failed` | A `state` event `disconnected` with the claim's `owner` before any `connected`: `no answer` is `timeout`, `aborted` after the host's `abort` is `aborted`, and anything else `refused`. |
+| `disconnected` | The same event after `connected`. `peer disconnected` is `remote`. The end of the host's own `disconnect` or `abort` (`closed`, `aborted`, `closed (no DISC_ACK)`) is `local`. `link timeout` and `no response` are `timeout`, and anything else is `failure`. |
+| `send` with `ref` | `send {data, ref}`. The `sent` event with `delivered: true` and the same `ref` is RPMI's `delivered`. Aether's `not_owner` and `not_connected` are `not-connected`. |
+| `disconnect` / `abort` | `disconnect` / `abort`. Aether refuses either `not_owner` on another program's session (RPMI's `not-connected`). It answers an `abort` with nothing under way as done, so the adapter answers RPMI's `not-connected` itself. |
+| `received` | The `data` events while the host's session is up. Aether runs one session at a time, so they are the host's link. |
+| `queued` | `metrics.queued_bytes` while the host's session is up: the host's own bytes not yet acknowledged, counted before compression. |
 | `quality` | `metrics` (`snr_db`, `throughput_bps`, `receiving`). |
-| `busy` | `status.channel_busy`, the `metrics` events. |
+| `busy` | `metrics.channel_busy`, and true while a session whose `owner` is not the host's is up (`status.owner`, or a `metrics.link` during another's session). |
 | `broadcast` | `datagram.send`; the `datagram` and `datagram-sent` events. |
+| `bandwidth` (in `connect`) | Not mapped yet. How programs sharing a station choose its bandwidth is open (ADR-0106 §5). The adapter offers the bandwidth Aether runs and refuses another with `unsupported`, as §4 says. |
 
-Aether reports `delivery`, `quality`, `busy` and `regulatory`. A future Aether may speak RPMI
-natively.
+Aether checks the band rules before every transmission, and ends each session with the Morse
+identifier itself. A future Aether may speak RPMI natively.
 
-**Sharing.** Today an Aether adapter has the modem to itself and reports `shared` false. Aether
-answers calls before any host speaks, so it cannot keep §4's "off until the host turns it on", and
-its control API does not say which program a session belongs to. Aether's
-[ADR-0106](https://github.com/KK4ODA/aether-hf/blob/master/docs/adr/0106-each-program-answers-for-its-own-callsigns.md)
-(proposed, not built) would make it shareable, with a RadioPost gateway beside a program on
-Aether's VARA-compatible port (RMS Trimode, for example). Each program would claim its callsigns,
-with answering off until it says otherwise, and each session would carry its owner. The adapter
-would then map `callsigns` to `claim {callsigns}`, `listen` to `listen {enabled}` on that claim,
-and know its links by the `owner` of Aether's `state` events. This section changes when ADR-0106
-is built.
+**Beside a program on Aether's VARA-compatible port.** RMS Trimode, Winlink Express or VarAC on
+Aether's VARA-compatible host port holds the callsigns its `MYCALL` names. While such a program is
+attached, Aether answers none of its own callsigns that the program does not hold. Give the
+RadioPost host callsigns of its own: `N1CALL-10` beside Trimode's `N1CALL-1`, for example. Each
+program then answers only for its own callsigns, is told nothing of the other's sessions, and
+sees them as `busy`.
+
+**Before 0.2.0-beta.146** Aether has no claims (`status.claims` is absent). The adapter has the
+modem to itself and reports `shared` false. `callsigns` is `callsigns.set {callsigns}`, which
+replaces the station's whole list. Aether answers calls to its callsigns whatever the host says,
+so the adapter answers `listen` off with `error` `unsupported`.
 
 ### 9.2 VARA HF and VARA FM
 
@@ -320,3 +337,4 @@ as by radio.
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.2.0 | 2026-11-09 | A shared modem (§1.1): callsigns, answering and links are each host's; `caps.shared`; error `claimed`; `callsigns` before `listen` and `connect` (§4); §9 says which modems can be shared, and how Aether would be (its ADR-0106). |
 | 0.3.0 | 2026-11-09 | What a bad line gets (`malformed`), and that a host ignores what it does not know (§2); `refused` before `hello` (§3); which `connect` errors come at once and what `ok` carries (§4); `failed`'s codes and `aborted` (§5, §7); `received` keeps no `send` boundaries (§5); test vectors. |
+| 0.3.1 | 2026-11-09 | §9.1: Aether shareable from 0.2.0-beta.146 (its ADR-0106): claims, `listen` on the claim, links by `owner`, and how Aether's answers and end reasons map to RPMI's; the WebSocket path is `/v1`. |

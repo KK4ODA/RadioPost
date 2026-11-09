@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.7 |
+| **Version** | 0.1.8 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -172,7 +172,7 @@ server with those interfaces could replace Stalwart (concept §8.1).
 
 | Adapter | Modem's interface | Notes |
 |---|---|---|
-| Aether | Control API, WebSocket | Delivery receipts, quality, busy, rules checked by the modem. Could become native RPMI. Shareable once its ADR-0106 is built (RP-4 §9.1). |
+| Aether | Control API, WebSocket | Delivery receipts, quality, busy, rules checked by the modem. Could become native RPMI. Shareable from 0.2.0-beta.146: each program claims its callsigns (its ADR-0106, RP-4 §9.1). |
 | VARA HF, VARA FM | Published TNC commands, two TCP ports | No delivery receipts. |
 | ARDOP | Host command and data ports | To be checked against ARDOP's specification. |
 | AX.25 | AGWPE (Direwolf, TNCs) | VHF and UHF packet. |
@@ -295,3 +295,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.5 | 2026-11-09 | The modem interface's test vectors (§7). |
 | 0.1.6 | 2026-11-09 | The post office API's test vectors (§7). |
 | 0.1.7 | 2026-11-09 | The email test vectors (§7). |
+| 0.1.8 | 2026-11-09 | §5.4: Aether is shareable from 0.2.0-beta.146 (its ADR-0106). |
