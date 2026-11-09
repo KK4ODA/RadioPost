@@ -14,6 +14,7 @@ from . import cbor, rp
 MAX_PATH = 8  # RP-7 §3.3
 LOCAL_DAYS = 30  # RP-7 §4.4: how long a copy makes its address a local user
 KEEP_DAYS = 30  # RP-7 §3.6, §7: how long a record is kept, and a message passed on remembered
+HOLD_S = 3600  # RP-7 §6.2: how long records wait for a partner that reaches the post offices
 PROOF = 11  # RP-3 §4
 
 
@@ -126,20 +127,6 @@ def sender_view(queued_at: int, confirmed: bool, now: int) -> str:
     return "queued" if now - queued_at < KEEP_DAYS * 86400 else "may have been dropped"
 
 
-# -- §4.4: local delivery -----------------------------------------------------------------------
-
-
-def local_users(copies_seen: dict[str, int], now: int) -> set[str]:
-    """The addresses a gateway received a copy for in the last 30 days (RP-7 §4.4)."""
-    return {a for a, t in copies_seen.items() if now - t < LOCAL_DAYS * 86400}
-
-
-def local_recipients(canonical: bytes, local: set[str]) -> list[str]:
-    """The message's `to` and `cc` that are local users, in the message's order."""
-    message = cbor.decode(canonical)
-    return [a for a in message.get(3, []) + message.get(4, []) if a in local]
-
-
 # -- §4: inward ----------------------------------------------------------------------------------
 
 
@@ -173,3 +160,41 @@ def check_placement(
     if now >= body.get(6, 0):
         return "refused-by-policy", body
     return "ok", body
+
+
+# -- §4.4: local delivery -----------------------------------------------------------------------
+
+
+def local_users(copies_seen: dict[str, int], now: int) -> set[str]:
+    """The addresses a gateway received a copy for in the last 30 days (RP-7 §4.4)."""
+    return {a for a, t in copies_seen.items() if now - t < LOCAL_DAYS * 86400}
+
+
+def local_recipients(canonical: bytes, local: set[str]) -> list[str]:
+    """The message's `to` and `cc` that are local users, in the message's order."""
+    message = cbor.decode(canonical)
+    return [a for a in message.get(3, []) + message.get(4, []) if a in local]
+
+
+# -- §5, §6.2: windows and partners --------------------------------------------------------------
+
+
+def next_window(window: dict[str, Any], now: int) -> int:
+    """RP-7 §5: when the window open at `now` opened, or else when the next one opens."""
+    every, at = window["every_s"], window["at_s"]
+    start = (now - at) // every * every + at
+    return start if now < start + window["length_s"] else start + every
+
+
+def records_to(partner: str, partners: dict[str, dict[str, Any]], now: int) -> bool:
+    """RP-7 §6.2: in `partner`'s window, does a cut-off gateway send it its records?
+
+    `partners` maps each partner to its `window` and, once called, the `online` of its last
+    `WELCOME`.
+    """
+    if partners[partner].get("online", True):
+        return True
+    return not any(
+        p != partner and s.get("online") and next_window(s["window"], now) - now <= HOLD_S
+        for p, s in partners.items()
+    )

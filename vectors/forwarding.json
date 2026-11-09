@@ -2,11 +2,11 @@
   "radiopost_vectors": "Forwarding: placements, session records, and the post office's side",
   "format": 1,
   "specs": {
-    "RP-7": "§3, §4, §6",
+    "RP-7": "§3, §4, §5, §6",
     "RP-5": "§5.6, §5.8"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "A placement made from `placement_body` with radiopost.org's key is exactly `placement_hex`; a gateway checking a placement case with `me` and `now`, and the post office keys of keys.json, returns `expect` (RP-7 §4.3). A record's ID is SHA-256 of its statement, cut to 12 bytes (RP-7 §3.1). A partner (`me`) holding the credentials `held_hex` and checking a PROOF case from `caller` returns `expect` (RP-7 §3.2, §3.3). The post office's exchanges read as in api-exchanges.json.",
+  "rule": "A placement made from `placement_body` with radiopost.org's key is exactly `placement_hex`; a gateway checking a placement case with `me` and `now`, and the post office keys of keys.json, returns `expect` (RP-7 §4.3). A record's ID is SHA-256 of its statement, cut to 12 bytes (RP-7 §3.1). A partner (`me`) holding the credentials `held_hex` and checking a PROOF case from `caller` returns `expect` (RP-7 §3.2, §3.3). A cut-off gateway in `calling`'s window at `now`, knowing `partners`, sends it its records when `expect` is true (RP-7 §5, §6.2). The post office's exchanges read as in api-exchanges.json.",
   "context": {
     "cut_off_at": 1794471300,
     "cut_off_after_s": 900,
@@ -224,6 +224,228 @@
       "me": "N1CALL-10",
       "held_hex": [],
       "expect": "malformed"
+    }
+  ],
+  "partner_cases": [
+    {
+      "what": "N1CALL-10, which said `online` true",
+      "calling": "N1CALL-10",
+      "now": 1794492960,
+      "partners": {
+        "N1CALL-10": {
+          "window": {
+            "channel": {
+              "dial_hz": 7101000,
+              "mode": "USB",
+              "modem": "aether",
+              "bandwidth_hz": 2300
+            },
+            "every_s": 3600,
+            "at_s": 900,
+            "length_s": 600
+          },
+          "online": true
+        },
+        "N4CALL-2": {
+          "window": {
+            "every_s": 3600,
+            "at_s": 2700,
+            "length_s": 600
+          },
+          "online": false
+        }
+      },
+      "expect": true
+    },
+    {
+      "what": "N4CALL-2, cut off; N1CALL-10, online, opens in 29 minutes",
+      "calling": "N4CALL-2",
+      "now": 1794494760,
+      "partners": {
+        "N1CALL-10": {
+          "window": {
+            "channel": {
+              "dial_hz": 7101000,
+              "mode": "USB",
+              "modem": "aether",
+              "bandwidth_hz": 2300
+            },
+            "every_s": 3600,
+            "at_s": 900,
+            "length_s": 600
+          },
+          "online": true
+        },
+        "N4CALL-2": {
+          "window": {
+            "every_s": 3600,
+            "at_s": 2700,
+            "length_s": 600
+          },
+          "online": false
+        }
+      },
+      "expect": false
+    },
+    {
+      "what": "N4CALL-2, cut off; N1CALL-10 cut off too",
+      "calling": "N4CALL-2",
+      "now": 1794494760,
+      "partners": {
+        "N1CALL-10": {
+          "window": {
+            "channel": {
+              "dial_hz": 7101000,
+              "mode": "USB",
+              "modem": "aether",
+              "bandwidth_hz": 2300
+            },
+            "every_s": 3600,
+            "at_s": 900,
+            "length_s": 600
+          },
+          "online": false
+        },
+        "N4CALL-2": {
+          "window": {
+            "every_s": 3600,
+            "at_s": 2700,
+            "length_s": 600
+          },
+          "online": false
+        }
+      },
+      "expect": true
+    },
+    {
+      "what": "N4CALL-2, never called; N1CALL-10, online, opens in 29 minutes",
+      "calling": "N4CALL-2",
+      "now": 1794494760,
+      "partners": {
+        "N1CALL-10": {
+          "window": {
+            "channel": {
+              "dial_hz": 7101000,
+              "mode": "USB",
+              "modem": "aether",
+              "bandwidth_hz": 2300
+            },
+            "every_s": 3600,
+            "at_s": 900,
+            "length_s": 600
+          },
+          "online": true
+        },
+        "N4CALL-2": {
+          "window": {
+            "every_s": 3600,
+            "at_s": 2700,
+            "length_s": 600
+          }
+        }
+      },
+      "expect": true
+    },
+    {
+      "what": "N4CALL-2, cut off; N1CALL-10 never called",
+      "calling": "N4CALL-2",
+      "now": 1794494760,
+      "partners": {
+        "N1CALL-10": {
+          "window": {
+            "channel": {
+              "dial_hz": 7101000,
+              "mode": "USB",
+              "modem": "aether",
+              "bandwidth_hz": 2300
+            },
+            "every_s": 3600,
+            "at_s": 900,
+            "length_s": 600
+          }
+        },
+        "N4CALL-2": {
+          "window": {
+            "every_s": 3600,
+            "at_s": 2700,
+            "length_s": 600
+          },
+          "online": false
+        }
+      },
+      "expect": true
+    },
+    {
+      "what": "N4CALL-2, cut off; W4CALL-1, online, opens in exactly an hour",
+      "calling": "N4CALL-2",
+      "now": 1794494760,
+      "partners": {
+        "N4CALL-2": {
+          "window": {
+            "every_s": 3600,
+            "at_s": 2700,
+            "length_s": 600
+          },
+          "online": false
+        },
+        "W4CALL-1": {
+          "window": {
+            "every_s": 14400,
+            "at_s": 13560,
+            "length_s": 1200
+          },
+          "online": true
+        }
+      },
+      "expect": false
+    },
+    {
+      "what": "N4CALL-2, cut off; W4CALL-1, online, opens in 61 minutes",
+      "calling": "N4CALL-2",
+      "now": 1794494760,
+      "partners": {
+        "N4CALL-2": {
+          "window": {
+            "every_s": 3600,
+            "at_s": 2700,
+            "length_s": 600
+          },
+          "online": false
+        },
+        "W4CALL-1": {
+          "window": {
+            "every_s": 14400,
+            "at_s": 13620,
+            "length_s": 1200
+          },
+          "online": true
+        }
+      },
+      "expect": true
+    },
+    {
+      "what": "N4CALL-2, cut off; W4CALL-1, online, opened 5 minutes ago",
+      "calling": "N4CALL-2",
+      "now": 1794494760,
+      "partners": {
+        "N4CALL-2": {
+          "window": {
+            "every_s": 3600,
+            "at_s": 2700,
+            "length_s": 600
+          },
+          "online": false
+        },
+        "W4CALL-1": {
+          "window": {
+            "every_s": 14400,
+            "at_s": 9660,
+            "length_s": 1200
+          },
+          "online": true
+        }
+      },
+      "expect": false
     }
   ],
   "post_office": [

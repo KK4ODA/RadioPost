@@ -3182,9 +3182,94 @@ def make_forwarding() -> dict[str, Any]:
             "both the credential and its hash": "malformed",
         },
     )
+    now = T_WINDOW + 1860  # 14:46, in N4CALL-2's window
+    n4 = {"every_s": 3600, "at_s": 2700, "length_s": 600}
+
+    def w4(opens_in: int) -> dict[str, Any]:
+        return {"every_s": 14400, "at_s": (now + opens_in) % 14400, "length_s": 1200}
+
+    partner_in = [
+        (
+            "N1CALL-10, which said `online` true",
+            "N1CALL-10",
+            T_WINDOW + 60,
+            {"N1CALL-10": (WINDOW, True), "N4CALL-2": (n4, False)},
+        ),
+        (
+            "N4CALL-2, cut off; N1CALL-10, online, opens in 29 minutes",
+            "N4CALL-2",
+            now,
+            {"N1CALL-10": (WINDOW, True), "N4CALL-2": (n4, False)},
+        ),
+        (
+            "N4CALL-2, cut off; N1CALL-10 cut off too",
+            "N4CALL-2",
+            now,
+            {"N1CALL-10": (WINDOW, False), "N4CALL-2": (n4, False)},
+        ),
+        (
+            "N4CALL-2, never called; N1CALL-10, online, opens in 29 minutes",
+            "N4CALL-2",
+            now,
+            {"N1CALL-10": (WINDOW, True), "N4CALL-2": (n4, None)},
+        ),
+        (
+            "N4CALL-2, cut off; N1CALL-10 never called",
+            "N4CALL-2",
+            now,
+            {"N1CALL-10": (WINDOW, None), "N4CALL-2": (n4, False)},
+        ),
+        (
+            "N4CALL-2, cut off; W4CALL-1, online, opens in exactly an hour",
+            "N4CALL-2",
+            now,
+            {"N4CALL-2": (n4, False), "W4CALL-1": (w4(3600), True)},
+        ),
+        (
+            "N4CALL-2, cut off; W4CALL-1, online, opens in 61 minutes",
+            "N4CALL-2",
+            now,
+            {"N4CALL-2": (n4, False), "W4CALL-1": (w4(3660), True)},
+        ),
+        (
+            "N4CALL-2, cut off; W4CALL-1, online, opened 5 minutes ago",
+            "N4CALL-2",
+            now,
+            {"N4CALL-2": (n4, False), "W4CALL-1": (w4(-300), True)},
+        ),
+    ]
+    partner_cases = []
+    for what, calling, at, known in partner_in:
+        partners = {
+            cs: {"window": w} | ({} if online is None else {"online": online})
+            for cs, (w, online) in known.items()
+        }
+        assert fwd.next_window(partners[calling]["window"], at) <= at  # its window is open
+        partner_cases.append(
+            {
+                "what": what,
+                "calling": calling,
+                "now": at,
+                "partners": partners,
+                "expect": fwd.records_to(calling, partners, at),
+            }
+        )
+    confirm(  # RP-7 §6.2: records wait an hour at most for a partner that reaches the Internet
+        partner_cases,
+        {
+            "N1CALL-10, which said `online` true": True,
+            "N4CALL-2, cut off; N1CALL-10, online, opens in 29 minutes": False,
+            "N4CALL-2, cut off; N1CALL-10 cut off too": True,
+            "N4CALL-2, never called; N1CALL-10, online, opens in 29 minutes": True,
+            "N4CALL-2, cut off; N1CALL-10 never called": True,
+            "N4CALL-2, cut off; W4CALL-1, online, opens in exactly an hour": False,
+            "N4CALL-2, cut off; W4CALL-1, online, opens in 61 minutes": True,
+            "N4CALL-2, cut off; W4CALL-1, online, opened 5 minutes ago": False,
+        },
+    )
     out = header(
         "Forwarding: placements, session records, and the post office's side",
-        {"RP-7": "§3, §4, §6", "RP-5": "§5.6, §5.8"},
+        {"RP-7": "§3, §4, §5, §6", "RP-5": "§5.6, §5.8"},
     )
     out["rule"] = (
         "A placement made from `placement_body` with radiopost.org's key is exactly "
@@ -3192,7 +3277,9 @@ def make_forwarding() -> dict[str, Any]:
         "office keys of keys.json, returns `expect` (RP-7 §4.3). A record's ID is SHA-256 of its "
         "statement, cut to 12 bytes (RP-7 §3.1). A partner (`me`) holding the credentials "
         "`held_hex` and checking a PROOF case from `caller` returns `expect` (RP-7 §3.2, §3.3). "
-        "The post office's exchanges read as in api-exchanges.json."
+        "A cut-off gateway in `calling`'s window at `now`, knowing `partners`, sends it its "
+        "records when `expect` is true (RP-7 §5, §6.2). The post office's exchanges read as in "
+        "api-exchanges.json."
     )
     out["context"] = {
         "cut_off_at": T_CUT,
@@ -3219,6 +3306,7 @@ def make_forwarding() -> dict[str, Any]:
     out["placement_cases"] = placement_cases
     out["records"] = entries
     out["proof_cases"] = proof_cases
+    out["partner_cases"] = partner_cases
     out["post_office"] = story
     return out
 
@@ -4984,6 +5072,9 @@ def check_forwarding(data: dict[str, Any]) -> None:
     for sent, r in zip(reports[0]["request"]["body"]["sessions"], data["records"], strict=True):
         pdu = cbor.decode(bytes.fromhex(r["proof"]["pdu_hex"]))
         assert jws.unb64u(sent["statement"]) == pdu[2] and sent["path"] == [*pdu[6], "N1CALL-10"]
+    for case in data["partner_cases"]:  # RP-7 §5: each is in the window of the partner called
+        w = case["partners"][case["calling"]]["window"]
+        assert (case["now"] - w["at_s"]) % w["every_s"] < w["length_s"]
     for case in data["proof_cases"]:  # RP-7 §3.2: a hash names a credential the partner holds
         pdu = cbor.decode(bytes.fromhex(case["proof_hex"]))
         if 9 in pdu and case["expect"] == "ok":

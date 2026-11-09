@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.14 |
+| **Version** | 0.1.15 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -91,7 +91,7 @@ reasoning; the specifications hold the result.
 | D20 | **In a station-to-station session the station called proves itself too**, with a statement over the caller's nonce (RP-1 §6.5, RP-3 §10). | Anyone can transmit any callsign, so the caller has no other way to know who answered, or whose mail it is taking. The caller's own nonce makes the statement fresh with no clock to compare. | Trusting the callsign (forged with a microphone); a challenge from the caller (one more exchange); a time-form statement checked against the clock (fails when the clocks disagree, with no way to ask again). |
 | D21 | **A cut-off gateway calls its partner, and one session carries both directions** (RP-7 §1, §2). | Only the partner's windows need agreeing, and only the station that needs the link starts transmitting. The cut-off gateway is the partner's client: its queue goes out as offers, its users' mail comes back as the partner's waiting list, in the five transmissions of RP-3. | Both gateways calling each other on schedules (two schedules, twice the transmissions); the partner pushing inward mail (the cut-off gateway must listen at agreed times, and the partner start transmissions it may not be allowed to). |
 | D22 | **Inward mail carries the post office's signature** (a placement, RP-7 §4.2). | A forwarding gateway could otherwise hand a cut-off area mail "from the post office" that it made up. The cut-off gateway already holds the post office's keys, and mail from the Internet has no sender's proof to carry. | Trusting the partner (any station can transmit any callsign); end-to-end proof only (Internet mail has none). |
-| D23 | **Partners are configured and routes published; no routing protocol yet** (RP-7 §5, §6). | An area has a few gateways, and their operators know each other. A routing protocol is hard to get right and harder to secure, and nothing yet shows it is needed. | Gateways announcing what they reach (open: RP-7 §8). |
+| D23 | **Partners are configured and routes published; gateways announce nothing** (RP-7 §5, §6). A cut-off gateway keeps its records up to an hour for a partner that last said it reaches the post offices (§6.2). | An area has a few gateways, and their operators know each other. An announcement would have to be trusted: one false one draws an area's mail to a station that cannot pass it on. What a partner said in its last session is enough to prefer one that reaches the Internet, and the hour is less than a detour through a cut-off partner, which waits for a window at every hop. | Gateways announcing what they reach (trust, and checks at every gateway); handing records to whichever partner answers first (detours through cut-off partners); waiting for an online partner however long (mail held while another way is open). |
 | D24 | **A cut-off gateway hands mail between its own users** (RP-7 §4.4): the addresses it received copies for in the last 30 days. | In a cut-off area much of the mail that matters is between neighbours, a shelter and the emergency operations centre, and it should not wait for the Internet or a partner's window. The copies say who uses the gateway with no list to keep. The record still takes the message to the post office, which checks it again and marks it picked up. | Waiting for the post office (no mail within the area while it is cut off); keeping mail for any address (the gateway would hold mail for strangers); going through the partner (a window and a round trip for mail that never leaves the area). |
 | D25 | **Mail dropped unsent is the sender's client's to track** (RP-7 §3.6): it keeps what a cut-off gateway took, offers it again until an online gateway confirms it, and tells the sender after 30 days. | Only the client knows what it sent: the gateway may be lost or have dropped the record, and the post office never heard of the message. Offers already carry content IDs and the post office already declines what it holds, so confirming costs a few bytes in sessions the client makes anyway. | The gateway telling the sender (only if the sender calls it again, and a dropped record leaves it nothing to say); a receipt by radio for every message (air time for all mail, not just the lost); keeping records for ever (a gateway's storage is finite, and a record that cannot leave in 30 days is unlikely to). |
 
@@ -292,7 +292,7 @@ Collected from the specifications and the concept, each to be settled in the doc
 | ARDOP's host interface, checked against its specification. | RP-4 §9.3 |
 | Third-party traffic: the table of agreements, and knowing a sender's country. | RP-6 §5 |
 | Stalwart: MTA hooks or milter; AGPL for operators; clustering's edition. | Concept §13 |
-| Forwarding: routing beyond partners, the bands per country. | RP-7 §8 |
+| Forwarding: the bands per country. | RP-7 §8 |
 | The reference implementations' languages and packaging. | §6 here |
 
 ---
@@ -316,3 +316,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.12 | 2026-11-09 | D24: local delivery at a cut-off gateway (RP-7 0.3.0); the forwarder's part; its vectors (§7). |
 | 0.1.13 | 2026-11-09 | D25: mail dropped unsent is the sender's client's to track (RP-7 0.4.0). |
 | 0.1.14 | 2026-11-09 | D6 covers `PROOF` (RP-7 0.5.0). |
+| 0.1.15 | 2026-11-09 | D23: gateways announce nothing, and how a cut-off gateway chooses among its partners (RP-7 0.6.0). |

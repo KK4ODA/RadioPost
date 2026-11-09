@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.5.0 |
+| **Version** | 0.6.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -34,7 +34,8 @@ Only the cut-off gateway calls, so only the partner's windows need to be agreed,
 station that needs the link starts transmitting.
 
 A cut-off gateway also hands mail between its own users without waiting for their post offices
-(§4.4). Not in this version: routing beyond configured partners and published routes (§8).
+(§4.4). Mail travels only through configured partners and published routes: gateways do not
+announce what they reach (§6.2).
 
 ---
 
@@ -300,7 +301,9 @@ start transmissions: an unattended gateway only where automatic control is allow
 
 ---
 
-## 6. Radio routes
+## 6. Routes
+
+### 6.1 Radio routes
 
 A post office publishes its routes at `GET /routes` (RP-5 §4.5), a signed document:
 
@@ -312,6 +315,20 @@ A post office publishes its routes at `GET /routes` (RP-5 §4.5), a signed docum
 Read: "when the gateways in `users_at` are cut off, their users' mail goes to `via`, which holds it
 for them." The `via` gateway MUST publish windows (§5), and the gateways in `users_at` SHOULD have
 it among their partners: they call it, inside its windows, to collect the mail.
+
+### 6.2 Choosing a partner
+
+Mail goes only to the partners an operator named, and on from them hop by hop (§3.4). Gateways do
+not announce what they reach. An announcement would have to be trusted: one false one draws an
+area's mail to a station that cannot pass it on, and every gateway would have to check them all.
+Partners are stations their operators know (§1), and the path's limit bounds the hops (§3.3).
+
+Records go furthest from a partner that reaches the post offices. So a cut-off gateway remembers,
+for each partner, whether that partner's last `WELCOME` said `online`. In the window of a partner
+whose last `WELCOME` said `online` false, it sends its records only if no partner whose last said
+`online` true opens a window within the next hour (one open now counts). Otherwise it calls with
+no offers, to collect its mail, and keeps its records for that window. A partner it has never
+called counts as neither.
 
 ---
 
@@ -330,8 +347,6 @@ it among their partners: they call it, inside its windows, to collect the mail.
 
 ## 8. Not yet settled
 
-* **Routing.** Gateways publishing what they reach; choosing among partners by more than their
-  operators' lists.
 * **Bands.** A table, per country, of the segments open to unattended forwarding.
 
 ---
@@ -360,7 +375,8 @@ All with framing, from `vectors/session-04.json`, `vectors/forwarding.json`,
 `vectors/session-04.json` is a forwarding session byte for byte: N2CALL-5, cut off, calls N1CALL-10
 in its window, sends two records and Shelter 3's message, and receives Ana's message with its
 placement. `vectors/forwarding.json` has the placement and seven checks of it, the records and
-eleven checks of a `PROOF` (four of them with the credential's hash), and the post office's side: the forward item placed when N2CALL-5 fell
+eleven checks of a `PROOF` (four of them with the credential's hash), eight choices of whether to
+send records to a partner (§6.2), and the post office's side: the forward item placed when N2CALL-5 fell
 silent, N1CALL-10's report with its path, and the drop when N2CALL-5 came back.
 
 `vectors/session-05.json` is local delivery byte for byte: Shelter 3 hands N2CALL-5, cut off, a
@@ -387,3 +403,4 @@ online, which declines the message `already-have` because the post office alread
 | 0.3.0 | 2026-11-09 | Local delivery (§4.4): local users, keeping, listing with serial 0 and the flag `local`, local pickups in the record and in `PROOF` key 8 (§3.1, §3.2), checked with `receive` (§3.3); its sizes (§9) and test vectors (§10). |
 | 0.4.0 | 2026-11-09 | Mail dropped unsent (§3.6): a message a cut-off gateway takes is queued, and the sender's client keeps it, offers it again and tells the sender; a cut-off gateway declines what it holds or passed on in the last 30 days (§3.5), and forgets a record it drops (§7); test vectors (§10). |
 | 0.5.0 | 2026-11-09 | Size: `PROOF` key 9 `credential_hash` in place of the credential when the partner holds it, which halves a `PROOF` (§3.2); the partner's checks begin with the credential, `credential-required` for a hash it does not hold (§3.3); sizes (§9); test vectors (§10). |
+| 0.6.0 | 2026-11-09 | Routing: gateways do not announce what they reach; a cut-off gateway keeps its records for a partner that reaches the post offices when one opens a window within the hour (§6.2); §6 split into radio routes (§6.1) and the choice (§6.2); test vectors (§10). |
