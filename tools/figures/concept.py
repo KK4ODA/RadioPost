@@ -386,7 +386,7 @@ def fig_identity() -> None:
         300,
         206,
         "paper",
-        tag="Credential (about 160 bytes)",
+        tag="Credential (about 165 bytes)",
         mono_rows=[
             "address   facundo@radiopost.org",
             "operator  KK4ODA",

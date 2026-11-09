@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.0 |
+| **Version** | 0.4.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -67,10 +67,11 @@ operator, and its operator's account as the address.
 
 ### 4.1 Format
 
-A credential is a CBOR array of two byte strings:
+A credential is a COSE_Sign1 signed by the post office (RP-0 §5), untagged:
 
 ```
-credential = [ payload, signature ]
+credential = [ protected, {}, payload, signature ]
+protected  = bstr .cbor { 1: -19, 4: kid }   ; Ed25519; the ID of the post office key that signed
 payload    = bstr .cbor credential-body
 signature  = bstr .size 64
 ```
@@ -86,13 +87,14 @@ signature  = bstr .size 64
 | 5 | `device` | bstr .size 32 | The device's Ed25519 public key. |
 | 6 | `issued` | uint | Time of issue. |
 | 7 | `expires` | uint | The credential is not valid at or after this time. |
-| 8 | `kid` | bstr .size 4 | The ID of the post office key that signed it. |
+| 8 | — | — | Not used: the key's ID is in the protected header. |
 | 9 | `flags` | uint | Bits: 1 `send` (may send mail), 2 `receive` (may pick up mail), 4 `role` (a role mailbox), 8 `gateway` (may act as a gateway: relay sessions and forward mail). |
 
-The signature is the post office key's Ed25519 signature (RP-0 §5) with context
-`RadioPost-credential-v1` over the `payload` bytes as they are, not re-encoded.
+The signature is the post office key's, over COSE's `Sig_structure` with the context
+`RadioPost-credential-v1` as external data (RP-0 §5): the `protected` and `payload` bytes as they
+are, not re-encoded.
 
-A credential is typically about 160 bytes.
+A credential is 161 to 169 bytes in the test vectors.
 
 ### 4.2 Lifetime
 
@@ -104,7 +106,7 @@ a gateway that has been offline (§8).
 ### 4.3 The credential hash
 
 Where a credential is referred to rather than sent, it is identified by the first 8 bytes of
-SHA-256 of the whole credential (the CBOR array). Gateways index the credentials they hold by it.
+SHA-256 of the whole credential (the COSE_Sign1 array's encoding). Gateways index the credentials they hold by it.
 
 ---
 
@@ -113,14 +115,15 @@ SHA-256 of the whole credential (the CBOR array). Gateways index the credentials
 A verifier (a gateway, a post office, a client checking a gateway) MUST check, in order, and reject
 the credential at the first failure:
 
-1. It decodes as §4.1, and `v` is a version it supports. Otherwise `credential-invalid`.
+1. It decodes as §4.1, a COSE_Sign1 in RP-0 §5's form, and `v` is a version it supports.
+   Otherwise `credential-invalid`.
 2. The address's domain names a post office whose keys the verifier holds (§7). Otherwise
    `unknown-post-office`.
-3. One of that post office's keys has the `kid`, is in its validity period at `issued`, and its
-   signature over `payload` verifies. Otherwise `credential-invalid`.
+3. One of that post office's keys has the protected header's `kid`, is in its validity period at
+   `issued`, and its signature verifies (RP-0 §5). Otherwise `credential-invalid`.
 4. The verifier's clock is before `expires`, and not more than 600 seconds before `issued`.
    Otherwise `credential-expired` (or `credential-invalid` for a future `issued`).
-5. The `serial`, and the `kid`, are not in the post office's revocation list the verifier holds
+5. The `serial`, and the header's `kid`, are not in the post office's revocation list the verifier holds
    (§8). Otherwise `credential-revoked`.
 6. The flags allow what is being asked. Otherwise `not-authorized`.
 
@@ -325,3 +328,4 @@ A serial MAY be dropped from the list once the credential it names has expired.
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.2.0 | 2026-11-09 | Each statement check names its error, a replay answers `time-skew` (§6.3); when a DNS record is ignored (§7.1); test vectors. |
 | 0.3.0 | 2026-11-09 | A statement by the station called, in a station-to-station session, over the caller's nonce (§6.5); §6.1 and §6.3 step 3 say whose callsign `gateway` holds. |
+| 0.4.0 | 2026-11-09 | A credential is an untagged COSE_Sign1 (RP-0 §5): the key's ID moves from the body (key 8, now unused) to the protected header, which names Ed25519; 161 to 169 bytes (§4.1, §4.3, §5). |

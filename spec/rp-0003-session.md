@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.5.0 |
+| **Version** | 0.5.1 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -380,9 +380,9 @@ Test vectors: `vectors/session-03.json` is a station-to-station session byte for
 | PDU | Typical size |
 |---|---|
 | `HELLO`, two offers, signed, credential hash | 201 bytes |
-| `HELLO`, the same with the full credential | 356 bytes |
+| `HELLO`, the same with the full credential | 361 bytes |
 | `WELCOME` with three waiting entries | 232 bytes |
-| `WELCOME` from a station called directly, one waiting entry, with its credential and signature | 351 bytes |
+| `WELCOME` from a station called directly, one waiting entry, with its credential and signature | 356 bytes |
 | `MSG` carrying 960 bytes of a message | 991 to 995 bytes |
 | `RECEIPT` for two messages | 33 bytes |
 | `DONE` | 5 bytes |
@@ -437,3 +437,4 @@ has one example of each PDU, and frames that must be refused.
 | 0.3.0 | 2026-11-09 | Forwarding (RP-7): `PROOF` defined there (§4), `role` 1, `MSG` key 6 `placement`, `RECEIPT` key 4 `records`. |
 | 0.4.0 | 2026-11-09 | Local delivery (RP-7 §4.4): the waiting flag `local` (§5.2), `REQUEST` key 4 `ids` (§5.6), no serial in a local message's `MSG` (§5.4). |
 | 0.5.0 | 2026-11-09 | Mail sent through a cut-off gateway is queued, not sent, and offered again (§5.5, RP-7 §3.6); a cut-off gateway's `already-have` (§5.2). |
+| 0.5.1 | 2026-11-09 | Sizes with credentials as COSE_Sign1 (RP-1 0.4.0) (§11). |

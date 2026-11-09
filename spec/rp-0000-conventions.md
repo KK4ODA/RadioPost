@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.4.1 |
+| **Version** | 0.5.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -105,6 +105,7 @@ RadioPost **signs; it never encrypts** anything sent over the air (§7).
 |---|---|
 | Signatures | **Ed25519** (RFC 8032), pure, no prehash. Public keys 32 bytes, signatures 64 bytes. |
 | Hashes | **SHA-256** (FIPS 180-4). |
+| Signed CBOR objects | **COSE_Sign1** (RFC 9052), untagged, with `alg` Ed25519 (-19, RFC 9864). |
 | Signed JSON documents | **JWS** compact serialisation (RFC 7515) with `alg` `EdDSA` (RFC 8037). |
 | Transport over the Internet | **TLS** 1.2 or later (HTTPS). |
 
@@ -117,6 +118,22 @@ signed_input = context || 0x00 || bytes
 
 The contexts are registered in §9.2. A signature made for one purpose can then never be accepted
 for another.
+
+**Signed CBOR objects** (a credential, RP-1 §4; a placement, RP-7 §4.2) are COSE_Sign1 structures
+(RFC 9052 §4.2), untagged:
+
+```
+object    = [ protected, unprotected, payload, signature ]
+protected = bstr .cbor { 1: -19, 4: kid }     ; alg Ed25519 (RFC 9864), the key's ID
+```
+
+`unprotected` is the empty map, `payload` a byte string, and `signature` the 64-byte Ed25519
+signature over COSE's `Sig_structure` (RFC 9052 §4.4), `["Signature1", protected, context,
+payload]`, deterministically encoded, with the object's context as the external data (`context`,
+its ASCII bytes). The context is not sent. That encoding begins with an array and the text
+`Signature1`, never with a context, so it cannot be taken for another RadioPost signature. A
+verifier refuses, as the object's decoding error, any other `alg`, any other header, a non-empty
+`unprotected` or a tag.
 
 **Signed JSON documents** are plain JWS, with no context: the signature is over the JWS signing
 input of RFC 7515, which is base64url text and a dot. It never holds the zero byte that ends every
@@ -259,12 +276,12 @@ As in §2. Numbers are never reused.
 
 | Context string | Signs | Defined in |
 |---|---|---|
-| `RadioPost-credential-v1` | A credential's payload | RP-1 §4 |
+| `RadioPost-credential-v1` | A credential's payload, as COSE external data | RP-1 §4 |
 | `RadioPost-session-v1` | A session statement | RP-1 §6 |
 | `RadioPost-api-login-v1` | A post office API login | RP-5 §3.2 |
 | `RadioPost-api-enroll-v1` | A new device's enrollment | RP-5 §6.1 |
 | `RadioPost-api-gateway-v1` | A gateway's registration | RP-5 §6.4 |
-| `RadioPost-placement-v1` | A post office's placement of mail for a cut-off gateway | RP-7 §4.2 |
+| `RadioPost-placement-v1` | A post office's placement of mail for a cut-off gateway, as COSE external data | RP-7 §4.2 |
 
 ### 9.3 Error codes
 
@@ -307,3 +324,4 @@ means the same thing wherever it appears.
 | 0.3.1 | 2026-11-09 | §8.6: the vectors cover RP-6 too. |
 | 0.4.0 | 2026-11-09 | The context `RadioPost-placement-v1` (§9.2); RP-7 is a draft (§2). |
 | 0.4.1 | 2026-11-09 | §8.6: the vectors cover RP-7 too. |
+| 0.5.0 | 2026-11-09 | Signed CBOR objects are untagged COSE_Sign1 with Ed25519 (-19), the context as external data (§5, §9.2). |

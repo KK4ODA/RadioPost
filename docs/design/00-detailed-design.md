@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.17 |
+| **Version** | 0.1.18 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -72,7 +72,7 @@ reasoning; the specifications hold the result.
 | D1 | **CBOR with small integer keys** on the air and in signed objects; **JSON** off the air (RP-0 §4). | A key costs one byte; the encoding is a standard with libraries everywhere, and deterministic encoding makes hashes and signatures stable. JSON is easier to debug where bytes are cheap. | JSON on the air (several times the bytes); Protocol Buffers (needs schemas and tooling to read a capture); a custom binary format (no tools at all). |
 | D2 | **Ed25519 and SHA-256**; sign, never encrypt (RP-0 §5). | Small keys (32 bytes) and signatures (64), fast, hard to misuse; encryption is not allowed on the air. | RSA (signatures four times larger); ECDSA (a bad random number leaks the key). |
 | D3 | **Content IDs**: 12 bytes of SHA-256 of the message (RP-0 §6.3, RP-2 §3). | Names a message by what it is: duplicates and resumes work across gateways, and a signed list of IDs signs the messages. 12 bytes is safe for the life of the network. | Sequence numbers (not global, no deduplication); 16 or 32 bytes (bytes on every list). |
-| D4 | **A compact credential** of our own: a signed CBOR pair, about 160 bytes (RP-1 §4). | Small enough to send over HF on a first visit; trivial to parse in a small program. | X.509 certificates (several times larger, complex parsing); COSE_Sign1 (close, a few bytes more; to be reconsidered before Candidate). |
+| D4 | **A compact credential as a COSE_Sign1** (RFC 9052), untagged, Ed25519 named in its protected header: 161 to 169 bytes (RP-0 §5, RP-1 §4). The post office's placements likewise (RP-7 §4.2). | Small enough to send over HF on a first visit. It is the standard envelope, with audited libraries in every common language, and the CBOR counterpart of the JWS used for JSON; with the algorithm in a signed header, a later algorithm can be added cleanly. It costs 5 bytes more than a pair of our own, about a second at 36 bit/s, on a first visit only. | X.509 certificates (several times larger, complex parsing); a signed pair of our own (5 bytes smaller, but one more format for every implementer to get right; the author chose COSE_Sign1, 2026-11-09). |
 | D5 | **The first transmission is signed with the time**; a challenge only if the clocks disagree (RP-1 §6, RP-3 §5.1). | Saves a whole exchange on every session: tens of seconds on a weak path. Clocks are usually right (GPS, the Internet). | Always a challenge (one more exchange every time). |
 | D6 | **A gateway keeps credentials**; the client sends a hash on later visits (RP-3 §5.1), and a forwarding gateway in each `PROOF` after the first of a user's (RP-7 §3.2). | About 160 bytes saved on every return visit and every such record: 35 seconds at 36 bit/s. | Sending the credential every time. |
 | D7 | **The caller hangs up** (RP-3 §8). | Someone must, by rule. Winlink's sessions through RMS Trimode waited 30 s at every end because the program that should hang up did not. | Either side; the server side. |
@@ -296,7 +296,6 @@ Collected from the specifications and the concept, each to be settled in the doc
 
 | Question | Where |
 |---|---|
-| COSE_Sign1 for credentials instead of the custom pair? | RP-1 |
 | How a new post office comes to be trusted by gateways that have never met its users. | RP-1 §7.3 |
 | Proof of callsign at enrollment: LoTW, the sysop's check, or both. | RP-1 §1 |
 | The Zstandard dictionary: training data, publication. | RP-2 §4 |
@@ -329,3 +328,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.15 | 2026-11-09 | D23: gateways announce nothing, and how a cut-off gateway chooses among its partners (RP-7 0.6.0). |
 | 0.1.16 | 2026-11-09 | D26: the bands open to unattended forwarding (RP-7 0.7.0). |
 | 0.1.17 | 2026-11-09 | The author's decisions: D27 Rust throughout, D28 one repository, D29 MTA hooks; §6 decided; Stalwart's edition and AGPL (§5.3). |
+| 0.1.18 | 2026-11-09 | D4: credentials and placements as COSE_Sign1 (RP-0 0.5.0, RP-1 0.4.0, RP-7 0.8.0). |

@@ -680,21 +680,20 @@ def credential_body(spec: dict[str, Any]) -> dict[int, Any]:
         5: PUBLIC[spec["device"]],
         6: issued,
         7: issued + 90 * DAY,
-        8: rp.kid(PUBLIC[spec["po"]]),
         9: sum(rp.FLAGS[f] for f in spec["flags"]),
     }
 
 
 def credential(name: str) -> bytes:
     spec = CREDENTIALS[name]
-    return rp.make_credential(credential_body(spec), SECRET[spec["po"]])[2]
+    return rp.make_credential(credential_body(spec), SECRET[spec["po"]])[3]
 
 
 def make_credentials() -> dict[str, Any]:
     entries = []
     for name, spec in CREDENTIALS.items():
         body = credential_body(spec)
-        payload, signature, cred = rp.make_credential(body, SECRET[spec["po"]])
+        payload, protected, signature, cred = rp.make_credential(body, SECRET[spec["po"]])
         entries.append(
             {
                 "name": name,
@@ -708,11 +707,12 @@ def make_credentials() -> dict[str, Any]:
                     "device_hex": body[5].hex(),
                     "issued": body[6],
                     "expires": body[7],
-                    "kid_hex": body[8].hex(),
                     "flags": body[9],
                 },
+                "kid_hex": rp.kid(PUBLIC[spec["po"]]).hex(),
                 "payload_hex": payload.hex(),
-                "signed_input_hex": rp.signed_input(rp.CTX_CREDENTIAL, payload).hex(),
+                "protected_hex": protected.hex(),
+                "to_be_signed_hex": rp.to_be_signed(rp.CTX_CREDENTIAL, protected, payload).hex(),
                 "signature_hex": signature.hex(),
                 "credential_hex": cred.hex(),
                 "credential_hash_hex": rp.credential_hash(cred).hex(),
@@ -721,8 +721,16 @@ def make_credentials() -> dict[str, Any]:
 
     good = credential("facundo")
     outer = cbor.decode(good)
-    tampered_payload = outer[0].replace(b"facundo@", b"facundp@")
-    tampered = cbor.encode([tampered_payload, outer[1]])
+    tampered = cbor.encode([outer[0], {}, outer[2].replace(b"facundo@", b"facundp@"), outer[3]])
+    rad_secret = SECRET["po:radiopost.org"]
+    rad_kid = rp.kid(PUBLIC["po:radiopost.org"])
+
+    def resigned(header: dict[int, Any], unprotected: dict[int, Any]) -> bytes:
+        """Facundo's payload signed properly by radiopost.org, under another header."""
+        protected = cbor.encode(header)
+        signed = rp.to_be_signed(rp.CTX_CREDENTIAL, protected, outer[2])
+        return cbor.encode([protected, unprotected, outer[2], ed25519.sign(rad_secret, signed)])
+
     rad = rp.kid(PUBLIC["po:radiopost.org"])
     cases_in = [
         ("valid", "facundo", T_SESSION, ["send", "receive"], {}, None),
@@ -783,12 +791,36 @@ def make_credentials() -> dict[str, Any]:
             None,
         ),
         (
-            "not a two-item array",
+            "not a COSE_Sign1: three items",
             None,
             T_SESSION,
             ["send"],
             {},
-            cbor.encode([outer[0], outer[1], b""]),
+            cbor.encode([outer[0], outer[2], outer[3]]),
+        ),
+        (
+            "signed and valid, but EdDSA (-8) in place of Ed25519 (-19)",
+            None,
+            T_SESSION,
+            ["send"],
+            {},
+            resigned({1: -8, 4: rad_kid}, {}),
+        ),
+        (
+            "signed and valid, but a header left unprotected",
+            None,
+            T_SESSION,
+            ["send"],
+            {},
+            resigned({1: rp.COSE_ED25519, 4: rad_kid}, {3: 0}),
+        ),
+        (
+            "header naming radiopost.org's previous key, not the signer",
+            None,
+            T_SESSION,
+            ["send"],
+            {},
+            resigned({1: rp.COSE_ED25519, 4: rp.kid(PUBLIC["po:radiopost.org:2025"])}, {}),
         ),
     ]
     cases = []
@@ -833,13 +865,17 @@ def make_credentials() -> dict[str, Any]:
             "role mailbox operator": "ok",
             "gateway acting as a gateway": "ok",
             "a user's credential asked to act as a gateway": "not-authorized",
-            "not a two-item array": "credential-invalid",
+            "not a COSE_Sign1: three items": "credential-invalid",
+            "signed and valid, but EdDSA (-8) in place of Ed25519 (-19)": "credential-invalid",
+            "signed and valid, but a header left unprotected": "credential-invalid",
+            "header naming radiopost.org's previous key, not the signer": "credential-invalid",
         },
     )
     out = header("Credentials and how they verify", {"RP-1": "§4–§5, §8", "RP-0": "§5, §9.3"})
     out["rule"] = (
-        "From `body` and the signing key, an issuer produces exactly `payload_hex`, "
-        "`signature_hex` and `credential_hex` (Ed25519 is deterministic). A verifier given a "
+        "From `body` and the signing key (`kid_hex`), an issuer produces exactly `payload_hex`, "
+        "`protected_hex`, the COSE `to_be_signed_hex`, `signature_hex` and `credential_hex`, an "
+        "untagged COSE_Sign1 (Ed25519 is deterministic). A verifier given a "
         "case's clock, needed flags, known post offices (keys and validity periods from keys.json) "
         "and revocations returns `expect`: `ok` or an RP-0 §9.3 error name, checking in RP-1 §5's "
         "order."
@@ -904,7 +940,7 @@ def make_statements() -> dict[str, Any]:
         )
 
     def body(cred: str) -> dict[int, Any]:
-        return cbor.decode(cbor.decode(credential(cred))[0])
+        return rp.credential_body(credential(cred))
 
     stmt, sig, cred = signed["time-form"]
     fewer = dict(stmt)
@@ -3080,7 +3116,7 @@ def make_forwarding() -> dict[str, Any]:
     story, item = forwarding_story()
     placement = jws.unb64u(item["placement"])
     assert placement is not None
-    payload, signature = cbor.decode(placement)
+    protected, _, payload, signature = cbor.decode(placement)
     cid = encoded("ana-to-shelter3")[1]
     keys = po_keys()
 
@@ -3090,6 +3126,11 @@ def make_forwarding() -> dict[str, Any]:
 
     bent = bytearray(placement)
     bent[-1] ^= 1
+    misnamed_header = rp.protected_header(rp.kid(PUBLIC["po:radiopost.org:2025"]))
+    misnamed_signed = rp.to_be_signed(rp.CTX_PLACEMENT, misnamed_header, payload)
+    misnamed = cbor.encode(
+        [misnamed_header, {}, payload, ed25519.sign(SECRET["po:radiopost.org"], misnamed_signed)]
+    )
     placement_cases_in = [
         ("as placed, checked by N2CALL-5 in session-04", placement, cid, "N2CALL-5", FWD_CLOCK),
         (
@@ -3100,6 +3141,7 @@ def make_forwarding() -> dict[str, Any]:
             FWD_CLOCK,
         ),
         ("its signature changed", bytes(bent), cid, "N2CALL-5", FWD_CLOCK),
+        ("its header naming another key of radiopost.org", misnamed, cid, "N2CALL-5", FWD_CLOCK),
         ("for another gateway", placed({5: "KK4ODA-1"}), cid, "N2CALL-5", FWD_CLOCK),
         ("for another message", placement, encoded("maria-421")[1], "N2CALL-5", FWD_CLOCK),
         ("past its `expires`", placement, cid, "N2CALL-5", cbor.decode(payload)[6]),
@@ -3124,6 +3166,7 @@ def make_forwarding() -> dict[str, Any]:
             "as placed, checked by N2CALL-5 in session-04": "ok",
             "signed by a key radiopost.org does not have": "signature-invalid",
             "its signature changed": "signature-invalid",
+            "its header naming another key of radiopost.org": "signature-invalid",
             "for another gateway": "not-authorized",
             "for another message": "not-authorized",
             "past its `expires`": "refused-by-policy",
@@ -3372,7 +3415,8 @@ def make_forwarding() -> dict[str, Any]:
         "for": "ana-to-shelter3, #501 for shelter3@radiopost.org, at N2CALL-5",
         "placement_body": cbor.diagnostic(cbor.decode(payload)),
         "payload_hex": payload.hex(),
-        "signed_input_hex": rp.signed_input(rp.CTX_PLACEMENT, payload).hex(),
+        "protected_hex": protected.hex(),
+        "to_be_signed_hex": rp.to_be_signed(rp.CTX_PLACEMENT, protected, payload).hex(),
         "signature_hex": signature.hex(),
         "placement_hex": placement.hex(),
     }
@@ -5022,6 +5066,8 @@ def self_check(name: str, data: dict[str, Any]) -> None:
         check_account(data)
     if name == "session-04.json":
         check_forwarding_session(data)
+    if name == "credentials.json":
+        check_cose(data["credentials"], rp.CTX_CREDENTIAL)
     if name == "forwarding.json":
         check_forwarding(data)
     if name == "session-05.json":
@@ -5162,8 +5208,36 @@ def check_forwarding_session(data: dict[str, Any]) -> None:
             assert welcome[7][0][1] == cid
 
 
+def bstr(raw: bytes) -> bytes:
+    """A CBOR byte string's head and bytes, written out by hand (RFC 8949 §3.1)."""
+    n = len(raw)
+    if n < 24:
+        return bytes([0x40 + n]) + raw
+    if n < 256:
+        return bytes([0x58, n]) + raw
+    return bytes([0x59]) + n.to_bytes(2, "big") + raw
+
+
+def check_cose(objects: list[dict[str, Any]], context: str) -> None:
+    """RP-0 §5 built by hand: the header, COSE's Sig_structure, the object, the signature."""
+    for o in objects:
+        kid = bytes.fromhex(o["kid_hex"]) if "kid_hex" in o else None
+        protected = bytes.fromhex(o["protected_hex"])
+        assert protected[:5] == bytes([0xA2, 0x01, 0x32, 0x04, 0x44]) and len(protected) == 9
+        assert kid is None or protected[5:] == kid
+        payload = bytes.fromhex(o["payload_hex"])
+        signed = b"\x84\x6aSignature1" + bstr(protected) + bstr(context.encode()) + bstr(payload)
+        assert signed.hex() == o["to_be_signed_hex"]
+        signature = bytes.fromhex(o["signature_hex"])
+        whole = b"\x84" + bstr(protected) + b"\xa0" + bstr(payload) + bstr(signature)
+        assert whole.hex() == o.get("credential_hex", o.get("placement_hex"))
+        keys = [k["public"] for ks in po_keys().values() for k in ks]
+        assert any(ed25519.verify(k, signed, signature) for k in keys)
+
+
 def check_forwarding(data: dict[str, Any]) -> None:
     """The placement is the forward item's; each record's ID is its statement's hash."""
+    check_cose([data["placement"]], rp.CTX_PLACEMENT)
     items = [
         i
         for e in data["post_office"]
@@ -5290,7 +5364,7 @@ def check_account(data: dict[str, Any]) -> None:
                         old = user
                     result, nb = rp.verify_credential(new, po_keys(), {}, e["at"], [])
                     assert result == "ok" and nb is not None
-                    ob = cbor.decode(cbor.decode(old)[0])
+                    ob = rp.credential_body(old)
                     assert [nb[k] for k in (3, 4, 5, 9)] == [ob[k] for k in (3, 4, 5, 9)]
                     assert nb[2] != ob[2] and nb[6] == e["at"]
                     given.append(new)

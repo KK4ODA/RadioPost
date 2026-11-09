@@ -180,7 +180,6 @@ class PostOffice:
                 4: waiting.cid,
                 5: cut,
                 6: copy["expires"],
-                7: rp.kid(self.public),
             }
             placement = fwd.make_placement(body, self.secret)
             item = {**copy, "kind": "forward", "gateway": cut, "placement": jws.b64u(placement)}
@@ -198,10 +197,9 @@ class PostOffice:
             5: device,
             6: self.now,
             7: self.now + CREDENTIAL_S,
-            8: rp.kid(self.public),
             9: flags,
         }
-        return rp.make_credential(body, self.secret)[2]
+        return rp.make_credential(body, self.secret)[3]
 
     # -- requests ----------------------------------------------------------------------------------
 

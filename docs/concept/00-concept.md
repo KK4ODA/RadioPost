@@ -175,7 +175,7 @@ can then check the user with no Internet.
 * **Each post office has a key pair too.** It publishes the public half in DNS (a `_radiopost`
   record) and on its website.
 * **A credential** is a short statement signed by the post office: this address, this operator's
-  callsign, this device key, valid until this date. It is about 160 bytes.
+  callsign, this device key, valid until this date. It is about 165 bytes.
 * **A gateway checks four things**: that a post office key it knows signed the credential; that
   the device key named in it signed the session; that the callsign on the air is the operator's;
   and that the credential has not expired or been revoked.

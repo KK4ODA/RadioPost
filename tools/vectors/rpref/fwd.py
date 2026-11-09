@@ -145,9 +145,8 @@ def sender_view(queued_at: int, confirmed: bool, now: int) -> str:
 
 
 def make_placement(body: dict[int, Any], secret: bytes) -> bytes:
-    """RP-7 §4.2: [payload, signature], signed by the post office."""
-    payload = cbor.encode(body)
-    return cbor.encode([payload, rp.sign(rp.CTX_PLACEMENT, payload, secret)])
+    """RP-7 §4.2: a COSE_Sign1 by the post office (RP-0 §5)."""
+    return rp.cose_sign1(rp.CTX_PLACEMENT, cbor.encode(body), secret)[2]
 
 
 def check_placement(
@@ -158,16 +157,18 @@ def check_placement(
     post_offices: dict[str, list[dict[str, Any]]],
 ) -> tuple[str, dict[int, Any] | None]:
     """RP-7 §4.3: the cut-off gateway's checks, in order."""
+    opened = rp.cose_open(placement)
+    if opened is None:
+        return "malformed", None
     try:
-        payload, signature = cbor.decode(placement)
-        body = cbor.decode(payload)
-    except (cbor.NotCanonical, ValueError, TypeError):
+        body = cbor.decode(opened[2])
+    except cbor.NotCanonical:
         return "malformed", None
     if not isinstance(body, dict) or body.get(1) != 1:
         return "malformed", None
     domain = str(body.get(2, "")).rpartition("@")[2].lower()
-    keys = [k["public"] for k in post_offices.get(domain, []) if rp.kid(k["public"]) == body.get(7)]
-    if not any(rp.verify(rp.CTX_PLACEMENT, payload, signature, k) for k in keys):
+    keys = [k["public"] for k in post_offices.get(domain, []) if rp.kid(k["public"]) == opened[0]]
+    if not any(rp.cose_verify(rp.CTX_PLACEMENT, opened, k) for k in keys):
         return "signature-invalid", body
     if body.get(4) != cid or body.get(5) != me:
         return "not-authorized", body

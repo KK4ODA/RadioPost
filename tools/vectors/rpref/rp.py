@@ -113,6 +113,53 @@ def verify(context: str, data: bytes, signature: bytes, public: bytes) -> bool:
     return ed25519.verify(public, signed_input(context, data), signature)
 
 
+COSE_ED25519 = -19  # RFC 9864: EdDSA with Ed25519
+
+
+def protected_header(key_id: bytes) -> bytes:
+    """RP-0 §5: a COSE_Sign1's protected header, exactly {1: Ed25519, 4: kid}."""
+    return cbor.encode({1: COSE_ED25519, 4: key_id})
+
+
+def to_be_signed(context: str, protected: bytes, payload: bytes) -> bytes:
+    """RP-0 §5: COSE's Sig_structure (RFC 9052 §4.4), the context as external data."""
+    return cbor.encode(["Signature1", protected, context.encode("ascii"), payload])
+
+
+def cose_sign1(context: str, payload: bytes, secret: bytes) -> tuple[bytes, bytes, bytes]:
+    """RP-0 §5: an untagged COSE_Sign1 by `secret`'s key. Returns protected, signature, object."""
+    protected = protected_header(kid(ed25519.public_key(secret)))
+    signature = ed25519.sign(secret, to_be_signed(context, protected, payload))
+    return protected, signature, cbor.encode([protected, {}, payload, signature])
+
+
+def cose_open(obj: bytes) -> tuple[bytes, bytes, bytes, bytes] | None:
+    """RP-0 §5: kid, protected header, payload and signature, or None if not in RadioPost's form."""
+    try:
+        outer = cbor.decode(obj)
+        if not (isinstance(outer, list) and len(outer) == 4):
+            return None
+        protected, unprotected, payload, signature = outer
+        if unprotected != {} or not all(isinstance(x, bytes) for x in (protected, payload)):
+            return None
+        header = cbor.decode(protected)
+    except cbor.NotCanonical:
+        return None
+    if not (isinstance(signature, bytes) and len(signature) == 64 and isinstance(header, dict)):
+        return None
+    key_id = header.get(4)
+    if set(header) != {1, 4} or header[1] != COSE_ED25519 or not isinstance(key_id, bytes):
+        return None
+    if len(key_id) != 4:
+        return None
+    return key_id, protected, payload, signature
+
+
+def cose_verify(context: str, opened: tuple[bytes, bytes, bytes, bytes], public: bytes) -> bool:
+    _, protected, payload, signature = opened
+    return ed25519.verify(public, to_be_signed(context, protected, payload), signature)
+
+
 def id_text(content_id: bytes) -> str:
     """RP-0 §6.3: base32, lowercase, RFC 4648 alphabet, no padding."""
     return base64.b32encode(content_id).decode("ascii").rstrip("=").lower()
@@ -188,11 +235,16 @@ def air_decode(air: bytes) -> bytes:
 # -- RP-1: credentials ---------------------------------------------------------------------------
 
 
-def make_credential(body: dict[int, Any], po_secret: bytes) -> tuple[bytes, bytes, bytes]:
-    """Payload, signature and the credential (RP-1 §4.1)."""
+def make_credential(body: dict[int, Any], po_secret: bytes) -> tuple[bytes, bytes, bytes, bytes]:
+    """Payload, protected header, signature and the credential, a COSE_Sign1 (RP-1 §4.1)."""
     payload = cbor.encode(body)
-    signature = sign(CTX_CREDENTIAL, payload, po_secret)
-    return payload, signature, cbor.encode([payload, signature])
+    protected, signature, credential = cose_sign1(CTX_CREDENTIAL, payload, po_secret)
+    return payload, protected, signature, credential
+
+
+def credential_body(credential: bytes) -> dict[int, Any]:
+    """RP-1 §4.1: the body a credential's payload holds, unverified."""
+    return cbor.decode(cbor.decode(credential)[2])
 
 
 def credential_hash(credential: bytes) -> bytes:
@@ -212,14 +264,12 @@ def verify_credential(
     ``post_offices`` maps a domain to its keys: each {"public": bytes, "not_before", "not_after"}.
     ``revoked`` maps a domain to {"serials": [...], "kids": [bytes, ...]}.
     """
+    opened = cose_open(credential)
+    if opened is None:
+        return "credential-invalid", None
+    key_id = opened[0]
     try:
-        outer = cbor.decode(credential)
-        if not (isinstance(outer, list) and len(outer) == 2):
-            return "credential-invalid", None
-        payload, signature = outer
-        if not (isinstance(payload, bytes) and isinstance(signature, bytes)):
-            return "credential-invalid", None
-        body = cbor.decode(payload)
+        body = cbor.decode(opened[2])
     except cbor.NotCanonical:
         return "credential-invalid", None
     if not isinstance(body, dict) or body.get(1) != 1:
@@ -231,16 +281,16 @@ def verify_credential(
     matching = [
         k
         for k in keys
-        if kid(k["public"]) == body.get(8) and k["not_before"] <= body.get(6, -1) < k["not_after"]
+        if kid(k["public"]) == key_id and k["not_before"] <= body.get(6, -1) < k["not_after"]
     ]
-    if not any(verify(CTX_CREDENTIAL, payload, signature, k["public"]) for k in matching):
+    if not any(cose_verify(CTX_CREDENTIAL, opened, k["public"]) for k in matching):
         return "credential-invalid", body
     if now >= body[7]:
         return "credential-expired", body
     if body[6] > now + FUTURE_ISSUE_S:
         return "credential-invalid", body
     gone = revoked.get(domain, {})
-    if body[2] in gone.get("serials", []) or body[8] in gone.get("kids", []):
+    if body[2] in gone.get("serials", []) or key_id in gone.get("kids", []):
         return "credential-revoked", body
     if any(not body[9] & FLAGS[f] for f in need):
         return "not-authorized", body
@@ -336,7 +386,7 @@ def statement_from_hello(hello: dict[int, Any]) -> dict[int, Any]:
 
 def statement_from_welcome(hello: dict[int, Any], welcome: dict[int, Any]) -> dict[int, Any]:
     """RP-1 §6.5, RP-3 §10: the statement a caller rebuilds from a called station's WELCOME."""
-    body = cbor.decode(cbor.decode(welcome[13])[0])
+    body = credential_body(welcome[13])
     return statement(
         body[3], body[4], hello[4], [w[1] for w in welcome[7]], time=welcome[10], nonce=hello[7]
     )

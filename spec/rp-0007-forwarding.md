@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.7.1 |
+| **Version** | 0.8.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -198,11 +198,12 @@ same content ID, and it keeps one.
 ### 4.2 The placement
 
 Each forward item carries a **placement**, signed by the post office, so that the cut-off gateway
-can tell its post office's mail from mail any station could make up. A placement is a CBOR array
-of two byte strings, like a credential (RP-1 §4.1):
+can tell its post office's mail from mail any station could make up. A placement is a COSE_Sign1
+signed by the post office (RP-0 §5), like a credential (RP-1 §4.1):
 
 ```
-placement = [ payload, signature ]
+placement = [ protected, {}, payload, signature ]
+protected = bstr .cbor { 1: -19, 4: kid }   ; Ed25519; the ID of the post office key that signed
 payload   = bstr .cbor placement-body
 ```
 
@@ -216,10 +217,9 @@ payload   = bstr .cbor placement-body
 | 4 | `id` | bstr .size 12 | The message's content ID. |
 | 5 | `gateway` | text | The cut-off gateway it is for. |
 | 6 | `expires` | uint | When the copy is to be dropped. |
-| 7 | `kid` | bstr .size 4 | The ID of the post office key that signed it. |
 
-The signature is the post office key's (RP-0 §5) with context `RadioPost-placement-v1` over the
-`payload` bytes as they are.
+The signature is the post office key's, over COSE's `Sig_structure` with the context
+`RadioPost-placement-v1` as external data (RP-0 §5).
 
 ### 4.3 In the session
 
@@ -236,8 +236,8 @@ key:
 The caller checks each placement, in this order, and lists the message failed with the code at
 the first failure:
 
-1. It decodes as §4.2, with `v` 1. Otherwise `malformed`.
-2. `kid` names a key of the address's post office that the caller holds (RP-1 §7.3), and the
+1. It decodes as §4.2, a COSE_Sign1 in RP-0 §5's form, with `v` 1. Otherwise `malformed`.
+2. The protected header's `kid` names a key of the address's post office that the caller holds (RP-1 §7.3), and the
    signature verifies with it. Otherwise `signature-invalid`.
 3. `id` is the message's content ID, and `gateway` the caller's own callsign. Otherwise
    `not-authorized`.
@@ -391,14 +391,14 @@ called counts as neither.
 
 | What | Size |
 |---|---|
-| `HELLO` from a gateway, one offer, with its credential | 335 bytes |
-| `PROOF`, a record with one message | 342 bytes |
-| `PROOF`, a pickup only | 332 bytes |
+| `HELLO` from a gateway, one offer, with its credential | 340 bytes |
+| `PROOF`, a record with one message | 347 bytes |
+| `PROOF`, a pickup only | 337 bytes |
 | `PROOF`, a local pickup only, the credential by its hash | 187 bytes |
 | `PROOF`, a record with one message, the credential by its hash | 186 bytes |
 | `PROOF`, a pickup only, the credential by its hash | 177 bytes |
 | `REQUEST` for one local message by content ID | 20 bytes |
-| A placement, in `MSG` key 6 | 136 bytes |
+| A placement, in `MSG` key 6 | 141 bytes |
 | `RECEIPT` for one message and two records | 48 bytes |
 
 All with framing, from `vectors/session-04.json`, `vectors/forwarding.json`,
@@ -410,7 +410,7 @@ All with framing, from `vectors/session-04.json`, `vectors/forwarding.json`,
 
 `vectors/session-04.json` is a forwarding session byte for byte: N2CALL-5, cut off, calls N1CALL-10
 in its window, sends two records and Shelter 3's message, and receives Ana's message with its
-placement. `vectors/forwarding.json` has the placement and seven checks of it, the records and
+placement. `vectors/forwarding.json` has the placement and eight checks of it, the records and
 eleven checks of a `PROOF` (four of them with the credential's hash), eleven windows checked against
 the United States' table (§5, §5.1), eight choices of whether to send records to a partner (§6.2),
 and the post office's side: the forward item placed when N2CALL-5 fell
@@ -445,3 +445,4 @@ online, which declines the message `already-have` because the post office alread
 | 0.6.0 | 2026-11-09 | Routing: gateways do not announce what they reach; a cut-off gateway keeps its records for a partner that reaches the post offices when one opens a window within the hour (§6.2); §6 split into radio routes (§6.1) and the choice (§6.2); test vectors (§10). |
 | 0.7.0 | 2026-11-09 | Bands: a window states `occupied_hz`, and each station checks it against its own country's table (§5); the segments open to unattended forwarding, with the United States' table (§5.1); test vectors (§10). |
 | 0.7.1 | 2026-11-09 | The local delivery vectors follow session-04: the sessions at 14:35 and 14:55, the records in the 15:15 window by their credentials' hashes (§9, §10). |
+| 0.8.0 | 2026-11-09 | A placement is an untagged COSE_Sign1 (RP-0 §5): its key's ID moves from the body (key 7, removed) to the protected header (§4.2, §4.3); sizes (§9). |
