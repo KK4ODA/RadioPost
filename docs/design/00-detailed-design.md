@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.21 |
+| **Version** | 0.1.22 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -259,7 +259,9 @@ the core against `vectors/` on every push, with the checks that run today.
   the bands, choosing a partner, credentials as COSE_Sign1, station-to-station reports,
   third-party traffic and which post offices a gateway trusts. Every specification has vectors.
 * **A conformance tester** that plays the other side: a client to test a gateway, a gateway to
-  test a client, over the TCP adapter, including broken links, resumes and wrong signatures.
+  test a client, over its own test adapter, including broken links, resumes and wrong signatures.
+  Its outline, with the tests by role and the order they are written in, is
+  [the conformance tester](01-conformance.md).
 * **A loopback adapter** joining two hosts through RPMI with delays and losses, for tests with no
   radio. Aether's simulated channel can carry the same sessions with real modem timing.
 * **Interoperation before Candidate:** a specification becomes Candidate only when two independent
@@ -287,7 +289,7 @@ the core against `vectors/` on every push, with the checks that run today.
 | Phase | Delivers | Specs |
 |---|---|---|
 | 0 | These documents brought to complete drafts; test vectors; the conformance tester's outline. | All |
-| 1 | The core library; the client; the TCP and Aether adapters; station-to-station sessions between two clients. | RP-1–RP-4 |
+| 1 | The core library; the client; the TCP and Aether adapters; station-to-station sessions between two clients; the conformance tester's first half ([its §6](01-conformance.md)). | RP-1–RP-4 |
 | 2 | The RadioPost service with Stalwart; the gateway, online; ordinary email both ways. The pilot: `radiopost.org` with KK4ODA-1. | RP-5, RP-6 |
 | 3 | Copies placed ahead; the offline queue; reports. | RP-5 §5.6, §5.8 |
 | 4 | Forwarding by radio. | RP-7 |
@@ -334,3 +336,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.19 | 2026-11-09 | D30: station-to-station mail reported over the Internet (RP-5 0.10.0). |
 | 0.1.20 | 2026-11-09 | D31: third-party traffic (RP-6 0.3.0, RP-3 0.7.0, RP-5 0.11.0). |
 | 0.1.21 | 2026-11-09 | D17: the dictionary's rule (RP-2 0.2.0); D32: trusting post offices (RP-1 0.5.0); D33: radiopost.org's enrollment. Phase 0's open questions settled but the data still owed. |
+| 0.1.22 | 2026-11-09 | §7: the conformance tester's outline, in its own document. |

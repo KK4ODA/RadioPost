@@ -5,7 +5,7 @@
 
 What it checks, and why:
 
-* Each specification and the detailed design has a status, a version and an update date in its
+* Each specification and each design document has a status, a version and an update date in its
   header, and a change log whose last row is that version on that date (RP-0 §8.2). A Draft or
   an Outline stays below 1.0.0, and the change log's versions only go up.
 * The specification index (`spec/README.md`) lists each specification's status and version as
@@ -130,7 +130,8 @@ def check_spdx(problems: list[str]) -> None:
 def main() -> int:
     problems: list[str] = []
     headers = {n: check_living(p, problems) for n, p in specifications().items()}
-    check_living(ROOT / "docs" / "design" / "00-detailed-design.md", problems)
+    for design in sorted((ROOT / "docs" / "design").glob("[0-9][0-9]-*.md")):
+        check_living(design, problems)
     check_index(headers, problems)
     check_links_and_references(problems)
     check_spdx(problems)
@@ -138,7 +139,7 @@ def main() -> int:
         print("\n".join(problems), file=sys.stderr)
         print(f"{len(problems)} problems", file=sys.stderr)
         return 1
-    print(f"{len(headers)} specifications, the design, links, references and licence lines agree")
+    print(f"{len(headers)} specifications, the designs, links, references and licence lines agree")
     return 0
 
 

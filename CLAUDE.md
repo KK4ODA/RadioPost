@@ -10,8 +10,9 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   session protocol, RP-4 modem interface (RPMI), RP-5 post office API, RP-6 email, RP-7 forwarding
   (a draft). `spec/README.md` is the index. Where a program and a spec disagree, the spec wins.
 - `docs/concept/` — the plain-language concept, with schematics.
-- `docs/design/` — the detailed design: the map, decisions D1–D33, the programs' parts, the order of
-  work, the open questions.
+- `docs/design/` — `00-detailed-design.md`: the map, decisions D1–D33, the programs' parts, the order of
+  work, the open questions; `01-conformance.md`: the conformance tester's outline (its tests by
+  role, conformance mode, the test adapter, what each phase adds).
 - **Code** (Phase 1 on, D27, D28): Rust throughout, in this repository — `core/`, a Cargo
   workspace (the core library, the gateway, the service), `app/` (the Tauri client) and `adapters/`.
   The core is checked against `vectors/` in CI.
