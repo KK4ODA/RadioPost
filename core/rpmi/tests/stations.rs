@@ -266,7 +266,7 @@ fn a_call_nobody_answers_fails_on_time_over_tcp() {
     );
     let facundo = run(facundo, at, None);
     assert_eq!(facundo.failed.as_deref(), Some("timeout"));
-    assert!(facundo.sent.is_empty());
+    assert_eq!(facundo.sent, Vec::new(), "nothing sent");
 }
 
 /// RP-4 §1.1: an adapter that is not shared serves one host; a second is turned away `busy`.

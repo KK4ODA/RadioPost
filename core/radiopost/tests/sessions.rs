@@ -281,7 +281,11 @@ fn session_02_broken_and_resumed() {
     let mut a =
         Client::new(base(&sessions[0], "N1CALL-10"), Box::new(|_| vec![421])).expect("a client");
     let events = replay_client(&mut a, &sessions[0], "client");
-    assert!(delivered(&events).is_empty());
+    assert_eq!(
+        delivered(&events),
+        Vec::<ContentId>::new(),
+        "nothing delivered"
+    );
     assert!(
         a.link_broken().iter().all(|e| !matches!(e, Event::Held(_))),
         "nothing received"
