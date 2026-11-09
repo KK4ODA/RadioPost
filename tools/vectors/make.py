@@ -25,7 +25,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from rpref import cbor, ed25519, jws, mail, po, rp, rpmi
+from rpref import cbor, ed25519, fwd, jws, mail, po, rp, rpmi
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "vectors"
@@ -40,6 +40,8 @@ T_SESSION = 1794235200  # 2026-11-09T14:40:00Z
 T_STATION = T_SESSION + 4 * 3600  # session-03: station to station, 18:40Z
 T_RESUME = T_SESSION + 6 * 3600  # session-02: the first of three, 20:40Z
 T_ACCOUNT = T_SESSION + 2 * DAY  # api-account.json: renewal and the accept list
+T_WINDOW = 1794492900  # session-04: N1CALL-10's window opens, 2026-11-12T14:15:00Z (:15 hourly)
+T_CUT = T_WINDOW - 6 * 3600  # Atlanta loses the Internet
 
 PO_RADIOPOST = "https://po.radiopost.org/rp/v1"
 PO_HAMPOST = "https://po.hampost.org/rp/v1"
@@ -79,6 +81,12 @@ KEY_LABELS = [
     ("device:shelter3-n4call", "Shelter 3's laptop, operator N4CALL", None, None),
     ("device:gateway-n1call-10", "Gateway N1CALL-10 (credential from hampost.org)", None, None),
     ("device:gateway-kk4oda-1", "Gateway KK4ODA-1, being registered at radiopost.org", None, None),
+    (
+        "device:gateway-n2call-5",
+        "Gateway N2CALL-5, the county EOC in Atlanta, credential from radiopost.org",
+        None,
+        None,
+    ),
     (
         "po:radiopost.org:new",
         "radiopost.org's new key, in its info document before DNS has it",
@@ -401,6 +409,25 @@ def messages() -> dict[str, dict[str, Any]]:
         "subject": "Generator",
         "body": "José, can you bring the generator to Shelter 3 tomorrow? 73, Facundo\n",
     }
+    m["shelter3-to-ana"] = {
+        "v": 1,
+        "from": "shelter3@radiopost.org",
+        "to": ["ana@hampost.org"],
+        "date": T_WINDOW - 4 * 3600 - 600,
+        "subject": "Water",
+        "body": "Ana, Shelter 3 is out of drinking water for 120 people. Can your club help? "
+        "N3CALL for Shelter 3\n",
+        "priority": 1,
+    }
+    m["ana-to-shelter3"] = {
+        "v": 1,
+        "from": "ana@hampost.org",
+        "to": ["shelter3@radiopost.org"],
+        "date": T_WINDOW - 3 * 3600 - 300,
+        "subject": "Water truck",
+        "body": "Shelter 3, our club can bring a 2 000 litre water truck on Thursday. Tell us "
+        "where to park. 73, Ana\n",
+    }
     m["facundo-reply"]["reply_to"] = rp.content_id(cbor.encode(rp.message_map(m["maria-419"])))
     return m
 
@@ -570,6 +597,14 @@ CREDENTIALS: dict[str, dict[str, Any]] = {
         "operator": "KK4ODA-1",
         "flags": ["send", "gateway"],
         "issued": T_ISSUED + 7200,
+    },
+    "gateway-n2call-5": {
+        "po": "po:radiopost.org",
+        "device": "device:gateway-n2call-5",
+        "serial": 1061,
+        "address": "eoc@radiopost.org",
+        "operator": "N2CALL-5",
+        "flags": ["send", "gateway"],
     },
     "signed-by-retired-key": {
         "po": "po:radiopost.org:2025",
@@ -1054,6 +1089,8 @@ def hello_pdu(
     cursor: int,
     full_credential: bool,
     partials: list[list[Any]] | None = None,
+    role: int = 0,
+    auto: int = AUTO,
 ) -> dict[int, Any]:
     """A signed HELLO (RP-3 §5.1) from the client holding credential ``who``."""
     spec = CREDENTIALS[who]
@@ -1062,7 +1099,7 @@ def hello_pdu(
     hello: dict[int, Any] = {
         0: 1,
         1: [1, 1],
-        2: 0,
+        2: role,
         3: spec["address"],
         4: spec["operator"],
         5: called,
@@ -1070,7 +1107,7 @@ def hello_pdu(
         7: nonce,
         8: [offer(n) for n in offers],
         9: cursor,
-        10: AUTO,
+        10: auto,
         12: CLIENT_CAPS,
         15: rp.sign(rp.CTX_SESSION, cbor.encode(stmt), SECRET[spec["device"]]),
     }
@@ -2491,6 +2528,416 @@ def make_api_exchanges() -> dict[str, Any]:
     return out
 
 
+# -- session-04.json and forwarding.json --------------------------------------------------------
+
+
+FWD_SHELTER_STARTED = T_WINDOW - 4 * 3600 + 35  # N2CALL-5's clock when Shelter 3's HELLO came
+FWD_FACUNDO_STARTED = T_WINDOW - 3 * 3600 - 1800 + 28
+FWD_CLOCK = T_WINDOW + 20  # N2CALL-5's clock when it calls
+FWD_PARTNER_CLOCK = FWD_CLOCK + 33  # N1CALL-10's
+FWD_AUTO = 65536  # what N2CALL-5 takes unasked: everything
+WINDOW = {
+    "channel": {"dial_hz": 7101000, "mode": "USB", "modem": "aether", "bandwidth_hz": 2300},
+    "every_s": 3600,
+    "at_s": 900,
+    "length_s": 600,
+}
+ROUTE = {"users_at": ["N2CALL-5", "KK4ODA-1"], "via": "N1CALL-10"}
+
+
+def offline_record(
+    cred: str, names: list[str], at: int, label: str, pickups: list[int]
+) -> dict[str, Any]:
+    """A session N2CALL-5 carried while cut off (RP-7 §3.1), checked there as RP-1 §6.3 says."""
+    spec = CREDENTIALS[cred]
+    ids = [encoded(n)[1] for n in names]
+    stmt = rp.statement(
+        spec["address"],
+        spec["operator"],
+        "N2CALL-5",
+        ids,
+        time=at - 30,
+        nonce=stream(f"{label} nonce", 8),
+    )
+    raw = cbor.encode(stmt)
+    signature = rp.sign(rp.CTX_SESSION, raw, SECRET[spec["device"]])
+    need = (["send"] if names else []) + ["receive"]
+    result, body = rp.verify_credential(credential(cred), po_keys(), {}, at, need)
+    assert result == "ok" and body is not None
+    assert rp.verify_statement(stmt, signature, body, me="N2CALL-5", now=at) == "ok"
+    return {
+        "credential": credential(cred),
+        "statement": raw,
+        "signature": signature,
+        "started": at,
+        "session": stream(f"{label} id", 8),
+        "messages": names,
+        "pickups": pickups,
+        "path": ["N2CALL-5"],
+    }
+
+
+def offline_records() -> list[dict[str, Any]]:
+    """Shelter 3 sends its message to Ana; Facundo picks up #421 from N2CALL-5's copy."""
+    return [
+        offline_record(
+            "shelter3-n3call", ["shelter3-to-ana"], FWD_SHELTER_STARTED, "fwd shelter", []
+        ),
+        offline_record("facundo", [], FWD_FACUNDO_STARTED, "fwd facundo", [421]),
+    ]
+
+
+def cut_off_office() -> tuple[po.PostOffice, Exchanges]:
+    """radiopost.org on the day Atlanta loses the Internet (RP-7 §4.1)."""
+    office = post_office()
+    office.gateways["N2CALL-5"] = {
+        "callsign": "N2CALL-5",
+        "operator": "N2CALL",
+        "copies": {"users": 50, "days": 7, "max_air_bytes": 16384},
+    }
+    office.gateways["N1CALL-10"] = {
+        "callsign": "N1CALL-10",
+        "operator": "N1CALL",
+        "forwarding": [WINDOW],
+    }
+    office.routes = [ROUTE]
+    office.settings["facundo@radiopost.org"] = {"usual_gateways": ["KK4ODA-1", "N2CALL-5"]}
+    office.settings["shelter3@radiopost.org"] = {"usual_gateways": ["N2CALL-5"]}
+    return office, Exchanges(office)
+
+
+def deliver(
+    office: po.PostOffice, ex: Exchanges, address: str, serial: int, name: str, at: int
+) -> None:
+    f = MESSAGES[name]
+    office.now = at
+    ex.note(f"Mail arrives for {address}: #{serial}, {f['subject']!r}.")
+    office.deliver(
+        address,
+        serial,
+        air0(name),
+        sender=f["from"],
+        subject=f["subject"],
+        priority=f.get("priority", 0),
+    )
+
+
+def forwarding_story() -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """The post office's side, before and after session-04, and the forward item it placed."""
+    office, ex = cut_off_office()
+    deliver(office, ex, "facundo@radiopost.org", 421, "maria-421", MESSAGES["maria-421"]["date"])
+    ex.note("N2CALL-5 polls for copies, as it does all the time, and takes the copy of #421.")
+    n2 = ex.login(T_CUT - 120, "N2CALL-5", "gateway-n2call-5")
+    copies = ex.call(T_CUT - 60, "N2CALL-5", "GET", "/copies?after=&wait=60", None, n2)
+    ex.call(T_CUT - 59, "N2CALL-5", "POST", "/copies/ack", {"cursor": copies["cursor"]}, n2)
+    ex.note(
+        "Atlanta loses the Internet. N2CALL-5 polls no more; 15 minutes on, radiopost.org counts "
+        "it cut off (RP-7 §4.1). Shelter 3 and Facundo call N2CALL-5, which checks them offline "
+        "and keeps their session records (RP-7 §3.1)."
+    )
+    deliver(
+        office,
+        ex,
+        "shelter3@radiopost.org",
+        501,
+        "ana-to-shelter3",
+        MESSAGES["ana-to-shelter3"]["date"] + 600,
+    )
+    ex.note(
+        "Shelter 3 named N2CALL-5 as usual, and N2CALL-5 is cut off: the route sends the mail to "
+        "N1CALL-10, as a forward item with a placement signed by radiopost.org (RP-7 §4.2)."
+    )
+    n1 = ex.login(T_WINDOW - 700, "N1CALL-10", "gateway-n1call-10")
+    polled = ex.call(T_WINDOW - 600, "N1CALL-10", "GET", "/copies?after=&wait=60", None, n1)
+    ex.call(T_WINDOW - 599, "N1CALL-10", "POST", "/copies/ack", {"cursor": polled["cursor"]}, n1)
+    item = next(i for i in polled["items"] if i["kind"] == "forward")
+    ex.note(
+        "In N1CALL-10's window N2CALL-5 calls it (session-04.json): the two records go out, the "
+        "forward item comes in. N1CALL-10 reaches radiopost.org and reports the records with "
+        "their path (RP-5 §5.6, RP-7 §3.4)."
+    )
+    sessions = []
+    for record in offline_records():
+        stmt = cbor.decode(record["statement"])
+        sessions.append(
+            {
+                "statement": jws.b64u(record["statement"]),
+                "signature": jws.b64u(record["signature"]),
+                "credential": jws.b64u(record["credential"]),
+                "started": record["started"],
+                "gateway_session": record["session"].hex(),
+                "messages": handed_in(record["messages"])["messages"],
+                "pickups": record["pickups"],
+                "path": [*record["path"], "N1CALL-10"],
+            }
+        )
+        assert stmt[3] == "N2CALL-5"
+    n1 = ex.login(FWD_PARTNER_CLOCK + 280, "N1CALL-10", "gateway-n1call-10")
+    ex.call(FWD_PARTNER_CLOCK + 300, "N1CALL-10", "POST", "/reports", {"sessions": sessions}, n1)
+    ex.note("A report whose path does not end at the reporting gateway is refused (RP-5 §5.6).")
+    wrong = sessions[1] | {"path": ["N2CALL-5", "KK4ODA-1"]}
+    ex.call(FWD_PARTNER_CLOCK + 310, "N1CALL-10", "POST", "/reports", {"sessions": [wrong]}, n1)
+    ex.note(
+        "Atlanta's Internet returns. N2CALL-5's poll ends the forwarding: radiopost.org has the "
+        "forward item at N1CALL-10 dropped (RP-7 §4.1). N2CALL-5 gets the copy of #501 it already "
+        "holds by radio; the copy of #421, picked up, is dropped."
+    )
+    back = T_WINDOW + 2 * 3600
+    n2 = ex.login(back, "N2CALL-5", "gateway-n2call-5")
+    ex.call(back + 5, "N2CALL-5", "GET", f"/copies?after={copies['cursor']}&wait=60", None, n2)
+    n1 = ex.login(back + 300, "N1CALL-10", "gateway-n1call-10")
+    ex.call(back + 305, "N1CALL-10", "GET", f"/copies?after={polled['cursor']}&wait=60", None, n1)
+    return ex.log, item
+
+
+def forwarding_pdus() -> list[Transmission]:
+    """Session-04 (RP-7 §2): N2CALL-5, cut off, calls N1CALL-10 in its window."""
+    records = offline_records()
+    offers = [n for r in records for n in r["messages"]]
+    hello = hello_pdu(
+        "gateway-n2call-5",
+        "N1CALL-10",
+        FWD_CLOCK,
+        stream("session-04 nonce", 8),
+        offers=offers,
+        cursor=0,
+        full_credential=True,
+        role=1,
+        auto=FWD_AUTO,
+    )
+    result, body = rp.verify_credential(
+        credential("gateway-n2call-5"), po_keys(), {}, FWD_PARTNER_CLOCK, ["gateway", "send"]
+    )
+    assert result == "ok" and body is not None
+    stmt = rp.statement_from_hello(hello)
+    assert rp.verify_statement(stmt, hello[15], body, me="N1CALL-10", now=FWD_PARTNER_CLOCK) == "ok"
+    _, item = forwarding_story()
+    placement = jws.unb64u(item["placement"])
+    assert placement is not None
+    welcome = welcome_pdu(
+        stream("session-04 id", 8),
+        FWD_PARTNER_CLOCK,
+        accept=[[encoded(n)[1], 0] for n in offers],
+        decline=[],
+        waiting=[waiting_entry(1, "ana-to-shelter3")],
+        caps=GATEWAY_CAPS,
+        online=True,
+        cached=True,
+    )
+    inward = [{**p, 6: placement} for p in msg_pdus("ana-to-shelter3", serial=1)]
+    proofs = [fwd.proof_pdu(r) for r in records]
+    return [
+        ("caller", [("HELLO", hello)]),
+        ("partner", [("WELCOME", welcome)] + [("MSG", p) for p in inward] + [("DONE", DONE)]),
+        (
+            "caller",
+            [("PROOF", p) for p in proofs]
+            + [("MSG", p) for n in offers for p in msg_pdus(n)]
+            + [("RECEIPT", receipt(["ana-to-shelter3"])), ("DONE", DONE)],
+        ),
+        (
+            "partner",
+            [
+                (
+                    "RECEIPT",
+                    {
+                        0: 5,
+                        1: [encoded(n)[1] for n in offers],
+                        4: [fwd.record_id(r["statement"]) for r in records],
+                    },
+                )
+            ],
+        ),
+    ]
+
+
+def make_forwarding_session() -> dict[str, Any]:
+    transmissions, streams = write_transmissions(forwarding_pdus())
+    out = header(
+        "A forwarding session between gateways, byte for byte",
+        {"RP-7": "§2, §3, §4", "RP-3": "§5"},
+    )
+    out["story"] = (
+        "Atlanta has lost the Internet. N2CALL-5 (the county EOC, cut off) calls N1CALL-10 in "
+        "Austin in N1CALL-10's window, at :15 past the hour, as a client calls a gateway (role 1). "
+        "It offers the message Shelter 3 left with it and sends two PROOF PDUs: Shelter 3's "
+        "session record and Facundo's, a pickup only. N1CALL-10 sends the forward item it holds "
+        "for N2CALL-5, Ana's message to Shelter 3, with radiopost.org's placement. N1CALL-10 "
+        "receipts the message and both records; N2CALL-5 hangs up after transmission 4."
+    )
+    out["rule"] = (
+        "As in session-01.json. The partner checks each PROOF as RP-7 §3.3 says (with `caller` "
+        "N2CALL-5) before taking the messages it covers, and lists the record IDs it took in "
+        "RECEIPT key 4. The caller checks each MSG key 6 placement (RP-7 §4.3) before holding the "
+        "message as a copy for the address the placement names."
+    )
+    out["context"] = {
+        "caller": "N2CALL-5, credential gateway-n2call-5 (credentials.json), cut off",
+        "partner": "N1CALL-10, credential gateway-n1call-10, online",
+        "window": WINDOW,
+        "caller_clock": FWD_CLOCK,
+        "partner_clock": FWD_PARTNER_CLOCK,
+        "records": "forwarding.json",
+        "forward_item": "forwarding.json, post_office: the item N1CALL-10 polled",
+    }
+    out["transmissions"] = transmissions
+    out["streams"] = streams
+    out["after"] = {
+        "partner_reports": (
+            "forwarding.json, post_office: POST /reports with path [N2CALL-5, N1CALL-10]"
+        ),
+        "caller_holds_as_copy": {"address": "shelter3@radiopost.org", "serial": 501},
+        "caller_lets_go": ["shelter3-to-ana", "both records"],
+    }
+    return out
+
+
+def make_forwarding() -> dict[str, Any]:
+    story, item = forwarding_story()
+    placement = jws.unb64u(item["placement"])
+    assert placement is not None
+    payload, signature = cbor.decode(placement)
+    cid = encoded("ana-to-shelter3")[1]
+    keys = po_keys()
+
+    def placed(changes: dict[int, Any]) -> bytes:
+        body = cbor.decode(payload) | changes
+        return fwd.make_placement(body, SECRET["po:radiopost.org"])
+
+    bent = bytearray(placement)
+    bent[-1] ^= 1
+    placement_cases_in = [
+        ("as placed, checked by N2CALL-5 in session-04", placement, cid, "N2CALL-5", FWD_CLOCK),
+        (
+            "signed by a key radiopost.org does not have",
+            fwd.make_placement(cbor.decode(payload), SECRET["po:hampost.org"]),
+            cid,
+            "N2CALL-5",
+            FWD_CLOCK,
+        ),
+        ("its signature changed", bytes(bent), cid, "N2CALL-5", FWD_CLOCK),
+        ("for another gateway", placed({5: "KK4ODA-1"}), cid, "N2CALL-5", FWD_CLOCK),
+        ("for another message", placement, encoded("maria-421")[1], "N2CALL-5", FWD_CLOCK),
+        ("past its `expires`", placement, cid, "N2CALL-5", cbor.decode(payload)[6]),
+        ("not a placement", cbor.encode([payload]), cid, "N2CALL-5", FWD_CLOCK),
+    ]
+    placement_cases = []
+    for what, pl, c, me, now in placement_cases_in:
+        result, _ = fwd.check_placement(pl, c, me, now, keys)
+        placement_cases.append(
+            {
+                "what": what,
+                "placement_hex": pl.hex(),
+                "content_id_hex": c.hex(),
+                "me": me,
+                "now": now,
+                "expect": result,
+            }
+        )
+    # What RP-7 §4.3 says each case gets, written out so that the reference is tested, not trusted.
+    assert [c["expect"] for c in placement_cases] == [
+        "ok",
+        "signature-invalid",
+        "signature-invalid",
+        "not-authorized",
+        "not-authorized",
+        "refused-by-policy",
+        "malformed",
+    ]
+    records = offline_records()
+    entries = []
+    for r in records:
+        pdu = fwd.proof_pdu(r)
+        entries.append(
+            {
+                "messages": r["messages"],
+                "record_id_hex": fwd.record_id(r["statement"]).hex(),
+                "proof": pdu_entry("PROOF", pdu),
+            }
+        )
+    good = fwd.proof_pdu(records[0])
+    loop = good | {6: ["N2CALL-5", "N1CALL-10", "N2CALL-5"]}
+    far = good | {6: ["N2CALL-5", *[f"N{i}CALL-1" for i in range(4, 11)], "N2CALL-5"]}
+    changed = dict(good)
+    stmt = cbor.decode(good[2])
+    stmt[6] = []
+    changed[2] = cbor.encode(stmt)
+    proof_cases_in = [
+        ("Shelter 3's record, as N2CALL-5 sends it", good, "N2CALL-5"),
+        ("Facundo's record, a pickup only", fwd.proof_pdu(records[1]), "N2CALL-5"),
+        (
+            "a path that does not start at the gateway the user called",
+            good | {6: ["KK4ODA-1", "N2CALL-5"]},
+            "N2CALL-5",
+        ),
+        ("a path that does not end at the caller", good | {6: ["N2CALL-5"]}, "KK4ODA-1"),
+        ("a path through the partner already: a loop", loop, "N2CALL-5"),
+        ("a path of nine gateways", far, "N2CALL-5"),
+        ("the statement changed after signing", changed, "N2CALL-5"),
+    ]
+    proof_cases = []
+    for what, pdu, caller in proof_cases_in:
+        result, _ = fwd.check_proof(pdu, caller, "N1CALL-10", keys, {})
+        proof_cases.append(
+            {
+                "what": what,
+                "proof_hex": cbor.encode(pdu).hex(),
+                "caller": caller,
+                "me": "N1CALL-10",
+                "expect": result,
+            }
+        )
+    # RP-7 §3.3, written out.
+    assert [c["expect"] for c in proof_cases] == [
+        "ok",
+        "ok",
+        "refused-by-policy",
+        "refused-by-policy",
+        "refused-by-policy",
+        "refused-by-policy",
+        "signature-invalid",
+    ]
+    out = header(
+        "Forwarding: placements, session records, and the post office's side",
+        {"RP-7": "§3, §4, §6", "RP-5": "§5.6, §5.8"},
+    )
+    out["rule"] = (
+        "A placement made from `placement_body` with radiopost.org's key is exactly "
+        "`placement_hex`; a gateway checking a placement case with `me` and `now`, and the post "
+        "office keys of keys.json, returns `expect` (RP-7 §4.3). A record's ID is SHA-256 of its "
+        "statement, cut to 12 bytes (RP-7 §3.1). A partner (`me`) checking a PROOF case from "
+        "`caller` returns `expect` (RP-7 §3.3). The post office's exchanges read as in "
+        "api-exchanges.json."
+    )
+    out["context"] = {
+        "cut_off_at": T_CUT,
+        "cut_off_after_s": 900,
+        "route": ROUTE,
+        "window": WINDOW,
+        "gateways": {
+            "N2CALL-5": "eoc@radiopost.org's gateway, holds copies, cut off",
+            "N1CALL-10": "online, takes calls from partners in its window",
+        },
+        "usual_gateways": {
+            "facundo@radiopost.org": ["KK4ODA-1", "N2CALL-5"],
+            "shelter3@radiopost.org": ["N2CALL-5"],
+        },
+    }
+    out["placement"] = {
+        "for": "ana-to-shelter3, #501 for shelter3@radiopost.org, at N2CALL-5",
+        "placement_body": cbor.diagnostic(cbor.decode(payload)),
+        "payload_hex": payload.hex(),
+        "signed_input_hex": rp.signed_input(rp.CTX_PLACEMENT, payload).hex(),
+        "signature_hex": signature.hex(),
+        "placement_hex": placement.hex(),
+    }
+    out["placement_cases"] = placement_cases
+    out["records"] = entries
+    out["proof_cases"] = proof_cases
+    out["post_office"] = story
+    return out
+
+
 # -- api-account.json ----------------------------------------------------------------------------
 
 
@@ -3430,6 +3877,7 @@ FILES = {
     "session-01.json": make_session,
     "session-02.json": make_resumed,
     "session-03.json": make_station,
+    "session-04.json": make_forwarding_session,
     "rpmi-lines.json": make_rpmi_lines,
     "rpmi-conversations.json": make_rpmi_conversations,
     "dns.json": make_dns,
@@ -3440,6 +3888,7 @@ FILES = {
     "email-out.json": make_email_out,
     "api-exchanges.json": make_api_exchanges,
     "api-account.json": make_api_account,
+    "forwarding.json": make_forwarding,
 }
 
 
@@ -3499,6 +3948,10 @@ def self_check(name: str, data: dict[str, Any]) -> None:
         check_email_out(data)
     if name == "api-account.json":
         check_account(data)
+    if name == "session-04.json":
+        check_forwarding_session(data)
+    if name == "forwarding.json":
+        check_forwarding(data)
 
 
 def check_rpmi(data: dict[str, Any]) -> None:
@@ -3600,6 +4053,55 @@ def check_api(data: dict[str, Any]) -> None:
     for e in by_path["GET /copies?after=&wait=60"]:
         for item in e["response"]["body"]["items"]:
             assert jws.unb64u(item["air"]) == air0(dict((s, n) for s, n in WAITING)[item["serial"]])
+
+
+def check_forwarding_session(data: dict[str, Any]) -> None:
+    """From the bytes alone: the caller, every PROOF, every message, the receipt, the placement."""
+    t = [pdus_of(x) for x in data["transmissions"]]
+    hello, welcome = t[0][0], t[1][0]
+    caller, me = hello[4], hello[5]
+    now = data["context"]["partner_clock"]
+    need = ["gateway"] + (["send"] if hello[8] else [])
+    result, body = rp.verify_credential(hello[13], po_keys(), {}, now, need)
+    assert result == "ok" and body is not None and hello[2] == 1
+    stmt = rp.statement_from_hello(hello)
+    assert rp.verify_statement(stmt, hello[15], body, me=me, now=now) == "ok"
+    taken, ids = [], []
+    for pdu in t[2]:
+        if pdu[0] == fwd.PROOF:
+            result, record = fwd.check_proof(pdu, caller, me, po_keys(), {})
+            assert result == "ok"
+            taken.append(record)
+            ids.append(fwd.record_id(pdu[2]))
+        if pdu[0] == rp.PDU_TYPES["MSG"]:
+            assert fwd.check_forwarded(rp.air_decode(pdu[4]), taken) == "ok"
+    assert t[3][0][4] == ids
+    for pdu in t[1]:
+        if pdu[0] == rp.PDU_TYPES["MSG"]:
+            cid = rp.content_id(rp.air_decode(pdu[4]))
+            now = data["context"]["caller_clock"]
+            assert fwd.check_placement(pdu[6], cid, caller, now, po_keys())[0] == "ok"
+            assert welcome[7][0][1] == cid
+
+
+def check_forwarding(data: dict[str, Any]) -> None:
+    """The placement is the forward item's; each record's ID is its statement's hash."""
+    items = [
+        i
+        for e in data["post_office"]
+        for i in (e.get("response", {}).get("body") or {}).get("items", [])
+        if i["kind"] == "forward"
+    ]
+    assert jws.unb64u(items[0]["placement"]) == bytes.fromhex(data["placement"]["placement_hex"])
+    for r in data["records"]:
+        pdu = cbor.decode(bytes.fromhex(r["proof"]["pdu_hex"]))
+        assert hashlib.sha256(pdu[2]).digest()[:12].hex() == r["record_id_hex"]
+    reports = [e for e in data["post_office"] if e.get("request", {}).get("path") == "/reports"]
+    refused = reports[1]["response"]["body"]["sessions"][0]
+    assert refused == {"code": rp.ERRORS["not-authorized"], "name": "not-authorized"}
+    for sent, r in zip(reports[0]["request"]["body"]["sessions"], data["records"], strict=True):
+        pdu = cbor.decode(bytes.fromhex(r["proof"]["pdu_hex"]))
+        assert jws.unb64u(sent["statement"]) == pdu[2] and sent["path"] == [*pdu[6], "N1CALL-10"]
 
 
 def check_account(data: dict[str, Any]) -> None:

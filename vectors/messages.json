@@ -405,6 +405,65 @@
           "exact": false
         }
       ]
+    },
+    {
+      "name": "shelter3-to-ana",
+      "fields": {
+        "v": 1,
+        "from": "shelter3@radiopost.org",
+        "to": [
+          "ana@hampost.org"
+        ],
+        "date": 1794477900,
+        "subject": "Water",
+        "body": "Ana, Shelter 3 is out of drinking water for 120 people. Can your club help? N3CALL for Shelter 3\n",
+        "priority": 1
+      },
+      "diagnostic": "{1: 1, 2: \"shelter3@radiopost.org\", 3: [\"ana@hampost.org\"], 5: 1794477900, 6: \"Water\", 7: \"Ana, Shelter 3 is out of drinking water for 120 people. Can your club help? N3CALL for Shelter 3\\n\", 9: 1}",
+      "canonical_hex": "a7010102767368656c7465723340726164696f706f73742e6f726703816f616e614068616d706f73742e6f7267051a6af58f4c06655761746572077861416e612c205368656c7465722033206973206f7574206f66206472696e6b696e6720776174657220666f72203132302070656f706c652e2043616e20796f757220636c75622068656c703f204e3343414c4c20666f72205368656c74657220330a0901",
+      "content_id_hex": "36daf5f499fef5c48faeae34",
+      "content_id_text": "g3npl5ez7324jd5ovy2a",
+      "air": [
+        {
+          "compression": 0,
+          "hex": "00a7010102767368656c7465723340726164696f706f73742e6f726703816f616e614068616d706f73742e6f7267051a6af58f4c06655761746572077861416e612c205368656c7465722033206973206f7574206f66206472696e6b696e6720776174657220666f72203132302070656f706c652e2043616e20796f757220636c75622068656c703f204e3343414c4c20666f72205368656c74657220330a0901",
+          "exact": true
+        },
+        {
+          "compression": 1,
+          "hex": "015bcec8c854569c919a53925a64ec50949892995f905f5ca2975f94cedc989f9897e89091980b136195cafadaefc3961a9e0854cd5e91e89897a8a3100cd1ac60ac9059ac905f5aa2909fa690529499979d9997ae500e52a990965fa4606864a050909a5f9093aaa7e09c98a750995f5aa4909c539aa400d45f60afe067ecece8e303560a37918b931100",
+          "exact": false
+        }
+      ]
+    },
+    {
+      "name": "ana-to-shelter3",
+      "fields": {
+        "v": 1,
+        "from": "ana@hampost.org",
+        "to": [
+          "shelter3@radiopost.org"
+        ],
+        "date": 1794481800,
+        "subject": "Water truck",
+        "body": "Shelter 3, our club can bring a 2 000 litre water truck on Thursday. Tell us where to park. 73, Ana\n"
+      },
+      "diagnostic": "{1: 1, 2: \"ana@hampost.org\", 3: [\"shelter3@radiopost.org\"], 5: 1794481800, 6: \"Water truck\", 7: \"Shelter 3, our club can bring a 2 000 litre water truck on Thursday. Tell us where to park. 73, Ana\\n\"}",
+      "canonical_hex": "a60101026f616e614068616d706f73742e6f72670381767368656c7465723340726164696f706f73742e6f7267051a6af59e88066b576174657220747275636b0778645368656c74657220332c206f757220636c75622063616e206272696e672061203220303030206c6974726520776174657220747275636b206f6e2054687572736461792e2054656c6c20757320776865726520746f207061726b2e2037332c20416e610a",
+      "content_id_hex": "9ba127c362f68fb493524315",
+      "content_id_text": "toqspq3c62h3je2simkq",
+      "air": [
+        {
+          "compression": 0,
+          "hex": "00a60101026f616e614068616d706f73742e6f72670381767368656c7465723340726164696f706f73742e6f7267051a6af59e88066b576174657220747275636b0778645368656c74657220332c206f757220636c75622063616e206272696e672061203220303030206c6974726520776174657220747275636b206f6e2054687572736461792e2054656c6c20757320776865726520746f207061726b2e2037332c20416e610a",
+          "exact": true
+        },
+        {
+          "compression": 1,
+          "hex": "01458c3d0e823014c783464d3c82d3ff00a62132b8e21924717e404391d2475e5bd1d1cd53387a4377498c71fe7dbc9264c6e42837d40fec836269e6f78b37da062d592e54b7fc038bcdf9fd7c2cbb134d0c4162d5adaef5f1eb22db82a3a0b2b144450ea5b4ae016187344d61db201ae3bf043b14268aafe9a650686b113d46a3272d3006924e613f4d0f8ed61f",
+          "exact": false
+        }
+      ]
     }
   ],
   "invalid": [

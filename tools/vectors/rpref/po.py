@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import cbor, jws, mail, rp
+from . import cbor, fwd, jws, mail, rp
 
 # RP-5 §1: the HTTP status of each RP-0 §9.3 code. `not-authorized` is 401 when the request has
 # no valid token, and 403 when the token may not do what is asked.
@@ -43,6 +43,7 @@ SESSION_S = 3600  # how long a session lasts (RP-5 §5.2)
 TOKEN_S = 3600  # how long a token lasts, at most (RP-5 §3.2)
 NONCE_S = 300  # how long a login nonce is good for (RP-5 §3.1)
 CREDENTIAL_S = 90 * 86400  # RP-1 §4.2
+CUT_OFF_S = 900  # RP-7 §4.1: no copies poll for this long, and a gateway is cut off
 ENTRY = re.compile(r"(?:[^@\s]+)?@[a-z0-9-]+(?:\.[a-z0-9-]+)+")  # RP-5 §6.5, in lowercase
 
 Response = tuple[int, dict[str, Any] | None]
@@ -117,6 +118,9 @@ class PostOffice:
     had: set[bytes] = field(default_factory=set)
     settings: dict[str, dict[str, Any]] = field(default_factory=dict)
     accept: dict[str, list[str]] = field(default_factory=dict)  # accept lists (RP-5 §6.5)
+    routes: list[dict[str, Any]] = field(default_factory=list)  # radio routes (RP-7 §6)
+    last_poll: dict[str, int] = field(default_factory=dict)  # gateway -> its last copies poll
+    forwarded: dict[str, list[tuple[str, str, int]]] = field(default_factory=dict)  # RP-7 §4.1
     gateways: dict[str, dict[str, Any]] = field(default_factory=dict)
     copies: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     codes: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -143,12 +147,44 @@ class PostOffice:
             record = self.gateways.get(callsign)
             if record is None or not record.get("copies"):
                 continue
-            item = {"kind": "copy", "address": address, **waiting.entry()}
-            del item["held"]
-            if len(air) <= record["copies"]["max_air_bytes"]:
-                item["air"] = jws.b64u(air)
-            item["expires"] = self.now + record["copies"]["days"] * 86400
+            item = self._copy_item(address, waiting, record)
             self.copies.setdefault(callsign, []).append(item)
+            if self._cut_off(callsign):
+                self._place_forward(callsign, address, waiting, item)
+
+    def _copy_item(self, address: str, waiting: Waiting, record: dict[str, Any]) -> dict[str, Any]:
+        item = {"kind": "copy", "address": address, **waiting.entry()}
+        del item["held"]
+        if len(waiting.air) <= record["copies"]["max_air_bytes"]:
+            item["air"] = jws.b64u(waiting.air)
+        item["expires"] = self.now + record["copies"]["days"] * 86400
+        return item
+
+    def _cut_off(self, callsign: str) -> bool:
+        """RP-7 §4.1: a gateway that has polled before, but not for 15 minutes."""
+        last = self.last_poll.get(callsign)
+        return last is not None and self.now - last >= CUT_OFF_S
+
+    def _place_forward(
+        self, cut: str, address: str, waiting: Waiting, copy: dict[str, Any]
+    ) -> None:
+        """RP-7 §4.1, §4.2: a forward item, with its signed placement, at each route's `via`."""
+        for route in self.routes:
+            if cut not in route["users_at"]:
+                continue
+            body = {
+                1: 1,
+                2: address,
+                3: waiting.serial,
+                4: waiting.cid,
+                5: cut,
+                6: copy["expires"],
+                7: rp.kid(self.public),
+            }
+            placement = fwd.make_placement(body, self.secret)
+            item = {**copy, "kind": "forward", "gateway": cut, "placement": jws.b64u(placement)}
+            self.copies.setdefault(route["via"], []).append(item)
+            self.forwarded.setdefault(cut, []).append((route["via"], address, waiting.serial))
 
     def issue(self, address: str, operator: str, device: bytes, flags: int) -> bytes:
         serial = self.next_serial
@@ -412,7 +448,14 @@ class PostOffice:
         """RP-5 §5.6: each session checked at its own `started`, one answer each, in order."""
         out: list[dict[str, Any]] = []
         for s in body.get("sessions", []):
-            stmt, _, failed = self.check_session(s, gateway[4], s["started"])
+            path = s.get("path", [])
+            called = path[0] if path else gateway[4]
+            if path and path[-1] != gateway[4]:
+                prob = problem("not-authorized")[1]
+                assert prob is not None
+                out.append({"code": prob["code"], "name": prob["name"]})
+                continue
+            stmt, _, failed = self.check_session(s, called, s["started"])
             if failed is not None:
                 prob = failed[1]
                 assert prob is not None
@@ -424,7 +467,15 @@ class PostOffice:
         return 200, {"sessions": out}
 
     def poll(self, gateway: dict[int, Any], query: str) -> Response:
-        """RP-5 §5.8: the items for this gateway after the cursor. Cursors here are `c_<count>`."""
+        """RP-5 §5.8: the items for this gateway after the cursor. Cursors here are `c_<count>`.
+
+        A poll from a gateway that was cut off ends its forwarding (RP-7 §4.1).
+        """
+        callsign = gateway[4]
+        for via, address, serial in self.forwarded.pop(callsign, []):
+            drop = {"kind": "drop", "address": address, "serial": serial}
+            self.copies.setdefault(via, []).append(drop)
+        self.last_poll[callsign] = self.now
         args = dict(p.partition("=")[::2] for p in query.split("&") if p)
         after = args.get("after", "")
         start = int(after[2:]) if after.startswith("c_") else 0

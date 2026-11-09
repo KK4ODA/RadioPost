@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.7.0 |
+| **Version** | 0.8.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -304,7 +304,8 @@ oldest first:
 gateways that held it, from the one the user called to the reporting gateway.
 
 The post office verifies each statement as in §5.2, with the station called being the path's first
-callsign (without a path, the reporting gateway), and the path's last being the reporting gateway.
+callsign (without a path, the reporting gateway). A path whose last callsign is not the reporting
+gateway is answered, for that session, `{"code", "name"}` with `not-authorized`.
 It checks the credential and `time` against `started` only, not its own clock. It takes
 the messages as in §5.4 and the pickups as in §5.5, and answers one entry per session, in order:
 `{"results": [...]}` as in §5.4, or `{"code", "name"}` when the session's statement fails, in which
@@ -467,3 +468,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.5.0 | 2026-11-09 | `gateway_session` in a session and a report, for RP-6's `Radio-Path` (§5.2, §5.6); the setting `attach_bytes` (§6.3). |
 | 0.6.0 | 2026-11-09 | Renewal (§6.2): what a renewed credential holds, gateways renew too (§2), the old one stays valid, a device's serials revoked together, expired or revoked means enrolling again, by radio (§5.2). The accept list (§6.5): `POST`'s answer, lowercase entries in order, `malformed`, one list for a role mailbox, recipients added when mail is sent; the setting `accept_on_send` (§6.3). Test vectors. |
 | 0.7.0 | 2026-11-09 | For forwarding (RP-7): `forwarding` windows in a gateway's record (§4.4), routes (§4.5), `path` in a report (§5.6), `forward` items (§5.8). |
+| 0.8.0 | 2026-11-09 | §5.6: a report whose path does not end at the reporting gateway is refused, `not-authorized`. |

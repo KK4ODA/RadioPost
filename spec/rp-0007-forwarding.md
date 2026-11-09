@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.0 |
+| **Version** | 0.2.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -43,8 +43,9 @@ configured partners and published routes (§8).
 A forwarding session is an RP-3 session in which the caller is a gateway:
 
 * `HELLO` `role` is 1. `address` and `operator` are the caller's gateway credential's (RP-1 §3).
-  The credential MUST have the `gateway` flag; the partner checks it as RP-1 §5 says, asking for
-  `gateway` in step 6.
+  The credential MUST have the `gateway` flag, and `send` when the caller offers messages; the
+  partner checks it as RP-1 §5 says, asking for those in step 6. It does not need `receive`: the
+  mail that comes back is not the gateway's own.
 * The statement (RP-1 §6) signs the caller's offers: the messages it forwards. It is the caller's
   own; the senders' statements travel in `PROOF` PDUs (§3.2).
 * `cursor` is the highest **forwarding serial** (§4.3) the caller has received from this partner;
@@ -103,8 +104,9 @@ record whose messages it sends, and one for each record with no messages (pickup
 For each `PROOF`, the partner checks, and refuses the record at the first failure:
 
 1. The proof, as RP-1 §6.3 says for a statement relayed later: the credential (RP-1 §5) as it was
-   at `started`, steps 2 and 4, and the statement's `time` within 600 seconds of `started`. As RP-5
-   §5.6 checks a report.
+   at `started`, with `send` if the statement lists messages and `receive` if the record has
+   pickups; steps 2 and 4; and the statement's `time` within 600 seconds of `started`. As RP-5 §5.6
+   checks a report.
 2. The path: its first callsign is the statement's `gateway`, its last is the caller, it holds at
    most 8 callsigns, and it does not hold the partner's own (a loop). Otherwise
    `refused-by-policy`.
@@ -145,8 +147,10 @@ routes (§6) whose `users_at` names that gateway, it places **forward items** at
 gateway: one for each message that is waiting for a user who named the cut-off gateway as usual
 (RP-5 §6.3), and for each that arrives while the gateway stays cut off.
 
-When the cut-off gateway polls again, the post office has the forward items it placed for it
-dropped (RP-5 §5.8, `drop`), and goes on placing copies at it as before.
+Copies for the cut-off gateway itself are still placed, and wait for its next poll. When it polls
+again, the post office has the forward items it placed for it dropped at the `via` gateways (RP-5
+§5.8, `drop`). The gateway may then receive copies of mail it already got by radio: they have the
+same content ID, and it keeps one.
 
 ### 4.2 The placement
 
@@ -177,19 +181,27 @@ The signature is the post office key's (RP-0 §5) with context `RadioPost-placem
 ### 4.3 In the session
 
 The partner lists the forward items it holds for the caller in `WELCOME` `waiting`, numbered with
-**forwarding serials** of its own, increasing for each caller, and sends them as RP-3 says (under
-the caller's `auto`, or when the caller asks). Each `MSG` that carries a forward item has a further
+**forwarding serials** of its own, increasing for each caller, with flags as for a copy (RP-3
+§5.2: `held` when the item came without its air form), and sends them as RP-3 says (under the
+caller's `auto`, or when the caller asks). Each `MSG` that carries a forward item has a further
 key:
 
 | Key | Name | Type | Meaning |
 |---|---|---|---|
 | 6 | `placement` | bstr | The item's placement (§4.2). |
 
-The caller checks each placement: it decodes, `kid` names a key of the address's post office that
-it holds (RP-1 §7.3), the signature verifies, `id` is the message's content ID, `gateway` is its
-own callsign, and `expires` is still ahead. Then it holds the message as a copy placed ahead for
-`address`, with `serial` and `expires` (RP-5 §5.8), and lists it `complete`. If a check fails it
-lists it failed with `signature-invalid`, or `not-authorized` for another gateway's item.
+The caller checks each placement, in this order, and lists the message failed with the code at
+the first failure:
+
+1. It decodes as §4.2, with `v` 1. Otherwise `malformed`.
+2. `kid` names a key of the address's post office that the caller holds (RP-1 §7.3), and the
+   signature verifies with it. Otherwise `signature-invalid`.
+3. `id` is the message's content ID, and `gateway` the caller's own callsign. Otherwise
+   `not-authorized`.
+4. The caller's clock is before `expires`. Otherwise `refused-by-policy`.
+
+Then it holds the message as a copy placed ahead for `address`, with `serial` and `expires` (RP-5
+§5.8), and lists it `complete`.
 
 The partner deletes a forward item once the caller has listed it `complete`, or when it expires.
 
@@ -255,9 +267,33 @@ it among their partners: they call it, inside its windows, to collect the mail.
   30 days.
 * **Routing.** Gateways publishing what they reach; choosing among partners by more than their
   operators' lists.
-* **Size.** Sending a credential's hash in `PROOF` when the partner holds it (as RP-3 `HELLO` key
-  14 does), and how many bytes a forwarding session costs, once there are test vectors.
+* **Size.** Sending a credential's hash in `PROOF` when the partner holds it, as RP-3 `HELLO`
+  key 14 does: the credential is about half of every `PROOF` (§9).
 * **Bands.** A table, per country, of the segments open to unattended forwarding.
+
+---
+
+## 9. Sizes *(informative)*
+
+| What | Size |
+|---|---|
+| `HELLO` from a gateway, one offer, with its credential | 335 bytes |
+| `PROOF`, a record with one message | 342 bytes |
+| `PROOF`, a pickup only | 332 bytes |
+| A placement, in `MSG` key 6 | 136 bytes |
+| `RECEIPT` for one message and two records | 48 bytes |
+
+All with framing, from `vectors/session-04.json` and `vectors/forwarding.json`.
+
+---
+
+## 10. Test vectors
+
+`vectors/session-04.json` is a forwarding session byte for byte: N2CALL-5, cut off, calls N1CALL-10
+in its window, sends two records and Shelter 3's message, and receives Ana's message with its
+placement. `vectors/forwarding.json` has the placement and seven checks of it, the records and
+seven checks of a `PROOF`, and the post office's side: the forward item placed when N2CALL-5 fell
+silent, N1CALL-10's report with its path, and the drop when N2CALL-5 came back.
 
 ---
 
@@ -268,3 +304,4 @@ it among their partners: they call it, inside its windows, to collect the mail.
 | 0.0.1 | 2026-11-09 | Outline. |
 | 0.0.2 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.1.0 | 2026-11-09 | First draft: the cut-off gateway calls its partner, one session both ways (§1, §2); session records and the `PROOF` PDU, the path, the partner's checks and `RECEIPT` `records` (§3); forward items, placements signed by the post office, forwarding serials and `MSG` `placement` (§4); windows (§5); routes (§6); keeping and accountability (§7); what is still open (§8). |
+| 0.2.0 | 2026-11-09 | From the test vectors: the caller's credential needs `gateway` and `send`, not `receive` (§2); the user's credential is checked with `send` and `receive` as the record needs (§3.3); copies still wait for a cut-off gateway (§4.1); the placement's checks in order, with their codes, and forward items flagged as copies (§4.3); sizes (§9); test vectors (§10). |

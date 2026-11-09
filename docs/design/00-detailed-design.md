@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.10 |
+| **Version** | 0.1.11 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -232,7 +232,11 @@ To be confirmed:
   accept list found RP-5 0.6.0's: a gateway could not renew its own credential (gateways were kept
   off client endpoints), what a renewed credential holds and what becomes of the old one, the
   accept list's answer and spelling, and no setting turned off the list's filling by mail sent.
-  Owed: RP-7's, now that it is a draft.
+  RP-7's vectors (a forwarding session, placements, records, the post office's side) found RP-7
+  0.2.0's: which flags a forwarding caller's credential needs, and a record's; the placement's
+  checks in order with their codes; that copies still wait for a cut-off gateway; and RP-5 0.8.0's
+  refusal of a report whose path does not end at the reporter. Every specification now has
+  vectors.
 * **A conformance tester** that plays the other side: a client to test a gateway, a gateway to
   test a client, over the TCP adapter, including broken links, resumes and wrong signatures.
 * **A loopback adapter** joining two hosts through RPMI with delays and losses, for tests with no
@@ -304,3 +308,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.8 | 2026-11-09 | §5.4: Aether is shareable from 0.2.0-beta.146 (its ADR-0106). |
 | 0.1.9 | 2026-11-09 | Renewal and accept-list test vectors (§7). |
 | 0.1.10 | 2026-11-09 | D21–D23: forwarding (RP-7 0.1.0); the forwarder's part; open questions moved to RP-7 §8. |
+| 0.1.11 | 2026-11-09 | RP-7's test vectors (§7). |

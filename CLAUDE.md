@@ -8,7 +8,7 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
 ## Layout
 - `spec/` — **the protocols, normative**: RP-0 conventions, RP-1 identity, RP-2 messages, RP-3
   session protocol, RP-4 modem interface (RPMI), RP-5 post office API, RP-6 email, RP-7 forwarding
-  (a first draft, no vectors yet). `spec/README.md` is the index. Where a program and a spec disagree, the spec wins.
+  (a draft). `spec/README.md` is the index. Where a program and a spec disagree, the spec wins.
 - `docs/concept/` — the plain-language concept, with schematics.
 - `docs/design/` — the detailed design: the map, decisions D1–D23, the programs' parts, the order of
   work, the open questions.
@@ -17,7 +17,7 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`
   from `tools/vectors/rpref/` (deterministic CBOR, Ed25519 after RFC 8032, RadioPost's objects,
   RPMI adapters on a simulated channel in `rpmi.py`, JWS in `jws.py`, a post office in `po.py`,
-  email in and out in `mail.py`; standard library only, self-tested against RFC 8032 §7.1 and
+  email in and out in `mail.py`, forwarding in `fwd.py`; standard library only, self-tested against RFC 8032 §7.1 and
   RFC 8949 Appendix A at every run).
 - `tools/check_docs.py` — headers against change logs and the index, relative links, `RP-n §x.y`
   references, SPDX lines. `.github/workflows/check.yml` runs it with ruff (pinned 0.16.9: preview
@@ -40,7 +40,9 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   three more, the modem interface's conversations seven unwritten rules, the post office's
   exchanges most of RP-5's error behaviour and JWS's missing context rule, the email vectors that
   bounces were refused at the door and `Radio-Path` lacked its session ID, renewal that a gateway
-  could not renew its own credential.
+  could not renew its own credential, forwarding the flags and the placement's checks. Where a
+  case's verdict is written in a spec, `make.py` asserts it in the case list, so the reference is
+  tested rather than trusted.
 - **Numbers are measured.** Sizes and times in the specs come from encoding the examples, not
   estimates.
 - **Cross-references** are written `RP-n §x.y`; check them when sections move.
