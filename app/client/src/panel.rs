@@ -32,6 +32,11 @@ use crate::store::{Error, Store, unhex};
 /// The panel's files, built into the program; `--ui DIR` serves them from disk instead.
 const FILES: &[(&str, &str, &str)] = &[
     (
+        "/icon.svg",
+        "image/svg+xml",
+        include_str!("../../ui/icon.svg"),
+    ),
+    (
         "/",
         "text/html; charset=utf-8",
         include_str!("../../ui/index.html"),

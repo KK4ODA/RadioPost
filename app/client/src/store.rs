@@ -52,6 +52,22 @@ fn write(path: &Path, bytes: &[u8]) -> Result<(), Error> {
     fs::rename(&tmp, path).map_err(|e| format!("cannot write {}: {e}", path.display()))
 }
 
+/// The client's home: the one given, else `$RADIOPOST_HOME`, else `.radiopost` in the user's home
+/// directory. The `radiopost` program and the desktop application share it.
+#[must_use]
+pub fn home(given: Option<&str>) -> PathBuf {
+    if let Some(h) = given
+        .map(str::to_owned)
+        .or_else(|| std::env::var("RADIOPOST_HOME").ok())
+    {
+        return PathBuf::from(h);
+    }
+    let base = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".into());
+    PathBuf::from(base).join(".radiopost")
+}
+
 /// A message waiting to be sent, with the serial it is offered under to a station that calls
 /// (RP-3 §10).
 #[derive(Clone, Debug, PartialEq, Eq)]

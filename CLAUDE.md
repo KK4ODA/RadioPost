@@ -48,10 +48,15 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   (`Event::Refused`), found by running two clients that trusted no post office.
   `app/ui` is the client's panel (no build step), served with a JSON API by `radiopost panel`
   (`panel.rs`: loopback only, the `Host` checked, changes need `X-RadioPost: 1`; a session on its
-  own thread, the home unchanged by the panel while it runs). The Tauri window around it is next.
+  own thread, the home unchanged by the panel while it runs). `app/src-tauri` (`radiopost-app`, its
+  own package and lockfile, outside the core workspace; CI's `app · desktop` job) is the Tauri
+  window around it: the panel's server in-process on 8620 or a free port, the window on it, no IPC.
+  It needs `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev
+  libayatana-appindicator3-dev`; `xvfb-run` and ImageMagick's `import` show the real window here.
+  Its icons come from `tools/figures/icons.py` (`--check` compares pixels, not zlib's bytes).
   Check the panel in headless Chromium (Playwright, `NODE_PATH=$(npm root -g)`); CI checks the
   script parses as a module.
-- `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`. Standard
+- `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`, `icons.py`. Standard
   library only; `ruff.toml` holds the lint settings.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`
   from `tools/vectors/rpref/` (deterministic CBOR, Ed25519 after RFC 8032, RadioPost's objects,

@@ -2,8 +2,8 @@
 
 `radiopost` is the RadioPost client: the user's device key and credential (RP-1), their mail
 (RP-2), and sessions (RP-3) over any modem that has an RPMI adapter (RP-4). It runs on the command
-line, or as a panel in a browser (`radiopost panel`); the desktop application (Tauri, design D27)
-will show the same panel in its own window.
+line, as a panel in a browser (`radiopost panel`), or as the desktop application (`app/src-tauri`,
+Tauri, design D27), which shows the same panel in a window of its own.
 
 Phase 1 carries mail **station to station** (RP-3 §10). Calling a gateway works as RP-3 §5 says,
 but there is no gateway to call until Phase 2, nor yet enrollment (RP-5 §6.1): a credential is
@@ -47,6 +47,22 @@ nothing in the home. `--ui DIR` serves the page from a directory, for working on
 Only this computer's own pages reach it: a request must name the panel's own host, so a page that
 rebinds its name to 127.0.0.1 is refused, and a change must carry `X-RadioPost: 1`, which another
 site's page cannot send without a preflight the panel never grants.
+
+## The desktop application
+
+`app/src-tauri` (`radiopost-app`) starts the panel's server in its own process, on port 8620 or
+another free one, and opens a window on it; the window grants the page no access to the
+application (no Tauri commands, no capabilities). It uses the same home as `radiopost`. It is a
+package of its own, outside the core workspace, because Tauri needs WebKitGTK on Linux:
+
+```
+sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libayatana-appindicator3-dev
+cd app/src-tauri && cargo run
+```
+
+Its icons are drawn by `tools/figures/icons.py` (with the panel's `icon.svg`); run it after
+changing the drawing, and CI checks them. Installers (`cargo tauri build`) and a macOS icon are
+for later.
 
 ## Two stations on one machine
 

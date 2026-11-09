@@ -75,6 +75,10 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test                              # the library against vectors/
 ```
 
+The desktop application is a package of its own: in `app/src-tauri`, the same three commands, with
+WebKitGTK's development packages installed on Linux ([the client's README](app/client/README.md)).
+`python tools/figures/icons.py --check` holds its icons to their generator.
+
 `rustup update stable` first: CI lints with the newest stable clippy. The Aether adapter's tests
 against real daemons run only when `AETHERD` names an `aetherd` of 0.2.0-beta.146 or later
 (`core/README.md`).

@@ -85,6 +85,8 @@ fn the_panel_keeps_other_pages_out() {
     let (status, page) = http(at, "GET", "/", &host, false, &Value::Null);
     assert_eq!(status, 200);
     assert!(page.contains("<title>RadioPost</title>"));
+    let (status, icon) = http(at, "GET", "/icon.svg", &host, false, &Value::Null);
+    assert_eq!((status, icon.starts_with("<svg")), (200, true), "the icon");
     // a page that rebinds its own name to this address is refused
     let (status, _) = http(
         at,

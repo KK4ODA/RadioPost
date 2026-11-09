@@ -45,16 +45,6 @@ session options:
 The home is --home, else $RADIOPOST_HOME, else .radiopost in the user's home directory.
 ";
 
-fn home(given: Option<String>) -> PathBuf {
-    if let Some(h) = given.or_else(|| std::env::var("RADIOPOST_HOME").ok()) {
-        return PathBuf::from(h);
-    }
-    let base = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_else(|_| ".".into());
-    PathBuf::from(base).join(".radiopost")
-}
-
 /// A date as people read it, UTC (RP-0 §4.4).
 fn utc(secs: u64) -> String {
     let days = i64::try_from(secs / 86_400).unwrap_or(0);
@@ -260,7 +250,7 @@ fn run(words: &[String]) -> Result<(), Error> {
         return Ok(());
     };
     let args = Args::parse(rest)?;
-    let mut store = Store::open(&home(home_flag))?;
+    let mut store = Store::open(&radiopost_client::store::home(home_flag.as_deref()))?;
     match command.as_str() {
         "help" | "--help" | "-h" => print!("{HELP}"),
         "key" => {
