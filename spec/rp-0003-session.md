@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.2 |
+| **Version** | 0.2.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -151,6 +151,10 @@ The called station's answer to `HELLO`, and to `AUTH` or a client `CREDENTIAL`.
 | 10 | `time` | uint | yes | The gateway's clock. |
 | 11 | `online` | bool | yes | The gateway can reach the caller's post office now. When false, `waiting` lists only copies the gateway holds, and what it accepts waits in its queue. |
 | 12 | `cached` | bool | yes | The gateway now holds the caller's credential, so the caller may send only its hash next time. |
+| 13 | `credential` | bstr | from a client called directly, when `ready` | Its credential (§10). |
+| 15 | `signature` | bstr .size 64 | with 13 | Its signature over its statement as the station called (RP-1 §6.5). |
+
+Keys 13 and 15 are absent from a gateway's `WELCOME`. Key 14 is not used in `WELCOME`.
 
 A waiting **entry** is
 `[serial, id, from, subject, size, priority, flags]`: the mailbox serial (uint, §6.2), the content
@@ -159,8 +163,9 @@ boundary (text), the air-form size (uint), the priority (uint), and flags (uint)
 (attachments held at the post office), 2 `copy` (a copy placed ahead, served while offline).
 
 When `status` is `ready`, the gateway follows `WELCOME`, in the same transmission, with `MSG` PDUs
-for waiting messages whose size is at most the caller's `auto`, in the order of `waiting`, and
-with `DONE` if it then has nothing more to send.
+for the waiting messages whose size is at most the caller's `auto` and for the rest of each waiting
+message the caller listed in `partials` (§7), in the order of `waiting`, and with `DONE` if it then
+has nothing more to send.
 
 When `status` is `sign` or `credential`, `WELCOME` carries no `accept`, `decline` or `waiting`, and
 the gateway sends nothing of the caller's mail until the caller is authenticated.
@@ -280,17 +285,31 @@ and a pickup from the post office count the same way.
 
 ## 7. Resuming
 
-A link that breaks mid-message loses only the PDU in flight.
+A link that breaks mid-message loses only the PDU in flight. The receiver keeps every complete
+piece before it.
 
-* **Downloads:** the caller keeps the complete pieces it received, and lists them in its next
-  `HELLO` under `partials`, through the same gateway or any other. The gateway resumes each message
-  at the offset given.
+* **Downloads:** the caller keeps the pieces it received, and lists each such message in its next
+  `HELLO` under `partials`, with the number of bytes it holds, through the same gateway or any
+  other. A message in `partials` counts as asked for: the gateway sends the rest of it from that
+  offset, after `WELCOME` and whatever its size (§5.2). A gateway that does not list the message as
+  waiting ignores the entry, and the caller keeps its pieces for another session.
 * **Uploads:** a gateway keeps the pieces of a message it accepted for at least **24 hours**, keyed
-  by address and content ID, and offers to resume through `accept` offsets.
+  by address and content ID, and offers to resume through `accept` offsets. The caller sends the
+  rest from the offset given.
+* **The same bytes.** Pieces join only if they come from the same air form, and two compressors can
+  make different air forms of one message (RP-2 §4). So a sender keeps the air form of a message it
+  has begun to send, and resumes with it. A gateway sends a waiting message's air form exactly as
+  the post office gave it, and the post office gives the same air form every time (RP-5 §5.3), so
+  a download resumes through any gateway. If a resumed message fails its check (RP-2 §3), the
+  receiver lists it as failed (`malformed`) and drops its pieces, and the message is sent again from
+  the start.
 
 Because messages are named by their content, a message already complete at the receiver is never
 sent again: it is declined (`already-have`) or, when waiting, receipted at once by the caller
 without asking for it.
+
+Test vectors: `vectors/session-02.json` is an upload resumed through the same gateway and a
+download resumed through another, byte for byte, with the breaks.
 
 ---
 
@@ -331,12 +350,23 @@ call** and takes the called station's part.
 
 * The answering client verifies the caller as a gateway would offline (RP-1 §5, §6.3), with the
   post office keys it holds.
+* **It proves itself in turn**, since anyone can transmit any callsign. Its `WELCOME` with `status`
+  `ready` carries its credential (key 13) and its signature (key 15) over a statement as the station
+  called (RP-1 §6.5), which lists the messages in `waiting` and carries the caller's nonce. The
+  caller verifies it before it takes any message. If it fails, the caller sends `ERROR` with the
+  code and hangs up.
 * It accepts only offered messages addressed to its own account (others: `refused-by-policy`).
-* Its `waiting` list holds only messages its own user addressed to the caller's account, numbered
-  with serials of its own; `online` is false.
-* Messages it receives this way keep their proof (RP-1 §6.4), so its post office can be told of
-  them once there is Internet and both mailboxes agree. *(How a client reports them is to be added
-  to RP-5.)*
+* Its `waiting` list holds only messages its own user addressed to the caller's account, all of
+  them (`more` 0, so that one signature covers them), numbered with serials of its own; `online` is
+  false. The caller sends `cursor` 0, since those serials are not its post office's, and the
+  answering client lists every such message not yet receipted, whatever `cursor` says.
+* Messages received this way, in either direction, keep their proof (RP-1 §6.4): the other
+  station's credential, statement and signature. With it, each user's post office can be told of
+  them once there is Internet, and both mailboxes agree. *(How a client reports them is to be
+  added to RP-5.)*
+
+Test vectors: `vectors/session-03.json` is a station-to-station session byte for byte, and
+`vectors/statements.json` has the called station's statement and how it verifies.
 
 ---
 
@@ -347,10 +377,12 @@ call** and takes the called station's part.
 | `HELLO`, two offers, signed, credential hash | 201 bytes |
 | `HELLO`, the same with the full credential | 356 bytes |
 | `WELCOME` with three waiting entries | 232 bytes |
+| `WELCOME` from a station called directly, one waiting entry, with its credential and signature | 351 bytes |
+| `MSG` carrying 960 bytes of a message | 991 to 995 bytes |
 | `RECEIPT` for two messages | 33 bytes |
 | `DONE` | 5 bytes |
 
-All with framing, from `vectors/pdus.json` and `vectors/session-01.json`. At 36 bit/s, Aether's
+All with framing, from `vectors/pdus.json` and the session vectors. At 36 bit/s, Aether's
 slowest rung, 200 bytes take 45 seconds; at 2 kbit/s, under a second.
 
 ---
@@ -396,3 +428,4 @@ has one example of each PDU, and frames that must be refused.
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.1.2 | 2026-11-09 | The example is the test vector's session, its `auto` and sizes made consistent with §5.2; test vectors. |
+| 0.2.0 | 2026-11-09 | Resuming (§7): a message in `partials` is sent unasked; a resumed air form is the same bytes; a message that fails after resuming starts over. Station to station (§10): the station called proves itself (`WELCOME` keys 13 and 15, RP-1 §6.5), and the caller sends `cursor` 0. Test vectors `session-02.json` and `session-03.json`. |

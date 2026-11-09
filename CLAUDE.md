@@ -10,7 +10,7 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   session protocol, RP-4 modem interface (RPMI), RP-5 post office API, RP-6 email, RP-7 forwarding
   (outline). `spec/README.md` is the index. Where a program and a spec disagree, the spec wins.
 - `docs/concept/` — the plain-language concept, with schematics.
-- `docs/design/` — the detailed design: the map, decisions D1–D19, the programs' parts, the order of
+- `docs/design/` — the detailed design: the map, decisions D1–D20, the programs' parts, the order of
   work, the open questions.
 - `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`. Standard
   library only; `ruff.toml` holds the lint settings.
@@ -32,8 +32,9 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   change the reference or `make.py`, run `python tools/vectors/make.py`, and commit the files with
   the spec. `python tools/vectors/make.py --check` must pass before a push. A vector that disagrees
   with a spec is a bug in the reference. DEFLATE air forms are marked `"exact": false` (zlib
-  versions differ); `--check` inflates them. The session vector sends uncompressed so it stays
-  byte-exact. Writing a vector is how a spec gap is found: the first run found five.
+  versions differ); `--check` inflates them. The session vectors send uncompressed so they stay
+  byte-exact. Writing a vector is how a spec gap is found: the first run found five, the resumed
+  and station-to-station sessions three more.
 - **Numbers are measured.** Sizes and times in the specs come from encoding the examples, not
   estimates.
 - **Cross-references** are written `RP-n §x.y`; check them when sections move.

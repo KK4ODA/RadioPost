@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.3 |
+| **Version** | 0.1.4 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -88,6 +88,7 @@ reasoning; the specifications hold the result.
 | D17 | **DEFLATE as the baseline**; Zstandard optional; a dictionary later (RP-2 §4). | DEFLATE is everywhere; a trained dictionary should do much better on short messages but must be published first. | Zstandard only (not in every small environment yet). |
 | D18 | **Forwarding uses the same session protocol** (RP-7). | One protocol to implement and test; proofs travel with messages. | A separate store-and-forward protocol. |
 | D19 | **A modem may be shared**: each host holds its own callsigns, answering switch and links (RP-4 §1.1). | During the move from Winlink, a gateway runs both systems on one radio, and two modems cannot share one sound card. A call names a callsign, so the callsign decides whose call it is, as AGWPE already does. | One program at a time (the operator must choose a system); routing by an SSID convention (callsigns are the operator's choice); a switchboard program between them (one more program to run). |
+| D20 | **In a station-to-station session the station called proves itself too**, with a statement over the caller's nonce (RP-1 §6.5, RP-3 §10). | Anyone can transmit any callsign, so the caller has no other way to know who answered, or whose mail it is taking. The caller's own nonce makes the statement fresh with no clock to compare. | Trusting the callsign (forged with a microphone); a challenge from the caller (one more exchange); a time-form statement checked against the clock (fails when the clocks disagree, with no way to ask again). |
 
 ---
 
@@ -198,13 +199,17 @@ To be confirmed:
 
 * **Test vectors** in `vectors/` (started): messages and their content IDs and air forms (RP-2);
   credentials, their verification and session statements made with published test keys (RP-1);
-  every PDU and a whole session, byte for byte (RP-3); the API's signatures (RP-5); deterministic
+  every PDU and three sessions, byte for byte: an ordinary one, uploads and downloads broken and
+  resumed, and station to station (RP-3); the API's signatures (RP-5); deterministic
   CBOR and DNS records (RP-0, RP-1). They are made by a small reference in Python, standard
   library only (`tools/vectors/`), written to read like the specifications rather than to be
   fast. `python tools/vectors/make.py` writes them and `--check` compares the reference with the
   files. Every implementation checks itself against them; a specification change updates them in
   the same pull request. Writing them found five gaps in the drafts, fixed in RP-0 0.2.0, RP-1
-  0.2.0, RP-2 0.1.2, RP-3 0.1.2 and RP-5 0.2.0. Owed: resumed sessions, RP-4 and RP-6.
+  0.2.0, RP-2 0.1.2, RP-3 0.1.2 and RP-5 0.2.0. The resumed and station-to-station sessions
+  found three more, fixed in RP-1 0.3.0, RP-3 0.2.0 and RP-5 0.3.0: a partial download was never
+  said to be sent unasked; nothing kept a resumed air form the same bytes; and the station called
+  never proved who it was (D20). Owed: RP-4 and RP-6.
 * **A conformance tester** that plays the other side: a client to test a gateway, a gateway to
   test a client, over the TCP adapter, including broken links, resumes and wrong signatures.
 * **A loopback adapter** joining two hosts through RPMI with delays and losses, for tests with no
@@ -269,3 +274,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.1.2 | 2026-11-09 | Test vectors started (§7). |
 | 0.1.3 | 2026-11-09 | D19: a modem may be shared (RP-4 0.2.0). |
+| 0.1.4 | 2026-11-09 | D20: the station called proves itself in a station-to-station session; the resumed and station-to-station test vectors (§7). |

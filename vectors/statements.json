@@ -3,10 +3,10 @@
   "format": 1,
   "specs": {
     "RP-1": "§6",
-    "RP-3": "§5.1, §5.3"
+    "RP-3": "§5.1, §5.3, §10"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "A client produces exactly `statement_hex` and `signature_hex`. A verifier given a case's statement, signature, credential (already verified), its own callsign, its clock, the challenge it issued and the (address, nonce) pairs it has seen returns `expect`, checking in RP-1 §6.3's order.",
+  "rule": "A client produces exactly `statement_hex` and `signature_hex`. A verifier given a case's statement, signature, credential (already verified), its own callsign, its clock, the challenge it issued and the (address, nonce) pairs it has seen returns `expect`, checking in RP-1 §6.3's order. A case with `sent_nonce_hex` is a caller checking the station it called (RP-1 §6.5): steps 1 to 4, then the nonce in place of the clock.",
   "statements": [
     {
       "name": "time-form",
@@ -31,6 +31,14 @@
       "statement_hex": "a601767368656c7465723340726164696f706f73742e6f726702664e3343414c4c03684e3243414c4c2d35041a6af1db400548abd502536c70d9f00680",
       "signed_input_hex": "526164696f506f73742d73657373696f6e2d763100a601767368656c7465723340726164696f706f73742e6f726702664e3343414c4c03684e3243414c4c2d35041a6af1db400548abd502536c70d9f00680",
       "signature_hex": "3a4b43b1521ede4b7ddef66389b449de520a85cc1b2fff263598e181dd38aacdc3394463c506d1da33528409918e5cb86934dec22e34c76b8ce8d09a4e915506"
+    },
+    {
+      "name": "called-station",
+      "credential": "ana",
+      "diagnostic": "{1: \"ana@hampost.org\", 2: \"N0CALL\", 3: \"KK4ODA\", 4: 1794249647, 5: h'0db0c3d9fd330023', 6: [h'0b5036895c73ec38608b9038']}",
+      "statement_hex": "a6016f616e614068616d706f73742e6f726702664e3043414c4c03664b4b344f4441041a6af213af05480db0c3d9fd33002306814c0b5036895c73ec38608b9038",
+      "signed_input_hex": "526164696f506f73742d73657373696f6e2d763100a6016f616e614068616d706f73742e6f726702664e3043414c4c03664b4b344f4441041a6af213af05480db0c3d9fd33002306814c0b5036895c73ec38608b9038",
+      "signature_hex": "146d45151e4c884488abafb84f9a72ef2d1cab8236e36569f49c8649834f827415b63a4c923fb955ee49d7eea3c2112b0e6d7316afd66c7c9a9f9ad1974b8102"
     }
   ],
   "verification": [
@@ -43,6 +51,7 @@
       "now": 1794235241,
       "challenge_hex": null,
       "seen": [],
+      "sent_nonce_hex": null,
       "expect": "ok"
     },
     {
@@ -54,6 +63,7 @@
       "now": 1794235800,
       "challenge_hex": null,
       "seen": [],
+      "sent_nonce_hex": null,
       "expect": "ok"
     },
     {
@@ -65,6 +75,7 @@
       "now": 1794235801,
       "challenge_hex": null,
       "seen": [],
+      "sent_nonce_hex": null,
       "expect": "time-skew"
     },
     {
@@ -81,6 +92,7 @@
           "f3e403391bfdb0fd"
         ]
       ],
+      "sent_nonce_hex": null,
       "expect": "time-skew"
     },
     {
@@ -92,6 +104,7 @@
       "now": 1794235241,
       "challenge_hex": null,
       "seen": [],
+      "sent_nonce_hex": null,
       "expect": "not-authorized"
     },
     {
@@ -103,6 +116,7 @@
       "now": 1794235241,
       "challenge_hex": null,
       "seen": [],
+      "sent_nonce_hex": null,
       "expect": "signature-invalid"
     },
     {
@@ -114,6 +128,7 @@
       "now": 1794235241,
       "challenge_hex": null,
       "seen": [],
+      "sent_nonce_hex": null,
       "expect": "not-authorized"
     },
     {
@@ -125,6 +140,7 @@
       "now": 1794236100,
       "challenge_hex": "1b1ad94a572993440327a6d9be381e3d",
       "seen": [],
+      "sent_nonce_hex": null,
       "expect": "ok"
     },
     {
@@ -136,6 +152,7 @@
       "now": 1794236100,
       "challenge_hex": "1835323e992eaff8a2857c5ea82d47fc",
       "seen": [],
+      "sent_nonce_hex": null,
       "expect": "signature-invalid"
     },
     {
@@ -147,7 +164,56 @@
       "now": 1794235200,
       "challenge_hex": null,
       "seen": [],
+      "sent_nonce_hex": null,
       "expect": "ok"
+    },
+    {
+      "what": "called station, checked by the caller with the nonce it sent",
+      "statement_hex": "a6016f616e614068616d706f73742e6f726702664e3043414c4c03664b4b344f4441041a6af213af05480db0c3d9fd33002306814c0b5036895c73ec38608b9038",
+      "signature_hex": "146d45151e4c884488abafb84f9a72ef2d1cab8236e36569f49c8649834f827415b63a4c923fb955ee49d7eea3c2112b0e6d7316afd66c7c9a9f9ad1974b8102",
+      "credential": "ana",
+      "verifier": "KK4ODA",
+      "now": 1794249600,
+      "challenge_hex": null,
+      "seen": [],
+      "sent_nonce_hex": "0db0c3d9fd330023",
+      "expect": "ok"
+    },
+    {
+      "what": "called station, its clock two hours ahead: the clocks are not compared",
+      "statement_hex": "a6016f616e614068616d706f73742e6f726702664e3043414c4c03664b4b344f4441041a6af22fa005480db0c3d9fd33002306814c0b5036895c73ec38608b9038",
+      "signature_hex": "65f00e02e1b361f46b63f46b9a9df461471a41801403dc67a53843b0958ee18fd28573db327120f8fd4ac09a82468ef27fb628ae9b1375e755dd864b3f1f9304",
+      "credential": "ana",
+      "verifier": "KK4ODA",
+      "now": 1794249600,
+      "challenge_hex": null,
+      "seen": [],
+      "sent_nonce_hex": "0db0c3d9fd330023",
+      "expect": "ok"
+    },
+    {
+      "what": "called station, the nonce of another session",
+      "statement_hex": "a6016f616e614068616d706f73742e6f726702664e3043414c4c03664b4b344f4441041a6af213af05480db0c3d9fd33002306814c0b5036895c73ec38608b9038",
+      "signature_hex": "146d45151e4c884488abafb84f9a72ef2d1cab8236e36569f49c8649834f827415b63a4c923fb955ee49d7eea3c2112b0e6d7316afd66c7c9a9f9ad1974b8102",
+      "credential": "ana",
+      "verifier": "KK4ODA",
+      "now": 1794249600,
+      "challenge_hex": null,
+      "seen": [],
+      "sent_nonce_hex": "995e2e8d7a0164d9",
+      "expect": "signature-invalid"
+    },
+    {
+      "what": "called station, checked by a caller it was not made for",
+      "statement_hex": "a6016f616e614068616d706f73742e6f726702664e3043414c4c03664b4b344f4441041a6af213af05480db0c3d9fd33002306814c0b5036895c73ec38608b9038",
+      "signature_hex": "146d45151e4c884488abafb84f9a72ef2d1cab8236e36569f49c8649834f827415b63a4c923fb955ee49d7eea3c2112b0e6d7316afd66c7c9a9f9ad1974b8102",
+      "credential": "ana",
+      "verifier": "N3CALL",
+      "now": 1794249600,
+      "challenge_hex": null,
+      "seen": [],
+      "sent_nonce_hex": "0db0c3d9fd330023",
+      "expect": "not-authorized"
     }
   ]
 }

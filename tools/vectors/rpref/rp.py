@@ -57,6 +57,35 @@ PDU_TYPES = {
     "NOTICE": 10,
 }
 
+# RP-0 §9.3: error codes, shared by RP-3 and RP-5.
+ERRORS = {
+    name: code
+    for code, name in enumerate(
+        [
+            "unsupported-version",
+            "malformed",
+            "credential-invalid",
+            "credential-expired",
+            "credential-revoked",
+            "credential-required",
+            "unknown-post-office",
+            "signature-invalid",
+            "time-skew",
+            "not-authorized",
+            "too-large",
+            "quota-exceeded",
+            "refused-by-policy",
+            "already-have",
+            "unknown-message",
+            "post-office-unreachable",
+            "busy",
+            "timeout",
+            "internal",
+        ],
+        start=1,
+    )
+}
+
 TIME_WINDOW_S = 600  # RP-1 §6.3
 REPLAY_S = 1200  # RP-1 §6.3
 FUTURE_ISSUE_S = 600  # RP-1 §5, step 4
@@ -240,14 +269,21 @@ def verify_statement(
     now: int,
     challenge: bytes | None = None,
     seen: list[tuple[str, bytes]] = (),  # type: ignore[assignment]
+    sent_nonce: bytes | None = None,
 ) -> str:
-    """RP-1 §6.3 steps 2 to 6, once the credential (step 1) has passed. ``body`` is its body."""
+    """RP-1 §6.3 steps 2 to 6, once the credential (step 1) has passed. ``body`` is its body.
+
+    With ``sent_nonce``, the statement is a called station's (RP-1 §6.5), checked by the caller:
+    its nonce must be the one the caller sent, and the clocks are not compared.
+    """
     if stmt.get(1) != body[3] or stmt.get(2) != body[4]:
         return "not-authorized"
     if stmt.get(3) != me:
         return "not-authorized"
     if not verify(CTX_SESSION, cbor.encode(stmt), signature, body[5]):
         return "signature-invalid"
+    if sent_nonce is not None:
+        return "ok" if 7 not in stmt and stmt.get(5) == sent_nonce else "signature-invalid"
     if 7 in stmt:
         return "ok" if stmt[7] == challenge else "signature-invalid"
     if abs(stmt[4] - now) > TIME_WINDOW_S or (stmt[1], stmt[5]) in seen:
@@ -270,6 +306,14 @@ def statement_from_hello(hello: dict[int, Any]) -> dict[int, Any]:
     """RP-3 §5.1: the statement a called station rebuilds from HELLO."""
     return statement(
         hello[3], hello[4], hello[5], [o[0] for o in hello[8]], time=hello[6], nonce=hello[7]
+    )
+
+
+def statement_from_welcome(hello: dict[int, Any], welcome: dict[int, Any]) -> dict[int, Any]:
+    """RP-1 §6.5, RP-3 §10: the statement a caller rebuilds from a called station's WELCOME."""
+    body = cbor.decode(cbor.decode(welcome[13])[0])
+    return statement(
+        body[3], body[4], hello[4], [w[1] for w in welcome[7]], time=welcome[10], nonce=hello[7]
     )
 
 

@@ -15,11 +15,11 @@ adapter from them.
 | Spec | Title | Status | Version | Governs |
 |---|---|---|---|---|
 | [RP-0](rp-0000-conventions.md) | Conventions | Draft | 0.2.0 | Requirement words, encodings, cryptography, identifiers, roles, how specs change, registries |
-| [RP-1](rp-0001-identity.md) | Identity | Draft | 0.2.0 | Keys, credentials, session statements, published keys, revocation |
+| [RP-1](rp-0001-identity.md) | Identity | Draft | 0.3.0 | Keys, credentials, session statements, published keys, revocation |
 | [RP-2](rp-0002-messages.md) | Messages | Draft | 0.1.2 | The message, its air form, its content ID |
-| [RP-3](rp-0003-session.md) | Session protocol | Draft | 0.1.2 | Client ↔ gateway over the radio |
+| [RP-3](rp-0003-session.md) | Session protocol | Draft | 0.2.0 | Client ↔ gateway over the radio |
 | [RP-4](rp-0004-modem-interface.md) | Modem interface | Draft | 0.2.0 | Client or gateway ↔ modem adapter |
-| [RP-5](rp-0005-post-office-api.md) | Post office API | Draft | 0.2.0 | Gateway or client ↔ post office over HTTPS |
+| [RP-5](rp-0005-post-office-api.md) | Post office API | Draft | 0.3.0 | Gateway or client ↔ post office over HTTPS |
 | [RP-6](rp-0006-email.md) | Email interoperation | Draft | 0.1.1 | Post office ↔ ordinary email |
 | [RP-7](rp-0007-forwarding.md) | Forwarding | Outline | 0.0.2 | Gateway ↔ gateway by radio |
 

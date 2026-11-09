@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.0 |
+| **Version** | 0.3.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -216,6 +216,10 @@ The post office verifies the credential and the statement (RP-1 §6.3, checking 
 | `GET /sessions/{s}/messages/{serial}` | One waiting message: `{"serial": 419, "id": "c1…", "air": "AXic…"}`. |
 | `POST /sessions/{s}/files` | `{"files": [{"serial": 419, "ref": "…"}]}`: send these held attachments. The post office answers `202` and later puts them in the mailbox as a new message, which the next waiting list shows. |
 
+The post office makes a message's air form once and serves those same bytes every time it is
+asked, and in every copy placed ahead (§5.8). A user whose download broke resumes it through any
+gateway by its offset (RP-3 §7), which works only if every gateway sends the same bytes.
+
 ### 5.4 `POST /sessions/{s}/messages`: mail the user sent
 
 ```json
@@ -373,3 +377,4 @@ How the accept list is used is RP-6's.
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.2.0 | 2026-11-09 | Login, enrollment and gateway registration each sign under a context of their own; test vectors (`vectors/api.json`). |
+| 0.3.0 | 2026-11-09 | A message's air form is made once and served the same every time (§5.3), so that downloads resume across gateways (RP-3 §7). |

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.0 |
+| **Version** | 0.3.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -142,7 +142,7 @@ A CBOR map:
 |---|---|---|---|
 | 1 | `address` | text | The account. |
 | 2 | `operator` | text | The operator's callsign, as on the air. |
-| 3 | `gateway` | text | The callsign of the gateway called. |
+| 3 | `gateway` | text | The callsign of the gateway called; in a statement by the station called, the caller's (§6.5). |
 | 4 | `time` | uint | The client's clock when it built the statement. Absent in challenge form. |
 | 5 | `nonce` | bstr .size 8 | Random. Absent in challenge form. |
 | 6 | `messages` | array of bstr .size 12 | The content IDs of every message the client offers in this session, in the order offered. May be empty. |
@@ -170,8 +170,8 @@ A verifier MUST check, in this order, and stop at the first failure:
 1. The credential, by §5, with the flags `send` if `messages` is not empty, and `receive` if mail
    is to be handed over. Otherwise the error §5 gives.
 2. `address` and `operator` equal the credential's. Otherwise `not-authorized`.
-3. `gateway` is the verifier's own callsign, when the verifier is the gateway called. Otherwise
-   `not-authorized`.
+3. `gateway` is the verifier's own callsign, when the verifier is the station the statement names:
+   the gateway called, or the caller in §6.5. Otherwise `not-authorized`.
 4. The signature, with the credential's device key. Otherwise `signature-invalid`.
 5. In time form: `time` is within **600 seconds** of the verifier's clock (600 is within), and the
    pair (`address`, `nonce`) has not been seen in the last 1 200 seconds; the gateway keeps a replay
@@ -182,7 +182,8 @@ A verifier MUST check, in this order, and stop at the first failure:
 A post office verifying a statement relayed later (RP-5 §5.6) checks 1, 2 and 4, and checks `time`
 against the gateway's reported session time instead of its own clock.
 
-Test vectors: `vectors/credentials.json` (§4, §5) and `vectors/statements.json` (§6.1–§6.3).
+Test vectors: `vectors/credentials.json` (§4, §5) and `vectors/statements.json` (§6.1–§6.3,
+§6.5).
 
 ### 6.4 Proof of submission
 
@@ -192,6 +193,25 @@ the message and its proof can check that the account in the statement sent it, b
 statement lists the message's content ID and the content ID is a hash of the message (RP-2 §3).
 Gateways pass the proof on with the message (RP-5 §5.4, RP-7) so that a forwarding station can
 carry a message but never alter it or forge its sender.
+
+### 6.5 A statement by the station called
+
+In a station-to-station session (RP-3 §10) the station called is a client too, and it proves
+itself to the caller with a statement of its own, in time form:
+
+| Key | Holds |
+|---|---|
+| `address`, `operator` | Its own, as in its credential. |
+| `gateway` | The caller's callsign (`HELLO` `operator`): the station it answers. |
+| `time` | Its clock (`WELCOME` `time`). |
+| `nonce` | The caller's nonce (`HELLO` `nonce`), not a new one. |
+| `messages` | The content IDs of the messages it lists in `waiting`, in that order. |
+
+It signs the statement as in §6.2. The caller verifies it by §6.3, steps 1 to 4, as the station
+step 3 names; then, in place of steps 5 and 6, it checks that `nonce` is the nonce it sent.
+Otherwise `signature-invalid`. The clocks are not compared: the caller's own nonce, new for this
+session, shows that the statement was made for it. The statement and its signature are the proof
+(§6.4) of the messages the caller receives.
 
 ---
 
@@ -292,7 +312,8 @@ A serial MAY be dropped from the list once the credential it names has expired.
   credentials for callsigns its users do not hold; gateways and other post offices trust a post
   office by choosing to keep its keys (§7.3).
 * **Replay.** A statement in time form can be replayed only within its window and only before the
-  gateway's replay cache has seen it (§6.3); a challenge-form statement only in its own session.
+  gateway's replay cache has seen it (§6.3); a challenge-form statement only in its own session; a
+  statement by the station called only in the session whose nonce it carries (§6.5).
 
 ---
 
@@ -303,3 +324,4 @@ A serial MAY be dropped from the list once the credential it names has expired.
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.2.0 | 2026-11-09 | Each statement check names its error, a replay answers `time-skew` (§6.3); when a DNS record is ignored (§7.1); test vectors. |
+| 0.3.0 | 2026-11-09 | A statement by the station called, in a station-to-station session, over the caller's nonce (§6.5); §6.1 and §6.3 step 3 say whose callsign `gateway` holds. |
