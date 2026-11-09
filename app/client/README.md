@@ -1,8 +1,9 @@
 # The RadioPost client
 
-`radiopost` is the RadioPost client on the command line: the user's device key and credential
-(RP-1), their mail (RP-2), and sessions (RP-3) over any modem that has an RPMI adapter (RP-4).
-The desktop application (Tauri, design D27) will be built on the same library, `radiopost_client`.
+`radiopost` is the RadioPost client: the user's device key and credential (RP-1), their mail
+(RP-2), and sessions (RP-3) over any modem that has an RPMI adapter (RP-4). It runs on the command
+line, or as a panel in a browser (`radiopost panel`); the desktop application (Tauri, design D27)
+will show the same panel in its own window.
 
 Phase 1 carries mail **station to station** (RP-3 §10). Calling a gateway works as RP-3 §5 says,
 but there is no gateway to call until Phase 2, nor yet enrollment (RP-5 §6.1): a credential is
@@ -27,11 +28,25 @@ radiopost [--home DIR] COMMAND
 | `reports` | The station-to-station sessions waiting to be reported to the post office (RP-5 §6.6). |
 | `call CALLSIGN [--station] [--fetch all\|none\|BYTES]` | Calls a gateway, or with `--station` another client's station. |
 | `listen` | Answers one station's call. |
+| `panel [--port N] [--ui DIR]` | Serves the panel on this computer (port 8620) and says where to open it. |
 
 `call` and `listen` take `--adapter HOST:PORT` (the modem's RPMI adapter, `127.0.0.1:8600` by
 default) and `--bandwidth HZ`. `--plain` sends messages uncompressed; `--clock`, `--nonce`,
 `--session-id` and `--challenge` fix the clock and the random draws, so that a session can be
 replayed exactly (the conformance tester's §2.4).
+
+## The panel
+
+`radiopost panel` serves the page in `app/ui/` (plain HTML, CSS and JavaScript, no build step,
+light or dark as the system is) and a JSON API under `/api/`, on the loopback interface only, as
+the Aether app serves its own. It shows the folders, reads and writes messages with attachments,
+calls a station or listens for one, and holds the setup: the device key, the credential and the
+post offices trusted. A session runs on a thread of its own; while it runs, the panel changes
+nothing in the home. `--ui DIR` serves the page from a directory, for working on it.
+
+Only this computer's own pages reach it: a request must name the panel's own host, so a page that
+rebinds its name to 127.0.0.1 is refused, and a change must carry `X-RadioPost: 1`, which another
+site's page cannot send without a preflight the panel never grants.
 
 ## Two stations on one machine
 
@@ -67,7 +82,9 @@ both stations' proofs, waits in `state.json` until the client can send it (Phase
 
 ## Tests
 
-`tests/two_clients.rs`: two clients replay session-03 byte for byte through the loopback adapter
+`tests/panel.rs`: the panel's guards, a message written with an attachment and carried by a call
+made from the panel, and listening stopped. `tests/two_clients.rs`: two clients replay session-03
+byte for byte through the loopback adapter
 with the vector's clocks and draws, and end with the folders the session says and the reports
 `vectors/direct.json` has; the program itself sets up two homes, composes, listens and calls; and it
 refuses a credential for another device's key.

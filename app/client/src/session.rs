@@ -7,6 +7,9 @@
 //! the `RECEIPT` that takes it is sent (RP-3 §5.4).
 
 use std::collections::HashMap;
+use std::io;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use radiopost::ContentId;
@@ -68,6 +71,8 @@ pub struct Options {
     pub bandwidth: Option<i64>,
     /// The longest the adapter may say nothing before the session is given up (RP-3 §8).
     pub quiet: Duration,
+    /// Set, it stops a station listening for a call: how a program's window says "stop".
+    pub stop: Option<Arc<AtomicBool>>,
 }
 
 impl Options {
@@ -86,6 +91,7 @@ impl Options {
             auto: 1000,
             bandwidth: None,
             quiet: Duration::from_secs(600),
+            stop: None,
         }
     }
 
@@ -234,6 +240,25 @@ impl Modem {
             .map_err(|e| format!("the adapter said nothing in time, or failed: {e}"))?
             .ok_or("the adapter closed the connection")?;
         Event::read(&m).map_err(|why| format!("the adapter wrote what RP-4 does not: {why}"))
+    }
+
+    /// The adapter's next event, or `None` when a quarter of a second passes without one.
+    fn poll(&mut self) -> Result<Option<Event>, Error> {
+        match self.conn.read_message() {
+            Ok(Some(m)) => Event::read(&m)
+                .map(Some)
+                .map_err(|why| format!("the adapter wrote what RP-4 does not: {why}")),
+            Ok(None) => Err("the adapter closed the connection".into()),
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                ) =>
+            {
+                Ok(None)
+            }
+            Err(e) => Err(format!("the adapter's connection failed: {e}")),
+        }
     }
 
     /// Sends a request and waits for its answer, past events before it.
@@ -591,8 +616,27 @@ pub fn answer(
     let listen = modem.host.listen(true);
     modem.ask(&listen)?;
     say(&format!("listening as {me}"));
+    let waiting = Duration::from_millis(250);
+    modem
+        .conn
+        .set_timeout(Some(waiting))
+        .map_err(|e| e.to_string())?;
     let (connected, remote) = loop {
-        let e = modem.next()?;
+        if opts
+            .stop
+            .as_ref()
+            .is_some_and(|s| s.load(Ordering::Relaxed))
+        {
+            say("stopped listening");
+            modem.conn.close();
+            return Ok(Report {
+                failed: Some("stopped before a call came".into()),
+                ..Report::default()
+            });
+        }
+        let Some(e) = modem.poll()? else {
+            continue;
+        };
         if let Event::Connected {
             direction: Direction::In,
             remote,
@@ -603,6 +647,10 @@ pub fn answer(
             break (e, remote);
         }
     };
+    modem
+        .conn
+        .set_timeout(Some(opts.quiet))
+        .map_err(|e| e.to_string())?;
     say(&format!("{remote} called"));
     let now = opts.now();
     let mut mail = Vec::new();

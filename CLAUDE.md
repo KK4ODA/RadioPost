@@ -46,6 +46,11 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   the engines now keep (`Client::proofs`, `Called::proofs`); the replay test matches session-03
   byte for byte and `direct.json`'s two reports. The engines report their own refusals
   (`Event::Refused`), found by running two clients that trusted no post office.
+  `app/ui` is the client's panel (no build step), served with a JSON API by `radiopost panel`
+  (`panel.rs`: loopback only, the `Host` checked, changes need `X-RadioPost: 1`; a session on its
+  own thread, the home unchanged by the panel while it runs). The Tauri window around it is next.
+  Check the panel in headless Chromium (Playwright, `NODE_PATH=$(npm root -g)`); CI checks the
+  script parses as a module.
 - `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`. Standard
   library only; `ruff.toml` holds the lint settings.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`

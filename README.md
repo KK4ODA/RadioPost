@@ -37,8 +37,8 @@ office or modem adapter from the specifications, and it will work with everyone 
 Phase 1 has begun: the core library in [`core/`](core/README.md) builds RadioPost's objects and
 runs RP-3's sessions, and its modem interface (RP-4) carries them between two stations, through a
 simulated channel or through two [Aether HF](https://github.com/KK4ODA/aether-hf) modems and the
-Aether adapter, each checked against the test vectors. The `radiopost` client program carries mail
-between two stations ([`app/client`](app/client/README.md)). The specifications are **drafts**:
+Aether adapter, each checked against the test vectors. The `radiopost` client carries mail between
+two stations, on the command line or from its panel in a browser ([`app/client`](app/client/README.md)). The specifications are **drafts**:
 anything may change, and nothing is ready to deploy. The project's own post office will be `radiopost.org`. The first modem is
 [Aether HF](https://github.com/KK4ODA/aether-hf), an open-source HF modem; VARA, ARDOP and AX.25
 packet follow through adapters.

@@ -32,6 +32,8 @@ usage: radiopost [--home DIR] COMMAND ...
   call CALLSIGN [--station] [--fetch all|none|BYTES] [SESSION OPTIONS]
                            call a gateway, or with --station another client's station (RP-3 §10)
   listen [SESSION OPTIONS] answer one station's call (RP-3 §10)
+  panel [--port N] [--ui DIR]
+                           serve the client's panel on this computer (port 8620) and say where
 
 session options:
   --adapter HOST:PORT      the modem's RPMI adapter (default 127.0.0.1:8600)
@@ -427,6 +429,18 @@ fn run(words: &[String]) -> Result<(), Error> {
             })?;
             if let Some(why) = report.failed {
                 return Err(why);
+            }
+        }
+        "panel" => {
+            let port = args.one("--port").unwrap_or_else(|| "8620".into());
+            let panel = radiopost_client::panel::Panel::new(
+                store.home(),
+                args.one("--ui").map(PathBuf::from),
+            );
+            let at = panel.start(&format!("127.0.0.1:{port}"))?;
+            println!("the panel is at http://{at}/");
+            loop {
+                std::thread::park();
             }
         }
         "listen" => {

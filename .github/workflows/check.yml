@@ -85,6 +85,12 @@ jobs:
         working-directory: core
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: The library against the vectors
+      - name: The library, the adapters and the client against the vectors
         working-directory: core
         run: cargo test --locked
+
+      - name: The client's panel parses
+        # a module, as the page loads it: a .mjs copy, since node reads a .js file as a script
+        run: |
+          cp app/ui/app.js "$RUNNER_TEMP/app.mjs"
+          node --check "$RUNNER_TEMP/app.mjs"
