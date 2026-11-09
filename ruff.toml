@@ -1,0 +1,16 @@
+# Lint and format settings for RadioPost's Python (the figure generators, for now).
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "RUF", "SIM", "PL"]
+preview = true
+ignore = [
+  "PLR0913", # drawing calls legitimately take many parameters
+  "PLR2004", # figure coordinates are literals by nature
+  "PLR0915", # a figure is one long function
+  "RUF001", "RUF002", "RUF003", # unicode punctuation in labels and docstrings
+]
+
+[format]
+quote-style = "double"

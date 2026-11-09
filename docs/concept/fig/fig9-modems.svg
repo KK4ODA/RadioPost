@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" width="1000" height="560" role="img" aria-label="Figure 9. One session protocol over many modems">
+<defs><marker id="ah-radio" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#c2410c"/></marker><marker id="ah-internet" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/></marker><marker id="ah-smtp" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#6d28d9"/></marker><marker id="ah-local" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/></marker><marker id="ah-fail" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b91c1c"/></marker></defs>
+<rect x="0" y="0" width="1000" height="560" fill="#ffffff"/>
+<text x="24" y="34" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#1e293b">Figure 9. One session protocol over many modems</text>
+<text x="24" y="56" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" fill="#475569">The client and the gateway program never talk to a modem directly; an adapter does.</text>
+<rect x="150.0" y="76.0" width="320.0" height="58.0" rx="10" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.5"/>
+<text xml:space="preserve" x="310.0" y="105.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1e293b" text-anchor="middle">RadioPost client</text>
+<g fill="none" stroke="#1d4ed8" stroke-width="1.6" stroke-linecap="round"><circle cx="449" cy="93.5" r="4"/><path d="M 441.5 106 Q 442 99 449 99 Q 456 99 456.5 106"/></g>
+<rect x="530.0" y="76.0" width="320.0" height="58.0" rx="10" fill="#fff7ed" stroke="#c2410c" stroke-width="1.5"/>
+<text xml:space="preserve" x="690.0" y="105.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1e293b" text-anchor="middle">Gateway program</text>
+<g fill="none" stroke="#c2410c" stroke-width="1.6" stroke-linecap="round"><path d="M 829 94 L 829 106 M 825 106 L 833 106"/><circle cx="829" cy="93" r="1.6" fill="#c2410c"/><path d="M 825 89.5 Q 822.5 93 825 96.5"/><path d="M 833 89.5 Q 835.5 93 833 96.5"/><path d="M 821.5 87 Q 818 93 821.5 99"/><path d="M 836.5 87 Q 840 93 836.5 99"/></g>
+<rect x="20.0" y="158.0" width="960.0" height="66.0" rx="10" fill="#f8fafc" stroke="#475569" stroke-width="1.5"/>
+<text xml:space="preserve" x="500.0" y="186.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#1e293b" text-anchor="middle">Session protocol: the same over every modem</text>
+<text xml:space="preserve" x="500.0" y="208.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="middle">hello, challenge, signature, messages, done; resumable; its own acknowledgements</text>
+<rect x="20.0" y="248.0" width="960.0" height="66.0" rx="10" fill="#f8fafc" stroke="#475569" stroke-width="1.5"/>
+<text xml:space="preserve" x="500.0" y="276.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#1e293b" text-anchor="middle">Modem adapter interface</text>
+<text xml:space="preserve" x="500.0" y="298.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="middle">listen, call, send bytes, receive bytes, close; optional: link quality, delivery receipts, broadcasts</text>
+<path d="M 310.0 136.0 L 310.0 156.0" fill="none" stroke="#64748b" stroke-width="1.8" stroke-dasharray="2 4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 690.0 136.0 L 690.0 156.0" fill="none" stroke="#64748b" stroke-width="1.8" stroke-dasharray="2 4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 500.0 226.0 L 500.0 246.0" fill="none" stroke="#64748b" stroke-width="1.8" stroke-dasharray="2 4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="20.0" y="340.0" width="179.2" height="128.0" rx="10" fill="#fff7ed" stroke="#c2410c" stroke-width="1.5"/>
+<text xml:space="preserve" x="34.0" y="368.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#1e293b" text-anchor="start">Aether</text>
+<text xml:space="preserve" x="34.0" y="390.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">Control API</text>
+<text xml:space="preserve" x="34.0" y="408.1" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">Delivery receipts</text>
+<text xml:space="preserve" x="34.0" y="426.2" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">Rules check on</text>
+<text xml:space="preserve" x="34.0" y="444.4" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">every keying</text>
+<path d="M 109.6 316.0 L 109.6 338.0" fill="none" stroke="#64748b" stroke-width="1.8" stroke-dasharray="2 4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="215.2" y="340.0" width="179.2" height="128.0" rx="10" fill="#fff7ed" stroke="#c2410c" stroke-width="1.5"/>
+<text xml:space="preserve" x="229.2" y="368.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#1e293b" text-anchor="start">VARA HF or FM</text>
+<text xml:space="preserve" x="229.2" y="390.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">Published TNC</text>
+<text xml:space="preserve" x="229.2" y="408.1" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">commands</text>
+<text xml:space="preserve" x="229.2" y="426.2" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">A byte stream</text>
+<path d="M 304.8 316.0 L 304.8 338.0" fill="none" stroke="#64748b" stroke-width="1.8" stroke-dasharray="2 4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="410.4" y="340.0" width="179.2" height="128.0" rx="10" fill="#fff7ed" stroke="#c2410c" stroke-width="1.5"/>
+<text xml:space="preserve" x="424.4" y="368.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#1e293b" text-anchor="start">ARDOP</text>
+<text xml:space="preserve" x="424.4" y="390.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">Its host</text>
+<text xml:space="preserve" x="424.4" y="408.1" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">interface</text>
+<text xml:space="preserve" x="424.4" y="426.2" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">A byte stream</text>
+<path d="M 500.0 316.0 L 500.0 338.0" fill="none" stroke="#64748b" stroke-width="1.8" stroke-dasharray="2 4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="605.6" y="340.0" width="179.2" height="128.0" rx="10" fill="#fff7ed" stroke="#c2410c" stroke-width="1.5"/>
+<text xml:space="preserve" x="619.6" y="368.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#1e293b" text-anchor="start">AX.25 by KISS</text>
+<text xml:space="preserve" x="619.6" y="390.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">Direwolf or a TNC</text>
+<text xml:space="preserve" x="619.6" y="408.1" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">VHF and UHF</text>
+<text xml:space="preserve" x="619.6" y="426.2" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">packet</text>
+<path d="M 695.2 316.0 L 695.2 338.0" fill="none" stroke="#64748b" stroke-width="1.8" stroke-dasharray="2 4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="800.8" y="340.0" width="179.2" height="128.0" rx="10" fill="#f5f3ff" stroke="#6d28d9" stroke-width="1.5"/>
+<text xml:space="preserve" x="814.8" y="368.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#1e293b" text-anchor="start">TCP with TLS</text>
+<text xml:space="preserve" x="814.8" y="390.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">The Internet</text>
+<text xml:space="preserve" x="814.8" y="408.1" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">AREDN mesh</text>
+<text xml:space="preserve" x="814.8" y="426.2" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">No radio</text>
+<path d="M 890.4 316.0 L 890.4 338.0" fill="none" stroke="#64748b" stroke-width="1.8" stroke-dasharray="2 4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="20.0" y="492.0" width="764.8" height="44.0" rx="8" fill="#fff7ed" stroke="#c2410c" stroke-width="1.2"/>
+<text xml:space="preserve" x="402.4" y="520.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#c2410c" text-anchor="middle">Radio: HF, VHF, UHF</text>
+<rect x="800.8" y="492.0" width="179.2" height="44.0" rx="8" fill="#f5f3ff" stroke="#6d28d9" stroke-width="1.2"/>
+<text xml:space="preserve" x="890.4" y="520.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#6d28d9" text-anchor="middle">Internet</text>
+</svg>
