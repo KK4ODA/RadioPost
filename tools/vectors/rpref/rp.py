@@ -297,6 +297,23 @@ def verify_credential(
     return "ok", body
 
 
+def trusts(
+    domain: str, found: dict[str, str], blocked: set[str], only: set[str] | None = None
+) -> bool:
+    """RP-1 §7.3: does a gateway trust this post office?
+
+    `found` says how the gateway learned each post office: `dns` (looked up while online) or
+    `list:<domain>` (named in that post office's list). `blocked` and `only` are its operator's.
+    """
+    if domain in blocked or (only is not None and domain not in only):
+        return False
+    how = found.get(domain, "")
+    if how == "dns":
+        return True
+    publisher = how.removeprefix("list:")
+    return how.startswith("list:") and found.get(publisher) == "dns" and publisher not in blocked
+
+
 # -- RP-1: session statements --------------------------------------------------------------------
 
 

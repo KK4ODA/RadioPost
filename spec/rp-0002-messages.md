@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.2 |
+| **Version** | 0.2.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -100,9 +100,16 @@ The content ID is computed on the uncompressed encoding, so a station may recomp
 without changing its ID.
 
 **Why DEFLATE is the baseline:** every platform has it, and it is the method Aether's link already
-uses. Zstandard with a dictionary trained on amateur traffic should do much better on short
-messages; it becomes a requirement once the dictionary is published with this specification
-(*open*).
+uses.
+
+**Dictionary 1.** Zstandard with a dictionary should do much better on the short messages that
+make up most HF traffic. A dictionary holds verbatim strings from what it was trained on, and is
+published like every encoding on the air, so it is trained only on a corpus RadioPost writes and
+publishes with this specification, never on real mail: the CBOR structure of messages, common
+domains and words, forms in the style of ICS-213, and short notes in English and Spanish. It is
+adopted only if, on a held-out part of that corpus, it makes messages of under 1 000 bytes at least
+20 % smaller than DEFLATE at their median. Then code 3 becomes a requirement, with the dictionary
+and its SHA-256 in this specification; until then it is not used.
 
 ---
 
@@ -159,3 +166,4 @@ content IDs and air forms, and air forms that must be refused.
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.1.2 | 2026-11-09 | The example is the test vector's, its sizes measured; test vectors. |
+| 0.2.0 | 2026-11-09 | Dictionary 1: trained only on a published corpus, adopted only if it beats DEFLATE by 20 % on short messages (§4). |

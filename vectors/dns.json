@@ -1,11 +1,11 @@
 {
-  "radiopost_vectors": "`_radiopost` TXT records: which are read and which ignored",
+  "radiopost_vectors": "`_radiopost` TXT records, and which post offices a gateway trusts",
   "format": 1,
   "specs": {
-    "RP-1": "§7.1"
+    "RP-1": "§7.1, §7.3"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "Parsing `txt` gives `result`: the record's tags, or null when it must be ignored.",
+  "rule": "Parsing `txt` gives `result`: the record's tags, or null when it must be ignored. A gateway that learned post offices as `found` says (`dns`, or `list:` and the post office whose list named it) trusts a case's `domain`, given its operator's `blocked` and `only`, when `expect` is true (RP-1 §7.3).",
   "records": [
     {
       "what": "an API record",
@@ -91,6 +91,78 @@
       "what": "not RadioPost's: an SPF record",
       "txt": "v=spf1 mx -all",
       "result": null
+    }
+  ],
+  "found": {
+    "radiopost.org": "dns",
+    "hampost.org": "list:radiopost.org",
+    "qrp-mail.example": "list:hampost.org",
+    "eoc-mail.example": "list:radiopost.org"
+  },
+  "trust_cases": [
+    {
+      "domain": "radiopost.org",
+      "what": "looked up in DNS when its user first called",
+      "blocked": [],
+      "only": null,
+      "expect": true
+    },
+    {
+      "domain": "hampost.org",
+      "what": "named in radiopost.org's list",
+      "blocked": [],
+      "only": null,
+      "expect": true
+    },
+    {
+      "domain": "qrp-mail.example",
+      "what": "named in hampost.org's list: two hops",
+      "blocked": [],
+      "only": null,
+      "expect": false
+    },
+    {
+      "domain": "never-met.example",
+      "what": "never met",
+      "blocked": [],
+      "only": null,
+      "expect": false
+    },
+    {
+      "domain": "eoc-mail.example",
+      "what": "named in a list, blocked by the operator",
+      "blocked": [
+        "eoc-mail.example"
+      ],
+      "only": null,
+      "expect": false
+    },
+    {
+      "domain": "hampost.org",
+      "what": "named by a post office the operator blocked",
+      "blocked": [
+        "radiopost.org"
+      ],
+      "only": null,
+      "expect": false
+    },
+    {
+      "domain": "hampost.org",
+      "what": "outside the operator's limit",
+      "blocked": [],
+      "only": [
+        "radiopost.org"
+      ],
+      "expect": false
+    },
+    {
+      "domain": "radiopost.org",
+      "what": "inside the operator's limit",
+      "blocked": [],
+      "only": [
+        "radiopost.org"
+      ],
+      "expect": true
     }
   ]
 }

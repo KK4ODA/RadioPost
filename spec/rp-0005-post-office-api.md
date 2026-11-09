@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.11.0 |
+| **Version** | 0.11.1 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -362,7 +362,7 @@ A gateway behind a home router uses only outgoing connections: the long poll is 
 ### 6.1 `POST /enroll`: a new device
 
 No token. The post office's operator gives the user a one-time **enrollment code** (by its website,
-by email, in person). The client generates a device key and sends:
+by email, in person), once the user has shown they hold the callsign (RP-1 §1). The client generates a device key and sends:
 
 ```json
 {"address": "facundo@radiopost.org", "operator": "KK4ODA", "code": "7Q4F-AZ9K",
@@ -531,3 +531,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.9.0 | 2026-11-09 | `local_pickups` in a report (§5.6), for RP-7's local delivery. |
 | 0.10.0 | 2026-11-09 | `POST /direct`: a client reports its station-to-station sessions with both proofs; received mail is filed as picked up, sent mail sent on to every recipient but the other station (§6.6); test vectors (§8). |
 | 0.11.0 | 2026-11-09 | `third_party` in waiting entries and copies, for RP-6 §5.1 (§5.2, §5.8). |
+| 0.11.1 | 2026-11-09 | §6.1: the enrollment code comes once the callsign is shown (RP-1 §1). |

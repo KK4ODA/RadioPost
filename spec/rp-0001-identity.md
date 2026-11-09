@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.4.0 |
+| **Version** | 0.5.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -272,7 +272,19 @@ holds while offline. It learns a post office:
 * from the **post office lists** that post offices publish (RP-5 §4.3), which it merges for the
   post offices it trusts.
 
-*Open:* how a new post office comes to be trusted by gateways that have never met its users.
+**Which it trusts.** Like email, RadioPost has no gatekeeper. By default a gateway trusts:
+
+* a post office it looked up in DNS when one of that post office's users called (§7.1, §7.2);
+* while offline, a post office named in the list of one it trusts that way: one hop only, so a list
+  learned from a list does not count.
+
+Its operator can block any post office, which the gateway then treats as unknown
+(`unknown-post-office`), or limit the gateway to the post offices the operator names. Anyone can
+set up a post office, and a dishonest one could issue credentials for callsigns its users do not
+hold. Every message carries the credential of the post office that vouched for its sender (§6.4),
+so such a post office is found out, and its operators' neighbours block it.
+
+Test vectors: `vectors/dns.json`, `trust_cases`.
 
 ### 7.4 Rotating keys
 
@@ -329,3 +341,4 @@ A serial MAY be dropped from the list once the credential it names has expired.
 | 0.2.0 | 2026-11-09 | Each statement check names its error, a replay answers `time-skew` (§6.3); when a DNS record is ignored (§7.1); test vectors. |
 | 0.3.0 | 2026-11-09 | A statement by the station called, in a station-to-station session, over the caller's nonce (§6.5); §6.1 and §6.3 step 3 say whose callsign `gateway` holds. |
 | 0.4.0 | 2026-11-09 | A credential is an untagged COSE_Sign1 (RP-0 §5): the key's ID moves from the body (key 8, now unused) to the protected header, which names Ed25519; 161 to 169 bytes (§4.1, §4.3, §5). |
+| 0.5.0 | 2026-11-09 | Which post offices a gateway trusts: by DNS, or one hop of post office lists; its operator may block or limit (§7.3). |

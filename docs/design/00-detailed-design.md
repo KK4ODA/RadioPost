@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.20 |
+| **Version** | 0.1.21 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -85,7 +85,7 @@ reasoning; the specifications hold the result.
 | D14 | **An off-the-shelf mail server** (Stalwart) with the RadioPost service beside it (RP-6). | Email is a solved, hard problem; deliverability and security are years of work we do not need to redo. | Writing our own mail server. |
 | D15 | **Refuse at the SMTP door**, never bounce later (RP-6 §2.1). | No backscatter to forged senders; the sender's own provider explains the refusal. | Accept and bounce; challenge-response email. |
 | D16 | **Mail leaves from the sender's post office** (RP-6 §3.1). | Only that server can sign for the domain, so the mail is delivered, not filtered. | Sending from the gateway (fails DKIM, SPF and DMARC). |
-| D17 | **DEFLATE as the baseline**; Zstandard optional; a dictionary later (RP-2 §4). | DEFLATE is everywhere; a trained dictionary should do much better on short messages but must be published first. | Zstandard only (not in every small environment yet). |
+| D17 | **DEFLATE as the baseline**; Zstandard optional; a dictionary only if it earns its place (RP-2 §4): trained on a corpus RadioPost writes and publishes, adopted if it makes messages under 1 000 bytes at least 20 % smaller than DEFLATE at their median. Phase 1 ships without it. | DEFLATE is everywhere. A dictionary keeps verbatim strings of what it was trained on and must be published, so real mail can never be its training data. | Zstandard only (not in every small environment yet); volunteers' mail after the pilot (private strings in a public dictionary); no dictionary (gives up the gain on short messages). |
 | D18 | **Forwarding uses the same session protocol** (RP-7). | One protocol to implement and test; proofs travel with messages. | A separate store-and-forward protocol. |
 | D19 | **A modem may be shared**: each host holds its own callsigns, answering switch and links (RP-4 §1.1). | During the move from Winlink, a gateway runs both systems on one radio, and two modems cannot share one sound card. A call names a callsign, so the callsign decides whose call it is, as AGWPE already does. | One program at a time (the operator must choose a system); routing by an SSID convention (callsigns are the operator's choice); a switchboard program between them (one more program to run). |
 | D20 | **In a station-to-station session the station called proves itself too**, with a statement over the caller's nonce (RP-1 §6.5, RP-3 §10). | Anyone can transmit any callsign, so the caller has no other way to know who answered, or whose mail it is taking. The caller's own nonce makes the statement fresh with no clock to compare. | Trusting the callsign (forged with a microphone); a challenge from the caller (one more exchange); a time-form statement checked against the clock (fails when the clocks disagree, with no way to ask again). |
@@ -100,6 +100,8 @@ reasoning; the specifications hold the result.
 | D29 | **The door answers Stalwart's MTA hooks** (RP-6 §2.1). | HTTP and JSON, in the same stack as the RP-5 API: the simplest to build and test. The door's rules live in the service, so a milter front can be added for a post office that runs Postfix. | Milter from the start (a binary protocol, for portability the pilot does not need); both at once (two doors to test before Phase 2). |
 | D30 | **Station-to-station mail is reported over the Internet** (RP-5 §6.6, RP-3 §10): each client, with both stations' proofs; the post office files what was received as picked up and sends what was sent on to the other recipients. | Mailboxes and sent mail agree with what crossed the air, and a cc'd recipient gets the message, at no cost in air time. The proofs make the report checkable like a gateway's. | Sending each message again through a gateway (every message crosses the air twice); not reporting (mailboxes differ, cc'd recipients never get it). |
 | D31 | **Third-party mail is flagged by the post office and checked by the gateway** (RP-6 §5.1, RP-3 §5.2): the post office marks mail whose sender is not shown to be licensed; the gateway hands it only to a station of its own country or one with an arrangement, read from the callsign the station operates under. | §97.115 turns on where the receiving station is, which only the gateway sees, and a portable callsign (`VE3/KK4ODA`) says it on every call. The sender's country never mattered. Licensed senders, RadioPost's own users, are not restricted. | By the account's country (wrong for a user operating abroad); domestic only (withholds mail the rules allow to Canada and most of the Americas); the sender's country (not what the rule asks). |
+| D32 | **Open trust of post offices, the operator deciding** (RP-1 §7.3): a gateway trusts a post office it looked up in DNS, and one hop of the post office lists of those; its operator can block any or limit the gateway to those it names. | Like email: no gatekeeper, so a new post office reaches gateways as its users call. Every message carries the credential of the post office that vouched for its sender, so a dishonest one is found out and blocked. | A list kept by the project (a gatekeeper, against the no-centre design); only what each operator names (new post offices reach few gateways). |
+| D33 | **radiopost.org enrolls on an LoTW certificate or the sysop's check** (RP-1 §1, RP-5 §6.1). | The applicant signs a challenge with the key of their ARRL Logbook of the World certificate, which names their callsign; one without LoTW is checked by the sysop against the licence database, with a code sent to the address the licence record holds. Either is enough. | LoTW only (excludes licensees without it); the sysop only (every new user waits); both (slowest, and still excludes those without LoTW). |
 
 ---
 
@@ -174,7 +176,7 @@ own licence is unaffected.
 
 | Part | Does | Spec |
 |---|---|---|
-| Identity | Accounts, enrollment codes, credentials, the post office's keys, revocation, the DNS and JWS documents. | RP-1 |
+| Identity | Accounts, enrollment codes once the callsign is shown (D33), credentials, the post office's keys, revocation, the DNS and JWS documents. | RP-1 |
 | API | The HTTPS interface for gateways and clients. | RP-5 |
 | Door | Answers the mail server's MTA hooks at `RCPT TO` and `DATA` (D29): the accept list, encryption, size. | RP-6 §2.1 |
 | Converter | Email to RadioPost message and back; serials; the content-ID-to-Message-ID map. | RP-6 §2.4, §3 |
@@ -252,9 +254,10 @@ the core against `vectors/` on every push, with the checks that run today.
   RP-7's vectors (a forwarding session, placements, records, the post office's side) found RP-7
   0.2.0's: which flags a forwarding caller's credential needs, and a record's; the placement's
   checks in order with their codes; that copies still wait for a cut-off gateway; and RP-5 0.8.0's
-  refusal of a report whose path does not end at the reporter. Local delivery has its own (a
-  session at a cut-off gateway, the local recipients, the post office's side). Every specification
-  now has vectors.
+  refusal of a report whose path does not end at the reporter. Later decisions came with their own:
+  local delivery, mail queued at a cut-off gateway, the credential's hash in `PROOF`, windows and
+  the bands, choosing a partner, credentials as COSE_Sign1, station-to-station reports,
+  third-party traffic and which post offices a gateway trusts. Every specification has vectors.
 * **A conformance tester** that plays the other side: a client to test a gateway, a gateway to
   test a client, over the TCP adapter, including broken links, resumes and wrong signatures.
 * **A loopback adapter** joining two hosts through RPMI with delays and losses, for tests with no
@@ -298,9 +301,7 @@ Collected from the specifications and the concept, each to be settled in the doc
 
 | Question | Where |
 |---|---|
-| How a new post office comes to be trusted by gateways that have never met its users. | RP-1 §7.3 |
-| Proof of callsign at enrollment: LoTW, the sysop's check, or both. | RP-1 §1 |
-| The Zstandard dictionary: training data, publication. | RP-2 §4 |
+| The dictionary's corpus, written and measured. | RP-2 §4 |
 | ARDOP's host interface, checked against its specification. | RP-4 §9.3 |
 | Third-party traffic: tables for gateway countries other than the United States. | RP-6 §5.1 |
 | Forwarding: segment tables for other countries, and the US bands of shorter wavelength than 6 m. | RP-7 §8 |
@@ -332,3 +333,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.18 | 2026-11-09 | D4: credentials and placements as COSE_Sign1 (RP-0 0.5.0, RP-1 0.4.0, RP-7 0.8.0). |
 | 0.1.19 | 2026-11-09 | D30: station-to-station mail reported over the Internet (RP-5 0.10.0). |
 | 0.1.20 | 2026-11-09 | D31: third-party traffic (RP-6 0.3.0, RP-3 0.7.0, RP-5 0.11.0). |
+| 0.1.21 | 2026-11-09 | D17: the dictionary's rule (RP-2 0.2.0); D32: trusting post offices (RP-1 0.5.0); D33: radiopost.org's enrollment. Phase 0's open questions settled but the data still owed. |

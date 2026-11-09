@@ -5320,11 +5320,63 @@ def make_dns() -> dict[str, Any]:
         },
         lambda c: "read" if c["result"] else "ignored",
     )
-    out = header("`_radiopost` TXT records: which are read and which ignored", {"RP-1": "§7.1"})
+    found = {
+        "radiopost.org": "dns",
+        "hampost.org": "list:radiopost.org",
+        "qrp-mail.example": "list:hampost.org",
+        "eoc-mail.example": "list:radiopost.org",
+    }
+    trust_in = [
+        ("radiopost.org", "looked up in DNS when its user first called", set(), None),
+        ("hampost.org", "named in radiopost.org's list", set(), None),
+        ("qrp-mail.example", "named in hampost.org's list: two hops", set(), None),
+        ("never-met.example", "never met", set(), None),
+        (
+            "eoc-mail.example",
+            "named in a list, blocked by the operator",
+            {"eoc-mail.example"},
+            None,
+        ),
+        ("hampost.org", "named by a post office the operator blocked", {"radiopost.org"}, None),
+        ("hampost.org", "outside the operator's limit", set(), {"radiopost.org"}),
+        ("radiopost.org", "inside the operator's limit", set(), {"radiopost.org"}),
+    ]
+    trust_cases = [
+        {
+            "domain": d,
+            "what": what,
+            "blocked": sorted(blocked),
+            "only": None if only is None else sorted(only),
+            "expect": rp.trusts(d, found, blocked, only),
+        }
+        for d, what, blocked, only in trust_in
+    ]
+    confirm(  # RP-1 §7.3: by DNS, or one hop of lists; the operator decides
+        trust_cases,
+        {
+            "looked up in DNS when its user first called": True,
+            "named in radiopost.org's list": True,
+            "named in hampost.org's list: two hops": False,
+            "never met": False,
+            "named in a list, blocked by the operator": False,
+            "named by a post office the operator blocked": False,
+            "outside the operator's limit": False,
+            "inside the operator's limit": True,
+        },
+    )
+    out = header(
+        "`_radiopost` TXT records, and which post offices a gateway trusts",
+        {"RP-1": "§7.1, §7.3"},
+    )
     out["rule"] = (
-        "Parsing `txt` gives `result`: the record's tags, or null when it must be ignored."
+        "Parsing `txt` gives `result`: the record's tags, or null when it must be ignored. A "
+        "gateway that learned post offices as `found` says (`dns`, or `list:` and the post office "
+        "whose list named it) trusts a case's `domain`, given its operator's `blocked` and `only`, "
+        "when `expect` is true (RP-1 §7.3)."
     )
     out["records"] = cases
+    out["found"] = found
+    out["trust_cases"] = trust_cases
     return out
 
 
