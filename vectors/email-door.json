@@ -1,0 +1,249 @@
+{
+  "radiopost_vectors": "Email at the door: taken or refused",
+  "format": 1,
+  "specs": {
+    "RP-6": "§2.1, §2.2"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "A post office with `context`'s accounts, accept lists and known post offices, given the envelope, the email and the mail server's DMARC and DKIM verdicts, answers `RCPT TO` and then `DATA` with `expect` (code and enhanced status; the text is its own). `data` is null when the recipient was refused. A case's `max_email_bytes` replaces the context's.",
+  "context": {
+    "accounts": {
+      "facundo@radiopost.org": [
+        "maria@example.com",
+        "@redcross.example"
+      ],
+      "shelter3@radiopost.org": [
+        "@redcross.example"
+      ]
+    },
+    "known_post_offices": [
+      "radiopost.org",
+      "hampost.org"
+    ],
+    "max_email_bytes": 10485760,
+    "sent_by_this_post_office": {
+      "<kdj2eowb2e7wqq4y5ttq@radiopost.org>": "50d3a23ac1d13f684398ece7"
+    }
+  },
+  "cases": [
+    {
+      "what": "Maria, on Facundo's list, DMARC pass",
+      "mail_from": "maria@example.com",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: Maria Alvarez <maria@example.com>\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+      "dmarc": "pass",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "250 2.0.0"
+      }
+    },
+    {
+      "what": "an address that does not exist",
+      "mail_from": "maria@example.com",
+      "rcpt_to": "nobody@radiopost.org",
+      "email": "From: Maria Alvarez <maria@example.com>\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+      "dmarc": "pass",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "550 5.1.1",
+        "data": null
+      }
+    },
+    {
+      "what": "a sender not on the list",
+      "mail_from": "stranger@example.net",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: stranger@example.net\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+      "dmarc": "pass",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "550 5.7.1",
+        "data": null
+      }
+    },
+    {
+      "what": "on the list with other capitals",
+      "mail_from": "Maria@EXAMPLE.com",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: Maria@EXAMPLE.com\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+      "dmarc": "pass",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "250 2.0.0"
+      }
+    },
+    {
+      "what": "a domain on the list (`@redcross.example`)",
+      "mail_from": "jorge@redcross.example",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: jorge@redcross.example\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+      "dmarc": "pass",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "250 2.0.0"
+      }
+    },
+    {
+      "what": "a subdomain of a listed domain is not that domain",
+      "mail_from": "x@mail.redcross.example",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: x@mail.redcross.example\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+      "dmarc": "pass",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "550 5.7.1",
+        "data": null
+      }
+    },
+    {
+      "what": "a user of a known RadioPost post office, DKIM pass for its domain",
+      "mail_from": "ana@hampost.org",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: Ana <ana@hampost.org>\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+      "dmarc": "pass",
+      "dkim_pass": [
+        "hampost.org"
+      ],
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "250 2.0.0"
+      }
+    },
+    {
+      "what": "claims a known post office's domain, but no DKIM signature passes for it",
+      "mail_from": "ana@hampost.org",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: Ana <ana@hampost.org>\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+      "dmarc": "none",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "550 5.7.1"
+      }
+    },
+    {
+      "what": "envelope sender on the list, header sender not",
+      "mail_from": "maria@example.com",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: someone@example.net\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+      "dmarc": "pass",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "550 5.7.1"
+      }
+    },
+    {
+      "what": "DMARC fails for the `From:` domain",
+      "mail_from": "maria@example.com",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: Maria Alvarez <maria@example.com>\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+      "dmarc": "fail",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "550 5.7.1"
+      }
+    },
+    {
+      "what": "over the post office's `max_email_bytes` (here 100)",
+      "mail_from": "maria@example.com",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: Maria Alvarez <maria@example.com>\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+      "dmarc": "pass",
+      "dkim_pass": [],
+      "max_email_bytes": 100,
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "552 5.3.4"
+      }
+    },
+    {
+      "what": "inline PGP",
+      "mail_from": "maria@example.com",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: maria@example.com\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\n-----BEGIN PGP MESSAGE-----\r\nhQEMA1x\r\n-----END PGP MESSAGE-----\r\n",
+      "dmarc": "pass",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "554 5.7.1"
+      }
+    },
+    {
+      "what": "PGP/MIME, multipart/encrypted",
+      "mail_from": "maria@example.com",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: maria@example.com\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"e\"\r\n\r\n--e\r\nContent-Type: application/pgp-encrypted\r\n\r\nVersion: 1\r\n--e\r\nContent-Type: application/octet-stream\r\n\r\nhQEMA1x\r\n--e--\r\n",
+      "dmarc": "pass",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "554 5.7.1"
+      }
+    },
+    {
+      "what": "S/MIME enveloped-data",
+      "mail_from": "maria@example.com",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: maria@example.com\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: application/pkcs7-mime; smime-type=enveloped-data; name=\"smime.p7m\"\r\nContent-Transfer-Encoding: base64\r\n\r\nMIAGCSqGSIb3DQEHA6CAMIACAQAxggE=\r\n",
+      "dmarc": "pass",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "554 5.7.1"
+      }
+    },
+    {
+      "what": "S/MIME signed, not encrypted",
+      "mail_from": "maria@example.com",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: maria@example.com\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: multipart/signed; protocol=\"application/pkcs7-signature\"; micalg=sha-256; boundary=\"s\"\r\n\r\n--s\r\nContent-Type: text/plain\r\n\r\nSigned, not encrypted.\r\n--s\r\nContent-Type: application/pkcs7-signature; name=\"smime.p7s\"\r\nContent-Transfer-Encoding: base64\r\n\r\nMIAGCSqGSIb3DQEHAqCAMIACAQEx\r\n--s--\r\n",
+      "dmarc": "pass",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "250 2.0.0"
+      }
+    },
+    {
+      "what": "an executable attachment",
+      "mail_from": "maria@example.com",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: maria@example.com\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"x\"\r\n\r\n--x\r\nContent-Type: text/plain\r\n\r\nSee the program.\r\n--x\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"Photos.EXE\"\r\nContent-Transfer-Encoding: base64\r\n\r\nTVqQAAMAAAAEAAAA\r\n--x--\r\n",
+      "dmarc": "pass",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "554 5.7.1"
+      }
+    },
+    {
+      "what": "a delivery report about a message this post office sent, null sender",
+      "mail_from": "",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: Mail Delivery System <MAILER-DAEMON@mx.example.com>\r\nTo: facundo@radiopost.org\r\nSubject: Undelivered Mail Returned to Sender\r\nDate: Mon, 09 Nov 2026 14:46:40 +0000\r\nMIME-Version: 1.0\r\nContent-Type: multipart/report; report-type=delivery-status; boundary=\"r\"\r\n\r\n--r\r\nContent-Type: text/plain\r\n\r\nYour message could not be delivered.\r\n--r\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; mx.example.com\r\n\r\nFinal-Recipient: rfc822; maria@example.com\r\nAction: failed\r\nStatus: 5.2.2\r\nDiagnostic-Code: smtp; 552 5.2.2 Mailbox full\r\n--r\r\nContent-Type: text/rfc822-headers\r\n\r\nFrom: Facundo <facundo@radiopost.org>\r\nTo: maria@example.com\r\nSubject: Re: Are you safe?\r\nMessage-ID: <kdj2eowb2e7wqq4y5ttq@radiopost.org>\r\n--r--\r\n",
+      "dmarc": "none",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "250 2.0.0"
+      }
+    },
+    {
+      "what": "null sender, not a delivery report",
+      "mail_from": "",
+      "rcpt_to": "facundo@radiopost.org",
+      "email": "From: MAILER-DAEMON@mx.example.com\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+      "dmarc": "none",
+      "dkim_pass": [],
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "550 5.7.1"
+      }
+    }
+  ]
+}

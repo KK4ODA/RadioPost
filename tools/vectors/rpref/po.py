@@ -98,6 +98,7 @@ class Session:
     statement: dict[int, Any]
     waiting: list[int]
     expires: int
+    gateway_session: str  # RP-3's session ID, for the Radio-Path header (RP-6 §3.2)
 
 
 @dataclass
@@ -284,7 +285,13 @@ class PostOffice:
                 accept.append({"id": rp.id_text(cid), "offset": 0})
         sid = "s_" + jws.b64u(self.fresh("session", 12))
         session = Session(
-            sid, gateway[4], stmt[1], stmt, [w.serial for w in waiting], self.now + SESSION_S
+            sid,
+            gateway[4],
+            stmt[1],
+            stmt,
+            [w.serial for w in waiting],
+            self.now + SESSION_S,
+            body.get("gateway_session", ""),
         )
         self.sessions[sid] = session
         return 201, {

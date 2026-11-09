@@ -1,0 +1,66 @@
+{
+  "radiopost_vectors": "Email out: what a message sent by radio becomes",
+  "format": 1,
+  "specs": {
+    "RP-6": "§3.1, §3.2, §4"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "A post office given the named message (messages.json) and the `context` makes an email whose headers have the values in `headers`, compared after unfolding and RFC 2047 decoding, and whose decoded text is the message's body and the footer. `email` is one spelling of it, before DKIM signing: header order, folding and the MIME boundary are the writer's. `part_hex`, where present, is the `application/radiopost-message` part's CBOR, exact (RP-6 §4).",
+  "context": {
+    "facundo-reply": "display name Facundo; session-01 (KK4ODA via N1CALL-10, started 1794235240, gateway session ec7b31841ec47c47); #419 came as <CAF.maria.419@mail.example.com>",
+    "facundo-to-ana": "as facundo-reply; every recipient (ana@hampost.org) at a RadioPost post office, so the part is added, with session-01's proof",
+    "shelter3-priority": "display name Shelter 3; N3CALL via N2CALL-5, started 1794234060, gateway session 86e5b36c010212ce; eoc@radiopost.org is in the same post office, so no part"
+  },
+  "emails": [
+    {
+      "message": "facundo-reply",
+      "headers": {
+        "From": "Facundo <facundo@radiopost.org>",
+        "To": "maria@example.com",
+        "Date": "Mon, 09 Nov 2026 14:30:00 +0000",
+        "Subject": "Re: Are you safe?",
+        "Message-ID": "<kdj2eowb2e7wqq4y5ttq@radiopost.org>",
+        "In-Reply-To": "<CAF.maria.419@mail.example.com>",
+        "References": "<CAF.maria.419@mail.example.com>",
+        "Radio-Path": "KK4ODA via N1CALL-10; at=2026-11-09T14:40:40Z; session=ec7b31841ec47c47",
+        "MIME-Version": "1.0",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Transfer-Encoding": "7bit"
+      },
+      "email": "From: Facundo <facundo@radiopost.org>\r\nTo: maria@example.com\r\nDate: Mon, 09 Nov 2026 14:30:00 +0000\r\nSubject: Re: Are you safe?\r\nMessage-ID: <kdj2eowb2e7wqq4y5ttq@radiopost.org>\r\nIn-Reply-To: <CAF.maria.419@mail.example.com>\r\nReferences: <CAF.maria.419@mail.example.com>\r\nRadio-Path: KK4ODA via N1CALL-10; at=2026-11-09T14:40:40Z; session=ec7b31841ec47c47\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 7bit\r\n\r\nWe are fine. Power is out, but the radio works.\r\n-- \r\nSent by amateur radio through RadioPost. Please reply in plain text, under 20 kB.\r\nAmateur radio carries no business content.\r\n",
+      "part_hex": null
+    },
+    {
+      "message": "facundo-to-ana",
+      "headers": {
+        "From": "Facundo <facundo@radiopost.org>",
+        "To": "ana@hampost.org",
+        "Date": "Mon, 09 Nov 2026 14:35:00 +0000",
+        "Subject": "Checking in",
+        "Message-ID": "<voo5eze7hjgflj4douaq@radiopost.org>",
+        "Radio-Path": "KK4ODA via N1CALL-10; at=2026-11-09T14:40:40Z; session=ec7b31841ec47c47",
+        "MIME-Version": "1.0",
+        "Content-Type": "multipart/mixed; boundary=\"radiopost-voo5eze7hjgflj4douaq\""
+      },
+      "email": "From: Facundo <facundo@radiopost.org>\r\nTo: ana@hampost.org\r\nDate: Mon, 09 Nov 2026 14:35:00 +0000\r\nSubject: Checking in\r\nMessage-ID: <voo5eze7hjgflj4douaq@radiopost.org>\r\nRadio-Path: KK4ODA via N1CALL-10; at=2026-11-09T14:40:40Z; session=ec7b31841ec47c47\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"radiopost-voo5eze7hjgflj4douaq\"\r\n\r\n--radiopost-voo5eze7hjgflj4douaq\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 7bit\r\n\r\nAna, I am on the road near Austin until Friday. All well here. 73, Facundo\r\n-- \r\nSent by amateur radio through RadioPost. Please reply in plain text, under 20 kB.\r\nAmateur radio carries no business content.\r\n\r\n--radiopost-voo5eze7hjgflj4douaq\r\nContent-Type: application/radiopost-message\r\nContent-Transfer-Encoding: base64\r\n\r\npQFYjgCmAQECdWZhY3VuZG9AcmFkaW9wb3N0Lm9yZwOBb2FuYUBoYW1wb3N0Lm9yZwUaavHaFAZr\r\nQ2hlY2tpbmcgaW4HeEtBbmEsIEkgYW0gb24gdGhlIHJvYWQgbmVhciBBdXN0aW4gdW50aWwgRnJp\r\nZGF5LiBBbGwgd2VsbCBoZXJlLiA3MywgRmFjdW5kbwoCWKKCWF2pAQECGQQRA3VmYWN1bmRvQHJh\r\nZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl/4/FN4toJ/R5oYwqGZj21OhKGcZBBhpq\r\n5oEABxprXSgACET7vV9cCQNYQPsVps+Kwu8OoY4S+IYuDQURtTGdiiAWwCVLjkiuQn8yyGFPYBwx\r\nRgWqZkcTRA0hp2/zHWHf97AtPw9u/joA7QYDWFemAXVmYWN1bmRvQHJhZGlvcG9zdC5vcmcCZktL\r\nNE9EQQNpTjFDQUxMLTEwBBpq8dtABUjz5AM5G/2w/QaCTFDTojrB0T9oQ5js50yrndJknzpMVaeD\r\ndQEEWECUPBMD8aMLhdLPbevo/RSgSRl8ZskuQ07q5tAdFPeYPc8R+3ljzQpJz0wO2J+GSoYnMtl6\r\nzDLjBHIVf/jHhU8BBRpq8dto\r\n\r\n--radiopost-voo5eze7hjgflj4douaq--\r\n",
+      "part_hex": "a501588e00a601010275666163756e646f40726164696f706f73742e6f726703816f616e614068616d706f73742e6f7267051a6af1da14066b436865636b696e6720696e07784b416e612c204920616d206f6e2074686520726f6164206e6561722041757374696e20756e74696c204672696461792e20416c6c2077656c6c20686572652e2037332c20466163756e646f0a0258a282585da90101021904110375666163756e646f40726164696f706f73742e6f726704664b4b344f4441055820e347cd11cf869b305668e5ff8fc5378b6827f479a18c2a1998f6d4e84a19c641061a6ae68100071a6b5d28000844fbbd5f5c09035840fb15a6cf8ac2ef0ea18e12f8862e0d0511b5319d8a2016c0254b8e48ae427f32c8614f601c314605aa664713440d21a76ff31d61dff7b02d3f0f6efe3a00ed06035857a60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d3130041a6af1db400548f3e403391bfdb0fd06824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501045840943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01051a6af1db68"
+    },
+    {
+      "message": "shelter3-priority",
+      "headers": {
+        "From": "Shelter 3 <shelter3@radiopost.org>",
+        "To": "eoc@radiopost.org",
+        "Date": "Mon, 09 Nov 2026 14:20:00 +0000",
+        "Subject": "=?utf-8?b?Q2Fmw6kgY2xvc2VkOyBzZcOxYWwgZMOpYmls?=",
+        "Message-ID": "<qwk75y43mpo7cn5rp7aa@radiopost.org>",
+        "Radio-Path": "N3CALL via N2CALL-5; at=2026-11-09T14:21:00Z; session=86e5b36c010212ce",
+        "Importance": "high",
+        "MIME-Version": "1.0",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Transfer-Encoding": "quoted-printable"
+      },
+      "email": "From: Shelter 3 <shelter3@radiopost.org>\r\nTo: eoc@radiopost.org\r\nDate: Mon, 09 Nov 2026 14:20:00 +0000\r\nSubject: =?utf-8?b?Q2Fmw6kgY2xvc2VkOyBzZcOxYWwgZMOpYmls?=\r\nMessage-ID: <qwk75y43mpo7cn5rp7aa@radiopost.org>\r\nRadio-Path: N3CALL via N2CALL-5; at=2026-11-09T14:21:00Z; session=86e5b36c010212ce\r\nImportance: high\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nNeed 40 cots and water for 3 days. Se=C3=B1al d=C3=A9bil despu=C3=A9s de la=\r\ns 18:00.\r\n--=20\r\nSent by amateur radio through RadioPost. Please reply in plain text, under =\r\n20 kB.\r\nAmateur radio carries no business content.\r\n",
+      "part_hex": null
+    }
+  ]
+}

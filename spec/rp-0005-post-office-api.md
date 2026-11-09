@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.4.0 |
+| **Version** | 0.5.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -203,6 +203,7 @@ Sent when a user's `HELLO` arrives (RP-3 §9), while the link turns around.
   "signature": "9b1f…",
   "credential": "gqNk…",
   "started": 1794326441,
+  "gateway_session": "ec7b31841ec47c47",
   "cursor": 418,
   "partials": [{"id": "k3q7m2x9a4d8f6h1j5n0", "offset": 512}],
   "renew": true
@@ -212,6 +213,8 @@ Sent when a user's `HELLO` arrives (RP-3 §9), while the link turns around.
 * `statement`: the user's session statement (RP-1 §6.1), deterministically encoded as the gateway
   rebuilt it from `HELLO` (or `AUTH`), base64url.
 * `started`: the gateway's clock when `HELLO` arrived.
+* `gateway_session`: the gateway's session ID (RP-3 `WELCOME` key 2) in hex. The post office records
+  it for the `Radio-Path` header of the mail the session sends (RP-6 §3.2).
 
 The post office verifies the credential and the statement in RP-1 §6.3's order, with the
 gateway's callsign as the station called and `started` in place of its clock, and then checks
@@ -288,7 +291,7 @@ oldest first:
 ```json
 {"sessions": [{
   "statement": "pgF2…", "signature": "9b1f…", "credential": "gqNk…",
-  "started": 1794326441,
+  "started": 1794326441, "gateway_session": "ec7b31841ec47c47",
   "messages": [{"id": "a3f9…", "air": "AXic…"}],
   "pickups": [419, 420]
 }]}
@@ -362,7 +365,8 @@ same device key. A new device enrolls with a new code instead.
 
 ```json
 {"usual_gateways": ["KK4ODA-1", "N2CALL-5"],
- "auto_bytes": 5000,
+ "auto_bytes": 1000,
+ "attach_bytes": 16384,
  "radio_skips_read": true}
 ```
 
@@ -370,6 +374,7 @@ same device key. A new device enrolls with a new code instead.
 |---|---|
 | `usual_gateways` | Where copies are placed ahead (§5.8). |
 | `auto_bytes` | A default for the client's `auto` (RP-3 §5.1). |
+| `attach_bytes` | Mail from the Internet carries its attachments up to this air-form size; above it they are held (RP-6 §2.4). The post office's default when unset is its own, at most its `max_air_bytes`. |
 | `radio_skips_read` | Mail already read in an ordinary mail program is not offered by radio. |
 
 ### 6.4 Gateway registration
@@ -425,3 +430,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.2.0 | 2026-11-09 | Login, enrollment and gateway registration each sign under a context of their own; test vectors (`vectors/api.json`). |
 | 0.3.0 | 2026-11-09 | A message's air form is made once and served the same every time (§5.3), so that downloads resume across gateways (RP-3 §7). |
 | 0.4.0 | 2026-11-09 | The HTTP status of each code, 401 and 403 (§1, §2); login and enrollment failures (§3.2, §6.1); public documents checked by RP-0 §5 and RP-1 §7.2 (§4); the order of a session's checks, `decline` entries, `waiting`'s order (§5.2); unknown serials (§5.3, §5.5); the codes of a refused message (§5.4); a report's answer (§5.6); test vectors. |
+| 0.5.0 | 2026-11-09 | `gateway_session` in a session and a report, for RP-6's `Radio-Path` (§5.2, §5.6); the setting `attach_bytes` (§6.3). |

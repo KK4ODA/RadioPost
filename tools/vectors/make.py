@@ -14,15 +14,18 @@ from __future__ import annotations
 
 import argparse
 import base64
+import email.utils
 import hashlib
 import json
 import sys
+from datetime import datetime, timedelta, timezone
+from email.header import Header
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from rpref import cbor, ed25519, jws, po, rp, rpmi
+from rpref import cbor, ed25519, jws, mail, po, rp, rpmi
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "vectors"
@@ -2207,13 +2210,14 @@ def deliver_waiting(office: po.PostOffice, ex: Exchanges | None) -> None:
 
 
 def session_request(hello: dict[int, Any], started: int, who: str = "facundo") -> dict[str, Any]:
-    """RP-5 §5.2's body, from a HELLO the gateway received at `started`."""
+    """RP-5 §5.2's body, from a HELLO the gateway received at `started` (session-01's)."""
     stmt = rp.statement_from_hello(hello)
     return {
         "statement": jws.b64u(cbor.encode(stmt)),
         "signature": jws.b64u(hello[15]),
         "credential": jws.b64u(credential(who)),
         "started": started,
+        "gateway_session": SESSION_ID.hex(),
         "cursor": hello[9],
     }
 
@@ -2251,6 +2255,7 @@ def api_story() -> list[dict[str, Any]]:
     settings = {
         "usual_gateways": ["KK4ODA-1", "N2CALL-5"],
         "auto_bytes": AUTO,
+        "attach_bytes": ATTACH_BYTES,
         "radio_skips_read": True,
     }
     ex.call(at - 30, "Facundo's laptop", "PUT", "/settings", settings, user)
@@ -2479,6 +2484,645 @@ def make_api_exchanges() -> dict[str, Any]:
     return out
 
 
+# -- email-door.json, email-in.json, email-out.json --------------------------------------------
+
+
+def crlf(text: str) -> bytes:
+    return text.replace("\n", "\r\n").encode("utf-8")
+
+
+def mail_date(seconds: int, hours: int) -> str:
+    """An RFC 5322 date as a sender in another time zone writes it."""
+    zone = timezone(timedelta(hours=hours))
+    return email.utils.format_datetime(datetime.fromtimestamp(seconds, zone))
+
+
+MARIA_ID = "<CAF.maria.419@mail.example.com>"
+MARIA_421_ID = "<CAF.maria.421@mail.example.com>"
+FACUNDO_ACCEPT = ["maria@example.com", "@redcross.example"]
+ATTACH_BYTES = 16384  # Facundo's setting (RP-5 §6.3)
+MAX_AIR_BYTES = 65536  # radiopost.org's limit (RP-5 §4.1)
+
+
+def maria_email(name: str) -> bytes:
+    """Maria's mail as her provider sends it; it becomes `name` exactly (messages.json)."""
+    f = MESSAGES[name]
+    head = (
+        "From: Maria Alvarez <maria@example.com>\n"
+        "To: Facundo <facundo@radiopost.org>\n"
+        f"Subject: {f['subject']}\n"
+        f"Date: {mail_date(f['date'], -6)}\n"
+        f"Message-ID: {MARIA_ID if name == 'maria-419' else MARIA_421_ID}\n"
+        "MIME-Version: 1.0\n"
+    )
+    if "files" not in f:
+        return crlf(
+            head + 'Content-Type: text/plain; charset="UTF-8"\n'
+            "Content-Transfer-Encoding: 7bit\n\n" + f["body"]
+        )
+    photo = f["files"][0]
+    b64 = base64.b64encode(photo["data"]).decode()
+    lines = "\n".join(b64[i : i + 76] for i in range(0, len(b64), 76))
+    return crlf(
+        head + 'Content-Type: multipart/mixed; boundary="b1"\n\n'
+        "--b1\n"
+        'Content-Type: text/plain; charset="UTF-8"\n\n' + f["body"] + "--b1\n"
+        f"Content-Type: {photo['type']}\n"
+        f'Content-Disposition: attachment; filename="{photo["name"]}"\n'
+        "Content-Transfer-Encoding: base64\n\n" + lines + "\n--b1--\n"
+    )
+
+
+def facundo_reply_id() -> str:
+    return f"<{rp.id_text(encoded('facundo-reply')[1])}@radiopost.org>"
+
+
+def inbound_emails() -> list[tuple[str, str, bytes, int, dict[str, Any]]]:
+    """(name, what it shows, the email, its serial, extra context) for §2.4."""
+    subject = "Re: Are you safe? ¡Qué alivio!"
+    quoted = crlf(
+        "From: Maria Alvarez <maria@example.com>\n"
+        "To: Facundo <facundo@radiopost.org>\n"
+        f"Subject: {Header(subject, 'utf-8').encode()}\n"
+        f"Date: {mail_date(T_SESSION + 1800, -6)}\n"
+        f"Message-ID: <CAF.maria.422@mail.example.com>\n"
+        f"In-Reply-To: {facundo_reply_id()}\n"
+        f"References: {MARIA_ID} {facundo_reply_id()}\n"
+        "MIME-Version: 1.0\n"
+        'Content-Type: text/plain; charset="UTF-8"\n'
+        "Content-Transfer-Encoding: quoted-printable\n\n"
+        "=C2=A1Que=CC=81 alivio! So glad to hear it. Tell us if you need anything.\n\n"
+        "Maria\n\n"
+        "On Mon, 9 Nov 2026 at 08:30, Facundo <facundo@radiopost.org>\n"
+        "wrote:\n"
+        "> We are fine. Power is out, but the radio works.\n"
+        ">\n"
+        "> --=20\n"
+        "> Sent by amateur radio through RadioPost. Please reply in plain text, under 20 kB.\n"
+        "> Amateur radio carries no business content.\n"
+    )
+    outlook = crlf(
+        "From: Jorge Ruiz <jorge@redcross.example>\n"
+        "To: Facundo <facundo@RadioPost.org>, EOC <eoc@radiopost.org>\n"
+        "Cc: Shelter 3 <shelter3@RADIOPOST.ORG>\n"
+        "Subject: RE: Shelter list\n"
+        f"Date: {mail_date(T_SESSION + 3600, -6)}\n"
+        "Message-ID: <BY5PR.jorge.1@redcross.example>\n"
+        "MIME-Version: 1.0\n"
+        'Content-Type: text/plain; charset="us-ascii"\n\n'
+        "Facundo, the list is in the next mail. Shelters 3 and 7 have room.\n\n"
+        "Jorge\n\n"
+        "________________________________\n"
+        "From: Facundo <facundo@radiopost.org>\n"
+        "Sent: Monday, November 9, 2026 9:00 AM\n"
+        "To: Jorge Ruiz <jorge@redcross.example>\n"
+        "Subject: Shelter list\n\n"
+        "Can you send me the shelter list?\n"
+    )
+    alternative = crlf(
+        "From: Red Cross Texas <updates@redcross.example>\n"
+        "To: facundo@radiopost.org\n"
+        "Subject: Shelter update\n"
+        "Date: sometime Tuesday\n"
+        "MIME-Version: 1.0\n"
+        'Content-Type: multipart/alternative; boundary="alt"\n\n'
+        "--alt\n"
+        'Content-Type: text/plain; charset="utf-8"\n\n'
+        "Shelters in Bastrop County are open. Water at the high school.\n"
+        "--alt\n"
+        'Content-Type: text/html; charset="utf-8"\n\n'
+        "<p>Shelters in <b>Bastrop County</b> are open.</p>\n"
+        "--alt--\n"
+    )
+    html_only = crlf(
+        "From: Red Cross Texas <updates@redcross.example>\n"
+        "To: facundo@radiopost.org\n"
+        "Subject: Where to get water\n"
+        f"Date: {mail_date(T_SESSION + 7200, -6)}\n"
+        "MIME-Version: 1.0\n"
+        'Content-Type: text/html; charset="utf-8"\n\n'
+        "<html><head><style>p {color: red}</style></head><body>\n"
+        '<p>Water &amp; ice at <a href="https://example.org/water">these places</a>.</p>\n'
+        '<p>Fuel: see <a href="https://example.org/fuel">the fuel map</a>.</p>\n'
+        "</body></html>\n"
+    )
+    pdf = stream("policy pdf", 40000)
+    b64 = base64.b64encode(pdf).decode()
+    held = crlf(
+        "From: Maria Alvarez <maria@example.com>\n"
+        "To: Facundo <facundo@radiopost.org>\n"
+        "Subject: Insurance papers\n"
+        f"Date: {mail_date(T_SESSION + 9000, -6)}\n"
+        "MIME-Version: 1.0\n"
+        'Content-Type: multipart/mixed; boundary="b2"\n\n'
+        "--b2\n"
+        'Content-Type: text/plain; charset="UTF-8"\n\n'
+        "Here are the insurance papers, in case you need them.\n"
+        "--b2\n"
+        "Content-Type: application/pdf\n"
+        'Content-Disposition: attachment; filename="policy.pdf"\n'
+        "Content-Transfer-Encoding: base64\n\n"
+        + "\n".join(b64[i : i + 76] for i in range(0, len(b64), 76))
+        + "\n--b2--\n"
+    )
+    return [
+        (
+            "maria-419",
+            "Maria's mail: plain text, a Date in her time zone",
+            maria_email("maria-419"),
+            419,
+            {},
+        ),
+        (
+            "maria-421",
+            "a photo under Facundo's `attach_bytes`, carried in `files`",
+            maria_email("maria-421"),
+            421,
+            {},
+        ),
+        (
+            "maria-reply",
+            "a reply: an encoded subject, quoted-printable text in decomposed form, the quotation "
+            "under an `On … wrote:` of two lines trimmed, `reply_to` from `In-Reply-To`",
+            quoted,
+            422,
+            {},
+        ),
+        (
+            "jorge-outlook",
+            "an Outlook reply: the history under the rule and `From:`/`Sent:` block trimmed; "
+            "display names dropped, domains in lowercase",
+            outlook,
+            423,
+            {},
+        ),
+        (
+            "redcross-alternative",
+            "multipart/alternative: the plain part is used; an unreadable Date gives the arrival",
+            alternative,
+            424,
+            {},
+        ),
+        (
+            "redcross-html",
+            "HTML only: one rendering as text, the links listed at the end",
+            html_only,
+            425,
+            {},
+        ),
+        (
+            "maria-held",
+            "a 40 kB attachment over Facundo's `attach_bytes`: held at the post office",
+            held,
+            426,
+            {"held_refs": [stream("held ref 426", 8)]},
+        ),
+    ]
+
+
+def inbound_context(extra: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "arrival": T_SESSION + 10800,
+        "attach_bytes": ATTACH_BYTES,
+        "max_air_bytes": MAX_AIR_BYTES,
+        "sent_message_ids": {facundo_reply_id(): encoded("facundo-reply")[1]},
+        **extra,
+    }
+
+
+def json_fields(fields: dict[str, Any]) -> dict[str, Any]:
+    out = to_json(fields)
+    if "reply_to_hex" in out:
+        out["reply_to_hex"] = fields["reply_to"].hex()
+    return out
+
+
+def dsn() -> bytes:
+    """A delivery failure report (RFC 3464) for Facundo's reply to Maria."""
+    return crlf(
+        "From: Mail Delivery System <MAILER-DAEMON@mx.example.com>\n"
+        "To: facundo@radiopost.org\n"
+        "Subject: Undelivered Mail Returned to Sender\n"
+        f"Date: {mail_date(T_SESSION + 400, 0)}\n"
+        "MIME-Version: 1.0\n"
+        'Content-Type: multipart/report; report-type=delivery-status; boundary="r"\n\n'
+        "--r\n"
+        "Content-Type: text/plain\n\n"
+        "Your message could not be delivered.\n"
+        "--r\n"
+        "Content-Type: message/delivery-status\n\n"
+        "Reporting-MTA: dns; mx.example.com\n\n"
+        "Final-Recipient: rfc822; maria@example.com\n"
+        "Action: failed\n"
+        "Status: 5.2.2\n"
+        "Diagnostic-Code: smtp; 552 5.2.2 Mailbox full\n"
+        "--r\n"
+        "Content-Type: text/rfc822-headers\n\n"
+        "From: Facundo <facundo@radiopost.org>\n"
+        "To: maria@example.com\n"
+        "Subject: Re: Are you safe?\n"
+        f"Message-ID: {facundo_reply_id()}\n"
+        "--r--\n"
+    )
+
+
+def make_email_in() -> dict[str, Any]:
+    cases = []
+    for name, what, raw, serial, extra in inbound_emails():
+        fields, from_html = mail.to_message(raw, inbound_context(extra))
+        canonical = mail.encode_fields(fields)
+        if name in MESSAGES:
+            assert canonical == encoded(name)[0], f"{name} does not convert to messages.json's"
+        cases.append(
+            {
+                "name": name,
+                "what": what,
+                "email": raw.decode("utf-8"),
+                "serial": serial,
+                "context": {k: v.hex() if isinstance(v, bytes) else v for k, v in extra.items()}
+                | ({"held_refs": [r.hex() for r in extra["held_refs"]]} if extra else {}),
+                "message": json_fields(fields),
+                "canonical_hex": canonical.hex(),
+                "content_id_text": rp.id_text(rp.content_id(canonical)),
+                "exact": not from_html,
+            }
+        )
+    bounce = mail.bounce(
+        dsn(),
+        {
+            "domain": "radiopost.org",
+            "sender": "facundo@radiopost.org",
+            "arrival": T_SESSION + 405,
+            "sent_message_ids": {facundo_reply_id(): encoded("facundo-reply")[1]},
+        },
+    )
+    bounce_canonical = mail.encode_fields(bounce)
+    between = []
+    sent_headers, sent = outbound()["facundo-to-ana"]
+    del sent_headers
+    for what, raw in between_emails(sent):
+        part = mail.find_part(raw)
+        assert part is not None
+        result, canonical = mail.check_part(part, "ana@hampost.org", po_keys(), {})
+        used = "part" if canonical is not None else "email"
+        if canonical is None:
+            fields, _ = mail.to_message(
+                raw,
+                {
+                    "arrival": T_SESSION + 120,
+                    "attach_bytes": ATTACH_BYTES,
+                    "max_air_bytes": MAX_AIR_BYTES,
+                },
+            )
+            canonical = mail.encode_fields(fields)
+        between.append(
+            {
+                "what": what,
+                "email": raw.decode("utf-8"),
+                "recipient": "ana@hampost.org",
+                "part_check": result,
+                "message_from": used,
+                "canonical_hex": canonical.hex(),
+                "content_id_text": rp.id_text(rp.content_id(canonical)),
+            }
+        )
+    assert between[0]["canonical_hex"] == encoded("facundo-to-ana")[0].hex()
+    assert all(b["message_from"] == "email" for b in between[1:])
+    out = header("Email in: what an email becomes", {"RP-6": "§2.4, §3.3, §4"})
+    out["rule"] = (
+        "A post office given `email` (and, for a case, its `context`) makes `message`: exactly "
+        "`canonical_hex` and its content ID where `exact` is true. Where it is false the text "
+        "came from HTML, and another rendering is as good (RP-6 §2.4 step 3); every other field "
+        "must still match. The message is stored under `serial`. In `between`, the receiving post "
+        "office checks the `application/radiopost-message` part (RP-6 §4) for `recipient`: "
+        "`part_check` ok means it uses the part's message, anything else that it converts the "
+        "email instead."
+    )
+    out["context"] = {
+        "post_office": "radiopost.org",
+        "recipient": "facundo@radiopost.org",
+        "arrival": T_SESSION + 10800,
+        "attach_bytes": ATTACH_BYTES,
+        "max_air_bytes": MAX_AIR_BYTES,
+        "sent_by_this_post_office": {facundo_reply_id(): encoded("facundo-reply")[1].hex()},
+    }
+    out["emails"] = cases
+    out["bounce"] = {
+        "what": "a delivery failure report for Facundo's reply to Maria (RP-6 §3.3)",
+        "email": dsn().decode("utf-8"),
+        "arrival": T_SESSION + 405,
+        "message": json_fields(bounce),
+        "canonical_hex": bounce_canonical.hex(),
+        "content_id_text": rp.id_text(rp.content_id(bounce_canonical)),
+    }
+    out["between"] = between
+    return out
+
+
+def proof_of(name: str) -> dict[str, Any]:
+    """Session-01's proof for one of its messages (RP-1 §6.4), as RP-6 §4's part carries it."""
+    hello = session_pdus()[0][1][0][1]
+    return {
+        "air": air0(name),
+        "credential": credential("facundo"),
+        "statement": cbor.encode(rp.statement_from_hello(hello)),
+        "signature": hello[15],
+        "started": T_SESSION + 40,
+    }
+
+
+def outbound() -> dict[str, tuple[dict[str, str], bytes]]:
+    """§3.1, §3.2: Facundo's two messages of session-01, and Shelter 3's priority message."""
+    session01 = {
+        "operator": "KK4ODA",
+        "gateways": ["N1CALL-10"],
+        "started": T_SESSION + 40,
+        "session": SESSION_ID.hex(),
+    }
+    facundo = {"display_name": "Facundo", "radio_path": session01}
+    return {
+        "facundo-reply": mail.from_message(
+            MESSAGES["facundo-reply"],
+            facundo | {"message_ids": {encoded("maria-419")[1]: MARIA_ID}},
+        ),
+        "facundo-to-ana": mail.from_message(
+            MESSAGES["facundo-to-ana"], facundo | {"proof": proof_of("facundo-to-ana")}
+        ),
+        "shelter3-priority": mail.from_message(
+            MESSAGES["shelter3-priority"],
+            {
+                "display_name": "Shelter 3",
+                "radio_path": {
+                    "operator": "N3CALL",
+                    "gateways": ["N2CALL-5"],
+                    "started": T_SESSION - 1140,
+                    "session": stream("shelter session id", 8).hex(),
+                },
+            },
+        ),
+    }
+
+
+def between_emails(sent: bytes) -> list[tuple[str, bytes]]:
+    """The email of facundo-to-ana as it reaches hampost.org, and three that must not pass."""
+    good = mail.find_part(sent)
+    assert good is not None
+    head, _, _ = sent.partition(b"application/radiopost-message")
+
+    def with_part(proof: dict[str, Any]) -> bytes:
+        new = mail.base64_lines(mail.part_bytes(proof)).encode()
+        old = mail.base64_lines(good).encode()
+        assert sent.count(old) == 1
+        return sent.replace(old, new)
+
+    swapped = proof_of("facundo-to-ana") | {"air": air0("facundo-reply")}
+    bent_sig = bytearray(proof_of("facundo-to-ana")["signature"])
+    bent_sig[0] ^= 1
+    changed_text = MESSAGES["facundo-to-ana"] | {"body": "Ana, send money. Facundo\n"}
+    changed = proof_of("facundo-to-ana") | {"air": rp.air_form(mail.encode_fields(changed_text), 0)}
+    del head
+    return [
+        ("the part as sent: its message is used, priority and content ID kept", sent),
+        (
+            "the part carries another message of the same session, not addressed to Ana",
+            with_part(swapped),
+        ),
+        (
+            "the statement's signature changed",
+            with_part(proof_of("facundo-to-ana") | {"signature": bytes(bent_sig)}),
+        ),
+        ("the part's message changed: its content ID is not in the statement", with_part(changed)),
+    ]
+
+
+def make_email_out() -> dict[str, Any]:
+    cases = []
+    for name, (headers, raw) in outbound().items():
+        cases.append(
+            {
+                "message": name,
+                "headers": headers,
+                "email": raw.decode("utf-8"),
+                "part_hex": (mail.find_part(raw) or b"").hex() or None,
+            }
+        )
+    out = header("Email out: what a message sent by radio becomes", {"RP-6": "§3.1, §3.2, §4"})
+    out["rule"] = (
+        "A post office given the named message (messages.json) and the `context` makes an email "
+        "whose headers have the values in `headers`, compared after unfolding and RFC 2047 "
+        "decoding, and whose decoded text is the message's body and the footer. `email` is one "
+        "spelling of it, before DKIM signing: header order, folding and the MIME boundary are "
+        "the writer's. `part_hex`, where present, is the `application/radiopost-message` part's "
+        "CBOR, exact (RP-6 §4)."
+    )
+    out["context"] = {
+        "facundo-reply": "display name Facundo; session-01 (KK4ODA via N1CALL-10, started "
+        f"{T_SESSION + 40}, gateway session {SESSION_ID.hex()}); #419 came as {MARIA_ID}",
+        "facundo-to-ana": "as facundo-reply; every recipient (ana@hampost.org) at a RadioPost "
+        "post office, so the part is added, with session-01's proof",
+        "shelter3-priority": "display name Shelter 3; N3CALL via N2CALL-5, started "
+        f"{T_SESSION - 1140}, gateway session {stream('shelter session id', 8).hex()}; "
+        "eoc@radiopost.org is in the same post office, so no part",
+    }
+    out["emails"] = cases
+    return out
+
+
+DOOR_CONTEXT = {
+    "accounts": {
+        "facundo@radiopost.org": FACUNDO_ACCEPT,
+        "shelter3@radiopost.org": ["@redcross.example"],
+    },
+    "known_post_offices": ["radiopost.org", "hampost.org"],
+    "max_email_bytes": 10485760,
+}
+
+
+def door_email(sender: str, extra: str = "", body: str = "Hello.\n") -> bytes:
+    return crlf(
+        f"From: {sender}\nTo: facundo@radiopost.org\nSubject: Test\n"
+        f"Date: {mail_date(T_SESSION, 0)}\nMIME-Version: 1.0\n{extra}"
+        + ("" if "Content-Type" in extra else 'Content-Type: text/plain; charset="utf-8"\n')
+        + "\n"
+        + body
+    )
+
+
+def make_email_door() -> dict[str, Any]:
+    maria = door_email("Maria Alvarez <maria@example.com>")
+    pgp = door_email(
+        "maria@example.com",
+        body="-----BEGIN PGP MESSAGE-----\nhQEMA1x\n-----END PGP MESSAGE-----\n",
+    )
+    smime_enc = door_email(
+        "maria@example.com",
+        'Content-Type: application/pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"\n'
+        "Content-Transfer-Encoding: base64\n",
+        "MIAGCSqGSIb3DQEHA6CAMIACAQAxggE=\n",
+    )
+    smime_signed = door_email(
+        "maria@example.com",
+        'Content-Type: multipart/signed; protocol="application/pkcs7-signature"; '
+        'micalg=sha-256; boundary="s"\n',
+        "--s\nContent-Type: text/plain\n\nSigned, not encrypted.\n--s\n"
+        'Content-Type: application/pkcs7-signature; name="smime.p7s"\n'
+        "Content-Transfer-Encoding: base64\n\nMIAGCSqGSIb3DQEHAqCAMIACAQEx\n--s--\n",
+    )
+    encrypted = door_email(
+        "maria@example.com",
+        'Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; boundary="e"\n',
+        "--e\nContent-Type: application/pgp-encrypted\n\nVersion: 1\n--e\n"
+        "Content-Type: application/octet-stream\n\nhQEMA1x\n--e--\n",
+    )
+    exe = door_email(
+        "maria@example.com",
+        'Content-Type: multipart/mixed; boundary="x"\n',
+        "--x\nContent-Type: text/plain\n\nSee the program.\n--x\n"
+        "Content-Type: application/octet-stream\n"
+        'Content-Disposition: attachment; filename="Photos.EXE"\n'
+        "Content-Transfer-Encoding: base64\n\nTVqQAAMAAAAEAAAA\n--x--\n",
+    )
+    report = dsn()
+    spam = door_email("MAILER-DAEMON@mx.example.com")
+    sent = {facundo_reply_id(): encoded("facundo-reply")[1].hex()}
+    base = {"dmarc": "pass", "dkim_pass": []}
+    cases_in: list[tuple[str, str, str, bytes, dict[str, Any]]] = [
+        (
+            "Maria, on Facundo's list, DMARC pass",
+            "maria@example.com",
+            "facundo@radiopost.org",
+            maria,
+            base,
+        ),
+        (
+            "an address that does not exist",
+            "maria@example.com",
+            "nobody@radiopost.org",
+            maria,
+            base,
+        ),
+        (
+            "a sender not on the list",
+            "stranger@example.net",
+            "facundo@radiopost.org",
+            door_email("stranger@example.net"),
+            base,
+        ),
+        (
+            "on the list with other capitals",
+            "Maria@EXAMPLE.com",
+            "facundo@radiopost.org",
+            door_email("Maria@EXAMPLE.com"),
+            base,
+        ),
+        (
+            "a domain on the list (`@redcross.example`)",
+            "jorge@redcross.example",
+            "facundo@radiopost.org",
+            door_email("jorge@redcross.example"),
+            base,
+        ),
+        (
+            "a subdomain of a listed domain is not that domain",
+            "x@mail.redcross.example",
+            "facundo@radiopost.org",
+            door_email("x@mail.redcross.example"),
+            base,
+        ),
+        (
+            "a user of a known RadioPost post office, DKIM pass for its domain",
+            "ana@hampost.org",
+            "facundo@radiopost.org",
+            door_email("Ana <ana@hampost.org>"),
+            {"dmarc": "pass", "dkim_pass": ["hampost.org"]},
+        ),
+        (
+            "claims a known post office's domain, but no DKIM signature passes for it",
+            "ana@hampost.org",
+            "facundo@radiopost.org",
+            door_email("Ana <ana@hampost.org>"),
+            {"dmarc": "none", "dkim_pass": []},
+        ),
+        (
+            "envelope sender on the list, header sender not",
+            "maria@example.com",
+            "facundo@radiopost.org",
+            door_email("someone@example.net"),
+            base,
+        ),
+        (
+            "DMARC fails for the `From:` domain",
+            "maria@example.com",
+            "facundo@radiopost.org",
+            maria,
+            {"dmarc": "fail", "dkim_pass": []},
+        ),
+        (
+            "over the post office's `max_email_bytes` (here 100)",
+            "maria@example.com",
+            "facundo@radiopost.org",
+            maria,
+            base | {"max_email_bytes": 100},
+        ),
+        ("inline PGP", "maria@example.com", "facundo@radiopost.org", pgp, base),
+        (
+            "PGP/MIME, multipart/encrypted",
+            "maria@example.com",
+            "facundo@radiopost.org",
+            encrypted,
+            base,
+        ),
+        ("S/MIME enveloped-data", "maria@example.com", "facundo@radiopost.org", smime_enc, base),
+        (
+            "S/MIME signed, not encrypted",
+            "maria@example.com",
+            "facundo@radiopost.org",
+            smime_signed,
+            base,
+        ),
+        ("an executable attachment", "maria@example.com", "facundo@radiopost.org", exe, base),
+        (
+            "a delivery report about a message this post office sent, null sender",
+            "",
+            "facundo@radiopost.org",
+            report,
+            {"dmarc": "none", "dkim_pass": []},
+        ),
+        (
+            "null sender, not a delivery report",
+            "",
+            "facundo@radiopost.org",
+            spam,
+            {"dmarc": "none", "dkim_pass": []},
+        ),
+    ]
+    cases = []
+    for what, sender, rcpt, raw, verdicts in cases_in:
+        ctx = DOOR_CONTEXT | verdicts | {"sent_message_ids": sent}
+        replies = mail.door({"mail_from": sender, "rcpt_to": rcpt}, raw, ctx)
+        case = {
+            "what": what,
+            "mail_from": sender,
+            "rcpt_to": rcpt,
+            "email": raw.decode("utf-8"),
+            "dmarc": verdicts["dmarc"],
+            "dkim_pass": verdicts["dkim_pass"],
+        }
+        if "max_email_bytes" in verdicts:
+            case["max_email_bytes"] = verdicts["max_email_bytes"]
+        cases.append(case | {"expect": replies})
+    out = header("Email at the door: taken or refused", {"RP-6": "§2.1, §2.2"})
+    out["rule"] = (
+        "A post office with `context`'s accounts, accept lists and known post offices, given the "
+        "envelope, the email and the mail server's DMARC and DKIM verdicts, answers `RCPT TO` and "
+        "then `DATA` with `expect` (code and enhanced status; the text is its own). `data` is "
+        "null when the recipient was refused. A case's `max_email_bytes` replaces the context's."
+    )
+    out["context"] = DOOR_CONTEXT | {"sent_by_this_post_office": sent}
+    out["cases"] = cases
+    return out
+
+
 # -- dns.json and api.json -----------------------------------------------------------------------
 
 
@@ -2567,6 +3211,9 @@ FILES = {
     "dns.json": make_dns,
     "api.json": make_api,
     "jws.json": make_jws,
+    "email-door.json": make_email_door,
+    "email-in.json": make_email_in,
+    "email-out.json": make_email_out,
     "api-exchanges.json": make_api_exchanges,
 }
 
@@ -2623,6 +3270,8 @@ def self_check(name: str, data: dict[str, Any]) -> None:
         check_jws(data)
     if name == "api-exchanges.json":
         check_api(data)
+    if name == "email-out.json":
+        check_email_out(data)
 
 
 def check_rpmi(data: dict[str, Any]) -> None:
@@ -2724,6 +3373,25 @@ def check_api(data: dict[str, Any]) -> None:
     for e in by_path["GET /copies?after=&wait=60"]:
         for item in e["response"]["body"]["items"]:
             assert jws.unb64u(item["air"]) == air0(dict((s, n) for s, n in WAITING)[item["serial"]])
+
+
+def check_email_out(data: dict[str, Any]) -> None:
+    """Each email, read back by a mail library, gives its message's values and text (RP-6 §3)."""
+    for case in data["emails"]:
+        fields = MESSAGES[case["message"]]
+        parsed = mail.parse(case["email"].encode("utf-8"))
+        assert str(parsed["Subject"]) == fields["subject"]
+        assert parsed["To"].addresses[0].addr_spec == fields["to"][0]
+        assert parsed["From"].addresses[0].addr_spec == fields["from"]
+        when = email.utils.parsedate_to_datetime(str(parsed["Date"]))
+        assert int(when.timestamp()) == fields["date"]
+        cid = rp.id_text(encoded(case["message"])[1])
+        assert str(parsed["Message-ID"]) == f"<{cid}@{mail.domain_of(fields['from'])}>"
+        body = parsed.get_body(preferencelist=("plain",))
+        assert body is not None
+        assert body.get_content().replace("\r\n", "\n") == fields["body"] + mail.FOOTER
+        if case["part_hex"]:
+            assert mail.find_part(case["email"].encode("utf-8")) == bytes.fromhex(case["part_hex"])
 
 
 def pdus_of(t: dict[str, Any]) -> list[dict[int, Any]]:

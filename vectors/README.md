@@ -31,6 +31,9 @@ anything but checking an implementation.
 | `dns.json` | RP-1 §7.1 | `_radiopost` TXT records, and which of them are read and which ignored. |
 | `api.json` | RP-5 §3.2, §6.1, §6.4 | The login, enrollment and gateway registration signatures. |
 | `jws.json` | RP-0 §5, RP-1 §7.2, RP-5 §4 | The post office's four public documents as JWS, and eight verifications: by the key in DNS, by a new key only the info document lists, a changed payload, `alg` none, a key that lists itself, broken forms. |
+| `email-door.json` | RP-6 §2.1, §2.2 | Eighteen emails at the SMTP door, with the replies to `RCPT TO` and `DATA`: lists and their matching, a known post office with and without DKIM, DMARC, size, every kind of encryption and a signed message, an executable, and delivery reports with their null sender. |
+| `email-in.json` | RP-6 §2.4, §3.3, §4 | Seven emails and the messages they become (Maria's two become `maria-419` and `maria-421` exactly; replies trimmed, HTML, a held attachment), a delivery report that becomes a bounce, and Facundo's message reaching Ana's post office with its RadioPost part, then three parts that must not be used. |
+| `email-out.json` | RP-6 §3, §4 | Facundo's two messages of session-01 and a priority message as email: headers, text, footer, `Radio-Path`, and the RadioPost part between post offices. |
 | `api-exchanges.json` | RP-5 | Requests to a reference post office and its answers: a tablet enrolled, a gateway registered, copies placed ahead and dropped, logins and an expired token, session-01 at the post office, an offline gateway's report; and ten cases, from a session opened cleanly to a replayed statement and messages refused for each reason. |
 
 Each file starts with the same header: what it holds (`radiopost_vectors`), the file format
@@ -46,7 +49,8 @@ implementation must reproduce and what it must refuse.
 * A verification case's `expect` is `ok` or an error name from RP-0 §9.3.
 * RPMI messages (RP-4) and the post office API's bodies (RP-5) are JSON, which has no one
   spelling: they compare as JSON values, not as text, and a `text` or `title` member, written for
-  people, need not match. Their `data` is standard base64,
+  people, need not match. Emails (RP-6) compare by header value, unfolded and decoded, and by
+  decoded text; header order, folding and MIME boundaries are the writer's. Their `data` is standard base64,
   and exact. In a conversation, how a simulated `received` splits the bytes, and the link IDs, are
   the simulated modem's choices; a real adapter makes its own.
 
@@ -96,8 +100,9 @@ specification disagree, the specification is right and the reference has a bug.
 
 ## Not yet covered
 
-Email conversion (RP-6), forwarding (RP-7), and the post office API's settings, accept list and
-credential renewal (RP-5 §6.2, §6.3 in part, §6.5). The modem interface's mapping to real modems (RP-4 §9) is informative and
+Forwarding (RP-7, an outline), DKIM signing (the mail server's), photo re-encoding (RP-6 §2.4
+step 5, a SHOULD this reference skips), and the post office API's accept list and credential
+renewal (RP-5 §6.2, §6.5). The modem interface's mapping to real modems (RP-4 §9) is informative and
 has none.
 
 ## Licence

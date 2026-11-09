@@ -16,8 +16,9 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   library only; `ruff.toml` holds the lint settings.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`
   from `tools/vectors/rpref/` (deterministic CBOR, Ed25519 after RFC 8032, RadioPost's objects,
-  RPMI adapters on a simulated channel in `rpmi.py`, JWS in `jws.py`, a post office in `po.py`;
-  standard library only, self-tested against RFC 8032 §7.1 and RFC 8949 Appendix A at every run).
+  RPMI adapters on a simulated channel in `rpmi.py`, JWS in `jws.py`, a post office in `po.py`,
+  email in and out in `mail.py`; standard library only, self-tested against RFC 8032 §7.1 and
+  RFC 8949 Appendix A at every run).
 - `tools/check_docs.py` — headers against change logs and the index, relative links, `RP-n §x.y`
   references, SPDX lines. `.github/workflows/check.yml` runs it with ruff (pinned 0.16.9: preview
   rules), `make.py --check` and the figure generators (no diff), on Python 3.12 and 3.13, for
@@ -37,7 +38,8 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   byte-exact. RPMI messages and API bodies compare as JSON values, not text. Writing a vector is
   how a spec gap is found: the first run found five, the resumed and station-to-station sessions
   three more, the modem interface's conversations seven unwritten rules, the post office's
-  exchanges most of RP-5's error behaviour and JWS's missing context rule.
+  exchanges most of RP-5's error behaviour and JWS's missing context rule, the email vectors that
+  bounces were refused at the door and `Radio-Path` lacked its session ID.
 - **Numbers are measured.** Sizes and times in the specs come from encoding the examples, not
   estimates.
 - **Cross-references** are written `RP-n §x.y`; check them when sections move.
