@@ -17,7 +17,9 @@ a change.
    * its **version** (RP-0 §8.2: patch for wording, minor for an addition others can ignore, major
      for one they cannot) and its **change log**;
    * the **registries** in RP-0 §9, if you add a number, a code or a signature context;
-   * the **test vectors**, once they exist, so implementations can check the change;
+   * the **test vectors** (`vectors/`), if the change alters any: change the reference in
+     `tools/vectors/`, rerun `python tools/vectors/make.py`, and commit the files it writes. Never
+     edit a vector by hand;
    * the **detailed design**, if a decision changes or a new one is made.
 3. **Say what it removes** as well as what it adds. Every rule has a cost for every implementer.
 4. A specification marked **Candidate** or **Stable** changes only as RP-0 §8.1 and §8.3 allow.
@@ -38,9 +40,22 @@ python tools/figures/design.py      # docs/design/fig/ and spec/fig/
 
 Edit the script, run it, and commit the script and the SVGs together.
 
+## Test vectors
+
+`vectors/` is made by `tools/vectors/make.py` from a small reference (Python, standard library
+only). Before a pull request:
+
+```
+python tools/vectors/make.py --check    # rebuild in memory; fail if a file differs
+```
+
+`vectors/README.md` says what each file holds and how an implementation uses it.
+
 ## Code
 
-There is no code yet. When there is, each program will say how to build and test it.
+The only code so far is the figures and the test vectors' reference. Code is checked with
+`ruff check` and `ruff format --check` (settings in `ruff.toml`). When there are programs, each
+will say how to build and test it.
 
 ## Licences of contributions
 

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.1 |
+| **Version** | 0.2.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -195,6 +195,9 @@ Each document has a version `MAJOR.MINOR.PATCH`:
   code, a new optional endpoint).
 * **MAJOR**: a change an existing implementation cannot ignore.
 
+While a document is a **Draft** its version stays below 1.0.0: a change to its requirements
+raises MINOR, anything else PATCH. A Draft's next MINOR may break what the last one allowed.
+
 ### 8.3 Protocol versions
 
 The protocols themselves carry small integer versions, negotiated by the programs:
@@ -215,7 +218,7 @@ version for at least a year.
 
 Changes are proposed as pull requests to the RadioPost repository, as described in
 `CONTRIBUTING.md`. A change to a protocol must update, in the same pull request: the specification,
-its change log, the affected registries (§9), and the test vectors once they exist.
+its change log, the affected registries (§9), and the test vectors (§8.6).
 
 ### 8.5 Licence
 
@@ -223,6 +226,15 @@ The specifications are published under the Creative Commons Attribution 4.0 Inte
 (CC BY 4.0). Anyone may implement them, copy them, adapt them and build on them, for any purpose,
 commercial or not, without asking, as long as they credit the RadioPost project. Code in the
 RadioPost repository is under the MIT licence or the Apache License 2.0, at the user's option.
+
+### 8.6 Test vectors
+
+The files in `vectors/` hold exact inputs and outputs for RP-1, RP-2 and RP-3 and for RP-5's
+signatures, made from published test keys by a reference written for the purpose
+(`tools/vectors/`, standard library only). Every implementation SHOULD check itself against
+them. A change that alters any vector updates the files in the same pull request, and
+`python tools/vectors/make.py --check` must pass. Where a vector and a specification disagree,
+the specification is right and the reference has a bug.
 
 ---
 
@@ -241,7 +253,9 @@ As in §2. Numbers are never reused.
 |---|---|---|
 | `RadioPost-credential-v1` | A credential's payload | RP-1 §4 |
 | `RadioPost-session-v1` | A session statement | RP-1 §6 |
-| `RadioPost-api-v1` | A post office API login | RP-5 §3 |
+| `RadioPost-api-login-v1` | A post office API login | RP-5 §3.2 |
+| `RadioPost-api-enroll-v1` | A new device's enrollment | RP-5 §6.1 |
+| `RadioPost-api-gateway-v1` | A gateway's registration | RP-5 §6.4 |
 
 ### 9.3 Error codes
 
@@ -278,3 +292,4 @@ means the same thing wherever it appears.
 |---|---|---|
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0 (§8.5). |
+| 0.2.0 | 2026-11-09 | Three API signature contexts in place of one (§9.2); Draft versions stay below 1.0.0 (§8.2); test vectors (§8.6). |

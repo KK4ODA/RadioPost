@@ -1,0 +1,153 @@
+{
+  "radiopost_vectors": "Session statements and how they verify",
+  "format": 1,
+  "specs": {
+    "RP-1": "§6",
+    "RP-3": "§5.1, §5.3"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "A client produces exactly `statement_hex` and `signature_hex`. A verifier given a case's statement, signature, credential (already verified), its own callsign, its clock, the challenge it issued and the (address, nonce) pairs it has seen returns `expect`, checking in RP-1 §6.3's order.",
+  "statements": [
+    {
+      "name": "time-form",
+      "credential": "facundo",
+      "diagnostic": "{1: \"facundo@radiopost.org\", 2: \"KK4ODA\", 3: \"N1CALL-10\", 4: 1794235200, 5: h'f3e403391bfdb0fd', 6: [h'50d3a23ac1d13f684398ece7', h'ab9dd2649f3a4c55a7837501']}",
+      "statement_hex": "a60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d3130041a6af1db400548f3e403391bfdb0fd06824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signed_input_hex": "526164696f506f73742d73657373696f6e2d763100a60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d3130041a6af1db400548f3e403391bfdb0fd06824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01"
+    },
+    {
+      "name": "challenge-form",
+      "credential": "facundo",
+      "diagnostic": "{1: \"facundo@radiopost.org\", 2: \"KK4ODA\", 3: \"N1CALL-10\", 6: [h'50d3a23ac1d13f684398ece7', h'ab9dd2649f3a4c55a7837501'], 7: h'1b1ad94a572993440327a6d9be381e3d'}",
+      "statement_hex": "a50175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d313006824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a783750107501b1ad94a572993440327a6d9be381e3d",
+      "signed_input_hex": "526164696f506f73742d73657373696f6e2d763100a50175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d313006824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a783750107501b1ad94a572993440327a6d9be381e3d",
+      "signature_hex": "a9904b079d5806a9d9be1001467f0ae7d3949121c384de80ec59a2ea65b1c84eaca9ca5df6b03a061abf2e8b03261d78ab3f34a278c40ebc05a32f777b7b110d"
+    },
+    {
+      "name": "pickup-only",
+      "credential": "shelter3-n3call",
+      "diagnostic": "{1: \"shelter3@radiopost.org\", 2: \"N3CALL\", 3: \"N2CALL-5\", 4: 1794235200, 5: h'abd502536c70d9f0', 6: []}",
+      "statement_hex": "a601767368656c7465723340726164696f706f73742e6f726702664e3343414c4c03684e3243414c4c2d35041a6af1db400548abd502536c70d9f00680",
+      "signed_input_hex": "526164696f506f73742d73657373696f6e2d763100a601767368656c7465723340726164696f706f73742e6f726702664e3343414c4c03684e3243414c4c2d35041a6af1db400548abd502536c70d9f00680",
+      "signature_hex": "3a4b43b1521ede4b7ddef66389b449de520a85cc1b2fff263598e181dd38aacdc3394463c506d1da33528409918e5cb86934dec22e34c76b8ce8d09a4e915506"
+    }
+  ],
+  "verification": [
+    {
+      "what": "valid, 41 s after the client's clock",
+      "statement_hex": "a60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d3130041a6af1db400548f3e403391bfdb0fd06824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
+      "credential": "facundo",
+      "verifier": "N1CALL-10",
+      "now": 1794235241,
+      "challenge_hex": null,
+      "seen": [],
+      "expect": "ok"
+    },
+    {
+      "what": "exactly 600 s apart: still inside",
+      "statement_hex": "a60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d3130041a6af1db400548f3e403391bfdb0fd06824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
+      "credential": "facundo",
+      "verifier": "N1CALL-10",
+      "now": 1794235800,
+      "challenge_hex": null,
+      "seen": [],
+      "expect": "ok"
+    },
+    {
+      "what": "601 s apart: sign a challenge instead",
+      "statement_hex": "a60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d3130041a6af1db400548f3e403391bfdb0fd06824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
+      "credential": "facundo",
+      "verifier": "N1CALL-10",
+      "now": 1794235801,
+      "challenge_hex": null,
+      "seen": [],
+      "expect": "time-skew"
+    },
+    {
+      "what": "nonce seen before: sign a challenge instead",
+      "statement_hex": "a60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d3130041a6af1db400548f3e403391bfdb0fd06824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
+      "credential": "facundo",
+      "verifier": "N1CALL-10",
+      "now": 1794235241,
+      "challenge_hex": null,
+      "seen": [
+        [
+          "facundo@radiopost.org",
+          "f3e403391bfdb0fd"
+        ]
+      ],
+      "expect": "time-skew"
+    },
+    {
+      "what": "verified by a gateway that was not the one called",
+      "statement_hex": "a60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d3130041a6af1db400548f3e403391bfdb0fd06824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
+      "credential": "facundo",
+      "verifier": "KK4ODA-1",
+      "now": 1794235241,
+      "challenge_hex": null,
+      "seen": [],
+      "expect": "not-authorized"
+    },
+    {
+      "what": "a message removed from the list after signing",
+      "statement_hex": "a60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d3130041a6af1db400548f3e403391bfdb0fd06814c50d3a23ac1d13f684398ece7",
+      "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
+      "credential": "facundo",
+      "verifier": "N1CALL-10",
+      "now": 1794235241,
+      "challenge_hex": null,
+      "seen": [],
+      "expect": "signature-invalid"
+    },
+    {
+      "what": "operator not the credential's",
+      "statement_hex": "a60175666163756e646f40726164696f706f73742e6f726702664e3043414c4c03694e3143414c4c2d3130041a6af1db400548f3e403391bfdb0fd06824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
+      "credential": "facundo",
+      "verifier": "N1CALL-10",
+      "now": 1794235241,
+      "challenge_hex": null,
+      "seen": [],
+      "expect": "not-authorized"
+    },
+    {
+      "what": "challenge form, the challenge issued",
+      "statement_hex": "a50175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d313006824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a783750107501b1ad94a572993440327a6d9be381e3d",
+      "signature_hex": "a9904b079d5806a9d9be1001467f0ae7d3949121c384de80ec59a2ea65b1c84eaca9ca5df6b03a061abf2e8b03261d78ab3f34a278c40ebc05a32f777b7b110d",
+      "credential": "facundo",
+      "verifier": "N1CALL-10",
+      "now": 1794236100,
+      "challenge_hex": "1b1ad94a572993440327a6d9be381e3d",
+      "seen": [],
+      "expect": "ok"
+    },
+    {
+      "what": "challenge form, another challenge issued",
+      "statement_hex": "a50175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d313006824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a783750107501b1ad94a572993440327a6d9be381e3d",
+      "signature_hex": "a9904b079d5806a9d9be1001467f0ae7d3949121c384de80ec59a2ea65b1c84eaca9ca5df6b03a061abf2e8b03261d78ab3f34a278c40ebc05a32f777b7b110d",
+      "credential": "facundo",
+      "verifier": "N1CALL-10",
+      "now": 1794236100,
+      "challenge_hex": "1835323e992eaff8a2857c5ea82d47fc",
+      "seen": [],
+      "expect": "signature-invalid"
+    },
+    {
+      "what": "pickup only, no messages offered",
+      "statement_hex": "a601767368656c7465723340726164696f706f73742e6f726702664e3343414c4c03684e3243414c4c2d35041a6af1db400548abd502536c70d9f00680",
+      "signature_hex": "3a4b43b1521ede4b7ddef66389b449de520a85cc1b2fff263598e181dd38aacdc3394463c506d1da33528409918e5cb86934dec22e34c76b8ce8d09a4e915506",
+      "credential": "shelter3-n3call",
+      "verifier": "N2CALL-5",
+      "now": 1794235200,
+      "challenge_hex": null,
+      "seen": [],
+      "expect": "ok"
+    }
+  ]
+}

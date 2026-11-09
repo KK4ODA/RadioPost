@@ -14,12 +14,21 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   work, the open questions.
 - `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`. Standard
   library only; `ruff.toml` holds the lint settings.
+- `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`
+  from `tools/vectors/rpref/` (deterministic CBOR, Ed25519 after RFC 8032, RadioPost's objects;
+  standard library only, self-tested against RFC 8032 §7.1 and RFC 8949 Appendix A at every run).
 
 ## Conventions
 - **Living documents.** Every spec has a status, a version (`MAJOR.MINOR.PATCH`, RP-0 §8.2) and a
   change log. A change updates, in the same commit: the text, the version, the change log, the RP-0
-  §9 registries if numbers are added, the test vectors (once they exist), and the design document
-  if a decision changes.
+  §9 registries if numbers are added, the test vectors, and the design document if a decision
+  changes.
+- **Test vectors are generated, never edited by hand.** A change that alters one is a spec change:
+  change the reference or `make.py`, run `python tools/vectors/make.py`, and commit the files with
+  the spec. `python tools/vectors/make.py --check` must pass before a push. A vector that disagrees
+  with a spec is a bug in the reference. DEFLATE air forms are marked `"exact": false` (zlib
+  versions differ); `--check` inflates them. The session vector sends uncompressed so it stays
+  byte-exact. Writing a vector is how a spec gap is found: the first run found five.
 - **Numbers are measured.** Sizes and times in the specs come from encoding the examples, not
   estimates.
 - **Cross-references** are written `RP-n §x.y`; check them when sections move.

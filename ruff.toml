@@ -1,4 +1,4 @@
-# Lint and format settings for RadioPost's Python (the figure generators, for now).
+# Lint and format settings for RadioPost's Python (the figure generators and the vectors' reference).
 line-length = 100
 target-version = "py312"
 
@@ -6,11 +6,21 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "B", "UP", "RUF", "SIM", "PL"]
 preview = true
 ignore = [
-  "PLR0913", # drawing calls legitimately take many parameters
-  "PLR2004", # figure coordinates are literals by nature
-  "PLR0915", # a figure is one long function
-  "RUF001", "RUF002", "RUF003", # unicode punctuation in labels and docstrings
+  "too-many-arguments", # drawing calls legitimately take many parameters
+  "magic-value-comparison", # figure coordinates are literals by nature
+  "too-many-statements", # a figure is one long function
+  # A strict decoder and a step-by-step verifier return at each check.
+  "too-many-return-statements",
+  "too-many-branches",
+  # Unicode punctuation in labels and docstrings.
+  "ambiguous-unicode-character-string",
+  "ambiguous-unicode-character-docstring",
+  "ambiguous-unicode-character-comment",
 ]
 
 [format]
 quote-style = "double"
+
+[lint.per-file-ignores]
+# A vector builder names every value it writes, so a reader can follow it to the file.
+"tools/vectors/make.py" = ["too-many-locals"]

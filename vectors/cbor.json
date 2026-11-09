@@ -1,0 +1,123 @@
+{
+  "radiopost_vectors": "Deterministic CBOR as RadioPost uses it",
+  "format": 1,
+  "specs": {
+    "RP-0": "§4.1",
+    "RFC 8949": "§4.2.1"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "An encoder produces exactly `hex` from the value in `diagnostic`. A decoder refuses every `invalid` entry.",
+  "valid": [
+    {
+      "what": "small integer",
+      "diagnostic": "23",
+      "hex": "17"
+    },
+    {
+      "what": "one-byte integer",
+      "diagnostic": "24",
+      "hex": "1818"
+    },
+    {
+      "what": "two-byte integer",
+      "diagnostic": "1000",
+      "hex": "1903e8"
+    },
+    {
+      "what": "four-byte integer, a time",
+      "diagnostic": "1794235200",
+      "hex": "1a6af1db40"
+    },
+    {
+      "what": "negative integer",
+      "diagnostic": "-1000",
+      "hex": "3903e7"
+    },
+    {
+      "what": "empty byte string",
+      "diagnostic": "h''",
+      "hex": "40"
+    },
+    {
+      "what": "12-byte content ID",
+      "diagnostic": "h'a3f9c27e15d0b84466e2c901'",
+      "hex": "4ca3f9c27e15d0b84466e2c901"
+    },
+    {
+      "what": "text with non-ASCII",
+      "diagnostic": "\"Señal ☕\"",
+      "hex": "6a5365c3b1616c20e29895"
+    },
+    {
+      "what": "booleans in an array",
+      "diagnostic": "[true, false]",
+      "hex": "82f5f4"
+    },
+    {
+      "what": "map keys in byte order: 1, 2, 10, 23, 24, 100",
+      "diagnostic": "{1: 0, 2: 0, 10: 0, 23: 0, 24: 0, 100: 0}",
+      "hex": "a6010002000a001700181800186400"
+    },
+    {
+      "what": "text map keys after integer keys",
+      "diagnostic": "{1: \"a\", \"a\": 1}",
+      "hex": "a2016161616101"
+    },
+    {
+      "what": "shorter text keys first",
+      "diagnostic": "{\"a\": 0, \"c\": 0, \"bb\": 0}",
+      "hex": "a361610061630062626200"
+    },
+    {
+      "what": "nested",
+      "diagnostic": "{1: [1, [2, 3]], 2: {1: h'01'}}",
+      "hex": "a201820182020302a1014101"
+    }
+  ],
+  "invalid": [
+    {
+      "hex": "1817",
+      "why": "23 in two bytes: not the shortest form"
+    },
+    {
+      "hex": "190064",
+      "why": "100 in three bytes: not the shortest form"
+    },
+    {
+      "hex": "5f4101ff",
+      "why": "an indefinite-length byte string"
+    },
+    {
+      "hex": "9f01ff",
+      "why": "an indefinite-length array"
+    },
+    {
+      "hex": "a2020101",
+      "why": "map keys out of order (2 before 1)"
+    },
+    {
+      "hex": "a201010101",
+      "why": "a repeated map key"
+    },
+    {
+      "hex": "f93c00",
+      "why": "a floating-point number (1.0, half precision)"
+    },
+    {
+      "hex": "c11a6912b240",
+      "why": "a tag (1, a time)"
+    },
+    {
+      "hex": "0101",
+      "why": "bytes after the item"
+    },
+    {
+      "hex": "62c3",
+      "why": "text shorter than its length"
+    },
+    {
+      "hex": "61ff",
+      "why": "text that is not UTF-8"
+    }
+  ]
+}

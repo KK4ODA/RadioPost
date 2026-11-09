@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.1 |
+| **Version** | 0.2.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -165,20 +165,24 @@ the map from them and checks the signature over the rebuilt encoding.
 
 ### 6.3 Verifying a statement
 
-A verifier MUST check:
+A verifier MUST check, in this order, and stop at the first failure:
 
 1. The credential, by §5, with the flags `send` if `messages` is not empty, and `receive` if mail
-   is to be handed over.
-2. `address` and `operator` equal the credential's.
-3. `gateway` is the verifier's own callsign, when the verifier is the gateway called.
+   is to be handed over. Otherwise the error §5 gives.
+2. `address` and `operator` equal the credential's. Otherwise `not-authorized`.
+3. `gateway` is the verifier's own callsign, when the verifier is the gateway called. Otherwise
+   `not-authorized`.
 4. The signature, with the credential's device key. Otherwise `signature-invalid`.
-5. In time form: `time` is within **600 seconds** of the verifier's clock (otherwise `time-skew`),
-   and the pair (`address`, `nonce`) has not been seen in the last 1 200 seconds. The gateway keeps
-   a replay cache for that long.
-6. In challenge form: `challenge` is the one the verifier issued for this session.
+5. In time form: `time` is within **600 seconds** of the verifier's clock (600 is within), and the
+   pair (`address`, `nonce`) has not been seen in the last 1 200 seconds; the gateway keeps a replay
+   cache for that long. Otherwise `time-skew`: the gateway asks for a challenge (RP-3 §5.2).
+6. In challenge form: `challenge` is the one the verifier issued for this session. Otherwise
+   `signature-invalid`: a signature over another challenge is a signature over another statement.
 
 A post office verifying a statement relayed later (RP-5 §5.6) checks 1, 2 and 4, and checks `time`
 against the gateway's reported session time instead of its own clock.
+
+Test vectors: `vectors/credentials.json` (§4, §5) and `vectors/statements.json` (§6.1–§6.3).
 
 ### 6.4 Proof of submission
 
@@ -207,10 +211,17 @@ _radiopost.radiopost.org.  TXT  "v=RP1; t=key; kid=3f9a1c22; p=Hk3sW…9Q="
 | `t=api` | `url`: the base URL of the post office API (RP-5). Exactly one. |
 | `t=key` | `kid`: the key ID in hex; `p`: the 32-byte public key in standard base64. One per current key. |
 
-Tags are separated by `;` and optional spaces. Unknown tags MUST be ignored. A record whose `v` is
-not `RP1` MUST be ignored.
+Tags are separated by `;`; spaces around a tag, its name and its value are ignored. Unknown tags
+MUST be ignored. A whole record MUST be ignored when:
+
+* its `v` is not `RP1`, or its `t` is missing or unknown;
+* a tag appears more than once;
+* an API record's `url` does not begin `https://`;
+* a key record's `p` is not 32 bytes in base64, or its `kid` is not that key's ID (RP-0 §5).
 
 The domain SHOULD be signed with DNSSEC, and a verifier that validates DNSSEC SHOULD use it.
+
+Test vectors: `vectors/dns.json`.
 
 ### 7.2 The info document
 
@@ -291,3 +302,4 @@ A serial MAY be dropped from the list once the credential it names has expired.
 |---|---|---|
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
+| 0.2.0 | 2026-11-09 | Each statement check names its error, a replay answers `time-skew` (§6.3); when a DNS record is ignored (§7.1); test vectors. |

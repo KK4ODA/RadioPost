@@ -1,0 +1,37 @@
+{
+  "radiopost_vectors": "Post office API signatures",
+  "format": 1,
+  "specs": {
+    "RP-5": "§3.2, §6.1, §6.4",
+    "RP-0": "§9.2"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "Each `signature_hex` is the device key's Ed25519 signature over `signed_input_hex`.",
+  "login": {
+    "base_url": "https://po.radiopost.org/rp/v1",
+    "credential": "gateway-n1call-10",
+    "credential_hex": "82585da90101021907e103726e3163616c6c4068616d706f73742e6f726704694e3143414c4c2d3130055820144be5fb969d95af9b608d09306458bb253565c8b0e3a7186eb31389d7244c53061a6ae68100071a6b5d2800084484219d0009095840ebd6ddaa02b9de7029987d103d1fe2f780f98c0ebe0e36c90c8a357c7012335fd917b6fe5d16cb1ac4e88444d8e0d21dfb86b4691e8a7734bb01c801423d830a",
+    "device": "device:gateway-n1call-10",
+    "nonce_hex": "6ec00d447bc6e0460abe93151059faf587f7a76272e2181b38e1c538f7c7f610",
+    "signed_input_hex": "526164696f506f73742d6170692d6c6f67696e2d7631006ec00d447bc6e0460abe93151059faf587f7a76272e2181b38e1c538f7c7f61068747470733a2f2f706f2e726164696f706f73742e6f72672f72702f7631",
+    "signature_hex": "ed468a1e60160fab3ff303bab3c67bb77b97b17dfb22ae557bdaa5412cb37b08487af38575f5a1e10fbfec0b89b1a26efd454b7d257deb9346e2e5630902c508"
+  },
+  "enroll": {
+    "base_url": "https://po.radiopost.org/rp/v1",
+    "address": "facundo@radiopost.org",
+    "operator": "KK4ODA",
+    "code": "7Q4F-AZ9K",
+    "device": "device:facundo-tablet",
+    "device_public_hex": "abb3bc80099c4586dd2179167299d979c5321ff0c970f634337661f597b1b65f",
+    "signed_input_hex": "526164696f506f73742d6170692d656e726f6c6c2d763100375134462d415a394b68747470733a2f2f706f2e726164696f706f73742e6f72672f72702f7631",
+    "signature_hex": "c2be19df250afb4f7465c3f2b57964dc9da2b89655d20e4000552512b9d4e1f1c6dc33b4c582adb5f6c9b06817b7719993d34a1a77c796e388470af798c2ab08"
+  },
+  "register_gateway": {
+    "base_url": "https://po.radiopost.org/rp/v1",
+    "callsign": "KK4ODA-1",
+    "device": "device:gateway-kk4oda-1",
+    "device_public_hex": "2f6b3d90f90779da12f0ed7e049a3995d35cf27828432ada576354db61042c9b",
+    "signed_input_hex": "526164696f506f73742d6170692d676174657761792d7631004b4b344f44412d3168747470733a2f2f706f2e726164696f706f73742e6f72672f72702f7631",
+    "signature_hex": "8a83c045bd41454d32a1374345823bfa6c438ced9680f014c8ddb5f8902142ed47048db33e2966142130d06dd3737785bb6b6f1c8b3dde82739a115acb677a0c"
+  }
+}

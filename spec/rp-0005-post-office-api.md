@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.1 |
+| **Version** | 0.2.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -75,7 +75,7 @@ No body. Answer:
 {"credential": "gqNk…", "nonce": "q7m2x9a4…", "signature": "9b1f…"}
 ```
 
-`signature` is the device key's signature (RP-0 §5) with context `RadioPost-api-v1` over the 32
+`signature` is the device key's signature (RP-0 §5) with context `RadioPost-api-login-v1` over the 32
 nonce bytes followed by the UTF-8 bytes of the base URL.
 
 The post office verifies the credential (RP-1 §5) and the signature, and answers:
@@ -309,7 +309,7 @@ by email, in person). The client generates a device key and sends:
  "device": "Hk3sW…", "signature": "…"}
 ```
 
-`signature` is the new device key's signature with context `RadioPost-api-v1` over the UTF-8 bytes
+`signature` is the new device key's signature with context `RadioPost-api-enroll-v1` over the UTF-8 bytes
 of the code followed by those of the base URL: it proves the client holds the key. The post office
 checks the code and the operator, and answers `{"credential": "gqNk…"}`.
 
@@ -337,8 +337,9 @@ same device key. A new device enrolls with a new code instead.
 A licensed user registers a gateway they operate:
 
 * **`POST /gateways`** with a user token: `{"record": {…}, "device": "…", "signature": "…"}`, the
-  record as in §4.4 and the gateway's own device key, proved as in §6.1 (the signed bytes are the
-  record's callsign instead of a code). The post office checks that the record's `operator` is the
+  record as in §4.4 and the gateway's own device key, proved by the gateway key's signature with
+  context `RadioPost-api-gateway-v1` over the UTF-8 bytes of the record's callsign followed by
+  those of the base URL. The post office checks that the record's `operator` is the
   token's operator, and answers `{"credential": "…"}` with the `gateway` flag, the gateway's
   callsign as `operator` and the user's address as `address`.
 * **`PUT /gateways/{callsign}`** updates the record; **`DELETE`** withdraws it.
@@ -371,3 +372,4 @@ How the accept list is used is RP-6's.
 |---|---|---|
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
+| 0.2.0 | 2026-11-09 | Login, enrollment and gateway registration each sign under a context of their own; test vectors (`vectors/api.json`). |

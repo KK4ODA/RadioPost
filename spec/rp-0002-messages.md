@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.1 |
+| **Version** | 0.1.2 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -128,26 +128,27 @@ text. Content IDs SHOULD be shown, if at all, as the first 6 base32 characters (
 
 ## 7. Example *(informative)*
 
-The message Facundo sends Maria from the concept document, written as diagnostic notation:
+The message Facundo sends Maria from the concept document, written as diagnostic notation. Its
+`reply_to` is the content ID of Maria's message (`maria-419` in the vectors):
 
 ```
 {
   1: 1,
   2: "facundo@radiopost.org",
   3: ["maria@example.com"],
-  5: 1794326400,
+  5: 1794234600,
   6: "Re: Are you safe?",
   7: "We are fine. Power is out, but the radio works.\n",
-  10: h'a3f9c27e15d0b84466e2c901'
+  10: h'47342a407f37d3189af7f7c1'
 }
 ```
 
-Its canonical encoding is 136 bytes. DEFLATE does not shorten a message this short, so the sender
-sends it uncompressed: an air form of 137 bytes, compression byte `0`. A message of a few paragraphs
-roughly halves (469 bytes to 234 with DEFLATE).
+Its canonical encoding is 136 bytes and its content ID `kdj2eowb2e7wqq4y5ttq`. Uncompressed, its
+air form is 137 bytes; DEFLATE saves a single byte (136). A longer message shrinks much more: the
+shelter roster (`eoc-420`) is 1 297 bytes, and 547 as a DEFLATE air form.
 
-*To come:* exact bytes, content IDs and air forms as test vectors in `vectors/`, which every
-implementation checks itself against.
+Test vectors: `vectors/messages.json` holds these and other messages with their exact encodings,
+content IDs and air forms, and air forms that must be refused.
 
 ---
 
@@ -157,3 +158,4 @@ implementation checks itself against.
 |---|---|---|
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
+| 0.1.2 | 2026-11-09 | The example is the test vector's, its sizes measured; test vectors. |

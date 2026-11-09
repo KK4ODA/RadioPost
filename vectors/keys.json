@@ -1,0 +1,89 @@
+{
+  "radiopost_vectors": "Test keys used by every other vector file",
+  "format": 1,
+  "specs": {
+    "RP-0": "§5",
+    "RP-1": "§2"
+  },
+  "made_by": "tools/vectors/make.py",
+  "warning": "TEST KEYS ONLY. Their private halves are published here; never use them for anything but checking an implementation against these vectors.",
+  "how_derived": "seed = SHA-256(\"RadioPost test vector key: \" + label)",
+  "keys": [
+    {
+      "label": "po:radiopost.org",
+      "what": "Post office key of radiopost.org",
+      "seed_hex": "3f3790587adae4c525690470b0080c684a3792bc8922ef8422a8992b8ccc8fc1",
+      "public_hex": "7660c2935993ad2ef49cd83fc90b9261ac6ad7f011ea6a0fce972440333e5c06",
+      "kid_hex": "fbbd5f5c",
+      "not_before": 1767225600,
+      "not_after": 1830297600
+    },
+    {
+      "label": "po:radiopost.org:2025",
+      "what": "radiopost.org's previous key",
+      "seed_hex": "4e843b6f471e9fe7c8b353c83a8be6d36ed09edb7fcbe8e4e82f781e3dcb7dbc",
+      "public_hex": "73ea95617a6ca0cc58d77bb3e08f1322f78eb2295e37e7586edece7b8fe175bc",
+      "kid_hex": "5534b9df",
+      "not_before": 1735689600,
+      "not_after": 1767225600
+    },
+    {
+      "label": "po:hampost.org",
+      "what": "Post office key of hampost.org",
+      "seed_hex": "9a44ca1bd0df049171972b12292d80740d7b68be0b7039162a1a55578bc287d3",
+      "public_hex": "bbf337a4acde6dac1125727f744e6728ebcf8602c49774f4be43a63cad75b7b4",
+      "kid_hex": "84219d00",
+      "not_before": 1767225600,
+      "not_after": 1830297600
+    },
+    {
+      "label": "device:facundo",
+      "what": "Facundo's laptop: facundo@radiopost.org, KK4ODA",
+      "seed_hex": "ac6283c18871a8da988239196775b67462047f1b3bab2cab789e258d10672a97",
+      "public_hex": "e347cd11cf869b305668e5ff8fc5378b6827f479a18c2a1998f6d4e84a19c641",
+      "kid_hex": "67f23e8f"
+    },
+    {
+      "label": "device:facundo-tablet",
+      "what": "Facundo's tablet, enrolled for receiving only",
+      "seed_hex": "5d8b81d61259ee479167c95d0ae6335ef5b7289ddf8191b5c633b4cfa49b5b68",
+      "public_hex": "abb3bc80099c4586dd2179167299d979c5321ff0c970f634337661f597b1b65f",
+      "kid_hex": "032bcfdb"
+    },
+    {
+      "label": "device:ana",
+      "what": "Ana's laptop: ana@hampost.org, N0CALL",
+      "seed_hex": "77f4d240fdfa7e5750441f4cb25cbbdc27bf288e87a08a123c9da5430930985e",
+      "public_hex": "d6581a6a7a13d846a88b2d203b1dfb87e35bc2c0b4503ac13f56bca2e80ace9c",
+      "kid_hex": "bb75cea1"
+    },
+    {
+      "label": "device:shelter3-n3call",
+      "what": "Shelter 3's laptop, operator N3CALL",
+      "seed_hex": "86b9c6458745fd1c15f80872fedfdc3b518efae8d3db1ebe44a136d9d8ee9f8c",
+      "public_hex": "5f1d8ed81c355abd1dc9ed9800825b61fa936a661556548fa924766e182e7b18",
+      "kid_hex": "537fac7b"
+    },
+    {
+      "label": "device:shelter3-n4call",
+      "what": "Shelter 3's laptop, operator N4CALL",
+      "seed_hex": "a6372e95fc437d4dd96baa024f5991ab348b5653ecb6e6eccc05b06d20ca0e07",
+      "public_hex": "6cf396595b38b999aaa95cd889225366c520b3753bec5941bc8c6c101c497433",
+      "kid_hex": "e7c8ba38"
+    },
+    {
+      "label": "device:gateway-n1call-10",
+      "what": "Gateway N1CALL-10 (credential from hampost.org)",
+      "seed_hex": "170998ac3459533f31a32b646d4de597b23c5854d2ef88e083f1667cd1617807",
+      "public_hex": "144be5fb969d95af9b608d09306458bb253565c8b0e3a7186eb31389d7244c53",
+      "kid_hex": "9125a136"
+    },
+    {
+      "label": "device:gateway-kk4oda-1",
+      "what": "Gateway KK4ODA-1, being registered at radiopost.org",
+      "seed_hex": "9db46af3b044dd1ba2d8cbb353c08b97f09016f1af7e574819bfb0b93cd661ab",
+      "public_hex": "2f6b3d90f90779da12f0ed7e049a3995d35cf27828432ada576354db61042c9b",
+      "kid_hex": "2a4243a5"
+    }
+  ]
+}

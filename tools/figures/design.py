@@ -256,7 +256,7 @@ def fig_session() -> None:
         c,
         g,
         "radio",
-        ["HELLO: signed statement, 2 offers,", "cursor 418, auto 5 kB, credential hash"],
+        ["HELLO: signed statement, 2 offers,", "cursor 418, auto 1 kB, credential hash"],
         "1",
     )
     step(246, g, p, "internet", ["POST /sessions"], None)

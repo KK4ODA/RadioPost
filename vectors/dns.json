@@ -1,0 +1,84 @@
+{
+  "radiopost_vectors": "`_radiopost` TXT records: which are read and which ignored",
+  "format": 1,
+  "specs": {
+    "RP-1": "§7.1"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "Parsing `txt` gives `result`: the record's tags, or null when it must be ignored.",
+  "records": [
+    {
+      "txt": "v=RP1; t=api; url=https://po.radiopost.org/rp/v1",
+      "result": {
+        "v": "RP1",
+        "t": "api",
+        "url": "https://po.radiopost.org/rp/v1"
+      }
+    },
+    {
+      "txt": "v=RP1; t=key; kid=fbbd5f5c; p=dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY=",
+      "result": {
+        "v": "RP1",
+        "t": "key",
+        "kid": "fbbd5f5c",
+        "p": "dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY="
+      }
+    },
+    {
+      "txt": "v=RP1;t=key;kid=fbbd5f5c;p=dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY=",
+      "result": {
+        "v": "RP1",
+        "t": "key",
+        "kid": "fbbd5f5c",
+        "p": "dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY="
+      }
+    },
+    {
+      "txt": "  v=RP1 ; t=key ; kid=fbbd5f5c ; p=dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY= ;",
+      "result": {
+        "v": "RP1",
+        "t": "key",
+        "kid": "fbbd5f5c",
+        "p": "dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY="
+      }
+    },
+    {
+      "txt": "v=RP1; t=key; kid=fbbd5f5c; p=dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY=; note=rotated 2026",
+      "result": {
+        "v": "RP1",
+        "t": "key",
+        "kid": "fbbd5f5c",
+        "p": "dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY=",
+        "note": "rotated 2026"
+      }
+    },
+    {
+      "txt": "v=RP2; t=key; kid=fbbd5f5c; p=dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY=",
+      "result": null
+    },
+    {
+      "txt": "v=RP1; t=key; kid=00000000; p=dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY=",
+      "result": null
+    },
+    {
+      "txt": "v=RP1; t=key; kid=fbbd5f5c; p=dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XA==",
+      "result": null
+    },
+    {
+      "txt": "v=RP1; t=key; kid=fbbd5f5c; kid=fbbd5f5c; p=dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY=",
+      "result": null
+    },
+    {
+      "txt": "v=RP1; t=api; url=http://po.radiopost.org/rp/v1",
+      "result": null
+    },
+    {
+      "txt": "v=RP1; kid=fbbd5f5c; p=dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY=",
+      "result": null
+    },
+    {
+      "txt": "v=spf1 mx -all",
+      "result": null
+    }
+  ]
+}

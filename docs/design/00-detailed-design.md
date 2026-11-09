@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.1 |
+| **Version** | 0.1.2 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -195,10 +195,15 @@ To be confirmed:
 
 ## 7. Testing and conformance
 
-* **Test vectors** in `vectors/`: messages and their content IDs and air forms (RP-2); credentials
-  and statements made with published test keys (RP-1); whole sessions, byte for byte (RP-3). Every
-  implementation checks itself against them; a specification change updates them in the same pull
-  request.
+* **Test vectors** in `vectors/` (started): messages and their content IDs and air forms (RP-2);
+  credentials, their verification and session statements made with published test keys (RP-1);
+  every PDU and a whole session, byte for byte (RP-3); the API's signatures (RP-5); deterministic
+  CBOR and DNS records (RP-0, RP-1). They are made by a small reference in Python, standard
+  library only (`tools/vectors/`), written to read like the specifications rather than to be
+  fast. `python tools/vectors/make.py` writes them and `--check` compares the reference with the
+  files. Every implementation checks itself against them; a specification change updates them in
+  the same pull request. Writing them found five gaps in the drafts, fixed in RP-0 0.2.0, RP-1
+  0.2.0, RP-2 0.1.2, RP-3 0.1.2 and RP-5 0.2.0. Owed: resumed sessions, RP-4 and RP-6.
 * **A conformance tester** that plays the other side: a client to test a gateway, a gateway to
   test a client, over the TCP adapter, including broken links, resumes and wrong signatures.
 * **A loopback adapter** joining two hosts through RPMI with delays and losses, for tests with no
@@ -261,3 +266,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 |---|---|---|
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
+| 0.1.2 | 2026-11-09 | Test vectors started (§7). |

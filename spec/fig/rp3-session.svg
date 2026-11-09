@@ -17,7 +17,7 @@
 <path d="M 860 142 L 860 716" stroke="#cbd5e1" stroke-width="1.6" stroke-dasharray="4 5"/>
 <path d="M 150.0 206.0 L 520.0 206.0" fill="none" stroke="#c2410c" stroke-width="2.2" stroke-dasharray="8 5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ah-radio)"/>
 <text xml:space="preserve" x="335.0" y="180.8" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#c2410c" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round">HELLO: signed statement, 2 offers,</text>
-<text xml:space="preserve" x="335.0" y="197.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#c2410c" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round">cursor 418, auto 5 kB, credential hash</text>
+<text xml:space="preserve" x="335.0" y="197.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#c2410c" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="5" stroke-linejoin="round">cursor 418, auto 1 kB, credential hash</text>
 <circle cx="162.0" cy="206.0" r="11" fill="#c2410c" stroke="#ffffff" stroke-width="2"/>
 <text xml:space="preserve" x="162.0" y="210.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
 <path d="M 520.0 246.0 L 860.0 246.0" fill="none" stroke="#334155" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ah-internet)"/>

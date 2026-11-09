@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.1 |
+| **Version** | 0.1.2 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -344,45 +344,48 @@ call** and takes the called station's part.
 
 | PDU | Typical size |
 |---|---|
-| `HELLO`, two offers, signed, credential hash | about 200 bytes |
-| `HELLO`, the same with the full credential | about 360 bytes |
-| `WELCOME` with three waiting entries | about 225 bytes |
+| `HELLO`, two offers, signed, credential hash | 201 bytes |
+| `HELLO`, the same with the full credential | 356 bytes |
+| `WELCOME` with three waiting entries | 232 bytes |
 | `RECEIPT` for two messages | 33 bytes |
 | `DONE` | 5 bytes |
 
-All with framing. At 36 bit/s, Aether's slowest rung, 200 bytes take 45 seconds; at 2 kbit/s,
-under a second.
+All with framing, from `vectors/pdus.json` and `vectors/session-01.json`. At 36 bit/s, Aether's
+slowest rung, 200 bytes take 45 seconds; at 2 kbit/s, under a second.
 
 ---
 
 ## 12. Example *(informative)*
 
-Facundo's session through N1CALL-10 (concept, Figure 4), in CBOR diagnostic notation, framing left
-out. Content IDs are shortened.
+Facundo's session through N1CALL-10 (concept, Figure 4), in CBOR diagnostic notation, framing
+left out, byte strings shortened to their first two bytes. His `auto` is 1 000 bytes, so the gateway
+sends #419 (277 bytes) unasked; he asks for #420 (1 298) and leaves #421 (6 122, a photo) waiting.
+Sizes are air forms (RP-2 §4).
 
 ```
-→ HELLO     {0:1, 1:[1,1], 2:0, 3:"facundo@radiopost.org", 4:"KK4ODA", 5:"N1CALL-10",
-             6:1794326400, 7:h'5c…', 8:[[h'a3f9…',640,0],[h'71c2…',410,0]], 9:418,
-             10:5000, 12:{1:[0,1,2], 2:4096}, 14:h'0e…', 15:h'9b…'}
-← WELCOME   {0:2, 1:1, 2:h'd4…', 3:0, 5:[[h'a3f9…',0],[h'71c2…',0]], 6:[],
-             7:[[419,h'c1…',"maria@example.com","Are you safe?",1104,0,0],
-                [420,h'08…',"eoc@radiopost.org","Shelter roster",2006,0,0],
-                [421,h'4e…',"maria@example.com","Photo",310522,0,1]],
-             8:0, 10:1794326441, 11:true, 12:true}
-← MSG       {0:4, 1:h'c1…', 2:0, 3:1104, 4:h'01…', 5:419}
-→ MSG       {0:4, 1:h'a3f9…', 2:0, 3:640, 4:h'01…'}
-→ MSG       {0:4, 1:h'71c2…', 2:0, 3:410, 4:h'01…'}
-→ RECEIPT   {0:5, 1:[h'c1…']}
+→ HELLO     {0:1, 1:[1, 1], 2:0, 3:"facundo@radiopost.org", 4:"KK4ODA", 5:"N1CALL-10",
+             6:1794235200, 7:h'f3e4…', 8:[[h'50d3…', 137, 0], [h'ab9d…', 142, 0]], 9:418,
+             10:1000, 12:{1:[0, 1, 2], 2:4096}, 14:h'ca61…', 15:h'943c…'}
+← WELCOME   {0:2, 1:1, 2:h'ec7b…', 3:0, 5:[[h'50d3…', 0], [h'ab9d…', 0]], 6:[],
+             7:[[419, h'4734…', "maria@example.com", "Are you safe?", 277, 0, 0],
+                [420, h'3cde…', "eoc@radiopost.org", "Shelter roster", 1298, 0, 0],
+                [421, h'13ec…', "maria@example.com", "Photo", 6122, 0, 0]],
+             8:0, 9:{1:[0, 1], 2:4096}, 10:1794235241, 11:true, 12:true}
+← MSG       {0:4, 1:h'4734…', 2:0, 3:277, 4:h'00a6…', 5:419}
+→ MSG       {0:4, 1:h'50d3…', 2:0, 3:137, 4:h'00a7…'}
+→ MSG       {0:4, 1:h'ab9d…', 2:0, 3:142, 4:h'00a6…'}
+→ RECEIPT   {0:5, 1:[h'4734…']}
 → REQUEST   {0:6, 1:[420]}
-← RECEIPT   {0:5, 1:[h'a3f9…', h'71c2…']}
-← MSG       {0:4, 1:h'08…', 2:0, 3:2006, 4:h'01…', 5:420}
+← RECEIPT   {0:5, 1:[h'50d3…', h'ab9d…']}
+← MSG       {0:4, 1:h'3cde…', 2:0, 3:1298, 4:h'00a7…', 5:420}
 ← DONE      {0:7}
-→ RECEIPT   {0:5, 1:[h'08…']}
+→ RECEIPT   {0:5, 1:[h'3cde…']}
 → DONE      {0:7}
   (Facundo's client hangs up)
 ```
 
-*To come:* the exact bytes of a whole session as test vectors.
+Test vectors: `vectors/session-01.json` is this session byte for byte, and `vectors/pdus.json`
+has one example of each PDU, and frames that must be refused.
 
 ---
 
@@ -392,3 +395,4 @@ out. Content IDs are shortened.
 |---|---|---|
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
+| 0.1.2 | 2026-11-09 | The example is the test vector's session, its `auto` and sizes made consistent with §5.2; test vectors. |
