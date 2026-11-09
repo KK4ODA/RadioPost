@@ -385,7 +385,8 @@
                   "subject": "Are you safe?",
                   "size": 277,
                   "priority": 0,
-                  "held": false
+                  "held": false,
+                  "third_party": true
                 },
                 {
                   "serial": 420,
@@ -394,7 +395,8 @@
                   "subject": "Shelter roster",
                   "size": 1298,
                   "priority": 0,
-                  "held": false
+                  "held": false,
+                  "third_party": false
                 },
                 {
                   "serial": 421,
@@ -403,7 +405,8 @@
                   "subject": "Photo",
                   "size": 6122,
                   "priority": 0,
-                  "held": false
+                  "held": false,
+                  "third_party": true
                 }
               ],
               "more": 0,

@@ -1,0 +1,408 @@
+{
+  "radiopost_vectors": "Third-party traffic: where a station is, and what a gateway lists to it",
+  "format": 1,
+  "specs": {
+    "RP-6": "§5.1",
+    "RP-3": "§5.2",
+    "RP-5": "§5.2, §5.8"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "A US gateway reads `where` from a case's operating callsign and may hand it third-party mail when `expect` is true (RP-6 §5.1, by `own_prefixes` and `arrangements`). Given `waiting`, it lists to each `operator` the entries `listed`, holding back `held_back` flagged `third-party` (8). Post offices set the flag on mail made from an email: `third_party` in api-exchanges.json's waiting entries and copies.",
+  "context": {
+    "gateway_country": "US",
+    "own_prefixes": [
+      "K",
+      "N",
+      "W",
+      "AA",
+      "AB",
+      "AC",
+      "AD",
+      "AE",
+      "AF",
+      "AG",
+      "AH",
+      "AI",
+      "AJ",
+      "AK",
+      "AL"
+    ],
+    "arrangements": [
+      {
+        "prefixes": "V2",
+        "country": "Antigua and Barbuda"
+      },
+      {
+        "prefixes": "LO–LW",
+        "country": "Argentina"
+      },
+      {
+        "prefixes": "VK",
+        "country": "Australia"
+      },
+      {
+        "prefixes": "V3",
+        "country": "Belize"
+      },
+      {
+        "prefixes": "CP",
+        "country": "Bolivia"
+      },
+      {
+        "prefixes": "E7",
+        "country": "Bosnia-Herzegovina"
+      },
+      {
+        "prefixes": "PP–PY",
+        "country": "Brazil"
+      },
+      {
+        "prefixes": "VE, VO, VY",
+        "country": "Canada"
+      },
+      {
+        "prefixes": "CA–CE",
+        "country": "Chile"
+      },
+      {
+        "prefixes": "HJ–HK",
+        "country": "Colombia"
+      },
+      {
+        "prefixes": "D6",
+        "country": "Comoros"
+      },
+      {
+        "prefixes": "TI, TE",
+        "country": "Costa Rica"
+      },
+      {
+        "prefixes": "CM, CO",
+        "country": "Cuba"
+      },
+      {
+        "prefixes": "HI",
+        "country": "Dominican Republic"
+      },
+      {
+        "prefixes": "J7",
+        "country": "Dominica"
+      },
+      {
+        "prefixes": "HC–HD",
+        "country": "Ecuador"
+      },
+      {
+        "prefixes": "YS",
+        "country": "El Salvador"
+      },
+      {
+        "prefixes": "C5",
+        "country": "The Gambia"
+      },
+      {
+        "prefixes": "9G",
+        "country": "Ghana"
+      },
+      {
+        "prefixes": "J3",
+        "country": "Grenada"
+      },
+      {
+        "prefixes": "TG",
+        "country": "Guatemala"
+      },
+      {
+        "prefixes": "8R",
+        "country": "Guyana"
+      },
+      {
+        "prefixes": "HH",
+        "country": "Haiti"
+      },
+      {
+        "prefixes": "HQ–HR",
+        "country": "Honduras"
+      },
+      {
+        "prefixes": "4X, 4Z",
+        "country": "Israel"
+      },
+      {
+        "prefixes": "6Y",
+        "country": "Jamaica"
+      },
+      {
+        "prefixes": "JY",
+        "country": "Jordan"
+      },
+      {
+        "prefixes": "EL",
+        "country": "Liberia"
+      },
+      {
+        "prefixes": "V7",
+        "country": "Marshall Islands"
+      },
+      {
+        "prefixes": "XA–XI",
+        "country": "Mexico"
+      },
+      {
+        "prefixes": "V6",
+        "country": "Micronesia"
+      },
+      {
+        "prefixes": "YN",
+        "country": "Nicaragua"
+      },
+      {
+        "prefixes": "HO–HP",
+        "country": "Panama"
+      },
+      {
+        "prefixes": "ZP",
+        "country": "Paraguay"
+      },
+      {
+        "prefixes": "OA–OC",
+        "country": "Peru"
+      },
+      {
+        "prefixes": "DU–DZ",
+        "country": "Philippines"
+      },
+      {
+        "prefixes": "V4",
+        "country": "St. Kitts and Nevis"
+      },
+      {
+        "prefixes": "J6",
+        "country": "St. Lucia"
+      },
+      {
+        "prefixes": "J8",
+        "country": "St. Vincent and the Grenadines"
+      },
+      {
+        "prefixes": "9L",
+        "country": "Sierra Leone"
+      },
+      {
+        "prefixes": "ZR–ZU",
+        "country": "South Africa"
+      },
+      {
+        "prefixes": "3DA",
+        "country": "Eswatini"
+      },
+      {
+        "prefixes": "9Y–9Z",
+        "country": "Trinidad and Tobago"
+      },
+      {
+        "prefixes": "TA–TC",
+        "country": "Turkey"
+      },
+      {
+        "prefixes": "GB",
+        "country": "United Kingdom"
+      },
+      {
+        "prefixes": "CV–CX",
+        "country": "Uruguay"
+      },
+      {
+        "prefixes": "YV–YY",
+        "country": "Venezuela"
+      },
+      {
+        "prefixes": "4U1ITU",
+        "country": "ITU, Geneva"
+      },
+      {
+        "prefixes": "4U1VIC",
+        "country": "VIC, Vienna"
+      }
+    ],
+    "source": "https://www.arrl.org/third-party-operating-agreements, read 2026-11-09"
+  },
+  "callsign_cases": [
+    {
+      "callsign": "KK4ODA",
+      "what": "a US callsign",
+      "where": "KK4ODA",
+      "expect": true
+    },
+    {
+      "callsign": "KP4ABC",
+      "what": "Puerto Rico, under US jurisdiction",
+      "where": "KP4ABC",
+      "expect": true
+    },
+    {
+      "callsign": "AL7ABC",
+      "what": "Alaska: AA to AL are US",
+      "where": "AL7ABC",
+      "expect": true
+    },
+    {
+      "callsign": "AM1ABC",
+      "what": "Spain: AM is not one of AA to AL",
+      "where": "AM1ABC",
+      "expect": false
+    },
+    {
+      "callsign": "VE3ABC",
+      "what": "Canada, an arrangement",
+      "where": "VE3ABC",
+      "expect": true
+    },
+    {
+      "callsign": "VE3/KK4ODA",
+      "what": "a US licensee operating in Canada",
+      "where": "VE3",
+      "expect": true
+    },
+    {
+      "callsign": "KK4ODA/VE3",
+      "what": "the same, the designator after",
+      "where": "VE3",
+      "expect": true
+    },
+    {
+      "callsign": "W4/G4ABC",
+      "what": "a British licensee operating in the US",
+      "where": "W4",
+      "expect": true
+    },
+    {
+      "callsign": "G4ABC",
+      "what": "the United Kingdom, but only GB is listed",
+      "where": "G4ABC",
+      "expect": false
+    },
+    {
+      "callsign": "GB2XYZ",
+      "what": "a GB special event station",
+      "where": "GB2XYZ",
+      "expect": true
+    },
+    {
+      "callsign": "F/KK4ODA",
+      "what": "a US licensee operating in France",
+      "where": "F",
+      "expect": false
+    },
+    {
+      "callsign": "XE1ABC",
+      "what": "Mexico, XA to XI",
+      "where": "XE1ABC",
+      "expect": true
+    },
+    {
+      "callsign": "HR2ABC",
+      "what": "Honduras, HQ to HR",
+      "where": "HR2ABC",
+      "expect": true
+    },
+    {
+      "callsign": "JA1ABC",
+      "what": "Japan, no arrangement",
+      "where": "JA1ABC",
+      "expect": false
+    },
+    {
+      "callsign": "4U1ITU",
+      "what": "the ITU in Geneva, listed by callsign",
+      "where": "4U1ITU",
+      "expect": true
+    },
+    {
+      "callsign": "4U1UN",
+      "what": "not one of the two listed 4U1 callsigns",
+      "where": "4U1UN",
+      "expect": false
+    },
+    {
+      "callsign": "VR6TC",
+      "what": "Pitcairn: informal, not listed",
+      "where": "VR6TC",
+      "expect": false
+    },
+    {
+      "callsign": "KK4ODA/P",
+      "what": "portable: ignored",
+      "where": "KK4ODA",
+      "expect": true
+    },
+    {
+      "callsign": "KK4ODA/4",
+      "what": "a lone digit: ignored",
+      "where": "KK4ODA",
+      "expect": true
+    },
+    {
+      "callsign": "KK4ODA/MM",
+      "what": "maritime mobile: no country",
+      "where": null,
+      "expect": false
+    }
+  ],
+  "waiting": [
+    {
+      "entry": "[419, h'47342a407f37d3189af7f7c1', \"maria@example.com\", \"Are you safe?\", 277, 0, 8]",
+      "third_party": true
+    },
+    {
+      "entry": "[420, h'3cde8dbf9fe1f94dba9149d1', \"eoc@radiopost.org\", \"Shelter roster\", 1298, 0, 0]",
+      "third_party": false
+    },
+    {
+      "entry": "[421, h'13ec505a3b6461bfc60bf972', \"maria@example.com\", \"Photo\", 6122, 0, 8]",
+      "third_party": true
+    },
+    {
+      "entry": "[1, h'0b5036895c73ec38608b9038', \"ana@hampost.org\", \"Net tonight\", 199, 0, 0]",
+      "third_party": false
+    }
+  ],
+  "listing_cases": [
+    {
+      "operator": "KK4ODA",
+      "listed": [
+        419,
+        420,
+        421,
+        1
+      ],
+      "held_back": 0
+    },
+    {
+      "operator": "VE3/KK4ODA",
+      "listed": [
+        419,
+        420,
+        421,
+        1
+      ],
+      "held_back": 0
+    },
+    {
+      "operator": "F/KK4ODA",
+      "listed": [
+        420,
+        1
+      ],
+      "held_back": 2
+    },
+    {
+      "operator": "KK4ODA/MM",
+      "listed": [
+        420,
+        1
+      ],
+      "held_back": 2
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.2 |
+| **Version** | 0.3.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -215,13 +215,106 @@ drops the part. Test vectors: `vectors/email-in.json`, `between`.
 
 ---
 
-## 5. The rules *(informative)*
+## 5. The rules
 
-* **Third-party traffic.** Mail from someone who is not licensed, sent to a radio user, is
-  third-party traffic. In the US, international third-party traffic is allowed only with countries
-  that have an agreement (§97.115). A post office SHOULD keep a table of agreements and SHOULD NOT
-  place copies of, or hand over, such mail through gateways where that is not allowed. How the
-  sender's country is known is *open*.
+### 5.1 Third-party traffic
+
+Under US rules (47 CFR §97.115, e-CFR current to 2026-11-05) a station may transmit a message for a
+third party to any station under US jurisdiction. To a station under a foreign government it may do
+so only for emergency or disaster relief, or where that government has an arrangement with the US.
+The restriction does not apply to a third party eligible to be a control operator, that is, a
+licensed amateur. What decides is where the receiving station is, not where the sender is.
+
+* **Flagged at the post office.** Mail whose sender is not shown to be licensed is **third-party
+  mail**: every message made from an email (§2.4), unless it came with the RadioPost part of §4 and
+  that part was used. Mail a RadioPost user handed in (RP-5 §5.4, §5.6, §6.6) is not. The post office
+  marks it in waiting entries and copies (RP-5 `third_party`), and gateways carry the mark on the air
+  (RP-3 §5.2, the flag `third-party`).
+* **Checked at the gateway.** A gateway hands third-party mail to a station, a user or a cut-off
+  gateway collecting forward items (RP-7 §4.3), only when that station is in the gateway's own
+  country or in one with an arrangement, by the gateway's country's table below. Otherwise it
+  leaves the message out of `waiting`, so that it stays at the post office, and says how many it
+  held back in a `NOTICE` (RP-3 §5.10). Emergency or disaster relief abroad is the control
+  operator's decision, never the program's.
+* **Where the station is** comes from the callsign it operates under (`HELLO` `operator`). A part
+  before or after a `/` that is not itself a whole callsign (a prefix, a digit, then one to four
+  letters) names it: `VE3/KK4ODA` and `KK4ODA/VE3` are in Canada, `W4/G4ABC` in the US. `/P`, `/M`,
+  `/QRP`, `/A` and a lone digit are ignored. `/MM` and `/AM` name no country, so such a station gets
+  no third-party mail. Otherwise the callsign's own prefix names it. A station's prefix matches a
+  table entry that it begins with.
+* **Identification.** At the end of an exchange of third-party traffic with a station in another
+  country, a US station also transmits that station's callsign (§97.115(d)): the modem's
+  identification, or the operator, must carry both (RP-4 §8).
+
+Tables of other countries' rules are owed; a gateway whose country has no table here hands
+third-party mail only to stations of its own country, as its operator enters its prefixes.
+
+**United States.** A station is under US jurisdiction when its prefix begins with K, N or W, or is
+AA to AL. Arrangements, as the ARRL lists them
+([arrl.org/third-party-operating-agreements](https://www.arrl.org/third-party-operating-agreements),
+read 2026-11-09); `LO`–`LW` stands for every prefix from `LO` to `LW`:
+
+| Prefixes | Country |
+|---|---|
+| V2 | Antigua and Barbuda |
+| LO–LW | Argentina |
+| VK | Australia |
+| V3 | Belize |
+| CP | Bolivia |
+| E7 | Bosnia-Herzegovina |
+| PP–PY | Brazil |
+| VE, VO, VY | Canada |
+| CA–CE | Chile |
+| HJ–HK | Colombia |
+| D6 | Comoros |
+| TI, TE | Costa Rica |
+| CM, CO | Cuba |
+| HI | Dominican Republic |
+| J7 | Dominica |
+| HC–HD | Ecuador |
+| YS | El Salvador |
+| C5 | The Gambia |
+| 9G | Ghana |
+| J3 | Grenada |
+| TG | Guatemala |
+| 8R | Guyana |
+| HH | Haiti |
+| HQ–HR | Honduras |
+| 4X, 4Z | Israel |
+| 6Y | Jamaica |
+| JY | Jordan |
+| EL | Liberia |
+| V7 | Marshall Islands |
+| XA–XI | Mexico |
+| V6 | Micronesia |
+| YN | Nicaragua |
+| HO–HP | Panama |
+| ZP | Paraguay |
+| OA–OC | Peru |
+| DU–DZ | Philippines |
+| V4 | St. Kitts and Nevis |
+| J6 | St. Lucia |
+| J8 | St. Vincent and the Grenadines |
+| 9L | Sierra Leone |
+| ZR–ZU | South Africa |
+| 3DA | Eswatini |
+| 9Y–9Z | Trinidad and Tobago |
+| TA–TC | Turkey |
+| GB | United Kingdom |
+| CV–CX | Uruguay |
+| YV–YY | Venezuela |
+| 4U1ITU | ITU, Geneva |
+| 4U1VIC | VIC, Vienna |
+
+Pitcairn Island (VR6) has an informal arrangement for medical emergencies, urgent needs and its
+residents' personal matters; a program cannot judge those, so it is not listed.
+
+Test vectors: `vectors/third-party.json` (where twenty stations are, which may be handed
+third-party mail, what a gateway lists to four of them); the flag in `vectors/api-exchanges.json`
+and the session files.
+
+### 5.2 Business and encryption
+
 * **Business.** The refusal text and the footer say amateur radio carries no business; operators
   stop traffic that breaks the rules once they know of it (§97.219(c)).
 * **Encryption** is refused at the door (§2.1), so nothing encrypted reaches the air.
@@ -237,3 +330,4 @@ drops the part. Test vectors: `vectors/email-in.json`, `between`.
 | 0.2.0 | 2026-11-09 | The door (§2.1): checks in order, the null sender and delivery reports, what is encrypted, which attachments are executable; how accept lists match (§2.2). Making the message (§2.4): addresses and dates, normalised text, a precise rule for quoted history, attachments by `attach_bytes`, held files. Mail out (§3): the date's form, the transfer encoding, the signature line `-- `, `Radio-Path`'s session from RP-5's `gateway_session`; a bounce's form (§3.3). Between post offices (§4): the part's types, and the checks, recipient included. Test vectors. |
 | 0.2.1 | 2026-11-09 | §2.2: how writing to an address adds it, and how that is turned off, are RP-5 §6.5 and §6.3. |
 | 0.2.2 | 2026-11-09 | §3.2: after forwarding, `Radio-Path` names each gateway of the path (RP-7). |
+| 0.3.0 | 2026-11-09 | Third-party traffic (§5.1), from §97.115's text: the receiving station's country decides, not the sender's; the post office flags mail whose sender is not shown to be licensed; the gateway hands it only to stations of its own country or one with an arrangement, read from the operating callsign, with the US table from the ARRL's list; §5 becomes normative. |

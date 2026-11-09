@@ -76,6 +76,7 @@ class Waiting:
     subject: str
     priority: int
     picked: bool = False
+    third_party: bool = False  # RP-6 §5.1: the sender is not shown to be licensed
 
     @property
     def cid(self) -> bytes:
@@ -90,6 +91,7 @@ class Waiting:
             "size": len(self.air),
             "priority": self.priority,
             "held": False,
+            "third_party": self.third_party,
         }
 
 
@@ -139,10 +141,18 @@ class PostOffice:
         return self.draw(f"post office {what} {self.issued}", n)
 
     def deliver(
-        self, address: str, serial: int, air: bytes, *, sender: str, subject: str, priority: int
+        self,
+        address: str,
+        serial: int,
+        air: bytes,
+        *,
+        sender: str,
+        subject: str,
+        priority: int,
+        third_party: bool,
     ) -> None:
         """Mail arrives for a user (RP-6); copies go to the user's usual gateways (§5.8)."""
-        waiting = Waiting(serial, air, sender, subject, priority)
+        waiting = Waiting(serial, air, sender, subject, priority, third_party=third_party)
         self.mailboxes.setdefault(address, []).append(waiting)
         for callsign in self.settings.get(address, {}).get("usual_gateways", []):
             record = self.gateways.get(callsign)
@@ -420,7 +430,7 @@ class PostOffice:
                 continue
             serial = max((w.serial for w in self.mailboxes.get(address, [])), default=0) + 1
             fields = {"sender": message[2], "subject": message[6], "priority": message.get(9, 0)}
-            self.deliver(address, serial, air, **fields)
+            self.deliver(address, serial, air, **fields, third_party=False)  # a user's: licensed
             self._picked_locally_here(address)
 
     def _picked_locally_here(self, address: str) -> None:

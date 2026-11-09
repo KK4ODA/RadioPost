@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.10.0 |
+| **Version** | 0.11.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -227,7 +227,8 @@ code (§1), and otherwise `201`:
   "session": "s_4Nf…",
   "expires": 1794330041,
   "waiting": [{"serial": 419, "id": "c1…", "from": "maria@example.com",
-               "subject": "Are you safe?", "size": 1104, "priority": 0, "held": false}],
+               "subject": "Are you safe?", "size": 1104, "priority": 0, "held": false,
+               "third_party": true}],
   "more": 0,
   "accept": [{"id": "a3f9…", "offset": 0}],
   "decline": [],
@@ -238,7 +239,8 @@ code (§1), and otherwise `201`:
 * `accept` / `decline`: the post office's view of the user's offers, which the gateway passes on
   in `WELCOME`. A `decline` entry is `{"id", "code", "name"}`, with `already-have`, `too-large` or
   `refused-by-policy`.
-* `waiting`: every message not yet picked up, in RP-3 §6.1's order.
+* `waiting`: every message not yet picked up, in RP-3 §6.1's order. `third_party` marks mail whose
+  sender is not shown to be licensed (RP-6 §5.1); the gateway lists it only as RP-6 §5.1 allows.
 * `credential`: a renewed credential (§6.2), when `renew` was asked and the post office issued
   one. The gateway hands it to the client in `CREDENTIAL` (RP-3 §5.8).
 
@@ -331,16 +333,17 @@ A post office places copies of a user's waiting mail at each gateway the user na
  "items": [
    {"kind": "copy", "address": "facundo@radiopost.org", "serial": 421, "id": "4e…",
     "from": "maria@example.com", "subject": "Photo", "size": 310522, "priority": 0,
-    "expires": 1794931200},
+    "third_party": true, "expires": 1794931200},
    {"kind": "copy", "address": "facundo@radiopost.org", "serial": 419, "id": "c1…",
     "from": "maria@example.com", "subject": "Are you safe?", "size": 1104, "priority": 0,
-    "air": "AXic…", "expires": 1794931200},
+    "third_party": true, "air": "AXic…", "expires": 1794931200},
    {"kind": "drop", "address": "facundo@radiopost.org", "serial": 418}
  ]}
 ```
 
 * A `copy` carries `air` when the message fits the gateway's `copies.max_air_bytes`; otherwise only
-  its list entry, and the gateway lists it with the `held` flag while offline.
+  its list entry, and the gateway lists it with the `held` flag while offline. `third_party` is as
+  in `waiting` (§5.2), and the gateway applies RP-6 §5.1 while offline too.
 * A `drop` means the message was picked up elsewhere, or expired: the gateway deletes its copy.
 * A `forward` item is a copy for a cut-off gateway, placed at the gateway its route names (RP-7
   §4.1): as a `copy`, with `gateway`, the cut-off gateway's callsign, and `placement`, the post
@@ -527,3 +530,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.8.0 | 2026-11-09 | §5.6: a report whose path does not end at the reporting gateway is refused, `not-authorized`. |
 | 0.9.0 | 2026-11-09 | `local_pickups` in a report (§5.6), for RP-7's local delivery. |
 | 0.10.0 | 2026-11-09 | `POST /direct`: a client reports its station-to-station sessions with both proofs; received mail is filed as picked up, sent mail sent on to every recipient but the other station (§6.6); test vectors (§8). |
+| 0.11.0 | 2026-11-09 | `third_party` in waiting entries and copies, for RP-6 §5.1 (§5.2, §5.8). |

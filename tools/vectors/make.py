@@ -1178,8 +1178,15 @@ def offer(name: str) -> list[Any]:
     return [encoded(name)[1], len(air0(name)), MESSAGES[name].get("priority", 0)]
 
 
+def third_party(name: str) -> bool:
+    """RP-6 §5.1: mail from outside RadioPost's post offices was made from an email."""
+    return MESSAGES[name]["from"].rpartition("@")[2] not in {"radiopost.org", "hampost.org"}
+
+
 def waiting_entry(serial: int, name: str, flags: int = 0) -> list[Any]:
+    """RP-3 §5.2: the flag `third-party` (8) set as the post office marked it (RP-6 §5.1)."""
     fields = MESSAGES[name]
+    flags |= 8 if third_party(name) else 0
     return [
         serial,
         encoded(name)[1],
@@ -2493,6 +2500,7 @@ def deliver_waiting(office: po.PostOffice, ex: Exchanges | None) -> None:
             sender=fields["from"],
             subject=fields["subject"],
             priority=fields.get("priority", 0),
+            third_party=third_party(name),
         )
 
 
@@ -2922,6 +2930,7 @@ def deliver(
         sender=f["from"],
         subject=f["subject"],
         priority=f.get("priority", 0),
+        third_party=third_party(name),
     )
 
 
@@ -4169,6 +4178,138 @@ def make_direct() -> dict[str, Any]:
     return out
 
 
+# -- third-party.json ----------------------------------------------------------------------------
+
+
+def spec_arrangements() -> list[tuple[str, str]]:
+    """RP-6 §5.1's US table, read from the specification itself."""
+    text = (ROOT / "spec" / "rp-0006-email.md").read_text(encoding="utf-8")
+    part = text.split("| Prefixes | Country |", 1)[1].split("\n\n", 1)[0]
+    rows = [r.split("|")[1:3] for r in part.strip().splitlines()[1:]]
+    return [(a.strip(), b.strip()) for a, b in rows]
+
+
+def make_third_party() -> dict[str, Any]:
+    """RP-6 §5.1: where a station is, whether a US gateway may hand it third-party mail."""
+    assert spec_arrangements() == mail.ARRANGEMENTS["US"]
+    callsigns_in = [
+        ("KK4ODA", "a US callsign"),
+        ("KP4ABC", "Puerto Rico, under US jurisdiction"),
+        ("AL7ABC", "Alaska: AA to AL are US"),
+        ("AM1ABC", "Spain: AM is not one of AA to AL"),
+        ("VE3ABC", "Canada, an arrangement"),
+        ("VE3/KK4ODA", "a US licensee operating in Canada"),
+        ("KK4ODA/VE3", "the same, the designator after"),
+        ("W4/G4ABC", "a British licensee operating in the US"),
+        ("G4ABC", "the United Kingdom, but only GB is listed"),
+        ("GB2XYZ", "a GB special event station"),
+        ("F/KK4ODA", "a US licensee operating in France"),
+        ("XE1ABC", "Mexico, XA to XI"),
+        ("HR2ABC", "Honduras, HQ to HR"),
+        ("JA1ABC", "Japan, no arrangement"),
+        ("4U1ITU", "the ITU in Geneva, listed by callsign"),
+        ("4U1UN", "not one of the two listed 4U1 callsigns"),
+        ("VR6TC", "Pitcairn: informal, not listed"),
+        ("KK4ODA/P", "portable: ignored"),
+        ("KK4ODA/4", "a lone digit: ignored"),
+        ("KK4ODA/MM", "maritime mobile: no country"),
+    ]
+    callsign_cases = [
+        {
+            "callsign": c,
+            "what": what,
+            "where": mail.station_designator(c),
+            "expect": mail.may_hand_third_party(c, "US"),
+        }
+        for c, what in callsigns_in
+    ]
+    confirm(  # RP-6 §5.1, for a US gateway
+        callsign_cases,
+        {
+            "KK4ODA": True,
+            "KP4ABC": True,
+            "AL7ABC": True,
+            "AM1ABC": False,
+            "VE3ABC": True,
+            "VE3/KK4ODA": True,
+            "KK4ODA/VE3": True,
+            "W4/G4ABC": True,
+            "G4ABC": False,
+            "GB2XYZ": True,
+            "F/KK4ODA": False,
+            "XE1ABC": True,
+            "HR2ABC": True,
+            "JA1ABC": False,
+            "4U1ITU": True,
+            "4U1UN": False,
+            "VR6TC": False,
+            "KK4ODA/P": True,
+            "KK4ODA/4": True,
+            "KK4ODA/MM": False,
+        },
+        by="callsign",
+    )
+    confirm(  # RP-6 §5.1: the part that says where the station is
+        callsign_cases,
+        {
+            "VE3/KK4ODA": "VE3",
+            "KK4ODA/VE3": "VE3",
+            "W4/G4ABC": "W4",
+            "F/KK4ODA": "F",
+            "KK4ODA/P": "KK4ODA",
+            "KK4ODA/4": "KK4ODA",
+            "KK4ODA/MM": None,
+        }
+        | {c: c for c, _ in callsigns_in if "/" not in c},
+        verdict=lambda c: c["where"],
+        by="callsign",
+    )
+    waiting = [
+        waiting_entry(419, "maria-419"),
+        waiting_entry(420, "eoc-420"),
+        waiting_entry(421, "maria-421"),
+        waiting_entry(1, "ana-to-facundo"),
+    ]
+    listing_cases = []
+    for operator in ["KK4ODA", "VE3/KK4ODA", "F/KK4ODA", "KK4ODA/MM"]:
+        listed, held = mail.listed_for(waiting, operator, "US")
+        listing_cases.append(
+            {"operator": operator, "listed": [e[0] for e in listed], "held_back": held}
+        )
+    confirm(  # RP-6 §5.1: third-party mail (flag 8) only where it may go; the rest always
+        listing_cases,
+        {
+            "KK4ODA": ([419, 420, 421, 1], 0),
+            "VE3/KK4ODA": ([419, 420, 421, 1], 0),
+            "F/KK4ODA": ([420, 1], 2),
+            "KK4ODA/MM": ([420, 1], 2),
+        },
+        verdict=lambda c: (c["listed"], c["held_back"]),
+        by="operator",
+    )
+    out = header(
+        "Third-party traffic: where a station is, and what a gateway lists to it",
+        {"RP-6": "§5.1", "RP-3": "§5.2", "RP-5": "§5.2, §5.8"},
+    )
+    out["rule"] = (
+        "A US gateway reads `where` from a case's operating callsign and may hand it third-party "
+        "mail when `expect` is true (RP-6 §5.1, by `own_prefixes` and `arrangements`). Given "
+        "`waiting`, it lists to each `operator` the entries `listed`, holding back `held_back` "
+        "flagged `third-party` (8). Post offices set the flag on mail made from an email: "
+        "`third_party` in api-exchanges.json's waiting entries and copies."
+    )
+    out["context"] = {
+        "gateway_country": "US",
+        "own_prefixes": mail.OWN_PREFIXES["US"],
+        "arrangements": [{"prefixes": w, "country": c} for w, c in mail.ARRANGEMENTS["US"]],
+        "source": "https://www.arrl.org/third-party-operating-agreements, read 2026-11-09",
+    }
+    out["callsign_cases"] = callsign_cases
+    out["waiting"] = [{"entry": cbor.diagnostic(e), "third_party": bool(e[6] & 8)} for e in waiting]
+    out["listing_cases"] = listing_cases
+    return out
+
+
 # -- api-account.json ----------------------------------------------------------------------------
 
 
@@ -5256,6 +5397,7 @@ FILES = {
     "local-delivery.json": make_local_delivery,
     "queued.json": make_queued,
     "direct.json": make_direct,
+    "third-party.json": make_third_party,
 }
 
 
@@ -5426,7 +5568,7 @@ def check_api(data: dict[str, Any]) -> None:
             subject40(w["subject"]),
             w["size"],
             w["priority"],
-            1 if w["held"] else 0,
+            (1 if w["held"] else 0) | (8 if w["third_party"] else 0),  # RP-3 §5.2
         ]
         for w in opened["waiting"]
     ]

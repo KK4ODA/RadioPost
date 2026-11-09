@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.6.0 |
+| **Version** | 0.7.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -161,7 +161,8 @@ A waiting **entry** is
 ID, the sender's address (text), the subject cut to at most 40 bytes of UTF-8 on a character
 boundary (text), the air-form size (uint), the priority (uint), and flags (uint): 1 `held`
 (attachments held at the post office), 2 `copy` (a copy placed ahead, served while offline), 4
-`local` (handed between two users of a cut-off gateway, RP-7 §4.4; its serial is 0).
+`local` (handed between two users of a cut-off gateway, RP-7 §4.4; its serial is 0), 8
+`third-party` (its sender is not shown to be licensed: listed only as RP-6 §5.1 allows).
 
 When `status` is `ready`, the gateway follows `WELCOME`, in the same transmission, with `MSG` PDUs
 for the waiting messages whose size is at most the caller's `auto` and for the rest of each waiting
@@ -441,3 +442,4 @@ has one example of each PDU, and frames that must be refused.
 | 0.5.0 | 2026-11-09 | Mail sent through a cut-off gateway is queued, not sent, and offered again (§5.5, RP-7 §3.6); a cut-off gateway's `already-have` (§5.2). |
 | 0.5.1 | 2026-11-09 | Sizes with credentials as COSE_Sign1 (RP-1 0.4.0) (§11). |
 | 0.6.0 | 2026-11-09 | Station-to-station mail is reported to each user's post office (§10, RP-5 §6.6). |
+| 0.7.0 | 2026-11-09 | The waiting flag `third-party` (8), for RP-6 §5.1 (§5.2). |

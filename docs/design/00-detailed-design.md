@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.19 |
+| **Version** | 0.1.20 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -99,6 +99,7 @@ reasoning; the specifications hold the result.
 | D28 | **Specs, vectors and code in one repository** (§6). | A spec change and the code change it causes go in one pull request, and CI runs every program against the vectors on every push, as in Aether's repository. | A separate code repository pinned to a vector version (two places to keep in step); a repository per program (four release and CI setups). |
 | D29 | **The door answers Stalwart's MTA hooks** (RP-6 §2.1). | HTTP and JSON, in the same stack as the RP-5 API: the simplest to build and test. The door's rules live in the service, so a milter front can be added for a post office that runs Postfix. | Milter from the start (a binary protocol, for portability the pilot does not need); both at once (two doors to test before Phase 2). |
 | D30 | **Station-to-station mail is reported over the Internet** (RP-5 §6.6, RP-3 §10): each client, with both stations' proofs; the post office files what was received as picked up and sends what was sent on to the other recipients. | Mailboxes and sent mail agree with what crossed the air, and a cc'd recipient gets the message, at no cost in air time. The proofs make the report checkable like a gateway's. | Sending each message again through a gateway (every message crosses the air twice); not reporting (mailboxes differ, cc'd recipients never get it). |
+| D31 | **Third-party mail is flagged by the post office and checked by the gateway** (RP-6 §5.1, RP-3 §5.2): the post office marks mail whose sender is not shown to be licensed; the gateway hands it only to a station of its own country or one with an arrangement, read from the callsign the station operates under. | §97.115 turns on where the receiving station is, which only the gateway sees, and a portable callsign (`VE3/KK4ODA`) says it on every call. The sender's country never mattered. Licensed senders, RadioPost's own users, are not restricted. | By the account's country (wrong for a user operating abroad); domestic only (withholds mail the rules allow to Canada and most of the Americas); the sender's country (not what the rule asks). |
 
 ---
 
@@ -301,7 +302,7 @@ Collected from the specifications and the concept, each to be settled in the doc
 | Proof of callsign at enrollment: LoTW, the sysop's check, or both. | RP-1 §1 |
 | The Zstandard dictionary: training data, publication. | RP-2 §4 |
 | ARDOP's host interface, checked against its specification. | RP-4 §9.3 |
-| Third-party traffic: the table of agreements, and knowing a sender's country. | RP-6 §5 |
+| Third-party traffic: tables for gateway countries other than the United States. | RP-6 §5.1 |
 | Forwarding: segment tables for other countries, and the US bands of shorter wavelength than 6 m. | RP-7 §8 |
 
 ---
@@ -330,3 +331,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.17 | 2026-11-09 | The author's decisions: D27 Rust throughout, D28 one repository, D29 MTA hooks; §6 decided; Stalwart's edition and AGPL (§5.3). |
 | 0.1.18 | 2026-11-09 | D4: credentials and placements as COSE_Sign1 (RP-0 0.5.0, RP-1 0.4.0, RP-7 0.8.0). |
 | 0.1.19 | 2026-11-09 | D30: station-to-station mail reported over the Internet (RP-5 0.10.0). |
+| 0.1.20 | 2026-11-09 | D31: third-party traffic (RP-6 0.3.0, RP-3 0.7.0, RP-5 0.11.0). |

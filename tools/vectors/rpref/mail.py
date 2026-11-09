@@ -25,6 +25,110 @@ from . import cbor, rp
 
 # -- §2.1: the door ------------------------------------------------------------------------------
 
+# RP-6 §5.1: who a gateway of each country may hand third-party mail to, by callsign prefix.
+OWN_PREFIXES = {"US": ["K", "N", "W", *(f"A{c}" for c in "ABCDEFGHIJKL")]}
+ARRANGEMENTS = {  # ARRL, "International Third-Party Traffic", read 2026-11-09
+    "US": [
+        ("V2", "Antigua and Barbuda"),
+        ("LO–LW", "Argentina"),
+        ("VK", "Australia"),
+        ("V3", "Belize"),
+        ("CP", "Bolivia"),
+        ("E7", "Bosnia-Herzegovina"),
+        ("PP–PY", "Brazil"),
+        ("VE, VO, VY", "Canada"),
+        ("CA–CE", "Chile"),
+        ("HJ–HK", "Colombia"),
+        ("D6", "Comoros"),
+        ("TI, TE", "Costa Rica"),
+        ("CM, CO", "Cuba"),
+        ("HI", "Dominican Republic"),
+        ("J7", "Dominica"),
+        ("HC–HD", "Ecuador"),
+        ("YS", "El Salvador"),
+        ("C5", "The Gambia"),
+        ("9G", "Ghana"),
+        ("J3", "Grenada"),
+        ("TG", "Guatemala"),
+        ("8R", "Guyana"),
+        ("HH", "Haiti"),
+        ("HQ–HR", "Honduras"),
+        ("4X, 4Z", "Israel"),
+        ("6Y", "Jamaica"),
+        ("JY", "Jordan"),
+        ("EL", "Liberia"),
+        ("V7", "Marshall Islands"),
+        ("XA–XI", "Mexico"),
+        ("V6", "Micronesia"),
+        ("YN", "Nicaragua"),
+        ("HO–HP", "Panama"),
+        ("ZP", "Paraguay"),
+        ("OA–OC", "Peru"),
+        ("DU–DZ", "Philippines"),
+        ("V4", "St. Kitts and Nevis"),
+        ("J6", "St. Lucia"),
+        ("J8", "St. Vincent and the Grenadines"),
+        ("9L", "Sierra Leone"),
+        ("ZR–ZU", "South Africa"),
+        ("3DA", "Eswatini"),
+        ("9Y–9Z", "Trinidad and Tobago"),
+        ("TA–TC", "Turkey"),
+        ("GB", "United Kingdom"),
+        ("CV–CX", "Uruguay"),
+        ("YV–YY", "Venezuela"),
+        ("4U1ITU", "ITU, Geneva"),
+        ("4U1VIC", "VIC, Vienna"),
+    ]
+}
+WHOLE_CALLSIGN = re.compile(r"[A-Z0-9]{1,3}[0-9][A-Z]{1,4}")
+
+
+def prefixes(written: str) -> list[str]:
+    """`VE, VO, VY` and `LO–LW` (every prefix between, by the last character) as a list."""
+    out = []
+    for item in written.split(","):
+        first, _, last = item.strip().partition("–")
+        if not last:
+            out.append(first)
+            continue
+        out.extend(first[:-1] + chr(c) for c in range(ord(first[-1]), ord(last[-1]) + 1))
+    return out
+
+
+def station_designator(callsign: str) -> str | None:
+    """RP-6 §5.1: the part of an operating callsign that says where the station is, if any."""
+    parts = callsign.upper().split("/")
+    if any(p in {"MM", "AM"} for p in parts):
+        return None
+    parts = [p for p in parts if p and p not in {"P", "M", "QRP", "A"} and not p.isdigit()]
+    designators = [p for p in parts if not WHOLE_CALLSIGN.fullmatch(p)]
+    return designators[0] if designators else (parts[0] if parts else None)
+
+
+def may_hand_third_party(callsign: str, country: str) -> bool:
+    """RP-6 §5.1: may a gateway of `country` hand third-party mail to the station `callsign`?"""
+    where = station_designator(callsign)
+    if where is None:
+        return False
+    allowed = OWN_PREFIXES.get(country, []) + [
+        p for written, _ in ARRANGEMENTS.get(country, []) for p in prefixes(written)
+    ]
+    return any(where.startswith(p) for p in allowed)
+
+
+def listed_for(
+    entries: list[list[Any]], callsign: str, country: str
+) -> tuple[list[list[Any]], int]:
+    """RP-6 §5.1: the waiting entries a gateway lists to a station, and how many it holds back."""
+    if may_hand_third_party(callsign, country):
+        return entries, 0
+    listed = [e for e in entries if not e[6] & THIRD_PARTY_FLAG]
+    return listed, len(entries) - len(listed)
+
+
+THIRD_PARTY_FLAG = 8  # RP-3 §5.2
+
+
 EXECUTABLE_EXTENSIONS = {
     ".exe", ".com", ".scr", ".pif", ".bat", ".cmd", ".msi", ".js", ".jse",
     ".vbs", ".vbe", ".wsf", ".hta", ".jar", ".ps1", ".lnk",
