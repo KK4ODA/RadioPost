@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.2 |
+| **Version** | 0.1.3 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -87,6 +87,7 @@ reasoning; the specifications hold the result.
 | D16 | **Mail leaves from the sender's post office** (RP-6 §3.1). | Only that server can sign for the domain, so the mail is delivered, not filtered. | Sending from the gateway (fails DKIM, SPF and DMARC). |
 | D17 | **DEFLATE as the baseline**; Zstandard optional; a dictionary later (RP-2 §4). | DEFLATE is everywhere; a trained dictionary should do much better on short messages but must be published first. | Zstandard only (not in every small environment yet). |
 | D18 | **Forwarding uses the same session protocol** (RP-7). | One protocol to implement and test; proofs travel with messages. | A separate store-and-forward protocol. |
+| D19 | **A modem may be shared**: each host holds its own callsigns, answering switch and links (RP-4 §1.1). | During the move from Winlink, a gateway runs both systems on one radio, and two modems cannot share one sound card. A call names a callsign, so the callsign decides whose call it is, as AGWPE already does. | One program at a time (the operator must choose a system); routing by an SSID convention (callsigns are the operator's choice); a switchboard program between them (one more program to run). |
 
 ---
 
@@ -170,7 +171,7 @@ server with those interfaces could replace Stalwart (concept §8.1).
 
 | Adapter | Modem's interface | Notes |
 |---|---|---|
-| Aether | Control API, WebSocket | Delivery receipts, quality, busy, rules checked by the modem. Could become native RPMI. |
+| Aether | Control API, WebSocket | Delivery receipts, quality, busy, rules checked by the modem. Could become native RPMI. Shareable once its ADR-0106 is built (RP-4 §9.1). |
 | VARA HF, VARA FM | Published TNC commands, two TCP ports | No delivery receipts. |
 | ARDOP | Host command and data ports | To be checked against ARDOP's specification. |
 | AX.25 | AGWPE (Direwolf, TNCs) | VHF and UHF packet. |
@@ -267,3 +268,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.1.2 | 2026-11-09 | Test vectors started (§7). |
+| 0.1.3 | 2026-11-09 | D19: a modem may be shared (RP-4 0.2.0). |

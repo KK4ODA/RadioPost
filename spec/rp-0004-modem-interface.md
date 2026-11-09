@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.1 |
+| **Version** | 0.2.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -28,9 +28,39 @@ adapter for it, and a modem may speak RPMI itself.
 * A **link** is one connection to one remote station: a reliable, ordered, two-way byte stream, as
   RP-3 §1 needs. The adapter names each link with a string ID.
 * A modem that carries datagrams (one-to-many frames, no connection) MAY offer **broadcasts**.
+* A modem MAY be **shared**: several programs, each through its own connection, use one modem
+  and one radio. An example is a gateway that carries RadioPost and another system's mail on the
+  same station. §1.1 says what each host can rely on.
 
 What the host is told about the radio, and when it is told, is all in RPMI. Keying the radio,
 choosing frequencies and modulation, retransmission and turnaround are the modem's business.
+
+### 1.1 A shared modem
+
+A modem may serve other programs besides this host: another RadioPost program, or a program of
+another system on the same station. Callsigns decide whose call is whose, because a call names a
+callsign. The adapter keeps each host to its own business:
+
+* **The host's callsigns are its own.** `callsigns` (§4) names the callsigns *this host* answers
+  to and calls as. No two programs hold the same callsign; callsigns are compared exactly, so
+  `N1CALL-1` and `N1CALL-10` are different. If another program holds one of the callsigns asked
+  for, the adapter answers `error` `claimed` naming it, and the host's callsigns stay as they
+  were.
+* **Answering is the host's.** A call is answered for this host only when it is addressed to one
+  of the host's callsigns and the host's `listen` is on. Calls to other programs' callsigns are
+  never this host's, whatever its `listen` says.
+* **Links are the host's.** The adapter reports `incoming`, `connected`, `received`, `queued`,
+  `delivered` and `disconnected` only for this host's links: calls to its callsigns, and calls it
+  placed. `status` lists only these links. `send`, `disconnect` and `abort` act only on them, and
+  answer `not-connected` for any other.
+* **Other programs' traffic reads as busy.** While the modem carries another program's link, or
+  transmits for it, an adapter with `caps.busy` reports `busy` true. A `connect` made then fails
+  `busy` (§7).
+* **A host that leaves takes its callsigns with it.** When the host's connection to the adapter
+  closes, calls to its callsigns are no longer answered for it.
+
+An adapter that cannot keep these rules reports `caps.shared` false and serves one host with the
+modem to itself. The rules above then hold trivially: everything the modem does is this host's.
 
 ---
 
@@ -78,6 +108,7 @@ The adapter answers:
 | `busy` | The adapter reports `busy` (§5). |
 | `regulatory` | The modem checks the station's band rules before every transmission (§8). |
 | `max_queue` | The most bytes the host should have queued on a link at once (§4, `send`). |
+| `shared` | Other programs may use the modem at the same time, under §1.1's rules. Absent means false: this host has the modem to itself. |
 
 If no version is in common the adapter answers `error` `unsupported-version` and closes.
 
@@ -88,19 +119,24 @@ If no version is in common the adapter answers `error` `unsupported-version` and
 | `op` | Members | What the adapter does |
 |---|---|---|
 | `hello` | `version`, `app` | §3. |
-| `callsigns` | `callsigns` (list) | The callsigns the station answers to and may call as; the first is the default. |
-| `listen` | `on` (bool) | Whether calls to the station's callsigns are answered. Off until the host turns it on. |
-| `connect` | `remote`, `as`?, `bandwidth`?, `id` | Calls `remote` as `as` (default: the first callsign). `ok` means the call is under way; `connected` or `failed` follows. |
-| `send` | `link`, `data`, `ref`? | Queues bytes on the link. With `ref`, the adapter later reports `delivered` (if it can) for the last byte of this send. |
-| `disconnect` | `link` | Closes the link in order: what is queued goes first, then the modem disconnects. |
-| `abort` | `link`? | Ends the link, or a call under way, now. Queued bytes are dropped. |
+| `callsigns` | `callsigns` (list) | The callsigns this host answers to and may call as; the first is the default. They replace the host's earlier list. `error` `claimed` if another program holds one (§1.1). |
+| `listen` | `on` (bool) | Whether calls to this host's callsigns are answered. Off until the host turns it on. |
+| `connect` | `remote`, `as`?, `bandwidth`?, `id` | Calls `remote` as `as`, one of this host's callsigns (default: the first). `ok` means the call is under way; `connected` or `failed` follows. |
+| `send` | `link`, `data`, `ref`? | Queues bytes on one of this host's links. With `ref`, the adapter later reports `delivered` (if it can) for the last byte of this send. |
+| `disconnect` | `link` | Closes this host's link in order: what is queued goes first, then the modem disconnects. |
+| `abort` | `link`? | Ends this host's link, or its call under way, now. Queued bytes are dropped. |
 | `broadcast` | `data`, `ref`? | §6. |
 | `status` | — | The adapter answers `status` (below). |
+
+**Callsigns first.** A host has no callsigns until it sends `callsigns`. Until then nothing is
+answered for it, and the adapter answers its `listen` and `connect` with `error` `refused`. On a
+shared modem the adapter cannot lend the host the station's callsign, because another program may
+hold it.
 
 **Flow control.** The host SHOULD keep no more than `max_queue` bytes queued on a link; the adapter
 reports `queued` (§5) as the queue drains. RP-3 sessions are small enough that this rarely binds.
 
-`status` answer:
+`status` answer. On a shared modem, `callsigns`, `listening` and `links` are this host's:
 
 ```json
 {"op": "status", "id": 7, "listening": true, "callsigns": ["N1CALL-10"], "busy": false,
@@ -113,7 +149,7 @@ reports `queued` (§5) as the queue drains. RP-3 sessions are small enough that 
 
 | `op` | Members | When |
 |---|---|---|
-| `incoming` | `remote`, `local` | A call to the station is being answered (optional; for display). |
+| `incoming` | `remote`, `local` | A call to one of this host's callsigns is being answered (optional; for display). |
 | `connected` | `link`, `remote`, `local`, `direction` (`in` or `out`), `bandwidth`? | A link is up. For an outgoing call, it answers the `connect` (and carries its `id`). |
 | `failed` | `id`, `code`, `text`? | An outgoing call ended without a link (no answer, refused, aborted). |
 | `received` | `link`, `data` | Bytes arrived on a link, in order. |
@@ -121,14 +157,15 @@ reports `queued` (§5) as the queue drains. RP-3 sessions are small enough that 
 | `delivered` | `link`, `ref` | The other station holds every byte up to the end of the send with this `ref`. Only with `delivery`. |
 | `disconnected` | `link`, `reason`, `text`? | The link is gone. `reason`: `local` (the host asked), `remote` (the other station hung up), `timeout`, `failure`. |
 | `quality` | `link`?, `snr_db`?, `rate_bps`?, `receiving`? | What the modem knows about the path: the last SNR heard, the data rate it is using, and whether it is receiving right now (RP-3 §8 uses this to tell a slow link from a dead one). Only with `quality`. |
-| `busy` | `busy` (bool) | Whether the channel is in use by others. Only with `busy`. |
+| `busy` | `busy` (bool) | Whether the channel is in use by others, including other programs on a shared modem (§1.1). Only with `busy`. |
 | `heard` | `callsign`, `snr_db`?, `bandwidth`? | A station was heard (a beacon, a call to someone else). Optional. |
 | `broadcast` | `source`, `data`, `snr_db`? | §6. |
 | `broadcast-sent` | `ref`, `sent` (bool), `text`? | §6. |
 | `error` | `id`?, `code`, `text`? | A request failed, or something went wrong. `code` is from §7. |
 
-The adapter MUST report every link it brings up with `connected` and every link it loses with
-`disconnected`, so the host never has to guess.
+The adapter MUST report every link it brings up for the host with `connected` and every such link
+it loses with `disconnected`, so the host never has to guess. On a shared modem it MUST NOT report
+another program's links to this host (§1.1).
 
 ---
 
@@ -152,17 +189,19 @@ Adapters use RP-0 §9.3's codes where one fits, and these words in `code` otherw
 | `unsupported` | The request is not known, or the modem cannot do it. |
 | `unsupported-version` | No RPMI version in common. |
 | `no-modem` | The adapter cannot reach its modem. |
-| `not-connected` | No such link. |
-| `refused` | The modem refused (a rule, a setting, the band). `text` says why. |
-| `busy` | The modem is doing something else (a call already under way). |
+| `not-connected` | No such link of this host's. |
+| `refused` | The modem refused (a rule, a setting, the band, no callsigns yet). `text` says why. |
+| `busy` | The modem is doing something else (a call already under way, or another program's link). |
+| `claimed` | Another program on a shared modem holds the callsign (§1.1). `text` names it. |
 
 ---
 
 ## 8. The rules on the air
 
-An adapter MUST NOT make the modem transmit except to carry out the host's requests (calls,
+An adapter MUST NOT make the modem transmit except to carry out its host's requests (calls,
 answers when `listen` is on, data, disconnects, broadcasts) and what the modem itself needs for
-them (acknowledgements, identification).
+them (acknowledgements, identification). On a shared modem, another program's transmissions are
+that program's business; this host hears of them only as `busy`.
 
 Whether a transmission is allowed on this band, at this time, under this kind of control, is the
 station's responsibility. When the modem checks it (`caps.regulatory`, as Aether does), a refusal
@@ -182,7 +221,7 @@ Aether's control API (JSON over WebSocket, `ws://127.0.0.1:8515/`) maps one to o
 
 | RPMI | Aether control API |
 |---|---|
-| `callsigns` | `callsigns.set {callsigns}` |
+| `callsigns` | `callsigns.set {callsigns}`, which replaces the station's whole list. |
 | `listen` | `listen {enabled: true}`. Aether answers every call to its callsigns while no host program is attached, and refuses `enabled: false` today (`unsupported`); until it can, the adapter answers `listen off` with `error` `unsupported`. |
 | `connect` | `connect {remote, callsign}`; `state` events `connected` / `disconnected`. |
 | `send` with `ref` | `send {data, ref}`; the `sent` event with `delivered: true` is RPMI's `delivered`. |
@@ -195,6 +234,17 @@ Aether's control API (JSON over WebSocket, `ws://127.0.0.1:8515/`) maps one to o
 
 Aether reports `delivery`, `quality`, `busy` and `regulatory`. A future Aether may speak RPMI
 natively.
+
+**Sharing.** Today an Aether adapter has the modem to itself and reports `shared` false. Aether
+answers calls before any host speaks, so it cannot keep §4's "off until the host turns it on", and
+its control API does not say which program a session belongs to. Aether's
+[ADR-0106](https://github.com/KK4ODA/aether-hf/blob/master/docs/adr/0106-each-program-answers-for-its-own-callsigns.md)
+(proposed, not built) would make it shareable, with a RadioPost gateway beside a program on
+Aether's VARA-compatible port (RMS Trimode, for example). Each program would claim its callsigns,
+with answering off until it says otherwise, and each session would carry its owner. The adapter
+would then map `callsigns` to `claim {callsigns}`, `listen` to `listen {enabled}` on that claim,
+and know its links by the `owner` of Aether's `state` events. This section changes when ADR-0106
+is built.
 
 ### 9.2 VARA HF and VARA FM
 
@@ -213,8 +263,10 @@ VARA's published TNC command list (EA5HVK, *VARA Protocol Native TNC Commands*) 
 | `busy` | `BUSY ON` / `BUSY OFF` |
 | `quality` | `SN <dB>` lines, where sent |
 
-VARA reports no delivery: `BUFFER 0` means sent, not acknowledged. VARA itself is proprietary; the
-adapter only uses its published commands.
+VARA reports no delivery: `BUFFER 0` means sent, not acknowledged. Its command port has one
+`MYCALL` list and one `LISTEN` for the program that holds it, so an adapter for VARA has the modem
+to itself (`shared` false). VARA itself is proprietary; the adapter only uses its published
+commands.
 
 ### 9.3 ARDOP
 
@@ -228,7 +280,10 @@ written.*
 Connected-mode AX.25 gives the link RP-3 needs. Direwolf, and many packages that sit on a KISS TNC,
 offer it through the **AGWPE** protocol: register a callsign (`X`), connect (`C`), send connected
 data (`D`), disconnect (`d`), with `Y` reporting frames still outstanding. UI frames carry
-broadcasts.
+broadcasts. AGWPE is already built for several programs: each registers its own callsigns, and
+connections to a callsign go to the program that registered it, the model §1.1 describes. *Check
+how the TNC software handles a callsign two programs register before an adapter reports `shared`
+true.*
 
 ### 9.5 TCP with TLS
 
@@ -245,3 +300,4 @@ as by radio.
 |---|---|---|
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
+| 0.2.0 | 2026-11-09 | A shared modem (§1.1): callsigns, answering and links are each host's; `caps.shared`; error `claimed`; `callsigns` before `listen` and `connect` (§4); §9 says which modems can be shared, and how Aether would be (its ADR-0106). |

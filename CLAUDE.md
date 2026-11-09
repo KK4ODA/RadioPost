@@ -10,7 +10,7 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   session protocol, RP-4 modem interface (RPMI), RP-5 post office API, RP-6 email, RP-7 forwarding
   (outline). `spec/README.md` is the index. Where a program and a spec disagree, the spec wins.
 - `docs/concept/` — the plain-language concept, with schematics.
-- `docs/design/` — the detailed design: the map, decisions D1–D18, the programs' parts, the order of
+- `docs/design/` — the detailed design: the map, decisions D1–D19, the programs' parts, the order of
   work, the open questions.
 - `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`. Standard
   library only; `ruff.toml` holds the lint settings.
