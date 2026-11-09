@@ -458,7 +458,7 @@ def messages() -> dict[str, dict[str, Any]]:
         "v": 1,
         "from": "shelter3@radiopost.org",
         "to": ["facundo@radiopost.org"],
-        "date": T_CUT + 3000,
+        "date": T_WINDOW + 900,
         "subject": "Spark plug",
         "body": "Facundo, the shelter's generator needs a spark plug. Can you bring one tomorrow? "
         "N3CALL for Shelter 3\n",
@@ -2888,8 +2888,9 @@ def deliver(
     )
 
 
-def forwarding_story() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """The post office's side, before and after session-04, and the forward item it placed."""
+def forwarding_office() -> tuple[Exchanges, dict[str, str], dict[str, Any]]:
+    """radiopost.org until N1CALL-10 has reported session-04's records: the exchanges, each
+    gateway's copies cursor, and the forward item it placed."""
     office, ex = cut_off_office()
     deliver(office, ex, "facundo@radiopost.org", 421, "maria-421", MESSAGES["maria-421"]["date"])
     ex.note("N2CALL-5 polls for copies, as it does all the time, and takes the copy of #421.")
@@ -2943,6 +2944,12 @@ def forwarding_story() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     ex.note("A report whose path does not end at the reporting gateway is refused (RP-5 §5.6).")
     wrong = sessions[1] | {"path": ["N2CALL-5", "KK4ODA-1"]}
     ex.call(FWD_PARTNER_CLOCK + 310, "N1CALL-10", "POST", "/reports", {"sessions": [wrong]}, n1)
+    return ex, {"N2CALL-5": copies["cursor"], "N1CALL-10": polled["cursor"]}, item
+
+
+def forwarding_story() -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """The post office's side, before and after session-04, and the forward item it placed."""
+    ex, cursors, item = forwarding_office()
     ex.note(
         "Atlanta's Internet returns. N2CALL-5's poll ends the forwarding: radiopost.org has the "
         "forward item at N1CALL-10 dropped (RP-7 §4.1). N2CALL-5 gets the copy of #501 it already "
@@ -2950,9 +2957,11 @@ def forwarding_story() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     )
     back = T_WINDOW + 2 * 3600
     n2 = ex.login(back, "N2CALL-5", "gateway-n2call-5")
-    ex.call(back + 5, "N2CALL-5", "GET", f"/copies?after={copies['cursor']}&wait=60", None, n2)
+    after = cursors["N2CALL-5"]
+    ex.call(back + 5, "N2CALL-5", "GET", f"/copies?after={after}&wait=60", None, n2)
     n1 = ex.login(back + 300, "N1CALL-10", "gateway-n1call-10")
-    ex.call(back + 305, "N1CALL-10", "GET", f"/copies?after={polled['cursor']}&wait=60", None, n1)
+    after = cursors["N1CALL-10"]
+    ex.call(back + 305, "N1CALL-10", "GET", f"/copies?after={after}&wait=60", None, n1)
     return ex.log, item
 
 
@@ -3383,8 +3392,9 @@ def make_forwarding() -> dict[str, Any]:
 # -- session-05.json and local-delivery.json ----------------------------------------------------
 
 
-LOCAL_A = T_CUT + 3600  # Shelter 3 calls N2CALL-5 (client's clock)
-LOCAL_B = T_CUT + 5400  # Facundo calls it
+LOCAL_A = T_WINDOW + 1200  # 14:35, after session-04: Shelter 3 calls N2CALL-5 (client's clock)
+LOCAL_B = T_WINDOW + 2400  # 14:55: Facundo calls it
+LOCAL_WINDOW = T_WINDOW + 3600  # 15:15: N1CALL-10's next window, which takes both records
 LOCAL_NOTICE = (
     "No Internet here since 08:15 UTC. Your mail waits in my queue; mail for this gateway's own "
     "users is handed over here."
@@ -3428,15 +3438,25 @@ def local_sessions() -> tuple[list[tuple[str, list[Transmission], int, int]], li
         LOCAL_A + 31,
         accept=[[cid, 0]],
         decline=[],
-        waiting=[],
+        waiting=[waiting_entry(501, "ana-to-shelter3", 2)],
         caps=GATEWAY_CAPS,
         online=False,
         cached=True,
     )
+    assert len(air0("ana-to-shelter3")) <= hello_a[10]  # under `auto`: sent unasked
     a = [
         ("client", [("HELLO", hello_a)]),
-        ("gateway", [("WELCOME", welcome_a), ("NOTICE", notice), ("DONE", DONE)]),
-        ("client", [("MSG", p) for p in msg_pdus(LOCAL_NAME)] + [("DONE", DONE)]),
+        (
+            "gateway",
+            [("WELCOME", welcome_a), ("NOTICE", notice)]
+            + [("MSG", p) for p in msg_pdus("ana-to-shelter3", serial=501)]
+            + [("DONE", DONE)],
+        ),
+        (
+            "client",
+            [("MSG", p) for p in msg_pdus(LOCAL_NAME)]
+            + [("RECEIPT", receipt(["ana-to-shelter3"])), ("DONE", DONE)],
+        ),
         ("gateway", [("RECEIPT", receipt([LOCAL_NAME]))]),
     ]
     hello_b = hello_pdu(
@@ -3445,17 +3465,18 @@ def local_sessions() -> tuple[list[tuple[str, list[Transmission], int, int]], li
         LOCAL_B,
         stream("session-05b nonce", 8),
         offers=[],
-        cursor=420,
+        cursor=421,
         full_credential=False,
         auto=0,
     )
     gateway_accepts(hello_b, "facundo", "N2CALL-5", LOCAL_B + 26)
+    assert hello_b[9] == max(offline_records()[1]["pickups"])  # #421, at 10:45 (session-04)
     welcome_b = welcome_pdu(
         stream("session-05b id", 8),
         LOCAL_B + 26,
         accept=[],
         decline=[],
-        waiting=[waiting_entry(421, "maria-421", 2), waiting_entry(0, LOCAL_NAME, 4)],
+        waiting=[waiting_entry(0, LOCAL_NAME, 4)],
         caps=GATEWAY_CAPS,
         online=False,
         cached=True,
@@ -3468,7 +3489,14 @@ def local_sessions() -> tuple[list[tuple[str, list[Transmission], int, int]], li
         ("client", [("RECEIPT", receipt([LOCAL_NAME])), ("DONE", DONE)]),
     ]
     records = [
-        record_from(hello_a, welcome_a, LOCAL_A + 31, who="shelter3-n3call", messages=[LOCAL_NAME]),
+        record_from(
+            hello_a,
+            welcome_a,
+            LOCAL_A + 31,
+            who="shelter3-n3call",
+            messages=[LOCAL_NAME],
+            pickups=[501],
+        ),
         record_from(hello_b, welcome_b, LOCAL_B + 26, who="facundo", local=[cid]),
     ]
     sessions = [("a", a, LOCAL_A, LOCAL_A + 31), ("b", b, LOCAL_B, LOCAL_B + 26)]
@@ -3478,21 +3506,25 @@ def local_sessions() -> tuple[list[tuple[str, list[Transmission], int, int]], li
 def make_local_session() -> dict[str, Any]:
     sessions, _ = local_sessions()
     stories = {
-        "a": "Shelter 3 (N3CALL) hands N2CALL-5 a message for Facundo. N2CALL-5 has no Internet: "
-        "it says so in a NOTICE, receipts the message, and keeps it both in Shelter 3's session "
-        "record and for Facundo, a local user (it holds copies for him).",
-        "b": "Facundo calls N2CALL-5 with `auto` 0: list only. Waiting are the copy of #421 "
-        "(flag `copy`, served offline) and Shelter 3's message (serial 0, flag `local`). He asks "
-        "for the local one by content ID (REQUEST key 4), takes it, and hangs up; the photo stays "
-        "waiting. N2CALL-5 adds the message's content ID to his record's local pickups.",
+        "a": "14:35, twenty minutes after session-04. Shelter 3 (N3CALL) calls N2CALL-5, which "
+        "has no Internet and says so in a NOTICE. Ana's message, #501, which came in by "
+        "session-04, waits as a copy and goes unasked. Shelter 3 hands over a message for "
+        "Facundo and receipts #501; N2CALL-5 receipts the message and keeps it both in Shelter "
+        "3's session record, with the pickup of #501, and for Facundo, a local user (it holds "
+        "copies for him).",
+        "b": "14:55. Facundo calls N2CALL-5 with `auto` 0: list only. He picked up #421 at "
+        "10:45 (session-04's record), so only Shelter 3's message waits: serial 0, flag `local`. "
+        "He asks for it by content ID (REQUEST key 4), takes it, and hangs up. N2CALL-5 adds the "
+        "message's content ID to his record's local pickups.",
     }
     out = header(
         "Local delivery at a cut-off gateway, byte for byte",
         {"RP-7": "§4.4", "RP-3": "§5.2, §5.4, §5.6"},
     )
     out["story"] = (
-        "Atlanta has lost the Internet. Two users of N2CALL-5 exchange a message through it "
-        "before their post office hears of it (RP-7 §4.4)."
+        "Atlanta has been without the Internet since 08:15; session-04 ran at 14:15. Two users "
+        "of N2CALL-5 exchange a message through it before their post office hears of it (RP-7 "
+        "§4.4)."
     )
     out["rule"] = (
         "As in session-01.json, for each session. A local message is listed with serial 0 and "
@@ -3519,19 +3551,22 @@ def make_local_session() -> dict[str, Any]:
     return out
 
 
-def local_report(records: list[dict[str, Any]]) -> tuple[Exchanges, str, int]:
-    """radiopost.org until N1CALL-10 reports N2CALL-5's records of session-05 (RP-7 §4.4)."""
-    office, ex = cut_off_office()
-    deliver(office, ex, "facundo@radiopost.org", 421, "maria-421", MESSAGES["maria-421"]["date"])
-    n2 = ex.login(T_CUT - 120, "N2CALL-5", "gateway-n2call-5")
-    copies = ex.call(T_CUT - 60, "N2CALL-5", "GET", "/copies?after=&wait=60", None, n2)
-    ex.call(T_CUT - 59, "N2CALL-5", "POST", "/copies/ack", {"cursor": copies["cursor"]}, n2)
+def local_report(records: list[dict[str, Any]]) -> tuple[Exchanges, str, int, str]:
+    """radiopost.org until N1CALL-10 reports N2CALL-5's records of session-05 (RP-7 §4.4).
+
+    It goes on from forwarding.json's story after session-04's report, and returns N1CALL-10's
+    copies cursor from before that window.
+    """
+    ex, cursors, _ = forwarding_office()
+    ex.log = []
     ex.note(
-        "Atlanta loses the Internet. Shelter 3 and Facundo exchange a message through N2CALL-5 "
-        "(session-05.json). In one of N1CALL-10's windows N2CALL-5 forwards both records "
-        "(as in session-04.json), and N1CALL-10 reports them."
+        "As in forwarding.json until N1CALL-10 has reported session-04's records: Facundo has "
+        "picked up #421, and Ana's #501 waits at N2CALL-5 for Shelter 3. N2CALL-5 is still cut "
+        "off. Shelter 3 and Facundo exchange a message through it (session-05.json). In "
+        "N1CALL-10's next window N2CALL-5 forwards both records, each credential by its hash, "
+        "since N1CALL-10 took both in session-04 (RP-7 §3.2); N1CALL-10 reports them."
     )
-    window = T_WINDOW + 3600
+    window = LOCAL_WINDOW
     n1 = ex.login(window + 200, "N1CALL-10", "gateway-n1call-10")
     reported = []
     for r in records:
@@ -3549,15 +3584,15 @@ def local_report(records: list[dict[str, Any]]) -> tuple[Exchanges, str, int]:
             }
         )
     ex.call(window + 220, "N1CALL-10", "POST", "/reports", {"sessions": reported}, n1)
-    return ex, n1, window
+    return ex, n1, window, cursors["N1CALL-10"]
 
 
 def make_local_delivery() -> dict[str, Any]:
     _, records = local_sessions()
     now = LOCAL_A
     seen = {
-        "facundo@radiopost.org": T_CUT - 600,
-        "shelter3@radiopost.org": T_CUT - 7 * DAY,
+        "facundo@radiopost.org": T_CUT - 60,  # the copy of #421, polled a minute before the cut
+        "shelter3@radiopost.org": FWD_CLOCK,  # the copy of #501, in session-04
         "ana@hampost.org": now - 29 * DAY,
         "kq4sax@radiopost.org": now - 31 * DAY,
     }
@@ -3577,13 +3612,13 @@ def make_local_delivery() -> dict[str, Any]:
         return cbor.encode(rp.message_map(fields))
 
     cases_in = [
-        ("to Facundo, a copy here 10 minutes before the cut", message(["facundo@radiopost.org"])),
+        ("to Facundo, a copy here a minute before the cut", message(["facundo@radiopost.org"])),
         ("to Maria, never a copy here", message(["maria@example.com"])),
         ("to Maria, cc Facundo", message(["maria@example.com"], ["facundo@radiopost.org"])),
         ("to Ana, of another post office, a copy here 29 days ago", message(["ana@hampost.org"])),
         ("to KQ4SAX, his last copy here 31 days ago", message(["kq4sax@radiopost.org"])),
         (
-            "to Facundo and Shelter 3 itself",
+            "to Facundo and Shelter 3, a copy here this afternoon",
             message(["facundo@radiopost.org", "shelter3@radiopost.org"]),
         ),
     ]
@@ -3594,21 +3629,22 @@ def make_local_delivery() -> dict[str, Any]:
     confirm(  # RP-7 §4.4: a local user had a copy here in the last 30 days
         cases,
         {
-            "to Facundo, a copy here 10 minutes before the cut": ["facundo@radiopost.org"],
+            "to Facundo, a copy here a minute before the cut": ["facundo@radiopost.org"],
             "to Maria, never a copy here": [],
             "to Maria, cc Facundo": ["facundo@radiopost.org"],
             "to Ana, of another post office, a copy here 29 days ago": ["ana@hampost.org"],
             "to KQ4SAX, his last copy here 31 days ago": [],
-            "to Facundo and Shelter 3 itself": [
+            "to Facundo and Shelter 3, a copy here this afternoon": [
                 "facundo@radiopost.org",
                 "shelter3@radiopost.org",
             ],
         },
     )
     entries = []
+    held = {rp.credential_hash(r["credential"]): r["credential"] for r in offline_records()}
     for r in records:
-        pdu = fwd.proof_pdu(r)
-        assert fwd.check_proof(pdu, "N2CALL-5", "N1CALL-10", po_keys(), {})[0] == "ok"
+        pdu = fwd.proof_pdu(r, hashed=True)  # N1CALL-10 took both credentials in session-04
+        assert fwd.check_proof(pdu, "N2CALL-5", "N1CALL-10", po_keys(), {}, held=held)[0] == "ok"
         entries.append(
             {
                 "messages": r["messages"],
@@ -3618,17 +3654,18 @@ def make_local_delivery() -> dict[str, Any]:
             }
         )
 
-    ex, n1, window = local_report(records)
+    ex, n1, window, cursor = local_report(records)
     ex.note(
         "Shelter 3's message reaches Facundo's mailbox as #422, and is marked picked up at once: "
         "he took it at N2CALL-5. The forward item placed for it at N1CALL-10 is dropped, so "
-        "N1CALL-10's next poll carries both, and drops it."
+        "N1CALL-10's next poll carries both, and drops it; #501, which Shelter 3 picked up, is "
+        "dropped too."
     )
-    ex.call(window + 230, "N1CALL-10", "GET", "/copies?after=&wait=60", None, n1)
-    ex.note("Facundo calls N1CALL-10 later: #422 is not offered again; #421 still waits.")
+    ex.call(window + 230, "N1CALL-10", "GET", f"/copies?after={cursor}&wait=60", None, n1)
+    ex.note("Facundo calls N1CALL-10 later: neither #421 nor #422 is offered; he has both.")
     body = signed_session("facundo", "N1CALL-10", [], window + 900, "local facundo")
     opened = ex.call(window + 960, "N1CALL-10", "POST", "/sessions", body, n1)
-    assert [w["serial"] for w in opened["waiting"]] == [421]
+    assert opened["waiting"] == []
     out = header(
         "Local delivery: who is local, the records, and the post office's side",
         {"RP-7": "§3.2, §4.4", "RP-5": "§5.6"},
@@ -3637,7 +3674,9 @@ def make_local_delivery() -> dict[str, Any]:
         "A gateway that received copies for `copies_seen`'s addresses at those times counts as "
         "local, at `now`, those seen in the last 30 days; given a case's message it keeps the "
         "message for `expect`, its local recipients (RP-7 §4.4). Each record's PROOF is exact, "
-        "Facundo's with key 8. The post office's exchanges read as in api-exchanges.json."
+        "its credential by hash (key 9: N1CALL-10 holds both), Shelter 3's with its pickup of "
+        "#501 and Facundo's with his local pickup (key 8). The post office's exchanges read as "
+        "in api-exchanges.json."
     )
     out["context"] = {"gateway": "N2CALL-5", "now": now, "copies_seen": seen}
     out["cases"] = cases
@@ -3652,7 +3691,7 @@ def make_local_delivery() -> dict[str, Any]:
 def make_queued() -> dict[str, Any]:
     """RP-7 §3.6: what the sender's client offers again, a cut-off gateway's answer, the view."""
     _, records = local_sessions()
-    ex, _, window = local_report(records)
+    ex, _, window, _ = local_report(records)
     cid = encoded(LOCAL_NAME)[1]
     other = encoded("maria-421")[1]
     took = LOCAL_A
@@ -5161,9 +5200,15 @@ def check_local_session(data: dict[str, Any]) -> None:
     a, b = ([pdus_of(t) for t in s["transmissions"]] for s in data["sessions"])
     handed = [p for p in a[2] if p[0] == rp.PDU_TYPES["MSG"]]
     assert len(handed) == 1 and a[3][0][1] == [handed[0][1]]
+    copies = [w for w in a[1][0][7] if w[6] & 2]  # a copy served offline, sent unasked
+    served = [p for p in a[1] if p[0] == rp.PDU_TYPES["MSG"]]
+    assert [(p.get(5), p[1]) for p in served] == [(w[0], w[1]) for w in copies]
+    receipts = [p[1] for p in a[2] if p[0] == rp.PDU_TYPES["RECEIPT"]]
+    assert receipts == [[w[1] for w in copies]]
     cid = rp.content_id(rp.air_decode(handed[0][4]))
     hello, welcome = b[0][0], b[1][0]
     assert hello[10] == 0 and not welcome[11]
+    assert hello[9] not in [w[0] for w in welcome[7]]  # RP-3 §6.2: the cursor's is picked up
     local = [w for w in welcome[7] if w[6] & 4]
     assert [w[0] for w in local] == [0] and local[0][1] == cid
     assert all(w[0] > 0 for w in welcome[7] if not w[6] & 4)
@@ -5187,6 +5232,11 @@ def check_local_delivery(data: dict[str, Any]) -> None:
     for sent, r in zip(report["request"]["body"]["sessions"], data["records"], strict=True):
         assert [rp.id_bytes(t).hex() for t in sent["local_pickups"]] == r["local_pickups"]
         taken.update(sent["local_pickups"])
+        pdu = cbor.decode(bytes.fromhex(r["proof"]["pdu_hex"]))  # RP-7 §3.2: by its hash
+        credential = jws.unb64u(sent["credential"])
+        assert credential is not None and 1 not in pdu
+        assert pdu[9] == hashlib.sha256(credential).digest()[:8]
+        assert pdu.get(7, []) == sent["pickups"]
     after = log[log.index(report) + 1 :]
     items = [i for e in after for i in (e["response"].get("body") or {}).get("items", [])]
     placed = {i["serial"] for i in items if i["kind"] != "drop" and i["id"] in taken}

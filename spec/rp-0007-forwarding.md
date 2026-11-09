@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.7.0 |
+| **Version** | 0.7.1 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -394,7 +394,7 @@ called counts as neither.
 | `HELLO` from a gateway, one offer, with its credential | 335 bytes |
 | `PROOF`, a record with one message | 342 bytes |
 | `PROOF`, a pickup only | 332 bytes |
-| `PROOF`, a local pickup only | 342 bytes |
+| `PROOF`, a local pickup only, the credential by its hash | 187 bytes |
 | `PROOF`, a record with one message, the credential by its hash | 186 bytes |
 | `PROOF`, a pickup only, the credential by its hash | 177 bytes |
 | `REQUEST` for one local message by content ID | 20 bytes |
@@ -416,12 +416,14 @@ the United States' table (§5, §5.1), eight choices of whether to send records 
 and the post office's side: the forward item placed when N2CALL-5 fell
 silent, N1CALL-10's report with its path, and the drop when N2CALL-5 came back.
 
-`vectors/session-05.json` is local delivery byte for byte: Shelter 3 hands N2CALL-5, cut off, a
-message for Facundo, who then finds it listed with serial 0 and the flag `local`, asks for it by
-content ID and takes it. `vectors/local-delivery.json` has six messages and the local recipients a
-gateway keeps them for, both records' `PROOF`s (Facundo's with key 8), and the post office's side:
-N1CALL-10's report with `local_pickups`, the forward item placed for the message and dropped in the
-same poll, and the message not offered to Facundo again.
+`vectors/session-05.json` is local delivery byte for byte, after session-04: Shelter 3 picks up
+Ana's message from N2CALL-5, still cut off, and hands it a message for Facundo, who then finds it
+listed with serial 0 and the flag `local`, asks for it by content ID and takes it.
+`vectors/local-delivery.json` has six messages and the local recipients a gateway keeps them for,
+both records' `PROOF`s for N1CALL-10's next window, each credential by its hash (Facundo's with key
+8), and the post office's side, going on from `forwarding.json`'s: N1CALL-10's report with
+`local_pickups`, the forward item placed for the message and dropped in the same poll, and the
+message not offered to Facundo again.
 
 `vectors/queued.json` has the sender's side (§3.6): when a client offers a queued message again,
 how a cut-off gateway answers, and what the client shows, and Shelter 3's session with N1CALL-10,
@@ -442,3 +444,4 @@ online, which declines the message `already-have` because the post office alread
 | 0.5.0 | 2026-11-09 | Size: `PROOF` key 9 `credential_hash` in place of the credential when the partner holds it, which halves a `PROOF` (§3.2); the partner's checks begin with the credential, `credential-required` for a hash it does not hold (§3.3); sizes (§9); test vectors (§10). |
 | 0.6.0 | 2026-11-09 | Routing: gateways do not announce what they reach; a cut-off gateway keeps its records for a partner that reaches the post offices when one opens a window within the hour (§6.2); §6 split into radio routes (§6.1) and the choice (§6.2); test vectors (§10). |
 | 0.7.0 | 2026-11-09 | Bands: a window states `occupied_hz`, and each station checks it against its own country's table (§5); the segments open to unattended forwarding, with the United States' table (§5.1); test vectors (§10). |
+| 0.7.1 | 2026-11-09 | The local delivery vectors follow session-04: the sessions at 14:35 and 14:55, the records in the 15:15 window by their credentials' hashes (§9, §10). |
