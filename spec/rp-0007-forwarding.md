@@ -3,9 +3,10 @@
 | | |
 |---|---|
 | **Status** | Outline |
-| **Version** | 0.0.1 |
+| **Version** | 0.0.2 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
+| **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-3, RP-5 |
 
 How gateways carry mail to each other **by radio** when the Internet is down: out of an area that
@@ -80,3 +81,4 @@ past the hour."
 | Version | Date | Change |
 |---|---|---|
 | 0.0.1 | 2026-11-09 | Outline. |
+| 0.0.2 | 2026-11-09 | Licence stated: CC BY 4.0. |

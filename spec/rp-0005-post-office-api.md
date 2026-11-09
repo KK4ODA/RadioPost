@@ -3,9 +3,10 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.0 |
+| **Version** | 0.1.1 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
+| **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-3 |
 | **Protocol version** | 1 (`/rp/v1/`) |
 
@@ -369,3 +370,4 @@ How the accept list is used is RP-6's.
 | Version | Date | Change |
 |---|---|---|
 | 0.1.0 | 2026-11-09 | First draft. |
+| 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |

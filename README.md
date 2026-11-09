@@ -46,4 +46,10 @@ pull requests, as [`CONTRIBUTING.md`](CONTRIBUTING.md) describes.
 
 ## Licence
 
-To be chosen.
+| What | Licence |
+|---|---|
+| The specifications (`spec/`), the documents (`docs/`) and their figures | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (`LICENSE-CC-BY-4.0`) |
+| Code (`tools/`, and the programs to come) | MIT (`LICENSE-MIT`) or Apache 2.0 (`LICENSE-APACHE`), at your option |
+
+Anyone may implement the protocols, in open or closed software, without asking; please credit the
+RadioPost project.

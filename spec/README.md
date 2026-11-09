@@ -7,16 +7,21 @@ special standing (RP-0 §3).
 They are **living documents**: each carries a status, a version and a change log, and changes are
 proposed as pull requests (`CONTRIBUTING.md`, RP-0 §8).
 
+They are published under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+(`LICENSE-CC-BY-4.0`): anyone may implement, copy and adapt them, for any purpose, crediting the
+RadioPost project. No permission or fee is needed to build a client, gateway, post office or
+adapter from them.
+
 | Spec | Title | Status | Version | Governs |
 |---|---|---|---|---|
-| [RP-0](rp-0000-conventions.md) | Conventions | Draft | 0.1.0 | Requirement words, encodings, cryptography, identifiers, roles, how specs change, registries |
-| [RP-1](rp-0001-identity.md) | Identity | Draft | 0.1.0 | Keys, credentials, session statements, published keys, revocation |
-| [RP-2](rp-0002-messages.md) | Messages | Draft | 0.1.0 | The message, its air form, its content ID |
-| [RP-3](rp-0003-session.md) | Session protocol | Draft | 0.1.0 | Client ↔ gateway over the radio |
-| [RP-4](rp-0004-modem-interface.md) | Modem interface | Draft | 0.1.0 | Client or gateway ↔ modem adapter |
-| [RP-5](rp-0005-post-office-api.md) | Post office API | Draft | 0.1.0 | Gateway or client ↔ post office over HTTPS |
-| [RP-6](rp-0006-email.md) | Email interoperation | Draft | 0.1.0 | Post office ↔ ordinary email |
-| [RP-7](rp-0007-forwarding.md) | Forwarding | Outline | 0.0.1 | Gateway ↔ gateway by radio |
+| [RP-0](rp-0000-conventions.md) | Conventions | Draft | 0.1.1 | Requirement words, encodings, cryptography, identifiers, roles, how specs change, registries |
+| [RP-1](rp-0001-identity.md) | Identity | Draft | 0.1.1 | Keys, credentials, session statements, published keys, revocation |
+| [RP-2](rp-0002-messages.md) | Messages | Draft | 0.1.1 | The message, its air form, its content ID |
+| [RP-3](rp-0003-session.md) | Session protocol | Draft | 0.1.1 | Client ↔ gateway over the radio |
+| [RP-4](rp-0004-modem-interface.md) | Modem interface | Draft | 0.1.1 | Client or gateway ↔ modem adapter |
+| [RP-5](rp-0005-post-office-api.md) | Post office API | Draft | 0.1.1 | Gateway or client ↔ post office over HTTPS |
+| [RP-6](rp-0006-email.md) | Email interoperation | Draft | 0.1.1 | Post office ↔ ordinary email |
+| [RP-7](rp-0007-forwarding.md) | Forwarding | Outline | 0.0.2 | Gateway ↔ gateway by radio |
 
 ## What to implement
 

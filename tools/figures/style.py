@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
 """The drawing kit RadioPost's figures share.
 
 Every figure uses one style: a role colour per kind of station (radio user, gateway, post

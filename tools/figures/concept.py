@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
 """Draw the figures of docs/concept/00-concept.md.
 
 Run from anywhere: ``python tools/figures/concept.py``. It writes one SVG per figure into

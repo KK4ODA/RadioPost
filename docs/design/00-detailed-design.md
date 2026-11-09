@@ -3,9 +3,10 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.0 |
+| **Version** | 0.1.1 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
+| **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The concept](../concept/00-concept.md) |
 
 The concept says what RadioPost is for and how it feels to use. This document says how it is
@@ -251,7 +252,6 @@ Collected from the specifications and the concept, each to be settled in the doc
 | Stalwart: MTA hooks or milter; AGPL for operators; clustering's edition. | Concept §13 |
 | Forwarding: routing, schedules, expiry, reporting. | RP-7 §4 |
 | The reference implementations' languages and packaging. | §6 here |
-| Licences for the specifications and the code. | `README.md` |
 
 ---
 
@@ -260,3 +260,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | Version | Date | Change |
 |---|---|---|
 | 0.1.0 | 2026-11-09 | First draft. |
+| 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |

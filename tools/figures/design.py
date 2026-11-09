@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
 """Draw the figures of the detailed design and the specifications.
 
 Run from anywhere: ``python tools/figures/design.py``. It writes docs/design/fig/d1-interfaces.svg

@@ -42,6 +42,12 @@ Edit the script, run it, and commit the script and the SVGs together.
 
 There is no code yet. When there is, each program will say how to build and test it.
 
+## Licences of contributions
+
+By contributing, you agree that what you contribute is published under the licence of the part it
+goes into: CC BY 4.0 for the specifications and documents, MIT or Apache 2.0 (at the user's option)
+for code. New code files start with `SPDX-License-Identifier: MIT OR Apache-2.0` in a comment.
+
 ## Conduct
 
 Be kind, be specific, and assume good faith. Amateur radio's own traditions of courtesy apply.

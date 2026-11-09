@@ -3,9 +3,10 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.0 |
+| **Version** | 0.1.1 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
+| **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
 This document holds what every other RadioPost specification relies on: the words that make a
 requirement, the data formats, the cryptography, how identifiers are written, how the
@@ -216,6 +217,13 @@ Changes are proposed as pull requests to the RadioPost repository, as described 
 `CONTRIBUTING.md`. A change to a protocol must update, in the same pull request: the specification,
 its change log, the affected registries (§9), and the test vectors once they exist.
 
+### 8.5 Licence
+
+The specifications are published under the Creative Commons Attribution 4.0 International licence
+(CC BY 4.0). Anyone may implement them, copy them, adapt them and build on them, for any purpose,
+commercial or not, without asking, as long as they credit the RadioPost project. Code in the
+RadioPost repository is under the MIT licence or the Apache License 2.0, at the user's option.
+
 ---
 
 ## 9. Registries
@@ -269,3 +277,4 @@ means the same thing wherever it appears.
 | Version | Date | Change |
 |---|---|---|
 | 0.1.0 | 2026-11-09 | First draft. |
+| 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0 (§8.5). |

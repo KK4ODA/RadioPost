@@ -1,6 +1,7 @@
 # RadioPost: a federated mail system for amateur radio
 
-*Concept document, 2026-11-09. A detailed design follows it.*
+*Concept document, 2026-11-09. A detailed design follows it. Licence:
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).*
 
 **RadioPost** lets licensed amateurs send and receive ordinary email by radio, through gateways
 that anyone can run, with no central server. It is *federated*: many post offices, each run by its

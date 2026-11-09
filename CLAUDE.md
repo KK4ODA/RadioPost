@@ -29,6 +29,9 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   black box — cite only its published documents (the TNC command list).
 - Figures: edit the generator, run it, check the render, commit the script and the SVGs together.
 - Conventional Commits. Work on a short-lived branch, fast-forward it into `main`, push both.
+- **Licences** (the author's choice, 2026-11-09): specifications, documents and figures under
+  CC BY 4.0 (`LICENSE-CC-BY-4.0`, stated in each spec's header table and RP-0 §8.5); code under
+  MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`), each code file starting with an SPDX line.
 
 ## Decided by the author
 - The name RadioPost; the project's post office domain `radiopost.org` (registered 2026-11-09,
