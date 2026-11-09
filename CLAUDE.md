@@ -39,7 +39,8 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   how a spec gap is found: the first run found five, the resumed and station-to-station sessions
   three more, the modem interface's conversations seven unwritten rules, the post office's
   exchanges most of RP-5's error behaviour and JWS's missing context rule, the email vectors that
-  bounces were refused at the door and `Radio-Path` lacked its session ID.
+  bounces were refused at the door and `Radio-Path` lacked its session ID, renewal that a gateway
+  could not renew its own credential.
 - **Numbers are measured.** Sizes and times in the specs come from encoding the examples, not
   estimates.
 - **Cross-references** are written `RP-n §x.y`; check them when sections move.

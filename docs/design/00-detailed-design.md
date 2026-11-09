@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.8 |
+| **Version** | 0.1.9 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -225,8 +225,11 @@ To be confirmed:
   RP-5 never sent; attachments were decided by limits that depend on the gateway, though the message
   is made once (now the account's `attach_bytes`); a message part could be any message of the
   session, not one for its recipient; and the door's order, encryption, executables, accept-list
-  matching, quoted history, the date's form and the signature line were unwritten. Owed: RP-7, once
-  it is more than an outline.
+  matching, quoted history, the date's form and the signature line were unwritten. Renewal and the
+  accept list found RP-5 0.6.0's: a gateway could not renew its own credential (gateways were kept
+  off client endpoints), what a renewed credential holds and what becomes of the old one, the
+  accept list's answer and spelling, and no setting turned off the list's filling by mail sent.
+  Owed: RP-7, once it is more than an outline.
 * **A conformance tester** that plays the other side: a client to test a gateway, a gateway to
   test a client, over the TCP adapter, including broken links, resumes and wrong signatures.
 * **A loopback adapter** joining two hosts through RPMI with delays and losses, for tests with no
@@ -296,3 +299,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.6 | 2026-11-09 | The post office API's test vectors (§7). |
 | 0.1.7 | 2026-11-09 | The email test vectors (§7). |
 | 0.1.8 | 2026-11-09 | §5.4: Aether is shareable from 0.2.0-beta.146 (its ADR-0106). |
+| 0.1.9 | 2026-11-09 | Renewal and accept-list test vectors (§7). |

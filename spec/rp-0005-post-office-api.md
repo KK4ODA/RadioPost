@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.5.0 |
+| **Version** | 0.6.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -70,8 +70,8 @@ part of this API.
 | §6 Client endpoints | Clients | A token from the account's credential (enrollment: a code) |
 
 A request with no token, or an unknown or expired one, is answered `401` `not-authorized`; a token
-without the `gateway` flag on a gateway endpoint, or one with it on a client endpoint, `403`
-`not-authorized`.
+without the `gateway` flag on a gateway endpoint, or one with it on a client endpoint other than
+`POST /credentials` (§6.2), `403` `not-authorized`.
 
 A post office accepts gateways credentialed by **any post office it knows** (RP-1 §7.3), unless its
 info document says `gateways: "listed"`, in which case only gateways in its own list (§4.4).
@@ -238,7 +238,8 @@ code (§1), and otherwise `201`:
   in `WELCOME`. A `decline` entry is `{"id", "code", "name"}`, with `already-have`, `too-large` or
   `refused-by-policy`.
 * `waiting`: every message not yet picked up, in RP-3 §6.1's order.
-* `credential`: a renewed credential, when `renew` was asked and the post office issued one.
+* `credential`: a renewed credential (§6.2), when `renew` was asked and the post office issued
+  one. The gateway hands it to the client in `CREDENTIAL` (RP-3 §5.8).
 
 ### 5.3 Messages for the user
 
@@ -358,8 +359,18 @@ operator: `403` `not-authorized`) and the signature (`422` `signature-invalid`),
 
 ### 6.2 `POST /credentials`: renewal
 
-With a token (§3) from the current credential. Body `{}`. Answers `{"credential": "gqNk…"}` for the
-same device key. A new device enrolls with a new code instead.
+With a token (§3) from the current credential, a client's or a gateway's. Body `{}`. Answers `200`
+`{"credential": "gqNk…"}`: a new credential with the same address, operator, device key and flags,
+the post office's next serial, issued now and expiring as RP-1 §4.2 says, signed with its current
+key.
+
+* The credential the token came from stays valid until it expires. The post office keeps the
+  serials of every credential it issued for a device key, so that revoking the device revokes
+  them all (RP-1 §8).
+* A credential that is expired or revoked cannot log in (§3.2), so it cannot be renewed: the device
+  enrolls again with a new code (§6.1). A new device enrolls too.
+* By radio, a client asks with `renew` in `HELLO`'s caps (RP-3 §5.1), the gateway passes `renew` on
+  (§5.2), and the post office answers in `credential` as here.
 
 ### 6.3 `GET /settings`, `PUT /settings`
 
@@ -376,6 +387,7 @@ same device key. A new device enrolls with a new code instead.
 | `auto_bytes` | A default for the client's `auto` (RP-3 §5.1). |
 | `attach_bytes` | Mail from the Internet carries its attachments up to this air-form size; above it they are held (RP-6 §2.4). The post office's default when unset is its own, at most its `max_air_bytes`. |
 | `radio_skips_read` | Mail already read in an ordinary mail program is not offered by radio. |
+| `accept_on_send` | Mail the user sends adds its recipients to the accept list (§6.5). Default true. |
 
 ### 6.4 Gateway registration
 
@@ -394,10 +406,20 @@ A licensed user registers a gateway they operate:
 
 | Request | Does |
 |---|---|
-| `GET /accept-list` | `{"entries": ["maria@example.com", "@redcross.example"]}`: addresses, or whole domains written `@domain`. |
-| `POST /accept-list` | `{"add": […], "remove": […]}` |
+| `GET /accept-list` | `200` `{"entries": ["maria@example.com", "@redcross.example"]}`: addresses, or whole domains written `@domain`. |
+| `POST /accept-list` | `{"add": […], "remove": […]}`. Answers `200` with the list as it now stands. |
 
-How the accept list is used is RP-6's.
+* Entries are written in lowercase, and keep the order they were added in. One already there is
+  not added again; removing one that is not there changes nothing. `add` is applied first, then
+  `remove`.
+* An entry that is neither an address nor `@domain` is answered `400` `malformed`, and nothing
+  changes.
+* A role mailbox has one list, which every operator's token reads and changes.
+* When the post office accepts a message the user sent (§5.4, §5.6), it adds each `to` and `cc`
+  address the list does not already match (RP-6 §2.2), unless the user's `accept_on_send` is false
+  (§6.3).
+
+How the accept list is used at the door is RP-6's.
 
 ---
 
@@ -414,7 +436,9 @@ How the accept list is used is RP-6's.
 
 ## 8. Test vectors
 
-`vectors/api-exchanges.json` (enrollment, a gateway registered, logins, session-01
+`vectors/api-account.json` (renewal over the Internet and by radio, a gateway's, an expired and a
+revoked credential; the accept list read and changed, shared by a role mailbox's operators, filled
+by mail sent, and its effect at the door), `vectors/api-exchanges.json` (enrollment, a gateway registered, logins, session-01
 at the post office, copies placed ahead and dropped, an offline gateway's report, and the
 failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures of §3.2, §6.1 and
 §6.4).
@@ -431,3 +455,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.3.0 | 2026-11-09 | A message's air form is made once and served the same every time (§5.3), so that downloads resume across gateways (RP-3 §7). |
 | 0.4.0 | 2026-11-09 | The HTTP status of each code, 401 and 403 (§1, §2); login and enrollment failures (§3.2, §6.1); public documents checked by RP-0 §5 and RP-1 §7.2 (§4); the order of a session's checks, `decline` entries, `waiting`'s order (§5.2); unknown serials (§5.3, §5.5); the codes of a refused message (§5.4); a report's answer (§5.6); test vectors. |
 | 0.5.0 | 2026-11-09 | `gateway_session` in a session and a report, for RP-6's `Radio-Path` (§5.2, §5.6); the setting `attach_bytes` (§6.3). |
+| 0.6.0 | 2026-11-09 | Renewal (§6.2): what a renewed credential holds, gateways renew too (§2), the old one stays valid, a device's serials revoked together, expired or revoked means enrolling again, by radio (§5.2). The accept list (§6.5): `POST`'s answer, lowercase entries in order, `malformed`, one list for a role mailbox, recipients added when mail is sent; the setting `accept_on_send` (§6.3). Test vectors. |

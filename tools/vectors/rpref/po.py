@@ -8,11 +8,12 @@ requires, as plainly as possible, and nothing about storage, mail or real time.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import cbor, jws, rp
+from . import cbor, jws, mail, rp
 
 # RP-5 §1: the HTTP status of each RP-0 §9.3 code. `not-authorized` is 401 when the request has
 # no valid token, and 403 when the token may not do what is asked.
@@ -42,6 +43,7 @@ SESSION_S = 3600  # how long a session lasts (RP-5 §5.2)
 TOKEN_S = 3600  # how long a token lasts, at most (RP-5 §3.2)
 NONCE_S = 300  # how long a login nonce is good for (RP-5 §3.1)
 CREDENTIAL_S = 90 * 86400  # RP-1 §4.2
+ENTRY = re.compile(r"(?:[^@\s]+)?@[a-z0-9-]+(?:\.[a-z0-9-]+)+")  # RP-5 §6.5, in lowercase
 
 Response = tuple[int, dict[str, Any] | None]
 
@@ -114,6 +116,7 @@ class PostOffice:
     mailboxes: dict[str, list[Waiting]] = field(default_factory=dict)
     had: set[bytes] = field(default_factory=set)
     settings: dict[str, dict[str, Any]] = field(default_factory=dict)
+    accept: dict[str, list[str]] = field(default_factory=dict)  # accept lists (RP-5 §6.5)
     gateways: dict[str, dict[str, Any]] = field(default_factory=dict)
     copies: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     codes: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -181,7 +184,8 @@ class PostOffice:
             return user
         is_gateway = bool(user[9] & rp.FLAGS["gateway"])
         gateway_routes = {"sessions", "reports", "copies"}
-        if (parts[0] in gateway_routes) != is_gateway:
+        anyone = {"/credentials"}  # gateways renew their credentials too (§6.2)
+        if route not in anyone and (parts[0] in gateway_routes) != is_gateway:
             return problem("not-authorized")
         if (method, route) == ("POST", "/sessions"):
             return self.open_session(user, body or {})
@@ -200,6 +204,10 @@ class PostOffice:
             return 200, self.settings.get(user[3], {})
         if (method, route) == ("POST", "/gateways"):
             return self.register(user, body or {})
+        if (method, route) == ("POST", "/credentials"):
+            return 200, {"credential": jws.b64u(self.renewed(user))}
+        if route == "/accept-list":
+            return self.accept_list(user[3], method, body or {})
         return problem("unknown-message", 404)
 
     def authorise(self, token: str | None) -> dict[int, Any] | Response:
@@ -241,32 +249,33 @@ class PostOffice:
 
     def check_session(
         self, body: dict[str, Any], gateway: str, clock: int
-    ) -> tuple[dict[int, Any], Response | None]:
+    ) -> tuple[dict[int, Any], dict[int, Any], Response | None]:
         """RP-5 §5.2, §5.6: the credential (at `clock`) and the statement (RP-1 §5, §6.3).
 
-        Returns the statement and None, or an empty map and the problem to answer with.
+        Returns the statement, the credential's body and None, or empty maps and the problem to
+        answer with.
         """
         raw = [jws.unb64u(body.get(k, "")) for k in ("statement", "signature", "credential")]
         statement_raw, signature, credential = raw
         if statement_raw is None or signature is None or credential is None:
-            return {}, problem("malformed")
+            return {}, {}, problem("malformed")
         try:
             stmt = cbor.decode(statement_raw)
         except cbor.NotCanonical:
-            return {}, problem("malformed")
+            return {}, {}, problem("malformed")
         started = body["started"]
         need = ["receive"] + (["send"] if stmt.get(6) else [])
         result, cbody = rp.verify_credential(credential, self.known, self.revoked, clock, need)
         if result != "ok" or cbody is None:
-            return {}, problem(result)
+            return {}, {}, problem(result)
         seen = [k for k, t in self.replay.items() if started - t < rp.REPLAY_S]
         result = rp.verify_statement(stmt, signature, cbody, me=gateway, now=started, seen=seen)
         if result != "ok":
-            return {}, problem(result)
-        return stmt, None
+            return {}, {}, problem(result)
+        return stmt, cbody, None
 
     def open_session(self, gateway: dict[int, Any], body: dict[str, Any]) -> Response:
-        stmt, failed = self.check_session(body, gateway[4], self.now)
+        stmt, cbody, failed = self.check_session(body, gateway[4], self.now)
         if failed is not None:
             return failed
         if abs(body["started"] - self.now) > rp.TIME_WINDOW_S:
@@ -294,7 +303,7 @@ class PostOffice:
             body.get("gateway_session", ""),
         )
         self.sessions[sid] = session
-        return 201, {
+        answer = {
             "session": sid,
             "expires": session.expires,
             "waiting": [w.entry() for w in waiting],
@@ -302,6 +311,9 @@ class PostOffice:
             "accept": accept,
             "decline": decline,
         }
+        if body.get("renew"):
+            answer["credential"] = jws.b64u(self.renewed(cbody))
+        return 201, answer
 
     def in_session(
         self,
@@ -356,8 +368,36 @@ class PostOffice:
                 continue
             status = "duplicate" if cid in self.had else "accepted"
             self.had.add(cid)
+            if status == "accepted":
+                self.written_to(stmt[1], cbor.decode(canonical))
             results.append({"id": text, "status": status})
         return results
+
+    def written_to(self, address: str, message: dict[int, Any]) -> None:
+        """RP-5 §6.5: the recipients of mail a user sent join the user's accept list."""
+        if not self.settings.get(address, {}).get("accept_on_send", True):
+            return
+        entries = self.accept.setdefault(address, [])
+        for recipient in message.get(3, []) + message.get(4, []):
+            if not mail.on_list(recipient, entries):
+                entries.append(recipient.lower())
+
+    def renewed(self, held: dict[int, Any]) -> bytes:
+        """RP-5 §6.2: a new credential for the same account, operator, device key and flags."""
+        return self.issue(held[3], held[4], held[5], held[9])
+
+    def accept_list(self, address: str, method: str, body: dict[str, Any]) -> Response:
+        """RP-5 §6.5: one list for the account, shared by every operator of a role mailbox."""
+        entries = self.accept.setdefault(address, [])
+        if method == "POST":
+            given = [*body.get("add", []), *body.get("remove", [])]
+            if not all(isinstance(e, str) and ENTRY.fullmatch(e.lower()) for e in given):
+                return problem("malformed")
+            add = [e.lower() for e in body.get("add", [])]
+            remove = [e.lower() for e in body.get("remove", [])]
+            entries.extend(e for i, e in enumerate(add) if e not in entries and e not in add[:i])
+            entries[:] = [e for e in entries if e not in remove]
+        return 200, {"entries": list(entries)}
 
     def picked_up(self, address: str, serials: list[int]) -> None:
         """RP-5 §5.5: mark them, and have every copy placed ahead dropped (§5.8)."""
@@ -372,7 +412,7 @@ class PostOffice:
         """RP-5 §5.6: each session checked at its own `started`, one answer each, in order."""
         out: list[dict[str, Any]] = []
         for s in body.get("sessions", []):
-            stmt, failed = self.check_session(s, gateway[4], s["started"])
+            stmt, _, failed = self.check_session(s, gateway[4], s["started"])
             if failed is not None:
                 prob = failed[1]
                 assert prob is not None

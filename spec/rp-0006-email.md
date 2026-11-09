@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.0 |
+| **Version** | 0.2.1 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -65,7 +65,9 @@ Each account has an accept list (RP-5 §6.5) of addresses and domains (`@domain`
 
 * An entry matches an address ignoring case. `@domain` matches addresses at that domain, not at
   its subdomains.
-* Writing to an address adds it, unless the user turns that off.
+* Writing to an address adds it (RP-5 §6.5), unless the user's `accept_on_send` is false (RP-5
+  §6.3). Test vectors: `vectors/api-account.json`, where an email refused at the door passes once
+  the user has written to its sender.
 * Mail from other RadioPost post offices needs no entry: their users are licensed and their mail
   is signed.
 * A role mailbox's list is shared by its operators.
@@ -233,3 +235,4 @@ drops the part. Test vectors: `vectors/email-in.json`, `between`.
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.2.0 | 2026-11-09 | The door (§2.1): checks in order, the null sender and delivery reports, what is encrypted, which attachments are executable; how accept lists match (§2.2). Making the message (§2.4): addresses and dates, normalised text, a precise rule for quoted history, attachments by `attach_bytes`, held files. Mail out (§3): the date's form, the transfer encoding, the signature line `-- `, `Radio-Path`'s session from RP-5's `gateway_session`; a bounce's form (§3.3). Between post offices (§4): the part's types, and the checks, recipient included. Test vectors. |
+| 0.2.1 | 2026-11-09 | §2.2: how writing to an address adds it, and how that is turned off, are RP-5 §6.5 and §6.3. |

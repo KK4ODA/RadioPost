@@ -1,0 +1,940 @@
+{
+  "radiopost_vectors": "Post office API: renewal and the accept list",
+  "format": 1,
+  "specs": {
+    "RP-5": "§5.2, §6.2, §6.3, §6.5",
+    "RP-6": "§2.2",
+    "RP-3": "§5.1, §5.8"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "As in api-exchanges.json: each exchange is a request to the post office at its clock and its answer, compared as JSON values. A renewed credential is new bytes from the post office's key (`po:radiopost.org`), for the same account, operator, device key and flags, with the next serial and issued at the request's time. An `smtp` entry is the door's answer (email-door.json) for the accept list as it stands at that moment. An `rp3` entry is a PDU on the air.",
+  "context": {
+    "post_office": "radiopost.org",
+    "next_serial": 1101,
+    "accept_lists_at_start": {
+      "facundo@radiopost.org": [
+        "maria@example.com",
+        "@redcross.example"
+      ],
+      "shelter3@radiopost.org": [
+        "@redcross.example"
+      ]
+    }
+  },
+  "renewal": [
+    {
+      "note": "Facundo renews his laptop's credential: same account, operator, key and flags."
+    },
+    {
+      "at": 1794408000,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+          "expires": 1794408300
+        }
+      }
+    },
+    {
+      "at": 1794408000,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+          "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+          "signature": "vvj6g6S7gFT7vifjFwtWwx2-YYalvH8gz_4rtIkx7ThOC1f8gixxmqZVBTsuyKZiY-etB4a_oFYpRFqJyIX6Cw"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+          "expires": 1794411600,
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA",
+          "flags": 3
+        }
+      }
+    },
+    {
+      "at": 1794408005,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/credentials",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+        "body": {}
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "credential": "glhdqQEBAhkETQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaavR-RQcaa2slRQhE-71fXAkDWEDhy56_qpWlX53pit2Hj7CtNsNfgWy1mczzpxJHA3PzTwV5C3E0LdJJvX_n4rvvInWKy_TZkDBWAKz5tuZg4uUP"
+        }
+      }
+    },
+    {
+      "note": "He logs in with the new credential; the old one still works until it expires."
+    },
+    {
+      "at": 1794408060,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "qDHrLf-NrMWfaCOoClbU8mMP7XQDR4U4H9sfHd1VrCw",
+          "expires": 1794408360
+        }
+      }
+    },
+    {
+      "at": 1794408060,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glhdqQEBAhkETQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaavR-RQcaa2slRQhE-71fXAkDWEDhy56_qpWlX53pit2Hj7CtNsNfgWy1mczzpxJHA3PzTwV5C3E0LdJJvX_n4rvvInWKy_TZkDBWAKz5tuZg4uUP",
+          "nonce": "qDHrLf-NrMWfaCOoClbU8mMP7XQDR4U4H9sfHd1VrCw",
+          "signature": "1QxRwE8d_kktAeQWmIttwufV8hxxq1WsxywIbXoxGA2Btb_VSXT64JjetiZIavY_jRovPWFiUkuLVZQr229UAg"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_nrAE4HmjRoMr3kBoGs0KWXrc",
+          "expires": 1794411660,
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA",
+          "flags": 3
+        }
+      }
+    },
+    {
+      "at": 1794408090,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "KdVDtVMXFVJDLCJc-DBQaG1CekuqA0Y2T4Wekk_y9ns",
+          "expires": 1794408390
+        }
+      }
+    },
+    {
+      "at": 1794408090,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+          "nonce": "KdVDtVMXFVJDLCJc-DBQaG1CekuqA0Y2T4Wekk_y9ns",
+          "signature": "rmOb_zBFynVEmPeDhC0aKf1IbEKfIAYAYLpZeuOjEPptzFeDQ2cKm1qI0HKptoq8rhWVLUwbk4OXYoB-g-hnCQ"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok__S0rLgmgVaVn3GOvq653Nwyi",
+          "expires": 1794411690,
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA",
+          "flags": 3
+        }
+      }
+    },
+    {
+      "note": "A gateway's credential expires too: KK4ODA-1 renews its own."
+    },
+    {
+      "at": 1794408120,
+      "who": "KK4ODA-1",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "YnIMfdL74LxF8F0CuKW2UTsDNl77F_AW6aiohypUgGs",
+          "expires": 1794408420
+        }
+      }
+    },
+    {
+      "at": 1794408120,
+      "who": "KK4ODA-1",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glhfqQEBAhkEGwN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGhLSzRPREEtMQVYIC9rPZD5B3naEvDtfgSaOZXTXPJ4KEMq2ldjVNthBCybBhpq5p0gBxprXUQgCET7vV9cCQlYQN0pnorDlc_qddQAwl8de1Y8gdbBAr2Mow7Gmdh-01e87OSXwXI9Aa4DiYQ-w95pVJsHiBuMCaFOqY-Ke87hKw4",
+          "nonce": "YnIMfdL74LxF8F0CuKW2UTsDNl77F_AW6aiohypUgGs",
+          "signature": "fI8i2ala9dNOb5FatzxWe5xR9ChsmwRv_4GAHjZImcKcDttJ50dAJW1cvJauMW9PuUoVBix4QTWUD5SQgqh-BQ"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_7FDsReE3n0Nfd47g83S1DcTo",
+          "expires": 1794411720,
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA-1",
+          "flags": 9
+        }
+      }
+    },
+    {
+      "at": 1794408125,
+      "who": "KK4ODA-1",
+      "request": {
+        "method": "POST",
+        "path": "/credentials",
+        "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+        "body": {}
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "credential": "glhfqQEBAhkETgN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGhLSzRPREEtMQVYIC9rPZD5B3naEvDtfgSaOZXTXPJ4KEMq2ldjVNthBCybBhpq9H69BxprayW9CET7vV9cCQlYQNnZNqk01xvjLYSnbQW4IuxdrmI6k0OTcsB9m9S6wFlw750qxN4LQb4JGi3zKVX4HP2ke2iqmJ-Ns261gLWlkwA"
+        }
+      }
+    }
+  ],
+  "renewal_cases": [
+    {
+      "what": "at its expiry a credential cannot log in, so cannot renew: the device enrolls again with a new code",
+      "exchanges": [
+        {
+          "at": 1801267200,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "expires": 1801267500
+            }
+          }
+        },
+        {
+          "at": 1801267200,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "signature": "vvj6g6S7gFT7vifjFwtWwx2-YYalvH8gz_4rtIkx7ThOC1f8gixxmqZVBTsuyKZiY-etB4a_oFYpRFqJyIX6Cw"
+            }
+          },
+          "response": {
+            "status": 422,
+            "body": {
+              "type": "about:blank",
+              "title": "Credential expired",
+              "status": 422,
+              "code": 4,
+              "name": "credential-expired"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "a revoked credential cannot log in",
+      "exchanges": [
+        {
+          "at": 1794408000,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "expires": 1794408300
+            }
+          }
+        },
+        {
+          "at": 1794408000,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "signature": "vvj6g6S7gFT7vifjFwtWwx2-YYalvH8gz_4rtIkx7ThOC1f8gixxmqZVBTsuyKZiY-etB4a_oFYpRFqJyIX6Cw"
+            }
+          },
+          "response": {
+            "status": 422,
+            "body": {
+              "type": "about:blank",
+              "title": "Credential revoked",
+              "status": 422,
+              "code": 5,
+              "name": "credential-revoked"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "renewal by radio, asked for in HELLO",
+      "exchanges": [
+        {
+          "note": "Session-01 again, with `renew` in HELLO's caps (RP-3 §5.1). The caps are not in the statement, so the signature is the same."
+        },
+        {
+          "rp3": {
+            "name": "HELLO",
+            "diagnostic": "{0: 1, 1: [1, 1], 2: 0, 3: \"facundo@radiopost.org\", 4: \"KK4ODA\", 5: \"N1CALL-10\", 6: 1794235200, 7: h'f3e403391bfdb0fd', 8: [[h'50d3a23ac1d13f684398ece7', 137, 0], [h'ab9dd2649f3a4c55a7837501', 142, 0]], 9: 418, 10: 1000, 12: {1: [0, 1, 2], 2: 4096, 3: true}, 14: h'ca61bd446437f3c3', 15: h'943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01'}",
+            "pdu_hex": "ae00010182010102000375666163756e646f40726164696f706f73742e6f726704664b4b344f444105694e3143414c4c2d3130061a6af1db400748f3e403391bfdb0fd0882834c50d3a23ac1d13f684398ece7188900834cab9dd2649f3a4c55a7837501188e00091901a20a1903e80ca301830001020219100003f50e48ca61bd446437f3c30f5840943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
+            "frame_hex": "00c9ae00010182010102000375666163756e646f40726164696f706f73742e6f726704664b4b344f444105694e3143414c4c2d3130061a6af1db400748f3e403391bfdb0fd0882834c50d3a23ac1d13f684398ece7188900834cab9dd2649f3a4c55a7837501188e00091901a20a1903e80ca301830001020219100003f50e48ca61bd446437f3c30f5840943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01"
+          }
+        },
+        {
+          "at": 1794234600,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "expires": 1794234900
+            }
+          }
+        },
+        {
+          "at": 1794234600,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "glhdqQEBAhkH4QNybjFjYWxsQGhhbXBvc3Qub3JnBGlOMUNBTEwtMTAFWCAUS-X7lp2Vr5tgjQkwZFi7JTVlyLDjpxhusxOJ1yRMUwYaauaBAAcaa10oAAhEhCGdAAkJWEDr1t2qArnecCmYfRA9H-L3gPmMDr4ONskMijV8cBIzX9kXtv5dFssaxOiERNjg0h37hrRpHop3NLsByAFCPYMK",
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "signature": "IobB9_QssZb1evVxdJQE4cQsQ2Vp7jB0YBSkx2RmVr5dIMEJdECiq-b_D8GsEyHoXoKyAnaUDjTp2_3g9i0mAw"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+              "expires": 1794238200,
+              "address": "n1call@hampost.org",
+              "operator": "N1CALL-10",
+              "flags": 9
+            }
+          }
+        },
+        {
+          "at": 1794235240,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgkxQ06I6wdE_aEOY7OdMq53SZJ86TFWng3UB",
+              "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794235240,
+              "gateway_session": "ec7b31841ec47c47",
+              "cursor": 418,
+              "renew": true
+            }
+          },
+          "response": {
+            "status": 201,
+            "body": {
+              "session": "s_UQiG_aCvr6PB02c-",
+              "expires": 1794238840,
+              "waiting": [
+                {
+                  "serial": 419,
+                  "id": "i42cuqd7g7jrrgxx67aq",
+                  "from": "maria@example.com",
+                  "subject": "Are you safe?",
+                  "size": 277,
+                  "priority": 0,
+                  "held": false
+                },
+                {
+                  "serial": 420,
+                  "id": "htpi3p474h4u3ourjhiq",
+                  "from": "eoc@radiopost.org",
+                  "subject": "Shelter roster",
+                  "size": 1298,
+                  "priority": 0,
+                  "held": false
+                },
+                {
+                  "serial": 421,
+                  "id": "cpwfawr3mrq37rql7fza",
+                  "from": "maria@example.com",
+                  "subject": "Photo",
+                  "size": 6122,
+                  "priority": 0,
+                  "held": false
+                }
+              ],
+              "more": 0,
+              "accept": [
+                {
+                  "id": "kdj2eowb2e7wqq4y5ttq",
+                  "offset": 0
+                },
+                {
+                  "id": "voo5eze7hjgflj4douaq",
+                  "offset": 0
+                }
+              ],
+              "decline": [],
+              "credential": "glhdqQEBAhkETQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaavHbaAcaa2iCaAhE-71fXAkDWEBOzpfDmqPTgEIEAWixVXb8T0rdJiBZCrqfSlBuPesawqiCY_d-sQV0G8OKAG9bzIBGe9rf-wt68rLp5dAOTUAK"
+            }
+          }
+        },
+        {
+          "note": "The gateway hands the new credential to Facundo in the session (RP-3 §5.8)."
+        },
+        {
+          "rp3": {
+            "name": "CREDENTIAL",
+            "diagnostic": "{0: 9, 1: h'82585da901010219044d0375666163756e646f40726164696f706f73742e6f726704664b4b344f4441055820e347cd11cf869b305668e5ff8fc5378b6827f479a18c2a1998f6d4e84a19c641061a6af1db68071a6b6882680844fbbd5f5c090358404ece97c39aa3d38042040168b15576fc4f4add2620590aba9f4a506e3deb1ac2a88263f77eb105741bc38a006f5bcc80467bdadffb0b7af2b2e9e5d00e4d400a'}",
+            "pdu_hex": "a200090158a282585da901010219044d0375666163756e646f40726164696f706f73742e6f726704664b4b344f4441055820e347cd11cf869b305668e5ff8fc5378b6827f479a18c2a1998f6d4e84a19c641061a6af1db68071a6b6882680844fbbd5f5c090358404ece97c39aa3d38042040168b15576fc4f4add2620590aba9f4a506e3deb1ac2a88263f77eb105741bc38a006f5bcc80467bdadffb0b7af2b2e9e5d00e4d400a",
+            "frame_hex": "00a8a200090158a282585da901010219044d0375666163756e646f40726164696f706f73742e6f726704664b4b344f4441055820e347cd11cf869b305668e5ff8fc5378b6827f479a18c2a1998f6d4e84a19c641061a6af1db68071a6b6882680844fbbd5f5c090358404ece97c39aa3d38042040168b15576fc4f4add2620590aba9f4a506e3deb1ac2a88263f77eb105741bc38a006f5bcc80467bdadffb0b7af2b2e9e5d00e4d400a"
+          }
+        }
+      ]
+    }
+  ],
+  "accept_list": [
+    {
+      "note": "Facundo reads his list, then changes it."
+    },
+    {
+      "at": 1794408000,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+          "expires": 1794408300
+        }
+      }
+    },
+    {
+      "at": 1794408000,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+          "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+          "signature": "vvj6g6S7gFT7vifjFwtWwx2-YYalvH8gz_4rtIkx7ThOC1f8gixxmqZVBTsuyKZiY-etB4a_oFYpRFqJyIX6Cw"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+          "expires": 1794411600,
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA",
+          "flags": 3
+        }
+      }
+    },
+    {
+      "at": 1794408001,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "GET",
+        "path": "/accept-list",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "entries": [
+            "maria@example.com",
+            "@redcross.example"
+          ]
+        }
+      }
+    },
+    {
+      "at": 1794408002,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/accept-list",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+        "body": {
+          "add": [
+            "Ana.Lopez@Example.ORG",
+            "@weather.example",
+            "maria@example.com"
+          ],
+          "remove": [
+            "@REDCROSS.example"
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "entries": [
+            "maria@example.com",
+            "ana.lopez@example.org",
+            "@weather.example"
+          ]
+        }
+      }
+    },
+    {
+      "at": 1794408003,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/accept-list",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+        "body": {
+          "add": [
+            "not an address"
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "type": "about:blank",
+          "title": "Malformed",
+          "status": 400,
+          "code": 2,
+          "name": "malformed"
+        }
+      }
+    },
+    {
+      "note": "Shelter 3's list is one, shared by its two operators."
+    },
+    {
+      "at": 1794408010,
+      "who": "Shelter 3 (N3CALL)",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "qDHrLf-NrMWfaCOoClbU8mMP7XQDR4U4H9sfHd1VrCw",
+          "expires": 1794408310
+        }
+      }
+    },
+    {
+      "at": 1794408010,
+      "who": "Shelter 3 (N3CALL)",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glheqQEBAhkENQN2c2hlbHRlcjNAcmFkaW9wb3N0Lm9yZwRmTjNDQUxMBVggXx2O2Bw1Wr0dye2YAIJbYfqTamYVVlSPqSR2bhguexgGGmrmgQAHGmtdKAAIRPu9X1wJB1hAmfPZDT7jAVsXnv0KiWcvUXrFAS4iU69n-I0sF1V_Wz19OcipxgdPyPajagsYV-3hmPzHbncwJ8wVdhiH40i3BQ",
+          "nonce": "qDHrLf-NrMWfaCOoClbU8mMP7XQDR4U4H9sfHd1VrCw",
+          "signature": "CPUqwySA6a_mq2aIWVj3JQsoJf5UO66IWg2ZUNvNGyfDV3eRlKUAEal3i8GHoXJVWH1kD1cxdYHPib9S-GjXDg"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_nrAE4HmjRoMr3kBoGs0KWXrc",
+          "expires": 1794411610,
+          "address": "shelter3@radiopost.org",
+          "operator": "N3CALL",
+          "flags": 7
+        }
+      }
+    },
+    {
+      "at": 1794408011,
+      "who": "Shelter 3 (N3CALL)",
+      "request": {
+        "method": "POST",
+        "path": "/accept-list",
+        "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc",
+        "body": {
+          "add": [
+            "@fema.example"
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "entries": [
+            "@redcross.example",
+            "@fema.example"
+          ]
+        }
+      }
+    },
+    {
+      "at": 1794408012,
+      "who": "Shelter 3 (N4CALL)",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "KdVDtVMXFVJDLCJc-DBQaG1CekuqA0Y2T4Wekk_y9ns",
+          "expires": 1794408312
+        }
+      }
+    },
+    {
+      "at": 1794408012,
+      "who": "Shelter 3 (N4CALL)",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glheqQEBAhkENgN2c2hlbHRlcjNAcmFkaW9wb3N0Lm9yZwRmTjRDQUxMBVggbPOWWVs4uZmqqVzYiSJTZsUgs3U77FlBvIxsEBxJdDMGGmrmgQAHGmtdKAAIRPu9X1wJB1hA5HehbPHT8eAhqeNwaDHHcfbv6Qx1dfqmYgXLy1lFePdycEbSAIfxSLFAB3iwmJ3S1VJklDuq3a7jFs33oNbzCQ",
+          "nonce": "KdVDtVMXFVJDLCJc-DBQaG1CekuqA0Y2T4Wekk_y9ns",
+          "signature": "X-xEmgjrkfYuDHiRN92e__aMqbgYVkSarr-lznWC6U62e38TB52xqnlwxX8KryNXsDdhg59KhYllKXZdl1ssBQ"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok__S0rLgmgVaVn3GOvq653Nwyi",
+          "expires": 1794411612,
+          "address": "shelter3@radiopost.org",
+          "operator": "N4CALL",
+          "flags": 7
+        }
+      }
+    },
+    {
+      "at": 1794408013,
+      "who": "Shelter 3 (N4CALL)",
+      "request": {
+        "method": "GET",
+        "path": "/accept-list",
+        "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "entries": [
+            "@redcross.example",
+            "@fema.example"
+          ]
+        }
+      }
+    },
+    {
+      "note": "José is on no list: his mail is refused at the door."
+    },
+    {
+      "at": 1794408020,
+      "smtp": {
+        "mail_from": "jose@example.net",
+        "rcpt_to": "facundo@radiopost.org",
+        "email": "From: jose@example.net\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+        "dmarc": "pass",
+        "dkim_pass": [],
+        "expect": {
+          "rcpt": "550 5.7.1",
+          "data": null
+        }
+      }
+    },
+    {
+      "note": "Facundo writes to José by radio. When his message is accepted, José joins his list."
+    },
+    {
+      "at": 1794408030,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "YnIMfdL74LxF8F0CuKW2UTsDNl77F_AW6aiohypUgGs",
+          "expires": 1794408330
+        }
+      }
+    },
+    {
+      "at": 1794408030,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glhdqQEBAhkH4QNybjFjYWxsQGhhbXBvc3Qub3JnBGlOMUNBTEwtMTAFWCAUS-X7lp2Vr5tgjQkwZFi7JTVlyLDjpxhusxOJ1yRMUwYaauaBAAcaa10oAAhEhCGdAAkJWEDr1t2qArnecCmYfRA9H-L3gPmMDr4ONskMijV8cBIzX9kXtv5dFssaxOiERNjg0h37hrRpHop3NLsByAFCPYMK",
+          "nonce": "YnIMfdL74LxF8F0CuKW2UTsDNl77F_AW6aiohypUgGs",
+          "signature": "nAXw_HHLlqtjyXUTRmm2TE5YLRXpRr294DSuT624ic5fioIsw4l4MHxWsiUIhJEeJnvTTWN48QpBHPFSfu76Dw"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_7FDsReE3n0Nfd47g83S1DcTo",
+          "expires": 1794411630,
+          "address": "n1call@hampost.org",
+          "operator": "N1CALL-10",
+          "flags": 9
+        }
+      }
+    },
+    {
+      "at": 1794408060,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/sessions",
+        "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+        "body": {
+          "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavR-XgVIPOu7s5wATwIGgUwhpL96IBXbdYAurKA",
+          "signature": "B45DOSRA1CEpCPeA6RlclcHPfoBHJDCgPLKmIvWfnWCRN_AZVLGxQ_9UId283cZZLZa1IudQw8gjm5Wk4ojoDg",
+          "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+          "started": 1794408060,
+          "gateway_session": "aaf70667e71e3d20",
+          "cursor": 0
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "session": "s_AOGdXgju0qfnnOsL",
+          "expires": 1794411660,
+          "waiting": [],
+          "more": 0,
+          "accept": [
+            {
+              "id": "egsl66racxnxlabovsqa",
+              "offset": 0
+            }
+          ],
+          "decline": []
+        }
+      }
+    },
+    {
+      "at": 1794408090,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/sessions/s_AOGdXgju0qfnnOsL/messages",
+        "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+        "body": {
+          "messages": [
+            {
+              "id": "egsl66racxnxlabovsqa",
+              "air": "AKYBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FwSm9zZUBleGFtcGxlLm5ldAUaavR76AZpR2VuZXJhdG9yB3hGSm9zw6ksIGNhbiB5b3UgYnJpbmcgdGhlIGdlbmVyYXRvciB0byBTaGVsdGVyIDMgdG9tb3Jyb3c_IDczLCBGYWN1bmRvCg"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "results": [
+            {
+              "id": "egsl66racxnxlabovsqa",
+              "status": "accepted"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "at": 1794408091,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "DELETE",
+        "path": "/sessions/s_AOGdXgju0qfnnOsL",
+        "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "at": 1794408100,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "GET",
+        "path": "/accept-list",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "entries": [
+            "maria@example.com",
+            "ana.lopez@example.org",
+            "@weather.example",
+            "jose@example.net"
+          ]
+        }
+      }
+    },
+    {
+      "note": "José's answer now passes the door."
+    },
+    {
+      "at": 1794408200,
+      "smtp": {
+        "mail_from": "jose@example.net",
+        "rcpt_to": "facundo@radiopost.org",
+        "email": "From: jose@example.net\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+        "dmarc": "pass",
+        "dkim_pass": [],
+        "expect": {
+          "rcpt": "250 2.1.5",
+          "data": "250 2.0.0"
+        }
+      }
+    },
+    {
+      "note": "Shelter 3 turns `accept_on_send` off: what it sends adds no one."
+    },
+    {
+      "at": 1794408300,
+      "who": "Shelter 3 (N3CALL)",
+      "request": {
+        "method": "PUT",
+        "path": "/settings",
+        "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc",
+        "body": {
+          "usual_gateways": [],
+          "auto_bytes": 1000,
+          "accept_on_send": false
+        }
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "at": 1794408360,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/sessions",
+        "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+        "body": {
+          "statement": "pgF2c2hlbHRlcjNAcmFkaW9wb3N0Lm9yZwJmTjNDQUxMA2lOMUNBTEwtMTAEGmr0f4oFSGYjFx5OwuBnBoFMhZX-45tj3fE3sX_A",
+          "signature": "LkI0JwDLfsOBVRkeBLNvjIShtHWpdYmER9dBlO8lmNcMJIKnQ4450MW0NpTJ3dGrtO5VdQ6axVwXfIRUjBlLAQ",
+          "credential": "glheqQEBAhkENQN2c2hlbHRlcjNAcmFkaW9wb3N0Lm9yZwRmTjNDQUxMBVggXx2O2Bw1Wr0dye2YAIJbYfqTamYVVlSPqSR2bhguexgGGmrmgQAHGmtdKAAIRPu9X1wJB1hAmfPZDT7jAVsXnv0KiWcvUXrFAS4iU69n-I0sF1V_Wz19OcipxgdPyPajagsYV-3hmPzHbncwJ8wVdhiH40i3BQ",
+          "started": 1794408360,
+          "gateway_session": "cf937d09ba57d8ec",
+          "cursor": 0
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "session": "s_NM4gvaAhcbe0TSCW",
+          "expires": 1794411960,
+          "waiting": [],
+          "more": 0,
+          "accept": [
+            {
+              "id": "qwk75y43mpo7cn5rp7aa",
+              "offset": 0
+            }
+          ],
+          "decline": []
+        }
+      }
+    },
+    {
+      "at": 1794408390,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/sessions/s_NM4gvaAhcbe0TSCW/messages",
+        "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+        "body": {
+          "messages": [
+            {
+              "id": "qwk75y43mpo7cn5rp7aa",
+              "air": "AKcBAQJ2c2hlbHRlcjNAcmFkaW9wb3N0Lm9yZwOBcWVvY0ByYWRpb3Bvc3Qub3JnBRpq8daQBngbQ2Fmw6kgY2xvc2VkOyBzZcOxYWwgZMOpYmlsB3hITmVlZCA0MCBjb3RzIGFuZCB3YXRlciBmb3IgMyBkYXlzLiBTZcOxYWwgZMOpYmlsIGRlc3B1w6lzIGRlIGxhcyAxODowMC4KCQE"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "results": [
+            {
+              "id": "qwk75y43mpo7cn5rp7aa",
+              "status": "accepted"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "at": 1794408400,
+      "who": "Shelter 3 (N4CALL)",
+      "request": {
+        "method": "GET",
+        "path": "/accept-list",
+        "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "entries": [
+            "@redcross.example",
+            "@fema.example"
+          ]
+        }
+      }
+    }
+  ]
+}

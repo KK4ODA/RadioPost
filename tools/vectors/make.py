@@ -39,6 +39,7 @@ T_EXPIRES = T_ISSUED + 90 * DAY
 T_SESSION = 1794235200  # 2026-11-09T14:40:00Z
 T_STATION = T_SESSION + 4 * 3600  # session-03: station to station, 18:40Z
 T_RESUME = T_SESSION + 6 * 3600  # session-02: the first of three, 20:40Z
+T_ACCOUNT = T_SESSION + 2 * DAY  # api-account.json: renewal and the accept list
 
 PO_RADIOPOST = "https://po.radiopost.org/rp/v1"
 PO_HAMPOST = "https://po.hampost.org/rp/v1"
@@ -391,6 +392,14 @@ def messages() -> dict[str, dict[str, Any]]:
         "subject": "Net tonight",
         "body": "Facundo, the county net meets at 20:00 local on 3.590 MHz. If you cannot make "
         "it, send me your check-in and I will read it. 73, Ana\n",
+    }
+    m["facundo-to-jose"] = {
+        "v": 1,
+        "from": "facundo@radiopost.org",
+        "to": ["Jose@example.net"],
+        "date": T_ACCOUNT - 600,
+        "subject": "Generator",
+        "body": "José, can you bring the generator to Shelter 3 tomorrow? 73, Facundo\n",
     }
     m["facundo-reply"]["reply_to"] = rp.content_id(cbor.encode(rp.message_map(m["maria-419"])))
     return m
@@ -2159,18 +2168,16 @@ class Exchanges:
         return answer or {}
 
     def login(self, at: int, who: str, cred: str) -> str:
+        return self.login_with(at, who, credential(cred), CREDENTIALS[cred]["device"])
+
+    def login_with(self, at: int, who: str, cred: bytes, device: str) -> str:
+        """RP-5 §3: a challenge, then a token for this credential (empty if refused)."""
         nonce = self.call(at, who, "POST", "/auth/challenge")["nonce"]
         raw = jws.unb64u(nonce)
         assert raw is not None
-        signature = rp.sign(
-            rp.CTX_LOGIN, raw + PO_RADIOPOST.encode(), SECRET[CREDENTIALS[cred]["device"]]
-        )
-        body = {
-            "credential": jws.b64u(credential(cred)),
-            "nonce": nonce,
-            "signature": jws.b64u(signature),
-        }
-        return self.call(at, who, "POST", "/auth/token", body)["token"]
+        signature = rp.sign(rp.CTX_LOGIN, raw + PO_RADIOPOST.encode(), SECRET[device])
+        body = {"credential": jws.b64u(cred), "nonce": nonce, "signature": jws.b64u(signature)}
+        return self.call(at, who, "POST", "/auth/token", body).get("token", "")
 
 
 def post_office() -> po.PostOffice:
@@ -2481,6 +2488,223 @@ def make_api_exchanges() -> dict[str, Any]:
     out["story"] = api_story()
     out["cases"] = api_cases()
     out["report"] = api_report()
+    return out
+
+
+# -- api-account.json ----------------------------------------------------------------------------
+
+
+def signed_session(
+    cred: str, gateway: str, names: list[str], at: int, label: str
+) -> dict[str, Any]:
+    """RP-5 §5.2's body for a session in which `cred`'s holder offers `names` through `gateway`."""
+    spec = CREDENTIALS[cred]
+    ids = [encoded(n)[1] for n in names]
+    stmt = rp.statement(
+        spec["address"], spec["operator"], gateway, ids, time=at, nonce=stream(f"{label} nonce", 8)
+    )
+    raw = cbor.encode(stmt)
+    return {
+        "statement": jws.b64u(raw),
+        "signature": jws.b64u(rp.sign(rp.CTX_SESSION, raw, SECRET[spec["device"]])),
+        "credential": jws.b64u(credential(cred)),
+        "started": at + 30,
+        "gateway_session": stream(f"{label} id", 8).hex(),
+        "cursor": 0,
+    }
+
+
+def account_renewal() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """RP-5 §6.2 and RP-3 §5.8: renewing over the Internet and by radio."""
+    office = post_office()
+    office.next_serial = 1101
+    ex = Exchanges(office)
+    at = T_ACCOUNT
+    ex.note("Facundo renews his laptop's credential: same account, operator, key and flags.")
+    token = ex.login(at, "Facundo's laptop", "facundo")
+    renewed = jws.unb64u(
+        ex.call(at + 5, "Facundo's laptop", "POST", "/credentials", {}, token)["credential"]
+    )
+    assert renewed is not None
+    ex.note("He logs in with the new credential; the old one still works until it expires.")
+    ex.login_with(at + 60, "Facundo's laptop", renewed, "device:facundo")
+    ex.login(at + 90, "Facundo's laptop", "facundo")
+    ex.note("A gateway's credential expires too: KK4ODA-1 renews its own.")
+    kk = ex.login(at + 120, "KK4ODA-1", "gateway-kk4oda-1")
+    ex.call(at + 125, "KK4ODA-1", "POST", "/credentials", {}, kk)
+    story = ex.log
+
+    cases = []
+    expired_office = post_office()
+    ex = Exchanges(expired_office)
+    ex.login(T_EXPIRES, "Facundo's laptop", "facundo")
+    cases.append(
+        {
+            "what": "at its expiry a credential cannot log in, so cannot renew: the device enrolls "
+            "again with a new code",
+            "exchanges": ex.log,
+        }
+    )
+    revoked_office = post_office()
+    revoked_office.revoked = {
+        "radiopost.org": {"serials": [CREDENTIALS["facundo"]["serial"]], "kids": []}
+    }
+    ex = Exchanges(revoked_office)
+    ex.login(at, "Facundo's laptop", "facundo")
+    cases.append({"what": "a revoked credential cannot log in", "exchanges": ex.log})
+
+    radio_office = post_office()
+    radio_office.next_serial = 1101
+    deliver_waiting(radio_office, None)
+    ex = Exchanges(radio_office)
+    hello = dict(session_pdus()[0][1][0][1])
+    hello[12] = {**hello[12], 3: True}
+    assert rp.statement_from_hello(hello) == statement_session()
+    ex.note(
+        "Session-01 again, with `renew` in HELLO's caps (RP-3 §5.1). The caps are not in the "
+        "statement, so the signature is the same."
+    )
+    ex.log.append({"rp3": pdu_entry("HELLO", hello)})
+    gw = ex.login(T_SESSION - 600, "N1CALL-10", "gateway-n1call-10")
+    body = session_request(hello, T_SESSION + 40) | {"renew": True}
+    opened = ex.call(T_SESSION + 40, "N1CALL-10", "POST", "/sessions", body, gw)
+    by_radio = jws.unb64u(opened["credential"])
+    assert by_radio is not None
+    ex.note("The gateway hands the new credential to Facundo in the session (RP-3 §5.8).")
+    ex.log.append({"rp3": pdu_entry("CREDENTIAL", {0: 9, 1: by_radio})})
+    cases.append({"what": "renewal by radio, asked for in HELLO", "exchanges": ex.log})
+    return story, cases
+
+
+def account_accept_list() -> list[dict[str, Any]]:
+    """RP-5 §6.5 and RP-6 §2.2: reading and changing a list, a shared one, and the door."""
+    office = post_office()
+    office.accept = {
+        "facundo@radiopost.org": list(FACUNDO_ACCEPT),
+        "shelter3@radiopost.org": ["@redcross.example"],
+    }
+    ex = Exchanges(office)
+    at = T_ACCOUNT
+
+    def door(when: int, sender: str) -> None:
+        raw = door_email(sender)
+        ctx = {
+            "accounts": dict(office.accept),
+            "known_post_offices": ["radiopost.org", "hampost.org"],
+            "max_email_bytes": 10485760,
+            "dmarc": "pass",
+            "dkim_pass": [],
+            "sent_message_ids": {},
+        }
+        result = mail.door({"mail_from": sender, "rcpt_to": "facundo@radiopost.org"}, raw, ctx)
+        ex.log.append(
+            {
+                "at": when,
+                "smtp": {
+                    "mail_from": sender,
+                    "rcpt_to": "facundo@radiopost.org",
+                    "email": raw.decode("utf-8"),
+                    "dmarc": "pass",
+                    "dkim_pass": [],
+                    "expect": result,
+                },
+            }
+        )
+
+    ex.note("Facundo reads his list, then changes it.")
+    me = ex.login(at, "Facundo's laptop", "facundo")
+    ex.call(at + 1, "Facundo's laptop", "GET", "/accept-list", None, me)
+    ex.call(
+        at + 2,
+        "Facundo's laptop",
+        "POST",
+        "/accept-list",
+        {
+            "add": ["Ana.Lopez@Example.ORG", "@weather.example", "maria@example.com"],
+            "remove": ["@REDCROSS.example"],
+        },
+        me,
+    )
+    ex.call(at + 3, "Facundo's laptop", "POST", "/accept-list", {"add": ["not an address"]}, me)
+    ex.note("Shelter 3's list is one, shared by its two operators.")
+    n3 = ex.login(at + 10, "Shelter 3 (N3CALL)", "shelter3-n3call")
+    ex.call(at + 11, "Shelter 3 (N3CALL)", "POST", "/accept-list", {"add": ["@fema.example"]}, n3)
+    n4 = ex.login(at + 12, "Shelter 3 (N4CALL)", "shelter3-n4call")
+    ex.call(at + 13, "Shelter 3 (N4CALL)", "GET", "/accept-list", None, n4)
+    ex.note("José is on no list: his mail is refused at the door.")
+    door(at + 20, "jose@example.net")
+    ex.note("Facundo writes to José by radio. When his message is accepted, José joins his list.")
+    gw = ex.login(at + 30, "N1CALL-10", "gateway-n1call-10")
+    sid = ex.call(
+        at + 60,
+        "N1CALL-10",
+        "POST",
+        "/sessions",
+        signed_session("facundo", "N1CALL-10", ["facundo-to-jose"], at + 30, "account jose"),
+        gw,
+    )["session"]
+    ex.call(
+        at + 90,
+        "N1CALL-10",
+        "POST",
+        f"/sessions/{sid}/messages",
+        handed_in(["facundo-to-jose"]),
+        gw,
+    )
+    ex.call(at + 91, "N1CALL-10", "DELETE", f"/sessions/{sid}", None, gw)
+    ex.call(at + 100, "Facundo's laptop", "GET", "/accept-list", None, me)
+    ex.note("José's answer now passes the door.")
+    door(at + 200, "jose@example.net")
+    ex.note("Shelter 3 turns `accept_on_send` off: what it sends adds no one.")
+    settings = {"usual_gateways": [], "auto_bytes": AUTO, "accept_on_send": False}
+    ex.call(at + 300, "Shelter 3 (N3CALL)", "PUT", "/settings", settings, n3)
+    sid = ex.call(
+        at + 360,
+        "N1CALL-10",
+        "POST",
+        "/sessions",
+        signed_session(
+            "shelter3-n3call", "N1CALL-10", ["shelter3-priority"], at + 330, "account shelter"
+        ),
+        gw,
+    )["session"]
+    ex.call(
+        at + 390,
+        "N1CALL-10",
+        "POST",
+        f"/sessions/{sid}/messages",
+        handed_in(["shelter3-priority"]),
+        gw,
+    )
+    ex.call(at + 400, "Shelter 3 (N4CALL)", "GET", "/accept-list", None, n4)
+    return ex.log
+
+
+def make_api_account() -> dict[str, Any]:
+    story, cases = account_renewal()
+    out = header(
+        "Post office API: renewal and the accept list",
+        {"RP-5": "§5.2, §6.2, §6.3, §6.5", "RP-6": "§2.2", "RP-3": "§5.1, §5.8"},
+    )
+    out["rule"] = (
+        "As in api-exchanges.json: each exchange is a request to the post office at its clock and "
+        "its answer, compared as JSON values. A renewed credential is new bytes from the post "
+        "office's key (`po:radiopost.org`), for the same account, operator, device key and flags, "
+        "with the next serial and issued at the request's time. An `smtp` entry is the door's "
+        "answer (email-door.json) for the accept list as it stands at that moment. An `rp3` entry "
+        "is a PDU on the air."
+    )
+    out["context"] = {
+        "post_office": "radiopost.org",
+        "next_serial": 1101,
+        "accept_lists_at_start": {
+            "facundo@radiopost.org": FACUNDO_ACCEPT,
+            "shelter3@radiopost.org": ["@redcross.example"],
+        },
+    }
+    out["renewal"] = story
+    out["renewal_cases"] = cases
+    out["accept_list"] = account_accept_list()
     return out
 
 
@@ -3215,6 +3439,7 @@ FILES = {
     "email-in.json": make_email_in,
     "email-out.json": make_email_out,
     "api-exchanges.json": make_api_exchanges,
+    "api-account.json": make_api_account,
 }
 
 
@@ -3272,6 +3497,8 @@ def self_check(name: str, data: dict[str, Any]) -> None:
         check_api(data)
     if name == "email-out.json":
         check_email_out(data)
+    if name == "api-account.json":
+        check_account(data)
 
 
 def check_rpmi(data: dict[str, Any]) -> None:
@@ -3373,6 +3600,61 @@ def check_api(data: dict[str, Any]) -> None:
     for e in by_path["GET /copies?after=&wait=60"]:
         for item in e["response"]["body"]["items"]:
             assert jws.unb64u(item["air"]) == air0(dict((s, n) for s, n in WAITING)[item["serial"]])
+
+
+def check_account(data: dict[str, Any]) -> None:
+    """Renewed credentials keep all but serial and dates; the door follows the list as read."""
+    logs = [data["renewal"], data["accept_list"]] + [c["exchanges"] for c in data["renewal_cases"]]
+    for log in logs:
+        holder: dict[str, bytes] = {}  # who -> the credential their token came from
+        given: list[bytes] = []
+        for e in log:
+            req, res = e.get("request", {}), e.get("response", {})
+            body = res.get("body") or {}
+            if req.get("path") == "/auth/token" and res.get("status") == 200:
+                raw = jws.unb64u(req["body"]["credential"])
+                assert raw is not None
+                holder[e["who"]] = raw
+            for key in ("credential",):
+                if key in body and req.get("path") in {"/credentials", "/sessions"}:
+                    new = jws.unb64u(body[key])
+                    assert new is not None
+                    old = holder[e["who"]] if req["path"] == "/credentials" else None
+                    if old is None:
+                        user = jws.unb64u(req["body"]["credential"])
+                        assert user is not None
+                        old = user
+                    result, nb = rp.verify_credential(new, po_keys(), {}, e["at"], [])
+                    assert result == "ok" and nb is not None
+                    ob = cbor.decode(cbor.decode(old)[0])
+                    assert [nb[k] for k in (3, 4, 5, 9)] == [ob[k] for k in (3, 4, 5, 9)]
+                    assert nb[2] != ob[2] and nb[6] == e["at"]
+                    given.append(new)
+            if "rp3" in e and e["rp3"]["name"] == "CREDENTIAL":
+                pdu = cbor.decode(bytes.fromhex(e["rp3"]["pdu_hex"]))
+                assert pdu[1] == given[-1]
+            if req.get("path") == "/accept-list" and res.get("status") == 200:
+                entries = body["entries"]
+                assert entries == [x.lower() for x in entries] and len(set(entries)) == len(entries)
+    last: list[str] = []
+    for e in data["accept_list"]:
+        if (
+            e.get("who") == "Facundo's laptop"
+            and e.get("request", {}).get("path") == "/accept-list"
+        ) and e["response"]["status"] == 200:
+            last = e["response"]["body"]["entries"]
+        if "smtp" in e:
+            smtp = e["smtp"]
+            ctx = {
+                "accounts": {smtp["rcpt_to"]: last},
+                "known_post_offices": ["radiopost.org", "hampost.org"],
+                "max_email_bytes": 10485760,
+                "dmarc": smtp["dmarc"],
+                "dkim_pass": smtp["dkim_pass"],
+                "sent_message_ids": {},
+            }
+            envelope = {"mail_from": smtp["mail_from"], "rcpt_to": smtp["rcpt_to"]}
+            assert mail.door(envelope, smtp["email"].encode(), ctx) == smtp["expect"]
 
 
 def check_email_out(data: dict[str, Any]) -> None:

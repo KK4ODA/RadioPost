@@ -19,7 +19,7 @@ anything but checking an implementation.
 |---|---|---|
 | `keys.json` | RP-0 §5, RP-1 | The eleven test keys: four post office keys (radiopost.org's current, previous and new ones, hampost.org's) and seven device keys (Facundo's laptop and tablet, Ana's laptop, a shelter's laptop under two operators, two gateways). Each has its seed, public key and key ID, and a post office key its validity. |
 | `cbor.json` | RP-0 §4.1 | Values and their deterministic encodings; encodings a decoder must refuse (a long form, an indefinite length, keys out of order or repeated, a float, a tag, bytes after the item). |
-| `messages.json` | RP-2 | Twelve messages, from a two-line reply to a 6 kB photo. Each has its fields, canonical encoding, content ID (bytes and text) and air forms. Also air forms that must be refused as `malformed`. |
+| `messages.json` | RP-2 | Thirteen messages, from a two-line reply to a 6 kB photo. Each has its fields, canonical encoding, content ID (bytes and text) and air forms. Also air forms that must be refused as `malformed`. |
 | `credentials.json` | RP-1 §4, §5 | Ten credentials with every step of their making, and sixteen verifications: valid, expired, revoked by serial or by key, signed by an unknown or retired key, issued too far ahead, missing a right, malformed. Each gives the RP-0 §9.3 error a verifier must return. |
 | `statements.json` | RP-1 §6 | Session statements in time form and challenge form and a statement by the station called (§6.5), and fourteen verifications (wrong address, operator or gateway; bad signature; clock outside the window; a nonce seen before; a wrong challenge; a called station's statement checked by the caller's nonce, whatever its clock). |
 | `pdus.json` | RP-3 §4 | One of each PDU type, with each kind of `WELCOME`, encoded and framed, and frames that must be refused. |
@@ -34,6 +34,7 @@ anything but checking an implementation.
 | `email-door.json` | RP-6 §2.1, §2.2 | Eighteen emails at the SMTP door, with the replies to `RCPT TO` and `DATA`: lists and their matching, a known post office with and without DKIM, DMARC, size, every kind of encryption and a signed message, an executable, and delivery reports with their null sender. |
 | `email-in.json` | RP-6 §2.4, §3.3, §4 | Seven emails and the messages they become (Maria's two become `maria-419` and `maria-421` exactly; replies trimmed, HTML, a held attachment), a delivery report that becomes a bounce, and Facundo's message reaching Ana's post office with its RadioPost part, then three parts that must not be used. |
 | `email-out.json` | RP-6 §3, §4 | Facundo's two messages of session-01 and a priority message as email: headers, text, footer, `Radio-Path`, and the RadioPost part between post offices. |
+| `api-account.json` | RP-5 §6.2, §6.5, RP-6 §2.2 | Renewal: a user's and a gateway's credential renewed, the old one still valid, expired and revoked credentials refused, and renewal by radio with its `HELLO` and `CREDENTIAL` PDUs. The accept list: read and changed (lowercase, duplicates, `malformed`), a role mailbox's list shared by its operators, a sender refused at the door then taken once the user has written to him, and `accept_on_send` off. |
 | `api-exchanges.json` | RP-5 | Requests to a reference post office and its answers: a tablet enrolled, a gateway registered, copies placed ahead and dropped, logins and an expired token, session-01 at the post office, an offline gateway's report; and ten cases, from a session opened cleanly to a replayed statement and messages refused for each reason. |
 
 Each file starts with the same header: what it holds (`radiopost_vectors`), the file format
@@ -100,10 +101,9 @@ specification disagree, the specification is right and the reference has a bug.
 
 ## Not yet covered
 
-Forwarding (RP-7, an outline), DKIM signing (the mail server's), photo re-encoding (RP-6 §2.4
-step 5, a SHOULD this reference skips), and the post office API's accept list and credential
-renewal (RP-5 §6.2, §6.5). The modem interface's mapping to real modems (RP-4 §9) is informative and
-has none.
+Forwarding (RP-7, an outline), DKIM signing (the mail server's) and photo re-encoding (RP-6 §2.4
+step 5, a SHOULD this reference skips). The modem interface's mapping to real modems (RP-4 §9) is
+informative and has none.
 
 ## Licence
 

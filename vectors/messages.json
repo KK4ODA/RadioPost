@@ -376,6 +376,35 @@
           "exact": false
         }
       ]
+    },
+    {
+      "name": "facundo-to-jose",
+      "fields": {
+        "v": 1,
+        "from": "facundo@radiopost.org",
+        "to": [
+          "Jose@example.net"
+        ],
+        "date": 1794407400,
+        "subject": "Generator",
+        "body": "José, can you bring the generator to Shelter 3 tomorrow? 73, Facundo\n"
+      },
+      "diagnostic": "{1: 1, 2: \"facundo@radiopost.org\", 3: [\"Jose@example.net\"], 5: 1794407400, 6: \"Generator\", 7: \"José, can you bring the generator to Shelter 3 tomorrow? 73, Facundo\\n\"}",
+      "canonical_hex": "a601010275666163756e646f40726164696f706f73742e6f72670381704a6f7365406578616d706c652e6e6574051a6af47be8066947656e657261746f720778464a6f73c3a92c2063616e20796f75206272696e67207468652067656e657261746f7220746f205368656c746572203320746f6d6f72726f773f2037332c20466163756e646f0a",
+      "content_id_hex": "21a4bf7a2015db75802eaca0",
+      "content_id_text": "egsl66racxnxlabovsqa",
+      "air": [
+        {
+          "compression": 0,
+          "hex": "00a601010275666163756e646f40726164696f706f73742e6f72670381704a6f7365406578616d706c652e6e6574051a6af47be8066947656e657261746f720778464a6f73c3a92c2063616e20796f75206272696e67207468652067656e657261746f7220746f205368656c746572203320746f6d6f72726f773f2037332c20466163756e646f0a",
+          "exact": true
+        },
+        {
+          "compression": 1,
+          "hex": "015bc6c8c8549a96985c9a9792ef50949892995f905f5ca2975f94cedc58e0955f9cea905a91985b9093aa97975ac22a95f5a5fa055ba67b6a5e6a5162497e117b851b50cde1953a0ac989790a95f9a50a49459979e90a2519a90ae930450a25f90ac119a93925a9450ac6404e6e7e51517eb9bd82b9b18e821bc4662e00",
+          "exact": false
+        }
+      ]
     }
   ],
   "invalid": [
