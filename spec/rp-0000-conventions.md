@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.1 |
+| **Version** | 0.3.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -118,6 +118,14 @@ signed_input = context || 0x00 || bytes
 The contexts are registered in §9.2. A signature made for one purpose can then never be accepted
 for another.
 
+**Signed JSON documents** are plain JWS, with no context: the signature is over the JWS signing
+input of RFC 7515, which is base64url text and a dot. It never holds the zero byte that ends every
+context, so it cannot be taken for any other RadioPost signature, and any JWS library can check it.
+The protected header has `alg` `EdDSA` and `kid`, the key's ID in hex. A verifier answers
+`malformed` for a JWS that is not three base64url parts with a JSON header and payload, and
+`signature-invalid` for any other `alg`, a `crit` header, a `kid` it does not accept (RP-1 §7.2),
+or a signature that does not verify. Test vectors: `vectors/jws.json`.
+
 **Key ID.** A key's ID (`kid`) is the first 4 bytes of SHA-256 of its 32-byte public key. It is
 written as 8 lowercase hexadecimal digits in text (`3f9a1c22`).
 
@@ -229,8 +237,8 @@ RadioPost repository is under the MIT licence or the Apache License 2.0, at the 
 
 ### 8.6 Test vectors
 
-The files in `vectors/` hold exact inputs and outputs for RP-1 to RP-4 and for RP-5's
-signatures, made from published test keys by a reference written for the purpose
+The files in `vectors/` hold exact inputs and outputs for RP-1 to RP-5, made from published
+test keys by a reference written for the purpose
 (`tools/vectors/`, standard library only). Every implementation SHOULD check itself against
 them. A change that alters any vector updates the files in the same pull request, and
 `python tools/vectors/make.py --check` must pass. Where a vector and a specification disagree,
@@ -271,7 +279,7 @@ means the same thing wherever it appears.
 | 5 | `credential-revoked` | The credential or its key has been revoked. |
 | 6 | `credential-required` | The receiver does not hold the sender's credential; send it. |
 | 7 | `unknown-post-office` | No key is known for the credential's post office. |
-| 8 | `signature-invalid` | A session statement's signature does not verify. |
+| 8 | `signature-invalid` | A signature does not verify: a session statement's, or a signed document's (§5). |
 | 9 | `time-skew` | The statement's time is outside the accepted window; sign a challenge instead. |
 | 10 | `not-authorized` | The account or station may not do this. |
 | 11 | `too-large` | A message or request is over the limit. |
@@ -294,3 +302,4 @@ means the same thing wherever it appears.
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0 (§8.5). |
 | 0.2.0 | 2026-11-09 | Three API signature contexts in place of one (§9.2); Draft versions stay below 1.0.0 (§8.2); test vectors (§8.6). |
 | 0.2.1 | 2026-11-09 | §8.6: the vectors cover RP-4 too. |
+| 0.3.0 | 2026-11-09 | Signed JSON documents are plain JWS, with no context, and how one is checked (§5); `signature-invalid` covers them (§9.3); §8.6: the vectors cover RP-5. |

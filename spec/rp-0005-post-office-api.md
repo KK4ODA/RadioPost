@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.0 |
+| **Version** | 0.4.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -37,6 +37,23 @@ part of this API.
    "code": 4, "name": "credential-expired"}
   ```
 
+* **The status** of each code:
+
+  | Status | Codes |
+  |---|---|
+  | 400 | `unsupported-version`, `malformed` |
+  | 401 | `not-authorized`, when the request has no token, or one unknown or expired |
+  | 403 | `not-authorized` otherwise (the token may not do this), `refused-by-policy` |
+  | 404 | `unknown-message`: no such serial in the session, or no such session of this gateway's |
+  | 409 | `already-have` |
+  | 413 | `too-large` |
+  | 422 | `credential-invalid`, `credential-expired`, `credential-revoked`, `credential-required`, `unknown-post-office`, `signature-invalid`, `time-skew` |
+  | 429 | `busy` |
+  | 500 | `internal` |
+  | 502 | `post-office-unreachable` |
+  | 504 | `timeout` |
+  | 507 | `quota-exceeded` |
+
 * **Rate limits** are answered `429` with `Retry-After`.
 * **Signed documents** (§4) are returned as `application/jose` (a JWS compact serialisation, RP-0
   §5) signed by one of the post office's keys, `kid` in the JWS header as the key's hex ID.
@@ -51,6 +68,10 @@ part of this API.
 | §3 Logging in | Gateways, clients | Credential and signature |
 | §5 Gateway endpoints | Gateways | A token from a credential with the `gateway` flag |
 | §6 Client endpoints | Clients | A token from the account's credential (enrollment: a code) |
+
+A request with no token, or an unknown or expired one, is answered `401` `not-authorized`; a token
+without the `gateway` flag on a gateway endpoint, or one with it on a client endpoint, `403`
+`not-authorized`.
 
 A post office accepts gateways credentialed by **any post office it knows** (RP-1 §7.3), unless its
 info document says `gateways: "listed"`, in which case only gateways in its own list (§4.4).
@@ -78,22 +99,26 @@ No body. Answer:
 `signature` is the device key's signature (RP-0 §5) with context `RadioPost-api-login-v1` over the 32
 nonce bytes followed by the UTF-8 bytes of the base URL.
 
-The post office verifies the credential (RP-1 §5) and the signature, and answers:
+The post office verifies the nonce (one it issued, unexpired, not used: otherwise `401`
+`not-authorized`), the credential (RP-1 §5) and the signature (`422` `signature-invalid`), and
+answers:
 
 ```json
 {"token": "tok_8Hc…", "expires": 1794330000, "address": "n1call@hampost.org",
  "operator": "N1CALL-10", "flags": 9}
 ```
 
-The token is sent as `Authorization: Bearer tok_8Hc…` on later requests. It lasts at most one hour
-and is bound to the credential: a revocation ends it.
+The token is sent as `Authorization: Bearer tok_8Hc…` on later requests. It lasts one hour, or
+until the credential expires if that is sooner, and is bound to the credential: a revocation ends
+it.
 
 ---
 
 ## 4. Public documents
 
-Each is a signed JWS. A gateway SHOULD fetch and keep them for every post office it knows (RP-1
-§7.3). The payloads:
+Each is a signed JWS (RP-0 §5), signed by a key the verifier accepts by RP-1 §7.2: one in DNS, or
+one the info document lists when a key in DNS signed that. A gateway SHOULD fetch and keep them for
+every post office it knows (RP-1 §7.3). Test vectors: `vectors/jws.json`. The payloads:
 
 ### 4.1 `GET /info`
 
@@ -188,8 +213,10 @@ Sent when a user's `HELLO` arrives (RP-3 §9), while the link turns around.
   rebuilt it from `HELLO` (or `AUTH`), base64url.
 * `started`: the gateway's clock when `HELLO` arrived.
 
-The post office verifies the credential and the statement (RP-1 §6.3, checking `time` against
-`started` and `started` against its own clock within 600 seconds), and answers `201`:
+The post office verifies the credential and the statement in RP-1 §6.3's order, with the
+gateway's callsign as the station called and `started` in place of its clock, and then checks
+`started` against its own clock within 600 seconds (`time-skew`). It answers a failure with its
+code (§1), and otherwise `201`:
 
 ```json
 {
@@ -204,8 +231,10 @@ The post office verifies the credential and the statement (RP-1 §6.3, checking 
 }
 ```
 
-* `accept` / `decline`: the post office's view of the user's offers (`already-have`, `too-large`,
-  `refused-by-policy`), which the gateway passes on in `WELCOME`.
+* `accept` / `decline`: the post office's view of the user's offers, which the gateway passes on
+  in `WELCOME`. A `decline` entry is `{"id", "code", "name"}`, with `already-have`, `too-large` or
+  `refused-by-policy`.
+* `waiting`: every message not yet picked up, in RP-3 §6.1's order.
 * `credential`: a renewed credential, when `renew` was asked and the post office issued one.
 
 ### 5.3 Messages for the user
@@ -213,7 +242,7 @@ The post office verifies the credential and the statement (RP-1 §6.3, checking 
 | Request | Does |
 |---|---|
 | `GET /sessions/{s}/waiting?after={serial}&limit={n}` | The next page of the waiting list (RP-3 `REQUEST` `more`). |
-| `GET /sessions/{s}/messages/{serial}` | One waiting message: `{"serial": 419, "id": "c1…", "air": "AXic…"}`. |
+| `GET /sessions/{s}/messages/{serial}` | One waiting message: `{"serial": 419, "id": "c1…", "air": "AXic…"}`. A serial the session's `waiting` did not list: `404` `unknown-message`. |
 | `POST /sessions/{s}/files` | `{"files": [{"serial": 419, "ref": "…"}]}`: send these held attachments. The post office answers `202` and later puts them in the mailbox as a new message, which the next waiting list shows. |
 
 The post office makes a message's air form once and serves those same bytes every time it is
@@ -235,7 +264,9 @@ answers:
 ```
 
 `status` is `accepted` (the post office has it and will send it on; RP-6), `duplicate` (it already
-had it), or `refused` with `code` and `text`. Only `accepted` and `duplicate` let the gateway list
+had it), or `refused` with `code`, `name` and `text`: `not-authorized` when the ID is not in the
+statement or the `from` is not its address, `malformed` when the air form does not decode to the
+ID. The checks go in the order above, one result per message, in the order sent. Only `accepted` and `duplicate` let the gateway list
 the message `complete` in its `RECEIPT` before it holds the message itself; a gateway that stores
 the message first MAY receipt it at once and hand it in later.
 
@@ -246,7 +277,8 @@ the message first MAY receipt it at once and hand it in later.
 ```
 
 Sent when the user's `RECEIPT` lists the messages complete (RP-3 §5.5). The post office marks them
-picked up and has any copies placed ahead dropped (§5.8). `204`.
+picked up and has any copies placed ahead dropped (§5.8). `204`. If any serial is not in the
+session's `waiting`, it marks none and answers `404` `unknown-message`.
 
 ### 5.6 `POST /reports`: what happened while offline
 
@@ -262,9 +294,11 @@ oldest first:
 }]}
 ```
 
-The post office verifies each statement as in §5.2 but checks `time` against `started` only, takes
-the messages as in §5.4 and the pickups as in §5.5, and answers with a result per message. Messages
-for other post offices go there (§5.4 applies at each).
+The post office verifies each statement as in §5.2, with the reporting gateway as the station
+called, but checks the credential and `time` against `started` only, not its own clock. It takes
+the messages as in §5.4 and the pickups as in §5.5, and answers one entry per session, in order:
+`{"results": [...]}` as in §5.4, or `{"code", "name"}` when the session's statement fails, in which
+case nothing of it is taken. Messages for other post offices go there (§5.4 applies at each).
 
 ### 5.7 `DELETE /sessions/{s}`
 
@@ -315,7 +349,9 @@ by email, in person). The client generates a device key and sends:
 
 `signature` is the new device key's signature with context `RadioPost-api-enroll-v1` over the UTF-8 bytes
 of the code followed by those of the base URL: it proves the client holds the key. The post office
-checks the code and the operator, and answers `{"credential": "gqNk…"}`.
+checks the code and the operator (a code that is unknown, used, or for another account or
+operator: `403` `not-authorized`) and the signature (`422` `signature-invalid`), and answers
+`{"credential": "gqNk…"}`. The code is then used.
 
 ### 6.2 `POST /credentials`: renewal
 
@@ -344,8 +380,9 @@ A licensed user registers a gateway they operate:
   record as in §4.4 and the gateway's own device key, proved by the gateway key's signature with
   context `RadioPost-api-gateway-v1` over the UTF-8 bytes of the record's callsign followed by
   those of the base URL. The post office checks that the record's `operator` is the
-  token's operator, and answers `{"credential": "…"}` with the `gateway` flag, the gateway's
-  callsign as `operator` and the user's address as `address`.
+  token's operator (otherwise `403` `not-authorized`) and the signature, and answers `201`
+  `{"credential": "…"}` with the `send` and `gateway` flags, the gateway's callsign as
+  `operator` and the user's address as `address`.
 * **`PUT /gateways/{callsign}`** updates the record; **`DELETE`** withdraws it.
 
 ### 6.5 The accept list
@@ -370,6 +407,15 @@ How the accept list is used is RP-6's.
 
 ---
 
+## 8. Test vectors
+
+`vectors/api-exchanges.json` (enrollment, a gateway registered, logins, session-01
+at the post office, copies placed ahead and dropped, an offline gateway's report, and the
+failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures of §3.2, §6.1 and
+§6.4).
+
+---
+
 ## Change log
 
 | Version | Date | Change |
@@ -378,3 +424,4 @@ How the accept list is used is RP-6's.
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.2.0 | 2026-11-09 | Login, enrollment and gateway registration each sign under a context of their own; test vectors (`vectors/api.json`). |
 | 0.3.0 | 2026-11-09 | A message's air form is made once and served the same every time (§5.3), so that downloads resume across gateways (RP-3 §7). |
+| 0.4.0 | 2026-11-09 | The HTTP status of each code, 401 and 403 (§1, §2); login and enrollment failures (§3.2, §6.1); public documents checked by RP-0 §5 and RP-1 §7.2 (§4); the order of a session's checks, `decline` entries, `waiting`'s order (§5.2); unknown serials (§5.3, §5.5); the codes of a refused message (§5.4); a report's answer (§5.6); test vectors. |

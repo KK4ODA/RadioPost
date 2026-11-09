@@ -14,12 +14,12 @@ adapter from them.
 
 | Spec | Title | Status | Version | Governs |
 |---|---|---|---|---|
-| [RP-0](rp-0000-conventions.md) | Conventions | Draft | 0.2.1 | Requirement words, encodings, cryptography, identifiers, roles, how specs change, registries |
+| [RP-0](rp-0000-conventions.md) | Conventions | Draft | 0.3.0 | Requirement words, encodings, cryptography, identifiers, roles, how specs change, registries |
 | [RP-1](rp-0001-identity.md) | Identity | Draft | 0.3.0 | Keys, credentials, session statements, published keys, revocation |
 | [RP-2](rp-0002-messages.md) | Messages | Draft | 0.1.2 | The message, its air form, its content ID |
 | [RP-3](rp-0003-session.md) | Session protocol | Draft | 0.2.0 | Client ↔ gateway over the radio |
 | [RP-4](rp-0004-modem-interface.md) | Modem interface | Draft | 0.3.0 | Client or gateway ↔ modem adapter |
-| [RP-5](rp-0005-post-office-api.md) | Post office API | Draft | 0.3.0 | Gateway or client ↔ post office over HTTPS |
+| [RP-5](rp-0005-post-office-api.md) | Post office API | Draft | 0.4.0 | Gateway or client ↔ post office over HTTPS |
 | [RP-6](rp-0006-email.md) | Email interoperation | Draft | 0.1.1 | Post office ↔ ordinary email |
 | [RP-7](rp-0007-forwarding.md) | Forwarding | Outline | 0.0.2 | Gateway ↔ gateway by radio |
 
@@ -34,10 +34,10 @@ adapter from them.
 
 ## Test vectors
 
-`../vectors/` holds exact inputs and outputs for RP-1 to RP-4 and RP-5's signatures: keys,
-credentials and their verification, session statements, messages and their content IDs, every
-PDU, sessions byte for byte (ordinary, resumed, station to station), modem interface lines and
-conversations, DNS records and API signatures. Check an implementation
+`../vectors/` holds exact inputs and outputs for RP-1 to RP-5: keys, credentials and their
+verification, session statements, messages and their content IDs, every PDU, sessions byte for
+byte (ordinary, resumed, station to station), modem interface lines and conversations, DNS
+records, signed documents, and the post office API's requests and answers. Check an implementation
 against them before it goes on the air (`../vectors/README.md`).
 
 The detailed design (`docs/design/`) explains how the pieces fit and why the protocols are as they

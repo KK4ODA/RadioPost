@@ -22,7 +22,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from rpref import cbor, ed25519, rp, rpmi
+from rpref import cbor, ed25519, jws, po, rp, rpmi
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "vectors"
@@ -75,6 +75,12 @@ KEY_LABELS = [
     ("device:shelter3-n4call", "Shelter 3's laptop, operator N4CALL", None, None),
     ("device:gateway-n1call-10", "Gateway N1CALL-10 (credential from hampost.org)", None, None),
     ("device:gateway-kk4oda-1", "Gateway KK4ODA-1, being registered at radiopost.org", None, None),
+    (
+        "po:radiopost.org:new",
+        "radiopost.org's new key, in its info document before DNS has it",
+        T_SESSION - 2 * DAY,
+        T_KEYS_UNTIL + 365 * DAY,
+    ),
 ]
 
 SECRET = {label: seed(label) for label, *_ in KEY_LABELS}
@@ -543,6 +549,15 @@ CREDENTIALS: dict[str, dict[str, Any]] = {
         "address": "n1call@hampost.org",
         "operator": "N1CALL-10",
         "flags": ["send", "gateway"],
+    },
+    "gateway-kk4oda-1": {
+        "po": "po:radiopost.org",
+        "device": "device:gateway-kk4oda-1",
+        "serial": 1051,
+        "address": "facundo@radiopost.org",
+        "operator": "KK4ODA-1",
+        "flags": ["send", "gateway"],
+        "issued": T_ISSUED + 7200,
     },
     "signed-by-retired-key": {
         "po": "po:radiopost.org:2025",
@@ -1940,6 +1955,530 @@ def make_rpmi_lines() -> dict[str, Any]:
     return out
 
 
+# -- jws.json ------------------------------------------------------------------------------------
+
+
+def key_entry(label: str) -> dict[str, Any]:
+    """A key as an info document lists it (RP-1 §7.2)."""
+    _, _, start, end = next(k for k in KEY_LABELS if k[0] == label)
+    return {
+        "kid": rp.kid(PUBLIC[label]).hex(),
+        "public": jws.b64u(PUBLIC[label]),
+        "not_before": start,
+        "not_after": end,
+    }
+
+
+GATEWAY_RECORD = {
+    "callsign": "KK4ODA-1",
+    "operator": "KK4ODA",
+    "grid": "EM73",
+    "place": "Atlanta, GA",
+    "channels": [
+        {"dial_hz": 3590000, "mode": "USB", "modem": "aether", "bandwidth_hz": 2300},
+        {"dial_hz": 7101000, "mode": "USB", "modem": "aether", "bandwidth_hz": 2300},
+    ],
+    "hours": "always",
+    "internet": True,
+    "copies": {"users": 50, "days": 7, "max_air_bytes": 16384},
+}
+T_DOCUMENTS = T_SESSION - DAY
+
+
+def documents() -> list[tuple[str, str, dict[str, Any], str]]:
+    """RP-5 §4's documents: (name, path, payload, the key that signs it)."""
+    info = {
+        "version": 1,
+        "domains": ["radiopost.org"],
+        "operator": "KK4ODA",
+        "contact": "postmaster@radiopost.org",
+        "country": "US",
+        "keys": [key_entry("po:radiopost.org"), key_entry("po:radiopost.org:new")],
+        "limits": {"max_air_bytes": 65536, "max_email_bytes": 10485760},
+        "gateways": "any",
+        "mail": {"jmap": "https://po.radiopost.org/jmap/session", "imap": "po.radiopost.org:993"},
+        "updated": T_DOCUMENTS,
+    }
+    revocations = {
+        "issued": T_DOCUMENTS,
+        "next": T_DOCUMENTS + 21600,
+        "serials": [1090],
+        "kids": [],
+    }
+    hampost = PUBLIC["po:hampost.org"]
+    post_offices = {
+        "issued": T_DOCUMENTS,
+        "post_offices": [
+            {
+                "domain": "hampost.org",
+                "api": PO_HAMPOST,
+                "keys": [{"kid": rp.kid(hampost).hex(), "public": jws.b64u(hampost)}],
+            }
+        ],
+    }
+    gateways = {
+        "issued": T_DOCUMENTS,
+        "gateways": [{**GATEWAY_RECORD, "updated": T_ISSUED + 7200}],
+    }
+    return [
+        ("info", "/info", info, "po:radiopost.org"),
+        ("revocations", "/revocations", revocations, "po:radiopost.org:new"),
+        ("post-offices", "/post-offices", post_offices, "po:radiopost.org"),
+        ("gateways", "/gateways", gateways, "po:radiopost.org"),
+    ]
+
+
+def signed_documents() -> dict[str, str]:
+    return {
+        name: jws.sign(jws.compact(payload), SECRET[key], PUBLIC[key])
+        for name, _, payload, key in documents()
+    }
+
+
+def make_jws() -> dict[str, Any]:
+    signed = signed_documents()
+    dns_label = "po:radiopost.org"
+    dns = {rp.kid(PUBLIC[dns_label]).hex(): PUBLIC[dns_label]}
+    entries = []
+    for name, path, payload, key in documents():
+        token = signed[name]
+        entries.append(
+            {
+                "name": name,
+                "path": path,
+                "signed_by": key,
+                "payload": payload,
+                "header_b64url": token.split(".")[0],
+                "payload_b64url": token.split(".")[1],
+                "jws": token,
+            }
+        )
+    retired = "po:radiopost.org:2025"
+    forged_info = jws.sign(
+        jws.compact({"version": 1, "domains": ["radiopost.org"], "keys": [key_entry(retired)]}),
+        SECRET[retired],
+        PUBLIC[retired],
+    )
+    by_retired = jws.sign(
+        jws.compact(
+            {"issued": T_DOCUMENTS, "next": T_DOCUMENTS + 21600, "serials": [], "kids": []}
+        ),
+        SECRET[retired],
+        PUBLIC[retired],
+    )
+    head, body, sig = signed["post-offices"].split(".")
+    changed = dict(documents()[2][2])
+    changed["post_offices"] = []
+    altered = f"{head}.{jws.b64u(jws.compact(changed))}.{sig}"
+    none_header = jws.b64u(jws.compact({"alg": "none", "kid": next(iter(dns))}))
+    unsigned = f"{none_header}.{signed['gateways'].split('.')[1]}."
+    cases_in = [
+        ("info, signed by the key in DNS", signed["info"], None),
+        (
+            "revocations, signed by the new key that the info document lists",
+            signed["revocations"],
+            signed["info"],
+        ),
+        ("revocations, checked with the DNS key alone", signed["revocations"], None),
+        ("post-offices, its payload changed after signing", altered, signed["info"]),
+        ("gateways, `alg` none and no signature", unsigned, signed["info"]),
+        (
+            "an info document signed by a key DNS does not list, naming itself; then a "
+            "document signed by that key",
+            by_retired,
+            forged_info,
+        ),
+        ("two parts, not three", ".".join(signed["info"].split(".")[:2]), None),
+        ("a header that is not JSON", jws.b64u(b"alg=EdDSA") + "." + body + "." + sig, None),
+    ]
+    cases = []
+    for what, token, info in cases_in:
+        result, _ = jws.verify(token, jws.accepted_keys(dns, info))
+        cases.append(
+            {
+                "what": what,
+                "jws": token,
+                "dns_kids": list(dns),
+                "info_jws": info,
+                "expect": result,
+            }
+        )
+    out = header(
+        "Signed documents (JWS) and how they verify",
+        {"RP-0": "§5", "RP-1": "§7.2", "RP-5": "§1, §4"},
+    )
+    out["rule"] = (
+        "From `header_b64url` and `payload_b64url` (the exact bytes signed), a signer with the "
+        "key named produces exactly `jws`: Ed25519 over the ASCII of header, a dot and payload, "
+        "with no RadioPost context (RP-0 §5). Another JSON spelling of the same payload is "
+        "another valid JWS. A verifier holds the keys `dns_kids` names (keys.json) and, when "
+        "`info_jws` is given, adds the keys an info document signed by one of them lists "
+        "(RP-1 §7.2); it then returns `expect`."
+    )
+    out["documents"] = entries
+    out["verification"] = cases
+    return out
+
+
+# -- api-exchanges.json --------------------------------------------------------------------------
+
+
+class Exchanges:
+    """Requests to a reference post office, and its answers, in order."""
+
+    def __init__(self, office: po.PostOffice) -> None:
+        self.po = office
+        self.log: list[dict[str, Any]] = []
+
+    def note(self, text: str) -> None:
+        self.log.append({"note": text})
+
+    def call(
+        self,
+        at: int,
+        who: str,
+        method: str,
+        path: str,
+        body: dict[str, Any] | None = None,
+        token: str | None = None,
+    ) -> dict[str, Any]:
+        self.po.now = at
+        status, answer = self.po.handle(method, path, body, token)
+        request: dict[str, Any] = {"method": method, "path": path}
+        if token is not None:
+            request["authorization"] = f"Bearer {token}"
+        if body is not None:
+            request["body"] = body
+        response: dict[str, Any] = {"status": status}
+        if answer is not None:
+            response["body"] = answer
+        self.log.append({"at": at, "who": who, "request": request, "response": response})
+        return answer or {}
+
+    def login(self, at: int, who: str, cred: str) -> str:
+        nonce = self.call(at, who, "POST", "/auth/challenge")["nonce"]
+        raw = jws.unb64u(nonce)
+        assert raw is not None
+        signature = rp.sign(
+            rp.CTX_LOGIN, raw + PO_RADIOPOST.encode(), SECRET[CREDENTIALS[cred]["device"]]
+        )
+        body = {
+            "credential": jws.b64u(credential(cred)),
+            "nonce": nonce,
+            "signature": jws.b64u(signature),
+        }
+        return self.call(at, who, "POST", "/auth/token", body)["token"]
+
+
+def post_office() -> po.PostOffice:
+    """radiopost.org as the vectors find it: Facundo's account, his tablet's enrollment code."""
+    office = po.PostOffice(
+        domains=["radiopost.org"],
+        base_url=PO_RADIOPOST,
+        secret=SECRET["po:radiopost.org"],
+        public=PUBLIC["po:radiopost.org"],
+        known=po_keys(),
+        draw=stream,
+    )
+    office.next_serial = 1050
+    office.codes["7Q4F-AZ9K"] = {
+        "address": "facundo@radiopost.org",
+        "operator": "KK4ODA",
+        "flags": rp.FLAGS["receive"],
+    }
+    return office
+
+
+def deliver_waiting(office: po.PostOffice, ex: Exchanges | None) -> None:
+    """Mail for Facundo arrives (RP-6), each message at its date."""
+    for serial, name in WAITING:
+        fields = MESSAGES[name]
+        office.now = fields["date"]
+        if ex is not None:
+            ex.note(f"Mail arrives for facundo@radiopost.org: #{serial}, {fields['subject']!r}.")
+        office.deliver(
+            "facundo@radiopost.org",
+            serial,
+            air0(name),
+            sender=fields["from"],
+            subject=fields["subject"],
+            priority=fields.get("priority", 0),
+        )
+
+
+def session_request(hello: dict[int, Any], started: int, who: str = "facundo") -> dict[str, Any]:
+    """RP-5 §5.2's body, from a HELLO the gateway received at `started`."""
+    stmt = rp.statement_from_hello(hello)
+    return {
+        "statement": jws.b64u(cbor.encode(stmt)),
+        "signature": jws.b64u(hello[15]),
+        "credential": jws.b64u(credential(who)),
+        "started": started,
+        "cursor": hello[9],
+    }
+
+
+def handed_in(names: list[str]) -> dict[str, Any]:
+    return {
+        "messages": [{"id": rp.id_text(encoded(n)[1]), "air": jws.b64u(air0(n))} for n in names]
+    }
+
+
+def api_story() -> list[dict[str, Any]]:
+    """Enrollment, a gateway registered, copies placed ahead, session-01 at the post office."""
+    office = post_office()
+    ex = Exchanges(office)
+    enroll_code = "7Q4F-AZ9K"
+    tablet = "device:facundo-tablet"
+    signed = enroll_code.encode() + PO_RADIOPOST.encode()
+    ex.note("Facundo enrolls his tablet with the code the post office gave him.")
+    ex.call(
+        T_ISSUED,
+        "Facundo's tablet",
+        "POST",
+        "/enroll",
+        {
+            "address": "facundo@radiopost.org",
+            "operator": "KK4ODA",
+            "code": enroll_code,
+            "device": jws.b64u(PUBLIC[tablet]),
+            "signature": jws.b64u(rp.sign(rp.CTX_ENROLL, signed, SECRET[tablet])),
+        },
+    )
+    at = T_ISSUED + 7200
+    ex.note("From his laptop he names his usual gateways, and registers his own, KK4ODA-1.")
+    user = ex.login(at - 60, "Facundo's laptop", "facundo")
+    settings = {
+        "usual_gateways": ["KK4ODA-1", "N2CALL-5"],
+        "auto_bytes": AUTO,
+        "radio_skips_read": True,
+    }
+    ex.call(at - 30, "Facundo's laptop", "PUT", "/settings", settings, user)
+    gateway = "device:gateway-kk4oda-1"
+    reg = GATEWAY_RECORD["callsign"].encode() + PO_RADIOPOST.encode()
+    ex.call(
+        at,
+        "Facundo's laptop",
+        "POST",
+        "/gateways",
+        {
+            "record": GATEWAY_RECORD,
+            "device": jws.b64u(PUBLIC[gateway]),
+            "signature": jws.b64u(rp.sign(rp.CTX_GATEWAY, reg, SECRET[gateway])),
+        },
+        user,
+    )
+    deliver_waiting(office, ex)
+    ex.note("KK4ODA-1 fetches the copies placed ahead for it, and acknowledges them.")
+    kk = ex.login(T_SESSION - 3600, "KK4ODA-1", "gateway-kk4oda-1")
+    copies = ex.call(T_SESSION - 3590, "KK4ODA-1", "GET", "/copies?after=&wait=60", None, kk)
+    ex.call(T_SESSION - 3589, "KK4ODA-1", "POST", "/copies/ack", {"cursor": copies["cursor"]}, kk)
+    ex.note("Facundo calls N1CALL-10 (session-01.json). The gateway carries his session here.")
+    gw = ex.login(T_SESSION - 600, "N1CALL-10", "gateway-n1call-10")
+    hello = session_pdus()[0][1][0][1]
+    opened = ex.call(
+        T_SESSION + 40, "N1CALL-10", "POST", "/sessions", session_request(hello, T_SESSION + 40), gw
+    )
+    sid = opened["session"]
+    ex.call(T_SESSION + 40, "N1CALL-10", "GET", f"/sessions/{sid}/messages/419", None, gw)
+    ex.note("Transmission 3 brings Facundo's two messages and his receipt for #419.")
+    ex.call(
+        T_SESSION + 95, "N1CALL-10", "POST", f"/sessions/{sid}/messages", handed_in(OUTGOING), gw
+    )
+    ex.call(T_SESSION + 95, "N1CALL-10", "POST", f"/sessions/{sid}/pickups", {"serials": [419]}, gw)
+    ex.call(T_SESSION + 95, "N1CALL-10", "GET", f"/sessions/{sid}/messages/420", None, gw)
+    ex.note("Transmission 5 brings his receipt for #420; then he hangs up.")
+    ex.call(
+        T_SESSION + 160, "N1CALL-10", "POST", f"/sessions/{sid}/pickups", {"serials": [420]}, gw
+    )
+    ex.call(T_SESSION + 161, "N1CALL-10", "DELETE", f"/sessions/{sid}", None, gw)
+    ex.note(
+        "KK4ODA-1 polls again. Its token ran out at the end of its hour: the post office answers "
+        "401, and the gateway logs in again. The new poll drops the copies of the two messages "
+        "picked up."
+    )
+    poll = f"/copies?after={copies['cursor']}&wait=60"
+    ex.call(T_SESSION + 300, "KK4ODA-1", "GET", poll, None, kk)
+    kk = ex.login(T_SESSION + 301, "KK4ODA-1", "gateway-kk4oda-1")
+    ex.call(T_SESSION + 302, "KK4ODA-1", "GET", poll, None, kk)
+    return ex.log
+
+
+def case_office() -> tuple[po.PostOffice, Exchanges, dict[str, str]]:
+    """A post office with Facundo's mail waiting, and tokens for N1CALL-10, KK4ODA-1, Facundo."""
+    office = post_office()
+    deliver_waiting(office, None)
+    quiet = Exchanges(office)
+    tokens = {
+        "N1CALL-10": quiet.login(T_SESSION - 600, "N1CALL-10", "gateway-n1call-10"),
+        "KK4ODA-1": quiet.login(T_SESSION - 600, "KK4ODA-1", "gateway-kk4oda-1"),
+        "facundo": quiet.login(T_SESSION - 600, "Facundo's laptop", "facundo"),
+    }
+    return office, Exchanges(office), tokens
+
+
+def api_cases() -> list[dict[str, Any]]:
+    hello = session_pdus()[0][1][0][1]
+    good = session_request(hello, T_SESSION + 40)
+    fewer = dict(good)
+    stmt = rp.statement_from_hello(hello)
+    stmt[6] = stmt[6][:1]
+    fewer["statement"] = jws.b64u(cbor.encode(stmt))
+    cases = []
+
+    def case(what: str, steps: list[tuple[Any, ...]], revoked: list[int] | None = None) -> None:
+        office, ex, tokens = case_office()
+        if revoked:
+            office.revoked = {"radiopost.org": {"serials": revoked, "kids": []}}
+        for at, who, method, path, body in steps:
+            ex.call(at, who, method, path, body, tokens.get(who))
+        cases.append({"what": what, "exchanges": ex.log})
+
+    gw = "N1CALL-10"
+    case(
+        "session-01, opened 40 s after the client's clock",
+        [(T_SESSION + 40, gw, "POST", "/sessions", good)],
+    )
+    case(
+        "the post office's clock 601 s after `started`",
+        [(T_SESSION + 641, gw, "POST", "/sessions", good)],
+    )
+    late = dict(good, started=T_SESSION + 601)
+    case(
+        "`started` 601 s after the statement's time",
+        [(T_SESSION + 601, gw, "POST", "/sessions", late)],
+    )
+    case(
+        "the same statement twice: a replay",
+        [
+            (T_SESSION + 40, gw, "POST", "/sessions", good),
+            (T_SESSION + 70, gw, "POST", "/sessions", good),
+        ],
+    )
+    case(
+        "a message removed from the statement after signing",
+        [(T_SESSION + 40, gw, "POST", "/sessions", fewer)],
+    )
+    case(
+        "the user's credential revoked",
+        [(T_SESSION + 40, gw, "POST", "/sessions", good)],
+        revoked=[CREDENTIALS["facundo"]["serial"]],
+    )
+    case(
+        "carried by a gateway the statement does not name",
+        [(T_SESSION + 40, "KK4ODA-1", "POST", "/sessions", good)],
+    )
+    case("no token", [(T_SESSION + 40, "nobody", "POST", "/sessions", good)])
+    case(
+        "a user's token on a gateway endpoint",
+        [(T_SESSION + 40, "facundo", "POST", "/sessions", good)],
+    )
+
+    # Handing in: a statement that offers a message from someone else, to show every refusal.
+    mixed_ids = [encoded(n)[1] for n in ["facundo-reply", "facundo-to-ana", "maria-419"]]
+    nonce = stream("api cases nonce", 8)
+    mixed = rp.statement(
+        "facundo@radiopost.org", "KK4ODA", "N1CALL-10", mixed_ids, time=T_SESSION, nonce=nonce
+    )
+    mixed_body = dict(
+        good,
+        statement=jws.b64u(cbor.encode(mixed)),
+        signature=jws.b64u(rp.sign(rp.CTX_SESSION, cbor.encode(mixed), SECRET["device:facundo"])),
+    )
+    _, ex, tokens = case_office()
+    sid = ex.call(T_SESSION + 40, gw, "POST", "/sessions", mixed_body, tokens[gw])["session"]
+    bent = bytearray(air0("facundo-reply"))
+    bent[-1] ^= 1
+    items = handed_in(["facundo-to-ana", "facundo-to-ana"])["messages"] + [
+        {"id": rp.id_text(encoded("facundo-reply")[1]), "air": jws.b64u(bytes(bent))},
+        handed_in(["maria-419"])["messages"][0],
+        handed_in(["eoc-420"])["messages"][0],
+    ]
+    ex.call(
+        T_SESSION + 95, gw, "POST", f"/sessions/{sid}/messages", {"messages": items}, tokens[gw]
+    )
+    ex.call(
+        T_SESSION + 96, gw, "POST", f"/sessions/{sid}/pickups", {"serials": [419, 999]}, tokens[gw]
+    )
+    ex.call(T_SESSION + 97, gw, "GET", f"/sessions/{sid}/messages/999", None, tokens[gw])
+    cases.append(
+        {
+            "what": (
+                "messages handed in: accepted; the same again, a duplicate; an air form that "
+                "is not its message; a message from someone else; a message not in the "
+                "statement. Then a pickup and a fetch of a serial the session did not list."
+            ),
+            "exchanges": ex.log,
+        }
+    )
+    return cases
+
+
+def api_report() -> list[dict[str, Any]]:
+    """RP-5 §5.6: an offline gateway reports a day later; one statement fails."""
+    _, ex, _ = case_office()
+    hello = session_pdus()[0][1][0][1]
+    good = session_request(hello, T_SESSION + 40)
+    stmt = rp.statement_from_hello(hello)
+    stmt[6] = stmt[6][:1]
+    bad = dict(good, statement=jws.b64u(cbor.encode(stmt)))
+    ex.note(
+        "N1CALL-10 had no Internet during session-01: it checked Facundo offline (RP-1 §5, §6.3), "
+        "queued his two messages and served no mail. A day later it reports, with a second, "
+        "made-up session whose statement no longer matches its signature."
+    )
+    token = ex.login(T_SESSION + DAY - 10, "N1CALL-10", "gateway-n1call-10")
+    ex.call(
+        T_SESSION + DAY,
+        "N1CALL-10",
+        "POST",
+        "/reports",
+        {
+            "sessions": [
+                {**good, "messages": handed_in(OUTGOING)["messages"], "pickups": []},
+                {**bad, "messages": [], "pickups": []},
+            ]
+        },
+        token,
+    )
+    return ex.log
+
+
+def make_api_exchanges() -> dict[str, Any]:
+    out = header(
+        "Post office API: requests and answers",
+        {"RP-5": "§1–§6", "RP-1": "§5, §6.3", "RP-3": "§12"},
+    )
+    out["rule"] = (
+        "Each exchange is one HTTPS request to the post office at its clock `at`, with its path "
+        "under the base URL, its bearer token and its JSON body, and the answer: status and "
+        "body. A post office given the same requests in order answers the same, and a gateway "
+        "or client sends the requests shown. JSON compares as values, not text; a problem's "
+        "`title` and a result's `text` are for people and need not match. Tokens, session IDs, "
+        "nonces and cursors are this post office's random or opaque choices: use the ones the "
+        "answers give. Air forms are those of the session vectors (compression 0)."
+    )
+    out["context"] = {
+        "post_office": "radiopost.org",
+        "base_url": PO_RADIOPOST,
+        "signs_credentials_with": "po:radiopost.org",
+        "knows_keys_of": ["radiopost.org", "hampost.org"],
+        "enrollment_code": {
+            "code": "7Q4F-AZ9K",
+            "address": "facundo@radiopost.org",
+            "operator": "KK4ODA",
+            "flags": rp.FLAGS["receive"],
+            "serial": 1050,
+        },
+        "next_serial_after_it": 1051,
+        "randomness": "post office values are stream('post office <what> <n>', bytes)",
+    }
+    out["story"] = api_story()
+    out["cases"] = api_cases()
+    out["report"] = api_report()
+    return out
+
+
 # -- dns.json and api.json -----------------------------------------------------------------------
 
 
@@ -2027,6 +2566,8 @@ FILES = {
     "rpmi-conversations.json": make_rpmi_conversations,
     "dns.json": make_dns,
     "api.json": make_api,
+    "jws.json": make_jws,
+    "api-exchanges.json": make_api_exchanges,
 }
 
 
@@ -2078,6 +2619,10 @@ def self_check(name: str, data: dict[str, Any]) -> None:
         check_station(data)
     if name == "rpmi-conversations.json":
         check_rpmi(data)
+    if name == "jws.json":
+        check_jws(data)
+    if name == "api-exchanges.json":
+        check_api(data)
 
 
 def check_rpmi(data: dict[str, Any]) -> None:
@@ -2114,6 +2659,71 @@ def check_rpmi(data: dict[str, Any]) -> None:
     streams = write_transmissions(session_pdus())[1]
     for who, other in (("client", "gateway"), ("gateway", "client")):
         assert sent[who].hex() == got[other].hex() == streams[who]
+
+
+def check_jws(data: dict[str, Any]) -> None:
+    """Each document verifies, and each case gives its verdict, from the file alone."""
+    dns_label = "po:radiopost.org"
+    dns = {rp.kid(PUBLIC[dns_label]).hex(): PUBLIC[dns_label]}
+    info = next(d["jws"] for d in data["documents"] if d["name"] == "info")
+    keys = jws.accepted_keys(dns, info)
+    for d in data["documents"]:
+        assert jws.verify(d["jws"], keys) == ("ok", d["payload"])
+    for case in data["verification"]:
+        given = {k: PUBLIC[label] for label in SECRET for k in [rp.kid(PUBLIC[label]).hex()]}
+        held = {k: given[k] for k in case["dns_kids"]}
+        assert (
+            jws.verify(case["jws"], jws.accepted_keys(held, case["info_jws"]))[0] == case["expect"]
+        )
+
+
+def check_api(data: dict[str, Any]) -> None:
+    """Statuses fit their codes; credentials, lists and air forms agree with the other files."""
+    logs = [data["story"], data["report"]] + [c["exchanges"] for c in data["cases"]]
+    for log in logs:
+        for e in log:
+            body = e.get("response", {}).get("body") or {}
+            if "name" in body and "status" in body:
+                assert body["status"] == e["response"]["status"]
+                assert body["code"] == rp.ERRORS[body["name"]]
+                if body["status"] == 401:
+                    assert body["name"] == "not-authorized"
+                else:
+                    assert body["status"] == po.HTTP_STATUS[body["name"]]
+    by_path = {}
+    for e in data["story"]:
+        if "request" in e:
+            by_path.setdefault(e["request"]["method"] + " " + e["request"]["path"], []).append(e)
+    tablet = by_path["POST /enroll"][0]["response"]["body"]["credential"]
+    assert jws.unb64u(tablet) == credential("facundo-tablet")
+    kk = by_path["POST /gateways"][0]["response"]["body"]["credential"]
+    assert jws.unb64u(kk) == credential("gateway-kk4oda-1")
+    opened = by_path["POST /sessions"][0]["response"]["body"]
+    welcome = session_pdus()[1][1][0][1]
+    as_welcome = [
+        [
+            w["serial"],
+            rp.id_bytes(w["id"]),
+            w["from"],
+            subject40(w["subject"]),
+            w["size"],
+            w["priority"],
+            1 if w["held"] else 0,
+        ]
+        for w in opened["waiting"]
+    ]
+    assert as_welcome == welcome[7]
+    assert [[rp.id_bytes(a["id"]), a["offset"]] for a in opened["accept"]] == welcome[5]
+    sent = {
+        p[5]: p[4] for _, pdus in session_pdus() for name, p in pdus if name == "MSG" and 5 in p
+    }
+    for key, entries in by_path.items():
+        if key.startswith("GET /sessions/"):
+            body = entries[0]["response"]["body"]
+            assert jws.unb64u(body["air"]) == sent[body["serial"]]
+    for e in by_path["GET /copies?after=&wait=60"]:
+        for item in e["response"]["body"]["items"]:
+            assert jws.unb64u(item["air"]) == air0(dict((s, n) for s, n in WAITING)[item["serial"]])
 
 
 def pdus_of(t: dict[str, Any]) -> list[dict[int, Any]]:

@@ -117,6 +117,14 @@ def id_text(content_id: bytes) -> str:
     return base64.b32encode(content_id).decode("ascii").rstrip("=").lower()
 
 
+def id_bytes(text: str) -> bytes | None:
+    """A content ID from its text (RP-0 §6.3), or None when the text is not one."""
+    if not re.fullmatch(r"[a-z2-7]{20}", text):
+        return None
+    raw = base64.b32decode(text.upper() + "====")
+    return raw if id_text(raw) == text else None
+
+
 def normalise(text: str) -> str:
     """RP-0 §4.3: NFC, LF line endings."""
     return unicodedata.normalize("NFC", text.replace("\r\n", "\n").replace("\r", "\n"))

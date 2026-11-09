@@ -22,5 +22,6 @@ ignore = [
 quote-style = "double"
 
 [lint.per-file-ignores]
-# A vector builder names every value it writes, so a reader can follow it to the file.
-"tools/vectors/make.py" = ["too-many-locals"]
+# A vector builder names every value it writes, so a reader can follow it to the file, and writes
+# a request as it reads: when, who, method, path, body, token.
+"tools/vectors/make.py" = ["too-many-locals", "too-many-positional-arguments"]

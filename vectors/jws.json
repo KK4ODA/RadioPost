@@ -1,0 +1,208 @@
+{
+  "radiopost_vectors": "Signed documents (JWS) and how they verify",
+  "format": 1,
+  "specs": {
+    "RP-0": "§5",
+    "RP-1": "§7.2",
+    "RP-5": "§1, §4"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "From `header_b64url` and `payload_b64url` (the exact bytes signed), a signer with the key named produces exactly `jws`: Ed25519 over the ASCII of header, a dot and payload, with no RadioPost context (RP-0 §5). Another JSON spelling of the same payload is another valid JWS. A verifier holds the keys `dns_kids` names (keys.json) and, when `info_jws` is given, adds the keys an info document signed by one of them lists (RP-1 §7.2); it then returns `expect`.",
+  "documents": [
+    {
+      "name": "info",
+      "path": "/info",
+      "signed_by": "po:radiopost.org",
+      "payload": {
+        "version": 1,
+        "domains": [
+          "radiopost.org"
+        ],
+        "operator": "KK4ODA",
+        "contact": "postmaster@radiopost.org",
+        "country": "US",
+        "keys": [
+          {
+            "kid": "fbbd5f5c",
+            "public": "dmDCk1mTrS70nNg_yQuSYaxq1_AR6moPzpckQDM-XAY",
+            "not_before": 1767225600,
+            "not_after": 1830297600
+          },
+          {
+            "kid": "0112c4ee",
+            "public": "ceDpAekbZSFjthO2tYh1NSvI2ZRAwW4AvKhCXyPzRYA",
+            "not_before": 1794062400,
+            "not_after": 1861833600
+          }
+        ],
+        "limits": {
+          "max_air_bytes": 65536,
+          "max_email_bytes": 10485760
+        },
+        "gateways": "any",
+        "mail": {
+          "jmap": "https://po.radiopost.org/jmap/session",
+          "imap": "po.radiopost.org:993"
+        },
+        "updated": 1794148800
+      },
+      "header_b64url": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0",
+      "payload_b64url": "eyJ2ZXJzaW9uIjoxLCJkb21haW5zIjpbInJhZGlvcG9zdC5vcmciXSwib3BlcmF0b3IiOiJLSzRPREEiLCJjb250YWN0IjoicG9zdG1hc3RlckByYWRpb3Bvc3Qub3JnIiwiY291bnRyeSI6IlVTIiwia2V5cyI6W3sia2lkIjoiZmJiZDVmNWMiLCJwdWJsaWMiOiJkbURDazFtVHJTNzBuTmdfeVF1U1lheHExX0FSNm1vUHpwY2tRRE0tWEFZIiwibm90X2JlZm9yZSI6MTc2NzIyNTYwMCwibm90X2FmdGVyIjoxODMwMjk3NjAwfSx7ImtpZCI6IjAxMTJjNGVlIiwicHVibGljIjoiY2VEcEFla2JaU0ZqdGhPMnRZaDFOU3ZJMlpSQXdXNEF2S2hDWHlQelJZQSIsIm5vdF9iZWZvcmUiOjE3OTQwNjI0MDAsIm5vdF9hZnRlciI6MTg2MTgzMzYwMH1dLCJsaW1pdHMiOnsibWF4X2Fpcl9ieXRlcyI6NjU1MzYsIm1heF9lbWFpbF9ieXRlcyI6MTA0ODU3NjB9LCJnYXRld2F5cyI6ImFueSIsIm1haWwiOnsiam1hcCI6Imh0dHBzOi8vcG8ucmFkaW9wb3N0Lm9yZy9qbWFwL3Nlc3Npb24iLCJpbWFwIjoicG8ucmFkaW9wb3N0Lm9yZzo5OTMifSwidXBkYXRlZCI6MTc5NDE0ODgwMH0",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJ2ZXJzaW9uIjoxLCJkb21haW5zIjpbInJhZGlvcG9zdC5vcmciXSwib3BlcmF0b3IiOiJLSzRPREEiLCJjb250YWN0IjoicG9zdG1hc3RlckByYWRpb3Bvc3Qub3JnIiwiY291bnRyeSI6IlVTIiwia2V5cyI6W3sia2lkIjoiZmJiZDVmNWMiLCJwdWJsaWMiOiJkbURDazFtVHJTNzBuTmdfeVF1U1lheHExX0FSNm1vUHpwY2tRRE0tWEFZIiwibm90X2JlZm9yZSI6MTc2NzIyNTYwMCwibm90X2FmdGVyIjoxODMwMjk3NjAwfSx7ImtpZCI6IjAxMTJjNGVlIiwicHVibGljIjoiY2VEcEFla2JaU0ZqdGhPMnRZaDFOU3ZJMlpSQXdXNEF2S2hDWHlQelJZQSIsIm5vdF9iZWZvcmUiOjE3OTQwNjI0MDAsIm5vdF9hZnRlciI6MTg2MTgzMzYwMH1dLCJsaW1pdHMiOnsibWF4X2Fpcl9ieXRlcyI6NjU1MzYsIm1heF9lbWFpbF9ieXRlcyI6MTA0ODU3NjB9LCJnYXRld2F5cyI6ImFueSIsIm1haWwiOnsiam1hcCI6Imh0dHBzOi8vcG8ucmFkaW9wb3N0Lm9yZy9qbWFwL3Nlc3Npb24iLCJpbWFwIjoicG8ucmFkaW9wb3N0Lm9yZzo5OTMifSwidXBkYXRlZCI6MTc5NDE0ODgwMH0.LETIhfItfKvzdRXT-YyhgHwPzxnM3S6AYizv5Yql43WiompYMsRwIoFcRvJbCpGrg2nUTSIrsoqV4heDFecZCQ"
+    },
+    {
+      "name": "revocations",
+      "path": "/revocations",
+      "signed_by": "po:radiopost.org:new",
+      "payload": {
+        "issued": 1794148800,
+        "next": 1794170400,
+        "serials": [
+          1090
+        ],
+        "kids": []
+      },
+      "header_b64url": "eyJhbGciOiJFZERTQSIsImtpZCI6IjAxMTJjNGVlIn0",
+      "payload_b64url": "eyJpc3N1ZWQiOjE3OTQxNDg4MDAsIm5leHQiOjE3OTQxNzA0MDAsInNlcmlhbHMiOlsxMDkwXSwia2lkcyI6W119",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6IjAxMTJjNGVlIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsIm5leHQiOjE3OTQxNzA0MDAsInNlcmlhbHMiOlsxMDkwXSwia2lkcyI6W119.CnTTJcq5ZvuYt46WvR2AvvkmtLYa4xnYqA5N_Mvu1MwDJmuh5aH4wMjmRd8U2ngX1L-OuTN_g9_6xLQw2E5EBQ"
+    },
+    {
+      "name": "post-offices",
+      "path": "/post-offices",
+      "signed_by": "po:radiopost.org",
+      "payload": {
+        "issued": 1794148800,
+        "post_offices": [
+          {
+            "domain": "hampost.org",
+            "api": "https://po.hampost.org/rp/v1",
+            "keys": [
+              {
+                "kid": "84219d00",
+                "public": "u_M3pKzebawRJXJ_dE5nKOvPhgLEl3T0vkOmPK11t7Q"
+              }
+            ]
+          }
+        ]
+      },
+      "header_b64url": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0",
+      "payload_b64url": "eyJpc3N1ZWQiOjE3OTQxNDg4MDAsInBvc3Rfb2ZmaWNlcyI6W3siZG9tYWluIjoiaGFtcG9zdC5vcmciLCJhcGkiOiJodHRwczovL3BvLmhhbXBvc3Qub3JnL3JwL3YxIiwia2V5cyI6W3sia2lkIjoiODQyMTlkMDAiLCJwdWJsaWMiOiJ1X00zcEt6ZWJhd1JKWEpfZEU1bktPdlBoZ0xFbDNUMHZrT21QSzExdDdRIn1dfV19",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsInBvc3Rfb2ZmaWNlcyI6W3siZG9tYWluIjoiaGFtcG9zdC5vcmciLCJhcGkiOiJodHRwczovL3BvLmhhbXBvc3Qub3JnL3JwL3YxIiwia2V5cyI6W3sia2lkIjoiODQyMTlkMDAiLCJwdWJsaWMiOiJ1X00zcEt6ZWJhd1JKWEpfZEU1bktPdlBoZ0xFbDNUMHZrT21QSzExdDdRIn1dfV19.2RQXoHDCghFzbs9bQWZo1cYcvE4rkZmPaxfithsug4vW9tLt_M8GqqdzNt7iuVz2s2TRx0Td3AbudX7pz76dCA"
+    },
+    {
+      "name": "gateways",
+      "path": "/gateways",
+      "signed_by": "po:radiopost.org",
+      "payload": {
+        "issued": 1794148800,
+        "gateways": [
+          {
+            "callsign": "KK4ODA-1",
+            "operator": "KK4ODA",
+            "grid": "EM73",
+            "place": "Atlanta, GA",
+            "channels": [
+              {
+                "dial_hz": 3590000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              },
+              {
+                "dial_hz": 7101000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              }
+            ],
+            "hours": "always",
+            "internet": true,
+            "copies": {
+              "users": 50,
+              "days": 7,
+              "max_air_bytes": 16384
+            },
+            "updated": 1793498400
+          }
+        ]
+      },
+      "header_b64url": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0",
+      "payload_b64url": "eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6IktLNE9EQS0xIiwib3BlcmF0b3IiOiJLSzRPREEiLCJncmlkIjoiRU03MyIsInBsYWNlIjoiQXRsYW50YSwgR0EiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwfSx7ImRpYWxfaHoiOjcxMDEwMDAsIm1vZGUiOiJVU0IiLCJtb2RlbSI6ImFldGhlciIsImJhbmR3aWR0aF9oeiI6MjMwMH1dLCJob3VycyI6ImFsd2F5cyIsImludGVybmV0Ijp0cnVlLCJjb3BpZXMiOnsidXNlcnMiOjUwLCJkYXlzIjo3LCJtYXhfYWlyX2J5dGVzIjoxNjM4NH0sInVwZGF0ZWQiOjE3OTM0OTg0MDB9XX0",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6IktLNE9EQS0xIiwib3BlcmF0b3IiOiJLSzRPREEiLCJncmlkIjoiRU03MyIsInBsYWNlIjoiQXRsYW50YSwgR0EiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwfSx7ImRpYWxfaHoiOjcxMDEwMDAsIm1vZGUiOiJVU0IiLCJtb2RlbSI6ImFldGhlciIsImJhbmR3aWR0aF9oeiI6MjMwMH1dLCJob3VycyI6ImFsd2F5cyIsImludGVybmV0Ijp0cnVlLCJjb3BpZXMiOnsidXNlcnMiOjUwLCJkYXlzIjo3LCJtYXhfYWlyX2J5dGVzIjoxNjM4NH0sInVwZGF0ZWQiOjE3OTM0OTg0MDB9XX0.ODhNLwrCuzpuUSuVRgMcHeRYzTeCkL2dCy9rg88h4YQ0gPYdue7-yIeUnpiY0ZXdFUHsDrZmwnt0DwLvBF9BDw"
+    }
+  ],
+  "verification": [
+    {
+      "what": "info, signed by the key in DNS",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJ2ZXJzaW9uIjoxLCJkb21haW5zIjpbInJhZGlvcG9zdC5vcmciXSwib3BlcmF0b3IiOiJLSzRPREEiLCJjb250YWN0IjoicG9zdG1hc3RlckByYWRpb3Bvc3Qub3JnIiwiY291bnRyeSI6IlVTIiwia2V5cyI6W3sia2lkIjoiZmJiZDVmNWMiLCJwdWJsaWMiOiJkbURDazFtVHJTNzBuTmdfeVF1U1lheHExX0FSNm1vUHpwY2tRRE0tWEFZIiwibm90X2JlZm9yZSI6MTc2NzIyNTYwMCwibm90X2FmdGVyIjoxODMwMjk3NjAwfSx7ImtpZCI6IjAxMTJjNGVlIiwicHVibGljIjoiY2VEcEFla2JaU0ZqdGhPMnRZaDFOU3ZJMlpSQXdXNEF2S2hDWHlQelJZQSIsIm5vdF9iZWZvcmUiOjE3OTQwNjI0MDAsIm5vdF9hZnRlciI6MTg2MTgzMzYwMH1dLCJsaW1pdHMiOnsibWF4X2Fpcl9ieXRlcyI6NjU1MzYsIm1heF9lbWFpbF9ieXRlcyI6MTA0ODU3NjB9LCJnYXRld2F5cyI6ImFueSIsIm1haWwiOnsiam1hcCI6Imh0dHBzOi8vcG8ucmFkaW9wb3N0Lm9yZy9qbWFwL3Nlc3Npb24iLCJpbWFwIjoicG8ucmFkaW9wb3N0Lm9yZzo5OTMifSwidXBkYXRlZCI6MTc5NDE0ODgwMH0.LETIhfItfKvzdRXT-YyhgHwPzxnM3S6AYizv5Yql43WiompYMsRwIoFcRvJbCpGrg2nUTSIrsoqV4heDFecZCQ",
+      "dns_kids": [
+        "fbbd5f5c"
+      ],
+      "info_jws": null,
+      "expect": "ok"
+    },
+    {
+      "what": "revocations, signed by the new key that the info document lists",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6IjAxMTJjNGVlIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsIm5leHQiOjE3OTQxNzA0MDAsInNlcmlhbHMiOlsxMDkwXSwia2lkcyI6W119.CnTTJcq5ZvuYt46WvR2AvvkmtLYa4xnYqA5N_Mvu1MwDJmuh5aH4wMjmRd8U2ngX1L-OuTN_g9_6xLQw2E5EBQ",
+      "dns_kids": [
+        "fbbd5f5c"
+      ],
+      "info_jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJ2ZXJzaW9uIjoxLCJkb21haW5zIjpbInJhZGlvcG9zdC5vcmciXSwib3BlcmF0b3IiOiJLSzRPREEiLCJjb250YWN0IjoicG9zdG1hc3RlckByYWRpb3Bvc3Qub3JnIiwiY291bnRyeSI6IlVTIiwia2V5cyI6W3sia2lkIjoiZmJiZDVmNWMiLCJwdWJsaWMiOiJkbURDazFtVHJTNzBuTmdfeVF1U1lheHExX0FSNm1vUHpwY2tRRE0tWEFZIiwibm90X2JlZm9yZSI6MTc2NzIyNTYwMCwibm90X2FmdGVyIjoxODMwMjk3NjAwfSx7ImtpZCI6IjAxMTJjNGVlIiwicHVibGljIjoiY2VEcEFla2JaU0ZqdGhPMnRZaDFOU3ZJMlpSQXdXNEF2S2hDWHlQelJZQSIsIm5vdF9iZWZvcmUiOjE3OTQwNjI0MDAsIm5vdF9hZnRlciI6MTg2MTgzMzYwMH1dLCJsaW1pdHMiOnsibWF4X2Fpcl9ieXRlcyI6NjU1MzYsIm1heF9lbWFpbF9ieXRlcyI6MTA0ODU3NjB9LCJnYXRld2F5cyI6ImFueSIsIm1haWwiOnsiam1hcCI6Imh0dHBzOi8vcG8ucmFkaW9wb3N0Lm9yZy9qbWFwL3Nlc3Npb24iLCJpbWFwIjoicG8ucmFkaW9wb3N0Lm9yZzo5OTMifSwidXBkYXRlZCI6MTc5NDE0ODgwMH0.LETIhfItfKvzdRXT-YyhgHwPzxnM3S6AYizv5Yql43WiompYMsRwIoFcRvJbCpGrg2nUTSIrsoqV4heDFecZCQ",
+      "expect": "ok"
+    },
+    {
+      "what": "revocations, checked with the DNS key alone",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6IjAxMTJjNGVlIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsIm5leHQiOjE3OTQxNzA0MDAsInNlcmlhbHMiOlsxMDkwXSwia2lkcyI6W119.CnTTJcq5ZvuYt46WvR2AvvkmtLYa4xnYqA5N_Mvu1MwDJmuh5aH4wMjmRd8U2ngX1L-OuTN_g9_6xLQw2E5EBQ",
+      "dns_kids": [
+        "fbbd5f5c"
+      ],
+      "info_jws": null,
+      "expect": "signature-invalid"
+    },
+    {
+      "what": "post-offices, its payload changed after signing",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsInBvc3Rfb2ZmaWNlcyI6W119.2RQXoHDCghFzbs9bQWZo1cYcvE4rkZmPaxfithsug4vW9tLt_M8GqqdzNt7iuVz2s2TRx0Td3AbudX7pz76dCA",
+      "dns_kids": [
+        "fbbd5f5c"
+      ],
+      "info_jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJ2ZXJzaW9uIjoxLCJkb21haW5zIjpbInJhZGlvcG9zdC5vcmciXSwib3BlcmF0b3IiOiJLSzRPREEiLCJjb250YWN0IjoicG9zdG1hc3RlckByYWRpb3Bvc3Qub3JnIiwiY291bnRyeSI6IlVTIiwia2V5cyI6W3sia2lkIjoiZmJiZDVmNWMiLCJwdWJsaWMiOiJkbURDazFtVHJTNzBuTmdfeVF1U1lheHExX0FSNm1vUHpwY2tRRE0tWEFZIiwibm90X2JlZm9yZSI6MTc2NzIyNTYwMCwibm90X2FmdGVyIjoxODMwMjk3NjAwfSx7ImtpZCI6IjAxMTJjNGVlIiwicHVibGljIjoiY2VEcEFla2JaU0ZqdGhPMnRZaDFOU3ZJMlpSQXdXNEF2S2hDWHlQelJZQSIsIm5vdF9iZWZvcmUiOjE3OTQwNjI0MDAsIm5vdF9hZnRlciI6MTg2MTgzMzYwMH1dLCJsaW1pdHMiOnsibWF4X2Fpcl9ieXRlcyI6NjU1MzYsIm1heF9lbWFpbF9ieXRlcyI6MTA0ODU3NjB9LCJnYXRld2F5cyI6ImFueSIsIm1haWwiOnsiam1hcCI6Imh0dHBzOi8vcG8ucmFkaW9wb3N0Lm9yZy9qbWFwL3Nlc3Npb24iLCJpbWFwIjoicG8ucmFkaW9wb3N0Lm9yZzo5OTMifSwidXBkYXRlZCI6MTc5NDE0ODgwMH0.LETIhfItfKvzdRXT-YyhgHwPzxnM3S6AYizv5Yql43WiompYMsRwIoFcRvJbCpGrg2nUTSIrsoqV4heDFecZCQ",
+      "expect": "signature-invalid"
+    },
+    {
+      "what": "gateways, `alg` none and no signature",
+      "jws": "eyJhbGciOiJub25lIiwia2lkIjoiZmJiZDVmNWMifQ.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6IktLNE9EQS0xIiwib3BlcmF0b3IiOiJLSzRPREEiLCJncmlkIjoiRU03MyIsInBsYWNlIjoiQXRsYW50YSwgR0EiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwfSx7ImRpYWxfaHoiOjcxMDEwMDAsIm1vZGUiOiJVU0IiLCJtb2RlbSI6ImFldGhlciIsImJhbmR3aWR0aF9oeiI6MjMwMH1dLCJob3VycyI6ImFsd2F5cyIsImludGVybmV0Ijp0cnVlLCJjb3BpZXMiOnsidXNlcnMiOjUwLCJkYXlzIjo3LCJtYXhfYWlyX2J5dGVzIjoxNjM4NH0sInVwZGF0ZWQiOjE3OTM0OTg0MDB9XX0.",
+      "dns_kids": [
+        "fbbd5f5c"
+      ],
+      "info_jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJ2ZXJzaW9uIjoxLCJkb21haW5zIjpbInJhZGlvcG9zdC5vcmciXSwib3BlcmF0b3IiOiJLSzRPREEiLCJjb250YWN0IjoicG9zdG1hc3RlckByYWRpb3Bvc3Qub3JnIiwiY291bnRyeSI6IlVTIiwia2V5cyI6W3sia2lkIjoiZmJiZDVmNWMiLCJwdWJsaWMiOiJkbURDazFtVHJTNzBuTmdfeVF1U1lheHExX0FSNm1vUHpwY2tRRE0tWEFZIiwibm90X2JlZm9yZSI6MTc2NzIyNTYwMCwibm90X2FmdGVyIjoxODMwMjk3NjAwfSx7ImtpZCI6IjAxMTJjNGVlIiwicHVibGljIjoiY2VEcEFla2JaU0ZqdGhPMnRZaDFOU3ZJMlpSQXdXNEF2S2hDWHlQelJZQSIsIm5vdF9iZWZvcmUiOjE3OTQwNjI0MDAsIm5vdF9hZnRlciI6MTg2MTgzMzYwMH1dLCJsaW1pdHMiOnsibWF4X2Fpcl9ieXRlcyI6NjU1MzYsIm1heF9lbWFpbF9ieXRlcyI6MTA0ODU3NjB9LCJnYXRld2F5cyI6ImFueSIsIm1haWwiOnsiam1hcCI6Imh0dHBzOi8vcG8ucmFkaW9wb3N0Lm9yZy9qbWFwL3Nlc3Npb24iLCJpbWFwIjoicG8ucmFkaW9wb3N0Lm9yZzo5OTMifSwidXBkYXRlZCI6MTc5NDE0ODgwMH0.LETIhfItfKvzdRXT-YyhgHwPzxnM3S6AYizv5Yql43WiompYMsRwIoFcRvJbCpGrg2nUTSIrsoqV4heDFecZCQ",
+      "expect": "signature-invalid"
+    },
+    {
+      "what": "an info document signed by a key DNS does not list, naming itself; then a document signed by that key",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6IjU1MzRiOWRmIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsIm5leHQiOjE3OTQxNzA0MDAsInNlcmlhbHMiOltdLCJraWRzIjpbXX0.6iV2A5_-jfSp2FYEOvNbRuNHW-tjJD935DPFWC9QYJGxabGJBVUXnihoSfqEfNpEWSEoEY2iTYjWt7VOoMbQAg",
+      "dns_kids": [
+        "fbbd5f5c"
+      ],
+      "info_jws": "eyJhbGciOiJFZERTQSIsImtpZCI6IjU1MzRiOWRmIn0.eyJ2ZXJzaW9uIjoxLCJkb21haW5zIjpbInJhZGlvcG9zdC5vcmciXSwia2V5cyI6W3sia2lkIjoiNTUzNGI5ZGYiLCJwdWJsaWMiOiJjLXFWWVhwc29NeFkxM3V6NEk4VEl2ZU9zaWxlTi1kWWJ0N09lNF9oZGJ3Iiwibm90X2JlZm9yZSI6MTczNTY4OTYwMCwibm90X2FmdGVyIjoxNzY3MjI1NjAwfV19.by3jA0gZ121n0Ovv2Xbs7WfSW-CtLd4xog2kTLwtou-dr35V4rD51HBZgTn3y0n95GvSY0exDBBhGULYJjCRAA",
+      "expect": "signature-invalid"
+    },
+    {
+      "what": "two parts, not three",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJ2ZXJzaW9uIjoxLCJkb21haW5zIjpbInJhZGlvcG9zdC5vcmciXSwib3BlcmF0b3IiOiJLSzRPREEiLCJjb250YWN0IjoicG9zdG1hc3RlckByYWRpb3Bvc3Qub3JnIiwiY291bnRyeSI6IlVTIiwia2V5cyI6W3sia2lkIjoiZmJiZDVmNWMiLCJwdWJsaWMiOiJkbURDazFtVHJTNzBuTmdfeVF1U1lheHExX0FSNm1vUHpwY2tRRE0tWEFZIiwibm90X2JlZm9yZSI6MTc2NzIyNTYwMCwibm90X2FmdGVyIjoxODMwMjk3NjAwfSx7ImtpZCI6IjAxMTJjNGVlIiwicHVibGljIjoiY2VEcEFla2JaU0ZqdGhPMnRZaDFOU3ZJMlpSQXdXNEF2S2hDWHlQelJZQSIsIm5vdF9iZWZvcmUiOjE3OTQwNjI0MDAsIm5vdF9hZnRlciI6MTg2MTgzMzYwMH1dLCJsaW1pdHMiOnsibWF4X2Fpcl9ieXRlcyI6NjU1MzYsIm1heF9lbWFpbF9ieXRlcyI6MTA0ODU3NjB9LCJnYXRld2F5cyI6ImFueSIsIm1haWwiOnsiam1hcCI6Imh0dHBzOi8vcG8ucmFkaW9wb3N0Lm9yZy9qbWFwL3Nlc3Npb24iLCJpbWFwIjoicG8ucmFkaW9wb3N0Lm9yZzo5OTMifSwidXBkYXRlZCI6MTc5NDE0ODgwMH0",
+      "dns_kids": [
+        "fbbd5f5c"
+      ],
+      "info_jws": null,
+      "expect": "malformed"
+    },
+    {
+      "what": "a header that is not JSON",
+      "jws": "YWxnPUVkRFNB.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsInBvc3Rfb2ZmaWNlcyI6W3siZG9tYWluIjoiaGFtcG9zdC5vcmciLCJhcGkiOiJodHRwczovL3BvLmhhbXBvc3Qub3JnL3JwL3YxIiwia2V5cyI6W3sia2lkIjoiODQyMTlkMDAiLCJwdWJsaWMiOiJ1X00zcEt6ZWJhd1JKWEpfZEU1bktPdlBoZ0xFbDNUMHZrT21QSzExdDdRIn1dfV19.2RQXoHDCghFzbs9bQWZo1cYcvE4rkZmPaxfithsug4vW9tLt_M8GqqdzNt7iuVz2s2TRx0Td3AbudX7pz76dCA",
+      "dns_kids": [
+        "fbbd5f5c"
+      ],
+      "info_jws": null,
+      "expect": "malformed"
+    }
+  ]
+}

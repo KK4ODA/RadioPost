@@ -84,6 +84,15 @@
       "seed_hex": "9db46af3b044dd1ba2d8cbb353c08b97f09016f1af7e574819bfb0b93cd661ab",
       "public_hex": "2f6b3d90f90779da12f0ed7e049a3995d35cf27828432ada576354db61042c9b",
       "kid_hex": "2a4243a5"
+    },
+    {
+      "label": "po:radiopost.org:new",
+      "what": "radiopost.org's new key, in its info document before DNS has it",
+      "seed_hex": "6707162dabf15a0bd27a034bd56c2895d5cd7d8646bdf6b64a4f296b55d50e0c",
+      "public_hex": "71e0e901e91b652163b613b6b58875352bc8d99440c16e00bca8425f23f34580",
+      "kid_hex": "0112c4ee",
+      "not_before": 1794062400,
+      "not_after": 1861833600
     }
   ]
 }

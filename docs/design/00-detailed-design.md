@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.5 |
+| **Version** | 0.1.6 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -201,7 +201,9 @@ To be confirmed:
   credentials, their verification and session statements made with published test keys (RP-1);
   every PDU and three sessions, byte for byte: an ordinary one, uploads and downloads broken and
   resumed, and station to station (RP-3); modem interface lines, and conversations between hosts
-  and a simulated modem, shared and not (RP-4); the API's signatures (RP-5); deterministic
+  and a simulated modem, shared and not (RP-4); signed documents, and the post office API's
+  requests and answers through a reference post office, from enrollment to an offline gateway's
+  report (RP-5); deterministic
   CBOR and DNS records (RP-0, RP-1). They are made by a small reference in Python, standard
   library only (`tools/vectors/`), written to read like the specifications rather than to be
   fast. `python tools/vectors/make.py` writes them and `--check` compares the reference with the
@@ -213,8 +215,10 @@ To be confirmed:
   never proved who it was (D20). The modem interface's conversations found seven unwritten rules,
   fixed in RP-4 0.3.0: what a bad line gets, that a host ignores what it does not know, `refused`
   before `hello`, which `connect` errors come at once, what `ok` carries, `failed`'s codes with a
-  new `aborted`, and that `received` keeps no `send` boundaries. Owed: RP-5's requests and
-  answers beyond its signatures, and RP-6.
+  new `aborted`, and that `received` keeps no `send` boundaries. The post office's exchanges found
+  RP-5 0.4.0's: the HTTP status of each code, 401 against 403, the order of a session's checks,
+  the codes of a refused message, unknown serials, a report's answer, and login and enrollment
+  failures; and RP-0 0.3.0's: signed documents are plain JWS, with no context. Owed: RP-6.
 * **A conformance tester** that plays the other side: a client to test a gateway, a gateway to
   test a client, over the TCP adapter, including broken links, resumes and wrong signatures.
 * **A loopback adapter** joining two hosts through RPMI with delays and losses, for tests with no
@@ -281,3 +285,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.3 | 2026-11-09 | D19: a modem may be shared (RP-4 0.2.0). |
 | 0.1.4 | 2026-11-09 | D20: the station called proves itself in a station-to-station session; the resumed and station-to-station test vectors (§7). |
 | 0.1.5 | 2026-11-09 | The modem interface's test vectors (§7). |
+| 0.1.6 | 2026-11-09 | The post office API's test vectors (§7). |

@@ -1,0 +1,1268 @@
+{
+  "radiopost_vectors": "Post office API: requests and answers",
+  "format": 1,
+  "specs": {
+    "RP-5": "§1–§6",
+    "RP-1": "§5, §6.3",
+    "RP-3": "§12"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "Each exchange is one HTTPS request to the post office at its clock `at`, with its path under the base URL, its bearer token and its JSON body, and the answer: status and body. A post office given the same requests in order answers the same, and a gateway or client sends the requests shown. JSON compares as values, not text; a problem's `title` and a result's `text` are for people and need not match. Tokens, session IDs, nonces and cursors are this post office's random or opaque choices: use the ones the answers give. Air forms are those of the session vectors (compression 0).",
+  "context": {
+    "post_office": "radiopost.org",
+    "base_url": "https://po.radiopost.org/rp/v1",
+    "signs_credentials_with": "po:radiopost.org",
+    "knows_keys_of": [
+      "radiopost.org",
+      "hampost.org"
+    ],
+    "enrollment_code": {
+      "code": "7Q4F-AZ9K",
+      "address": "facundo@radiopost.org",
+      "operator": "KK4ODA",
+      "flags": 2,
+      "serial": 1050
+    },
+    "next_serial_after_it": 1051,
+    "randomness": "post office values are stream('post office <what> <n>', bytes)"
+  },
+  "story": [
+    {
+      "note": "Facundo enrolls his tablet with the code the post office gave him."
+    },
+    {
+      "at": 1793491200,
+      "who": "Facundo's tablet",
+      "request": {
+        "method": "POST",
+        "path": "/enroll",
+        "body": {
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA",
+          "code": "7Q4F-AZ9K",
+          "device": "q7O8gAmcRYbdIXkWcpnZecUyH_DJcPY0M3Zh9Zextl8",
+          "signature": "wr4Z3yUK-090ZcPytXlk3J2iuJZV0g5AAFUlErnU4fHG3DO0xYKttfbJsGgXt3GZk9NKGnfHluOIRwr3mMKrCA"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "credential": "glhdqQEBAhkEGgN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCCrs7yACZxFht0heRZymdl5xTIf8Mlw9jQzdmH1l7G2XwYaauaBAAcaa10oAAhE-71fXAkCWECEp_Fvf_hBG28q6MFnGF8TQp2Cpr0Wcs2T8ODERvCPeKKPypnxpZeFB3h17HRe5p1C9u0I7tDeJ068_mP6nEkD"
+        }
+      }
+    },
+    {
+      "note": "From his laptop he names his usual gateways, and registers his own, KK4ODA-1."
+    },
+    {
+      "at": 1793498340,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+          "expires": 1793498640
+        }
+      }
+    },
+    {
+      "at": 1793498340,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+          "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+          "signature": "vvj6g6S7gFT7vifjFwtWwx2-YYalvH8gz_4rtIkx7ThOC1f8gixxmqZVBTsuyKZiY-etB4a_oFYpRFqJyIX6Cw"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+          "expires": 1793501940,
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA",
+          "flags": 3
+        }
+      }
+    },
+    {
+      "at": 1793498370,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "PUT",
+        "path": "/settings",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+        "body": {
+          "usual_gateways": [
+            "KK4ODA-1",
+            "N2CALL-5"
+          ],
+          "auto_bytes": 1000,
+          "radio_skips_read": true
+        }
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "at": 1793498400,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/gateways",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+        "body": {
+          "record": {
+            "callsign": "KK4ODA-1",
+            "operator": "KK4ODA",
+            "grid": "EM73",
+            "place": "Atlanta, GA",
+            "channels": [
+              {
+                "dial_hz": 3590000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              },
+              {
+                "dial_hz": 7101000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              }
+            ],
+            "hours": "always",
+            "internet": true,
+            "copies": {
+              "users": 50,
+              "days": 7,
+              "max_air_bytes": 16384
+            }
+          },
+          "device": "L2s9kPkHedoS8O1-BJo5ldNc8ngoQyraV2NU22EELJs",
+          "signature": "ioPARb1BRU0yoTdDRYI7-mxDjO2WgPAUyN21-JAhQu1HBI2zPilmFCEw0G3Tc3eFu2tvHIs93oJzmhFay2d6DA"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "credential": "glhfqQEBAhkEGwN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGhLSzRPREEtMQVYIC9rPZD5B3naEvDtfgSaOZXTXPJ4KEMq2ldjVNthBCybBhpq5p0gBxprXUQgCET7vV9cCQlYQN0pnorDlc_qddQAwl8de1Y8gdbBAr2Mow7Gmdh-01e87OSXwXI9Aa4DiYQ-w95pVJsHiBuMCaFOqY-Ke87hKw4"
+        }
+      }
+    },
+    {
+      "note": "Mail arrives for facundo@radiopost.org: #419, 'Are you safe?'."
+    },
+    {
+      "note": "Mail arrives for facundo@radiopost.org: #420, 'Shelter roster'."
+    },
+    {
+      "note": "Mail arrives for facundo@radiopost.org: #421, 'Photo'."
+    },
+    {
+      "note": "KK4ODA-1 fetches the copies placed ahead for it, and acknowledges them."
+    },
+    {
+      "at": 1794231600,
+      "who": "KK4ODA-1",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "qDHrLf-NrMWfaCOoClbU8mMP7XQDR4U4H9sfHd1VrCw",
+          "expires": 1794231900
+        }
+      }
+    },
+    {
+      "at": 1794231600,
+      "who": "KK4ODA-1",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glhfqQEBAhkEGwN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGhLSzRPREEtMQVYIC9rPZD5B3naEvDtfgSaOZXTXPJ4KEMq2ldjVNthBCybBhpq5p0gBxprXUQgCET7vV9cCQlYQN0pnorDlc_qddQAwl8de1Y8gdbBAr2Mow7Gmdh-01e87OSXwXI9Aa4DiYQ-w95pVJsHiBuMCaFOqY-Ke87hKw4",
+          "nonce": "qDHrLf-NrMWfaCOoClbU8mMP7XQDR4U4H9sfHd1VrCw",
+          "signature": "NjLEJ_J3IE09m-QB4QshqVcUJ31IAVJuPYmTXXDMqU8RqsxUdEy39ykQ0WhyahmHsPWYXVWNZ677X8DLEr_jDw"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_nrAE4HmjRoMr3kBoGs0KWXrc",
+          "expires": 1794235200,
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA-1",
+          "flags": 9
+        }
+      }
+    },
+    {
+      "at": 1794231610,
+      "who": "KK4ODA-1",
+      "request": {
+        "method": "GET",
+        "path": "/copies?after=&wait=60",
+        "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "cursor": "c_3",
+          "items": [
+            {
+              "kind": "copy",
+              "address": "facundo@radiopost.org",
+              "serial": 419,
+              "id": "i42cuqd7g7jrrgxx67aq",
+              "from": "maria@example.com",
+              "subject": "Are you safe?",
+              "size": 277,
+              "priority": 0,
+              "air": "AKYBAQJxbWFyaWFAZXhhbXBsZS5jb20DgXVmYWN1bmRvQHJhZGlvcG9zdC5vcmcFGmrxsRAGbUFyZSB5b3Ugc2FmZT8HeM5GYWN1bmRvLAoKV2Ugc2F3IHRoZSBuZXdzIGFib3V0IHRoZSBzdG9ybSBhbmQgY2Fubm90IHJlYWNoIGFueW9uZSBieSBwaG9uZS4gQXJlIHlvdSBhbmQgdGhlIGZhbWlseSBzYWZlPyBJcyB0aGUgaG91c2UgYWxsIHJpZ2h0PyBEbyB5b3UgbmVlZCBhbnl0aGluZyB3ZSBjYW4gc2VuZD8KCldyaXRlIHdoZW4geW91IGNhbiwgZXZlbiBvbmUgbGluZS4KCk1hcmlhCg",
+              "expires": 1794829200
+            },
+            {
+              "kind": "copy",
+              "address": "facundo@radiopost.org",
+              "serial": 420,
+              "id": "htpi3p474h4u3ourjhiq",
+              "from": "eoc@radiopost.org",
+              "subject": "Shelter roster",
+              "size": 1298,
+              "priority": 0,
+              "air": "AKcBAQJxZW9jQHJhZGlvcG9zdC5vcmcDgXVmYWN1bmRvQHJhZGlvcG9zdC5vcmcEgXZzaGVsdGVyM0ByYWRpb3Bvc3Qub3JnBRpq8b8gBm5TaGVsdGVyIHJvc3Rlcgd5BLBTaGVsdGVyIDMgcm9zdGVyIGFzIG9mIDEyOjAwIGxvY2FsLiBQbGVhc2UgY29uZmlybSBieSByYWRpby4KCiAxLiBGYW1pbHkgQWx2YXJlejogNCBwZW9wbGUsIGluc3VsaW4gbmVlZGVkIGJ5IFRodXJzZGF5CiAyLiBGYW1pbHkgQnJvb2tzOiAyIHBlb3BsZSwgbm8gbmVlZHMKIDMuIEZhbWlseSBDaGVuOiA1IHBlb3BsZSwgaW5mYW50IGZvcm11bGEKIDQuIEZhbWlseSBEaWFsbG86IDMgcGVvcGxlLCBubyBuZWVkcwogNS4gRmFtaWx5IEV2YW5zOiAxIHBlb3BsZSwgd2hlZWxjaGFpciwgbmVlZHMgZ3JvdW5kIGZsb29yCiA2LiBGYW1pbHkgRmlzY2hlcjogNiBwZW9wbGUsIG5vIG5lZWRzCiA3LiBGYW1pbHkgR2FyY2lhOiAyIHBlb3BsZSwgb3h5Z2VuIGNvbmNlbnRyYXRvciwgbmVlZHMgcG93ZXIKIDguIEZhbWlseSBIYWRkYWQ6IDQgcGVvcGxlLCBubyBuZWVkcwogOS4gRmFtaWx5IEl2YW5vdmE6IDMgcGVvcGxlLCBwZXQgZG9nCjEwLiBGYW1pbHkgSm9obnNvbjogMiBwZW9wbGUsIG5vIG5lZWRzCjExLiBGYW1pbHkgS293YWxza2k6IDUgcGVvcGxlLCBubyBuZWVkcwoxMi4gRmFtaWx5IExvcGV6OiAzIHBlb3BsZSwgcHJlc2NyaXB0aW9uIHJlZmlsbCwgYmxvb2QgcHJlc3N1cmUKMTMuIEZhbWlseSBNZW5zYWg6IDQgcGVvcGxlLCBubyBuZWVkcwoxNC4gRmFtaWx5IE5ha2FtdXJhOiAyIHBlb3BsZSwgbm8gbmVlZHMKMTUuIEZhbWlseSBPa2Fmb3I6IDcgcGVvcGxlLCB0d28gY2hpbGRyZW4gdW5kZXIgdGhyZWUKMTYuIEZhbWlseSBQYXRlbDogMyBwZW9wbGUsIG5vIG5lZWRzCjE3LiBGYW1pbHkgUXVpbm46IDEgcGVvcGxlLCBubyBuZWVkcwoxOC4gRmFtaWx5IFJvc3NpOiA0IHBlb3BsZSwgZGlldGFyeTogZ2x1dGVuIGZyZWUKMTkuIEZhbWlseSBTaWx2YTogMiBwZW9wbGUsIG5vIG5lZWRzCjIwLiBGYW1pbHkgVGhvbXBzb246IDMgcGVvcGxlLCBubyBuZWVkcwoyMS4gRmFtaWx5IFVlZGE6IDIgcGVvcGxlLCBoZWFyaW5nIGltcGFpcmVkLCBuZWVkcyB3cml0dGVuIG5vdGljZXMKMjIuIEZhbWlseSBWYXJnYXM6IDUgcGVvcGxlLCBubyBuZWVkcwoyMy4gRmFtaWx5IFdpbGxpYW1zOiAyIHBlb3BsZSwgbm8gbmVlZHMKMjQuIEZhbWlseSBYdTogMyBwZW9wbGUsIG5vIG5lZWRzCjI1LiBGYW1pbHkgWW91bmc6IDQgcGVvcGxlLCBubyBuZWVkcwoyNi4gRmFtaWx5IFpob3U6IDIgcGVvcGxlLCBubyBuZWVkcwo",
+              "expires": 1794832800
+            },
+            {
+              "kind": "copy",
+              "address": "facundo@radiopost.org",
+              "serial": 421,
+              "id": "cpwfawr3mrq37rql7fza",
+              "from": "maria@example.com",
+              "subject": "Photo",
+              "size": 6122,
+              "priority": 0,
+              "air": "AKcBAQJxbWFyaWFAZXhhbXBsZS5jb20DgXVmYWN1bmRvQHJhZGlvcG9zdC5vcmcFGmrxzTAGZVBob3RvB3gaVGhlIGtpZHMgbWFkZSB5b3UgYSBjYXJkLgoIgaMBbElNR18yMjMxLmpwZwJqaW1hZ2UvanBlZwNZF3BcSkp025gjMfcS3S9tmCURa8vb1HhSYuyU1aGnSO0I2WQKB-s49P-jKTYQ-EEhWSQQlBoo-unaS2DbkqAHznh-tlWFW4BhkLneKIq2yaRBiCKCHFSPDXWc5rOuNSiTG_Qse3rz-Mu5spZbFXWuiSDdGYWoT1Jv80rZjvn3mwlBnFNGhCTvMuUOcv8R9T1RyMfnmvxiX3mmITeGZkB5GuY6eS7F1MZBwMVEY7_v68tpCFAbHlOXR2m6hjlzN3z_AVMw2Jzokto37SpIJeV-r7FFw5CRtNh7nR0BgL-SbZnmWIi6qTgD0ld4AFa9_XMjUnqpXroPMgQBRVQjkwprfPoS-AmJ9BF-NHECkaw13ysuN3EgZsyd_j6eR93lZudAwzCSfPUoG4MpLStUzpZ8ogaTgZJhTBnXUb7w13I1wfYJBlzTkeiLgvgPQz_waOzFpiLiDtMt0iwpYVUmswLwu_5LQ9tRXVFsr-aKdn8-L06p1j1gq2yJMiAqrRIn3D1JwskGVIYpgS62MUey0vZoHHuaCYRNmnjM7CBwmgfYlxX827khcdrxeLInXNlL0CdP0w0pOYunxA-Mbw0bWEE2FSgDw952VZ1F7EtDw6-akQJTCFZk_E13UhRYZEECrTXNwImzGthBRzWMbnuI9hbNnVX2LneA-J0VdCYvoR6dUyXPutlEpxg841lBQR0-gycZR5wBEaKrSL7pVvSg-76cHgnAMUxiZ46dbYZqcHL-fbBHS4HcHul2xDei6K4OauadcjchS31FToVdpebB_duEcmHQgZu95o1zQY29NiancQ7I6XnnHkxnUpf-J7ESbNhD4zFVPQTknTVmMrFIH77K_wHNHPO21zGnNGKOVGjGBVoqE9KoWCSjKg5hKyTFA339l8HtTapxR5jXL1T4H9prSsmaAvNm476c34TZbYqPpvTlLbqbQ4aAldIS93tzHx5R0aUBnAILlYfVIdZGyu__yukoIMU3KtISSSF4aSn9btEyPFhDIfv2JsOwsZ2KQLLsEtH4SPE6MwP3BqTZxRIFV3zPpzDzw50kRyveQOnlN0Ra0JU_btBubeonZfPE3srZxJKpQwgtNYNdihGzxks_aOHxrw6y9Zf6Wx6GRSgNngapshcYiRv0JlykaOpW7n7PP8bLEQJ42ioCRKyL2ZJa1ccJ122bhanol4AqWNqgb8CeWdwAl8r7CarthCunsMPnvw9sv7fthJIx2GhyBbyHlNYTeETejhW4gPidvWJYOWQQMObLHtL2_hkMxLxFQ4eCsIItHYIxB3X22cPWYbM0fG3FNp-I7bINhv-bdERXaWnAYlfPnagBq5mdv2vb3wLZPEgrGD144soejiH3RoAuXdMc90SeddJxToeuRAkJBACRSu9rrmI-b9x3qlnpDodrGu28SE8SPk5P_kIg7_asUz7SkSvXfdKRPo0ibUrD3HVemmhJJvmjwF4SU4DianPsKejUeM-g2b69oU7-UyYGalWil6m_tnmZgw6pZge52sdlivBpgwYs1ZZBZR_kFZt4ikl16EHjEZIIOv5bhf6OgN_DjXYdLWXumXBc6rQ_O-6RRAcGg97OqtZl2Ppn4rd0gHb6BU8vuZDjLBh9yISD8RbSXFOXt1ZYDJ0MEIF6y_sMbw9-1SL7Y40D5h_dqk4AQrclMwWrGtaSPAwFyKEwL_wP7sGRNwbfaC3d_CQl068L7TXbAo5hgrHg3-F5VJ1Zo49GhsZmHPXPZRBmMCl0aHgBrvwVRkdXCe5GG8VA9F7i6maBtZgl-BGEyHTkGODY1hfJiysa6Izn8COLQXJSkKTGB-xzJ8WM1oOSmLhmYzRDxp2yFio_ySco3sMf7E4L9d4xV5sxkhKfQ_5y8WJBOjQBocMJylnnODV-vyjqYR0nhOvwnTuG5Z34dysbxjM0AEl-J-w1IkTwrxkLjpgmjEjolbJM9r17eiHXUxG6T0F7hUO_iLyP0xc3HMutoHK8iQp3_WLr4br890ng_FW3EsYhgSxFw2wcYq5Dvuw3eVZnCrKSyFCCm6GTHe4O_XZ2uRHKo3CgnN4rOzuSpH_syD_ZPDrTap2IErCyHZ0MiV0jSySH0rVNLDhBDCWPn6RWNJQIxvI0-ipk4f1tsE3oifUTJ5O1JoZrWT-WZYY9HaGRFbhd25hj6YTKOfmyg6BQA64oZ-qTvPr03yKPiR_6hAsz6dui8JkaMq3anwORpWf2T0Tvpd3VgXnRpiJq1btpximMOkOvqn4DmAme9CCx_FTDwqTZoz0Tg6RkuYnmGrjNQAeN590qFJy1bMfAg94FDc4nTXC0-aVz-K-f3UkEdM6zmdyv_dCJvqFv5TvrBpBHQ6xDxmiLrWPDKJDdDqfMK91fsAwMeVBdkjTMsZjYIZY3YHUlfpQgMxEJKNBfF9r1lG1TikZAy0puyrvq78G0PJdlVF9PjFj1FYm97QhLLLGxsVe2OaICljauwyyzoXI-uqvQ5QukYRdl9zk6G7nT41bW0-LDfJnrfGahn4qvhiWOdJV-FuaD2Eru-LlUKF6MWgCL_tVV5Mu3RYxEQ5tamDCp30jpqPdy69dRFDxKt_vzBEMn31VMLZWNJgVGf1EfdEcDLQSS3xlOCYcMkVGA3CEiUbs8Ej7AM3hV9DV_vXVDgwrbNCokN58wecOHIAqDlxEswgWVu0wXeR8Kk9USfJN14nGWiqdcaE4vsWOf2H6PBB4YScHEQP4AcF873huuHj_SrWd9Y64aXDRC6aAU35TRxN5nfZKHecbTlcm0pwwdef5ucgePlATKdRLd4OP9oFI7m7Kal5fVuEvUUogvSB9PpWu1IyoWYUrnfH5QG6h7J3CcR9TboOP99wCAOx-rsrG_DlFMEbOON_iJ9kHp7swC0hHE-sRTbZKjRFJbe6bHg6yydVZvoSF3msXhVsdvUfXNJ-fsfHzQCcqUShzeS_icLD9REl7-jH246VHQISUzOvnH4bp1xWBxWw29J9swbn3QnGyIW03g8SMAEeEvHEKWjMy3rYbCrRr7IrbS59RaF8gY1Ff935612GFwehoKKAgmwCGxgBAhWQ7VL_iR3NAFqugDnpBwRNA1uJOlqV9G8nzbw5eQjfzd7Mm2tALhGohh8aAnrU3dZghU-Ef76ZA8Bzk4pwCgPXMbVfZKe7LqoIsPyc41QIFygO4OgAfsCmG_08hMfB8I8tIaQWTHR2-DuCs9yBflPl4_X9M11TMwAdcQfm4waXEnTX6ABukDDjBk9B3T1dj-T7oyJzF9BYRKKnT9ae3JCVzOIB9SPdP9IGKjI7gilNr6NigNo6Pj_aUbaHF4mTFGxB05_AYe7ITvgORR-mEac5R7V7bxdnNjnQT5qpRh3dJzxOnJ9XY_7blLqLQ1uPTlRynQY9322rUpk8o0mYewbSy5ksQsgX1HBGaHMKJcq0_RIUP9cf9VLESlKbHkfwxrJEy91seeQreCgHqLYnURpZ_jjNqBpgFOlynhG7NvPVdTCdAHjUBf6alHytE1vLnjhPh94jFYiX756T-4Y647MlwHZql3go1D9EgHRvLEVQ39DTwQbb6USUf3GOuYxQUQczLBhFuAg_SS4KNKqiFYOFgpozgdHJ1A7lKlBbujZ86I4hpAf7bBKftxdEiu0ynligC-q2Grhi2W7399fZc9yru-d4XOsjg_ggsZXkFJkutfcuMUhGXSRquQO8L_dhpc3yPnntAObpUiCwIC1rUd9oYtB7FMk-xHsk9s5YnEUtrIyhgK3Y5pYDH6_2pFdrQuE25F9TTYlcw-OP1OEfmVS6ES7LpQgG7C-JdyoeZRdrlPbdRxFXikkceJjVJoe_rceMBGvA0_6yNRLSveeiZTkgXWLzZjIacF424JvEjD83SvnIYLjl-jx2aeiovS7LW6eB6slYiBngqUAm-4kR3rVqhh3C6ZnOV0RTYKRx9XUBekfwhcyqw1LQAEVinOtDeeEjxujpFwtbMwjLotC6RB7MRvk2xp86OMMdtcD2r3n61WkHqYbaCMUK-ojRJt5Fq7ULAYyWEBdmUsx7lXskq-WZTAKVvgjTXdWHXFxW9hDIMlsVepl-WXAvTMzklGE7yKhS74VvlF-ikPMV9sOz1k30xyGIdFlNFP7A3TF3Le3ajPmtzv3UWdI6EFQcbvlwE5-S-8OaKK_7P7ltsJ2Xh0ju4arOwQSK-TPJQI4z36YUUHyFHePPVWDbYczjSoRKTwSsRpth9F-YzvJ_ib96bKyw0phdTW9JZHCAaJKrrBGtwuOprVEUrohip7N8cUcD1YH-0zEarGSBpxcE1aYs_0Nc1pBmN3Z_VuaY8ax_Wjx6FzX-zX1zYNAY3e6brm8r5gTt_UWeXuHwJocuV01EmfaimjaWVSYJoNeosKcsPcWQnqjXuboXPddjX2Nh7LrnyC2l2En1tLMAOmbgnBnJC8B1dChCeL8cHb6L2hPfYwTxf4cAtu8F9x-_7oAI1wSaWzjqgeqOqP3AJ_YnMebz_oesP0WM3rrIPTn98iDuqt55PaHFE408qaFhhua8afS2GEBjYNBOfOMlfn-UyMWwISle8o28JhKI2XrnhADjs1MfnpgyTxhc7sE9p6917GksARCNtjko2UU5RYwxYynNQOxsWBhnXMvW8kJXuQoBGJBUwENX6EVlZr5xQMO2mirq6IAY4weVRczOvksrv5lVcJtXx6Bfoc7Gfc-QjFmfIkPL4SFG6jN1Y80yR5ayBlNQGzqeRlPGytG11fHrHs5f4I0Kycg_AihSdxjAjrwv9CwTkSyomDCbDmCbG-bfGDvgYjR9W13-TJWwLZSX9vT96vaOX22-_aw2g0WZ-YRoXFnxxQyYsSeeNNJ_2gO-QhMYdwznuTMA1nvL0Ya3487wBgQd5qXqVFeVHbAduFp1QZaqN59kDp4ZG8aKwDhlj2yQQTR696XRw4bZyNr3Rj3ntAmdPJN4BlX-ziunOBpSsSnnhqTZOP-5M2ExH5TRff2hdCredUKBorqpPqV1ipx_MxzcNZmNw32i1_jaDPOdBMaQlfCi6iX-BIDukHDqVLIp7XzvsBV415lLOWfWgUzvKkLyH3OC-EwcgJ6rH96UrtKOYxAMyuPmoaG6ZYepKPRFDBgm33bi_nDpHci4UUxs6Sv6XEcxtnp_n6zLXY4ivZMjlSSYj-45BIXEr6x_GTGGEb4-U1h4COAGtKATceC__Wdg4WUko1owXCQvGhENfF_ovEoTCWrXyUTX2HSHVd4BGGYBWiPUluZeoBKy4CsgXJwNSbyJH7xvT7zNGnari-tZ9FFWfiuQfPT1gTw0Zy-zLICOm3IsJPyFA1djZc3ZTDtX_4D845F4rHaxISWkCjS_ebCfO6YTmZ9BX6MnmkaXtjT69v8DETjmLHI26azSXibxaS2NdIdLRWQCnORhhj-jvFCgH4HOREZ7CIdq46Hd6H9SYcfZCcp8V2brlsjwZhEUJlLBFmIV8b3wBryyb1Vgw2IJH9NKBKU8BhqOtYWwkvmhGQvr0KLNBsbpKyprqgQOM7lwqN9AhdH_hENA8e0qE3FiPlfbkGfBe24oxqafB-BLJQZ-jQHiNEvcOJ1dUxxPT7NboNhYwqcsPaA2OOPGgdRisiX30G4nS79Hfd2e704EMa_ByCByseqa_pl0-1CYnGJmhKUILlHavj0gF9fxvVBYGAUgHiHT1R69z3NRW11aLct_pH2Bsj43ip-_wA3Rmsm1lwTlKs8eipMYaXuVYt9qvy2BTEoLjisqF16PXXTQMAp1av000RrVuyH4Kn1pFtVFioK7z3ESKMFb_6ILz--eXbKKRbltdezjDi1AckUJT41du1d0UizFPuLroCVLv56rdLVYbUPYs3vIg8iOZSi3X5kfhc7yk8gwpa_3Mc86gJ7Elf_H2yIV5FmMGuW4TKs8Ftxq8vphST9EItSXK2j7rY6DAQcdDpLIQrdD5enZmx3w-YCxdXZdIZvophptHGXHSrEaWEwbBRnC0LcPYhAf3sz10U5dqDS-N-tIJz0uDVWN2TWgn8Jm1sAMy2YrMb96aZOiHL-gt7LYOt0NQ2CmKg-Txg3tUzrcR6UM9HIyKceW5L53pe14sYXajBMfIQgZnYyiYf2b7UrMaf86vO7dI-geV5AYUKHn3W9DXJvf0OBAHTV-0qE0DbaSD3phNiYBvzQxV8QkZCPj5qsggApcspAuEVv6lLiC1L8i6UVjPM3RH3oGap511vykOi1pr1ZscIKB-bbyfJ-gFAJQLnVg96s6UVASGnihCeFT5DCMDlzHGodCamgytKSagOObIgG_9vhKMNk2CDXZkhIe3uf7qp-gPHO0qslx-p-w1aybLXt0WkzabAzo_1E14y0Z5xemlAdT_1_zy_na-BxCj7zosWbObsiTJNo4kf7fnGfQ0mwOKiNUMKGw56Hln8kwOBrRVvgy5a0hH8IRxbCRKl5QqqaE3qttWErRPTQGbcg30Z2f_crvg_huvHREvQhs4dtWNgwjhqgo65EVbIhgHwyZKhCKQx9exdsgkADrurbXPiCpQdsVyejLbk25tw88pfdpnUBgaTzPrlqukQNZKb_LLrBj-yelC_MoodtTOIaTLjPsSlMSzmdjBBNnuXBOIYf9En0MrrI33vQcDQDI9PV9AaJQ1sNs2VA4Au5_pOVdYwBwMbDuDKXG4bBPbx9HiE7-I8IrPDuqbpL59NcaMmMcOeJAEDf-pk2w5a4Xq5fSkxBsWOh8fJNrn-Idu97YUB2MpW6DNgGjCuX9xnbFEOfgM8L60BTrkSboWQZ6OD239FK7rFCftVUxOuv8e1dYiwIsNWZOHIJZc7-QZsKDn6EEdhbWxsROn6CwnSuICY58GzsYDgradgeiC1tWDbfj8TQKHe2L9jy2p_rRw3x98aNnfZfGvajgBq7L4j77cDquDyT7I4x1P55GI3Eg8yuA0nOdKkLbo4-7i2cFFb_14xNOyGOLfJnBAKbIsRJ20WZcrVRuu1ve9gZQUReZxCPlsdL59gNNqgKpzYEgO1YAuFF5M9JCWmR3UQKAF2ZEx0kVbU8FLQQUcFZBzfGbwBRa6pCphaSZ8DE-Qzc2Tkbe3QL8QwFa2a3AHWqdh1mK9FTQQHN32chn465Dh3Gj6syzqM3QOZWqAWN_YKkeHaYxA7RCHoNgv--atbqUm4Jni5tGxWKFH32VVr5-htajWA-9tNIIX3bQ7oBm0eSELXBcuBfbZWqD9KfsL5sIurmjDumYZ8kG7UUwlWTPJKqKb86xVJ0yatAI4HYNNNFIpj2izztJt8JCLwP_7NVOR8K6W4Rp6yNw2K94ncsuPZ9Es6aQflQNQZe9yabP8jFspKEkjADCSD1LniYcUjoA7JFtz9XhEFhDvGIB426hVDMwlO5NnD08YmPJgNwk4FyiqVaNuXouy-UDoDIe8RoejLw-zTKepJDIh7yB9HYTLRdXbZ3pfYa0SRAYZeP0lUPsY-MjXMnym-VexFh3O9IXYVvhuhctB0ly_53xTLsEu3AwtSZxQmSYMG_yJFHgpOFn1swHshilvhuOqm-oZV2aeO7635TcK5CZmGvdp3yB5GwRaByNu1joZo0g7SE3j9Q7roe_TtxD06US7IPj9ZQl0pUGmgi1ZZUW5EAMMKrSQluBRpwNQKIZKKGeF6-Qcd8uELud7RhudWLTNDxkri68YwrbaWHQ-Z9QeE6AHO8_bUrGvSbMvyhIxXoCI-zjsaQg_zgaoUBD_Y5mC1044i4TL_BWkY-YjTAgXqyKmnT7PexU33VGkY4GBK3PROitOj785xn4QjL-XxnH1vvrf-LJvWoK4gYqx_vlx_C_DeV0VlWktYtPzaC3P8X4a1A4x-zQyjzmmrX_OAisBjG20-jp5FOLyrs7tqXLZKWT52Zg3oosumdQFDqtlA-jXwJFNX-baIlaqWsKxXvM5Gw_ffnmw-_6bs5xBZ2e8cFPvodXW8sWjNVEjOwbCMku12zBhDnJYSMDQhxBSUGpH02CPhEALKcvvD6Ha6KfdCvus",
+              "expires": 1794836400
+            }
+          ]
+        }
+      }
+    },
+    {
+      "at": 1794231611,
+      "who": "KK4ODA-1",
+      "request": {
+        "method": "POST",
+        "path": "/copies/ack",
+        "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc",
+        "body": {
+          "cursor": "c_3"
+        }
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "note": "Facundo calls N1CALL-10 (session-01.json). The gateway carries his session here."
+    },
+    {
+      "at": 1794234600,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "KdVDtVMXFVJDLCJc-DBQaG1CekuqA0Y2T4Wekk_y9ns",
+          "expires": 1794234900
+        }
+      }
+    },
+    {
+      "at": 1794234600,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glhdqQEBAhkH4QNybjFjYWxsQGhhbXBvc3Qub3JnBGlOMUNBTEwtMTAFWCAUS-X7lp2Vr5tgjQkwZFi7JTVlyLDjpxhusxOJ1yRMUwYaauaBAAcaa10oAAhEhCGdAAkJWEDr1t2qArnecCmYfRA9H-L3gPmMDr4ONskMijV8cBIzX9kXtv5dFssaxOiERNjg0h37hrRpHop3NLsByAFCPYMK",
+          "nonce": "KdVDtVMXFVJDLCJc-DBQaG1CekuqA0Y2T4Wekk_y9ns",
+          "signature": "nKgf75xODG_yr1Llk0Tu0WsO-uIqHSarv8fc2ovCxJjeJsDP33gYX4sCQy1IX6rGOJbHiMC128xsQGijl7_TAw"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok__S0rLgmgVaVn3GOvq653Nwyi",
+          "expires": 1794238200,
+          "address": "n1call@hampost.org",
+          "operator": "N1CALL-10",
+          "flags": 9
+        }
+      }
+    },
+    {
+      "at": 1794235240,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/sessions",
+        "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi",
+        "body": {
+          "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgkxQ06I6wdE_aEOY7OdMq53SZJ86TFWng3UB",
+          "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+          "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+          "started": 1794235240,
+          "cursor": 418
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "session": "s_NW_ilWmh-QN7oZhM",
+          "expires": 1794238840,
+          "waiting": [
+            {
+              "serial": 419,
+              "id": "i42cuqd7g7jrrgxx67aq",
+              "from": "maria@example.com",
+              "subject": "Are you safe?",
+              "size": 277,
+              "priority": 0,
+              "held": false
+            },
+            {
+              "serial": 420,
+              "id": "htpi3p474h4u3ourjhiq",
+              "from": "eoc@radiopost.org",
+              "subject": "Shelter roster",
+              "size": 1298,
+              "priority": 0,
+              "held": false
+            },
+            {
+              "serial": 421,
+              "id": "cpwfawr3mrq37rql7fza",
+              "from": "maria@example.com",
+              "subject": "Photo",
+              "size": 6122,
+              "priority": 0,
+              "held": false
+            }
+          ],
+          "more": 0,
+          "accept": [
+            {
+              "id": "kdj2eowb2e7wqq4y5ttq",
+              "offset": 0
+            },
+            {
+              "id": "voo5eze7hjgflj4douaq",
+              "offset": 0
+            }
+          ],
+          "decline": []
+        }
+      }
+    },
+    {
+      "at": 1794235240,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "GET",
+        "path": "/sessions/s_NW_ilWmh-QN7oZhM/messages/419",
+        "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "serial": 419,
+          "id": "i42cuqd7g7jrrgxx67aq",
+          "air": "AKYBAQJxbWFyaWFAZXhhbXBsZS5jb20DgXVmYWN1bmRvQHJhZGlvcG9zdC5vcmcFGmrxsRAGbUFyZSB5b3Ugc2FmZT8HeM5GYWN1bmRvLAoKV2Ugc2F3IHRoZSBuZXdzIGFib3V0IHRoZSBzdG9ybSBhbmQgY2Fubm90IHJlYWNoIGFueW9uZSBieSBwaG9uZS4gQXJlIHlvdSBhbmQgdGhlIGZhbWlseSBzYWZlPyBJcyB0aGUgaG91c2UgYWxsIHJpZ2h0PyBEbyB5b3UgbmVlZCBhbnl0aGluZyB3ZSBjYW4gc2VuZD8KCldyaXRlIHdoZW4geW91IGNhbiwgZXZlbiBvbmUgbGluZS4KCk1hcmlhCg"
+        }
+      }
+    },
+    {
+      "note": "Transmission 3 brings Facundo's two messages and his receipt for #419."
+    },
+    {
+      "at": 1794235295,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/sessions/s_NW_ilWmh-QN7oZhM/messages",
+        "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi",
+        "body": {
+          "messages": [
+            {
+              "id": "kdj2eowb2e7wqq4y5ttq",
+              "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FxbWFyaWFAZXhhbXBsZS5jb20FGmrx2OgGcVJlOiBBcmUgeW91IHNhZmU_B3gwV2UgYXJlIGZpbmUuIFBvd2VyIGlzIG91dCwgYnV0IHRoZSByYWRpbyB3b3Jrcy4KCkxHNCpAfzfTGJr398E"
+            },
+            {
+              "id": "voo5eze7hjgflj4douaq",
+              "air": "AKYBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBRpq8doUBmtDaGVja2luZyBpbgd4S0FuYSwgSSBhbSBvbiB0aGUgcm9hZCBuZWFyIEF1c3RpbiB1bnRpbCBGcmlkYXkuIEFsbCB3ZWxsIGhlcmUuIDczLCBGYWN1bmRvCg"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "results": [
+            {
+              "id": "kdj2eowb2e7wqq4y5ttq",
+              "status": "accepted"
+            },
+            {
+              "id": "voo5eze7hjgflj4douaq",
+              "status": "accepted"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "at": 1794235295,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/sessions/s_NW_ilWmh-QN7oZhM/pickups",
+        "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi",
+        "body": {
+          "serials": [
+            419
+          ]
+        }
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "at": 1794235295,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "GET",
+        "path": "/sessions/s_NW_ilWmh-QN7oZhM/messages/420",
+        "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "serial": 420,
+          "id": "htpi3p474h4u3ourjhiq",
+          "air": "AKcBAQJxZW9jQHJhZGlvcG9zdC5vcmcDgXVmYWN1bmRvQHJhZGlvcG9zdC5vcmcEgXZzaGVsdGVyM0ByYWRpb3Bvc3Qub3JnBRpq8b8gBm5TaGVsdGVyIHJvc3Rlcgd5BLBTaGVsdGVyIDMgcm9zdGVyIGFzIG9mIDEyOjAwIGxvY2FsLiBQbGVhc2UgY29uZmlybSBieSByYWRpby4KCiAxLiBGYW1pbHkgQWx2YXJlejogNCBwZW9wbGUsIGluc3VsaW4gbmVlZGVkIGJ5IFRodXJzZGF5CiAyLiBGYW1pbHkgQnJvb2tzOiAyIHBlb3BsZSwgbm8gbmVlZHMKIDMuIEZhbWlseSBDaGVuOiA1IHBlb3BsZSwgaW5mYW50IGZvcm11bGEKIDQuIEZhbWlseSBEaWFsbG86IDMgcGVvcGxlLCBubyBuZWVkcwogNS4gRmFtaWx5IEV2YW5zOiAxIHBlb3BsZSwgd2hlZWxjaGFpciwgbmVlZHMgZ3JvdW5kIGZsb29yCiA2LiBGYW1pbHkgRmlzY2hlcjogNiBwZW9wbGUsIG5vIG5lZWRzCiA3LiBGYW1pbHkgR2FyY2lhOiAyIHBlb3BsZSwgb3h5Z2VuIGNvbmNlbnRyYXRvciwgbmVlZHMgcG93ZXIKIDguIEZhbWlseSBIYWRkYWQ6IDQgcGVvcGxlLCBubyBuZWVkcwogOS4gRmFtaWx5IEl2YW5vdmE6IDMgcGVvcGxlLCBwZXQgZG9nCjEwLiBGYW1pbHkgSm9obnNvbjogMiBwZW9wbGUsIG5vIG5lZWRzCjExLiBGYW1pbHkgS293YWxza2k6IDUgcGVvcGxlLCBubyBuZWVkcwoxMi4gRmFtaWx5IExvcGV6OiAzIHBlb3BsZSwgcHJlc2NyaXB0aW9uIHJlZmlsbCwgYmxvb2QgcHJlc3N1cmUKMTMuIEZhbWlseSBNZW5zYWg6IDQgcGVvcGxlLCBubyBuZWVkcwoxNC4gRmFtaWx5IE5ha2FtdXJhOiAyIHBlb3BsZSwgbm8gbmVlZHMKMTUuIEZhbWlseSBPa2Fmb3I6IDcgcGVvcGxlLCB0d28gY2hpbGRyZW4gdW5kZXIgdGhyZWUKMTYuIEZhbWlseSBQYXRlbDogMyBwZW9wbGUsIG5vIG5lZWRzCjE3LiBGYW1pbHkgUXVpbm46IDEgcGVvcGxlLCBubyBuZWVkcwoxOC4gRmFtaWx5IFJvc3NpOiA0IHBlb3BsZSwgZGlldGFyeTogZ2x1dGVuIGZyZWUKMTkuIEZhbWlseSBTaWx2YTogMiBwZW9wbGUsIG5vIG5lZWRzCjIwLiBGYW1pbHkgVGhvbXBzb246IDMgcGVvcGxlLCBubyBuZWVkcwoyMS4gRmFtaWx5IFVlZGE6IDIgcGVvcGxlLCBoZWFyaW5nIGltcGFpcmVkLCBuZWVkcyB3cml0dGVuIG5vdGljZXMKMjIuIEZhbWlseSBWYXJnYXM6IDUgcGVvcGxlLCBubyBuZWVkcwoyMy4gRmFtaWx5IFdpbGxpYW1zOiAyIHBlb3BsZSwgbm8gbmVlZHMKMjQuIEZhbWlseSBYdTogMyBwZW9wbGUsIG5vIG5lZWRzCjI1LiBGYW1pbHkgWW91bmc6IDQgcGVvcGxlLCBubyBuZWVkcwoyNi4gRmFtaWx5IFpob3U6IDIgcGVvcGxlLCBubyBuZWVkcwo"
+        }
+      }
+    },
+    {
+      "note": "Transmission 5 brings his receipt for #420; then he hangs up."
+    },
+    {
+      "at": 1794235360,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/sessions/s_NW_ilWmh-QN7oZhM/pickups",
+        "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi",
+        "body": {
+          "serials": [
+            420
+          ]
+        }
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "at": 1794235361,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "DELETE",
+        "path": "/sessions/s_NW_ilWmh-QN7oZhM",
+        "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "note": "KK4ODA-1 polls again. Its token ran out at the end of its hour: the post office answers 401, and the gateway logs in again. The new poll drops the copies of the two messages picked up."
+    },
+    {
+      "at": 1794235500,
+      "who": "KK4ODA-1",
+      "request": {
+        "method": "GET",
+        "path": "/copies?after=c_3&wait=60",
+        "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc"
+      },
+      "response": {
+        "status": 401,
+        "body": {
+          "type": "about:blank",
+          "title": "Not authorized",
+          "status": 401,
+          "code": 10,
+          "name": "not-authorized"
+        }
+      }
+    },
+    {
+      "at": 1794235501,
+      "who": "KK4ODA-1",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "Jy_yEkCf0Po8EzLdQehMnq6A57xoLgdu1EHU_RSAr2Q",
+          "expires": 1794235801
+        }
+      }
+    },
+    {
+      "at": 1794235501,
+      "who": "KK4ODA-1",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glhfqQEBAhkEGwN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGhLSzRPREEtMQVYIC9rPZD5B3naEvDtfgSaOZXTXPJ4KEMq2ldjVNthBCybBhpq5p0gBxprXUQgCET7vV9cCQlYQN0pnorDlc_qddQAwl8de1Y8gdbBAr2Mow7Gmdh-01e87OSXwXI9Aa4DiYQ-w95pVJsHiBuMCaFOqY-Ke87hKw4",
+          "nonce": "Jy_yEkCf0Po8EzLdQehMnq6A57xoLgdu1EHU_RSAr2Q",
+          "signature": "8V9l8MMCS50uhSfzcVBnpi_wGdmGqbekPMFIdotNn9qvRDvf93s7GdVJfdCmqiWbfjdhLw4BKtBtKTryODKoCw"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_bAP6nBtUpGOPknuY8QuFvpXB",
+          "expires": 1794239101,
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA-1",
+          "flags": 9
+        }
+      }
+    },
+    {
+      "at": 1794235502,
+      "who": "KK4ODA-1",
+      "request": {
+        "method": "GET",
+        "path": "/copies?after=c_3&wait=60",
+        "authorization": "Bearer tok_bAP6nBtUpGOPknuY8QuFvpXB"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "cursor": "c_5",
+          "items": [
+            {
+              "kind": "drop",
+              "address": "facundo@radiopost.org",
+              "serial": 419
+            },
+            {
+              "kind": "drop",
+              "address": "facundo@radiopost.org",
+              "serial": 420
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "cases": [
+    {
+      "what": "session-01, opened 40 s after the client's clock",
+      "exchanges": [
+        {
+          "at": 1794235240,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgkxQ06I6wdE_aEOY7OdMq53SZJ86TFWng3UB",
+              "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794235240,
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 201,
+            "body": {
+              "session": "s_NW_ilWmh-QN7oZhM",
+              "expires": 1794238840,
+              "waiting": [
+                {
+                  "serial": 419,
+                  "id": "i42cuqd7g7jrrgxx67aq",
+                  "from": "maria@example.com",
+                  "subject": "Are you safe?",
+                  "size": 277,
+                  "priority": 0,
+                  "held": false
+                },
+                {
+                  "serial": 420,
+                  "id": "htpi3p474h4u3ourjhiq",
+                  "from": "eoc@radiopost.org",
+                  "subject": "Shelter roster",
+                  "size": 1298,
+                  "priority": 0,
+                  "held": false
+                },
+                {
+                  "serial": 421,
+                  "id": "cpwfawr3mrq37rql7fza",
+                  "from": "maria@example.com",
+                  "subject": "Photo",
+                  "size": 6122,
+                  "priority": 0,
+                  "held": false
+                }
+              ],
+              "more": 0,
+              "accept": [
+                {
+                  "id": "kdj2eowb2e7wqq4y5ttq",
+                  "offset": 0
+                },
+                {
+                  "id": "voo5eze7hjgflj4douaq",
+                  "offset": 0
+                }
+              ],
+              "decline": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "the post office's clock 601 s after `started`",
+      "exchanges": [
+        {
+          "at": 1794235841,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgkxQ06I6wdE_aEOY7OdMq53SZJ86TFWng3UB",
+              "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794235240,
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 422,
+            "body": {
+              "type": "about:blank",
+              "title": "Time skew",
+              "status": 422,
+              "code": 9,
+              "name": "time-skew"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "`started` 601 s after the statement's time",
+      "exchanges": [
+        {
+          "at": 1794235801,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgkxQ06I6wdE_aEOY7OdMq53SZJ86TFWng3UB",
+              "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794235801,
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 422,
+            "body": {
+              "type": "about:blank",
+              "title": "Time skew",
+              "status": 422,
+              "code": 9,
+              "name": "time-skew"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "the same statement twice: a replay",
+      "exchanges": [
+        {
+          "at": 1794235240,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgkxQ06I6wdE_aEOY7OdMq53SZJ86TFWng3UB",
+              "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794235240,
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 201,
+            "body": {
+              "session": "s_NW_ilWmh-QN7oZhM",
+              "expires": 1794238840,
+              "waiting": [
+                {
+                  "serial": 419,
+                  "id": "i42cuqd7g7jrrgxx67aq",
+                  "from": "maria@example.com",
+                  "subject": "Are you safe?",
+                  "size": 277,
+                  "priority": 0,
+                  "held": false
+                },
+                {
+                  "serial": 420,
+                  "id": "htpi3p474h4u3ourjhiq",
+                  "from": "eoc@radiopost.org",
+                  "subject": "Shelter roster",
+                  "size": 1298,
+                  "priority": 0,
+                  "held": false
+                },
+                {
+                  "serial": 421,
+                  "id": "cpwfawr3mrq37rql7fza",
+                  "from": "maria@example.com",
+                  "subject": "Photo",
+                  "size": 6122,
+                  "priority": 0,
+                  "held": false
+                }
+              ],
+              "more": 0,
+              "accept": [
+                {
+                  "id": "kdj2eowb2e7wqq4y5ttq",
+                  "offset": 0
+                },
+                {
+                  "id": "voo5eze7hjgflj4douaq",
+                  "offset": 0
+                }
+              ],
+              "decline": []
+            }
+          }
+        },
+        {
+          "at": 1794235270,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgkxQ06I6wdE_aEOY7OdMq53SZJ86TFWng3UB",
+              "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794235240,
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 422,
+            "body": {
+              "type": "about:blank",
+              "title": "Time skew",
+              "status": 422,
+              "code": 9,
+              "name": "time-skew"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "a message removed from the statement after signing",
+      "exchanges": [
+        {
+          "at": 1794235240,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgUxQ06I6wdE_aEOY7Oc",
+              "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794235240,
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 422,
+            "body": {
+              "type": "about:blank",
+              "title": "Signature invalid",
+              "status": 422,
+              "code": 8,
+              "name": "signature-invalid"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "the user's credential revoked",
+      "exchanges": [
+        {
+          "at": 1794235240,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgkxQ06I6wdE_aEOY7OdMq53SZJ86TFWng3UB",
+              "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794235240,
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 422,
+            "body": {
+              "type": "about:blank",
+              "title": "Credential revoked",
+              "status": 422,
+              "code": 5,
+              "name": "credential-revoked"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "carried by a gateway the statement does not name",
+      "exchanges": [
+        {
+          "at": 1794235240,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgkxQ06I6wdE_aEOY7OdMq53SZJ86TFWng3UB",
+              "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794235240,
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 403,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "no token",
+      "exchanges": [
+        {
+          "at": 1794235240,
+          "who": "nobody",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgkxQ06I6wdE_aEOY7OdMq53SZJ86TFWng3UB",
+              "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794235240,
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 401,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 401,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "a user's token on a gateway endpoint",
+      "exchanges": [
+        {
+          "at": 1794235240,
+          "who": "facundo",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgkxQ06I6wdE_aEOY7OdMq53SZJ86TFWng3UB",
+              "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794235240,
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 403,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "messages handed in: accepted; the same again, a duplicate; an air form that is not its message; a message from someone else; a message not in the statement. Then a pickup and a fetch of a serial the session did not list.",
+      "exchanges": [
+        {
+          "at": 1794235240,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI0xaU_z8MqNMGg0xQ06I6wdE_aEOY7OdMq53SZJ86TFWng3UBTEc0KkB_N9MYmvf3wQ",
+              "signature": "QKrxE_D8lSk2a4ALhPNilFhBtvnojW7Be6ioy6n2mHi-Jdyx8bInX_1UUTUeE22BxgR2eCkbbbBJcsfDDRV2Dg",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794235240,
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 201,
+            "body": {
+              "session": "s_NW_ilWmh-QN7oZhM",
+              "expires": 1794238840,
+              "waiting": [
+                {
+                  "serial": 419,
+                  "id": "i42cuqd7g7jrrgxx67aq",
+                  "from": "maria@example.com",
+                  "subject": "Are you safe?",
+                  "size": 277,
+                  "priority": 0,
+                  "held": false
+                },
+                {
+                  "serial": 420,
+                  "id": "htpi3p474h4u3ourjhiq",
+                  "from": "eoc@radiopost.org",
+                  "subject": "Shelter roster",
+                  "size": 1298,
+                  "priority": 0,
+                  "held": false
+                },
+                {
+                  "serial": 421,
+                  "id": "cpwfawr3mrq37rql7fza",
+                  "from": "maria@example.com",
+                  "subject": "Photo",
+                  "size": 6122,
+                  "priority": 0,
+                  "held": false
+                }
+              ],
+              "more": 0,
+              "accept": [
+                {
+                  "id": "kdj2eowb2e7wqq4y5ttq",
+                  "offset": 0
+                },
+                {
+                  "id": "voo5eze7hjgflj4douaq",
+                  "offset": 0
+                },
+                {
+                  "id": "i42cuqd7g7jrrgxx67aq",
+                  "offset": 0
+                }
+              ],
+              "decline": []
+            }
+          }
+        },
+        {
+          "at": 1794235295,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions/s_NW_ilWmh-QN7oZhM/messages",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "messages": [
+                {
+                  "id": "voo5eze7hjgflj4douaq",
+                  "air": "AKYBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBRpq8doUBmtDaGVja2luZyBpbgd4S0FuYSwgSSBhbSBvbiB0aGUgcm9hZCBuZWFyIEF1c3RpbiB1bnRpbCBGcmlkYXkuIEFsbCB3ZWxsIGhlcmUuIDczLCBGYWN1bmRvCg"
+                },
+                {
+                  "id": "voo5eze7hjgflj4douaq",
+                  "air": "AKYBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBRpq8doUBmtDaGVja2luZyBpbgd4S0FuYSwgSSBhbSBvbiB0aGUgcm9hZCBuZWFyIEF1c3RpbiB1bnRpbCBGcmlkYXkuIEFsbCB3ZWxsIGhlcmUuIDczLCBGYWN1bmRvCg"
+                },
+                {
+                  "id": "kdj2eowb2e7wqq4y5ttq",
+                  "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FxbWFyaWFAZXhhbXBsZS5jb20FGmrx2OgGcVJlOiBBcmUgeW91IHNhZmU_B3gwV2UgYXJlIGZpbmUuIFBvd2VyIGlzIG91dCwgYnV0IHRoZSByYWRpbyB3b3Jrcy4KCkxHNCpAfzfTGJr398A"
+                },
+                {
+                  "id": "i42cuqd7g7jrrgxx67aq",
+                  "air": "AKYBAQJxbWFyaWFAZXhhbXBsZS5jb20DgXVmYWN1bmRvQHJhZGlvcG9zdC5vcmcFGmrxsRAGbUFyZSB5b3Ugc2FmZT8HeM5GYWN1bmRvLAoKV2Ugc2F3IHRoZSBuZXdzIGFib3V0IHRoZSBzdG9ybSBhbmQgY2Fubm90IHJlYWNoIGFueW9uZSBieSBwaG9uZS4gQXJlIHlvdSBhbmQgdGhlIGZhbWlseSBzYWZlPyBJcyB0aGUgaG91c2UgYWxsIHJpZ2h0PyBEbyB5b3UgbmVlZCBhbnl0aGluZyB3ZSBjYW4gc2VuZD8KCldyaXRlIHdoZW4geW91IGNhbiwgZXZlbiBvbmUgbGluZS4KCk1hcmlhCg"
+                },
+                {
+                  "id": "htpi3p474h4u3ourjhiq",
+                  "air": "AKcBAQJxZW9jQHJhZGlvcG9zdC5vcmcDgXVmYWN1bmRvQHJhZGlvcG9zdC5vcmcEgXZzaGVsdGVyM0ByYWRpb3Bvc3Qub3JnBRpq8b8gBm5TaGVsdGVyIHJvc3Rlcgd5BLBTaGVsdGVyIDMgcm9zdGVyIGFzIG9mIDEyOjAwIGxvY2FsLiBQbGVhc2UgY29uZmlybSBieSByYWRpby4KCiAxLiBGYW1pbHkgQWx2YXJlejogNCBwZW9wbGUsIGluc3VsaW4gbmVlZGVkIGJ5IFRodXJzZGF5CiAyLiBGYW1pbHkgQnJvb2tzOiAyIHBlb3BsZSwgbm8gbmVlZHMKIDMuIEZhbWlseSBDaGVuOiA1IHBlb3BsZSwgaW5mYW50IGZvcm11bGEKIDQuIEZhbWlseSBEaWFsbG86IDMgcGVvcGxlLCBubyBuZWVkcwogNS4gRmFtaWx5IEV2YW5zOiAxIHBlb3BsZSwgd2hlZWxjaGFpciwgbmVlZHMgZ3JvdW5kIGZsb29yCiA2LiBGYW1pbHkgRmlzY2hlcjogNiBwZW9wbGUsIG5vIG5lZWRzCiA3LiBGYW1pbHkgR2FyY2lhOiAyIHBlb3BsZSwgb3h5Z2VuIGNvbmNlbnRyYXRvciwgbmVlZHMgcG93ZXIKIDguIEZhbWlseSBIYWRkYWQ6IDQgcGVvcGxlLCBubyBuZWVkcwogOS4gRmFtaWx5IEl2YW5vdmE6IDMgcGVvcGxlLCBwZXQgZG9nCjEwLiBGYW1pbHkgSm9obnNvbjogMiBwZW9wbGUsIG5vIG5lZWRzCjExLiBGYW1pbHkgS293YWxza2k6IDUgcGVvcGxlLCBubyBuZWVkcwoxMi4gRmFtaWx5IExvcGV6OiAzIHBlb3BsZSwgcHJlc2NyaXB0aW9uIHJlZmlsbCwgYmxvb2QgcHJlc3N1cmUKMTMuIEZhbWlseSBNZW5zYWg6IDQgcGVvcGxlLCBubyBuZWVkcwoxNC4gRmFtaWx5IE5ha2FtdXJhOiAyIHBlb3BsZSwgbm8gbmVlZHMKMTUuIEZhbWlseSBPa2Fmb3I6IDcgcGVvcGxlLCB0d28gY2hpbGRyZW4gdW5kZXIgdGhyZWUKMTYuIEZhbWlseSBQYXRlbDogMyBwZW9wbGUsIG5vIG5lZWRzCjE3LiBGYW1pbHkgUXVpbm46IDEgcGVvcGxlLCBubyBuZWVkcwoxOC4gRmFtaWx5IFJvc3NpOiA0IHBlb3BsZSwgZGlldGFyeTogZ2x1dGVuIGZyZWUKMTkuIEZhbWlseSBTaWx2YTogMiBwZW9wbGUsIG5vIG5lZWRzCjIwLiBGYW1pbHkgVGhvbXBzb246IDMgcGVvcGxlLCBubyBuZWVkcwoyMS4gRmFtaWx5IFVlZGE6IDIgcGVvcGxlLCBoZWFyaW5nIGltcGFpcmVkLCBuZWVkcyB3cml0dGVuIG5vdGljZXMKMjIuIEZhbWlseSBWYXJnYXM6IDUgcGVvcGxlLCBubyBuZWVkcwoyMy4gRmFtaWx5IFdpbGxpYW1zOiAyIHBlb3BsZSwgbm8gbmVlZHMKMjQuIEZhbWlseSBYdTogMyBwZW9wbGUsIG5vIG5lZWRzCjI1LiBGYW1pbHkgWW91bmc6IDQgcGVvcGxlLCBubyBuZWVkcwoyNi4gRmFtaWx5IFpob3U6IDIgcGVvcGxlLCBubyBuZWVkcwo"
+                }
+              ]
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "results": [
+                {
+                  "id": "voo5eze7hjgflj4douaq",
+                  "status": "accepted"
+                },
+                {
+                  "id": "voo5eze7hjgflj4douaq",
+                  "status": "duplicate"
+                },
+                {
+                  "id": "kdj2eowb2e7wqq4y5ttq",
+                  "status": "refused",
+                  "code": 2,
+                  "name": "malformed",
+                  "text": "the air form is not this message"
+                },
+                {
+                  "id": "i42cuqd7g7jrrgxx67aq",
+                  "status": "refused",
+                  "code": 10,
+                  "name": "not-authorized",
+                  "text": "not from the statement's address"
+                },
+                {
+                  "id": "htpi3p474h4u3ourjhiq",
+                  "status": "refused",
+                  "code": 10,
+                  "name": "not-authorized",
+                  "text": "not in the session's statement"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "at": 1794235296,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions/s_NW_ilWmh-QN7oZhM/pickups",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "serials": [
+                419,
+                999
+              ]
+            }
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "type": "about:blank",
+              "title": "Unknown message",
+              "status": 404,
+              "code": 15,
+              "name": "unknown-message"
+            }
+          }
+        },
+        {
+          "at": 1794235297,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "GET",
+            "path": "/sessions/s_NW_ilWmh-QN7oZhM/messages/999",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "type": "about:blank",
+              "title": "Unknown message",
+              "status": 404,
+              "code": 15,
+              "name": "unknown-message"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "report": [
+    {
+      "note": "N1CALL-10 had no Internet during session-01: it checked Facundo offline (RP-1 §5, §6.3), queued his two messages and served no mail. A day later it reports, with a second, made-up session whose statement no longer matches its signature."
+    },
+    {
+      "at": 1794321590,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "YnIMfdL74LxF8F0CuKW2UTsDNl77F_AW6aiohypUgGs",
+          "expires": 1794321890
+        }
+      }
+    },
+    {
+      "at": 1794321590,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glhdqQEBAhkH4QNybjFjYWxsQGhhbXBvc3Qub3JnBGlOMUNBTEwtMTAFWCAUS-X7lp2Vr5tgjQkwZFi7JTVlyLDjpxhusxOJ1yRMUwYaauaBAAcaa10oAAhEhCGdAAkJWEDr1t2qArnecCmYfRA9H-L3gPmMDr4ONskMijV8cBIzX9kXtv5dFssaxOiERNjg0h37hrRpHop3NLsByAFCPYMK",
+          "nonce": "YnIMfdL74LxF8F0CuKW2UTsDNl77F_AW6aiohypUgGs",
+          "signature": "nAXw_HHLlqtjyXUTRmm2TE5YLRXpRr294DSuT624ic5fioIsw4l4MHxWsiUIhJEeJnvTTWN48QpBHPFSfu76Dw"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_7FDsReE3n0Nfd47g83S1DcTo",
+          "expires": 1794325190,
+          "address": "n1call@hampost.org",
+          "operator": "N1CALL-10",
+          "flags": 9
+        }
+      }
+    },
+    {
+      "at": 1794321600,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/reports",
+        "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+        "body": {
+          "sessions": [
+            {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgkxQ06I6wdE_aEOY7OdMq53SZJ86TFWng3UB",
+              "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794235240,
+              "cursor": 418,
+              "messages": [
+                {
+                  "id": "kdj2eowb2e7wqq4y5ttq",
+                  "air": "AKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FxbWFyaWFAZXhhbXBsZS5jb20FGmrx2OgGcVJlOiBBcmUgeW91IHNhZmU_B3gwV2UgYXJlIGZpbmUuIFBvd2VyIGlzIG91dCwgYnV0IHRoZSByYWRpbyB3b3Jrcy4KCkxHNCpAfzfTGJr398E"
+                },
+                {
+                  "id": "voo5eze7hjgflj4douaq",
+                  "air": "AKYBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBRpq8doUBmtDaGVja2luZyBpbgd4S0FuYSwgSSBhbSBvbiB0aGUgcm9hZCBuZWFyIEF1c3RpbiB1bnRpbCBGcmlkYXkuIEFsbCB3ZWxsIGhlcmUuIDczLCBGYWN1bmRvCg"
+                }
+              ],
+              "pickups": []
+            },
+            {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgUxQ06I6wdE_aEOY7Oc",
+              "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794235240,
+              "cursor": 418,
+              "messages": [],
+              "pickups": []
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sessions": [
+            {
+              "results": [
+                {
+                  "id": "kdj2eowb2e7wqq4y5ttq",
+                  "status": "accepted"
+                },
+                {
+                  "id": "voo5eze7hjgflj4douaq",
+                  "status": "accepted"
+                }
+              ]
+            },
+            {
+              "code": 8,
+              "name": "signature-invalid"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
