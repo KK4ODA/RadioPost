@@ -563,3 +563,39 @@ fn aether_going_away_ends_the_link() {
         [json!({"op": "error", "id": 4, "code": "no-modem"})]
     );
 }
+
+#[test]
+fn a_host_that_leaves_ends_its_link_and_its_call() {
+    // a link up: the bridge asks Aether to abort it
+    let (mut b, mut a) = opened(true, false);
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":3,"remote":"N1CALL-10"}"#,
+    );
+    event(
+        &mut b,
+        &mut a,
+        "state",
+        &mine("connected", "N1CALL-10 (master)"),
+    );
+    let asked = a.asked.len();
+    let outs = b.host_left();
+    assert_eq!(lines(&settle(&mut b, &mut a, outs)), Vec::<Value>::new());
+    assert_eq!(a.asked[asked]["method"], json!("abort"));
+    assert!(!b.awaiting());
+    // a call under way: the same
+    let (mut b, mut a) = opened(true, false);
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":3,"remote":"N1CALL-10"}"#,
+    );
+    let asked = a.asked.len();
+    let outs = b.host_left();
+    settle(&mut b, &mut a, outs);
+    assert_eq!(a.asked[asked]["method"], json!("abort"));
+    // nothing held: nothing asked
+    let (mut b, _) = opened(true, true);
+    assert_eq!(b.host_left().len(), 0, "nothing held, nothing asked");
+}

@@ -4,8 +4,10 @@
 //! specifications require, and where it did not.
 //!
 //! It holds the client's tests C-01 to C-08 and C-11 ([`client`]), run through the tester's own
-//! RPMI adapter ([`harness::TestAdapter`]).
+//! RPMI adapter ([`harness::TestAdapter`]), and the modem adapter's tests A-01 to A-04
+//! ([`adapter`]).
 
+pub mod adapter;
 pub mod client;
 pub mod harness;
 
@@ -17,6 +19,11 @@ use serde_json::{Value as Json, json};
 /// The test post office keys of `vectors/keys.json`, built in: their private halves are published,
 /// so they are never real keys.
 pub const KEYS_JSON: &str = include_str!("../../../vectors/keys.json");
+
+/// The RPMI lines an adapter reads, and its answers (`vectors/rpmi-lines.json`).
+pub const RPMI_LINES_JSON: &str = include_str!("../../../vectors/rpmi-lines.json");
+/// `session-01`, which A-04 carries between two instances of an adapter.
+pub const SESSION_01_JSON: &str = include_str!("../../../vectors/session-01.json");
 
 /// One test's verdict.
 pub struct Verdict {

@@ -58,7 +58,24 @@ and send the tester the credential it prints (hexadecimal). It is valid for 90 d
 4. Under *Post offices trusted*, enter the domain (`test.radiopost.org`) and the key the operator
    sent, and click **Trust**. A station trusts the post offices its operator chooses (RP-1 §7.3).
 
-## 3. On the air
+## 3. A rehearsal over the Internet (optional)
+
+Before the air, the two stations can run the same session over the Internet, to check the
+credentials and the trust with no radio involved. Each runs `radiopost-tcp`, from the tools
+archive, and puts its address, `127.0.0.1:8600`, in RadioPost's **Modem** box.
+
+**Station A** (it answers): `radiopost-tcp --listen 0.0.0.0:8774`. The first time, it makes a
+certificate for itself and prints its fingerprint (`SHA-256 5c0e…`): send that to B. A's router
+must pass TCP port 8774 to this computer. In RadioPost, click **Listen**.
+
+**Station B** (it calls): `radiopost-tcp --trust <A's fingerprint> --peer <A's callsign>=<A's
+address>:8774`, then **Call** A's callsign with **Another client's station** ticked.
+
+The link is TLS: encryption is allowed on the Internet, which is not the air. Put
+`ws://127.0.0.1:8515/v1` back in the **Modem** box afterwards. (On an amateur mesh network such as
+AREDN, which is on the air, both use `--plain`: nothing on the air is encrypted.)
+
+## 4. On the air
 
 Agree a frequency in the band's digital segment, a time, and who calls first. Start Aether on
 both stations and check it works with the radio (its *Tune* or a probe), at the bandwidth you
@@ -87,7 +104,7 @@ the next call.
 Closing RadioPost while it listens or a session is under way asks first: closing ends the
 session and leaves the other station waiting.
 
-## 4. The rules
+## 5. The rules
 
 * **Control.** Each station is attended: its operator is at the controls (local control) for the
   whole test. Aether checks each transmission against the band rules it knows, and refuses one
@@ -99,7 +116,7 @@ session and leaves the other station waiting.
 * **Third-party traffic.** Messages between the two operators themselves are not third-party
   traffic. Do not carry mail for others in these tests.
 
-## 5. What to report
+## 6. What to report
 
 For each test, open an issue on [RadioPost's repository](https://github.com/KK4ODA/RadioPost/issues)
 with:
@@ -111,7 +128,7 @@ with:
 * for a session that failed or was slow, Aether's recording of it: switch on Aether's **Record**
   before the test, and send the files from Aether's Log tab (*Send files…*).
 
-## 6. What these tests do not cover yet
+## 7. What these tests do not cover yet
 
 * **Post offices and gateways** (Phase 2). Mail reaches only the other station. Each station keeps
   a report of the session (the panel counts them), for its post office when there is one; that is

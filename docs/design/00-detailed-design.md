@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.22 |
+| **Version** | 0.1.23 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -194,7 +194,7 @@ server with those interfaces could replace Stalwart (concept §8.1).
 | VARA HF, VARA FM | Published TNC commands, two TCP ports | No delivery receipts. |
 | ARDOP | Host command and data ports | To be checked against ARDOP's specification. |
 | AX.25 | AGWPE (Direwolf, TNCs) | VHF and UHF packet. |
-| TCP with TLS | — | The Internet, AREDN mesh, and tests. |
+| TCP | Another TCP adapter (RP-4 §9.5) | The Internet over TLS; an amateur mesh such as AREDN in plain TCP, since it is on the air; tests. |
 
 ---
 
@@ -337,3 +337,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.20 | 2026-11-09 | D31: third-party traffic (RP-6 0.3.0, RP-3 0.7.0, RP-5 0.11.0). |
 | 0.1.21 | 2026-11-09 | D17: the dictionary's rule (RP-2 0.2.0); D32: trusting post offices (RP-1 0.5.0); D33: radiopost.org's enrollment. Phase 0's open questions settled but the data still owed. |
 | 0.1.22 | 2026-11-09 | §7: the conformance tester's outline, in its own document. |
+| 0.1.23 | 2026-11-09 | The TCP adapter: TLS on the Internet only; plain TCP on an amateur mesh, which is on the air (RP-4 0.5.0). |

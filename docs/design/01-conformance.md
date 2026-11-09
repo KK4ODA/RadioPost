@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.0 |
+| **Version** | 0.3.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -65,6 +65,10 @@ To be tested, a program offers a mode that:
 * refuses every adapter but the test one, so test keys never reach the air.
 
 It needs nothing else. The program keeps its own clock and random numbers and makes its own keys.
+
+An adapter is tested as it runs: the tester connects to it as its host (`--at`), and for the
+tests that need the air, to a second instance joined to it (`--far`) as the far station's host,
+named in `connect` as `--reach` says. It allows a radio's timing for anything that crosses.
 
 A **driver file** tells the tester how to run the program: a JSON object naming each command it
 needs (`conformance`, `key`, `init`, `trust`, `compose`, `call`, `call_station`, `listen`, `inbox`,
@@ -165,8 +169,8 @@ RP-0 §3: RP-4, the adapter's side.
 | ID | Checks | Builds on |
 |---|---|---|
 | A-01 | The lines it reads and the ones it answers with an error (RP-4 §2). | `rpmi-lines` |
-| A-02 | Opening, requests, events and errors in conversation (RP-4 §3, §4, §5, §7). | `rpmi-conversations` |
-| A-03 | A shared modem: two hosts, their callsigns, each call to its own host (RP-4 §1.1). | `rpmi-conversations` |
+| A-02 | Opening, requests, events and errors in conversation, and a host that leaves with its link up (RP-4 §1.1, §3, §4, §5, §7). | `rpmi-conversations` |
+| A-03 | A second host: turned away `busy` by an adapter that is not shared; on a shared one, its own callsigns, another's `claimed`, its own `status` (RP-4 §1.1, §3). Calls to each host of a shared modem come in Phase 5. | `rpmi-conversations` |
 | A-04 | `session-01` carried between two instances, every byte intact (RP-4 §4, §5). | `rpmi-conversations` |
 | A-05 | A transmission the rules forbid reported as `refused`, when the modem checks the rules (RP-4 §8). | — |
 
@@ -227,3 +231,4 @@ RP-0 §3: RP-4, the adapter's side.
 |---|---|---|
 | 0.1.0 | 2026-11-09 | First outline: what the tester is for, how it plays the other side through its own adapter, conformance mode, the tests by role, what it reports, how it is built and tested, and the order of work. |
 | 0.2.0 | 2026-11-09 | Phase 1's client tests built (`core/tester`): how a program is driven (a driver file, §2.3), which settles how conformance mode is turned on (§7). C-06 asks `too-large` for a frame over `max_pdu`, as RP-3 0.10.0 now says. |
+| 0.3.0 | 2026-11-09 | Phase 1's adapter tests built: how an adapter is reached (§2.3); A-02 also checks a host that leaves (RP-4 0.5.0), and A-03 says what it covers. |

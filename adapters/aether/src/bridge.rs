@@ -818,6 +818,24 @@ impl Bridge {
         self.update_busy(out);
     }
 
+    /// The host's connection closed (RP-4 §1.1): its link and its call under way end as `abort`
+    /// would end them, so the station is not left in a session nobody holds. What to ask Aether.
+    pub fn host_left(&mut self) -> Vec<Out> {
+        let link = self.link.take().is_some();
+        let call = self.call.take().is_some();
+        if (link || call) && !self.modem_lost {
+            vec![self.ask("abort", json!({}), Waiting::Nothing)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Whether a request to Aether is still unanswered.
+    #[must_use]
+    pub fn awaiting(&self) -> bool {
+        !self.waiting.is_empty()
+    }
+
     /// Aether's connection closed: the host's link or call goes with it, and every request from
     /// now on is answered `no-modem`.
     pub fn modem_lost(&mut self) -> Vec<Out> {

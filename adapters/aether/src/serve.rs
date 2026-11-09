@@ -9,7 +9,7 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rpmi::tcp::MAX_LINE;
 use rpmi::wire::line_of;
@@ -20,6 +20,8 @@ use crate::bridge::{Bridge, Out};
 
 /// How long a read of Aether waits before the host's lines are looked at again.
 const POLL: Duration = Duration::from_millis(10);
+/// How long a host that left waits for Aether to take its abort.
+const LEAVING: Duration = Duration::from_secs(2);
 
 /// What a host's reader thread hands the connection's thread.
 enum FromHost {
@@ -81,8 +83,8 @@ fn read_host(stream: TcpStream, to: &mpsc::Sender<FromHost>) {
     }
 }
 
-/// Serves one host until its connection closes. Aether's connection closes with it, which ends
-/// the host's claim (ADR-0106).
+/// Serves one host until its connection closes. Its link or call is aborted first (RP-4 §1.1);
+/// then Aether's connection closes, which ends the host's claim (ADR-0106).
 pub fn serve(host: &TcpStream, aether: &str) {
     let _ = host.set_nodelay(true);
     let Ok(reader) = host.try_clone() else {
@@ -98,10 +100,38 @@ pub fn serve(host: &TcpStream, aether: &str) {
     };
     run(&mut bridge, &mut ws, host, &rx);
     if let Some(mut ws) = ws {
+        left(&mut bridge, &mut ws);
         let _ = ws.close(None);
         let _ = ws.flush();
     }
     let _ = host.shutdown(Shutdown::Both);
+}
+
+/// The host is gone: what it held on the air is ended, and Aether's answer awaited a moment so
+/// the abort is done before the claim goes.
+fn left(bridge: &mut Bridge, ws: &mut WebSocket<MaybeTlsStream<TcpStream>>) {
+    for out in bridge.host_left() {
+        if let Out::Aether(request) = out
+            && ws.send(Ws::text(request.to_string())).is_err()
+        {
+            return;
+        }
+    }
+    let deadline = Instant::now() + LEAVING;
+    while bridge.awaiting() && Instant::now() < deadline {
+        match ws.read() {
+            Ok(Ws::Text(text)) => {
+                let _ = bridge.from_aether(&text);
+            }
+            Ok(_) => {}
+            Err(tungstenite::Error::Io(e))
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                ) => {}
+            Err(_) => return,
+        }
+    }
 }
 
 fn run(

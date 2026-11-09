@@ -14,6 +14,11 @@ usage:
       says how to run the program (core/tester/drivers/radiopost.json is the radiopost client's);
       the program is put in conformance mode in a fresh home for each test. C-11 takes five
       minutes: it runs with --slow, or when named in --only.
+  radiopost-tester adapter --at HOST:PORT [--far HOST:PORT] [--reach REMOTE] [--only ID,...]
+                           [--json FILE]
+      test a modem adapter (A-01 to A-04): the one whose hosts connect at --at, and for A-02 and
+      A-04 a second instance at --far, joined to the first, whose host --reach names in
+      `connect` (N1CALL-10 when not given; for the TCP adapter, N1CALL-10@HOST:PORT).
 
 Exit status: 0 when every test run passed, 1 when one failed, 2 when the tester could not run.";
 
@@ -104,16 +109,33 @@ fn client(args: &Args) -> Result<ExitCode, String> {
     Ok(finish("client", &bin, &verdicts, args.one("--json")))
 }
 
+fn adapter(args: &Args) -> Result<ExitCode, String> {
+    let at = args.one("--at").ok_or("adapter needs --at HOST:PORT")?;
+    let plan = radiopost_tester::adapter::Plan {
+        at: at.clone(),
+        far: args.one("--far"),
+        reach: args
+            .one("--reach")
+            .unwrap_or_else(|| "N1CALL-10".to_owned()),
+        only: args.list("--only"),
+    };
+    let verdicts = radiopost_tester::adapter::run(&plan, say)?;
+    Ok(finish("modem adapter", &at, &verdicts, args.one("--json")))
+}
+
 fn main() -> ExitCode {
     let words: Vec<String> = std::env::args().skip(1).collect();
     let args = Args {
         words: words.iter().skip(1).cloned().collect(),
     };
-    if words.first().map(String::as_str) != Some("client") {
-        println!("{USAGE}");
-        return ExitCode::from(2);
-    }
-    let result = client(&args);
+    let result = match words.first().map(String::as_str) {
+        Some("client") => client(&args),
+        Some("adapter") => adapter(&args),
+        _ => {
+            println!("{USAGE}");
+            return ExitCode::from(2);
+        }
+    };
     result.unwrap_or_else(|e| {
         eprintln!("radiopost-tester: {e}");
         ExitCode::from(2)

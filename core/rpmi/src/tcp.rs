@@ -321,6 +321,16 @@ impl Connection {
         self.writer.write_all(line.as_bytes())
     }
 
+    /// Writes one line as it is, JSON or not, and its LF: how a test sends what a host should not.
+    ///
+    /// # Errors
+    ///
+    /// The connection failed.
+    pub fn send_line(&mut self, line: &str) -> io::Result<()> {
+        self.writer.write_all(line.as_bytes())?;
+        self.writer.write_all(b"\n")
+    }
+
     /// The adapter's next message; `None` when it has closed the connection.
     ///
     /// # Errors

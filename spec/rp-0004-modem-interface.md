@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.4.1 |
+| **Version** | 0.5.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -56,8 +56,10 @@ callsign. The adapter keeps each host to its own business:
 * **Other programs' traffic reads as busy.** While the modem carries another program's link, or
   transmits for it, an adapter with `caps.busy` reports `busy` true. A `connect` made then fails
   `busy` (§7).
-* **A host that leaves takes its callsigns with it.** When the host's connection to the adapter
-  closes, calls to its callsigns are no longer answered for it.
+* **A host that leaves takes its callsigns, its call and its links with it.** When the host's
+  connection to the adapter closes, calls to its callsigns are no longer answered for it, and the
+  adapter ends its call under way and its links as `abort` would, so the station is not left in a
+  session nobody holds: the other station hears `disconnected`.
 
 An adapter that cannot keep these rules reports `caps.shared` false and serves one host with the
 modem to itself: while that host is connected, a second host is turned away at its `hello` (§3).
@@ -242,7 +244,8 @@ MUST check it, or its operator must, before turning on `listen` or calling (RP-0
 ## 9. Mapping to modems *(informative)*
 
 How an adapter can carry RPMI on today's modems. These notes guide adapter writers; each modem's
-own documentation is the authority on its interface.
+own documentation is the authority on its interface. One part is normative: §9.5's opening lines,
+on which TCP adapters of different programs meet each other.
 
 ### 9.1 Aether
 
@@ -331,12 +334,34 @@ connections to a callsign go to the program that registered it, the model §1.1 
 how the TNC software handles a callsign two programs register before an adapter reports `shared`
 true.*
 
-### 9.5 TCP with TLS
+### 9.5 TCP
 
-For the Internet and mesh networks (AREDN). `remote` is a host and port
-(`gw.example.net:8774`) or a name the adapter maps to one; the link is a TLS connection; no
-callsigns are keyed. Useful for testing, and for a client with Internet that wants the same protocol
-as by radio.
+For the Internet, amateur mesh networks (AREDN), and tests. The adapter takes calls from other
+adapters on a TCP port (**8774** by default). `remote` is `CALLSIGN@host:port`, or `host:port`
+(whoever answers there), or a name the adapter's operator maps to one of these. No callsign is
+keyed and no band rules apply: `regulatory` is false.
+
+* **On the Internet the link is TLS**, version 1.2 or later. The caller checks the certificate of
+  the adapter it calls, by the usual roots of the web or by the certificate's SHA-256 fingerprint,
+  which the two operators exchange.
+* **On an amateur mesh network the link is plain TCP.** The mesh is on the air, and nothing on the
+  air is encrypted (RP-0 §5).
+
+Before any of the hosts' bytes, the two adapters agree to the link in one line each, ASCII ended by
+LF:
+
+| From | Line | Meaning |
+|---|---|---|
+| The caller | `RPTCP 1 <as> <called>` | Version 1; the callsign the caller calls as; the callsign called, or `*` when `remote` named only an address. |
+| The adapter called | `OK <callsign>` | The link is up. Its host listens and holds `<called>`; for `*`, the callsign is the host's first. |
+| The adapter called | `NO <code>` | No link: `refused` (no host, not listening, or not its callsign) or `busy` (a link or a call of its host's is up). It then closes the connection. |
+
+A line longer than 200 bytes, or one that does not read as above, ends the connection. The caller's
+host hears `connected` with `remote` the callsign `OK` named, or `failed` with `NO`'s code;
+`failed` `timeout` when no line comes within 30 seconds, and `refused` when the connection itself
+is refused. After the lines the link carries the hosts' bytes as they are, both ways. Either side
+closing it is the other's `disconnected` `remote`. `delivery` is false: TCP says when bytes have
+left, not when the other host holds them.
 
 ---
 
@@ -351,3 +376,4 @@ as by radio.
 | 0.3.1 | 2026-11-09 | §9.1: Aether shareable from 0.2.0-beta.146 (its ADR-0106): claims, `listen` on the claim, links by `owner`, and how Aether's answers and end reasons map to RPMI's; the WebSocket path is `/v1`. |
 | 0.4.0 | 2026-11-09 | Found by writing the Rust adapter and host: a request missing a member it needs, or with one of the wrong type, is `malformed`, and the order of the checks (§2); the members' types, `ref` a string or an integer, and a `connect` needs its `id` (§4); an adapter that is not shared turns a second host away `busy` (§1.1, §3, §7). Test vectors for each. |
 | 0.4.1 | 2026-11-09 | §9.1, found by writing the Aether adapter and running it against Aether 0.2.0-beta.146: `modem`'s name; the adapter's own references for `send`; `busy` while the host's own link is up; broadcasts as unformatted datagrams; a named bandwidth kept with `keep_bandwidth`, and `connected` carrying the one in use. |
+| 0.5.0 | 2026-11-09 | A host that leaves ends its call and its links (§1.1): the Aether adapter had let its callsigns go and left the session up, found by running the conformance tester's A-02 over two Aether daemons. §9.5, found by writing the TCP adapter: the link on an amateur mesh is plain TCP, since a mesh is on the air (RP-0 §5), and TLS only on the Internet; the opening lines two TCP adapters agree a link with (normative), the port, what `remote` may be, and what the caller's host hears. |

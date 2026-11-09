@@ -54,7 +54,19 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   a test and shows each test failing. Writing it found that RP-3 §2 never said what a frame over
   `max_pdu` gets (`too-large`, RP-3 0.10.0), and that a station called answers the caller's last
   turn with a `RECEIPT` alone (session-03), so a turn ends on a `RECEIPT` that covers what was
-  sent, not only on `DONE` or `REQUEST`.
+  sent, not only on `DONE` or `REQUEST`. Its `adapter` command runs A-01 to A-04 against any
+  adapter (`--at`, a second instance `--far`, `--reach` the far host's name in `connect`), with
+  waits long enough for a radio: they pass on the loopback, the TCP adapter and the Aether adapter
+  over two `aetherd` joined by `[sim]` (minutes there). Running them over Aether found that a host
+  leaving mid-session left the Aether session up, the station busy for everyone until Aether's link
+  timeout: RP-4 0.5.0 §1.1 now has a leaving host's call and links ended as `abort` would
+  (`Bridge::host_left`), and A-02 checks it.
+  `adapters/tcp` (`radiopost-tcp`) is RP-4 §9.5: links to other TCP adapters opened with one line
+  each way (`RPTCP 1 <as> <called>`, `OK <callsign>` or `NO <code>`), TLS on the Internet with
+  rustls and ring (a self-signed certificate made on first use, pinned by SHA-256 fingerprint, or
+  the web's roots), plain TCP with `--plain` on an amateur mesh, which is on the air (RP-4 0.5.0:
+  §9.5 and the design had put TLS on AREDN). One host, one link; for an Internet rehearsal before
+  the air (`docs/user/on-air-tests.md` §3).
   Station-to-station mail moves to `sent` and its RP-5 §6.6 report is kept (D30), from the proofs
   the engines now keep (`Client::proofs`, `Called::proofs`); the replay test matches session-03
   byte for byte and `direct.json`'s two reports. The engines report their own refusals

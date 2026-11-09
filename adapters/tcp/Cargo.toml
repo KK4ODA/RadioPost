@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+[package]
+name = "radiopost-tcp"
+description = "An RPMI adapter (RP-4) whose links are TCP connections to other adapters: TLS on the Internet, plain on an amateur mesh (RP-4 §9.5)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+# a member of the core workspace, so one lockfile and one CI job hold every crate
+workspace = "../../core"
+
+[dependencies]
+rpmi = { path = "../../core/rpmi" }
+serde_json = { version = "1", features = ["preserve_order"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "logging", "tls12"] }
+rcgen = { version = "0.14", default-features = false, features = ["ring", "pem"] }
+webpki-roots = "1"
+sha2 = "0.10"
+
+[dev-dependencies]
+radiopost-tester = { path = "../../core/tester" }
+
+[lints]
+workspace = true
