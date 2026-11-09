@@ -8,8 +8,9 @@
 
 use std::collections::HashMap;
 use std::io;
-use std::sync::Arc;
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use radiopost::ContentId;
@@ -49,7 +50,8 @@ pub enum Fetch {
 /// given, the session is reproducible, as the conformance tester's replay asks (its §2.4).
 #[derive(Clone, Debug)]
 pub struct Options {
-    /// The adapter's address (RP-4 §2).
+    /// The modem: an RPMI adapter's address (RP-4 §2), or Aether HF's control API (`ws://…`, RP-4
+    /// §9.1), for which this program runs the adapter itself.
     pub adapter: String,
     /// The program's name and version, for `hello`.
     pub app: String,
@@ -203,22 +205,47 @@ impl Engine for Answering {
     }
 }
 
+/// The address to reach a modem at: an RPMI adapter's `host:port` as given, or for Aether HF's
+/// control API (`ws://…`) the Aether adapter (RP-4 §9.1) this program runs for it, started on first
+/// use and kept, one for each address.
+fn adapter_for(modem: &str) -> Result<String, Error> {
+    static RUNNING: OnceLock<Mutex<HashMap<String, SocketAddr>>> = OnceLock::new();
+    if !modem.starts_with("ws://") {
+        return Ok(modem.to_owned());
+    }
+    let mut running = RUNNING
+        .get_or_init(Mutex::default)
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    if let Some(at) = running.get(modem) {
+        return Ok(at.to_string());
+    }
+    let at = radiopost_aether::serve::listen("127.0.0.1:0", modem)
+        .map_err(|e| format!("cannot start the Aether adapter: {e}"))?;
+    running.insert(modem.to_owned(), at);
+    Ok(at.to_string())
+}
+
 /// A connection to the adapter, with the host's requests numbered.
 struct Modem {
     conn: Connection,
     host: Host,
+    /// The modem as the user named it.
+    name: String,
 }
 
 impl Modem {
     fn open(store: &Store, opts: &Options) -> Result<(Modem, String), Error> {
         let me = store.me()?;
-        let conn = Connection::open(opts.adapter.as_str())
+        let adapter = adapter_for(&opts.adapter)?;
+        let conn = Connection::open(adapter.as_str())
             .map_err(|e| format!("cannot reach the modem's adapter at {}: {e}", opts.adapter))?;
         conn.set_timeout(Some(opts.quiet))
             .map_err(|e| e.to_string())?;
         let mut modem = Modem {
             conn,
             host: Host::new(),
+            name: opts.adapter.clone(),
         };
         let hello = modem.host.hello(&opts.app);
         modem.ask(&hello)?;
@@ -274,6 +301,12 @@ impl Modem {
                     text,
                 } if Some(i) == id.as_ref() => {
                     let op = request.get("op").and_then(Value::as_str).unwrap_or("");
+                    if code == "no-modem" {
+                        return Err(format!(
+                            "the modem at {} cannot be reached: is it running?",
+                            self.name
+                        ));
+                    }
                     return Err(format!(
                         "the modem refused {op}: {code}{}",
                         text.as_deref()

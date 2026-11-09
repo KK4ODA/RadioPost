@@ -41,7 +41,10 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   the newest stable (1.99 added `assert_is_empty`): run `rustup update stable` before linting.
   `app/client` (`radiopost-client`, the `radiopost` program, a member of the core workspace) is
   the client: home directory store, composing (NFC, LF), and `session::call`/`answer` over any
-  RPMI adapter; `rpmi-loopback` serves the simulated channel for running two clients by hand.
+  RPMI adapter; `rpmi-loopback` serves the simulated channel for running two clients by hand. A
+  modem given as `ws://…` is Aether's control API: the client runs the Aether adapter in-process.
+  `core/issuer` (`radiopost-issue`) makes a post office key and issues credentials for on-air
+  tests before Phase 2's post office; the vectors' keys never go on the air.
   Station-to-station mail moves to `sent` and its RP-5 §6.6 report is kept (D30), from the proofs
   the engines now keep (`Client::proofs`, `Called::proofs`); the replay test matches session-03
   byte for byte and `direct.json`'s two reports. The engines report their own refusals

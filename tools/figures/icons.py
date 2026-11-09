@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 """The client's icon: an envelope under two radio arcs, on a graphite tile.
 
-Writes the desktop application's icons (`app/src-tauri/icons/`: PNGs and a Windows ICO) and the
+Writes the desktop application's icons (`app/src-tauri/icons/`: PNGs, a Windows ICO and a macOS
+ICNS) and the
 panel's favicon (`app/ui/icon.svg`) from one geometry. Standard library only. The PNGs are drawn at
 512 pixels, two samples a side, and the smaller ones averaged down from it.
 
@@ -171,6 +172,27 @@ def ico_pixels(data: bytes) -> list[bytes]:
     return out
 
 
+# ICNS entry types holding PNG data, by size (Apple's icon family; macOS 10.7 and later).
+ICNS_TYPES = {32: b"icp5", 128: b"ic07", 256: b"ic08", 512: b"ic09"}
+
+
+def icns(images: list[tuple[int, bytes]]) -> bytes:
+    """A macOS icon family holding PNG images."""
+    body = b"".join(
+        ICNS_TYPES[size] + struct.pack(">I", 8 + len(data)) + data for size, data in images
+    )
+    return b"icns" + struct.pack(">I", 8 + len(body)) + body
+
+
+def icns_pixels(data: bytes) -> list[bytes]:
+    out, pos = [], 8
+    while pos < len(data):
+        (length,) = struct.unpack(">I", data[pos + 4 : pos + 8])
+        out.append(png_pixels(data[pos + 8 : pos + length]))
+        pos += length
+    return out
+
+
 def svg() -> str:
     def p(v: float) -> str:
         return f"{v * 64:g}"
@@ -225,6 +247,13 @@ def main() -> int:
             wrong.append(path)
     else:
         path.write_bytes(icon)
+    family = (32, 128, 256, 512)
+    path = ICONS / "icon.icns"
+    if check:
+        if not path.exists() or icns_pixels(path.read_bytes()) != [sizes[s] for s in family]:
+            wrong.append(path)
+    else:
+        path.write_bytes(icns([(s, png(sizes[s], s)) for s in family]))
     if check:
         if not FAVICON.exists() or FAVICON.read_text() != svg():
             wrong.append(FAVICON)
@@ -233,7 +262,7 @@ def main() -> int:
     for path in wrong:
         print(f"{path.relative_to(ROOT)} is not what icons.py draws", file=sys.stderr)
     if not check:
-        print(f"wrote {len(pngs) + 1} icons in {ICONS.relative_to(ROOT)} and {FAVICON.name}")
+        print(f"wrote {len(pngs) + 2} icons in {ICONS.relative_to(ROOT)} and {FAVICON.name}")
     return 1 if wrong else 0
 
 

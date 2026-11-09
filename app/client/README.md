@@ -30,8 +30,9 @@ radiopost [--home DIR] COMMAND
 | `listen` | Answers one station's call. |
 | `panel [--port N] [--ui DIR]` | Serves the panel on this computer (port 8620) and says where to open it. |
 
-`call` and `listen` take `--adapter HOST:PORT` (the modem's RPMI adapter, `127.0.0.1:8600` by
-default) and `--bandwidth HZ`. `--plain` sends messages uncompressed; `--clock`, `--nonce`,
+`call` and `listen` take `--adapter MODEM` and `--bandwidth HZ`. The modem is Aether HF's control
+API, `ws://127.0.0.1:8515/v1` as Aether runs it, for which the client runs the Aether adapter (RP-4
+§9.1) itself; or an RPMI adapter's `HOST:PORT` (`127.0.0.1:8600` by default, as RP-4 §2 has it). `--plain` sends messages uncompressed; `--clock`, `--nonce`,
 `--session-id` and `--challenge` fix the clock and the random draws, so that a session can be
 replayed exactly (the conformance tester's §2.4).
 
@@ -52,7 +53,9 @@ site's page cannot send without a preflight the panel never grants.
 
 `app/src-tauri` (`radiopost-app`) starts the panel's server in its own process, on port 8620 or
 another free one, and opens a window on it; the window grants the page no access to the
-application (no Tauri commands, no capabilities). It uses the same home as `radiopost`. It is a
+application (no Tauri commands, no capabilities). It uses the same home as `radiopost`. Closing
+the window while a call, a session or listening is under way asks first: closing ends it and
+leaves the other station waiting. It is a
 package of its own, outside the core workspace, because Tauri needs WebKitGTK on Linux:
 
 ```
@@ -60,9 +63,8 @@ sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev 
 cd app/src-tauri && cargo run
 ```
 
-Its icons are drawn by `tools/figures/icons.py` (with the panel's `icon.svg`); run it after
-changing the drawing, and CI checks them. Installers (`cargo tauri build`) and a macOS icon are
-for later.
+Its icons (PNGs, the Windows ICO, the macOS ICNS and the panel's `icon.svg`) are drawn by
+`tools/figures/icons.py`; run it after changing the drawing, and CI checks them.
 
 ## Two stations on one machine
 

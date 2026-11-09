@@ -300,6 +300,22 @@ fn two_clients_exchange_mail_with_the_program() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Aether HF named as the modem, and not running: said plainly.
+#[test]
+fn a_modem_not_running_is_said_plainly() {
+    let dir = scratch("no-modem");
+    let mut facundo = store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    // nothing listens on port 9 here: the adapter starts, and Aether cannot be reached
+    let opts = Options::new("ws://127.0.0.1:9/v1");
+    let e = session::call(&mut facundo, "N0CALL", Kind::Station, &opts, &mut |_| {})
+        .expect_err("no modem");
+    assert_eq!(
+        e,
+        "the modem at ws://127.0.0.1:9/v1 cannot be reached: is it running?"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn the_program_refuses_what_it_should() {
     let dir = scratch("refuses");

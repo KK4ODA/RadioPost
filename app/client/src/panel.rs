@@ -229,6 +229,13 @@ impl Panel {
             .with_header(Header::from_bytes("Cache-Control", "no-store").expect("a header"))
     }
 
+    /// What the station is doing: `idle`, `calling`, `listening` or `session`. A clone of the
+    /// panel kept before [`Panel::start`] reads the running panel's state.
+    #[must_use]
+    pub fn activity(&self) -> &'static str {
+        lock(&self.activity).state
+    }
+
     fn busy(&self) -> Result<(), Error> {
         match lock(&self.activity).state {
             "idle" => Ok(()),

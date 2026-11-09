@@ -1,6 +1,6 @@
 # RadioPost core
 
-The Rust workspace of RadioPost's programs (design D27, D28). So far it holds four crates; the
+The Rust workspace of RadioPost's programs (design D27, D28). So far it holds five crates; the
 adapter in `../adapters/` and the client in `../app/` are members here, so that one lockfile and one
 CI job hold them all:
 
@@ -9,6 +9,7 @@ CI job hold them all:
 | `radiopost` | RadioPost's objects as the specifications define them: deterministic CBOR (RP-0 §4.1), key IDs, signatures with a context and COSE_Sign1 (RP-0 §5), content IDs (RP-0 §6.3), messages and their air forms (RP-2), credentials (RP-1 §4, §5), session statements (RP-1 §6), PDU framing (RP-3 §2, §4), and the session protocol's engines (RP-3): the caller (`session::client`) and a client that answers a call (`session::called`, RP-3 §10). |
 | `radiopost-client` (`../app/client`) | The client ([its README](../app/client/README.md)): the device key and credential, the trusted post offices, the mail and its folders, and RP-3 sessions over any RPMI adapter, as the `radiopost` program, on the command line or as a panel in a browser (`../app/ui`). A station-to-station session's report (RP-5 §6.6) is kept for when there is a post office to send it to. |
 | `radiopost-aether` (`../adapters/aether`) | The RPMI adapter for Aether HF (RP-4 §9.1): each host that connects gets its own WebSocket to Aether's control API, and its callsigns are a claim there, so several hosts share one station. `bridge` maps one host onto one Aether connection with no input or output; `serve` and the `radiopost-aether` program put it on a port. |
+| `radiopost-issue` (`issuer`) | A post office's key and the credentials it issues (RP-1 §4), for on-air tests before the post office service exists (Phase 2): `radiopost-issue key`, `issue`, `trust`. The vectors' keys are published and never go on the air. |
 | `rpmi` | The modem interface (RP-4): its lines and requests (`wire`, standard base64 in `base64`), the host's side (`host`: requests numbered on a connection, the adapter's lines read as events, and `Carrier`, which joins one RP-3 session to one link), a simulated channel of stations and their adapters (`channel`: the loopback adapter, and the start of the conformance tester's test adapter), and that channel served on loopback TCP ports, with a host's connection to any adapter (`tcp`); `rpmi-loopback` is that channel as a program. |
 
 The engines and the channel take bytes or lines and give back bytes, lines and events, with no
