@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.15 |
+| **Version** | 0.1.16 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -94,6 +94,7 @@ reasoning; the specifications hold the result.
 | D23 | **Partners are configured and routes published; gateways announce nothing** (RP-7 §5, §6). A cut-off gateway keeps its records up to an hour for a partner that last said it reaches the post offices (§6.2). | An area has a few gateways, and their operators know each other. An announcement would have to be trusted: one false one draws an area's mail to a station that cannot pass it on. What a partner said in its last session is enough to prefer one that reaches the Internet, and the hour is less than a detour through a cut-off partner, which waits for a window at every hop. | Gateways announcing what they reach (trust, and checks at every gateway); handing records to whichever partner answers first (detours through cut-off partners); waiting for an online partner however long (mail held while another way is open). |
 | D24 | **A cut-off gateway hands mail between its own users** (RP-7 §4.4): the addresses it received copies for in the last 30 days. | In a cut-off area much of the mail that matters is between neighbours, a shelter and the emergency operations centre, and it should not wait for the Internet or a partner's window. The copies say who uses the gateway with no list to keep. The record still takes the message to the post office, which checks it again and marks it picked up. | Waiting for the post office (no mail within the area while it is cut off); keeping mail for any address (the gateway would hold mail for strangers); going through the partner (a window and a round trip for mail that never leaves the area). |
 | D25 | **Mail dropped unsent is the sender's client's to track** (RP-7 §3.6): it keeps what a cut-off gateway took, offers it again until an online gateway confirms it, and tells the sender after 30 days. | Only the client knows what it sent: the gateway may be lost or have dropped the record, and the post office never heard of the message. Offers already carry content IDs and the post office already declines what it holds, so confirming costs a few bytes in sessions the client makes anyway. | The gateway telling the sender (only if the sender calls it again, and a dropped record leaves it nothing to say); a receipt by radio for every message (air time for all mail, not just the lost); keeping records for ever (a gateway's storage is finite, and a record that cannot leave in 30 days is unlikely to). |
+| D26 | **A window states the band its signal occupies, and each station checks it against its own country's table** (RP-7 §5, §5.1). RadioPost keeps the tables, the United States' first; a gateway with no table forwards only when attended. | Both stations transmit in a forwarding session, each under its own rules, and the caller may be in another country. Stating `occupied_hz` lets it check without knowing the partner's modem. Read from the rules' text and dated, the tables change with a spec version, where they can be checked. | Trusting the partner's publication (its rules may not be the caller's); each operator's own judgement only (easy to get wrong unattended); the modem alone (not every modem checks, RP-4 §8). |
 
 ---
 
@@ -292,7 +293,7 @@ Collected from the specifications and the concept, each to be settled in the doc
 | ARDOP's host interface, checked against its specification. | RP-4 §9.3 |
 | Third-party traffic: the table of agreements, and knowing a sender's country. | RP-6 §5 |
 | Stalwart: MTA hooks or milter; AGPL for operators; clustering's edition. | Concept §13 |
-| Forwarding: the bands per country. | RP-7 §8 |
+| Forwarding: segment tables for other countries, and the US bands of shorter wavelength than 6 m. | RP-7 §8 |
 | The reference implementations' languages and packaging. | §6 here |
 
 ---
@@ -317,3 +318,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.13 | 2026-11-09 | D25: mail dropped unsent is the sender's client's to track (RP-7 0.4.0). |
 | 0.1.14 | 2026-11-09 | D6 covers `PROOF` (RP-7 0.5.0). |
 | 0.1.15 | 2026-11-09 | D23: gateways announce nothing, and how a cut-off gateway chooses among its partners (RP-7 0.6.0). |
+| 0.1.16 | 2026-11-09 | D26: the bands open to unattended forwarding (RP-7 0.7.0). |

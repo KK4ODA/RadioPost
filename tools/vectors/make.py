@@ -2792,8 +2792,18 @@ FWD_FACUNDO_STARTED = T_WINDOW - 3 * 3600 - 1800 + 28
 FWD_CLOCK = T_WINDOW + 20  # N2CALL-5's clock when it calls
 FWD_PARTNER_CLOCK = FWD_CLOCK + 33  # N1CALL-10's
 FWD_AUTO = 65536  # what N2CALL-5 takes unasked: everything
+# Aether's 2 300 Hz signal occupies 240-2 760 Hz of audio by the wider reading of §97.3(a)(8)
+# (measured: aether-hf core/aetherd/data/occupancy.json); on a USB dial, add the dial.
+AETHER_2300_HZ = (240, 2760)
+AETHER_500_HZ = (1143, 1857)
 WINDOW = {
-    "channel": {"dial_hz": 7101000, "mode": "USB", "modem": "aether", "bandwidth_hz": 2300},
+    "channel": {
+        "dial_hz": 7101000,
+        "mode": "USB",
+        "modem": "aether",
+        "bandwidth_hz": 2300,
+        "occupied_hz": [7101000 + AETHER_2300_HZ[0], 7101000 + AETHER_2300_HZ[1]],
+    },
     "every_s": 3600,
     "at_s": 900,
     "length_s": 600,
@@ -3048,6 +3058,15 @@ def make_forwarding_session() -> dict[str, Any]:
     return out
 
 
+def spec_segments(country: str) -> list[tuple[int, int]]:
+    """RP-7 §5.1's table for `country`, read from the specification itself."""
+    text = (ROOT / "spec" / "rp-0007-forwarding.md").read_text(encoding="utf-8")
+    names = {"US": "**United States**"}
+    part = text.split(names[country], 1)[1].split("\n\n", 2)[1]
+    rows = [r.split("|")[2:4] for r in part.splitlines()[2:]]
+    return [(int(a.replace(" ", "")), int(b.replace(" ", ""))) for a, b in rows]
+
+
 def make_forwarding() -> dict[str, Any]:
     story, item = forwarding_story()
     placement = jws.unb64u(item["placement"])
@@ -3182,6 +3201,49 @@ def make_forwarding() -> dict[str, Any]:
             "both the credential and its hash": "malformed",
         },
     )
+    assert spec_segments("US") == fwd.SEGMENTS["US"]
+
+    def usb(dial: int, audio: tuple[int, int] = AETHER_2300_HZ) -> list[int]:
+        return [dial + audio[0], dial + audio[1]]
+
+    window_in = [
+        ("N1CALL-10's window: 7.101 MHz, Aether 2 300 Hz", WINDOW["channel"]["occupied_hz"], "US"),
+        ("7.103 MHz: the signal runs past 7.105", usb(7103000), "US"),
+        ("3.590 MHz, Aether 500 Hz", usb(3590000, AETHER_500_HZ), "US"),
+        ("14.0975 MHz: across the beacons at 14.100", usb(14097500), "US"),
+        ("14.101 MHz, above the beacons", usb(14101000), "US"),
+        ("60 m, 5.357 MHz: no automatic control", usb(5357000), "US"),
+        ("6 m, 50.690 MHz", usb(50690000), "US"),
+        ("6 m, 50.050 MHz: CW only below 50.1", usb(50050000), "US"),
+        ("exactly 7.100 to 7.105 MHz: the ends count", [7100000, 7105000], "US"),
+        ("one hertz past 3.600 MHz", [3597600, 3600001], "US"),
+        ("7.101 MHz from a country with no table here", WINDOW["channel"]["occupied_hz"], "CA"),
+    ]
+    window_cases = [
+        {
+            "what": what,
+            "occupied_hz": occupied,
+            "country": country,
+            "expect": fwd.window_allowed(occupied, country),
+        }
+        for what, occupied, country in window_in
+    ]
+    confirm(  # RP-7 §5, §5.1: inside one segment of the station's own table, ends included
+        window_cases,
+        {
+            "N1CALL-10's window: 7.101 MHz, Aether 2 300 Hz": True,
+            "7.103 MHz: the signal runs past 7.105": False,
+            "3.590 MHz, Aether 500 Hz": True,
+            "14.0975 MHz: across the beacons at 14.100": False,
+            "14.101 MHz, above the beacons": True,
+            "60 m, 5.357 MHz: no automatic control": False,
+            "6 m, 50.690 MHz": True,
+            "6 m, 50.050 MHz: CW only below 50.1": False,
+            "exactly 7.100 to 7.105 MHz: the ends count": True,
+            "one hertz past 3.600 MHz": False,
+            "7.101 MHz from a country with no table here": False,
+        },
+    )
     now = T_WINDOW + 1860  # 14:46, in N4CALL-2's window
     n4 = {"every_s": 3600, "at_s": 2700, "length_s": 600}
 
@@ -3277,6 +3339,8 @@ def make_forwarding() -> dict[str, Any]:
         "office keys of keys.json, returns `expect` (RP-7 §4.3). A record's ID is SHA-256 of its "
         "statement, cut to 12 bytes (RP-7 §3.1). A partner (`me`) holding the credentials "
         "`held_hex` and checking a PROOF case from `caller` returns `expect` (RP-7 §3.2, §3.3). "
+        "A station of `country` may publish or call in a window whose signal occupies "
+        "`occupied_hz` when `expect` is true (RP-7 §5, §5.1). "
         "A cut-off gateway in `calling`'s window at `now`, knowing `partners`, sends it its "
         "records when `expect` is true (RP-7 §5, §6.2). The post office's exchanges read as in "
         "api-exchanges.json."
@@ -3306,6 +3370,11 @@ def make_forwarding() -> dict[str, Any]:
     out["placement_cases"] = placement_cases
     out["records"] = entries
     out["proof_cases"] = proof_cases
+    out["window_cases"] = window_cases
+    out["segments"] = {
+        "US": [list(seg) for seg in fwd.SEGMENTS["US"]],
+        "rule": "47 CFR §97.221(b), §97.305(c); RP-7 §5.1",
+    }
     out["partner_cases"] = partner_cases
     out["post_office"] = story
     return out
@@ -5072,6 +5141,11 @@ def check_forwarding(data: dict[str, Any]) -> None:
     for sent, r in zip(reports[0]["request"]["body"]["sessions"], data["records"], strict=True):
         pdu = cbor.decode(bytes.fromhex(r["proof"]["pdu_hex"]))
         assert jws.unb64u(sent["statement"]) == pdu[2] and sent["path"] == [*pdu[6], "N1CALL-10"]
+    assert [tuple(seg) for seg in data["segments"]["US"]] == spec_segments("US")  # RP-7 §5.1
+    for case in data["window_cases"]:
+        low, high = case["occupied_hz"]
+        table = data["segments"].get(case["country"], [])
+        assert case["expect"] == any(a <= low and high <= b for a, b in table)
     for case in data["partner_cases"]:  # RP-7 §5: each is in the window of the partner called
         w = case["partners"][case["calling"]]["window"]
         assert (case["now"] - w["at_s"]) % w["every_s"] < w["length_s"]

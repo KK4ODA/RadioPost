@@ -6,7 +6,7 @@
     "RP-5": "§5.6, §5.8"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "A placement made from `placement_body` with radiopost.org's key is exactly `placement_hex`; a gateway checking a placement case with `me` and `now`, and the post office keys of keys.json, returns `expect` (RP-7 §4.3). A record's ID is SHA-256 of its statement, cut to 12 bytes (RP-7 §3.1). A partner (`me`) holding the credentials `held_hex` and checking a PROOF case from `caller` returns `expect` (RP-7 §3.2, §3.3). A cut-off gateway in `calling`'s window at `now`, knowing `partners`, sends it its records when `expect` is true (RP-7 §5, §6.2). The post office's exchanges read as in api-exchanges.json.",
+  "rule": "A placement made from `placement_body` with radiopost.org's key is exactly `placement_hex`; a gateway checking a placement case with `me` and `now`, and the post office keys of keys.json, returns `expect` (RP-7 §4.3). A record's ID is SHA-256 of its statement, cut to 12 bytes (RP-7 §3.1). A partner (`me`) holding the credentials `held_hex` and checking a PROOF case from `caller` returns `expect` (RP-7 §3.2, §3.3). A station of `country` may publish or call in a window whose signal occupies `occupied_hz` when `expect` is true (RP-7 §5, §5.1). A cut-off gateway in `calling`'s window at `now`, knowing `partners`, sends it its records when `expect` is true (RP-7 §5, §6.2). The post office's exchanges read as in api-exchanges.json.",
   "context": {
     "cut_off_at": 1794471300,
     "cut_off_after_s": 900,
@@ -22,7 +22,11 @@
         "dial_hz": 7101000,
         "mode": "USB",
         "modem": "aether",
-        "bandwidth_hz": 2300
+        "bandwidth_hz": 2300,
+        "occupied_hz": [
+          7101240,
+          7103760
+        ]
       },
       "every_s": 3600,
       "at_s": 900,
@@ -226,6 +230,152 @@
       "expect": "malformed"
     }
   ],
+  "window_cases": [
+    {
+      "what": "N1CALL-10's window: 7.101 MHz, Aether 2 300 Hz",
+      "occupied_hz": [
+        7101240,
+        7103760
+      ],
+      "country": "US",
+      "expect": true
+    },
+    {
+      "what": "7.103 MHz: the signal runs past 7.105",
+      "occupied_hz": [
+        7103240,
+        7105760
+      ],
+      "country": "US",
+      "expect": false
+    },
+    {
+      "what": "3.590 MHz, Aether 500 Hz",
+      "occupied_hz": [
+        3591143,
+        3591857
+      ],
+      "country": "US",
+      "expect": true
+    },
+    {
+      "what": "14.0975 MHz: across the beacons at 14.100",
+      "occupied_hz": [
+        14097740,
+        14100260
+      ],
+      "country": "US",
+      "expect": false
+    },
+    {
+      "what": "14.101 MHz, above the beacons",
+      "occupied_hz": [
+        14101240,
+        14103760
+      ],
+      "country": "US",
+      "expect": true
+    },
+    {
+      "what": "60 m, 5.357 MHz: no automatic control",
+      "occupied_hz": [
+        5357240,
+        5359760
+      ],
+      "country": "US",
+      "expect": false
+    },
+    {
+      "what": "6 m, 50.690 MHz",
+      "occupied_hz": [
+        50690240,
+        50692760
+      ],
+      "country": "US",
+      "expect": true
+    },
+    {
+      "what": "6 m, 50.050 MHz: CW only below 50.1",
+      "occupied_hz": [
+        50050240,
+        50052760
+      ],
+      "country": "US",
+      "expect": false
+    },
+    {
+      "what": "exactly 7.100 to 7.105 MHz: the ends count",
+      "occupied_hz": [
+        7100000,
+        7105000
+      ],
+      "country": "US",
+      "expect": true
+    },
+    {
+      "what": "one hertz past 3.600 MHz",
+      "occupied_hz": [
+        3597600,
+        3600001
+      ],
+      "country": "US",
+      "expect": false
+    },
+    {
+      "what": "7.101 MHz from a country with no table here",
+      "occupied_hz": [
+        7101240,
+        7103760
+      ],
+      "country": "CA",
+      "expect": false
+    }
+  ],
+  "segments": {
+    "US": [
+      [
+        3585000,
+        3600000
+      ],
+      [
+        7100000,
+        7105000
+      ],
+      [
+        10140000,
+        10150000
+      ],
+      [
+        14095000,
+        14099500
+      ],
+      [
+        14100500,
+        14112000
+      ],
+      [
+        18105000,
+        18110000
+      ],
+      [
+        21090000,
+        21100000
+      ],
+      [
+        24925000,
+        24930000
+      ],
+      [
+        28120000,
+        28189000
+      ],
+      [
+        50100000,
+        54000000
+      ]
+    ],
+    "rule": "47 CFR §97.221(b), §97.305(c); RP-7 §5.1"
+  },
   "partner_cases": [
     {
       "what": "N1CALL-10, which said `online` true",
@@ -238,7 +388,11 @@
               "dial_hz": 7101000,
               "mode": "USB",
               "modem": "aether",
-              "bandwidth_hz": 2300
+              "bandwidth_hz": 2300,
+              "occupied_hz": [
+                7101240,
+                7103760
+              ]
             },
             "every_s": 3600,
             "at_s": 900,
@@ -268,7 +422,11 @@
               "dial_hz": 7101000,
               "mode": "USB",
               "modem": "aether",
-              "bandwidth_hz": 2300
+              "bandwidth_hz": 2300,
+              "occupied_hz": [
+                7101240,
+                7103760
+              ]
             },
             "every_s": 3600,
             "at_s": 900,
@@ -298,7 +456,11 @@
               "dial_hz": 7101000,
               "mode": "USB",
               "modem": "aether",
-              "bandwidth_hz": 2300
+              "bandwidth_hz": 2300,
+              "occupied_hz": [
+                7101240,
+                7103760
+              ]
             },
             "every_s": 3600,
             "at_s": 900,
@@ -328,7 +490,11 @@
               "dial_hz": 7101000,
               "mode": "USB",
               "modem": "aether",
-              "bandwidth_hz": 2300
+              "bandwidth_hz": 2300,
+              "occupied_hz": [
+                7101240,
+                7103760
+              ]
             },
             "every_s": 3600,
             "at_s": 900,
@@ -357,7 +523,11 @@
               "dial_hz": 7101000,
               "mode": "USB",
               "modem": "aether",
-              "bandwidth_hz": 2300
+              "bandwidth_hz": 2300,
+              "occupied_hz": [
+                7101240,
+                7103760
+              ]
             },
             "every_s": 3600,
             "at_s": 900,

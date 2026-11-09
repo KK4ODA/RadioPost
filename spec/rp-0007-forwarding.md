@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.6.0 |
+| **Version** | 0.7.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -282,9 +282,13 @@ A gateway that takes calls from partners publishes its **windows** in its record
 
 ```json
 "forwarding": [{"channel": {"dial_hz": 7101000, "mode": "USB", "modem": "aether",
-                            "bandwidth_hz": 2300},
+                            "bandwidth_hz": 2300, "occupied_hz": [7101240, 7103760]},
                 "every_s": 3600, "at_s": 900, "length_s": 600}]
 ```
+
+`occupied_hz` is the lowest and highest radio frequency of the signal, as its modem measures its
+occupied bandwidth (US: §97.3(a)(8), 26 dB down). Here Aether's 2 300 Hz signal, which occupies 240
+to 2 760 Hz of audio by the wider reading of that rule, on a USB dial of 7.101 MHz.
 
 A window opens `at_s` seconds after each multiple of `every_s` since the Unix epoch, and lasts
 `length_s` seconds: here at :15 past every hour, for ten minutes. During a window the gateway
@@ -295,9 +299,40 @@ answered it tries again at most twice in the same window, a minute apart, then w
 window. It does not call on a channel its modem reports busy (RP-4 §5). An attended station MAY
 call a partner at any time.
 
-**The rules.** A window's channel MUST be in a segment where the stations' control allows them to
-start transmissions: an unattended gateway only where automatic control is allowed (US:
-§97.221(b)). The modem's checks, or the gateway's own, enforce it (RP-4 §8).
+**The rules.** Both stations start transmissions in a forwarding session, each under its own
+country's rules. So a gateway publishes a window, and a cut-off gateway calls in one, only when the
+window's `occupied_hz` lies inside one segment of its own table (§5.1), ends included. The modem's
+checks, or the gateway's own, enforce it as well (RP-4 §8). An attended station keeps to the rules
+for its own control.
+
+### 5.1 Segments open to unattended forwarding
+
+A gateway holds the segments where its country's rules let a station under automatic control start
+a data transmission. RadioPost keeps here the tables it knows, each read from the rules' text, with
+the date it was read. A gateway in a country with no table here uses the segments its operator
+enters from that country's rules; with none, it publishes no window and calls no partner while
+unattended. A new country or a correction comes with the rule cited.
+
+**United States**, ITU Region 2: 47 CFR §97.221(b), with §97.305(c) for where data is allowed;
+read from the e-CFR text current to 2026-09-23 (6 m to 2026-09-24). Hertz.
+
+| Band | From | To |
+|---|---|---|
+| 80 m | 3 585 000 | 3 600 000 |
+| 40 m | 7 100 000 | 7 105 000 |
+| 30 m | 10 140 000 | 10 150 000 |
+| 20 m | 14 095 000 | 14 099 500 |
+| 20 m | 14 100 500 | 14 112 000 |
+| 17 m | 18 105 000 | 18 110 000 |
+| 15 m | 21 090 000 | 21 100 000 |
+| 12 m | 24 925 000 | 24 930 000 |
+| 10 m | 28 120 000 | 28 189 000 |
+| 6 m | 50 100 000 | 54 000 000 |
+
+§97.221(b) opens the 6 m and shorter bands whole; data starts at 50.1 MHz on 6 m (§97.305(c)), and
+the bands of shorter wavelength are not listed yet. §97.221(c), automatic control anywhere in the data segments
+for a signal of 500 Hz or less, needs a station under local or remote control asking: it does not
+cover two unattended gateways.
 
 ---
 
@@ -347,7 +382,8 @@ called counts as neither.
 
 ## 8. Not yet settled
 
-* **Bands.** A table, per country, of the segments open to unattended forwarding.
+* **Tables.** Segments for countries other than the United States, and for the US bands of
+  shorter wavelength than 6 m (§5.1).
 
 ---
 
@@ -375,8 +411,9 @@ All with framing, from `vectors/session-04.json`, `vectors/forwarding.json`,
 `vectors/session-04.json` is a forwarding session byte for byte: N2CALL-5, cut off, calls N1CALL-10
 in its window, sends two records and Shelter 3's message, and receives Ana's message with its
 placement. `vectors/forwarding.json` has the placement and seven checks of it, the records and
-eleven checks of a `PROOF` (four of them with the credential's hash), eight choices of whether to
-send records to a partner (§6.2), and the post office's side: the forward item placed when N2CALL-5 fell
+eleven checks of a `PROOF` (four of them with the credential's hash), eleven windows checked against
+the United States' table (§5, §5.1), eight choices of whether to send records to a partner (§6.2),
+and the post office's side: the forward item placed when N2CALL-5 fell
 silent, N1CALL-10's report with its path, and the drop when N2CALL-5 came back.
 
 `vectors/session-05.json` is local delivery byte for byte: Shelter 3 hands N2CALL-5, cut off, a
@@ -404,3 +441,4 @@ online, which declines the message `already-have` because the post office alread
 | 0.4.0 | 2026-11-09 | Mail dropped unsent (§3.6): a message a cut-off gateway takes is queued, and the sender's client keeps it, offers it again and tells the sender; a cut-off gateway declines what it holds or passed on in the last 30 days (§3.5), and forgets a record it drops (§7); test vectors (§10). |
 | 0.5.0 | 2026-11-09 | Size: `PROOF` key 9 `credential_hash` in place of the credential when the partner holds it, which halves a `PROOF` (§3.2); the partner's checks begin with the credential, `credential-required` for a hash it does not hold (§3.3); sizes (§9); test vectors (§10). |
 | 0.6.0 | 2026-11-09 | Routing: gateways do not announce what they reach; a cut-off gateway keeps its records for a partner that reaches the post offices when one opens a window within the hour (§6.2); §6 split into radio routes (§6.1) and the choice (§6.2); test vectors (§10). |
+| 0.7.0 | 2026-11-09 | Bands: a window states `occupied_hz`, and each station checks it against its own country's table (§5); the segments open to unattended forwarding, with the United States' table (§5.1); test vectors (§10). |

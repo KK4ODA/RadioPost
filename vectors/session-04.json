@@ -16,7 +16,11 @@
         "dial_hz": 7101000,
         "mode": "USB",
         "modem": "aether",
-        "bandwidth_hz": 2300
+        "bandwidth_hz": 2300,
+        "occupied_hz": [
+          7101240,
+          7103760
+        ]
       },
       "every_s": 3600,
       "at_s": 900,

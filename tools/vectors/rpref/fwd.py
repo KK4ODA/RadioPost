@@ -15,6 +15,20 @@ MAX_PATH = 8  # RP-7 §3.3
 LOCAL_DAYS = 30  # RP-7 §4.4: how long a copy makes its address a local user
 KEEP_DAYS = 30  # RP-7 §3.6, §7: how long a record is kept, and a message passed on remembered
 HOLD_S = 3600  # RP-7 §6.2: how long records wait for a partner that reaches the post offices
+SEGMENTS = {  # RP-7 §5.1: where automatic control may start a data transmission, hertz
+    "US": [
+        (3_585_000, 3_600_000),
+        (7_100_000, 7_105_000),
+        (10_140_000, 10_150_000),
+        (14_095_000, 14_099_500),
+        (14_100_500, 14_112_000),
+        (18_105_000, 18_110_000),
+        (21_090_000, 21_100_000),
+        (24_925_000, 24_930_000),
+        (28_120_000, 28_189_000),
+        (50_100_000, 54_000_000),
+    ],
+}
 PROOF = 11  # RP-3 §4
 
 
@@ -184,6 +198,12 @@ def next_window(window: dict[str, Any], now: int) -> int:
     every, at = window["every_s"], window["at_s"]
     start = (now - at) // every * every + at
     return start if now < start + window["length_s"] else start + every
+
+
+def window_allowed(occupied: list[int], country: str) -> bool:
+    """RP-7 §5: the signal lies inside one segment of the country's table, ends included."""
+    low, high = occupied
+    return low <= high and any(a <= low and high <= b for a, b in SEGMENTS.get(country, []))
 
 
 def records_to(partner: str, partners: dict[str, dict[str, Any]], now: int) -> bool:
