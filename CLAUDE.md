@@ -10,8 +10,11 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   session protocol, RP-4 modem interface (RPMI), RP-5 post office API, RP-6 email, RP-7 forwarding
   (a draft). `spec/README.md` is the index. Where a program and a spec disagree, the spec wins.
 - `docs/concept/` — the plain-language concept, with schematics.
-- `docs/design/` — the detailed design: the map, decisions D1–D26, the programs' parts, the order of
+- `docs/design/` — the detailed design: the map, decisions D1–D29, the programs' parts, the order of
   work, the open questions.
+- **Code** (Phase 1 on, D27, D28): Rust throughout, in this repository — `core/`, a Cargo
+  workspace (the core library, the gateway, the service), `app/` (the Tauri client) and `adapters/`.
+  The core is checked against `vectors/` in CI.
 - `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`. Standard
   library only; `ruff.toml` holds the lint settings.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`
@@ -65,4 +68,11 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
 - No compatibility with Winlink's programs or B2F; a new client.
 - Priorities for the Internet-down features: copies placed ahead, the gateway's queue, then
   forwarding by radio.
-- Stalwart as the post office's mail server (others possible behind JMAP/SMTP).
+- Stalwart as the post office's mail server (others possible behind JMAP/SMTP); the door answers
+  its MTA hooks (D29).
+- (2026-11-09) Rust throughout, specs and code in this repository (D27, D28); credentials and
+  placements as COSE_Sign1; station-to-station mail reported to the post office over the Internet;
+  radiopost.org enrolls on an LoTW certificate or the sysop's check; third-party mail flagged by the
+  post office and checked by the gateway against the receiving station's country (§97.115); any
+  post office found in DNS trusted, the operator deciding; the Zstandard dictionary trained only on
+  a published corpus, adopted only if it beats DEFLATE by a measured margin.
