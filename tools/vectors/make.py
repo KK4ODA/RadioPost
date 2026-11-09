@@ -556,12 +556,32 @@ def make_messages() -> dict[str, Any]:
             "expect": "malformed",
         },
     ]
-    out = header("Messages: canonical encodings, content IDs, air forms", {"RP-2": "§2–§4"})
+    good = rp.id_text(encoded("maria-419")[1])
+    ids_in = [
+        (good[:-1], "19 characters"),
+        (good + "a", "21 characters"),
+        (good.upper(), "upper case"),
+        (good[:5] + "1" + good[6:], "a 1, not in the alphabet"),
+        (good[:-1] + "b", "the last character's unused bits not zero"),
+        (good[:-1] + "=", "padding"),
+    ]
+    id_cases = [
+        {"text": t, "why": why, "expect": "ok" if rp.id_bytes(t) is not None else "not an ID"}
+        for t, why in ids_in
+    ]
+    confirm(  # RP-0 §6.3: 20 lowercase base32 characters, one text for each ID
+        id_cases, {why: "not an ID" for _, why in ids_in}, by="why"
+    )
+    out = header(
+        "Messages: canonical encodings, content IDs, air forms", {"RP-2": "§2–§4", "RP-0": "§6.3"}
+    )
     out["rule"] = (
         "From `fields`, an encoder produces exactly `canonical_hex`; its content ID is "
-        "`content_id_hex`. Every air form decodes to `canonical_hex`. An air form marked "
-        "`exact: false` is one valid DEFLATE stream among many: check that it inflates, not that "
-        "you produce the same bytes. Every `invalid` air form is refused as `malformed`."
+        "`content_id_hex`, written `content_id_text`. Every air form decodes to `canonical_hex`. "
+        "An air form marked `exact: false` is one valid DEFLATE stream among many: check that it "
+        "inflates, not that you produce the same bytes. Every `invalid` air form is refused as "
+        "`malformed`, and every `invalid_ids` text is not a content ID: 96 bits leave the last "
+        "character 4 unused bits, which are zero, so that each ID has one text."
     )
     out["fields_note"] = (
         "Field names are RP-2 §2's; a name ending in `_hex` holds bytes. `files` and `held` items "
@@ -570,6 +590,7 @@ def make_messages() -> dict[str, Any]:
     )
     out["messages"] = entries
     out["invalid"] = invalid
+    out["invalid_ids"] = id_cases
     return out
 
 
@@ -816,6 +837,16 @@ def make_credentials() -> dict[str, Any]:
             resigned({1: rp.COSE_ED25519, 4: rad_kid}, {3: 0}),
         ),
         (
+            "signed by radiopost.org's new key before its validity",
+            None,
+            T_SESSION,
+            ["send"],
+            {},
+            rp.make_credential(
+                credential_body(CREDENTIALS["facundo"]), SECRET["po:radiopost.org:new"]
+            )[3],
+        ),
+        (
             "header naming radiopost.org's previous key, not the signer",
             None,
             T_SESSION,
@@ -870,6 +901,7 @@ def make_credentials() -> dict[str, Any]:
             "signed and valid, but EdDSA (-8) in place of Ed25519 (-19)": "credential-invalid",
             "signed and valid, but a header left unprotected": "credential-invalid",
             "header naming radiopost.org's previous key, not the signer": "credential-invalid",
+            "signed by radiopost.org's new key before its validity": "credential-invalid",
         },
     )
     out = header("Credentials and how they verify", {"RP-1": "§4–§5, §8", "RP-0": "§5, §9.3"})

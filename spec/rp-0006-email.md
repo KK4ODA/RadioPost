@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.0 |
+| **Version** | 0.3.1 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -143,7 +143,7 @@ from a gateway, so that its DKIM signature and SPF match its domain.
 | `To:`, `Cc:` | `to`, `cc`. |
 | `Date:` | `date`, as RFC 5322 date-time in UTC, written `+0000`: `Mon, 09 Nov 2026 14:30:00 +0000`. |
 | `Subject:` | `subject`, encoded if needed (RFC 2047). |
-| `Message-ID:` | `<` the content ID in base32 `@` the sender's domain `>`: `<k3q7m2x9a4d8f6h1j5n0@radiopost.org>`. |
+| `Message-ID:` | `<` the content ID in base32 `@` the sender's domain `>`: `<kdj2eowb2e7wqq4y5ttq@radiopost.org>`. |
 | `In-Reply-To:`, `References:` | When `reply_to` names a message whose `Message-ID` the post office knows (§2.4, step 8). |
 | `Radio-Path:` | §3.2. |
 | `Importance:` | `high` when `priority` is 1 or 2. |
@@ -331,3 +331,4 @@ and the session files.
 | 0.2.1 | 2026-11-09 | §2.2: how writing to an address adds it, and how that is turned off, are RP-5 §6.5 and §6.3. |
 | 0.2.2 | 2026-11-09 | §3.2: after forwarding, `Radio-Path` names each gateway of the path (RP-7). |
 | 0.3.0 | 2026-11-09 | Third-party traffic (§5.1), from §97.115's text: the receiving station's country decides, not the sender's; the post office flags mail whose sender is not shown to be licensed; the gateway hands it only to stations of its own country or one with an arrangement, read from the operating callsign, with the US table from the ARRL's list; §5 becomes normative. |
+| 0.3.1 | 2026-11-09 | §3.1: the example `Message-ID` holds a real content ID (RP-0 §6.3) |

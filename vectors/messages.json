@@ -2,10 +2,11 @@
   "radiopost_vectors": "Messages: canonical encodings, content IDs, air forms",
   "format": 1,
   "specs": {
-    "RP-2": "§2–§4"
+    "RP-2": "§2–§4",
+    "RP-0": "§6.3"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "From `fields`, an encoder produces exactly `canonical_hex`; its content ID is `content_id_hex`. Every air form decodes to `canonical_hex`. An air form marked `exact: false` is one valid DEFLATE stream among many: check that it inflates, not that you produce the same bytes. Every `invalid` air form is refused as `malformed`.",
+  "rule": "From `fields`, an encoder produces exactly `canonical_hex`; its content ID is `content_id_hex`, written `content_id_text`. Every air form decodes to `canonical_hex`. An air form marked `exact: false` is one valid DEFLATE stream among many: check that it inflates, not that you produce the same bytes. Every `invalid` air form is refused as `malformed`, and every `invalid_ids` text is not a content ID: 96 bits leave the last character 4 unused bits, which are zero, so that each ID has one text.",
   "fields_note": "Field names are RP-2 §2's; a name ending in `_hex` holds bytes. `files` and `held` items use the names of RP-2 §2 (name, type, data or size, ref). A field named with a number is that CBOR key.",
   "messages": [
     {
@@ -518,6 +519,38 @@
       "why": "the `v` key is missing",
       "air_hex": "00a502656140622e630381656440652e66050006600760",
       "expect": "malformed"
+    }
+  ],
+  "invalid_ids": [
+    {
+      "text": "i42cuqd7g7jrrgxx67a",
+      "why": "19 characters",
+      "expect": "not an ID"
+    },
+    {
+      "text": "i42cuqd7g7jrrgxx67aqa",
+      "why": "21 characters",
+      "expect": "not an ID"
+    },
+    {
+      "text": "I42CUQD7G7JRRGXX67AQ",
+      "why": "upper case",
+      "expect": "not an ID"
+    },
+    {
+      "text": "i42cu1d7g7jrrgxx67aq",
+      "why": "a 1, not in the alphabet",
+      "expect": "not an ID"
+    },
+    {
+      "text": "i42cuqd7g7jrrgxx67ab",
+      "why": "the last character's unused bits not zero",
+      "expect": "not an ID"
+    },
+    {
+      "text": "i42cuqd7g7jrrgxx67a=",
+      "why": "padding",
+      "expect": "not an ID"
     }
   ]
 }

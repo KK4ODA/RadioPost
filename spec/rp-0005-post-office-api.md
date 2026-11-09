@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.11.1 |
+| **Version** | 0.11.2 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -206,7 +206,7 @@ Sent when a user's `HELLO` arrives (RP-3 §9), while the link turns around.
   "started": 1794326441,
   "gateway_session": "ec7b31841ec47c47",
   "cursor": 418,
-  "partials": [{"id": "k3q7m2x9a4d8f6h1j5n0", "offset": 512}],
+  "partials": [{"id": "cpwfawr3mrq37rql7fza", "offset": 512}],
   "renew": true
 }
 ```
@@ -298,7 +298,7 @@ oldest first:
   "started": 1794326441, "gateway_session": "ec7b31841ec47c47",
   "messages": [{"id": "a3f9…", "air": "AXic…"}],
   "pickups": [419, 420],
-  "local_pickups": ["k3q7m2x9a4d8f6h1j5n0"],
+  "local_pickups": ["3ic5zafw7yhvse5zt5iq"],
   "path": ["N2CALL-5", "N1CALL-10"]
 }]}
 ```
@@ -532,3 +532,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.10.0 | 2026-11-09 | `POST /direct`: a client reports its station-to-station sessions with both proofs; received mail is filed as picked up, sent mail sent on to every recipient but the other station (§6.6); test vectors (§8). |
 | 0.11.0 | 2026-11-09 | `third_party` in waiting entries and copies, for RP-6 §5.1 (§5.2, §5.8). |
 | 0.11.1 | 2026-11-09 | §6.1: the enrollment code comes once the callsign is shown (RP-1 §1). |
+| 0.11.2 | 2026-11-09 | §5.2, §5.6: the examples' content IDs are real ones (RP-0 §6.3) |

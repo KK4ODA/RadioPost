@@ -15,7 +15,10 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   role, conformance mode, the test adapter, what each phase adds).
 - **Code** (Phase 1 on, D27, D28): Rust throughout, in this repository — `core/`, a Cargo
   workspace (the core library, the gateway, the service), `app/` (the Tauri client) and `adapters/`.
-  The core is checked against `vectors/` in CI.
+  `core/radiopost` is the library of RadioPost's objects; `tests/vectors.rs` replays `vectors/`
+  against it, and CI runs `cargo fmt`, `cargo clippy -D warnings` (Aether's lint levels) and
+  `cargo test --locked` (`core/README.md`). Writing it found two gaps in the vectors: no ID text
+  that must be refused, and no credential signed before its key's validity began.
 - `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`. Standard
   library only; `ruff.toml` holds the lint settings.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`

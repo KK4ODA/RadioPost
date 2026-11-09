@@ -13,7 +13,7 @@ What it checks, and why:
 * Every relative link in a Markdown file leads to a file that exists.
 * Every `RP-n §x.y` names a section that exists in RP-n, including a list such as
   `RP-1 §5, §6.3` and a reference broken across two lines.
-* Every Python file starts with an SPDX licence line (CLAUDE.md, CONTRIBUTING.md).
+* Every Python and Rust file starts with an SPDX licence line (CLAUDE.md, CONTRIBUTING.md).
 
 Standard library only. Exits 1 and lists every problem if anything is wrong.
 """
@@ -26,7 +26,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SPDX = "# SPDX-License-Identifier: MIT OR Apache-2.0"
-SKIP_DIRS = {".git", "__pycache__", ".venv", "node_modules"}
+SPDX_RS = "// SPDX-License-Identifier: MIT OR Apache-2.0"
+SKIP_DIRS = {".git", "__pycache__", ".venv", "node_modules", "target"}
 
 HEADER = re.compile(r"^\| \*\*(Status|Version|Updated)\*\* \| ([^|]+?) \|$", re.MULTILINE)
 LOG_ROW = re.compile(r"^\| (\d+\.\d+\.\d+) \| (\d{4}-\d{2}-\d{2}) \|", re.MULTILINE)
@@ -121,10 +122,11 @@ def check_links_and_references(problems: list[str]) -> None:
 
 
 def check_spdx(problems: list[str]) -> None:
-    for path in files("*.py"):
-        first = path.read_text(encoding="utf-8").split("\n", 1)[0]
-        if first != SPDX:
-            problems.append(f"{path.relative_to(ROOT)}: does not start with `{SPDX}`")
+    for pattern, line in (("*.py", SPDX), ("*.rs", SPDX_RS)):
+        for path in files(pattern):
+            first = path.read_text(encoding="utf-8").split("\n", 1)[0]
+            if first != line:
+                problems.append(f"{path.relative_to(ROOT)}: does not start with `{line}`")
 
 
 def main() -> int:

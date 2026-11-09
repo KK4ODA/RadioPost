@@ -49,8 +49,9 @@ list; never copy it from what the reference answers.
 
 ## Code
 
-The only code so far is the figures, the test vectors' reference and a checker for the documents.
-When there are programs, each will say how to build and test it.
+Besides the figures, the test vectors' reference and a checker for the documents, the programs are
+in `core/`, a Rust workspace ([`core/README.md`](core/README.md)). Each crate says how to build and
+test it.
 
 ## Checks
 
@@ -64,6 +65,14 @@ python tools/vectors/make.py --check    # the vectors are what the reference mak
 python tools/figures/concept.py         # the figures are what their generators draw:
 python tools/figures/design.py          #   git status shows no change after these
 python tools/check_docs.py              # versions, change logs, the index, links, RP-n §x.y
+```
+
+and, in `core/`, with a stable Rust:
+
+```
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test                              # the library against vectors/
 ```
 
 `check_docs.py` holds each specification's header to the last row of its change log and to the

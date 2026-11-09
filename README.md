@@ -34,8 +34,9 @@ office or modem adapter from the specifications, and it will work with everyone 
 
 ## Status
 
-Early design. The specifications are **drafts**: anything may change, and nothing is ready to
-deploy. The project's own post office will be `radiopost.org`. The first modem is
+Phase 1 has begun: the core library in [`core/`](core/README.md) builds RadioPost's objects and
+checks itself against the test vectors. The specifications are **drafts**: anything may change, and
+nothing is ready to deploy. The project's own post office will be `radiopost.org`. The first modem is
 [Aether HF](https://github.com/KK4ODA/aether-hf), an open-source HF modem; VARA, ARDOP and AX.25
 packet follow through adapters.
 

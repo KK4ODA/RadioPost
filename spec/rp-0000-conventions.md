@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.5.0 |
+| **Version** | 0.5.1 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -173,8 +173,11 @@ For accounts a post office creates, the local part SHOULD use only lowercase let
 ### 6.3 Content IDs
 
 A message's **content ID** is the first **12 bytes** of SHA-256 of the message's canonical encoding
-(RP-2 §3). In text it is written in **base32**, lowercase, RFC 4648 alphabet, no padding: 20
-characters (`k3q7m2x9a4d8f6h1j5n0`). A display MAY show the first 6 characters.
+(RP-2 §3). In text it is written in **base32**, lowercase, RFC 4648 alphabet (`a` to `z`, `2` to
+`7`), no padding: 20 characters (`i42cuqd7g7jrrgxx67aq`). The last character carries 4 bits that
+are not the ID's; they are zero, so each ID has one text, and a text with them set, or of another
+length, case or alphabet, is not a content ID. A display MAY show the first 6 characters. Test
+vectors: `vectors/messages.json`, `invalid_ids`.
 
 Why 12 bytes: 16 would be safer than needed and cost 4 bytes per message in every list sent on the
 air; 8 would allow collisions once a network carried billions of messages. With 96 bits, a
@@ -325,3 +328,4 @@ means the same thing wherever it appears.
 | 0.4.0 | 2026-11-09 | The context `RadioPost-placement-v1` (§9.2); RP-7 is a draft (§2). |
 | 0.4.1 | 2026-11-09 | §8.6: the vectors cover RP-7 too. |
 | 0.5.0 | 2026-11-09 | Signed CBOR objects are untagged COSE_Sign1 with Ed25519 (-19), the context as external data (§5, §9.2). |
+| 0.5.1 | 2026-11-09 | §6.3: the example was not base32; each ID has one text, its unused bits zero; test vectors |

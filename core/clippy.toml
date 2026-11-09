@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Names the documentation uses as words, not code.
+doc-valid-idents = ["RadioPost", "COSE_Sign1", "Sig_structure", ".."]

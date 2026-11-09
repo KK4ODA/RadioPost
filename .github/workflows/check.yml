@@ -2,8 +2,8 @@
 #
 # Every push to main and every pull request: the Python is linted and formatted, the test vectors
 # are what the reference makes, the figures are what their generators draw, and the documents'
-# versions, links and cross-references agree. Standard library only, so nothing is installed but
-# Python and ruff. A run takes well under a minute.
+# versions, links and cross-references agree (standard library only: nothing is installed but
+# Python and ruff). The Rust workspace in core/ is formatted, linted and tested against the vectors.
 name: Check
 
 on:
@@ -59,3 +59,32 @@ jobs:
 
       - name: Versions, links and cross-references
         run: uv run --no-project --python ${{ matrix.python }} tools/check_docs.py
+
+  core:
+    name: core · rust
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Format
+        working-directory: core
+        run: cargo fmt --all -- --check
+
+      - name: Lint
+        working-directory: core
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: The library against the vectors
+        working-directory: core
+        run: cargo test --locked
