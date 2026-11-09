@@ -215,6 +215,8 @@ pub enum Event {
         serial: Option<u64>,
         /// The message.
         message: Message,
+        /// Its air form as it arrived: what a station-to-station report carries (RP-5 §6.6).
+        air: Vec<u8>,
     },
     /// A message that arrived failed its check and is dropped.
     Failed {
@@ -245,10 +247,35 @@ pub enum Event {
         /// Its text, if any.
         text: Option<String>,
     },
+    /// This station ended the session with `ERROR`: what the other station sent was refused.
+    Refused(ErrorCode),
     /// A renewed credential, to use from the next session (RP-3 §5.8).
     NewCredential(Vec<u8>),
     /// The session is over: the caller hangs up (RP-3 §8).
     End,
+}
+
+/// One station's proof (RP-1 §6.4): its statement, the signature over it, and its credential.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Proof {
+    /// The statement, as RP-1 §6.1 encodes it.
+    pub statement: Vec<u8>,
+    /// Its signature (RP-1 §6.2).
+    pub signature: Vec<u8>,
+    /// The credential the signature is checked against.
+    pub credential: Vec<u8>,
+}
+
+/// What a station-to-station session leaves for its report (RP-5 §6.6): when it started, by the
+/// station called's clock, and both stations' proofs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Proofs {
+    /// The station called's clock at `WELCOME`.
+    pub started: u64,
+    /// This station's proof.
+    pub mine: Proof,
+    /// The other station's.
+    pub theirs: Proof,
 }
 
 /// A message received in part (RP-3 §7): the bytes held, and its serial if it had one.
@@ -265,7 +292,7 @@ pub struct Partial {
 }
 
 /// What a `MSG` completed: the message and its serial, or the message that failed and why.
-type Taken = Result<(Option<u64>, Message), (ContentId, ErrorCode)>;
+type Taken = Result<(Option<u64>, Message, Vec<u8>), (ContentId, ErrorCode)>;
 
 /// Messages arriving in pieces, joined (RP-3 §5.4, §7).
 #[derive(Clone, Debug, Default)]
@@ -311,7 +338,7 @@ impl Inbound {
         let whole = self.pieces.remove(&id)?;
         match Message::from_air(&whole.held) {
             Ok(message) if whole.held.len() as u64 == total && message.content_id() == id => {
-                Some(Ok((whole.serial.or(serial), message)))
+                Some(Ok((whole.serial.or(serial), message, whole.held)))
             }
             _ => fail(ErrorCode::Malformed),
         }
@@ -469,7 +496,11 @@ mod tests {
             if i < last {
                 assert!(got.is_none());
             } else {
-                assert_eq!(got, Some(Ok((Some(3), out.message.clone()))));
+                assert_eq!(
+                    got,
+                    Some(Ok((Some(3), out.message.clone(), out.air.clone()))),
+                    "the message, and its air form as it arrived"
+                );
             }
         }
     }

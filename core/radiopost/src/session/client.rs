@@ -6,8 +6,8 @@ use std::collections::BTreeSet;
 use ed25519_dalek::SigningKey;
 
 use super::{
-    Caps, Event, Inbound, Outgoing, Partial, Receipts, VERSION, WaitingEntry, done, error_pdu,
-    listed_ids, listed_pairs, msg_pdus, piece_for, transmission,
+    Caps, Event, Inbound, Outgoing, Partial, Proof, Proofs, Receipts, VERSION, WaitingEntry, done,
+    error_pdu, listed_ids, listed_pairs, msg_pdus, piece_for, transmission,
 };
 use crate::cbor::Value;
 use crate::credential::{self, Body, Credential, Trust, flags};
@@ -61,6 +61,8 @@ enum State {
 
 /// The caller's side of a session.
 pub struct Client {
+    hello_proof: Option<Proof>,
+    station_proof: Option<(u64, Proof)>,
     cfg: ClientConfig,
     choose: Chooser,
     me: Body,
@@ -90,6 +92,8 @@ impl Client {
             .body;
         let inbound = Inbound::resume(&cfg.partials);
         Ok(Client {
+            hello_proof: None,
+            station_proof: None,
             cfg,
             choose,
             me,
@@ -125,6 +129,12 @@ impl Client {
             time: self.cfg.time,
             nonce: self.cfg.nonce,
         });
+        let signature = stmt.sign(&self.cfg.device);
+        self.hello_proof = Some(Proof {
+            statement: stmt.encode(),
+            signature: signature.to_vec(),
+            credential: self.cfg.credential.clone(),
+        });
         let mut entries = vec![
             (0, Value::Uint(kind::HELLO)),
             (
@@ -144,7 +154,7 @@ impl Client {
             (9, Value::Uint(self.cfg.cursor)),
             (10, Value::Uint(self.cfg.auto)),
             (12, self.cfg.caps.to_value()),
-            (15, Value::bytes(&stmt.sign(&self.cfg.device))),
+            (15, Value::bytes(&signature)),
         ];
         if !self.cfg.partials.is_empty() {
             let partials = self.cfg.partials.iter().map(|p| {
@@ -196,6 +206,18 @@ impl Client {
         std::mem::take(&mut self.events)
     }
 
+    /// Both stations' proofs, once the station called has proved itself (RP-3 §10): what a
+    /// station-to-station session is reported with (RP-5 §6.6).
+    #[must_use]
+    pub fn proofs(&self) -> Option<Proofs> {
+        let (started, theirs) = self.station_proof.clone()?;
+        Some(Proofs {
+            started,
+            mine: self.hello_proof.clone()?,
+            theirs,
+        })
+    }
+
     /// Whether the session is over and the client hangs up (RP-3 §8).
     #[must_use]
     pub fn is_over(&self) -> bool {
@@ -209,6 +231,7 @@ impl Client {
 
     fn fail(&mut self, code: ErrorCode) {
         self.queued.push(transmission(&[error_pdu(code)]));
+        self.events.push(Event::Refused(code));
         self.end();
     }
 
@@ -216,9 +239,13 @@ impl Client {
         match pdu.get(0).and_then(Value::as_u64) {
             Some(kind::WELCOME) if self.state == State::Welcome => self.welcome(pdu),
             Some(kind::MSG) if self.state == State::Exchange => match self.inbound.take(pdu) {
-                Some(Ok((serial, message))) => {
+                Some(Ok((serial, message, air))) => {
                     self.receipts.complete.push(message.content_id());
-                    self.events.push(Event::Received { serial, message });
+                    self.events.push(Event::Received {
+                        serial,
+                        message,
+                        air,
+                    });
                 }
                 Some(Err((id, code))) => {
                     self.receipts.failed.push((id, code));
@@ -311,7 +338,8 @@ impl Client {
         let mut peer_account = None;
         if let Some(trust) = &self.cfg.station {
             match self.check_station(pdu, &waiting, trust) {
-                Ok(body) => {
+                Ok((body, proof)) => {
+                    self.station_proof = Some(proof);
                     peer_account = Some(body.address.clone());
                     self.events.push(Event::StationProved(body));
                 }
@@ -363,7 +391,7 @@ impl Client {
         pdu: &Value,
         waiting: &[WaitingEntry],
         trust: &Trust,
-    ) -> Result<Body, ErrorCode> {
+    ) -> Result<(Body, (u64, Proof)), ErrorCode> {
         let cred = pdu
             .get(13)
             .and_then(Value::as_bytes)
@@ -401,7 +429,12 @@ impl Client {
             sent_nonce: Some(self.cfg.nonce),
         };
         statement::verify(&stmt, sig, &body, &self.me.operator, &freshness)?;
-        Ok(body)
+        let proof = Proof {
+            statement: stmt.encode(),
+            signature: sig.to_vec(),
+            credential: cred.to_vec(),
+        };
+        Ok((body, (time, proof)))
     }
 
     /// Answer once the other station has said all it owes this turn: its `DONE` (after `WELCOME`

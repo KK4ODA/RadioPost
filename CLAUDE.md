@@ -39,6 +39,13 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   --release -p aetherd`, which needs `libasound2-dev`). Writing it settled five details of §9.1
   (RP-4 0.4.1). `clippy.toml` is at the repository's root, so every crate finds it. CI's clippy is
   the newest stable (1.99 added `assert_is_empty`): run `rustup update stable` before linting.
+  `app/client` (`radiopost-client`, the `radiopost` program, a member of the core workspace) is
+  the client: home directory store, composing (NFC, LF), and `session::call`/`answer` over any
+  RPMI adapter; `rpmi-loopback` serves the simulated channel for running two clients by hand.
+  Station-to-station mail moves to `sent` and its RP-5 §6.6 report is kept (D30), from the proofs
+  the engines now keep (`Client::proofs`, `Called::proofs`); the replay test matches session-03
+  byte for byte and `direct.json`'s two reports. The engines report their own refusals
+  (`Event::Refused`), found by running two clients that trusted no post office.
 - `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`. Standard
   library only; `ruff.toml` holds the lint settings.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`
