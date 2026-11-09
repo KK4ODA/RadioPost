@@ -18,7 +18,11 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `core/radiopost` is the library of RadioPost's objects; `tests/vectors.rs` replays `vectors/`
   against it, and CI runs `cargo fmt`, `cargo clippy -D warnings` (Aether's lint levels) and
   `cargo test --locked` (`core/README.md`). Writing it found two gaps in the vectors: no ID text
-  that must be refused, and no credential signed before its key's validity began.
+  that must be refused, and no credential signed before its key's validity began. The session
+  engines (`session::client`, `session::called`) found two in RP-3: a station called cannot tell
+  from an offer whom a message is for (§10), and `session-01` left out the `DONE` that ends a
+  gateway's turn after `WELCOME` (§5.2, §5.7). The engines are sans-IO: clock, nonces and the
+  user's choices come in through their configuration, so the replays are byte for byte.
 - `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`. Standard
   library only; `ruff.toml` holds the lint settings.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`

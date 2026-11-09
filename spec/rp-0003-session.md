@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.7.0 |
+| **Version** | 0.9.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -166,8 +166,8 @@ boundary (text), the air-form size (uint), the priority (uint), and flags (uint)
 
 When `status` is `ready`, the gateway follows `WELCOME`, in the same transmission, with `MSG` PDUs
 for the waiting messages whose size is at most the caller's `auto` and for the rest of each waiting
-message the caller listed in `partials` (§7), in the order of `waiting`, and with `DONE` if it then
-has nothing more to send.
+message the caller listed in `partials` (§7), in the order of `waiting`, and then with `DONE`: it has
+nothing more to send unless asked.
 
 When `status` is `sign` or `credential`, `WELCOME` carries no `accept`, `decline` or `waiting`, and
 the gateway sends nothing of the caller's mail until the caller is authenticated.
@@ -239,6 +239,13 @@ Waiting messages that are neither sent nor requested stay waiting.
 
 A station may send `DONE` more than once: after a `REQUEST`, the gateway sends what was asked for
 and `DONE` again.
+
+**Whose turn it is.** No PDU says that a transmission has ended; a station knows the other has said
+all it owes, and answers, when it holds: after `HELLO`, a `WELCOME` (with `status` `sign` or
+`credential`, alone; with `ready`, its `MSG` PDUs and `DONE`); after `MSG` PDUs, a `RECEIPT` listing
+each; after `REQUEST`, the `MSG` PDUs asked for and `DONE`. The called station answers the caller's
+`DONE` or `REQUEST`. When both have sent `DONE` and every message is receipted, the session is over
+(§8).
 
 ### 5.8 CREDENTIAL
 
@@ -361,7 +368,11 @@ call** and takes the called station's part.
   called (RP-1 §6.5), which lists the messages in `waiting` and carries the caller's nonce. The
   caller verifies it before it takes any message. If it fails, the caller sends `ERROR` with the
   code and hangs up.
-* It accepts only offered messages addressed to its own account (others: `refused-by-policy`).
+* An offer does not say whom a message is for, so it accepts the offers it has room for. The
+  caller, which now knows the station's account from its verified credential, sends of those only
+  the messages addressed (`to` or `cc`) to that account; the others stay in its outbox. A message
+  that arrives addressed elsewhere all the same is listed as failed, `refused-by-policy`, and
+  dropped.
 * Its `waiting` list holds only messages its own user addressed to the caller's account, all of
   them (`more` 0, so that one signature covers them), numbered with serials of its own; `online` is
   false. The caller sends `cursor` 0, since those serials are not its post office's, and the
@@ -405,13 +416,14 @@ Sizes are air forms (RP-2 §4).
 ```
 → HELLO     {0:1, 1:[1, 1], 2:0, 3:"facundo@radiopost.org", 4:"KK4ODA", 5:"N1CALL-10",
              6:1794235200, 7:h'f3e4…', 8:[[h'50d3…', 137, 0], [h'ab9d…', 142, 0]], 9:418,
-             10:1000, 12:{1:[0, 1, 2], 2:4096}, 14:h'ca61…', 15:h'943c…'}
+             10:1000, 12:{1:[0, 1, 2], 2:4096}, 14:h'd21c…', 15:h'943c…'}
 ← WELCOME   {0:2, 1:1, 2:h'ec7b…', 3:0, 5:[[h'50d3…', 0], [h'ab9d…', 0]], 6:[],
-             7:[[419, h'4734…', "maria@example.com", "Are you safe?", 277, 0, 0],
+             7:[[419, h'4734…', "maria@example.com", "Are you safe?", 277, 0, 8],
                 [420, h'3cde…', "eoc@radiopost.org", "Shelter roster", 1298, 0, 0],
-                [421, h'13ec…', "maria@example.com", "Photo", 6122, 0, 0]],
+                [421, h'13ec…', "maria@example.com", "Photo", 6122, 0, 8]],
              8:0, 9:{1:[0, 1], 2:4096}, 10:1794235241, 11:true, 12:true}
 ← MSG       {0:4, 1:h'4734…', 2:0, 3:277, 4:h'00a6…', 5:419}
+← DONE      {0:7}
 → MSG       {0:4, 1:h'50d3…', 2:0, 3:137, 4:h'00a7…'}
 → MSG       {0:4, 1:h'ab9d…', 2:0, 3:142, 4:h'00a6…'}
 → RECEIPT   {0:5, 1:[h'4734…']}
@@ -443,3 +455,5 @@ has one example of each PDU, and frames that must be refused.
 | 0.5.1 | 2026-11-09 | Sizes with credentials as COSE_Sign1 (RP-1 0.4.0) (§11). |
 | 0.6.0 | 2026-11-09 | Station-to-station mail is reported to each user's post office (§10, RP-5 §6.6). |
 | 0.7.0 | 2026-11-09 | The waiting flag `third-party` (8), for RP-6 §5.1 (§5.2). |
+| 0.8.0 | 2026-11-09 | Station to station (§10): the station called cannot tell from an offer whom a message is for, so it accepts what it has room for and the caller sends only messages for its account; one addressed elsewhere is refused in `RECEIPT`. Found by writing the session engines. |
+| 0.9.0 | 2026-11-09 | A gateway always ends `WELCOME`'s transmission with `DONE` (§5.2), and how a station knows its turn has come (§5.7): `session-01` and the example (§12) had left that `DONE` out, so the client could not tell the gateway's turn was over. The example's credential hash and third-party flags brought up to date. Found by writing the session engines. |

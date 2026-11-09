@@ -287,7 +287,7 @@
           }
         },
         {
-          "note": "RP-3 transmission 2: WELCOME, MSG"
+          "note": "RP-3 transmission 2: WELCOME, MSG, DONE"
         },
         {
           "station": "N1CALL-10",
@@ -296,7 +296,7 @@
           "message": {
             "op": "send",
             "link": "g1",
-            "data": "AOasAAIBAQJI7HsxhB7EfEcDAAWCgkxQ06I6wdE/aEOY7OcAgkyrndJknzpMVaeDdQEABoAHg4cZAaNMRzQqQH830xia9/fBcW1hcmlhQGV4YW1wbGUuY29tbUFyZSB5b3Ugc2FmZT8ZARUACIcZAaRMPN6Nv5/h+U26kUnRcWVvY0ByYWRpb3Bvc3Qub3JnblNoZWx0ZXIgcm9zdGVyGQUSAACHGQGlTBPsUFo7ZGG/xgv5cnFtYXJpYUBleGFtcGxlLmNvbWVQaG90bxkX6gAICAAJogGCAAECGRAAChpq8dtpC/UM9QE0pgAEAUxHNCpAfzfTGJr398ECAAMZARUEWQEVAKYBAQJxbWFyaWFAZXhhbXBsZS5jb20DgXVmYWN1bmRvQHJhZGlvcG9zdC5vcmcFGmrxsRAGbUFyZSB5b3Ugc2FmZT8HeM5GYWN1bmRvLAoKV2Ugc2F3IHRoZSBuZXdzIGFib3V0IHRoZSBzdG9ybSBhbmQgY2Fubm90IHJlYWNoIGFueW9uZSBieSBwaG9uZS4gQXJlIHlvdSBhbmQgdGhlIGZhbWlseSBzYWZlPyBJcyB0aGUgaG91c2UgYWxsIHJpZ2h0PyBEbyB5b3UgbmVlZCBhbnl0aGluZyB3ZSBjYW4gc2VuZD8KCldyaXRlIHdoZW4geW91IGNhbiwgZXZlbiBvbmUgbGluZS4KCk1hcmlhCgUZAaM=",
+            "data": "AOasAAIBAQJI7HsxhB7EfEcDAAWCgkxQ06I6wdE/aEOY7OcAgkyrndJknzpMVaeDdQEABoAHg4cZAaNMRzQqQH830xia9/fBcW1hcmlhQGV4YW1wbGUuY29tbUFyZSB5b3Ugc2FmZT8ZARUACIcZAaRMPN6Nv5/h+U26kUnRcWVvY0ByYWRpb3Bvc3Qub3JnblNoZWx0ZXIgcm9zdGVyGQUSAACHGQGlTBPsUFo7ZGG/xgv5cnFtYXJpYUBleGFtcGxlLmNvbWVQaG90bxkX6gAICAAJogGCAAECGRAAChpq8dtpC/UM9QE0pgAEAUxHNCpAfzfTGJr398ECAAMZARUEWQEVAKYBAQJxbWFyaWFAZXhhbXBsZS5jb20DgXVmYWN1bmRvQHJhZGlvcG9zdC5vcmcFGmrxsRAGbUFyZSB5b3Ugc2FmZT8HeM5GYWN1bmRvLAoKV2Ugc2F3IHRoZSBuZXdzIGFib3V0IHRoZSBzdG9ybSBhbmQgY2Fubm90IHJlYWNoIGFueW9uZSBieSBwaG9uZS4gQXJlIHlvdSBhbmQgdGhlIGZhbWlseSBzYWZlPyBJcyB0aGUgaG91c2UgYWxsIHJpZ2h0PyBEbyB5b3UgbmVlZCBhbnl0aGluZyB3ZSBjYW4gc2VuZD8KCldyaXRlIHdoZW4geW91IGNhbiwgZXZlbiBvbmUgbGluZS4KCk1hcmlhCgUZAaMAA6EABw==",
             "ref": "t2"
           }
         },
@@ -307,7 +307,7 @@
           "message": {
             "op": "queued",
             "link": "g1",
-            "bytes": 542
+            "bytes": 547
           }
         },
         {
@@ -357,7 +357,7 @@
           "message": {
             "op": "received",
             "link": "c1",
-            "data": "YW4sIGV2ZW4gb25lIGxpbmUuCgpNYXJpYQoFGQGj"
+            "data": "YW4sIGV2ZW4gb25lIGxpbmUuCgpNYXJpYQoFGQGjAAOhAAc="
           }
         },
         {

@@ -1425,7 +1425,9 @@ def session_pdus() -> list[Transmission]:
         ("client", [("HELLO", hello)]),
         (
             "gateway",
-            [("WELCOME", welcome)] + [("MSG", p) for s, n in auto for p in msg_pdus(n, serial=s)],
+            [("WELCOME", welcome)]
+            + [("MSG", p) for s, n in auto for p in msg_pdus(n, serial=s)]
+            + [("DONE", DONE)],  # nothing more unless asked (RP-3 §5.2, §5.7)
         ),
         (
             "client",
@@ -1736,8 +1738,9 @@ def station_pdus() -> list[Transmission]:
     welcome = welcome_pdu(
         STATION_ID,
         STATION_CLOCK,
-        accept=[[encoded("facundo-direct")[1], 0]],
-        decline=[[encoded("facundo-to-eoc")[1], rp.ERRORS["refused-by-policy"]]],
+        # An offer does not say whom a message is for, so Ana's client takes both (RP-3 §10).
+        accept=[[encoded(n)[1], 0] for n in STATION_OFFERS],
+        decline=[],
         waiting=[waiting_entry(s, n) for s, n in STATION_WAITING],
         caps=CLIENT_CAPS,
         online=False,
@@ -1756,6 +1759,9 @@ def station_pdus() -> list[Transmission]:
         == "ok"
     )
     auto = [(s, n) for s, n in STATION_WAITING if len(air0(n)) <= AUTO]
+    # Of the offers taken, the caller sends only those for the account it reached (RP-3 §10).
+    sent = [n for n in STATION_OFFERS if body[3] in MESSAGES[n]["to"] + MESSAGES[n].get("cc", [])]
+    assert sent == ["facundo-direct"]
     return [
         ("caller", [("HELLO", hello)]),
         (
@@ -1766,7 +1772,7 @@ def station_pdus() -> list[Transmission]:
         ),
         (
             "caller",
-            [("MSG", p) for p in msg_pdus("facundo-direct")]
+            [("MSG", p) for n in sent for p in msg_pdus(n)]
             + [("RECEIPT", receipt([n for _, n in auto])), ("DONE", DONE)],
         ),
         ("called", [("RECEIPT", receipt(["facundo-direct"]))]),
@@ -1781,10 +1787,11 @@ def make_station() -> dict[str, Any]:
     out["story"] = (
         "No gateway hears Facundo (facundo@radiopost.org, KK4ODA), so he calls Ana's client "
         "(ana@hampost.org, N0CALL) directly. Ana's client checks his credential and statement "
-        "with the post office keys it holds, takes the message addressed to her and refuses the "
-        "one for eoc@radiopost.org (`refused-by-policy`), which stays in his outbox. It proves "
-        "itself in its WELCOME with its credential and a statement over his nonce, and sends him "
-        "the one message Ana wrote him. Facundo hangs up after transmission 4."
+        "with the post office keys it holds, and takes both his offers: an offer does not say "
+        "whom a message is for. It proves itself in its WELCOME with its credential and a "
+        "statement over his nonce, and sends him the one message Ana wrote him. Facundo's client, "
+        "which now knows Ana's account, sends only the message addressed to her; the one for "
+        "eoc@radiopost.org stays in his outbox. Facundo hangs up after transmission 4."
     )
     out["rule"] = (
         "As in session-01.json. Before taking any message from the station it called, the caller "
