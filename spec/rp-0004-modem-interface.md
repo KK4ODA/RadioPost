@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.0 |
+| **Version** | 0.3.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -78,7 +78,13 @@ that has an `id` with `ok` or `error` carrying the same `id`. Events from the ad
 unless they answer a request.
 
 An adapter MUST ignore members it does not know, and answer an unknown `op` with `error`
-`unsupported`.
+`unsupported`. It answers `error` `malformed` (RP-0 §9.3) to a line that is not a JSON object with
+a string `op`, whose `id` is neither a string nor an integer, or whose `data` is not standard
+base64 with padding; the `error` carries the request's `id` when it could be read. A host MUST
+ignore events and members it does not know, so that adapters can add them.
+
+Test vectors: `vectors/rpmi-lines.json`: lines an adapter reads, and lines it answers with an
+error.
 
 ---
 
@@ -110,7 +116,8 @@ The adapter answers:
 | `max_queue` | The most bytes the host should have queued on a link at once (§4, `send`). |
 | `shared` | Other programs may use the modem at the same time, under §1.1's rules. Absent means false: this host has the modem to itself. |
 
-If no version is in common the adapter answers `error` `unsupported-version` and closes.
+If no version is in common the adapter answers `error` `unsupported-version` and closes. Until it
+has answered `hello`, it answers any other request with `error` `refused`.
 
 ---
 
@@ -124,9 +131,16 @@ If no version is in common the adapter answers `error` `unsupported-version` and
 | `connect` | `remote`, `as`?, `bandwidth`?, `id` | Calls `remote` as `as`, one of this host's callsigns (default: the first). `ok` means the call is under way; `connected` or `failed` follows. |
 | `send` | `link`, `data`, `ref`? | Queues bytes on one of this host's links. With `ref`, the adapter later reports `delivered` (if it can) for the last byte of this send. |
 | `disconnect` | `link` | Closes this host's link in order: what is queued goes first, then the modem disconnects. |
-| `abort` | `link`? | Ends this host's link, or its call under way, now. Queued bytes are dropped. |
+| `abort` | `link`? | Ends this host's link, or its call under way, now. Queued bytes are dropped. A call ended this way ends with `failed` `aborted`; with no call under way, `error` `not-connected`. |
 | `broadcast` | `data`, `ref`? | §6. |
 | `status` | — | The adapter answers `status` (below). |
+
+**Answers.** `ok` carries only `op` and the request's `id`. A request the adapter turns down at once
+is answered with `error` instead, and nothing more follows from it. For `connect` these are: no
+callsigns yet (`refused`); an `as` that is not one of the host's callsigns (`not-authorized`); a
+`bandwidth` not in `caps.bandwidths` (`unsupported`); a link or a call of the host's already up,
+`max_links` links up, or another program's link on the channel (`busy`). An `error` answering a
+request with no `id` carries no `id`.
 
 **Callsigns first.** A host has no callsigns until it sends `callsigns`. Until then nothing is
 answered for it, and the adapter answers its `listen` and `connect` with `error` `refused`. On a
@@ -151,8 +165,8 @@ reports `queued` (§5) as the queue drains. RP-3 sessions are small enough that 
 |---|---|---|
 | `incoming` | `remote`, `local` | A call to one of this host's callsigns is being answered (optional; for display). |
 | `connected` | `link`, `remote`, `local`, `direction` (`in` or `out`), `bandwidth`? | A link is up. For an outgoing call, it answers the `connect` (and carries its `id`). |
-| `failed` | `id`, `code`, `text`? | An outgoing call ended without a link (no answer, refused, aborted). |
-| `received` | `link`, `data` | Bytes arrived on a link, in order. |
+| `failed` | `id`, `code`, `text`? | An outgoing call ended without a link: `timeout` (no answer), `refused` (the modem or the other station refused), `busy`, or `aborted` (the host's `abort`). |
+| `received` | `link`, `data` | Bytes arrived on a link, in order. A `received` may hold any part of the stream: it keeps no `send` boundaries, and the host joins them. |
 | `queued` | `link`, `bytes` | Bytes still queued on the link, when it changes. `0` means everything sent has been handed over (and, with `delivery`, acknowledged). |
 | `delivered` | `link`, `ref` | The other station holds every byte up to the end of the send with this `ref`. Only with `delivery`. |
 | `disconnected` | `link`, `reason`, `text`? | The link is gone. `reason`: `local` (the host asked), `remote` (the other station hung up), `timeout`, `failure`. |
@@ -166,6 +180,9 @@ reports `queued` (§5) as the queue drains. RP-3 sessions are small enough that 
 The adapter MUST report every link it brings up for the host with `connected` and every such link
 it loses with `disconnected`, so the host never has to guess. On a shared modem it MUST NOT report
 another program's links to this host (§1.1).
+
+Test vectors: `vectors/rpmi-conversations.json`: session-01 (RP-3 §12) carried over RPMI on both
+stations, every error a host can meet, a shared modem, and a broadcast.
 
 ---
 
@@ -191,8 +208,9 @@ Adapters use RP-0 §9.3's codes where one fits, and these words in `code` otherw
 | `no-modem` | The adapter cannot reach its modem. |
 | `not-connected` | No such link of this host's. |
 | `refused` | The modem refused (a rule, a setting, the band, no callsigns yet). `text` says why. |
-| `busy` | The modem is doing something else (a call already under way, or another program's link). |
+| `busy` | The modem is doing something else (a call or a link already up, or another program's link). |
 | `claimed` | Another program on a shared modem holds the callsign (§1.1). `text` names it. |
+| `aborted` | The host's `abort` ended its call under way (in `failed`). |
 
 ---
 
@@ -301,3 +319,4 @@ as by radio.
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.2.0 | 2026-11-09 | A shared modem (§1.1): callsigns, answering and links are each host's; `caps.shared`; error `claimed`; `callsigns` before `listen` and `connect` (§4); §9 says which modems can be shared, and how Aether would be (its ADR-0106). |
+| 0.3.0 | 2026-11-09 | What a bad line gets (`malformed`), and that a host ignores what it does not know (§2); `refused` before `hello` (§3); which `connect` errors come at once and what `ok` carries (§4); `failed`'s codes and `aborted` (§5, §7); `received` keeps no `send` boundaries (§5); test vectors. |

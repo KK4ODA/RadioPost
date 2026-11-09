@@ -1,0 +1,143 @@
+{
+  "radiopost_vectors": "RPMI lines: read, or answered with an error",
+  "format": 1,
+  "specs": {
+    "RP-4": "§2, §4, §7"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "An adapter that has said `hello` to a host with the callsign KK4ODA, and has no links, reads each `line` (one line of JSON Lines, without its LF) and answers with `answers`. Messages compare as JSON values; `text` need not match.",
+  "lines": [
+    {
+      "what": "a string id, an unknown member",
+      "line": "{ \"op\" : \"status\", \"id\" : \"s1\", \"colour\" : \"blue\" }",
+      "answers": [
+        {
+          "op": "status",
+          "id": "s1",
+          "listening": false,
+          "callsigns": [
+            "KK4ODA"
+          ],
+          "busy": false,
+          "links": []
+        }
+      ]
+    },
+    {
+      "what": "not JSON",
+      "line": "hello",
+      "answers": [
+        {
+          "op": "error",
+          "code": "malformed",
+          "text": "not JSON"
+        }
+      ]
+    },
+    {
+      "what": "not a JSON object",
+      "line": "[\"op\", \"status\"]",
+      "answers": [
+        {
+          "op": "error",
+          "code": "malformed",
+          "text": "not a JSON object"
+        }
+      ]
+    },
+    {
+      "what": "no op",
+      "line": "{\"id\": 4}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 4,
+          "code": "malformed",
+          "text": "no `op`"
+        }
+      ]
+    },
+    {
+      "what": "an op that is not a string",
+      "line": "{\"op\": 5, \"id\": 5}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 5,
+          "code": "malformed",
+          "text": "no `op`"
+        }
+      ]
+    },
+    {
+      "what": "an id that is neither a string nor an integer",
+      "line": "{\"op\": \"status\", \"id\": 1.5}",
+      "answers": [
+        {
+          "op": "error",
+          "code": "malformed",
+          "text": "`id` is neither a string nor an integer"
+        }
+      ]
+    },
+    {
+      "what": "an id that is a boolean",
+      "line": "{\"op\": \"status\", \"id\": true}",
+      "answers": [
+        {
+          "op": "error",
+          "code": "malformed",
+          "text": "`id` is neither a string nor an integer"
+        }
+      ]
+    },
+    {
+      "what": "base64url, not standard base64",
+      "line": "{\"op\": \"send\", \"id\": 8, \"link\": \"c1\", \"data\": \"-_8=\"}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 8,
+          "code": "malformed",
+          "text": "`data` is not standard base64 with padding"
+        }
+      ]
+    },
+    {
+      "what": "base64 without its padding",
+      "line": "{\"op\": \"send\", \"id\": 9, \"link\": \"c1\", \"data\": \"AQ\"}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 9,
+          "code": "malformed",
+          "text": "`data` is not standard base64 with padding"
+        }
+      ]
+    },
+    {
+      "what": "an op this adapter does not know",
+      "line": "{\"op\": \"tune\", \"id\": 10}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 10,
+          "code": "unsupported",
+          "text": "no op tune"
+        }
+      ]
+    },
+    {
+      "what": "good base64, but no such link",
+      "line": "{\"op\": \"send\", \"id\": 11, \"link\": \"c1\", \"data\": \"AQ==\"}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 11,
+          "code": "not-connected",
+          "text": "no such link of this host's"
+        }
+      ]
+    }
+  ]
+}

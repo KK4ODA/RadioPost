@@ -22,7 +22,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from rpref import cbor, ed25519, rp
+from rpref import cbor, ed25519, rp, rpmi
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "vectors"
@@ -1697,6 +1697,249 @@ def make_pdus() -> dict[str, Any]:
     return out
 
 
+# -- rpmi-lines.json and rpmi-conversations.json ------------------------------------------------
+
+
+RPMI_MODEM = "rpref simulated modem 1"
+RPMI_FRAME = 128  # the most bytes one `received` carries on the simulated modem
+
+
+def rpmi_adapter(world: rpmi.World, station: str, prefix: str, *, shared: bool) -> rpmi.Adapter:
+    caps = {
+        "bandwidths": [500, 2300],
+        "max_links": 1,
+        "delivery": True,
+        "broadcast": True,
+        "quality": False,
+        "busy": True,
+        "regulatory": False,
+        "max_queue": 65536,
+        "shared": shared,
+    }
+    return rpmi.Adapter(
+        world, station, modem=RPMI_MODEM, caps=caps, prefix=prefix, frame_bytes=RPMI_FRAME
+    )
+
+
+def rpmi_start(
+    adapter: rpmi.Adapter, host: str, app: str, callsigns: list[str], *, listen: bool
+) -> None:
+    """A host opens its connection, says hello, names its callsigns and maybe listens."""
+    adapter.open(host)
+    adapter.request(host, {"op": "hello", "id": 1, "version": [1, 1], "app": app})
+    adapter.request(host, {"op": "callsigns", "id": 2, "callsigns": callsigns})
+    if listen:
+        adapter.request(host, {"op": "listen", "id": 3, "on": True})
+
+
+def link_of(adapter: rpmi.Adapter, host: str) -> str:
+    return next(e.link for e in adapter.ends if e.host == host)
+
+
+def rpmi_session() -> list[dict[str, Any]]:
+    """Session-01 (RP-3 §12) carried over RPMI on both stations."""
+    w = rpmi.World()
+    client = rpmi_adapter(w, "KK4ODA", "c", shared=False)
+    gateway = rpmi_adapter(w, "N1CALL-10", "g", shared=False)
+    rpmi_start(gateway, "gateway", "RadioPost gateway 0.1.0", ["N1CALL-10"], listen=True)
+    rpmi_start(client, "client", "RadioPost client 0.1.0", ["KK4ODA"], listen=False)
+    client.request("client", {"op": "connect", "id": 3, "remote": "N1CALL-10", "bandwidth": 2300})
+    adapters = {"client": client, "gateway": gateway}
+    links = {who: link_of(a, who) for who, a in adapters.items()}
+    for n, (who, pdus) in enumerate(session_pdus(), start=1):
+        w.note(f"RP-3 transmission {n}: {', '.join(name for name, _ in pdus)}")
+        data = b"".join(rp.frame(p) for _, p in pdus)
+        adapters[who].request(
+            who,
+            {"op": "send", "link": links[who], "data": rpmi.encode_data(data), "ref": f"t{n}"},
+        )
+    w.note("Both stations have sent DONE and hold receipts: the caller hangs up (RP-3 §8).")
+    client.request("client", {"op": "disconnect", "id": 4, "link": links["client"]})
+    return w.log
+
+
+def rpmi_errors() -> list[dict[str, Any]]:
+    """Every error a host meets on one station, and the call that fails each way."""
+    w = rpmi.World()
+    client = rpmi_adapter(w, "KK4ODA", "c", shared=False)
+    gateway = rpmi_adapter(w, "N1CALL-10", "g", shared=False)
+    rpmi_start(gateway, "gateway", "RadioPost gateway 0.1.0", ["N1CALL-10"], listen=True)
+    app = "RadioPost client 0.1.0"
+    client.open("client")
+    client.request("client", {"op": "connect", "id": 1, "remote": "N1CALL-10"})
+    client.request("client", {"op": "hello", "id": 2, "version": [2, 3], "app": app})
+    client.open("client")
+    for request in [
+        {"op": "hello", "id": 3, "version": [1, 2], "app": app},
+        {"op": "listen", "id": 4, "on": True},
+        {"op": "connect", "id": 5, "remote": "N1CALL-10"},
+        {"op": "callsigns", "id": 6, "callsigns": ["KK4ODA"]},
+        {"op": "connect", "id": 7, "remote": "N1CALL-10", "as": "W1AW"},
+        {"op": "connect", "id": 8, "remote": "N1CALL-10", "bandwidth": 2750},
+        {"op": "tune", "id": 9},
+        {"op": "send", "id": 10, "link": "c7", "data": rpmi.encode_data(b"\x00")},
+        {"op": "abort", "id": 11},
+        {"op": "connect", "id": 12, "remote": "N9ZZZ"},
+        {"op": "abort", "id": 13},
+        {"op": "connect", "id": 14, "remote": "N9ZZZ"},
+    ]:
+        client.request("client", request)
+    w.note("Nobody answers N9ZZZ: the modem gives up on the call.")
+    w.give_up()
+    client.request("client", {"op": "connect", "id": 15, "remote": "N1CALL-10"})
+    client.request("client", {"op": "connect", "id": 16, "remote": "N2CALL-5"})
+    client.request("client", {"op": "abort", "id": 17, "link": link_of(client, "client")})
+    return w.log
+
+
+def rpmi_shared() -> list[dict[str, Any]]:
+    """A gateway's modem shared by RadioPost and another program (RP-4 §1.1)."""
+    w = rpmi.World()
+    gateway = rpmi_adapter(w, "N1CALL", "g", shared=True)
+    caller = rpmi_adapter(w, "N3CALL", "c", shared=False)
+    rpmi_start(gateway, "radiopost", "RadioPost gateway 0.1.0", ["N1CALL-10"], listen=True)
+    gateway.open("other")
+    gateway.request("other", {"op": "hello", "id": 1, "version": [1, 1], "app": "Other mail 2.3"})
+    gateway.request("other", {"op": "callsigns", "id": 2, "callsigns": ["N1CALL-10"]})
+    gateway.request("other", {"op": "callsigns", "id": 3, "callsigns": ["N1CALL-1"]})
+    rpmi_start(caller, "client", "Other mail client 2.3", ["N3CALL"], listen=False)
+    caller.request("client", {"op": "connect", "id": 3, "remote": "N1CALL-1"})
+    w.note(
+        "N1CALL-1 is the other program's, and it is not listening; RadioPost listens, but only "
+        "for its own N1CALL-10. Nobody answers."
+    )
+    w.give_up()
+    gateway.request("other", {"op": "listen", "id": 4, "on": True})
+    caller.request("client", {"op": "connect", "id": 4, "remote": "N1CALL-1"})
+    other_link = link_of(gateway, "other")
+    gateway.request("radiopost", {"op": "status", "id": 4})
+    gateway.request(
+        "radiopost",
+        {"op": "send", "id": 5, "link": other_link, "data": rpmi.encode_data(b"not mine")},
+    )
+    gateway.request("radiopost", {"op": "connect", "id": 6, "remote": "KK4ODA"})
+    caller.request("client", {"op": "disconnect", "id": 5, "link": link_of(caller, "client")})
+    gateway.close("other")
+    caller.request("client", {"op": "connect", "id": 6, "remote": "N1CALL-1"})
+    w.note("The other program has gone, and N1CALL-1 with it: nobody answers.")
+    w.give_up()
+    return w.log
+
+
+def rpmi_broadcast() -> list[dict[str, Any]]:
+    w = rpmi.World()
+    client = rpmi_adapter(w, "KK4ODA", "c", shared=False)
+    gateway = rpmi_adapter(w, "N1CALL-10", "g", shared=False)
+    rpmi_start(gateway, "gateway", "RadioPost gateway 0.1.0", ["N1CALL-10"], listen=True)
+    rpmi_start(client, "client", "RadioPost client 0.1.0", ["KK4ODA"], listen=False)
+    client.request(
+        "client",
+        {
+            "op": "broadcast",
+            "id": 3,
+            "data": rpmi.encode_data(b"KK4ODA: on the road near Austin, all well"),
+            "ref": "b1",
+        },
+    )
+    return w.log
+
+
+def make_rpmi_conversations() -> dict[str, Any]:
+    out = header("Conversations between hosts and adapters", {"RP-4": "§1–§7"})
+    out["rule"] = (
+        "Each step is one line on one station's connection between a host and its adapter: "
+        "`to: adapter` from the host, `to: host` from the adapter, or a connection opening or "
+        "closing. Messages compare as JSON values, not as text; `text` is for people and need not "
+        "match. An adapter given the host lines answers with the adapter lines, except where the "
+        "modem decides: how `received` splits the bytes (here at most 128 a line) and the time "
+        "between events. A host given the adapter lines sends the host lines. Notes are for "
+        "people."
+    )
+    out["modem"] = {
+        "name": RPMI_MODEM,
+        "received_bytes_at_most": RPMI_FRAME,
+        "link_ids": "each adapter's own: a letter for the station and a count from 1",
+    }
+    out["conversations"] = [
+        {
+            "name": "session-01 over RPMI",
+            "story": (
+                "The client KK4ODA calls the gateway N1CALL-10 and the two carry session-01.json "
+                "between them: one `send` a transmission, with a `ref`. Each `received` carries "
+                "part of the other station's stream; a host joins them, since `received` keeps no "
+                "`send` boundaries. The bytes received are session-01.json's streams."
+            ),
+            "steps": rpmi_session(),
+        },
+        {
+            "name": "errors",
+            "story": (
+                "A client meets every error in turn: a request before `hello`; no version in "
+                "common (the adapter closes, and the host connects again); `listen` and `connect` "
+                "before `callsigns`; an `as` that is not its own; a bandwidth the modem lacks; an "
+                "unknown op; a link that is not its; an `abort` with nothing to abort. Then two "
+                "calls to a station nobody answers for, one aborted and one given up, a call that "
+                "connects, a second call while that link is up, and the link aborted."
+            ),
+            "steps": rpmi_errors(),
+        },
+        {
+            "name": "a shared modem",
+            "story": (
+                "The gateway station N1CALL shares its modem between RadioPost (N1CALL-10) and "
+                "another mail program (N1CALL-1). The other program cannot take N1CALL-10, and "
+                "N1CALL-1 is a different callsign. A call to N1CALL-1 is answered only once that "
+                "program listens. While its link is up, RadioPost hears only `busy`: its status "
+                "lists no links, the other program's link is `not-connected` to it, and its own "
+                "call is refused `busy`. When the other program's connection closes, its "
+                "callsign goes with it."
+            ),
+            "steps": rpmi_shared(),
+        },
+        {
+            "name": "a broadcast",
+            "story": "The client sends a broadcast; the gateway's host hears it with its source.",
+            "steps": rpmi_broadcast(),
+        },
+    ]
+    return out
+
+
+RPMI_LINES = [
+    ('{ "op" : "status", "id" : "s1", "colour" : "blue" }', "a string id, an unknown member"),
+    ("hello", "not JSON"),
+    ('["op", "status"]', "not a JSON object"),
+    ('{"id": 4}', "no op"),
+    ('{"op": 5, "id": 5}', "an op that is not a string"),
+    ('{"op": "status", "id": 1.5}', "an id that is neither a string nor an integer"),
+    ('{"op": "status", "id": true}', "an id that is a boolean"),
+    ('{"op": "send", "id": 8, "link": "c1", "data": "-_8="}', "base64url, not standard base64"),
+    ('{"op": "send", "id": 9, "link": "c1", "data": "AQ"}', "base64 without its padding"),
+    ('{"op": "tune", "id": 10}', "an op this adapter does not know"),
+    ('{"op": "send", "id": 11, "link": "c1", "data": "AQ=="}', "good base64, but no such link"),
+]
+
+
+def make_rpmi_lines() -> dict[str, Any]:
+    w = rpmi.World()
+    adapter = rpmi_adapter(w, "KK4ODA", "c", shared=False)
+    rpmi_start(adapter, "client", "RadioPost client 0.1.0", ["KK4ODA"], listen=False)
+    cases = []
+    for line, what in RPMI_LINES:
+        before = len(w.log)
+        adapter.request_line("client", line)
+        answers = [e["message"] for e in w.log[before + 1 :]]
+        cases.append({"what": what, "line": line, "answers": answers})
+    out = header("RPMI lines: read, or answered with an error", {"RP-4": "§2, §4, §7"})
+    out["rule"] = (
+        "An adapter that has said `hello` to a host with the callsign KK4ODA, and has no links, "
+        "reads each `line` (one line of JSON Lines, without its LF) and answers with `answers`. "
+        "Messages compare as JSON values; `text` need not match."
+    )
+    out["lines"] = cases
+    return out
+
+
 # -- dns.json and api.json -----------------------------------------------------------------------
 
 
@@ -1780,6 +2023,8 @@ FILES = {
     "session-01.json": make_session,
     "session-02.json": make_resumed,
     "session-03.json": make_station,
+    "rpmi-lines.json": make_rpmi_lines,
+    "rpmi-conversations.json": make_rpmi_conversations,
     "dns.json": make_dns,
     "api.json": make_api,
 }
@@ -1831,6 +2076,44 @@ def self_check(name: str, data: dict[str, Any]) -> None:
         check_resumed(data)
     if name == "session-03.json":
         check_station(data)
+    if name == "rpmi-conversations.json":
+        check_rpmi(data)
+
+
+def check_rpmi(data: dict[str, Any]) -> None:
+    """Each request is a good line and is answered; session-01's bytes cross intact (RP-4)."""
+    answers = {"ok", "error", "hello", "status"}
+    for conversation in data["conversations"]:
+        steps = conversation["steps"]
+        for i, step in enumerate(steps):
+            m = step.get("message")
+            if step.get("to") != "adapter" or m is None:
+                continue
+            assert rpmi.parse_line(rpmi.line_of(m)) == (m, None)
+            if "id" not in m:
+                continue
+            later = [
+                t["message"]
+                for t in steps[i + 1 :]
+                if t.get("to") == "host"
+                and (t["station"], t["host"]) == (step["station"], step["host"])
+            ]
+            first = next(x for x in later if x.get("id") == m["id"] and x["op"] in answers)
+            if m["op"] == "connect" and first["op"] == "ok":
+                assert any(
+                    x.get("id") == m["id"] and x["op"] in {"connected", "failed"} for x in later
+                )
+    sent = {"client": b"", "gateway": b""}
+    got = {"client": b"", "gateway": b""}
+    for step in data["conversations"][0]["steps"]:
+        m = step.get("message") or {}
+        if m.get("op") in {"send", "received"}:
+            data_bytes = rpmi.decode_data(m["data"])
+            assert data_bytes is not None
+            (sent if m["op"] == "send" else got)[step["host"]] += data_bytes
+    streams = write_transmissions(session_pdus())[1]
+    for who, other in (("client", "gateway"), ("gateway", "client")):
+        assert sent[who].hex() == got[other].hex() == streams[who]
 
 
 def pdus_of(t: dict[str, Any]) -> list[dict[int, Any]]:

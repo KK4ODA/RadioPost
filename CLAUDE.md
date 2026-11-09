@@ -15,8 +15,8 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
 - `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`. Standard
   library only; `ruff.toml` holds the lint settings.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`
-  from `tools/vectors/rpref/` (deterministic CBOR, Ed25519 after RFC 8032, RadioPost's objects;
-  standard library only, self-tested against RFC 8032 §7.1 and RFC 8949 Appendix A at every run).
+  from `tools/vectors/rpref/` (deterministic CBOR, Ed25519 after RFC 8032, RadioPost's objects,
+  RPMI adapters on a simulated channel in `rpmi.py`; standard library only, self-tested against RFC 8032 §7.1 and RFC 8949 Appendix A at every run).
 - `tools/check_docs.py` — headers against change logs and the index, relative links, `RP-n §x.y`
   references, SPDX lines. `.github/workflows/check.yml` runs it with ruff (pinned 0.16.9: preview
   rules), `make.py --check` and the figure generators (no diff), on Python 3.12 and 3.13, for
@@ -33,8 +33,9 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   the spec. `python tools/vectors/make.py --check` must pass before a push. A vector that disagrees
   with a spec is a bug in the reference. DEFLATE air forms are marked `"exact": false` (zlib
   versions differ); `--check` inflates them. The session vectors send uncompressed so they stay
-  byte-exact. Writing a vector is how a spec gap is found: the first run found five, the resumed
-  and station-to-station sessions three more.
+  byte-exact. RPMI messages compare as JSON values, not text. Writing a vector is how a spec gap
+  is found: the first run found five, the resumed and station-to-station sessions three more, the
+  modem interface's conversations seven unwritten rules.
 - **Numbers are measured.** Sizes and times in the specs come from encoding the examples, not
   estimates.
 - **Cross-references** are written `RP-n §x.y`; check them when sections move.

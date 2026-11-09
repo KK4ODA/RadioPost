@@ -1,0 +1,1970 @@
+{
+  "radiopost_vectors": "Conversations between hosts and adapters",
+  "format": 1,
+  "specs": {
+    "RP-4": "§1–§7"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "Each step is one line on one station's connection between a host and its adapter: `to: adapter` from the host, `to: host` from the adapter, or a connection opening or closing. Messages compare as JSON values, not as text; `text` is for people and need not match. An adapter given the host lines answers with the adapter lines, except where the modem decides: how `received` splits the bytes (here at most 128 a line) and the time between events. A host given the adapter lines sends the host lines. Notes are for people.",
+  "modem": {
+    "name": "rpref simulated modem 1",
+    "received_bytes_at_most": 128,
+    "link_ids": "each adapter's own: a letter for the station and a count from 1"
+  },
+  "conversations": [
+    {
+      "name": "session-01 over RPMI",
+      "story": "The client KK4ODA calls the gateway N1CALL-10 and the two carry session-01.json between them: one `send` a transmission, with a `ref`. Each `received` carries part of the other station's stream; a host joins them, since `received` keeps no `send` boundaries. The bytes received are session-01.json's streams.",
+      "steps": [
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "connection": "opened"
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost gateway 0.1.0"
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": false
+            }
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "N1CALL-10"
+            ]
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "adapter",
+          "message": {
+            "op": "listen",
+            "id": 3,
+            "on": true
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 3
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "connection": "opened"
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost client 0.1.0"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": false
+            }
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "KK4ODA"
+            ]
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 3,
+            "remote": "N1CALL-10",
+            "bandwidth": 2300
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 3
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "incoming",
+            "remote": "KK4ODA",
+            "local": "N1CALL-10"
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "connected",
+            "link": "g1",
+            "remote": "KK4ODA",
+            "local": "N1CALL-10",
+            "direction": "in",
+            "bandwidth": 2300
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "connected",
+            "id": 3,
+            "link": "c1",
+            "remote": "N1CALL-10",
+            "local": "KK4ODA",
+            "direction": "out",
+            "bandwidth": 2300
+          }
+        },
+        {
+          "note": "RP-3 transmission 1: HELLO"
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "send",
+            "link": "c1",
+            "data": "AMeuAAEBggEBAgADdWZhY3VuZG9AcmFkaW9wb3N0Lm9yZwRmS0s0T0RBBWlOMUNBTEwtMTAGGmrx20AHSPPkAzkb/bD9CIKDTFDTojrB0T9oQ5js5xiJAINMq53SZJ86TFWng3UBGI4ACRkBogoZA+gMogGDAAECAhkQAA5IymG9RGQ388MPWECUPBMD8aMLhdLPbevo/RSgSRl8ZskuQ07q5tAdFPeYPc8R+3ljzQpJz0wO2J+GSoYnMtl6zDLjBHIVf/jHhU8B",
+            "ref": "t1"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "queued",
+            "link": "c1",
+            "bytes": 201
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "g1",
+            "data": "AMeuAAEBggEBAgADdWZhY3VuZG9AcmFkaW9wb3N0Lm9yZwRmS0s0T0RBBWlOMUNBTEwtMTAGGmrx20AHSPPkAzkb/bD9CIKDTFDTojrB0T9oQ5js5xiJAINMq53SZJ86TFWng3UBGI4ACRkBogoZA+gMogGDAAECAhkQAA5IymE="
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "g1",
+            "data": "vURkN/PDD1hAlDwTA/GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX/4x4VPAQ=="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "delivered",
+            "link": "c1",
+            "ref": "t1"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "queued",
+            "link": "c1",
+            "bytes": 0
+          }
+        },
+        {
+          "note": "RP-3 transmission 2: WELCOME, MSG"
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "adapter",
+          "message": {
+            "op": "send",
+            "link": "g1",
+            "data": "AOasAAIBAQJI7HsxhB7EfEcDAAWCgkxQ06I6wdE/aEOY7OcAgkyrndJknzpMVaeDdQEABoAHg4cZAaNMRzQqQH830xia9/fBcW1hcmlhQGV4YW1wbGUuY29tbUFyZSB5b3Ugc2FmZT8ZARUAAIcZAaRMPN6Nv5/h+U26kUnRcWVvY0ByYWRpb3Bvc3Qub3JnblNoZWx0ZXIgcm9zdGVyGQUSAACHGQGlTBPsUFo7ZGG/xgv5cnFtYXJpYUBleGFtcGxlLmNvbWVQaG90bxkX6gAACAAJogGCAAECGRAAChpq8dtpC/UM9QE0pgAEAUxHNCpAfzfTGJr398ECAAMZARUEWQEVAKYBAQJxbWFyaWFAZXhhbXBsZS5jb20DgXVmYWN1bmRvQHJhZGlvcG9zdC5vcmcFGmrxsRAGbUFyZSB5b3Ugc2FmZT8HeM5GYWN1bmRvLAoKV2Ugc2F3IHRoZSBuZXdzIGFib3V0IHRoZSBzdG9ybSBhbmQgY2Fubm90IHJlYWNoIGFueW9uZSBieSBwaG9uZS4gQXJlIHlvdSBhbmQgdGhlIGZhbWlseSBzYWZlPyBJcyB0aGUgaG91c2UgYWxsIHJpZ2h0PyBEbyB5b3UgbmVlZCBhbnl0aGluZyB3ZSBjYW4gc2VuZD8KCldyaXRlIHdoZW4geW91IGNhbiwgZXZlbiBvbmUgbGluZS4KCk1hcmlhCgUZAaM=",
+            "ref": "t2"
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "queued",
+            "link": "g1",
+            "bytes": 542
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "AOasAAIBAQJI7HsxhB7EfEcDAAWCgkxQ06I6wdE/aEOY7OcAgkyrndJknzpMVaeDdQEABoAHg4cZAaNMRzQqQH830xia9/fBcW1hcmlhQGV4YW1wbGUuY29tbUFyZSB5b3Ugc2FmZT8ZARUAAIcZAaRMPN6Nv5/h+U26kUnRcWU="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "b2NAcmFkaW9wb3N0Lm9yZ25TaGVsdGVyIHJvc3RlchkFEgAAhxkBpUwT7FBaO2Rhv8YL+XJxbWFyaWFAZXhhbXBsZS5jb21lUGhvdG8ZF+oAAAgACaIBggABAhkQAAoaavHbaQv1DPUBNKYABAFMRzQqQH830xia9/fBAgADGQE="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "FQRZARUApgEBAnFtYXJpYUBleGFtcGxlLmNvbQOBdWZhY3VuZG9AcmFkaW9wb3N0Lm9yZwUaavGxEAZtQXJlIHlvdSBzYWZlPwd4zkZhY3VuZG8sCgpXZSBzYXcgdGhlIG5ld3MgYWJvdXQgdGhlIHN0b3JtIGFuZCBjYW5ub3Q="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "IHJlYWNoIGFueW9uZSBieSBwaG9uZS4gQXJlIHlvdSBhbmQgdGhlIGZhbWlseSBzYWZlPyBJcyB0aGUgaG91c2UgYWxsIHJpZ2h0PyBEbyB5b3UgbmVlZCBhbnl0aGluZyB3ZSBjYW4gc2VuZD8KCldyaXRlIHdoZW4geW91IGM="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "YW4sIGV2ZW4gb25lIGxpbmUuCgpNYXJpYQoFGQGj"
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "delivered",
+            "link": "g1",
+            "ref": "t2"
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "queued",
+            "link": "g1",
+            "bytes": 0
+          }
+        },
+        {
+          "note": "RP-3 transmission 3: MSG, MSG, RECEIPT, REQUEST"
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "send",
+            "link": "c1",
+            "data": "AKKlAAQBTFDTojrB0T9oQ5js5wIAAxiJBFiJAKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FxbWFyaWFAZXhhbXBsZS5jb20FGmrx2OgGcVJlOiBBcmUgeW91IHNhZmU/B3gwV2UgYXJlIGZpbmUuIFBvd2VyIGlzIG91dCwgYnV0IHRoZSByYWRpbyB3b3Jrcy4KCkxHNCpAfzfTGJr398EAp6UABAFMq53SZJ86TFWng3UBAgADGI4EWI4ApgEBAnVmYWN1bmRvQHJhZGlvcG9zdC5vcmcDgW9hbmFAaGFtcG9zdC5vcmcFGmrx2hQGa0NoZWNraW5nIGluB3hLQW5hLCBJIGFtIG9uIHRoZSByb2FkIG5lYXIgQXVzdGluIHVudGlsIEZyaWRheS4gQWxsIHdlbGwgaGVyZS4gNzMsIEZhY3VuZG8KABKiAAUBgUxHNCpAfzfTGJr398EACKIABgGBGQGk",
+            "ref": "t3"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "queued",
+            "link": "c1",
+            "bytes": 363
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "g1",
+            "data": "AKKlAAQBTFDTojrB0T9oQ5js5wIAAxiJBFiJAKcBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FxbWFyaWFAZXhhbXBsZS5jb20FGmrx2OgGcVJlOiBBcmUgeW91IHNhZmU/B3gwV2UgYXJlIGZpbmUuIFBvd2VyIGlzIG91dCw="
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "g1",
+            "data": "IGJ1dCB0aGUgcmFkaW8gd29ya3MuCgpMRzQqQH830xia9/fBAKelAAQBTKud0mSfOkxVp4N1AQIAAxiOBFiOAKYBAQJ1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnA4FvYW5hQGhhbXBvc3Qub3JnBRpq8doUBmtDaGVja2luZyBpbgc="
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "g1",
+            "data": "eEtBbmEsIEkgYW0gb24gdGhlIHJvYWQgbmVhciBBdXN0aW4gdW50aWwgRnJpZGF5LiBBbGwgd2VsbCBoZXJlLiA3MywgRmFjdW5kbwoAEqIABQGBTEc0KkB/N9MYmvf3wQAIogAGAYEZAaQ="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "delivered",
+            "link": "c1",
+            "ref": "t3"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "queued",
+            "link": "c1",
+            "bytes": 0
+          }
+        },
+        {
+          "note": "RP-3 transmission 4: RECEIPT, MSG, DONE"
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "adapter",
+          "message": {
+            "op": "send",
+            "link": "g1",
+            "data": "AB+iAAUBgkxQ06I6wdE/aEOY7OdMq53SZJ86TFWng3UBBTGmAAQBTDzejb+f4flNupFJ0QIAAxkFEgRZBRIApwEBAnFlb2NAcmFkaW9wb3N0Lm9yZwOBdWZhY3VuZG9AcmFkaW9wb3N0Lm9yZwSBdnNoZWx0ZXIzQHJhZGlvcG9zdC5vcmcFGmrxvyAGblNoZWx0ZXIgcm9zdGVyB3kEsFNoZWx0ZXIgMyByb3N0ZXIgYXMgb2YgMTI6MDAgbG9jYWwuIFBsZWFzZSBjb25maXJtIGJ5IHJhZGlvLgoKIDEuIEZhbWlseSBBbHZhcmV6OiA0IHBlb3BsZSwgaW5zdWxpbiBuZWVkZWQgYnkgVGh1cnNkYXkKIDIuIEZhbWlseSBCcm9va3M6IDIgcGVvcGxlLCBubyBuZWVkcwogMy4gRmFtaWx5IENoZW46IDUgcGVvcGxlLCBpbmZhbnQgZm9ybXVsYQogNC4gRmFtaWx5IERpYWxsbzogMyBwZW9wbGUsIG5vIG5lZWRzCiA1LiBGYW1pbHkgRXZhbnM6IDEgcGVvcGxlLCB3aGVlbGNoYWlyLCBuZWVkcyBncm91bmQgZmxvb3IKIDYuIEZhbWlseSBGaXNjaGVyOiA2IHBlb3BsZSwgbm8gbmVlZHMKIDcuIEZhbWlseSBHYXJjaWE6IDIgcGVvcGxlLCBveHlnZW4gY29uY2VudHJhdG9yLCBuZWVkcyBwb3dlcgogOC4gRmFtaWx5IEhhZGRhZDogNCBwZW9wbGUsIG5vIG5lZWRzCiA5LiBGYW1pbHkgSXZhbm92YTogMyBwZW9wbGUsIHBldCBkb2cKMTAuIEZhbWlseSBKb2huc29uOiAyIHBlb3BsZSwgbm8gbmVlZHMKMTEuIEZhbWlseSBLb3dhbHNraTogNSBwZW9wbGUsIG5vIG5lZWRzCjEyLiBGYW1pbHkgTG9wZXo6IDMgcGVvcGxlLCBwcmVzY3JpcHRpb24gcmVmaWxsLCBibG9vZCBwcmVzc3VyZQoxMy4gRmFtaWx5IE1lbnNhaDogNCBwZW9wbGUsIG5vIG5lZWRzCjE0LiBGYW1pbHkgTmFrYW11cmE6IDIgcGVvcGxlLCBubyBuZWVkcwoxNS4gRmFtaWx5IE9rYWZvcjogNyBwZW9wbGUsIHR3byBjaGlsZHJlbiB1bmRlciB0aHJlZQoxNi4gRmFtaWx5IFBhdGVsOiAzIHBlb3BsZSwgbm8gbmVlZHMKMTcuIEZhbWlseSBRdWlubjogMSBwZW9wbGUsIG5vIG5lZWRzCjE4LiBGYW1pbHkgUm9zc2k6IDQgcGVvcGxlLCBkaWV0YXJ5OiBnbHV0ZW4gZnJlZQoxOS4gRmFtaWx5IFNpbHZhOiAyIHBlb3BsZSwgbm8gbmVlZHMKMjAuIEZhbWlseSBUaG9tcHNvbjogMyBwZW9wbGUsIG5vIG5lZWRzCjIxLiBGYW1pbHkgVWVkYTogMiBwZW9wbGUsIGhlYXJpbmcgaW1wYWlyZWQsIG5lZWRzIHdyaXR0ZW4gbm90aWNlcwoyMi4gRmFtaWx5IFZhcmdhczogNSBwZW9wbGUsIG5vIG5lZWRzCjIzLiBGYW1pbHkgV2lsbGlhbXM6IDIgcGVvcGxlLCBubyBuZWVkcwoyNC4gRmFtaWx5IFh1OiAzIHBlb3BsZSwgbm8gbmVlZHMKMjUuIEZhbWlseSBZb3VuZzogNCBwZW9wbGUsIG5vIG5lZWRzCjI2LiBGYW1pbHkgWmhvdTogMiBwZW9wbGUsIG5vIG5lZWRzCgUZAaQAA6EABw==",
+            "ref": "t4"
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "queued",
+            "link": "g1",
+            "bytes": 1369
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "AB+iAAUBgkxQ06I6wdE/aEOY7OdMq53SZJ86TFWng3UBBTGmAAQBTDzejb+f4flNupFJ0QIAAxkFEgRZBRIApwEBAnFlb2NAcmFkaW9wb3N0Lm9yZwOBdWZhY3VuZG9AcmFkaW9wb3N0Lm9yZwSBdnNoZWx0ZXIzQHJhZGlvcG8="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "c3Qub3JnBRpq8b8gBm5TaGVsdGVyIHJvc3Rlcgd5BLBTaGVsdGVyIDMgcm9zdGVyIGFzIG9mIDEyOjAwIGxvY2FsLiBQbGVhc2UgY29uZmlybSBieSByYWRpby4KCiAxLiBGYW1pbHkgQWx2YXJlejogNCBwZW9wbGUsIGluc3U="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "bGluIG5lZWRlZCBieSBUaHVyc2RheQogMi4gRmFtaWx5IEJyb29rczogMiBwZW9wbGUsIG5vIG5lZWRzCiAzLiBGYW1pbHkgQ2hlbjogNSBwZW9wbGUsIGluZmFudCBmb3JtdWxhCiA0LiBGYW1pbHkgRGlhbGxvOiAzIHBlb3A="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "bGUsIG5vIG5lZWRzCiA1LiBGYW1pbHkgRXZhbnM6IDEgcGVvcGxlLCB3aGVlbGNoYWlyLCBuZWVkcyBncm91bmQgZmxvb3IKIDYuIEZhbWlseSBGaXNjaGVyOiA2IHBlb3BsZSwgbm8gbmVlZHMKIDcuIEZhbWlseSBHYXJjaWE="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "OiAyIHBlb3BsZSwgb3h5Z2VuIGNvbmNlbnRyYXRvciwgbmVlZHMgcG93ZXIKIDguIEZhbWlseSBIYWRkYWQ6IDQgcGVvcGxlLCBubyBuZWVkcwogOS4gRmFtaWx5IEl2YW5vdmE6IDMgcGVvcGxlLCBwZXQgZG9nCjEwLiBGYW0="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "aWx5IEpvaG5zb246IDIgcGVvcGxlLCBubyBuZWVkcwoxMS4gRmFtaWx5IEtvd2Fsc2tpOiA1IHBlb3BsZSwgbm8gbmVlZHMKMTIuIEZhbWlseSBMb3BlejogMyBwZW9wbGUsIHByZXNjcmlwdGlvbiByZWZpbGwsIGJsb29kIHA="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "cmVzc3VyZQoxMy4gRmFtaWx5IE1lbnNhaDogNCBwZW9wbGUsIG5vIG5lZWRzCjE0LiBGYW1pbHkgTmFrYW11cmE6IDIgcGVvcGxlLCBubyBuZWVkcwoxNS4gRmFtaWx5IE9rYWZvcjogNyBwZW9wbGUsIHR3byBjaGlsZHJlbiA="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "dW5kZXIgdGhyZWUKMTYuIEZhbWlseSBQYXRlbDogMyBwZW9wbGUsIG5vIG5lZWRzCjE3LiBGYW1pbHkgUXVpbm46IDEgcGVvcGxlLCBubyBuZWVkcwoxOC4gRmFtaWx5IFJvc3NpOiA0IHBlb3BsZSwgZGlldGFyeTogZ2x1dGU="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "biBmcmVlCjE5LiBGYW1pbHkgU2lsdmE6IDIgcGVvcGxlLCBubyBuZWVkcwoyMC4gRmFtaWx5IFRob21wc29uOiAzIHBlb3BsZSwgbm8gbmVlZHMKMjEuIEZhbWlseSBVZWRhOiAyIHBlb3BsZSwgaGVhcmluZyBpbXBhaXJlZCw="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "IG5lZWRzIHdyaXR0ZW4gbm90aWNlcwoyMi4gRmFtaWx5IFZhcmdhczogNSBwZW9wbGUsIG5vIG5lZWRzCjIzLiBGYW1pbHkgV2lsbGlhbXM6IDIgcGVvcGxlLCBubyBuZWVkcwoyNC4gRmFtaWx5IFh1OiAzIHBlb3BsZSwgbm8="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "c1",
+            "data": "IG5lZWRzCjI1LiBGYW1pbHkgWW91bmc6IDQgcGVvcGxlLCBubyBuZWVkcwoyNi4gRmFtaWx5IFpob3U6IDIgcGVvcGxlLCBubyBuZWVkcwoFGQGkAAOhAAc="
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "delivered",
+            "link": "g1",
+            "ref": "t4"
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "queued",
+            "link": "g1",
+            "bytes": 0
+          }
+        },
+        {
+          "note": "RP-3 transmission 5: RECEIPT, DONE"
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "send",
+            "link": "c1",
+            "data": "ABKiAAUBgUw83o2/n+H5TbqRSdEAA6EABw==",
+            "ref": "t5"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "queued",
+            "link": "c1",
+            "bytes": 25
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "received",
+            "link": "g1",
+            "data": "ABKiAAUBgUw83o2/n+H5TbqRSdEAA6EABw=="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "delivered",
+            "link": "c1",
+            "ref": "t5"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "queued",
+            "link": "c1",
+            "bytes": 0
+          }
+        },
+        {
+          "note": "Both stations have sent DONE and hold receipts: the caller hangs up (RP-3 §8)."
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "disconnect",
+            "id": 4,
+            "link": "c1"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 4
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "disconnected",
+            "link": "c1",
+            "reason": "local"
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "disconnected",
+            "link": "g1",
+            "reason": "remote"
+          }
+        }
+      ]
+    },
+    {
+      "name": "errors",
+      "story": "A client meets every error in turn: a request before `hello`; no version in common (the adapter closes, and the host connects again); `listen` and `connect` before `callsigns`; an `as` that is not its own; a bandwidth the modem lacks; an unknown op; a link that is not its; an `abort` with nothing to abort. Then two calls to a station nobody answers for, one aborted and one given up, a call that connects, a second call while that link is up, and the link aborted.",
+      "steps": [
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "connection": "opened"
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost gateway 0.1.0"
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": false
+            }
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "N1CALL-10"
+            ]
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "adapter",
+          "message": {
+            "op": "listen",
+            "id": 3,
+            "on": true
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 3
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "connection": "opened"
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 1,
+            "remote": "N1CALL-10"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 1,
+            "code": "refused",
+            "text": "hello first"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 2,
+            "version": [
+              2,
+              3
+            ],
+            "app": "RadioPost client 0.1.0"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 2,
+            "code": "unsupported-version",
+            "text": "this adapter speaks 1"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "connection": "closed"
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "connection": "opened"
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 3,
+            "version": [
+              1,
+              2
+            ],
+            "app": "RadioPost client 0.1.0"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 3,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": false
+            }
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "listen",
+            "id": 4,
+            "on": true
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 4,
+            "code": "refused",
+            "text": "no callsigns yet"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 5,
+            "remote": "N1CALL-10"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 5,
+            "code": "refused",
+            "text": "no callsigns yet"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 6,
+            "callsigns": [
+              "KK4ODA"
+            ]
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 6
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 7,
+            "remote": "N1CALL-10",
+            "as": "W1AW"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 7,
+            "code": "not-authorized",
+            "text": "W1AW is not this host's"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 8,
+            "remote": "N1CALL-10",
+            "bandwidth": 2750
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 8,
+            "code": "unsupported",
+            "text": "no 2750 Hz on this modem"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "tune",
+            "id": 9
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 9,
+            "code": "unsupported",
+            "text": "no op tune"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "send",
+            "id": 10,
+            "link": "c7",
+            "data": "AA=="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 10,
+            "code": "not-connected",
+            "text": "no such link of this host's"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "abort",
+            "id": 11
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 11,
+            "code": "not-connected",
+            "text": "no call under way"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 12,
+            "remote": "N9ZZZ"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 12
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "abort",
+            "id": 13
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 13
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "failed",
+            "id": 12,
+            "code": "aborted",
+            "text": "the host aborted"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 14,
+            "remote": "N9ZZZ"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 14
+          }
+        },
+        {
+          "note": "Nobody answers N9ZZZ: the modem gives up on the call."
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "failed",
+            "id": 14,
+            "code": "timeout",
+            "text": "no answer"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 15,
+            "remote": "N1CALL-10"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 15
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "incoming",
+            "remote": "KK4ODA",
+            "local": "N1CALL-10"
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "connected",
+            "link": "g1",
+            "remote": "KK4ODA",
+            "local": "N1CALL-10",
+            "direction": "in"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "connected",
+            "id": 15,
+            "link": "c1",
+            "remote": "N1CALL-10",
+            "local": "KK4ODA",
+            "direction": "out"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 16,
+            "remote": "N2CALL-5"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 16,
+            "code": "busy",
+            "text": "a link or a call is up"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "abort",
+            "id": 17,
+            "link": "c1"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 17
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "disconnected",
+            "link": "c1",
+            "reason": "local"
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "disconnected",
+            "link": "g1",
+            "reason": "remote"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a shared modem",
+      "story": "The gateway station N1CALL shares its modem between RadioPost (N1CALL-10) and another mail program (N1CALL-1). The other program cannot take N1CALL-10, and N1CALL-1 is a different callsign. A call to N1CALL-1 is answered only once that program listens. While its link is up, RadioPost hears only `busy`: its status lists no links, the other program's link is `not-connected` to it, and its own call is refused `busy`. When the other program's connection closes, its callsign goes with it.",
+      "steps": [
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "connection": "opened"
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost gateway 0.1.0"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": true
+            }
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "N1CALL-10"
+            ]
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "listen",
+            "id": 3,
+            "on": true
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 3
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "connection": "opened"
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "Other mail 2.3"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": true
+            }
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "N1CALL-10"
+            ]
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 2,
+            "code": "claimed",
+            "text": "N1CALL-10 is held by another program"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 3,
+            "callsigns": [
+              "N1CALL-1"
+            ]
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 3
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "connection": "opened"
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "Other mail client 2.3"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": false
+            }
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "N3CALL"
+            ]
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 3,
+            "remote": "N1CALL-1"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 3
+          }
+        },
+        {
+          "note": "N1CALL-1 is the other program's, and it is not listening; RadioPost listens, but only for its own N1CALL-10. Nobody answers."
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "failed",
+            "id": 3,
+            "code": "timeout",
+            "text": "no answer"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "listen",
+            "id": 4,
+            "on": true
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 4
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 4,
+            "remote": "N1CALL-1"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 4
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "incoming",
+            "remote": "N3CALL",
+            "local": "N1CALL-1"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "connected",
+            "link": "g1",
+            "remote": "N3CALL",
+            "local": "N1CALL-1",
+            "direction": "in"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "connected",
+            "id": 4,
+            "link": "c1",
+            "remote": "N1CALL-1",
+            "local": "N3CALL",
+            "direction": "out"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "busy",
+            "busy": true
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "status",
+            "id": 4
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "status",
+            "id": 4,
+            "listening": true,
+            "callsigns": [
+              "N1CALL-10"
+            ],
+            "busy": true,
+            "links": []
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "send",
+            "id": 5,
+            "link": "g1",
+            "data": "bm90IG1pbmU="
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 5,
+            "code": "not-connected",
+            "text": "no such link of this host's"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 6,
+            "remote": "KK4ODA"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 6,
+            "code": "busy",
+            "text": "a link or a call is up"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "disconnect",
+            "id": 5,
+            "link": "c1"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 5
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "disconnected",
+            "link": "c1",
+            "reason": "local"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "disconnected",
+            "link": "g1",
+            "reason": "remote"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "busy",
+            "busy": false
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "connection": "closed"
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 6,
+            "remote": "N1CALL-1"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 6
+          }
+        },
+        {
+          "note": "The other program has gone, and N1CALL-1 with it: nobody answers."
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "failed",
+            "id": 6,
+            "code": "timeout",
+            "text": "no answer"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a broadcast",
+      "story": "The client sends a broadcast; the gateway's host hears it with its source.",
+      "steps": [
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "connection": "opened"
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost gateway 0.1.0"
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": false
+            }
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "N1CALL-10"
+            ]
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "adapter",
+          "message": {
+            "op": "listen",
+            "id": 3,
+            "on": true
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 3
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "connection": "opened"
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost client 0.1.0"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": false
+            }
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "KK4ODA"
+            ]
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "broadcast",
+            "id": 3,
+            "data": "S0s0T0RBOiBvbiB0aGUgcm9hZCBuZWFyIEF1c3RpbiwgYWxsIHdlbGw=",
+            "ref": "b1"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 3
+          }
+        },
+        {
+          "station": "N1CALL-10",
+          "host": "gateway",
+          "to": "host",
+          "message": {
+            "op": "broadcast",
+            "source": "KK4ODA",
+            "data": "S0s0T0RBOiBvbiB0aGUgcm9hZCBuZWFyIEF1c3RpbiwgYWxsIHdlbGw="
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "broadcast-sent",
+            "sent": true,
+            "ref": "b1"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -26,6 +26,8 @@ anything but checking an implementation.
 | `session-01.json` | RP-3 | The example session of RP-3 §12 byte for byte: five transmissions, both stations' byte streams, and what the gateway reports to the post office afterwards. |
 | `session-02.json` | RP-3 §7 | Three sessions, byte for byte, with the links breaking: an upload broken and resumed through the same gateway, then a download broken and resumed through another gateway the next morning. |
 | `session-03.json` | RP-3 §10 | Station to station, byte for byte: Facundo calls Ana's client directly; it takes the message for Ana, refuses the one for someone else, proves itself and hands over Ana's message. |
+| `rpmi-lines.json` | RP-4 §2 | Lines an adapter reads (a string `id`, an unknown member) and lines it answers with an error: not JSON, no `op`, a bad `id`, `data` that is not standard base64 with padding, an unknown `op`. |
+| `rpmi-conversations.json` | RP-4 | Conversations between hosts and a simulated modem's adapters, line by line: session-01 carried over RPMI on both stations, every error a host can meet, a modem shared by two programs, a broadcast. |
 | `dns.json` | RP-1 §7.1 | `_radiopost` TXT records, and which of them are read and which ignored. |
 | `api.json` | RP-5 §3.2, §6.1, §6.4 | The login, enrollment and gateway registration signatures. |
 
@@ -40,6 +42,10 @@ implementation must reproduce and what it must refuse.
   the files. The hex is what counts.
 * Times are Unix seconds (RP-0 §4.4).
 * A verification case's `expect` is `ok` or an error name from RP-0 §9.3.
+* RPMI messages (RP-4) are JSON, which has no one spelling: they compare as JSON values, not as
+  text, and a `text` member, written for people, need not match. Their `data` is standard base64,
+  and exact. In a conversation, how a simulated `received` splits the bytes, and the link IDs, are
+  the simulated modem's choices; a real adapter makes its own.
 
 ### Exact and inflate-only air forms
 
@@ -65,6 +71,8 @@ Read the JSON with any library, and for each file:
 2. **Check** each verification case: give your verifier the case's inputs and compare its verdict
    with `expect`.
 3. **Refuse** each `invalid` item, with the error named.
+4. **Replay** each conversation (`session-*.json`, `rpmi-conversations.json`): play one side
+   from the file and compare what your program says with the other side.
 
 Ed25519 signatures are deterministic, so a correct signer reproduces `signature_hex` exactly.
 
@@ -84,8 +92,9 @@ specification disagree, the specification is right and the reference has a bug.
 
 ## Not yet covered
 
-The modem interface (RP-4), the post office API's requests and answers beyond its signatures
-(RP-5), email conversion (RP-6) and forwarding (RP-7).
+The post office API's requests and answers beyond its signatures (RP-5), email conversion (RP-6)
+and forwarding (RP-7). The modem interface's mapping to real modems (RP-4 §9) is informative and
+has none.
 
 ## Licence
 

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.0 |
+| **Version** | 0.2.1 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -229,7 +229,7 @@ RadioPost repository is under the MIT licence or the Apache License 2.0, at the 
 
 ### 8.6 Test vectors
 
-The files in `vectors/` hold exact inputs and outputs for RP-1, RP-2 and RP-3 and for RP-5's
+The files in `vectors/` hold exact inputs and outputs for RP-1 to RP-4 and for RP-5's
 signatures, made from published test keys by a reference written for the purpose
 (`tools/vectors/`, standard library only). Every implementation SHOULD check itself against
 them. A change that alters any vector updates the files in the same pull request, and
@@ -293,3 +293,4 @@ means the same thing wherever it appears.
 | 0.1.0 | 2026-11-09 | First draft. |
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0 (§8.5). |
 | 0.2.0 | 2026-11-09 | Three API signature contexts in place of one (§9.2); Draft versions stay below 1.0.0 (§8.2); test vectors (§8.6). |
+| 0.2.1 | 2026-11-09 | §8.6: the vectors cover RP-4 too. |

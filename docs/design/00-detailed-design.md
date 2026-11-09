@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.4 |
+| **Version** | 0.1.5 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -200,7 +200,8 @@ To be confirmed:
 * **Test vectors** in `vectors/` (started): messages and their content IDs and air forms (RP-2);
   credentials, their verification and session statements made with published test keys (RP-1);
   every PDU and three sessions, byte for byte: an ordinary one, uploads and downloads broken and
-  resumed, and station to station (RP-3); the API's signatures (RP-5); deterministic
+  resumed, and station to station (RP-3); modem interface lines, and conversations between hosts
+  and a simulated modem, shared and not (RP-4); the API's signatures (RP-5); deterministic
   CBOR and DNS records (RP-0, RP-1). They are made by a small reference in Python, standard
   library only (`tools/vectors/`), written to read like the specifications rather than to be
   fast. `python tools/vectors/make.py` writes them and `--check` compares the reference with the
@@ -209,7 +210,11 @@ To be confirmed:
   0.2.0, RP-2 0.1.2, RP-3 0.1.2 and RP-5 0.2.0. The resumed and station-to-station sessions
   found three more, fixed in RP-1 0.3.0, RP-3 0.2.0 and RP-5 0.3.0: a partial download was never
   said to be sent unasked; nothing kept a resumed air form the same bytes; and the station called
-  never proved who it was (D20). Owed: RP-4 and RP-6.
+  never proved who it was (D20). The modem interface's conversations found seven unwritten rules,
+  fixed in RP-4 0.3.0: what a bad line gets, that a host ignores what it does not know, `refused`
+  before `hello`, which `connect` errors come at once, what `ok` carries, `failed`'s codes with a
+  new `aborted`, and that `received` keeps no `send` boundaries. Owed: RP-5's requests and
+  answers beyond its signatures, and RP-6.
 * **A conformance tester** that plays the other side: a client to test a gateway, a gateway to
   test a client, over the TCP adapter, including broken links, resumes and wrong signatures.
 * **A loopback adapter** joining two hosts through RPMI with delays and losses, for tests with no
@@ -275,3 +280,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.2 | 2026-11-09 | Test vectors started (§7). |
 | 0.1.3 | 2026-11-09 | D19: a modem may be shared (RP-4 0.2.0). |
 | 0.1.4 | 2026-11-09 | D20: the station called proves itself in a station-to-station session; the resumed and station-to-station test vectors (§7). |
+| 0.1.5 | 2026-11-09 | The modem interface's test vectors (§7). |
