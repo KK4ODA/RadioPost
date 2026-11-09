@@ -121,6 +121,7 @@ class PostOffice:
     routes: list[dict[str, Any]] = field(default_factory=list)  # radio routes (RP-7 §6)
     last_poll: dict[str, int] = field(default_factory=dict)  # gateway -> its last copies poll
     forwarded: dict[str, list[tuple[str, str, int]]] = field(default_factory=dict)  # RP-7 §4.1
+    picked_locally: dict[str, set[bytes]] = field(default_factory=dict)  # RP-7 §4.4, not yet here
     gateways: dict[str, dict[str, Any]] = field(default_factory=dict)
     copies: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     codes: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -406,8 +407,27 @@ class PostOffice:
             self.had.add(cid)
             if status == "accepted":
                 self.written_to(stmt[1], cbor.decode(canonical))
+                self._deliver_here(canonical)
             results.append({"id": text, "status": status})
         return results
+
+    def _deliver_here(self, canonical: bytes) -> None:
+        """Mail between this post office's own accounts goes to their mailboxes at once."""
+        message = cbor.decode(canonical)
+        air = rp.air_form(canonical, 0)
+        for address in message.get(3, []) + message.get(4, []):
+            if address.rpartition("@")[2] not in self.domains:
+                continue
+            serial = max((w.serial for w in self.mailboxes.get(address, [])), default=0) + 1
+            fields = {"sender": message[2], "subject": message[6], "priority": message.get(9, 0)}
+            self.deliver(address, serial, air, **fields)
+            self._picked_locally_here(address)
+
+    def _picked_locally_here(self, address: str) -> None:
+        """RP-5 §5.6 `local_pickups`: mark what the user already picked up at a gateway."""
+        cids = self.picked_locally.get(address, set())
+        serials = [w.serial for w in self.mailboxes.get(address, []) if w.cid in cids]
+        self.picked_up(address, serials)
 
     def written_to(self, address: str, message: dict[int, Any]) -> None:
         """RP-5 §6.5: the recipients of mail a user sent join the user's accept list."""
@@ -463,6 +483,9 @@ class PostOffice:
                 continue
             results = self.take(stmt, s.get("messages", []))
             self.picked_up(stmt[1], s.get("pickups", []))
+            local = {rp.id_bytes(t) for t in s.get("local_pickups", [])} - {None}
+            self.picked_locally.setdefault(stmt[1], set()).update(local)  # type: ignore[arg-type]
+            self._picked_locally_here(stmt[1])
             out.append({"results": results})
         return 200, {"sessions": out}
 

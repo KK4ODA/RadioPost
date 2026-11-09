@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.11 |
+| **Version** | 0.1.12 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -92,6 +92,7 @@ reasoning; the specifications hold the result.
 | D21 | **A cut-off gateway calls its partner, and one session carries both directions** (RP-7 §1, §2). | Only the partner's windows need agreeing, and only the station that needs the link starts transmitting. The cut-off gateway is the partner's client: its queue goes out as offers, its users' mail comes back as the partner's waiting list, in the five transmissions of RP-3. | Both gateways calling each other on schedules (two schedules, twice the transmissions); the partner pushing inward mail (the cut-off gateway must listen at agreed times, and the partner start transmissions it may not be allowed to). |
 | D22 | **Inward mail carries the post office's signature** (a placement, RP-7 §4.2). | A forwarding gateway could otherwise hand a cut-off area mail "from the post office" that it made up. The cut-off gateway already holds the post office's keys, and mail from the Internet has no sender's proof to carry. | Trusting the partner (any station can transmit any callsign); end-to-end proof only (Internet mail has none). |
 | D23 | **Partners are configured and routes published; no routing protocol yet** (RP-7 §5, §6). | An area has a few gateways, and their operators know each other. A routing protocol is hard to get right and harder to secure, and nothing yet shows it is needed. | Gateways announcing what they reach (open: RP-7 §8). |
+| D24 | **A cut-off gateway hands mail between its own users** (RP-7 §4.4): the addresses it received copies for in the last 30 days. | In a cut-off area much of the mail that matters is between neighbours, a shelter and the emergency operations centre, and it should not wait for the Internet or a partner's window. The copies say who uses the gateway with no list to keep. The record still takes the message to the post office, which checks it again and marks it picked up. | Waiting for the post office (no mail within the area while it is cut off); keeping mail for any address (the gateway would hold mail for strangers); going through the partner (a window and a round trip for mail that never leaves the area). |
 
 ---
 
@@ -150,7 +151,7 @@ client sees the same protocol, with `online` false and a `NOTICE` saying why.
 | Store | The outgoing queue, copies placed ahead, partial uploads, the replay cache, credentials seen. | RP-3 §7 |
 | Modem host | Talks RPMI to one adapter per radio. | RP-4 |
 | Rules check | Bands and segments for automatic control, when the modem does not check them. | RP-4 §8 |
-| Forwarder | When cut off: calls partners in their windows, offers session records with `PROOF`, takes inward mail and checks its placements. As a partner: takes records, reports them or forwards them on, holds forward items. | RP-7 |
+| Forwarder | When cut off: calls partners in their windows, offers session records with `PROOF`, takes inward mail and checks its placements, and hands mail between its own users. As a partner: takes records, reports them or forwards them on, holds forward items. | RP-7 |
 
 ### 5.3 The post office
 
@@ -235,8 +236,9 @@ To be confirmed:
   RP-7's vectors (a forwarding session, placements, records, the post office's side) found RP-7
   0.2.0's: which flags a forwarding caller's credential needs, and a record's; the placement's
   checks in order with their codes; that copies still wait for a cut-off gateway; and RP-5 0.8.0's
-  refusal of a report whose path does not end at the reporter. Every specification now has
-  vectors.
+  refusal of a report whose path does not end at the reporter. Local delivery has its own (a
+  session at a cut-off gateway, the local recipients, the post office's side). Every specification
+  now has vectors.
 * **A conformance tester** that plays the other side: a client to test a gateway, a gateway to
   test a client, over the TCP adapter, including broken links, resumes and wrong signatures.
 * **A loopback adapter** joining two hosts through RPMI with delays and losses, for tests with no
@@ -288,7 +290,7 @@ Collected from the specifications and the concept, each to be settled in the doc
 | ARDOP's host interface, checked against its specification. | RP-4 §9.3 |
 | Third-party traffic: the table of agreements, and knowing a sender's country. | RP-6 §5 |
 | Stalwart: MTA hooks or milter; AGPL for operators; clustering's edition. | Concept §13 |
-| Forwarding: local delivery in a cut-off area, telling a sender of mail dropped unsent, routing beyond partners, the bands per country. | RP-7 §8 |
+| Forwarding: telling a sender of mail dropped unsent, routing beyond partners, the bands per country. | RP-7 §8 |
 | The reference implementations' languages and packaging. | §6 here |
 
 ---
@@ -309,3 +311,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.9 | 2026-11-09 | Renewal and accept-list test vectors (§7). |
 | 0.1.10 | 2026-11-09 | D21–D23: forwarding (RP-7 0.1.0); the forwarder's part; open questions moved to RP-7 §8. |
 | 0.1.11 | 2026-11-09 | RP-7's test vectors (§7). |
+| 0.1.12 | 2026-11-09 | D24: local delivery at a cut-off gateway (RP-7 0.3.0); the forwarder's part; its vectors (§7). |

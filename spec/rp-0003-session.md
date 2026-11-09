@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.0 |
+| **Version** | 0.4.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -160,7 +160,8 @@ A waiting **entry** is
 `[serial, id, from, subject, size, priority, flags]`: the mailbox serial (uint, §6.2), the content
 ID, the sender's address (text), the subject cut to at most 40 bytes of UTF-8 on a character
 boundary (text), the air-form size (uint), the priority (uint), and flags (uint): 1 `held`
-(attachments held at the post office), 2 `copy` (a copy placed ahead, served while offline).
+(attachments held at the post office), 2 `copy` (a copy placed ahead, served while offline), 4
+`local` (handed between two users of a cut-off gateway, RP-7 §4.4; its serial is 0).
 
 When `status` is `ready`, the gateway follows `WELCOME`, in the same transmission, with `MSG` PDUs
 for the waiting messages whose size is at most the caller's `auto` and for the rest of each waiting
@@ -190,7 +191,7 @@ A message, or a piece of one.
 | 2 | `offset` | uint | yes | Where in the air form this piece starts. |
 | 3 | `total` | uint | yes | The air form's whole length. |
 | 4 | `data` | bstr | yes | The bytes from `offset`. |
-| 5 | `serial` | uint | from the gateway | The mailbox serial of a waiting message (a forwarding serial between gateways, RP-7 §4.3). |
+| 5 | `serial` | uint | from the gateway | The mailbox serial of a waiting message (a forwarding serial between gateways, RP-7 §4.3). Absent for a `local` message. |
 | 6 | `placement` | bstr | when forwarding inward | The post office's placement of the message (RP-7 §4.2, §4.3). |
 
 A station sends a message's pieces in order, without gaps. When it has all `total` bytes, the
@@ -226,6 +227,7 @@ The caller asks for more.
 | 1 | `send` | array of uint | Send these waiting messages (serials). |
 | 2 | `files` | array of [serial, ref] | Ask the post office for these held attachments (RP-2 §2, `held`). They arrive later as a new waiting message from the post office. |
 | 3 | `more` | bool | List the waiting messages not yet listed (`WELCOME` `more`). The gateway answers with another `WELCOME`. |
+| 4 | `ids` | array of bstr .size 12 | Send these waiting messages, by content ID: those listed with serial 0 (RP-7 §4.4). |
 
 Waiting messages that are neither sent nor requested stay waiting.
 
@@ -432,3 +434,4 @@ has one example of each PDU, and frames that must be refused.
 | 0.1.2 | 2026-11-09 | The example is the test vector's session, its `auto` and sizes made consistent with §5.2; test vectors. |
 | 0.2.0 | 2026-11-09 | Resuming (§7): a message in `partials` is sent unasked; a resumed air form is the same bytes; a message that fails after resuming starts over. Station to station (§10): the station called proves itself (`WELCOME` keys 13 and 15, RP-1 §6.5), and the caller sends `cursor` 0. Test vectors `session-02.json` and `session-03.json`. |
 | 0.3.0 | 2026-11-09 | Forwarding (RP-7): `PROOF` defined there (§4), `role` 1, `MSG` key 6 `placement`, `RECEIPT` key 4 `records`. |
+| 0.4.0 | 2026-11-09 | Local delivery (RP-7 §4.4): the waiting flag `local` (§5.2), `REQUEST` key 4 `ids` (§5.6), no serial in a local message's `MSG` (§5.4). |

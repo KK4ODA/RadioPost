@@ -12,6 +12,7 @@ from typing import Any
 from . import cbor, rp
 
 MAX_PATH = 8  # RP-7 §3.3
+LOCAL_DAYS = 30  # RP-7 §4.4: how long a copy makes its address a local user
 PROOF = 11  # RP-3 §4
 
 
@@ -36,6 +37,8 @@ def proof_pdu(record: dict[str, Any]) -> dict[int, Any]:
     }
     if record.get("pickups"):
         pdu[7] = list(record["pickups"])
+    if record.get("local"):
+        pdu[8] = list(record["local"])
     return pdu
 
 
@@ -55,7 +58,7 @@ def check_proof(
         credential, signature, started, path = pdu[1], pdu[3], pdu[4], pdu[6]
     except (cbor.NotCanonical, KeyError):
         return "malformed", {}
-    need = (["send"] if stmt.get(6) else []) + (["receive"] if pdu.get(7) else [])
+    need = (["send"] if stmt.get(6) else []) + (["receive"] if pdu.get(7) or pdu.get(8) else [])
     result, body = rp.verify_credential(credential, post_offices, revoked, started, need)
     if result != "ok" or body is None:
         return result, stmt
@@ -80,6 +83,20 @@ def check_forwarded(canonical: bytes, statements: list[dict[int, Any]]) -> str:
         if cid in stmt.get(6, []) and sender == stmt.get(1):
             return "ok"
     return "not-authorized"
+
+
+# -- §4.4: local delivery -----------------------------------------------------------------------
+
+
+def local_users(copies_seen: dict[str, int], now: int) -> set[str]:
+    """The addresses a gateway received a copy for in the last 30 days (RP-7 §4.4)."""
+    return {a for a, t in copies_seen.items() if now - t < LOCAL_DAYS * 86400}
+
+
+def local_recipients(canonical: bytes, local: set[str]) -> list[str]:
+    """The message's `to` and `cc` that are local users, in the message's order."""
+    message = cbor.decode(canonical)
+    return [a for a in message.get(3, []) + message.get(4, []) if a in local]
 
 
 # -- §4: inward ----------------------------------------------------------------------------------

@@ -454,6 +454,15 @@ def messages() -> dict[str, dict[str, Any]]:
         "body": "Shelter 3, our club can bring a 2 000 litre water truck on Thursday. Tell us "
         "where to park. 73, Ana\n",
     }
+    m["shelter3-to-facundo"] = {
+        "v": 1,
+        "from": "shelter3@radiopost.org",
+        "to": ["facundo@radiopost.org"],
+        "date": T_CUT + 3000,
+        "subject": "Spark plug",
+        "body": "Facundo, the shelter's generator needs a spark plug. Can you bring one tomorrow? "
+        "N3CALL for Shelter 3\n",
+    }
     m["facundo-reply"]["reply_to"] = rp.content_id(cbor.encode(rp.message_map(m["maria-419"])))
     return m
 
@@ -3189,6 +3198,266 @@ def make_forwarding() -> dict[str, Any]:
     return out
 
 
+# -- session-05.json and local-delivery.json ----------------------------------------------------
+
+
+LOCAL_A = T_CUT + 3600  # Shelter 3 calls N2CALL-5 (client's clock)
+LOCAL_B = T_CUT + 5400  # Facundo calls it
+LOCAL_NOTICE = (
+    "No Internet here since 08:15 UTC. Your mail waits in my queue; mail for this gateway's own "
+    "users is handed over here."
+)
+LOCAL_NAME = "shelter3-to-facundo"
+
+
+def record_from(
+    hello: dict[int, Any], welcome: dict[int, Any], started: int, **parts: Any
+) -> dict[str, Any]:
+    """The session record a cut-off gateway keeps for a session it carried (RP-7 §3.1)."""
+    return {
+        "credential": hello.get(13) or credential(parts.pop("who")),
+        "statement": cbor.encode(rp.statement_from_hello(hello)),
+        "signature": hello[15],
+        "started": started,
+        "session": welcome[2],
+        "messages": parts.get("messages", []),
+        "pickups": parts.get("pickups", []),
+        "local": parts.get("local", []),
+        "path": ["N2CALL-5"],
+    }
+
+
+def local_sessions() -> tuple[list[tuple[str, list[Transmission], int, int]], list[dict[str, Any]]]:
+    """Two sessions at N2CALL-5, cut off, and the records it keeps of them (RP-7 §4.4)."""
+    notice = {0: 10, 1: LOCAL_NOTICE}
+    cid = encoded(LOCAL_NAME)[1]
+    hello_a = hello_pdu(
+        "shelter3-n3call",
+        "N2CALL-5",
+        LOCAL_A,
+        stream("session-05a nonce", 8),
+        offers=[LOCAL_NAME],
+        cursor=0,
+        full_credential=False,
+    )
+    gateway_accepts(hello_a, "shelter3-n3call", "N2CALL-5", LOCAL_A + 31)
+    welcome_a = welcome_pdu(
+        stream("session-05a id", 8),
+        LOCAL_A + 31,
+        accept=[[cid, 0]],
+        decline=[],
+        waiting=[],
+        caps=GATEWAY_CAPS,
+        online=False,
+        cached=True,
+    )
+    a = [
+        ("client", [("HELLO", hello_a)]),
+        ("gateway", [("WELCOME", welcome_a), ("NOTICE", notice), ("DONE", DONE)]),
+        ("client", [("MSG", p) for p in msg_pdus(LOCAL_NAME)] + [("DONE", DONE)]),
+        ("gateway", [("RECEIPT", receipt([LOCAL_NAME]))]),
+    ]
+    hello_b = hello_pdu(
+        "facundo",
+        "N2CALL-5",
+        LOCAL_B,
+        stream("session-05b nonce", 8),
+        offers=[],
+        cursor=420,
+        full_credential=False,
+        auto=0,
+    )
+    gateway_accepts(hello_b, "facundo", "N2CALL-5", LOCAL_B + 26)
+    welcome_b = welcome_pdu(
+        stream("session-05b id", 8),
+        LOCAL_B + 26,
+        accept=[],
+        decline=[],
+        waiting=[waiting_entry(421, "maria-421", 2), waiting_entry(0, LOCAL_NAME, 4)],
+        caps=GATEWAY_CAPS,
+        online=False,
+        cached=True,
+    )
+    b = [
+        ("client", [("HELLO", hello_b)]),
+        ("gateway", [("WELCOME", welcome_b), ("NOTICE", notice), ("DONE", DONE)]),
+        ("client", [("REQUEST", {0: 6, 4: [cid]})]),
+        ("gateway", [("MSG", p) for p in msg_pdus(LOCAL_NAME)] + [("DONE", DONE)]),
+        ("client", [("RECEIPT", receipt([LOCAL_NAME])), ("DONE", DONE)]),
+    ]
+    records = [
+        record_from(hello_a, welcome_a, LOCAL_A + 31, who="shelter3-n3call", messages=[LOCAL_NAME]),
+        record_from(hello_b, welcome_b, LOCAL_B + 26, who="facundo", local=[cid]),
+    ]
+    sessions = [("a", a, LOCAL_A, LOCAL_A + 31), ("b", b, LOCAL_B, LOCAL_B + 26)]
+    return sessions, records
+
+
+def make_local_session() -> dict[str, Any]:
+    sessions, _ = local_sessions()
+    stories = {
+        "a": "Shelter 3 (N3CALL) hands N2CALL-5 a message for Facundo. N2CALL-5 has no Internet: "
+        "it says so in a NOTICE, receipts the message, and keeps it both in Shelter 3's session "
+        "record and for Facundo, a local user (it holds copies for him).",
+        "b": "Facundo calls N2CALL-5 with `auto` 0: list only. Waiting are the copy of #421 "
+        "(flag `copy`, served offline) and Shelter 3's message (serial 0, flag `local`). He asks "
+        "for the local one by content ID (REQUEST key 4), takes it, and hangs up; the photo stays "
+        "waiting. N2CALL-5 adds the message's content ID to his record's local pickups.",
+    }
+    out = header(
+        "Local delivery at a cut-off gateway, byte for byte",
+        {"RP-7": "§4.4", "RP-3": "§5.2, §5.4, §5.6"},
+    )
+    out["story"] = (
+        "Atlanta has lost the Internet. Two users of N2CALL-5 exchange a message through it "
+        "before their post office hears of it (RP-7 §4.4)."
+    )
+    out["rule"] = (
+        "As in session-01.json, for each session. A local message is listed with serial 0 and "
+        "flag 4, asked for by content ID, and sent without a serial."
+    )
+    out["context"] = {
+        "gateway": "N2CALL-5, cut off; it holds copies for facundo@radiopost.org, so he is a local "
+        "user",
+        "records": "local-delivery.json",
+    }
+    out["sessions"] = []
+    for label, seq, client, gateway in sessions:
+        transmissions, streams = write_transmissions(seq)
+        out["sessions"].append(
+            {
+                "session": label,
+                "story": stories[label],
+                "client_clock": client,
+                "gateway_clock": gateway,
+                "transmissions": transmissions,
+                "streams": streams,
+            }
+        )
+    return out
+
+
+def make_local_delivery() -> dict[str, Any]:
+    _, records = local_sessions()
+    now = LOCAL_A
+    seen = {
+        "facundo@radiopost.org": T_CUT - 600,
+        "shelter3@radiopost.org": T_CUT - 7 * DAY,
+        "ana@hampost.org": now - 29 * DAY,
+        "kq4sax@radiopost.org": now - 31 * DAY,
+    }
+    local = fwd.local_users(seen, now)
+
+    def message(to: list[str], cc: list[str] | None = None) -> bytes:
+        fields: dict[str, Any] = {
+            "v": 1,
+            "from": "shelter3@radiopost.org",
+            "to": to,
+            "date": now,
+            "subject": "Test",
+            "body": "",
+        }
+        if cc:
+            fields["cc"] = cc
+        return cbor.encode(rp.message_map(fields))
+
+    cases_in = [
+        ("to Facundo, a copy here 10 minutes before the cut", message(["facundo@radiopost.org"])),
+        ("to Maria, never a copy here", message(["maria@example.com"])),
+        ("to Maria, cc Facundo", message(["maria@example.com"], ["facundo@radiopost.org"])),
+        ("to Ana, of another post office, a copy here 29 days ago", message(["ana@hampost.org"])),
+        ("to KQ4SAX, his last copy here 31 days ago", message(["kq4sax@radiopost.org"])),
+        (
+            "to Facundo and Shelter 3 itself",
+            message(["facundo@radiopost.org", "shelter3@radiopost.org"]),
+        ),
+    ]
+    cases = [
+        {"what": w, "message_hex": m.hex(), "expect": fwd.local_recipients(m, local)}
+        for w, m in cases_in
+    ]
+    confirm(  # RP-7 §4.4: a local user had a copy here in the last 30 days
+        cases,
+        {
+            "to Facundo, a copy here 10 minutes before the cut": ["facundo@radiopost.org"],
+            "to Maria, never a copy here": [],
+            "to Maria, cc Facundo": ["facundo@radiopost.org"],
+            "to Ana, of another post office, a copy here 29 days ago": ["ana@hampost.org"],
+            "to KQ4SAX, his last copy here 31 days ago": [],
+            "to Facundo and Shelter 3 itself": [
+                "facundo@radiopost.org",
+                "shelter3@radiopost.org",
+            ],
+        },
+    )
+    entries = []
+    for r in records:
+        pdu = fwd.proof_pdu(r)
+        assert fwd.check_proof(pdu, "N2CALL-5", "N1CALL-10", po_keys(), {})[0] == "ok"
+        entries.append(
+            {
+                "messages": r["messages"],
+                "local_pickups": [c.hex() for c in r["local"]],
+                "record_id_hex": fwd.record_id(r["statement"]).hex(),
+                "proof": pdu_entry("PROOF", pdu),
+            }
+        )
+
+    office, ex = cut_off_office()
+    deliver(office, ex, "facundo@radiopost.org", 421, "maria-421", MESSAGES["maria-421"]["date"])
+    n2 = ex.login(T_CUT - 120, "N2CALL-5", "gateway-n2call-5")
+    copies = ex.call(T_CUT - 60, "N2CALL-5", "GET", "/copies?after=&wait=60", None, n2)
+    ex.call(T_CUT - 59, "N2CALL-5", "POST", "/copies/ack", {"cursor": copies["cursor"]}, n2)
+    ex.note(
+        "Atlanta loses the Internet. Shelter 3 and Facundo exchange a message through N2CALL-5 "
+        "(session-05.json). In N1CALL-10's next window N2CALL-5 forwards both records "
+        "(as in session-04.json), and N1CALL-10 reports them."
+    )
+    window = T_WINDOW + 3600
+    n1 = ex.login(window + 200, "N1CALL-10", "gateway-n1call-10")
+    reported = []
+    for r in records:
+        reported.append(
+            {
+                "statement": jws.b64u(r["statement"]),
+                "signature": jws.b64u(r["signature"]),
+                "credential": jws.b64u(r["credential"]),
+                "started": r["started"],
+                "gateway_session": r["session"].hex(),
+                "messages": handed_in(r["messages"])["messages"],
+                "pickups": r["pickups"],
+                "local_pickups": [rp.id_text(c) for c in r["local"]],
+                "path": ["N2CALL-5", "N1CALL-10"],
+            }
+        )
+    ex.call(window + 220, "N1CALL-10", "POST", "/reports", {"sessions": reported}, n1)
+    ex.note(
+        "Shelter 3's message reaches Facundo's mailbox as #422, and is marked picked up at once: "
+        "he took it at N2CALL-5. The forward item placed for it at N1CALL-10 is dropped, so "
+        "N1CALL-10's next poll carries both, and drops it."
+    )
+    ex.call(window + 230, "N1CALL-10", "GET", "/copies?after=&wait=60", None, n1)
+    ex.note("Facundo calls N1CALL-10 later: #422 is not offered again; #421 still waits.")
+    body = signed_session("facundo", "N1CALL-10", [], window + 900, "local facundo")
+    opened = ex.call(window + 960, "N1CALL-10", "POST", "/sessions", body, n1)
+    assert [w["serial"] for w in opened["waiting"]] == [421]
+    out = header(
+        "Local delivery: who is local, the records, and the post office's side",
+        {"RP-7": "§3.2, §4.4", "RP-5": "§5.6"},
+    )
+    out["rule"] = (
+        "A gateway that received copies for `copies_seen`'s addresses at those times counts as "
+        "local, at `now`, those seen in the last 30 days; given a case's message it keeps the "
+        "message for `expect`, its local recipients (RP-7 §4.4). Each record's PROOF is exact, "
+        "Facundo's with key 8. The post office's exchanges read as in api-exchanges.json."
+    )
+    out["context"] = {"gateway": "N2CALL-5", "now": now, "copies_seen": seen}
+    out["cases"] = cases
+    out["records"] = entries
+    out["post_office"] = ex.log
+    return out
+
+
 # -- api-account.json ----------------------------------------------------------------------------
 
 
@@ -4261,6 +4530,7 @@ FILES = {
     "session-02.json": make_resumed,
     "session-03.json": make_station,
     "session-04.json": make_forwarding_session,
+    "session-05.json": make_local_session,
     "rpmi-lines.json": make_rpmi_lines,
     "rpmi-conversations.json": make_rpmi_conversations,
     "dns.json": make_dns,
@@ -4272,6 +4542,7 @@ FILES = {
     "api-exchanges.json": make_api_exchanges,
     "api-account.json": make_api_account,
     "forwarding.json": make_forwarding,
+    "local-delivery.json": make_local_delivery,
 }
 
 
@@ -4347,6 +4618,10 @@ def self_check(name: str, data: dict[str, Any]) -> None:
         check_forwarding_session(data)
     if name == "forwarding.json":
         check_forwarding(data)
+    if name == "session-05.json":
+        check_local_session(data)
+    if name == "local-delivery.json":
+        check_local_delivery(data)
 
 
 def check_rpmi(data: dict[str, Any]) -> None:
@@ -4497,6 +4772,45 @@ def check_forwarding(data: dict[str, Any]) -> None:
     for sent, r in zip(reports[0]["request"]["body"]["sessions"], data["records"], strict=True):
         pdu = cbor.decode(bytes.fromhex(r["proof"]["pdu_hex"]))
         assert jws.unb64u(sent["statement"]) == pdu[2] and sent["path"] == [*pdu[6], "N1CALL-10"]
+
+
+def check_local_session(data: dict[str, Any]) -> None:
+    """From the bytes alone: the message handed in is listed `local`, asked for and taken."""
+    a, b = ([pdus_of(t) for t in s["transmissions"]] for s in data["sessions"])
+    handed = [p for p in a[2] if p[0] == rp.PDU_TYPES["MSG"]]
+    assert len(handed) == 1 and a[3][0][1] == [handed[0][1]]
+    cid = rp.content_id(rp.air_decode(handed[0][4]))
+    hello, welcome = b[0][0], b[1][0]
+    assert hello[10] == 0 and not welcome[11]
+    local = [w for w in welcome[7] if w[6] & 4]
+    assert [w[0] for w in local] == [0] and local[0][1] == cid
+    assert all(w[0] > 0 for w in welcome[7] if not w[6] & 4)
+    assert b[2] == [{0: rp.PDU_TYPES["REQUEST"], 4: [cid]}]
+    sent = [p for p in b[3] if p[0] == rp.PDU_TYPES["MSG"]]
+    assert len(sent) == 1 and 5 not in sent[0] and sent[0][1] == cid
+    message = cbor.decode(rp.air_decode(sent[0][4]))
+    assert hello[3] in message.get(3, []) + message.get(4, [])
+    assert b[4][0][1] == [cid]
+
+
+def check_local_delivery(data: dict[str, Any]) -> None:
+    """The report carries each PROOF's local pickups; the post office drops what was taken."""
+    for r in data["records"]:
+        pdu = cbor.decode(bytes.fromhex(r["proof"]["pdu_hex"]))
+        assert hashlib.sha256(pdu[2]).digest()[:12].hex() == r["record_id_hex"]
+        assert [c.hex() for c in pdu.get(8, [])] == r["local_pickups"]
+    log = [e for e in data["post_office"] if "request" in e]
+    report = next(e for e in log if e["request"]["path"] == "/reports")
+    taken = set()
+    for sent, r in zip(report["request"]["body"]["sessions"], data["records"], strict=True):
+        assert [rp.id_bytes(t).hex() for t in sent["local_pickups"]] == r["local_pickups"]
+        taken.update(sent["local_pickups"])
+    after = log[log.index(report) + 1 :]
+    items = [i for e in after for i in (e["response"].get("body") or {}).get("items", [])]
+    placed = {i["serial"] for i in items if i["kind"] != "drop" and i["id"] in taken}
+    assert placed and placed <= {i["serial"] for i in items if i["kind"] == "drop"}
+    opened = next(e for e in after if e["request"]["path"] == "/sessions")
+    assert not placed & {w["serial"] for w in opened["response"]["body"]["waiting"]}
 
 
 def check_account(data: dict[str, Any]) -> None:

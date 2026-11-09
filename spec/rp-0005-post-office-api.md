@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.8.0 |
+| **Version** | 0.9.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -296,12 +296,16 @@ oldest first:
   "started": 1794326441, "gateway_session": "ec7b31841ec47c47",
   "messages": [{"id": "a3f9…", "air": "AXic…"}],
   "pickups": [419, 420],
+  "local_pickups": ["k3q7m2x9a4d8f6h1j5n0"],
   "path": ["N2CALL-5", "N1CALL-10"]
 }]}
 ```
 
 `path` is there when the session reached the reporting gateway by forwarding (RP-7 §3.4): the
-gateways that held it, from the one the user called to the reporting gateway.
+gateways that held it, from the one the user called to the reporting gateway. `local_pickups` are
+the content IDs of messages the user picked up from a cut-off gateway's local delivery (RP-7 §4.4):
+the post office marks each picked up in the user's mailbox once it holds it, has its copies placed
+ahead dropped, and does not offer it to the user again.
 
 The post office verifies each statement as in §5.2, with the station called being the path's first
 callsign (without a path, the reporting gateway). A path whose last callsign is not the reporting
@@ -469,3 +473,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.6.0 | 2026-11-09 | Renewal (§6.2): what a renewed credential holds, gateways renew too (§2), the old one stays valid, a device's serials revoked together, expired or revoked means enrolling again, by radio (§5.2). The accept list (§6.5): `POST`'s answer, lowercase entries in order, `malformed`, one list for a role mailbox, recipients added when mail is sent; the setting `accept_on_send` (§6.3). Test vectors. |
 | 0.7.0 | 2026-11-09 | For forwarding (RP-7): `forwarding` windows in a gateway's record (§4.4), routes (§4.5), `path` in a report (§5.6), `forward` items (§5.8). |
 | 0.8.0 | 2026-11-09 | §5.6: a report whose path does not end at the reporting gateway is refused, `not-authorized`. |
+| 0.9.0 | 2026-11-09 | `local_pickups` in a report (§5.6), for RP-7's local delivery. |

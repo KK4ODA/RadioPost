@@ -1,0 +1,363 @@
+{
+  "radiopost_vectors": "Local delivery: who is local, the records, and the post office's side",
+  "format": 1,
+  "specs": {
+    "RP-7": "§3.2, §4.4",
+    "RP-5": "§5.6"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "A gateway that received copies for `copies_seen`'s addresses at those times counts as local, at `now`, those seen in the last 30 days; given a case's message it keeps the message for `expect`, its local recipients (RP-7 §4.4). Each record's PROOF is exact, Facundo's with key 8. The post office's exchanges read as in api-exchanges.json.",
+  "context": {
+    "gateway": "N2CALL-5",
+    "now": 1794474900,
+    "copies_seen": {
+      "facundo@radiopost.org": 1794470700,
+      "shelter3@radiopost.org": 1793866500,
+      "ana@hampost.org": 1791969300,
+      "kq4sax@radiopost.org": 1791796500
+    }
+  },
+  "cases": [
+    {
+      "what": "to Facundo, a copy here 10 minutes before the cut",
+      "message_hex": "a6010102767368656c7465723340726164696f706f73742e6f7267038175666163756e646f40726164696f706f73742e6f7267051a6af583940664546573740760",
+      "expect": [
+        "facundo@radiopost.org"
+      ]
+    },
+    {
+      "what": "to Maria, never a copy here",
+      "message_hex": "a6010102767368656c7465723340726164696f706f73742e6f72670381716d61726961406578616d706c652e636f6d051a6af583940664546573740760",
+      "expect": []
+    },
+    {
+      "what": "to Maria, cc Facundo",
+      "message_hex": "a7010102767368656c7465723340726164696f706f73742e6f72670381716d61726961406578616d706c652e636f6d048175666163756e646f40726164696f706f73742e6f7267051a6af583940664546573740760",
+      "expect": [
+        "facundo@radiopost.org"
+      ]
+    },
+    {
+      "what": "to Ana, of another post office, a copy here 29 days ago",
+      "message_hex": "a6010102767368656c7465723340726164696f706f73742e6f726703816f616e614068616d706f73742e6f7267051a6af583940664546573740760",
+      "expect": [
+        "ana@hampost.org"
+      ]
+    },
+    {
+      "what": "to KQ4SAX, his last copy here 31 days ago",
+      "message_hex": "a6010102767368656c7465723340726164696f706f73742e6f72670381746b713473617840726164696f706f73742e6f7267051a6af583940664546573740760",
+      "expect": []
+    },
+    {
+      "what": "to Facundo and Shelter 3 itself",
+      "message_hex": "a6010102767368656c7465723340726164696f706f73742e6f7267038275666163756e646f40726164696f706f73742e6f7267767368656c7465723340726164696f706f73742e6f7267051a6af583940664546573740760",
+      "expect": [
+        "facundo@radiopost.org",
+        "shelter3@radiopost.org"
+      ]
+    }
+  ],
+  "records": [
+    {
+      "messages": [
+        "shelter3-to-facundo"
+      ],
+      "local_pickups": [],
+      "record_id_hex": "db799f36092e236c7f9a149c",
+      "proof": {
+        "name": "PROOF",
+        "diagnostic": "{0: 11, 1: h'82585ea901010219043503767368656c7465723340726164696f706f73742e6f726704664e3343414c4c0558205f1d8ed81c355abd1dc9ed9800825b61fa936a661556548fa924766e182e7b18061a6ae68100071a6b5d28000844fbbd5f5c0907584099f3d90d3ee3015b179efd0a89672f517ac5012e2253af67f88d2c17557f5b3d7d39c8a9c6074fc8f6a36a0b1857ede198fcc76e773027cc15761887e348b705', 2: h'a601767368656c7465723340726164696f706f73742e6f726702664e3343414c4c03684e3243414c4c2d35041a6af58394054863efff422270625a06814c31a61e7fb08b17487541254f', 3: h'8557364a5111f93cfe4fb1b831ff3eabf7b74acbe36bed4516c7ff2bc04fb792826a85fb951ff5eb44315d045548ac3ab460e150c600cefc7b6c61357a75210c', 4: 1794474931, 5: h'8ff2e5bae7b5224a', 6: [\"N2CALL-5\"]}",
+        "pdu_hex": "a7000b0158a382585ea901010219043503767368656c7465723340726164696f706f73742e6f726704664e3343414c4c0558205f1d8ed81c355abd1dc9ed9800825b61fa936a661556548fa924766e182e7b18061a6ae68100071a6b5d28000844fbbd5f5c0907584099f3d90d3ee3015b179efd0a89672f517ac5012e2253af67f88d2c17557f5b3d7d39c8a9c6074fc8f6a36a0b1857ede198fcc76e773027cc15761887e348b70502584aa601767368656c7465723340726164696f706f73742e6f726702664e3343414c4c03684e3243414c4c2d35041a6af58394054863efff422270625a06814c31a61e7fb08b17487541254f0358408557364a5111f93cfe4fb1b831ff3eabf7b74acbe36bed4516c7ff2bc04fb792826a85fb951ff5eb44315d045548ac3ab460e150c600cefc7b6c61357a75210c041a6af583b305488ff2e5bae7b5224a0681684e3243414c4c2d35",
+        "frame_hex": "0154a7000b0158a382585ea901010219043503767368656c7465723340726164696f706f73742e6f726704664e3343414c4c0558205f1d8ed81c355abd1dc9ed9800825b61fa936a661556548fa924766e182e7b18061a6ae68100071a6b5d28000844fbbd5f5c0907584099f3d90d3ee3015b179efd0a89672f517ac5012e2253af67f88d2c17557f5b3d7d39c8a9c6074fc8f6a36a0b1857ede198fcc76e773027cc15761887e348b70502584aa601767368656c7465723340726164696f706f73742e6f726702664e3343414c4c03684e3243414c4c2d35041a6af58394054863efff422270625a06814c31a61e7fb08b17487541254f0358408557364a5111f93cfe4fb1b831ff3eabf7b74acbe36bed4516c7ff2bc04fb792826a85fb951ff5eb44315d045548ac3ab460e150c600cefc7b6c61357a75210c041a6af583b305488ff2e5bae7b5224a0681684e3243414c4c2d35"
+      }
+    },
+    {
+      "messages": [],
+      "local_pickups": [
+        "31a61e7fb08b17487541254f"
+      ],
+      "record_id_hex": "aca5ac50ae3ded06316d5532",
+      "proof": {
+        "name": "PROOF",
+        "diagnostic": "{0: 11, 1: h'82585da90101021904110375666163756e646f40726164696f706f73742e6f726704664b4b344f4441055820e347cd11cf869b305668e5ff8fc5378b6827f479a18c2a1998f6d4e84a19c641061a6ae68100071a6b5d28000844fbbd5f5c09035840fb15a6cf8ac2ef0ea18e12f8862e0d0511b5319d8a2016c0254b8e48ae427f32c8614f601c314605aa664713440d21a76ff31d61dff7b02d3f0f6efe3a00ed06', 2: h'a60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103684e3243414c4c2d35041a6af58a9c05487837ec7a791548f20680', 3: h'3e32c53f3bebd4947d5109474eb8848e7d3eee39093ff2d7265227c8a3a0380fa464e066d0dd3ef61b1789fc02edd73f329a5a7bd508f0cd1751eb433abd730a', 4: 1794476726, 5: h'bf46b92deca5c63b', 6: [\"N2CALL-5\"], 8: [h'31a61e7fb08b17487541254f']}",
+        "pdu_hex": "a8000b0158a282585da90101021904110375666163756e646f40726164696f706f73742e6f726704664b4b344f4441055820e347cd11cf869b305668e5ff8fc5378b6827f479a18c2a1998f6d4e84a19c641061a6ae68100071a6b5d28000844fbbd5f5c09035840fb15a6cf8ac2ef0ea18e12f8862e0d0511b5319d8a2016c0254b8e48ae427f32c8614f601c314605aa664713440d21a76ff31d61dff7b02d3f0f6efe3a00ed0602583ca60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103684e3243414c4c2d35041a6af58a9c05487837ec7a791548f206800358403e32c53f3bebd4947d5109474eb8848e7d3eee39093ff2d7265227c8a3a0380fa464e066d0dd3ef61b1789fc02edd73f329a5a7bd508f0cd1751eb433abd730a041a6af58ab60548bf46b92deca5c63b0681684e3243414c4c2d3508814c31a61e7fb08b17487541254f",
+        "frame_hex": "0154a8000b0158a282585da90101021904110375666163756e646f40726164696f706f73742e6f726704664b4b344f4441055820e347cd11cf869b305668e5ff8fc5378b6827f479a18c2a1998f6d4e84a19c641061a6ae68100071a6b5d28000844fbbd5f5c09035840fb15a6cf8ac2ef0ea18e12f8862e0d0511b5319d8a2016c0254b8e48ae427f32c8614f601c314605aa664713440d21a76ff31d61dff7b02d3f0f6efe3a00ed0602583ca60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103684e3243414c4c2d35041a6af58a9c05487837ec7a791548f206800358403e32c53f3bebd4947d5109474eb8848e7d3eee39093ff2d7265227c8a3a0380fa464e066d0dd3ef61b1789fc02edd73f329a5a7bd508f0cd1751eb433abd730a041a6af58ab60548bf46b92deca5c63b0681684e3243414c4c2d3508814c31a61e7fb08b17487541254f"
+      }
+    }
+  ],
+  "post_office": [
+    {
+      "note": "Mail arrives for facundo@radiopost.org: #421, 'Photo'."
+    },
+    {
+      "at": 1794471180,
+      "who": "N2CALL-5",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+          "expires": 1794471480
+        }
+      }
+    },
+    {
+      "at": 1794471180,
+      "who": "N2CALL-5",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glhbqQEBAhkEJQNxZW9jQHJhZGlvcG9zdC5vcmcEaE4yQ0FMTC01BVggum9tGOyCvXUH3EcPqvA1ATv1c3ZD7NJrG0sb6aF2KwgGGmrmgQAHGmtdKAAIRPu9X1wJCVhADGuiZ8pK5mz21xSLIAVLv7A4SfOyV_nlGx6IO4vsNi3JyAv--edo7nnZqHHx2dt37UVxfnp-bEX-XlDSQPP5BQ",
+          "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+          "signature": "_skM6EvtmwiH1JvRVsmsyz5VdfWRQHDrwMxBgIPPNWzXKNFEhxRo8zRzyqiHyX9gehHHNlQ4fgl5IabLRYorCg"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+          "expires": 1794474780,
+          "address": "eoc@radiopost.org",
+          "operator": "N2CALL-5",
+          "flags": 9
+        }
+      }
+    },
+    {
+      "at": 1794471240,
+      "who": "N2CALL-5",
+      "request": {
+        "method": "GET",
+        "path": "/copies?after=&wait=60",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "cursor": "c_1",
+          "items": [
+            {
+              "kind": "copy",
+              "address": "facundo@radiopost.org",
+              "serial": 421,
+              "id": "cpwfawr3mrq37rql7fza",
+              "from": "maria@example.com",
+              "subject": "Photo",
+              "size": 6122,
+              "priority": 0,
+              "air": "AKcBAQJxbWFyaWFAZXhhbXBsZS5jb20DgXVmYWN1bmRvQHJhZGlvcG9zdC5vcmcFGmrxzTAGZVBob3RvB3gaVGhlIGtpZHMgbWFkZSB5b3UgYSBjYXJkLgoIgaMBbElNR18yMjMxLmpwZwJqaW1hZ2UvanBlZwNZF3BcSkp025gjMfcS3S9tmCURa8vb1HhSYuyU1aGnSO0I2WQKB-s49P-jKTYQ-EEhWSQQlBoo-unaS2DbkqAHznh-tlWFW4BhkLneKIq2yaRBiCKCHFSPDXWc5rOuNSiTG_Qse3rz-Mu5spZbFXWuiSDdGYWoT1Jv80rZjvn3mwlBnFNGhCTvMuUOcv8R9T1RyMfnmvxiX3mmITeGZkB5GuY6eS7F1MZBwMVEY7_v68tpCFAbHlOXR2m6hjlzN3z_AVMw2Jzokto37SpIJeV-r7FFw5CRtNh7nR0BgL-SbZnmWIi6qTgD0ld4AFa9_XMjUnqpXroPMgQBRVQjkwprfPoS-AmJ9BF-NHECkaw13ysuN3EgZsyd_j6eR93lZudAwzCSfPUoG4MpLStUzpZ8ogaTgZJhTBnXUb7w13I1wfYJBlzTkeiLgvgPQz_waOzFpiLiDtMt0iwpYVUmswLwu_5LQ9tRXVFsr-aKdn8-L06p1j1gq2yJMiAqrRIn3D1JwskGVIYpgS62MUey0vZoHHuaCYRNmnjM7CBwmgfYlxX827khcdrxeLInXNlL0CdP0w0pOYunxA-Mbw0bWEE2FSgDw952VZ1F7EtDw6-akQJTCFZk_E13UhRYZEECrTXNwImzGthBRzWMbnuI9hbNnVX2LneA-J0VdCYvoR6dUyXPutlEpxg841lBQR0-gycZR5wBEaKrSL7pVvSg-76cHgnAMUxiZ46dbYZqcHL-fbBHS4HcHul2xDei6K4OauadcjchS31FToVdpebB_duEcmHQgZu95o1zQY29NiancQ7I6XnnHkxnUpf-J7ESbNhD4zFVPQTknTVmMrFIH77K_wHNHPO21zGnNGKOVGjGBVoqE9KoWCSjKg5hKyTFA339l8HtTapxR5jXL1T4H9prSsmaAvNm476c34TZbYqPpvTlLbqbQ4aAldIS93tzHx5R0aUBnAILlYfVIdZGyu__yukoIMU3KtISSSF4aSn9btEyPFhDIfv2JsOwsZ2KQLLsEtH4SPE6MwP3BqTZxRIFV3zPpzDzw50kRyveQOnlN0Ra0JU_btBubeonZfPE3srZxJKpQwgtNYNdihGzxks_aOHxrw6y9Zf6Wx6GRSgNngapshcYiRv0JlykaOpW7n7PP8bLEQJ42ioCRKyL2ZJa1ccJ122bhanol4AqWNqgb8CeWdwAl8r7CarthCunsMPnvw9sv7fthJIx2GhyBbyHlNYTeETejhW4gPidvWJYOWQQMObLHtL2_hkMxLxFQ4eCsIItHYIxB3X22cPWYbM0fG3FNp-I7bINhv-bdERXaWnAYlfPnagBq5mdv2vb3wLZPEgrGD144soejiH3RoAuXdMc90SeddJxToeuRAkJBACRSu9rrmI-b9x3qlnpDodrGu28SE8SPk5P_kIg7_asUz7SkSvXfdKRPo0ibUrD3HVemmhJJvmjwF4SU4DianPsKejUeM-g2b69oU7-UyYGalWil6m_tnmZgw6pZge52sdlivBpgwYs1ZZBZR_kFZt4ikl16EHjEZIIOv5bhf6OgN_DjXYdLWXumXBc6rQ_O-6RRAcGg97OqtZl2Ppn4rd0gHb6BU8vuZDjLBh9yISD8RbSXFOXt1ZYDJ0MEIF6y_sMbw9-1SL7Y40D5h_dqk4AQrclMwWrGtaSPAwFyKEwL_wP7sGRNwbfaC3d_CQl068L7TXbAo5hgrHg3-F5VJ1Zo49GhsZmHPXPZRBmMCl0aHgBrvwVRkdXCe5GG8VA9F7i6maBtZgl-BGEyHTkGODY1hfJiysa6Izn8COLQXJSkKTGB-xzJ8WM1oOSmLhmYzRDxp2yFio_ySco3sMf7E4L9d4xV5sxkhKfQ_5y8WJBOjQBocMJylnnODV-vyjqYR0nhOvwnTuG5Z34dysbxjM0AEl-J-w1IkTwrxkLjpgmjEjolbJM9r17eiHXUxG6T0F7hUO_iLyP0xc3HMutoHK8iQp3_WLr4br890ng_FW3EsYhgSxFw2wcYq5Dvuw3eVZnCrKSyFCCm6GTHe4O_XZ2uRHKo3CgnN4rOzuSpH_syD_ZPDrTap2IErCyHZ0MiV0jSySH0rVNLDhBDCWPn6RWNJQIxvI0-ipk4f1tsE3oifUTJ5O1JoZrWT-WZYY9HaGRFbhd25hj6YTKOfmyg6BQA64oZ-qTvPr03yKPiR_6hAsz6dui8JkaMq3anwORpWf2T0Tvpd3VgXnRpiJq1btpximMOkOvqn4DmAme9CCx_FTDwqTZoz0Tg6RkuYnmGrjNQAeN590qFJy1bMfAg94FDc4nTXC0-aVz-K-f3UkEdM6zmdyv_dCJvqFv5TvrBpBHQ6xDxmiLrWPDKJDdDqfMK91fsAwMeVBdkjTMsZjYIZY3YHUlfpQgMxEJKNBfF9r1lG1TikZAy0puyrvq78G0PJdlVF9PjFj1FYm97QhLLLGxsVe2OaICljauwyyzoXI-uqvQ5QukYRdl9zk6G7nT41bW0-LDfJnrfGahn4qvhiWOdJV-FuaD2Eru-LlUKF6MWgCL_tVV5Mu3RYxEQ5tamDCp30jpqPdy69dRFDxKt_vzBEMn31VMLZWNJgVGf1EfdEcDLQSS3xlOCYcMkVGA3CEiUbs8Ej7AM3hV9DV_vXVDgwrbNCokN58wecOHIAqDlxEswgWVu0wXeR8Kk9USfJN14nGWiqdcaE4vsWOf2H6PBB4YScHEQP4AcF873huuHj_SrWd9Y64aXDRC6aAU35TRxN5nfZKHecbTlcm0pwwdef5ucgePlATKdRLd4OP9oFI7m7Kal5fVuEvUUogvSB9PpWu1IyoWYUrnfH5QG6h7J3CcR9TboOP99wCAOx-rsrG_DlFMEbOON_iJ9kHp7swC0hHE-sRTbZKjRFJbe6bHg6yydVZvoSF3msXhVsdvUfXNJ-fsfHzQCcqUShzeS_icLD9REl7-jH246VHQISUzOvnH4bp1xWBxWw29J9swbn3QnGyIW03g8SMAEeEvHEKWjMy3rYbCrRr7IrbS59RaF8gY1Ff935612GFwehoKKAgmwCGxgBAhWQ7VL_iR3NAFqugDnpBwRNA1uJOlqV9G8nzbw5eQjfzd7Mm2tALhGohh8aAnrU3dZghU-Ef76ZA8Bzk4pwCgPXMbVfZKe7LqoIsPyc41QIFygO4OgAfsCmG_08hMfB8I8tIaQWTHR2-DuCs9yBflPl4_X9M11TMwAdcQfm4waXEnTX6ABukDDjBk9B3T1dj-T7oyJzF9BYRKKnT9ae3JCVzOIB9SPdP9IGKjI7gilNr6NigNo6Pj_aUbaHF4mTFGxB05_AYe7ITvgORR-mEac5R7V7bxdnNjnQT5qpRh3dJzxOnJ9XY_7blLqLQ1uPTlRynQY9322rUpk8o0mYewbSy5ksQsgX1HBGaHMKJcq0_RIUP9cf9VLESlKbHkfwxrJEy91seeQreCgHqLYnURpZ_jjNqBpgFOlynhG7NvPVdTCdAHjUBf6alHytE1vLnjhPh94jFYiX756T-4Y647MlwHZql3go1D9EgHRvLEVQ39DTwQbb6USUf3GOuYxQUQczLBhFuAg_SS4KNKqiFYOFgpozgdHJ1A7lKlBbujZ86I4hpAf7bBKftxdEiu0ynligC-q2Grhi2W7399fZc9yru-d4XOsjg_ggsZXkFJkutfcuMUhGXSRquQO8L_dhpc3yPnntAObpUiCwIC1rUd9oYtB7FMk-xHsk9s5YnEUtrIyhgK3Y5pYDH6_2pFdrQuE25F9TTYlcw-OP1OEfmVS6ES7LpQgG7C-JdyoeZRdrlPbdRxFXikkceJjVJoe_rceMBGvA0_6yNRLSveeiZTkgXWLzZjIacF424JvEjD83SvnIYLjl-jx2aeiovS7LW6eB6slYiBngqUAm-4kR3rVqhh3C6ZnOV0RTYKRx9XUBekfwhcyqw1LQAEVinOtDeeEjxujpFwtbMwjLotC6RB7MRvk2xp86OMMdtcD2r3n61WkHqYbaCMUK-ojRJt5Fq7ULAYyWEBdmUsx7lXskq-WZTAKVvgjTXdWHXFxW9hDIMlsVepl-WXAvTMzklGE7yKhS74VvlF-ikPMV9sOz1k30xyGIdFlNFP7A3TF3Le3ajPmtzv3UWdI6EFQcbvlwE5-S-8OaKK_7P7ltsJ2Xh0ju4arOwQSK-TPJQI4z36YUUHyFHePPVWDbYczjSoRKTwSsRpth9F-YzvJ_ib96bKyw0phdTW9JZHCAaJKrrBGtwuOprVEUrohip7N8cUcD1YH-0zEarGSBpxcE1aYs_0Nc1pBmN3Z_VuaY8ax_Wjx6FzX-zX1zYNAY3e6brm8r5gTt_UWeXuHwJocuV01EmfaimjaWVSYJoNeosKcsPcWQnqjXuboXPddjX2Nh7LrnyC2l2En1tLMAOmbgnBnJC8B1dChCeL8cHb6L2hPfYwTxf4cAtu8F9x-_7oAI1wSaWzjqgeqOqP3AJ_YnMebz_oesP0WM3rrIPTn98iDuqt55PaHFE408qaFhhua8afS2GEBjYNBOfOMlfn-UyMWwISle8o28JhKI2XrnhADjs1MfnpgyTxhc7sE9p6917GksARCNtjko2UU5RYwxYynNQOxsWBhnXMvW8kJXuQoBGJBUwENX6EVlZr5xQMO2mirq6IAY4weVRczOvksrv5lVcJtXx6Bfoc7Gfc-QjFmfIkPL4SFG6jN1Y80yR5ayBlNQGzqeRlPGytG11fHrHs5f4I0Kycg_AihSdxjAjrwv9CwTkSyomDCbDmCbG-bfGDvgYjR9W13-TJWwLZSX9vT96vaOX22-_aw2g0WZ-YRoXFnxxQyYsSeeNNJ_2gO-QhMYdwznuTMA1nvL0Ya3487wBgQd5qXqVFeVHbAduFp1QZaqN59kDp4ZG8aKwDhlj2yQQTR696XRw4bZyNr3Rj3ntAmdPJN4BlX-ziunOBpSsSnnhqTZOP-5M2ExH5TRff2hdCredUKBorqpPqV1ipx_MxzcNZmNw32i1_jaDPOdBMaQlfCi6iX-BIDukHDqVLIp7XzvsBV415lLOWfWgUzvKkLyH3OC-EwcgJ6rH96UrtKOYxAMyuPmoaG6ZYepKPRFDBgm33bi_nDpHci4UUxs6Sv6XEcxtnp_n6zLXY4ivZMjlSSYj-45BIXEr6x_GTGGEb4-U1h4COAGtKATceC__Wdg4WUko1owXCQvGhENfF_ovEoTCWrXyUTX2HSHVd4BGGYBWiPUluZeoBKy4CsgXJwNSbyJH7xvT7zNGnari-tZ9FFWfiuQfPT1gTw0Zy-zLICOm3IsJPyFA1djZc3ZTDtX_4D845F4rHaxISWkCjS_ebCfO6YTmZ9BX6MnmkaXtjT69v8DETjmLHI26azSXibxaS2NdIdLRWQCnORhhj-jvFCgH4HOREZ7CIdq46Hd6H9SYcfZCcp8V2brlsjwZhEUJlLBFmIV8b3wBryyb1Vgw2IJH9NKBKU8BhqOtYWwkvmhGQvr0KLNBsbpKyprqgQOM7lwqN9AhdH_hENA8e0qE3FiPlfbkGfBe24oxqafB-BLJQZ-jQHiNEvcOJ1dUxxPT7NboNhYwqcsPaA2OOPGgdRisiX30G4nS79Hfd2e704EMa_ByCByseqa_pl0-1CYnGJmhKUILlHavj0gF9fxvVBYGAUgHiHT1R69z3NRW11aLct_pH2Bsj43ip-_wA3Rmsm1lwTlKs8eipMYaXuVYt9qvy2BTEoLjisqF16PXXTQMAp1av000RrVuyH4Kn1pFtVFioK7z3ESKMFb_6ILz--eXbKKRbltdezjDi1AckUJT41du1d0UizFPuLroCVLv56rdLVYbUPYs3vIg8iOZSi3X5kfhc7yk8gwpa_3Mc86gJ7Elf_H2yIV5FmMGuW4TKs8Ftxq8vphST9EItSXK2j7rY6DAQcdDpLIQrdD5enZmx3w-YCxdXZdIZvophptHGXHSrEaWEwbBRnC0LcPYhAf3sz10U5dqDS-N-tIJz0uDVWN2TWgn8Jm1sAMy2YrMb96aZOiHL-gt7LYOt0NQ2CmKg-Txg3tUzrcR6UM9HIyKceW5L53pe14sYXajBMfIQgZnYyiYf2b7UrMaf86vO7dI-geV5AYUKHn3W9DXJvf0OBAHTV-0qE0DbaSD3phNiYBvzQxV8QkZCPj5qsggApcspAuEVv6lLiC1L8i6UVjPM3RH3oGap511vykOi1pr1ZscIKB-bbyfJ-gFAJQLnVg96s6UVASGnihCeFT5DCMDlzHGodCamgytKSagOObIgG_9vhKMNk2CDXZkhIe3uf7qp-gPHO0qslx-p-w1aybLXt0WkzabAzo_1E14y0Z5xemlAdT_1_zy_na-BxCj7zosWbObsiTJNo4kf7fnGfQ0mwOKiNUMKGw56Hln8kwOBrRVvgy5a0hH8IRxbCRKl5QqqaE3qttWErRPTQGbcg30Z2f_crvg_huvHREvQhs4dtWNgwjhqgo65EVbIhgHwyZKhCKQx9exdsgkADrurbXPiCpQdsVyejLbk25tw88pfdpnUBgaTzPrlqukQNZKb_LLrBj-yelC_MoodtTOIaTLjPsSlMSzmdjBBNnuXBOIYf9En0MrrI33vQcDQDI9PV9AaJQ1sNs2VA4Au5_pOVdYwBwMbDuDKXG4bBPbx9HiE7-I8IrPDuqbpL59NcaMmMcOeJAEDf-pk2w5a4Xq5fSkxBsWOh8fJNrn-Idu97YUB2MpW6DNgGjCuX9xnbFEOfgM8L60BTrkSboWQZ6OD239FK7rFCftVUxOuv8e1dYiwIsNWZOHIJZc7-QZsKDn6EEdhbWxsROn6CwnSuICY58GzsYDgradgeiC1tWDbfj8TQKHe2L9jy2p_rRw3x98aNnfZfGvajgBq7L4j77cDquDyT7I4x1P55GI3Eg8yuA0nOdKkLbo4-7i2cFFb_14xNOyGOLfJnBAKbIsRJ20WZcrVRuu1ve9gZQUReZxCPlsdL59gNNqgKpzYEgO1YAuFF5M9JCWmR3UQKAF2ZEx0kVbU8FLQQUcFZBzfGbwBRa6pCphaSZ8DE-Qzc2Tkbe3QL8QwFa2a3AHWqdh1mK9FTQQHN32chn465Dh3Gj6syzqM3QOZWqAWN_YKkeHaYxA7RCHoNgv--atbqUm4Jni5tGxWKFH32VVr5-htajWA-9tNIIX3bQ7oBm0eSELXBcuBfbZWqD9KfsL5sIurmjDumYZ8kG7UUwlWTPJKqKb86xVJ0yatAI4HYNNNFIpj2izztJt8JCLwP_7NVOR8K6W4Rp6yNw2K94ncsuPZ9Es6aQflQNQZe9yabP8jFspKEkjADCSD1LniYcUjoA7JFtz9XhEFhDvGIB426hVDMwlO5NnD08YmPJgNwk4FyiqVaNuXouy-UDoDIe8RoejLw-zTKepJDIh7yB9HYTLRdXbZ3pfYa0SRAYZeP0lUPsY-MjXMnym-VexFh3O9IXYVvhuhctB0ly_53xTLsEu3AwtSZxQmSYMG_yJFHgpOFn1swHshilvhuOqm-oZV2aeO7635TcK5CZmGvdp3yB5GwRaByNu1joZo0g7SE3j9Q7roe_TtxD06US7IPj9ZQl0pUGmgi1ZZUW5EAMMKrSQluBRpwNQKIZKKGeF6-Qcd8uELud7RhudWLTNDxkri68YwrbaWHQ-Z9QeE6AHO8_bUrGvSbMvyhIxXoCI-zjsaQg_zgaoUBD_Y5mC1044i4TL_BWkY-YjTAgXqyKmnT7PexU33VGkY4GBK3PROitOj785xn4QjL-XxnH1vvrf-LJvWoK4gYqx_vlx_C_DeV0VlWktYtPzaC3P8X4a1A4x-zQyjzmmrX_OAisBjG20-jp5FOLyrs7tqXLZKWT52Zg3oosumdQFDqtlA-jXwJFNX-baIlaqWsKxXvM5Gw_ffnmw-_6bs5xBZ2e8cFPvodXW8sWjNVEjOwbCMku12zBhDnJYSMDQhxBSUGpH02CPhEALKcvvD6Ha6KfdCvus",
+              "expires": 1794836400
+            }
+          ]
+        }
+      }
+    },
+    {
+      "at": 1794471241,
+      "who": "N2CALL-5",
+      "request": {
+        "method": "POST",
+        "path": "/copies/ack",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+        "body": {
+          "cursor": "c_1"
+        }
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "note": "Atlanta loses the Internet. Shelter 3 and Facundo exchange a message through N2CALL-5 (session-05.json). In N1CALL-10's next window N2CALL-5 forwards both records (as in session-04.json), and N1CALL-10 reports them."
+    },
+    {
+      "at": 1794496700,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "qDHrLf-NrMWfaCOoClbU8mMP7XQDR4U4H9sfHd1VrCw",
+          "expires": 1794497000
+        }
+      }
+    },
+    {
+      "at": 1794496700,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glhdqQEBAhkH4QNybjFjYWxsQGhhbXBvc3Qub3JnBGlOMUNBTEwtMTAFWCAUS-X7lp2Vr5tgjQkwZFi7JTVlyLDjpxhusxOJ1yRMUwYaauaBAAcaa10oAAhEhCGdAAkJWEDr1t2qArnecCmYfRA9H-L3gPmMDr4ONskMijV8cBIzX9kXtv5dFssaxOiERNjg0h37hrRpHop3NLsByAFCPYMK",
+          "nonce": "qDHrLf-NrMWfaCOoClbU8mMP7XQDR4U4H9sfHd1VrCw",
+          "signature": "VpNC9NoH_tDM9essnD8yu6RnAdaOxDz6m_fJbZlD-V8uLyPbTm0I0c8jLOY7RtxnNJ_lRo3StrIv0vAtKiEDDg"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_nrAE4HmjRoMr3kBoGs0KWXrc",
+          "expires": 1794500300,
+          "address": "n1call@hampost.org",
+          "operator": "N1CALL-10",
+          "flags": 9
+        }
+      }
+    },
+    {
+      "at": 1794496720,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/reports",
+        "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc",
+        "body": {
+          "sessions": [
+            {
+              "statement": "pgF2c2hlbHRlcjNAcmFkaW9wb3N0Lm9yZwJmTjNDQUxMA2hOMkNBTEwtNQQaavWDlAVIY-__QiJwYloGgUwxph5_sIsXSHVBJU8",
+              "signature": "hVc2SlER-Tz-T7G4Mf8-q_e3Ssvja-1FFsf_K8BPt5KCaoX7lR_160QxXQRVSKw6tGDhUMYAzvx7bGE1enUhDA",
+              "credential": "glheqQEBAhkENQN2c2hlbHRlcjNAcmFkaW9wb3N0Lm9yZwRmTjNDQUxMBVggXx2O2Bw1Wr0dye2YAIJbYfqTamYVVlSPqSR2bhguexgGGmrmgQAHGmtdKAAIRPu9X1wJB1hAmfPZDT7jAVsXnv0KiWcvUXrFAS4iU69n-I0sF1V_Wz19OcipxgdPyPajagsYV-3hmPzHbncwJ8wVdhiH40i3BQ",
+              "started": 1794474931,
+              "gateway_session": "8ff2e5bae7b5224a",
+              "messages": [
+                {
+                  "id": "ggtb475qrmluq5kbevhq",
+                  "air": "AKYBAQJ2c2hlbHRlcjNAcmFkaW9wb3N0Lm9yZwOBdWZhY3VuZG9AcmFkaW9wb3N0Lm9yZwUaavWBPAZqU3BhcmsgcGx1Zwd4ZkZhY3VuZG8sIHRoZSBzaGVsdGVyJ3MgZ2VuZXJhdG9yIG5lZWRzIGEgc3BhcmsgcGx1Zy4gQ2FuIHlvdSBicmluZyBvbmUgdG9tb3Jyb3c_IE4zQ0FMTCBmb3IgU2hlbHRlciAzCg"
+                }
+              ],
+              "pickups": [],
+              "local_pickups": [],
+              "path": [
+                "N2CALL-5",
+                "N1CALL-10"
+              ]
+            },
+            {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaE4yQ0FMTC01BBpq9YqcBUh4N-x6eRVI8gaA",
+              "signature": "PjLFPzvr1JR9UQlHTriEjn0-7jkJP_LXJlInyKOgOA-kZOBm0N0-9hsXifwC7dc_Mppae9UI8M0XUetDOr1zCg",
+              "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+              "started": 1794476726,
+              "gateway_session": "bf46b92deca5c63b",
+              "messages": [],
+              "pickups": [],
+              "local_pickups": [
+                "ggtb475qrmluq5kbevhq"
+              ],
+              "path": [
+                "N2CALL-5",
+                "N1CALL-10"
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sessions": [
+            {
+              "results": [
+                {
+                  "id": "ggtb475qrmluq5kbevhq",
+                  "status": "accepted"
+                }
+              ]
+            },
+            {
+              "results": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "note": "Shelter 3's message reaches Facundo's mailbox as #422, and is marked picked up at once: he took it at N2CALL-5. The forward item placed for it at N1CALL-10 is dropped, so N1CALL-10's next poll carries both, and drops it."
+    },
+    {
+      "at": 1794496730,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "GET",
+        "path": "/copies?after=&wait=60",
+        "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "cursor": "c_2",
+          "items": [
+            {
+              "kind": "forward",
+              "address": "facundo@radiopost.org",
+              "serial": 422,
+              "id": "ggtb475qrmluq5kbevhq",
+              "from": "shelter3@radiopost.org",
+              "subject": "Spark plug",
+              "size": 175,
+              "priority": 0,
+              "air": "AKYBAQJ2c2hlbHRlcjNAcmFkaW9wb3N0Lm9yZwOBdWZhY3VuZG9AcmFkaW9wb3N0Lm9yZwUaavWBPAZqU3BhcmsgcGx1Zwd4ZkZhY3VuZG8sIHRoZSBzaGVsdGVyJ3MgZ2VuZXJhdG9yIG5lZWRzIGEgc3BhcmsgcGx1Zy4gQ2FuIHlvdSBicmluZyBvbmUgdG9tb3Jyb3c_IE4zQ0FMTCBmb3IgU2hlbHRlciAzCg",
+              "expires": 1795101520,
+              "gateway": "N2CALL-5",
+              "placement": "glhCpwEBAnVmYWN1bmRvQHJhZGlvcG9zdC5vcmcDGQGmBEwxph5_sIsXSHVBJU8FaE4yQ0FMTC01Bhpq_xNQB0T7vV9cWEBjiQUd14nkz8Y1v88MgX_lViU2psuYJA08-qNrJrLGUQ-1RZHoY7m-figAa4BCrJklzNE4JrYqduIMkDGpjcAK"
+            },
+            {
+              "kind": "drop",
+              "address": "facundo@radiopost.org",
+              "serial": 422
+            }
+          ]
+        }
+      }
+    },
+    {
+      "note": "Facundo calls N1CALL-10 later: #422 is not offered again; #421 still waits."
+    },
+    {
+      "at": 1794497460,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/sessions",
+        "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc",
+        "body": {
+          "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavXbeAVIBdAinTWUdNoGgA",
+          "signature": "XT2UUPrX7yfBMN_FkRAUfScHO0vuC8AEkdy9YIOLrAgh1_UjIElkK6vzq9yTpwI0BHOmekNZsa-erohxvZiGBQ",
+          "credential": "glhdqQEBAhkEEQN1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBGZLSzRPREEFWCDjR80Rz4abMFZo5f-PxTeLaCf0eaGMKhmY9tToShnGQQYaauaBAAcaa10oAAhE-71fXAkDWED7FabPisLvDqGOEviGLg0FEbUxnYogFsAlS45IrkJ_MshhT2AcMUYFqmZHE0QNIadv8x1h3_ewLT8Pbv46AO0G",
+          "started": 1794497430,
+          "gateway_session": "dcd79a984ee1ae24",
+          "cursor": 0
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "session": "s_6BUMK-dsVrhQs-yk",
+          "expires": 1794501060,
+          "waiting": [
+            {
+              "serial": 421,
+              "id": "cpwfawr3mrq37rql7fza",
+              "from": "maria@example.com",
+              "subject": "Photo",
+              "size": 6122,
+              "priority": 0,
+              "held": false
+            }
+          ],
+          "more": 0,
+          "accept": [],
+          "decline": []
+        }
+      }
+    }
+  ]
+}

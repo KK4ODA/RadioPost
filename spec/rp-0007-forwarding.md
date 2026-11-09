@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.0 |
+| **Version** | 0.3.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -33,8 +33,8 @@ adds one PDU and two keys to it, and adds a few members to the post office API (
 Only the cut-off gateway calls, so only the partner's windows need to be agreed, and only the
 station that needs the link starts transmitting.
 
-Not in this version: delivery between two users of the same cut-off gateway, and routing beyond
-configured partners and published routes (§8).
+A cut-off gateway also hands mail between its own users without waiting for their post offices
+(§4.4). Not in this version: routing beyond configured partners and published routes (§8).
 
 ---
 
@@ -76,6 +76,7 @@ would report.
 | gateway session | The RP-3 session ID the gateway gave it (RP-5 §5.2, `gateway_session`). |
 | messages | The messages the user sent, as air forms. |
 | pickups | The serials the user picked up from copies (RP-5 §5.5). |
+| local pickups | The content IDs of the messages the user picked up by local delivery (§4.4). |
 | path | The callsigns of the gateways that have held the record, in order. The first is the gateway the user called (the statement's `gateway`); the last is the one holding it now. |
 
 A record's **ID** is the first 12 bytes of SHA-256 of the statement's encoding.
@@ -94,10 +95,12 @@ a forwarding session.
 | 5 | `session` | bstr .size 8 | yes | The gateway session ID. |
 | 6 | `path` | array of text | yes | The record's path, ending with the caller. |
 | 7 | `pickups` | array of uint | no | The serials picked up. |
+| 8 | `local` | array of bstr .size 12 | no | The content IDs picked up by local delivery (§4.4). |
 
 The caller offers, in `HELLO`, every message of every record it forwards that the partner has not
 yet receipted. In its third transmission it sends, before the `MSG` PDUs, one `PROOF` for each
-record whose messages it sends, and one for each record with no messages (pickups only).
+record whose messages it sends, and one for each record with no messages (pickups or local pickups
+only).
 
 ### 3.3 What the partner checks
 
@@ -105,7 +108,7 @@ For each `PROOF`, the partner checks, and refuses the record at the first failur
 
 1. The proof, as RP-1 §6.3 says for a statement relayed later: the credential (RP-1 §5) as it was
    at `started`, with `send` if the statement lists messages and `receive` if the record has
-   pickups; steps 2 and 4; and the statement's `time` within 600 seconds of `started`. As RP-5 §5.6
+   pickups or local pickups; steps 2 and 4; and the statement's `time` within 600 seconds of `started`. As RP-5 §5.6
    checks a report.
 2. The path: its first callsign is the statement's `gateway`, its last is the caller, it holds at
    most 8 callsigns, and it does not hold the partner's own (a loop). Otherwise
@@ -205,6 +208,32 @@ Then it holds the message as a copy placed ahead for `address`, with `serial` an
 
 The partner deletes a forward item once the caller has listed it `complete`, or when it expires.
 
+### 4.4 Local delivery
+
+A cut-off gateway hands mail between its own users without waiting for their post offices. Its
+**local users** are the addresses for which it has received a copy placed ahead (RP-5 §5.8) in the
+last 30 days: their users named it as usual, whichever post office they belong to.
+
+* **Keeping.** When a user hands the gateway a message (RP-3 §5.4) whose `to` or `cc` names a local
+  user, the gateway keeps it for that user as well as in the sender's session record (§3.1). The
+  message still goes to the post office with the record, for its other recipients and for the
+  record.
+* **Listing.** The gateway lists it in that user's `WELCOME` `waiting` with serial 0 and the flag
+  `local` (4) (RP-3 §5.2), in RP-3 §6.1's order, after the copies of the same priority. It sends
+  it like any waiting message: unasked under the user's `auto`, or when the user asks for it by
+  content ID (RP-3 §5.6, `ids`). Its `MSG` has no serial.
+* **Picked up.** When the user lists it `complete`, the gateway adds its content ID to the local
+  pickups of that user's session record, and stops listing it to that user.
+* **Told.** The post office learns of each local pickup with the record (RP-5 §5.6,
+  `local_pickups`), and marks the message picked up for that user once it holds it, so that the
+  user is not offered it again. A copy that comes anyway has the same content ID, and the client
+  keeps one (RP-3 §7).
+
+Local delivery happens only while the gateway is cut off: online, the message reaches the post
+office at once and comes back as a copy. The user trusts a local message as a copy the gateway
+serves offline: the gateway checked its sender (RP-1 §5, §6.3), and the post office checks it again
+when the record arrives.
+
 ---
 
 ## 5. Windows
@@ -261,8 +290,6 @@ it among their partners: they call it, inside its windows, to collect the mail.
 
 ## 8. Not yet settled
 
-* **Local delivery.** Two users of the same cut-off gateway exchanging mail through it before their
-  post offices hear of it.
 * **Mail dropped unsent.** What the sender is told when a gateway drops a record at the end of its
   30 days.
 * **Routing.** Gateways publishing what they reach; choosing among partners by more than their
@@ -280,10 +307,13 @@ it among their partners: they call it, inside its windows, to collect the mail.
 | `HELLO` from a gateway, one offer, with its credential | 335 bytes |
 | `PROOF`, a record with one message | 342 bytes |
 | `PROOF`, a pickup only | 332 bytes |
+| `PROOF`, a local pickup only | 342 bytes |
+| `REQUEST` for one local message by content ID | 20 bytes |
 | A placement, in `MSG` key 6 | 136 bytes |
 | `RECEIPT` for one message and two records | 48 bytes |
 
-All with framing, from `vectors/session-04.json` and `vectors/forwarding.json`.
+All with framing, from `vectors/session-04.json`, `vectors/forwarding.json`,
+`vectors/session-05.json` and `vectors/local-delivery.json`.
 
 ---
 
@@ -295,6 +325,13 @@ placement. `vectors/forwarding.json` has the placement and seven checks of it, t
 seven checks of a `PROOF`, and the post office's side: the forward item placed when N2CALL-5 fell
 silent, N1CALL-10's report with its path, and the drop when N2CALL-5 came back.
 
+`vectors/session-05.json` is local delivery byte for byte: Shelter 3 hands N2CALL-5, cut off, a
+message for Facundo, who then finds it listed with serial 0 and the flag `local`, asks for it by
+content ID and takes it. `vectors/local-delivery.json` has six messages and the local recipients a
+gateway keeps them for, both records' `PROOF`s (Facundo's with key 8), and the post office's side:
+N1CALL-10's report with `local_pickups`, the forward item placed for the message and dropped in the
+same poll, and the message not offered to Facundo again.
+
 ---
 
 ## Change log
@@ -305,3 +342,4 @@ silent, N1CALL-10's report with its path, and the drop when N2CALL-5 came back.
 | 0.0.2 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.1.0 | 2026-11-09 | First draft: the cut-off gateway calls its partner, one session both ways (§1, §2); session records and the `PROOF` PDU, the path, the partner's checks and `RECEIPT` `records` (§3); forward items, placements signed by the post office, forwarding serials and `MSG` `placement` (§4); windows (§5); routes (§6); keeping and accountability (§7); what is still open (§8). |
 | 0.2.0 | 2026-11-09 | From the test vectors: the caller's credential needs `gateway` and `send`, not `receive` (§2); the user's credential is checked with `send` and `receive` as the record needs (§3.3); copies still wait for a cut-off gateway (§4.1); the placement's checks in order, with their codes, and forward items flagged as copies (§4.3); sizes (§9); test vectors (§10). |
+| 0.3.0 | 2026-11-09 | Local delivery (§4.4): local users, keeping, listing with serial 0 and the flag `local`, local pickups in the record and in `PROOF` key 8 (§3.1, §3.2), checked with `receive` (§3.3); its sizes (§9) and test vectors (§10). |
