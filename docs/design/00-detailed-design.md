@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.12 |
+| **Version** | 0.1.13 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -93,6 +93,7 @@ reasoning; the specifications hold the result.
 | D22 | **Inward mail carries the post office's signature** (a placement, RP-7 §4.2). | A forwarding gateway could otherwise hand a cut-off area mail "from the post office" that it made up. The cut-off gateway already holds the post office's keys, and mail from the Internet has no sender's proof to carry. | Trusting the partner (any station can transmit any callsign); end-to-end proof only (Internet mail has none). |
 | D23 | **Partners are configured and routes published; no routing protocol yet** (RP-7 §5, §6). | An area has a few gateways, and their operators know each other. A routing protocol is hard to get right and harder to secure, and nothing yet shows it is needed. | Gateways announcing what they reach (open: RP-7 §8). |
 | D24 | **A cut-off gateway hands mail between its own users** (RP-7 §4.4): the addresses it received copies for in the last 30 days. | In a cut-off area much of the mail that matters is between neighbours, a shelter and the emergency operations centre, and it should not wait for the Internet or a partner's window. The copies say who uses the gateway with no list to keep. The record still takes the message to the post office, which checks it again and marks it picked up. | Waiting for the post office (no mail within the area while it is cut off); keeping mail for any address (the gateway would hold mail for strangers); going through the partner (a window and a round trip for mail that never leaves the area). |
+| D25 | **Mail dropped unsent is the sender's client's to track** (RP-7 §3.6): it keeps what a cut-off gateway took, offers it again until an online gateway confirms it, and tells the sender after 30 days. | Only the client knows what it sent: the gateway may be lost or have dropped the record, and the post office never heard of the message. Offers already carry content IDs and the post office already declines what it holds, so confirming costs a few bytes in sessions the client makes anyway. | The gateway telling the sender (only if the sender calls it again, and a dropped record leaves it nothing to say); a receipt by radio for every message (air time for all mail, not just the lost); keeping records for ever (a gateway's storage is finite, and a record that cannot leave in 30 days is unlikely to). |
 
 ---
 
@@ -123,7 +124,8 @@ reasoning; the specifications hold the result.
 **Offline**, steps 2, 4 and 6 change: the gateway checks the credential and statement against the
 keys and revocation list it holds, lists the copies placed ahead for Facundo, keeps his messages in
 its queue, and reports everything with `POST /reports` when the Internet returns (RP-5 §5.6). The
-client sees the same protocol, with `online` false and a `NOTICE` saying why.
+client sees the same protocol, with `online` false and a `NOTICE` saying why. It shows Facundo's
+messages as queued at KK4ODA-1 until a gateway that is online confirms them (RP-7 §3.6).
 
 ---
 
@@ -135,7 +137,7 @@ client sees the same protocol, with `online` false and a `NOTICE` saying why.
 |---|---|---|
 | Keys and credentials | Generates the device key, enrolls, renews, remembers which gateways hold its credential. | RP-1, RP-5 §6 |
 | Message store | Mail as standard `.eml` files, plus each message's air form and content ID. | RP-2 |
-| Session engine | The client side of RP-3: `HELLO`, transfers, receipts, resume. | RP-3 |
+| Session engine | The client side of RP-3: `HELLO`, transfers, receipts, resume; mail queued at cut-off gateways, offered again until confirmed. | RP-3, RP-7 §3.6 |
 | Modem host | Talks RPMI to an adapter; or embeds one. | RP-4 |
 | Gateway list | From post offices' gateway documents; ranked by distance, band and hours. | RP-5 §4.4 |
 | Interface | Folders, compose, attachments, the waiting list, where each message is. | — |
@@ -290,7 +292,7 @@ Collected from the specifications and the concept, each to be settled in the doc
 | ARDOP's host interface, checked against its specification. | RP-4 §9.3 |
 | Third-party traffic: the table of agreements, and knowing a sender's country. | RP-6 §5 |
 | Stalwart: MTA hooks or milter; AGPL for operators; clustering's edition. | Concept §13 |
-| Forwarding: telling a sender of mail dropped unsent, routing beyond partners, the bands per country. | RP-7 §8 |
+| Forwarding: routing beyond partners, the size of `PROOF`, the bands per country. | RP-7 §8 |
 | The reference implementations' languages and packaging. | §6 here |
 
 ---
@@ -312,3 +314,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.10 | 2026-11-09 | D21–D23: forwarding (RP-7 0.1.0); the forwarder's part; open questions moved to RP-7 §8. |
 | 0.1.11 | 2026-11-09 | RP-7's test vectors (§7). |
 | 0.1.12 | 2026-11-09 | D24: local delivery at a cut-off gateway (RP-7 0.3.0); the forwarder's part; its vectors (§7). |
+| 0.1.13 | 2026-11-09 | D25: mail dropped unsent is the sender's client's to track (RP-7 0.4.0). |

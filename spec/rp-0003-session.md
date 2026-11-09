@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.4.0 |
+| **Version** | 0.5.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -144,7 +144,7 @@ The called station's answer to `HELLO`, and to `AUTH` or a client `CREDENTIAL`.
 | 3 | `status` | uint | yes | 0 `ready`: the caller is authenticated. 1 `sign`: sign the challenge in key 4 (§5.3). 2 `credential`: send your credential (§5.8). |
 | 4 | `challenge` | bstr .size 16 | when `status` is 1 | Random. |
 | 5 | `accept` | array of [id, offset] | when `ready` | The offers the gateway will take, each with the number of bytes it already holds (0, or more to resume, §7). |
-| 6 | `decline` | array of [id, code] | when `ready` | Offers it will not take, with an RP-0 §9.3 code (`already-have`, `too-large`, `refused-by-policy`, …). Every offer is in `accept` or `decline`. |
+| 6 | `decline` | array of [id, code] | when `ready` | Offers it will not take, with an RP-0 §9.3 code (`already-have`, `too-large`, `refused-by-policy`, …). Every offer is in `accept` or `decline`. A cut-off gateway's `already-have` covers what is in its queue or it passed on (RP-7 §3.6). |
 | 7 | `waiting` | array of entry | when `ready` | Mail waiting for the caller, in the order the gateway will send it (§6.1). |
 | 8 | `more` | uint | when `ready` | How many further waiting messages are not listed. |
 | 9 | `caps` | caps | no | As in `HELLO`. |
@@ -216,7 +216,8 @@ What the sender of the `RECEIPT` now holds.
 A station SHOULD send a `RECEIPT` in each transmission in which it has received `MSG` pieces since
 its last one. A message counts as **delivered** only when listed `complete`: for mail picked up,
 that is when the gateway may report the pickup to the post office (RP-5 §5.5); for mail sent, that
-is when the client may mark it sent.
+is when the client may mark it sent, if the gateway is online (`WELCOME` `online`). From a cut-off
+gateway it is only queued, and the client keeps it and offers it again (RP-7 §3.6).
 
 ### 5.6 REQUEST
 
@@ -435,3 +436,4 @@ has one example of each PDU, and frames that must be refused.
 | 0.2.0 | 2026-11-09 | Resuming (§7): a message in `partials` is sent unasked; a resumed air form is the same bytes; a message that fails after resuming starts over. Station to station (§10): the station called proves itself (`WELCOME` keys 13 and 15, RP-1 §6.5), and the caller sends `cursor` 0. Test vectors `session-02.json` and `session-03.json`. |
 | 0.3.0 | 2026-11-09 | Forwarding (RP-7): `PROOF` defined there (§4), `role` 1, `MSG` key 6 `placement`, `RECEIPT` key 4 `records`. |
 | 0.4.0 | 2026-11-09 | Local delivery (RP-7 §4.4): the waiting flag `local` (§5.2), `REQUEST` key 4 `ids` (§5.6), no serial in a local message's `MSG` (§5.4). |
+| 0.5.0 | 2026-11-09 | Mail sent through a cut-off gateway is queued, not sent, and offered again (§5.5, RP-7 §3.6); a cut-off gateway's `already-have` (§5.2). |

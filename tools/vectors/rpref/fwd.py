@@ -13,6 +13,7 @@ from . import cbor, rp
 
 MAX_PATH = 8  # RP-7 §3.3
 LOCAL_DAYS = 30  # RP-7 §4.4: how long a copy makes its address a local user
+KEEP_DAYS = 30  # RP-7 §3.6, §7: how long a record is kept, and a message passed on remembered
 PROOF = 11  # RP-3 §4
 
 
@@ -83,6 +84,32 @@ def check_forwarded(canonical: bytes, statements: list[dict[int, Any]]) -> str:
         if cid in stmt.get(6, []) and sender == stmt.get(1):
             return "ok"
     return "not-authorized"
+
+
+# -- §3.6: the sender's side -------------------------------------------------------------------
+
+
+def offer_again(queued_at: int, calling: str, cut_off_then: dict[str, bool], now: int) -> bool:
+    """RP-7 §3.6: does the client offer a queued message again to the gateway it calls?
+
+    `cut_off_then` holds, for each gateway the client has called, whether its last `WELCOME`
+    said `online` false.
+    """
+    return now - queued_at >= KEEP_DAYS * 86400 or not cut_off_then.get(calling)
+
+
+def answer_offer(cid: bytes, queue: set[bytes], passed_on: dict[bytes, int], now: int) -> str:
+    """RP-7 §3.6: a cut-off gateway's answer to an offer, `accept` or `already-have`."""
+    if cid in queue or now - passed_on.get(cid, now - KEEP_DAYS * 86400) < KEEP_DAYS * 86400:
+        return "already-have"
+    return "accept"
+
+
+def sender_view(queued_at: int, confirmed: bool, now: int) -> str:
+    """RP-7 §3.6: what the client shows of a message it handed to a cut-off gateway."""
+    if confirmed:
+        return "sent"
+    return "queued" if now - queued_at < KEEP_DAYS * 86400 else "may have been dropped"
 
 
 # -- §4.4: local delivery -----------------------------------------------------------------------

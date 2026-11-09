@@ -1,0 +1,318 @@
+{
+  "radiopost_vectors": "Mail queued at a cut-off gateway: offered again, answered, shown",
+  "format": 1,
+  "specs": {
+    "RP-7": "§3.6",
+    "RP-3": "§5.2, §5.5",
+    "RP-5": "§5.2"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "A client offers a queued message again to the gateway it calls as `offer_cases` say, a cut-off gateway answers an offer as `answer_cases` say, and the client shows the message as `view_cases` say (RP-7 §3.6). The session is as in session-01.json, and the post office's exchanges as in api-exchanges.json.",
+  "context": {
+    "message": "shelter3-to-facundo",
+    "content_id_hex": "31a61e7fb08b17487541254f",
+    "queued_at": "N2CALL-5, cut off, at `queued_at` (session-05.json, session a)"
+  },
+  "offer_cases": [
+    {
+      "what": "N1CALL-10, never called before; 3 days on",
+      "queued_at": 1794474900,
+      "calling": "N1CALL-10",
+      "cut_off_when_last_called": {
+        "N2CALL-5": true
+      },
+      "now": 1794734100,
+      "expect": true
+    },
+    {
+      "what": "N2CALL-5, which queued it, cut off then; 3 days on",
+      "queued_at": 1794474900,
+      "calling": "N2CALL-5",
+      "cut_off_when_last_called": {
+        "N2CALL-5": true
+      },
+      "now": 1794734100,
+      "expect": false
+    },
+    {
+      "what": "N2CALL-5, cut off then; 30 days on",
+      "queued_at": 1794474900,
+      "calling": "N2CALL-5",
+      "cut_off_when_last_called": {
+        "N2CALL-5": true
+      },
+      "now": 1797066900,
+      "expect": true
+    },
+    {
+      "what": "N2CALL-5, online when last called; 3 days on",
+      "queued_at": 1794474900,
+      "calling": "N2CALL-5",
+      "cut_off_when_last_called": {
+        "N2CALL-5": false
+      },
+      "now": 1794734100,
+      "expect": true
+    },
+    {
+      "what": "N4CALL-2, cut off when last called; 3 days on",
+      "queued_at": 1794474900,
+      "calling": "N4CALL-2",
+      "cut_off_when_last_called": {
+        "N2CALL-5": true,
+        "N4CALL-2": true
+      },
+      "now": 1794734100,
+      "expect": false
+    },
+    {
+      "what": "N4CALL-2, cut off when last called; 31 days on",
+      "queued_at": 1794474900,
+      "calling": "N4CALL-2",
+      "cut_off_when_last_called": {
+        "N2CALL-5": true,
+        "N4CALL-2": true
+      },
+      "now": 1797153300,
+      "expect": true
+    },
+    {
+      "what": "N4CALL-2, never called; 3 days on",
+      "queued_at": 1794474900,
+      "calling": "N4CALL-2",
+      "cut_off_when_last_called": {
+        "N2CALL-5": true
+      },
+      "now": 1794734100,
+      "expect": true
+    }
+  ],
+  "answer_cases": [
+    {
+      "what": "in its queue",
+      "offer_hex": "31a61e7fb08b17487541254f",
+      "queue_hex": [
+        "31a61e7fb08b17487541254f"
+      ],
+      "passed_on": {},
+      "now": 1797930900,
+      "expect": "already-have"
+    },
+    {
+      "what": "passed on to N1CALL-10 10 days ago",
+      "offer_hex": "31a61e7fb08b17487541254f",
+      "queue_hex": [],
+      "passed_on": {
+        "31a61e7fb08b17487541254f": 1797066900
+      },
+      "now": 1797930900,
+      "expect": "already-have"
+    },
+    {
+      "what": "passed on 30 days ago",
+      "offer_hex": "31a61e7fb08b17487541254f",
+      "queue_hex": [],
+      "passed_on": {
+        "31a61e7fb08b17487541254f": 1795338900
+      },
+      "now": 1797930900,
+      "expect": "accept"
+    },
+    {
+      "what": "its record dropped unsent",
+      "offer_hex": "31a61e7fb08b17487541254f",
+      "queue_hex": [],
+      "passed_on": {},
+      "now": 1797930900,
+      "expect": "accept"
+    },
+    {
+      "what": "another message in its queue",
+      "offer_hex": "31a61e7fb08b17487541254f",
+      "queue_hex": [
+        "13ec505a3b6461bfc60bf972"
+      ],
+      "passed_on": {},
+      "now": 1797930900,
+      "expect": "accept"
+    }
+  ],
+  "view_cases": [
+    {
+      "what": "receipted by N2CALL-5 an hour ago",
+      "queued_at": 1794474900,
+      "confirmed": false,
+      "now": 1794478500,
+      "expect": "queued"
+    },
+    {
+      "what": "declined `already-have` by N1CALL-10, online",
+      "queued_at": 1794474900,
+      "confirmed": true,
+      "now": 1794734100,
+      "expect": "sent"
+    },
+    {
+      "what": "unconfirmed after 29 days",
+      "queued_at": 1794474900,
+      "confirmed": false,
+      "now": 1796980500,
+      "expect": "queued"
+    },
+    {
+      "what": "unconfirmed after 30 days",
+      "queued_at": 1794474900,
+      "confirmed": false,
+      "now": 1797066900,
+      "expect": "may have been dropped"
+    }
+  ],
+  "session": {
+    "story": "Shelter 3 reaches N1CALL-10, online, and offers its queued message again. The post office already holds it, so N1CALL-10 declines it `already-have`, and Shelter 3's client shows it sent. The offer cost its entries in HELLO and WELCOME.",
+    "client_clock": 1794498300,
+    "gateway_clock": 1794498320,
+    "transmissions": [
+      {
+        "number": 1,
+        "from": "client",
+        "pdus": [
+          {
+            "name": "HELLO",
+            "diagnostic": "{0: 1, 1: [1, 1], 2: 0, 3: \"shelter3@radiopost.org\", 4: \"N3CALL\", 5: \"N1CALL-10\", 6: 1794498300, 7: h'707bffd73190ebbb', 8: [[h'31a61e7fb08b17487541254f', 175, 0]], 9: 0, 10: 1000, 12: {1: [0, 1, 2], 2: 4096}, 13: h'82585ea901010219043503767368656c7465723340726164696f706f73742e6f726704664e3343414c4c0558205f1d8ed81c355abd1dc9ed9800825b61fa936a661556548fa924766e182e7b18061a6ae68100071a6b5d28000844fbbd5f5c0907584099f3d90d3ee3015b179efd0a89672f517ac5012e2253af67f88d2c17557f5b3d7d39c8a9c6074fc8f6a36a0b1857ede198fcc76e773027cc15761887e348b705', 15: h'0745e6165e0b1ea5c61db7fdf840b7ed0581b02be906a2173b0be158e22621c5d1a7dbe410caddca583c7f86c5c712cde4d6484436ba4cc80d2496eb8b001e0e'}",
+            "pdu_hex": "ae000101820101020003767368656c7465723340726164696f706f73742e6f726704664e3343414c4c05694e3143414c4c2d3130061a6af5defc0748707bffd73190ebbb0881834c31a61e7fb08b17487541254f18af0009000a1903e80ca20183000102021910000d58a382585ea901010219043503767368656c7465723340726164696f706f73742e6f726704664e3343414c4c0558205f1d8ed81c355abd1dc9ed9800825b61fa936a661556548fa924766e182e7b18061a6ae68100071a6b5d28000844fbbd5f5c0907584099f3d90d3ee3015b179efd0a89672f517ac5012e2253af67f88d2c17557f5b3d7d39c8a9c6074fc8f6a36a0b1857ede198fcc76e773027cc15761887e348b7050f58400745e6165e0b1ea5c61db7fdf840b7ed0581b02be906a2173b0be158e22621c5d1a7dbe410caddca583c7f86c5c712cde4d6484436ba4cc80d2496eb8b001e0e",
+            "frame_hex": "0151ae000101820101020003767368656c7465723340726164696f706f73742e6f726704664e3343414c4c05694e3143414c4c2d3130061a6af5defc0748707bffd73190ebbb0881834c31a61e7fb08b17487541254f18af0009000a1903e80ca20183000102021910000d58a382585ea901010219043503767368656c7465723340726164696f706f73742e6f726704664e3343414c4c0558205f1d8ed81c355abd1dc9ed9800825b61fa936a661556548fa924766e182e7b18061a6ae68100071a6b5d28000844fbbd5f5c0907584099f3d90d3ee3015b179efd0a89672f517ac5012e2253af67f88d2c17557f5b3d7d39c8a9c6074fc8f6a36a0b1857ede198fcc76e773027cc15761887e348b7050f58400745e6165e0b1ea5c61db7fdf840b7ed0581b02be906a2173b0be158e22621c5d1a7dbe410caddca583c7f86c5c712cde4d6484436ba4cc80d2496eb8b001e0e"
+          }
+        ],
+        "bytes": 339,
+        "bytes_hex": "0151ae000101820101020003767368656c7465723340726164696f706f73742e6f726704664e3343414c4c05694e3143414c4c2d3130061a6af5defc0748707bffd73190ebbb0881834c31a61e7fb08b17487541254f18af0009000a1903e80ca20183000102021910000d58a382585ea901010219043503767368656c7465723340726164696f706f73742e6f726704664e3343414c4c0558205f1d8ed81c355abd1dc9ed9800825b61fa936a661556548fa924766e182e7b18061a6ae68100071a6b5d28000844fbbd5f5c0907584099f3d90d3ee3015b179efd0a89672f517ac5012e2253af67f88d2c17557f5b3d7d39c8a9c6074fc8f6a36a0b1857ede198fcc76e773027cc15761887e348b7050f58400745e6165e0b1ea5c61db7fdf840b7ed0581b02be906a2173b0be158e22621c5d1a7dbe410caddca583c7f86c5c712cde4d6484436ba4cc80d2496eb8b001e0e"
+      },
+      {
+        "number": 2,
+        "from": "gateway",
+        "pdus": [
+          {
+            "name": "WELCOME",
+            "diagnostic": "{0: 2, 1: 1, 2: h'63b0c97e0bb0afbc', 3: 0, 5: [], 6: [[h'31a61e7fb08b17487541254f', 14]], 7: [], 8: 0, 9: {1: [0, 1], 2: 4096}, 10: 1794498320, 11: true, 12: true}",
+            "pdu_hex": "ac00020101024863b0c97e0bb0afbc030005800681824c31a61e7fb08b17487541254f0e0780080009a201820001021910000a1a6af5df100bf50cf5",
+            "frame_hex": "003cac00020101024863b0c97e0bb0afbc030005800681824c31a61e7fb08b17487541254f0e0780080009a201820001021910000a1a6af5df100bf50cf5"
+          },
+          {
+            "name": "DONE",
+            "diagnostic": "{0: 7}",
+            "pdu_hex": "a10007",
+            "frame_hex": "0003a10007"
+          }
+        ],
+        "bytes": 67,
+        "bytes_hex": "003cac00020101024863b0c97e0bb0afbc030005800681824c31a61e7fb08b17487541254f0e0780080009a201820001021910000a1a6af5df100bf50cf50003a10007"
+      },
+      {
+        "number": 3,
+        "from": "client",
+        "pdus": [
+          {
+            "name": "DONE",
+            "diagnostic": "{0: 7}",
+            "pdu_hex": "a10007",
+            "frame_hex": "0003a10007"
+          }
+        ],
+        "bytes": 5,
+        "bytes_hex": "0003a10007"
+      }
+    ],
+    "streams": {
+      "client": "0151ae000101820101020003767368656c7465723340726164696f706f73742e6f726704664e3343414c4c05694e3143414c4c2d3130061a6af5defc0748707bffd73190ebbb0881834c31a61e7fb08b17487541254f18af0009000a1903e80ca20183000102021910000d58a382585ea901010219043503767368656c7465723340726164696f706f73742e6f726704664e3343414c4c0558205f1d8ed81c355abd1dc9ed9800825b61fa936a661556548fa924766e182e7b18061a6ae68100071a6b5d28000844fbbd5f5c0907584099f3d90d3ee3015b179efd0a89672f517ac5012e2253af67f88d2c17557f5b3d7d39c8a9c6074fc8f6a36a0b1857ede198fcc76e773027cc15761887e348b7050f58400745e6165e0b1ea5c61db7fdf840b7ed0581b02be906a2173b0be158e22621c5d1a7dbe410caddca583c7f86c5c712cde4d6484436ba4cc80d2496eb8b001e0e0003a10007",
+      "gateway": "003cac00020101024863b0c97e0bb0afbc030005800681824c31a61e7fb08b17487541254f0e0780080009a201820001021910000a1a6af5df100bf50cf50003a10007"
+    }
+  },
+  "post_office": [
+    {
+      "note": "As in local-delivery.json, N1CALL-10 has reported Shelter 3's record: radiopost.org holds its message. Shelter 3's client still shows it queued at N2CALL-5, and offers it again."
+    },
+    {
+      "at": 1794498320,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "KdVDtVMXFVJDLCJc-DBQaG1CekuqA0Y2T4Wekk_y9ns",
+          "expires": 1794498620
+        }
+      }
+    },
+    {
+      "at": 1794498320,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "glhdqQEBAhkH4QNybjFjYWxsQGhhbXBvc3Qub3JnBGlOMUNBTEwtMTAFWCAUS-X7lp2Vr5tgjQkwZFi7JTVlyLDjpxhusxOJ1yRMUwYaauaBAAcaa10oAAhEhCGdAAkJWEDr1t2qArnecCmYfRA9H-L3gPmMDr4ONskMijV8cBIzX9kXtv5dFssaxOiERNjg0h37hrRpHop3NLsByAFCPYMK",
+          "nonce": "KdVDtVMXFVJDLCJc-DBQaG1CekuqA0Y2T4Wekk_y9ns",
+          "signature": "nKgf75xODG_yr1Llk0Tu0WsO-uIqHSarv8fc2ovCxJjeJsDP33gYX4sCQy1IX6rGOJbHiMC128xsQGijl7_TAw"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok__S0rLgmgVaVn3GOvq653Nwyi",
+          "expires": 1794501920,
+          "address": "n1call@hampost.org",
+          "operator": "N1CALL-10",
+          "flags": 9
+        }
+      }
+    },
+    {
+      "at": 1794498320,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/sessions",
+        "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi",
+        "body": {
+          "statement": "pgF2c2hlbHRlcjNAcmFkaW9wb3N0Lm9yZwJmTjNDQUxMA2lOMUNBTEwtMTAEGmr13vwFSHB7_9cxkOu7BoFMMaYef7CLF0h1QSVP",
+          "signature": "B0XmFl4LHqXGHbf9-EC37QWBsCvpBqIXOwvhWOImIcXRp9vkEMrdylg8f4bFxxLN5NZIRDa6TMgNJJbriwAeDg",
+          "credential": "glheqQEBAhkENQN2c2hlbHRlcjNAcmFkaW9wb3N0Lm9yZwRmTjNDQUxMBVggXx2O2Bw1Wr0dye2YAIJbYfqTamYVVlSPqSR2bhguexgGGmrmgQAHGmtdKAAIRPu9X1wJB1hAmfPZDT7jAVsXnv0KiWcvUXrFAS4iU69n-I0sF1V_Wz19OcipxgdPyPajagsYV-3hmPzHbncwJ8wVdhiH40i3BQ",
+          "started": 1794498320,
+          "gateway_session": "63b0c97e0bb0afbc",
+          "cursor": 0
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "session": "s_NW_ilWmh-QN7oZhM",
+          "expires": 1794501920,
+          "waiting": [],
+          "more": 0,
+          "accept": [],
+          "decline": [
+            {
+              "id": "ggtb475qrmluq5kbevhq",
+              "code": 14,
+              "name": "already-have"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "at": 1794498350,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "DELETE",
+        "path": "/sessions/s_NW_ilWmh-QN7oZhM",
+        "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi"
+      },
+      "response": {
+        "status": 204
+      }
+    }
+  ]
+}

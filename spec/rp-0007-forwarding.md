@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.0 |
+| **Version** | 0.4.0 |
 | **Updated** | 2026-11-09 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -136,7 +136,35 @@ The partner adds its own callsign to the record's path and stores it. Then:
 ### 3.5 When the caller lets go
 
 The caller deletes a message once the partner has listed it `complete`, and a record once the
-partner has listed it in `records`. Until then it offers them again in later windows.
+partner has listed it in `records`. Until then it offers them again in later windows. It keeps the
+content ID of each message it passed on, to a partner or to a post office (RP-5 §5.6, `accepted`
+or `duplicate`), for 30 days (§3.6).
+
+### 3.6 The sender's side
+
+A message a cut-off gateway receipts is **queued**, not sent: the post office has not seen it. The
+gateway may be lost, or drop the record unsent after its 30 days (§7), and it has no way to reach
+the sender. Only the sender's client knows what it sent, so the client keeps track.
+
+* **Queued.** A client that hands a message to a gateway whose `WELCOME` said `online` false keeps
+  the message's air form, the gateway's callsign and the time, and shows the message as queued
+  there. It shows it as **sent** once a gateway that is online lists it `complete` (RP-3 §5.5) or
+  declines it `already-have` (RP-3 §5.2): either way the post office holds it.
+* **Offered again.** In each later session the client offers each queued message again (RP-3
+  `HELLO` `offers`), unless the gateway it calls said `online` false the last time the client called
+  it and the message was queued less than 30 days ago. An online gateway passes the offer to the
+  post office like any other (RP-5 §5.2), so a message that already arrived by forwarding costs
+  only its entries in `HELLO` and `WELCOME`.
+* **At a cut-off gateway.** A cut-off gateway declines an offer `already-have` while the message is
+  in its queue, and for 30 days after it passed it on (§3.5). Otherwise it takes the message as
+  new: a gateway that dropped the message's record queues it again, and another gateway queues a
+  second copy, which the post office answers `duplicate` (RP-5 §5.4).
+* **Told.** When a message has been queued for 30 days, the client tells the sender that it may
+  have been dropped unsent, says where and when it was queued, and goes on offering it.
+
+The gateway cannot tell the sender itself: the sender may never call it again, and a gateway that
+has dropped a record has nothing left to say. Nothing new goes on the air for it: a queued message
+is confirmed or sent again by the offers a session already carries.
 
 ---
 
@@ -279,7 +307,8 @@ it among their partners: they call it, inside its windows, to collect the mail.
 ## 7. Keeping and accountability
 
 * **Outward records** are kept until a partner has taken them (§3.5) or they have been reported
-  (RP-5 §5.6), and for at least **30 days** otherwise.
+  (RP-5 §5.6), and for at least **30 days** otherwise. A gateway that then drops a record unsent
+  forgets its messages, so their senders' clients can queue them again (§3.6).
 * **Forward items** are kept until their placement's `expires`.
 * **Every hop keeps its evidence.** A gateway keeps, with each record it takes, the caller's own
   statement and signature from the forwarding session, for at least 30 days. With the path, they
@@ -290,8 +319,6 @@ it among their partners: they call it, inside its windows, to collect the mail.
 
 ## 8. Not yet settled
 
-* **Mail dropped unsent.** What the sender is told when a gateway drops a record at the end of its
-  30 days.
 * **Routing.** Gateways publishing what they reach; choosing among partners by more than their
   operators' lists.
 * **Size.** Sending a credential's hash in `PROOF` when the partner holds it, as RP-3 `HELLO`
@@ -332,6 +359,10 @@ gateway keeps them for, both records' `PROOF`s (Facundo's with key 8), and the p
 N1CALL-10's report with `local_pickups`, the forward item placed for the message and dropped in the
 same poll, and the message not offered to Facundo again.
 
+`vectors/queued.json` has the sender's side (§3.6): when a client offers a queued message again,
+how a cut-off gateway answers, and what the client shows, and Shelter 3's session with N1CALL-10,
+online, which declines the message `already-have` because the post office already holds it.
+
 ---
 
 ## Change log
@@ -343,3 +374,4 @@ same poll, and the message not offered to Facundo again.
 | 0.1.0 | 2026-11-09 | First draft: the cut-off gateway calls its partner, one session both ways (§1, §2); session records and the `PROOF` PDU, the path, the partner's checks and `RECEIPT` `records` (§3); forward items, placements signed by the post office, forwarding serials and `MSG` `placement` (§4); windows (§5); routes (§6); keeping and accountability (§7); what is still open (§8). |
 | 0.2.0 | 2026-11-09 | From the test vectors: the caller's credential needs `gateway` and `send`, not `receive` (§2); the user's credential is checked with `send` and `receive` as the record needs (§3.3); copies still wait for a cut-off gateway (§4.1); the placement's checks in order, with their codes, and forward items flagged as copies (§4.3); sizes (§9); test vectors (§10). |
 | 0.3.0 | 2026-11-09 | Local delivery (§4.4): local users, keeping, listing with serial 0 and the flag `local`, local pickups in the record and in `PROOF` key 8 (§3.1, §3.2), checked with `receive` (§3.3); its sizes (§9) and test vectors (§10). |
+| 0.4.0 | 2026-11-09 | Mail dropped unsent (§3.6): a message a cut-off gateway takes is queued, and the sender's client keeps it, offers it again and tells the sender; a cut-off gateway declines what it holds or passed on in the last 30 days (§3.5), and forgets a record it drops (§7); test vectors (§10). |

@@ -3337,6 +3337,39 @@ def make_local_session() -> dict[str, Any]:
     return out
 
 
+def local_report(records: list[dict[str, Any]]) -> tuple[Exchanges, str, int]:
+    """radiopost.org until N1CALL-10 reports N2CALL-5's records of session-05 (RP-7 §4.4)."""
+    office, ex = cut_off_office()
+    deliver(office, ex, "facundo@radiopost.org", 421, "maria-421", MESSAGES["maria-421"]["date"])
+    n2 = ex.login(T_CUT - 120, "N2CALL-5", "gateway-n2call-5")
+    copies = ex.call(T_CUT - 60, "N2CALL-5", "GET", "/copies?after=&wait=60", None, n2)
+    ex.call(T_CUT - 59, "N2CALL-5", "POST", "/copies/ack", {"cursor": copies["cursor"]}, n2)
+    ex.note(
+        "Atlanta loses the Internet. Shelter 3 and Facundo exchange a message through N2CALL-5 "
+        "(session-05.json). In N1CALL-10's next window N2CALL-5 forwards both records "
+        "(as in session-04.json), and N1CALL-10 reports them."
+    )
+    window = T_WINDOW + 3600
+    n1 = ex.login(window + 200, "N1CALL-10", "gateway-n1call-10")
+    reported = []
+    for r in records:
+        reported.append(
+            {
+                "statement": jws.b64u(r["statement"]),
+                "signature": jws.b64u(r["signature"]),
+                "credential": jws.b64u(r["credential"]),
+                "started": r["started"],
+                "gateway_session": r["session"].hex(),
+                "messages": handed_in(r["messages"])["messages"],
+                "pickups": r["pickups"],
+                "local_pickups": [rp.id_text(c) for c in r["local"]],
+                "path": ["N2CALL-5", "N1CALL-10"],
+            }
+        )
+    ex.call(window + 220, "N1CALL-10", "POST", "/reports", {"sessions": reported}, n1)
+    return ex, n1, window
+
+
 def make_local_delivery() -> dict[str, Any]:
     _, records = local_sessions()
     now = LOCAL_A
@@ -3403,34 +3436,7 @@ def make_local_delivery() -> dict[str, Any]:
             }
         )
 
-    office, ex = cut_off_office()
-    deliver(office, ex, "facundo@radiopost.org", 421, "maria-421", MESSAGES["maria-421"]["date"])
-    n2 = ex.login(T_CUT - 120, "N2CALL-5", "gateway-n2call-5")
-    copies = ex.call(T_CUT - 60, "N2CALL-5", "GET", "/copies?after=&wait=60", None, n2)
-    ex.call(T_CUT - 59, "N2CALL-5", "POST", "/copies/ack", {"cursor": copies["cursor"]}, n2)
-    ex.note(
-        "Atlanta loses the Internet. Shelter 3 and Facundo exchange a message through N2CALL-5 "
-        "(session-05.json). In N1CALL-10's next window N2CALL-5 forwards both records "
-        "(as in session-04.json), and N1CALL-10 reports them."
-    )
-    window = T_WINDOW + 3600
-    n1 = ex.login(window + 200, "N1CALL-10", "gateway-n1call-10")
-    reported = []
-    for r in records:
-        reported.append(
-            {
-                "statement": jws.b64u(r["statement"]),
-                "signature": jws.b64u(r["signature"]),
-                "credential": jws.b64u(r["credential"]),
-                "started": r["started"],
-                "gateway_session": r["session"].hex(),
-                "messages": handed_in(r["messages"])["messages"],
-                "pickups": r["pickups"],
-                "local_pickups": [rp.id_text(c) for c in r["local"]],
-                "path": ["N2CALL-5", "N1CALL-10"],
-            }
-        )
-    ex.call(window + 220, "N1CALL-10", "POST", "/reports", {"sessions": reported}, n1)
+    ex, n1, window = local_report(records)
     ex.note(
         "Shelter 3's message reaches Facundo's mailbox as #422, and is marked picked up at once: "
         "he took it at N2CALL-5. The forward item placed for it at N1CALL-10 is dropped, so "
@@ -3454,6 +3460,184 @@ def make_local_delivery() -> dict[str, Any]:
     out["context"] = {"gateway": "N2CALL-5", "now": now, "copies_seen": seen}
     out["cases"] = cases
     out["records"] = entries
+    out["post_office"] = ex.log
+    return out
+
+
+# -- queued.json ---------------------------------------------------------------------------------
+
+
+def make_queued() -> dict[str, Any]:
+    """RP-7 §3.6: what the sender's client offers again, a cut-off gateway's answer, the view."""
+    _, records = local_sessions()
+    ex, _, window = local_report(records)
+    cid = encoded(LOCAL_NAME)[1]
+    other = encoded("maria-421")[1]
+    took = LOCAL_A
+    cut = {"N4CALL-2": True}
+    offer_in = [
+        ("N1CALL-10, never called before; 3 days on", "N1CALL-10", {}, 3 * DAY),
+        ("N2CALL-5, which queued it, cut off then; 3 days on", "N2CALL-5", {}, 3 * DAY),
+        ("N2CALL-5, cut off then; 30 days on", "N2CALL-5", {}, 30 * DAY),
+        ("N2CALL-5, online when last called; 3 days on", "N2CALL-5", {"N2CALL-5": False}, 3 * DAY),
+        ("N4CALL-2, cut off when last called; 3 days on", "N4CALL-2", cut, 3 * DAY),
+        ("N4CALL-2, cut off when last called; 31 days on", "N4CALL-2", cut, 31 * DAY),
+        ("N4CALL-2, never called; 3 days on", "N4CALL-2", {}, 3 * DAY),
+    ]
+    offer_cases = []
+    for what, calling, last, later in offer_in:
+        then = {"N2CALL-5": True, **last}
+        offer_cases.append(
+            {
+                "what": what,
+                "queued_at": took,
+                "calling": calling,
+                "cut_off_when_last_called": then,
+                "now": took + later,
+                "expect": fwd.offer_again(took, calling, then, took + later),
+            }
+        )
+    confirm(  # RP-7 §3.6: not to a gateway cut off when last called, until 30 days have passed
+        offer_cases,
+        {
+            "N1CALL-10, never called before; 3 days on": True,
+            "N2CALL-5, which queued it, cut off then; 3 days on": False,
+            "N2CALL-5, cut off then; 30 days on": True,
+            "N2CALL-5, online when last called; 3 days on": True,
+            "N4CALL-2, cut off when last called; 3 days on": False,
+            "N4CALL-2, cut off when last called; 31 days on": True,
+            "N4CALL-2, never called; 3 days on": True,
+        },
+    )
+    now = took + 40 * DAY
+    answer_in = [
+        ("in its queue", {cid}, {}),
+        ("passed on to N1CALL-10 10 days ago", set(), {cid: now - 10 * DAY}),
+        ("passed on 30 days ago", set(), {cid: now - 30 * DAY}),
+        ("its record dropped unsent", set(), {}),
+        ("another message in its queue", {other}, {}),
+    ]
+    answer_cases = [
+        {
+            "what": what,
+            "offer_hex": cid.hex(),
+            "queue_hex": sorted(c.hex() for c in queue),
+            "passed_on": {c.hex(): t for c, t in passed.items()},
+            "now": now,
+            "expect": fwd.answer_offer(cid, queue, passed, now),
+        }
+        for what, queue, passed in answer_in
+    ]
+    confirm(  # RP-7 §3.6: `already-have` while queued, and for 30 days after passing it on
+        answer_cases,
+        {
+            "in its queue": "already-have",
+            "passed on to N1CALL-10 10 days ago": "already-have",
+            "passed on 30 days ago": "accept",
+            "its record dropped unsent": "accept",
+            "another message in its queue": "accept",
+        },
+    )
+    view_in = [
+        ("receipted by N2CALL-5 an hour ago", False, 3600),
+        ("declined `already-have` by N1CALL-10, online", True, 3 * DAY),
+        ("unconfirmed after 29 days", False, 29 * DAY),
+        ("unconfirmed after 30 days", False, 30 * DAY),
+    ]
+    view_cases = [
+        {
+            "what": what,
+            "queued_at": took,
+            "confirmed": confirmed,
+            "now": took + later,
+            "expect": fwd.sender_view(took, confirmed, took + later),
+        }
+        for what, confirmed, later in view_in
+    ]
+    confirm(  # RP-7 §3.6: sent once confirmed; after 30 days, perhaps dropped
+        view_cases,
+        {
+            "receipted by N2CALL-5 an hour ago": "queued",
+            "declined `already-have` by N1CALL-10, online": "sent",
+            "unconfirmed after 29 days": "queued",
+            "unconfirmed after 30 days": "may have been dropped",
+        },
+    )
+
+    ex.log = []
+    ex.note(
+        "As in local-delivery.json, N1CALL-10 has reported Shelter 3's record: radiopost.org holds "
+        "its message. Shelter 3's client still shows it queued at N2CALL-5, and offers it again."
+    )
+    at = window + 1800
+    started = at + 20
+    hello = hello_pdu(
+        "shelter3-n3call",
+        "N1CALL-10",
+        at,
+        stream("queued nonce", 8),
+        offers=[LOCAL_NAME],
+        cursor=0,
+        full_credential=True,
+    )
+    gateway_accepts(hello, "shelter3-n3call", "N1CALL-10", started)
+    sid = stream("queued id", 8)
+    n1 = ex.login(started, "N1CALL-10", "gateway-n1call-10")
+    request = {
+        "statement": jws.b64u(cbor.encode(rp.statement_from_hello(hello))),
+        "signature": jws.b64u(hello[15]),
+        "credential": jws.b64u(credential("shelter3-n3call")),
+        "started": started,
+        "gateway_session": sid.hex(),
+        "cursor": 0,
+    }
+    opened = ex.call(started, "N1CALL-10", "POST", "/sessions", request, n1)
+    assert opened["accept"] == [] and opened["waiting"] == []
+    assert opened["decline"] == [{"id": rp.id_text(cid), "code": 14, "name": "already-have"}]
+    ex.call(started + 30, "N1CALL-10", "DELETE", f"/sessions/{opened['session']}", None, n1)
+    welcome = welcome_pdu(
+        sid,
+        started,
+        accept=[],
+        decline=[[cid, rp.ERRORS["already-have"]]],
+        waiting=[],
+        caps=GATEWAY_CAPS,
+        online=True,
+        cached=True,
+    )
+    seq = [
+        ("client", [("HELLO", hello)]),
+        ("gateway", [("WELCOME", welcome), ("DONE", DONE)]),
+        ("client", [("DONE", DONE)]),
+    ]
+    transmissions, streams = write_transmissions(seq)
+    out = header(
+        "Mail queued at a cut-off gateway: offered again, answered, shown",
+        {"RP-7": "§3.6", "RP-3": "§5.2, §5.5", "RP-5": "§5.2"},
+    )
+    out["rule"] = (
+        "A client offers a queued message again to the gateway it calls as `offer_cases` say, a "
+        "cut-off gateway answers an offer as `answer_cases` say, and the client shows the message "
+        "as `view_cases` say (RP-7 §3.6). The session is as in session-01.json, and the post "
+        "office's exchanges as in api-exchanges.json."
+    )
+    out["context"] = {
+        "message": LOCAL_NAME,
+        "content_id_hex": cid.hex(),
+        "queued_at": "N2CALL-5, cut off, at `queued_at` (session-05.json, session a)",
+    }
+    out["offer_cases"] = offer_cases
+    out["answer_cases"] = answer_cases
+    out["view_cases"] = view_cases
+    out["session"] = {
+        "story": "Shelter 3 reaches N1CALL-10, online, and offers its queued message again. The "
+        "post office already holds it, so N1CALL-10 declines it `already-have`, and Shelter 3's "
+        "client shows it sent. The offer cost its entries in HELLO and WELCOME.",
+        "client_clock": at,
+        "gateway_clock": started,
+        "transmissions": transmissions,
+        "streams": streams,
+    }
     out["post_office"] = ex.log
     return out
 
@@ -4543,6 +4727,7 @@ FILES = {
     "api-account.json": make_api_account,
     "forwarding.json": make_forwarding,
     "local-delivery.json": make_local_delivery,
+    "queued.json": make_queued,
 }
 
 
@@ -4622,6 +4807,8 @@ def self_check(name: str, data: dict[str, Any]) -> None:
         check_local_session(data)
     if name == "local-delivery.json":
         check_local_delivery(data)
+    if name == "queued.json":
+        check_queued(data)
 
 
 def check_rpmi(data: dict[str, Any]) -> None:
@@ -4811,6 +4998,27 @@ def check_local_delivery(data: dict[str, Any]) -> None:
     assert placed and placed <= {i["serial"] for i in items if i["kind"] == "drop"}
     opened = next(e for e in after if e["request"]["path"] == "/sessions")
     assert not placed & {w["serial"] for w in opened["response"]["body"]["waiting"]}
+
+
+def check_queued(data: dict[str, Any]) -> None:
+    """From the bytes alone: the signed offer, declined `already-have` as the post office said."""
+    session = data["session"]
+    for t in session["transmissions"]:
+        check_transmission(t)
+    hello, welcome = (pdus_of(t)[0] for t in session["transmissions"][:2])
+    now = session["gateway_clock"]
+    result, body = rp.verify_credential(hello[13], po_keys(), {}, now, ["send", "receive"])
+    assert result == "ok" and body is not None
+    stmt = rp.statement_from_hello(hello)
+    assert rp.verify_statement(stmt, hello[15], body, me=hello[5], now=now) == "ok"
+    offered = [o[0] for o in hello[8]]
+    assert offered == [bytes.fromhex(data["context"]["content_id_hex"])]
+    assert welcome[11] is True and welcome[5] == [] and welcome[7] == []
+    assert welcome[6] == [[c, rp.ERRORS["already-have"]] for c in offered]
+    opened = next(e for e in data["post_office"] if e.get("request", {}).get("path") == "/sessions")
+    assert jws.unb64u(opened["request"]["body"]["statement"]) == cbor.encode(stmt)
+    declined = [[rp.id_bytes(d["id"]), d["code"]] for d in opened["response"]["body"]["decline"]]
+    assert declined == welcome[6]
 
 
 def check_account(data: dict[str, Any]) -> None:
