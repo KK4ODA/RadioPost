@@ -244,40 +244,76 @@ pub fn enroll(
     }
 }
 
-/// RP-1 §7.1: a domain's `_radiopost` TXT records, read by DNS over HTTPS, each as its tags.
-#[must_use]
-pub fn records(resolver: &str, domain: &str) -> Vec<std::collections::BTreeMap<String, String>> {
+/// The record types `query` asks for, by name and RFC 1035 number.
+const TYPES: [(&str, u64); 6] = [
+    ("A", 1),
+    ("CNAME", 5),
+    ("PTR", 12),
+    ("MX", 15),
+    ("TXT", 16),
+    ("AAAA", 28),
+];
+
+/// One question to a DNS-over-HTTPS resolver that answers in JSON (Google's and Cloudflare's
+/// form): the data of each answer of type `kind`, a TXT record's strings joined into one. A
+/// name that does not exist, or has no such record, gives an empty list.
+///
+/// # Errors
+///
+/// The resolver cannot be reached, does not answer in JSON, or reports a failure other than a
+/// name that does not exist.
+pub fn query(resolver: &str, name: &str, kind: &str) -> Result<Vec<String>, String> {
+    let number = TYPES
+        .iter()
+        .find(|(n, _)| *n == kind)
+        .map(|(_, t)| *t)
+        .ok_or_else(|| format!("{kind}: not a record type asked here"))?;
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(15)))
         .build()
         .into();
-    let Ok(mut response) = agent
+    let answer: Json = agent
         .get(resolver)
-        .query("name", format!("_radiopost.{domain}"))
-        .query("type", "TXT")
+        .query("name", name)
+        .query("type", kind)
         .header("Accept", "application/dns-json")
         .call()
-    else {
-        return Vec::new();
-    };
-    let answer: Json = response
+        .map_err(|e| format!("{resolver}: {e}"))?
         .body_mut()
         .read_to_string()
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or(Json::Null);
-    answer
+        .ok_or_else(|| format!("{resolver} gave no JSON for {name} {kind}"))?;
+    match answer.get("Status").and_then(Json::as_u64) {
+        Some(0 | 3) => {}
+        other => return Err(format!("{name} {kind}: the resolver's status is {other:?}")),
+    }
+    Ok(answer
         .get("Answer")
         .and_then(Json::as_array)
         .into_iter()
         .flatten()
+        .filter(|a| a.get("type").and_then(Json::as_u64) == Some(number))
         .filter_map(|a| a.get("data")?.as_str())
         .map(|d| {
-            d.split('"')
-                .filter(|s| !s.trim().is_empty())
-                .collect::<String>()
+            if kind == "TXT" {
+                d.split('"')
+                    .filter(|s| !s.trim().is_empty())
+                    .collect::<String>()
+            } else {
+                d.to_owned()
+            }
         })
-        .filter_map(|txt| radiopost::dns::parse(&txt))
+        .collect())
+}
+
+/// RP-1 §7.1: a domain's `_radiopost` TXT records, read by DNS over HTTPS, each as its tags.
+#[must_use]
+pub fn records(resolver: &str, domain: &str) -> Vec<std::collections::BTreeMap<String, String>> {
+    query(resolver, &format!("_radiopost.{domain}"), "TXT")
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|txt| radiopost::dns::parse(txt))
         .collect()
 }
 

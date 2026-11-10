@@ -3,6 +3,7 @@
 //! documents ([`documents`]), and the HTTP service around them ([`serve`]).
 
 pub mod auth;
+pub mod check;
 pub mod documents;
 pub mod email;
 pub mod mail;

@@ -110,7 +110,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   on mail-parser 0.11; its tests fill the lookup cache and build with `mail-auth`'s `test`
   feature, which makes any other name NXDOMAIN and a name with `_dns_error.` fail for now); and
   the door had refused `postmaster@`. Verdicts are never read from the message's own
-  `Authentication-Results`.
+  `Authentication-Results`. `radiopost-po check` (`postoffice/src/check.rs`) looks at a post
+  office from outside: DNS (`radiopost_api::query`, any record type by DNS over HTTPS), reverse
+  DNS, `info` over HTTPS, the door with its token, and the submission port signed in to and
+  asked for `MAIL FROM` but never sent to; its judgements are functions of what was found. The
+  door logs each decision with addresses and a reason (`mail::rcpt_why`, `data_why`), never
+  the message.
   `core/api` (`radiopost-api`) is RP-5 over HTTPS (login, calls, enrollment, DNS over HTTPS), shared
   by the gateway and the client; the client's `online` module uses it (enroll, renew, settings —
   `PUT` replaces them whole, so the client merges —, accept list, `report`). `app/src-tauri` has its

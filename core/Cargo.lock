@@ -1441,6 +1441,7 @@ dependencies = [
  "mail-auth",
  "mail-parser",
  "radiopost",
+ "radiopost-api",
  "radiopost-tester",
  "serde",
  "serde_json",
@@ -1448,6 +1449,7 @@ dependencies = [
  "tiny_http",
  "tokio",
  "unicode-normalization",
+ "ureq",
 ]
 
 [[package]]

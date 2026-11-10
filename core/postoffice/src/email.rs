@@ -223,6 +223,31 @@ pub fn hook_answer(draft: bool, reply: &str, text: &str) -> (u16, String) {
     (200, answer.to_string())
 }
 
+/// One line of the operator's log about the door: what it did with mail from `sender` to
+/// `recipients` at a stage, its reply and why. Addresses only, never the message.
+#[must_use]
+pub fn door_log(
+    did: &str,
+    sender: &str,
+    recipients: &[String],
+    stage: &str,
+    reply: &str,
+    why: &str,
+) -> String {
+    let to = recipients
+        .iter()
+        .map(|r| format!("<{r}>"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let stage = if stage == "rcpt" { "RCPT TO" } else { "DATA" };
+    let why = if why.is_empty() {
+        String::new()
+    } else {
+        format!(": {why}")
+    };
+    format!("door: {did} <{sender}> to {to} at {stage}, {reply}{why}")
+}
+
 /// RP-6 §2.1: the sender could not be checked for now (a DNS lookup failed), so the sending
 /// server tries again later.
 pub const TRY_LATER: &str = "451 4.7.1";
@@ -281,17 +306,8 @@ impl Running {
             .filter(|r| account(r))
             .cloned()
             .collect();
-        if hook.stage == "data" && !ours.is_empty() {
-            if !hook.given {
-                self.check_sender(&mut hook);
-            }
-            if hook.dmarc == "temperror" {
-                return hook_answer(
-                    hook.draft,
-                    TRY_LATER,
-                    &refusal_text(TRY_LATER, &ours[0], max),
-                );
-            }
+        if let Some(answer) = self.held_back(&mut hook, &ours, max) {
+            return answer;
         }
         let mut office = self.office();
         office.at(now());
@@ -312,26 +328,45 @@ impl Running {
                 .recipients
                 .last()
                 .filter(|r| account(r))
-                .map(|r| (mail::rcpt(&hook.sender, r, &door), r.clone()))
-                .filter(|(reply, _)| *reply != mail::OK_RCPT),
+                .map(|r| (mail::rcpt_why(&hook.sender, r, &door), r.clone()))
+                .filter(|((reply, _), _)| *reply != mail::OK_RCPT),
             "data" => {
                 let raw = hook.raw.as_deref().unwrap_or_default();
                 ours.iter().find_map(|r| {
-                    let (rcpt, data) = mail::door(&hook.sender, r, raw, &verdicts, &door);
-                    let reply = data.unwrap_or(rcpt);
-                    (reply != mail::OK_DATA).then(|| (reply, r.clone()))
+                    let at_rcpt = mail::rcpt_why(&hook.sender, r, &door);
+                    let answer = if at_rcpt.0 == mail::OK_RCPT {
+                        mail::data_why(&hook.sender, r, raw, &verdicts, &door)
+                    } else {
+                        at_rcpt
+                    };
+                    (answer.0 != mail::OK_DATA).then(|| (answer, r.clone()))
                 })
             }
             _ => None,
         };
         drop(office);
-        if let Some((reply, recipient)) = refused {
+        if let Some(((reply, why), recipient)) = refused {
+            eprintln!(
+                "radiopost-po: {}",
+                door_log(
+                    "refused",
+                    &hook.sender,
+                    std::slice::from_ref(&recipient),
+                    &hook.stage,
+                    reply,
+                    why
+                )
+            );
             return hook_answer(hook.draft, reply, &refusal_text(reply, &recipient, max));
         }
         if hook.stage == "data"
             && !ours.is_empty()
             && let Some(raw) = &hook.raw
         {
+            eprintln!(
+                "radiopost-po: {}",
+                door_log("took", &hook.sender, &ours, &hook.stage, mail::OK_DATA, "")
+            );
             if let Err(e) = self.email_in(&hook.sender, &ours, raw) {
                 eprintln!("radiopost-po: an email taken but not made a message: {e}");
             }
@@ -342,6 +377,29 @@ impl Running {
             mail::OK_DATA
         };
         hook_answer(hook.draft, ok, "")
+    }
+
+    /// At `DATA` for the post office's accounts, the sender checked (the door's own checks when
+    /// the mail server gave no verdicts): the answer that holds the message back when that could
+    /// not be done for now.
+    fn held_back(&self, hook: &mut Hook, ours: &[String], max: u64) -> Option<(u16, String)> {
+        if hook.stage != "data" || ours.is_empty() {
+            return None;
+        }
+        if !hook.given {
+            self.check_sender(hook);
+        }
+        if hook.dmarc != "temperror" {
+            return None;
+        }
+        let why = "the sender could not be checked for now";
+        let log = door_log("held back", &hook.sender, ours, &hook.stage, TRY_LATER, why);
+        eprintln!("radiopost-po: {log}");
+        Some(hook_answer(
+            hook.draft,
+            TRY_LATER,
+            &refusal_text(TRY_LATER, &ours[0], max),
+        ))
     }
 
     /// The door's own sender checks (`auth`), when the mail server gave no verdicts. Without
@@ -735,6 +793,33 @@ mod tests {
             .replace('_', "/");
         let pad = "=".repeat((4 - b64.len() % 4) % 4);
         format!("{b64}{pad}")
+    }
+
+    #[test]
+    fn the_operators_log_names_the_addresses_the_reply_and_why() {
+        assert_eq!(
+            super::door_log(
+                "refused",
+                "stranger@example.net",
+                &["kk4oda@radiopost.org".to_owned()],
+                "rcpt",
+                "550 5.7.1",
+                "the envelope sender is not on the accept list"
+            ),
+            "door: refused <stranger@example.net> to <kk4oda@radiopost.org> at RCPT TO, \
+             550 5.7.1: the envelope sender is not on the accept list"
+        );
+        assert_eq!(
+            super::door_log(
+                "took",
+                "",
+                &["a@radiopost.org".to_owned(), "b@radiopost.org".to_owned()],
+                "data",
+                "250 2.0.0",
+                ""
+            ),
+            "door: took <> to <a@radiopost.org>, <b@radiopost.org> at DATA, 250 2.0.0"
+        );
     }
 
     #[test]

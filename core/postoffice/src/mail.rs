@@ -205,17 +205,27 @@ pub fn reported_message_id(email: &Email<'_>) -> Option<String> {
 /// delivers it to a mailbox of its own (`postmaster@`, RFC 5321 §4.5.1) or refuses it.
 #[must_use]
 pub fn rcpt(sender: &str, recipient: &str, door: &Door<'_>) -> &'static str {
+    rcpt_why(sender, recipient, door).0
+}
+
+/// `rcpt`, and why, in a few words for the operator's log.
+#[must_use]
+pub fn rcpt_why(sender: &str, recipient: &str, door: &Door<'_>) -> (&'static str, &'static str) {
     let Some(accept) = door.accounts.get(&recipient.to_lowercase()) else {
-        return OK_RCPT;
+        return (OK_RCPT, "no account here: the mail server's");
     };
     let known = door
         .known_post_offices
         .iter()
         .any(|d| d.to_lowercase() == domain_of(sender));
-    if sender.is_empty() || on_list(sender, accept) || known {
-        OK_RCPT
+    if sender.is_empty() {
+        (OK_RCPT, "the null sender")
+    } else if on_list(sender, accept) {
+        (OK_RCPT, "the envelope sender is on the accept list")
+    } else if known {
+        (OK_RCPT, "a RadioPost post office's user")
     } else {
-        NOT_LISTED
+        (NOT_LISTED, "the envelope sender is not on the accept list")
     }
 }
 
@@ -228,18 +238,33 @@ pub fn data(
     verdicts: &Verdicts<'_>,
     door: &Door<'_>,
 ) -> &'static str {
+    data_why(sender, recipient, raw, verdicts, door).0
+}
+
+/// `data`, and why, in a few words for the operator's log.
+#[must_use]
+pub fn data_why(
+    sender: &str,
+    recipient: &str,
+    raw: &[u8],
+    verdicts: &Verdicts<'_>,
+    door: &Door<'_>,
+) -> (&'static str, &'static str) {
     let Some(accept) = door.accounts.get(&recipient.to_lowercase()) else {
-        return OK_DATA;
+        return (OK_DATA, "no account here: the mail server's");
     };
     let Some(email) = parse(raw) else {
-        return NOT_LISTED;
+        return (NOT_LISTED, "not readable as an email");
     };
     if verdicts.dmarc.eq_ignore_ascii_case("fail") {
-        return NOT_LISTED;
+        return (NOT_LISTED, "DMARC fails for the From: domain");
     }
     if sender.is_empty() {
         if !reported_message_id(&email).is_some_and(|id| (door.sent)(&id)) {
-            return NOT_LISTED;
+            return (
+                NOT_LISTED,
+                "a null sender, but no report about mail sent from here",
+            );
         }
     } else {
         let header_from = first_address(&email).unwrap_or_default();
@@ -253,16 +278,19 @@ pub fn data(
                 .iter()
                 .any(|d| d.to_lowercase() == domain);
         if !(on_list(&header_from, accept) || signed) {
-            return NOT_LISTED;
+            return (NOT_LISTED, "the From: address is not on the accept list");
         }
     }
     if raw.len() as u64 > door.max_email_bytes {
-        return TOO_LARGE;
+        return (TOO_LARGE, "larger than max_email_bytes");
     }
-    if encrypted(&email) || executable(&email) {
-        return NOT_ALLOWED;
+    if encrypted(&email) {
+        return (NOT_ALLOWED, "encrypted");
     }
-    OK_DATA
+    if executable(&email) {
+        return (NOT_ALLOWED, "an executable attachment");
+    }
+    (OK_DATA, "taken")
 }
 
 /// The door's two answers, `RCPT TO` and then `DATA` (`None` when the recipient was refused).

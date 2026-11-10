@@ -125,6 +125,42 @@ fn the_door_answers_as_rp6_2_1_says() {
             case["expect"]["data"],
             "{what}: DATA"
         );
+        // the reason the operator's log gives, for the reply that decided
+        let from = case["mail_from"].as_str().expect("from");
+        let to = case["rcpt_to"].as_str().expect("to");
+        let at_rcpt = mail::rcpt_why(from, to, &door);
+        let (reply, why) = if at_rcpt.0 == mail::OK_RCPT {
+            let raw = case["email"].as_str().expect("email").as_bytes();
+            mail::data_why(from, to, raw, &verdicts, &door)
+        } else {
+            at_rcpt
+        };
+        assert_eq!(
+            reply,
+            data.unwrap_or(rcpt),
+            "{what}: the reply with a reason"
+        );
+        let want = match what {
+            "a sender not on the list" => "the envelope sender is not on the accept list",
+            "envelope sender on the list, header sender not" => {
+                "the From: address is not on the accept list"
+            }
+            "DMARC fails for the `From:` domain" => "DMARC fails for the From: domain",
+            "over the post office's `max_email_bytes` (here 100)" => "larger than max_email_bytes",
+            "inline PGP" | "PGP/MIME, multipart/encrypted" | "S/MIME enveloped-data" => "encrypted",
+            "an executable attachment" => "an executable attachment",
+            "null sender, not a delivery report" => {
+                "a null sender, but no report about mail sent from here"
+            }
+            "an address that is no account (`postmaster@`): the mail server's" => {
+                "no account here: the mail server's"
+            }
+            _ if reply == mail::OK_DATA => "taken",
+            _ => "",
+        };
+        if !want.is_empty() {
+            assert_eq!(why, want, "{what}: the reason");
+        }
     }
 }
 

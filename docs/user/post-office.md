@@ -280,7 +280,20 @@ WantedBy=multi-user.target
 ```
 
 `systemctl daemon-reload && systemctl enable --now radiopost-po`. It logs what it does with email
-(`email out: …`, and why a sender could not be checked) to the journal.
+to the journal (`journalctl -u radiopost-po`): mail sent out (`email out: …`), and each decision
+of the door, with the addresses and the reason but never the message:
+
+```
+door: took <maria@example.com> to <kk4oda@radiopost.org> at DATA, 250 2.0.0
+door: refused <stranger@example.net> to <kk4oda@radiopost.org> at RCPT TO, 550 5.7.1: the envelope sender is not on the accept list
+door: held back <maria@example.com> to <kk4oda@radiopost.org> at DATA, 451 4.7.1: the sender could not be checked for now
+```
+
+Stalwart reads changes made in its administration only when it reloads its settings: restart it
+(`systemctl restart stalwart`) after §5's changes, or the hook is not called at all. To see that
+the hook is called: stop `radiopost-po`, send a message to `postmaster@` on port 25 from the
+server itself (`swaks --server 127.0.0.1 --to postmaster@radiopost.org --from test@example.org`),
+and Stalwart should answer `451 4.3.5` at `RCPT TO`; start it again.
 
 ## 7. DNS
 
@@ -317,6 +330,19 @@ sends (`name` changes it later). `status` and `outgoing` show what the post offi
 user the Stalwart account of §5.7 too.
 
 ## 9. Checks before going live
+
+`check` looks at the post office from outside, as the world will: the `_radiopost` records
+against `key.hex` and the base URL, MX, SPF, DMARC and the DKIM keys (give the selectors from
+Stalwart's zone file), the reverse DNS of the mail host's addresses, the signed `info` document
+over HTTPS, the door with its token, and the submission port: it signs in as `radiopost` and asks
+to send as `postmaster@`, then resets, so no mail is sent.
+
+```
+radiopost-po --dir /var/lib/radiopost check --dkim v1-rsa-20261110,v1-ed25519-20261110
+```
+
+Each line says `ok`, `FAIL` (with what to change) or `note`; the last says `ready` when nothing
+failed. Then:
 
 1. From an outside address, send an email to a user. It is refused at `RCPT TO` with the accept
    list's explanation (RP-6 §2.3).

@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use ed25519_dalek::SigningKey;
 use radiopost::base64url;
+use radiopost_postoffice::check::{self, Verdict};
 use radiopost_postoffice::documents::Info;
 use radiopost_postoffice::serve::{self, Files, Running, Settings};
 use serde_json::{Value as Json, json};
@@ -33,7 +34,10 @@ usage: radiopost-po --dir DIR COMMAND
                      put a message's air form in a mailbox by hand
   revoke --device KEY revoke every credential of a device key (base64url or hex)
   outgoing           the mail waiting to go on by email
-  status             accounts, gateways, codes, sessions";
+  status             accounts, gateways, codes, sessions
+  check [--dkim SELECTOR,…] [--resolver URL]
+                     the post office checked from outside: its DNS records, reverse DNS, the API
+                     over HTTPS, the door, and the mail server's submission port (no mail sent)";
 
 struct Args {
     words: Vec<String>,
@@ -168,6 +172,52 @@ fn admin(files: &Files, method: &str, path: &str, body: &Json) -> Result<Json, S
     Ok(json)
 }
 
+fn check(files: &Files, a: &Args) -> Result<(), String> {
+    let settings = files.settings()?;
+    let public = files.key()?.verifying_key().to_bytes();
+    let resolver = a
+        .one("--resolver")
+        .unwrap_or_else(|| radiopost_api::RESOLVER.into());
+    let selectors: Vec<String> = a
+        .one("--dkim")
+        .map(|s| {
+            s.split(',')
+                .map(str::trim)
+                .filter(|x| !x.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut lines = check::run(&settings, &public, &resolver, &selectors);
+    lines.push(match admin(files, "GET", "/status", &Json::Null) {
+        Ok(status) => check::Line {
+            verdict: Verdict::Note,
+            text: format!(
+                "the post office: {} accounts, {} waiting to go out by email",
+                status["accounts"], status["outgoing"]
+            ),
+        },
+        Err(e) => check::Line {
+            verdict: Verdict::Fail,
+            text: format!("the operator's port: {e}"),
+        },
+    });
+    for line in &lines {
+        let mark = match line.verdict {
+            Verdict::Ok => "ok  ",
+            Verdict::Fail => "FAIL",
+            Verdict::Note => "note",
+        };
+        println!("{mark}  {}", line.text);
+    }
+    let failed = lines.iter().filter(|l| l.verdict == Verdict::Fail).count();
+    if failed > 0 {
+        return Err(format!("{failed} of {} checks failed", lines.len()));
+    }
+    println!("ready");
+    Ok(())
+}
+
 fn know(files: &Files, a: &Args) -> Result<(), String> {
     let mut settings = files.settings()?;
     let public = key_bytes(&a.need("--public")?).ok_or("--public is not a 32-byte key")?;
@@ -196,43 +246,42 @@ fn know(files: &Files, a: &Args) -> Result<(), String> {
     Ok(())
 }
 
+/// `serve`: the API, the operator's port, the door and email out, until the process ends.
+fn serve_all(dir: &std::path::Path, files: &Files) -> Result<(), String> {
+    let settings = files.settings()?;
+    let running = Arc::new(Running::load(dir, serve::system_draw())?);
+    let (api, ops) = serve::serve(running.clone(), &settings.listen, &settings.admin)?;
+    eprintln!(
+        "radiopost-po: {} on http://{api} (for {}), operator's port {ops}",
+        settings.domains.join(", "),
+        settings.base_url
+    );
+    if let Some(hooks) = &settings.hooks {
+        let at = serve::serve_hooks(running.clone(), hooks)?;
+        eprintln!("radiopost-po: the door answers the mail server's MTA hooks on http://{at}");
+    }
+    match &settings.smtp {
+        Some(url) => {
+            serve::send_mail(running, url, |line| {
+                eprintln!("radiopost-po: email out: {line}");
+            })?;
+            eprintln!("radiopost-po: email leaves through the mail server's submission port");
+        }
+        None => {
+            eprintln!("radiopost-po: no `smtp` in config.json: email waits in `outgoing`");
+        }
+    }
+    loop {
+        std::thread::park();
+    }
+}
+
 fn run(a: &Args, command: &str) -> Result<(), String> {
     let dir = PathBuf::from(a.need("--dir")?);
     let files = Files::new(&dir);
     match command {
         "init" => init(&files, a),
-        "serve" => {
-            let settings = files.settings()?;
-            let running = Arc::new(Running::load(&dir, serve::system_draw())?);
-            let (api, ops) = serve::serve(running.clone(), &settings.listen, &settings.admin)?;
-            eprintln!(
-                "radiopost-po: {} on http://{api} (for {}), operator's port {ops}",
-                settings.domains.join(", "),
-                settings.base_url
-            );
-            if let Some(hooks) = &settings.hooks {
-                let at = serve::serve_hooks(running.clone(), hooks)?;
-                eprintln!(
-                    "radiopost-po: the door answers the mail server's MTA hooks on http://{at}"
-                );
-            }
-            match &settings.smtp {
-                Some(url) => {
-                    serve::send_mail(running, url, |line| {
-                        eprintln!("radiopost-po: email out: {line}");
-                    })?;
-                    eprintln!(
-                        "radiopost-po: email leaves through the mail server's submission port"
-                    );
-                }
-                None => {
-                    eprintln!("radiopost-po: no `smtp` in config.json: email waits in `outgoing`");
-                }
-            }
-            loop {
-                std::thread::park();
-            }
-        }
+        "serve" => serve_all(&dir, &files),
         "dns" => {
             let running = Running::load(&dir, serve::system_draw())?;
             for r in running.office().dns_records() {
@@ -295,6 +344,7 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
             );
             Ok(())
         }
+        "check" => check(&files, a),
         _ => Err(format!("unknown command {command}\n{USAGE}")),
     }
 }
