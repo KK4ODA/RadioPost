@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.25 |
+| **Version** | 0.1.26 |
 | **Updated** | 2026-11-11 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -297,6 +297,10 @@ the core against `vectors/` on every push, with the checks that run today.
 | 4 | Forwarding by radio. | RP-7 |
 | 5 | More adapters (VARA, ARDOP, AGWPE); forms; the phone. | RP-4, new |
 
+What the author and users ask for, inside this order and beyond it, is kept in
+[the wishlist](02-wishlist.md): each wish grouped, given a proposed priority, and checked against
+the specifications, with what has been set aside and why.
+
 ---
 
 ## 10. Open questions
@@ -342,3 +346,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.23 | 2026-11-09 | The TCP adapter: TLS on the Internet only; plain TCP on an amateur mesh, which is on the air (RP-4 0.5.0). |
 | 0.1.24 | 2026-11-10 | §5.2: the gateway's interface, an application of its own with its own installer, as the author chose. |
 | 0.1.25 | 2026-11-11 | D34: the programs update themselves from a signed update channel, as the author asked. |
+| 0.1.26 | 2026-11-11 | §9: the wishlist, in its own document. |
