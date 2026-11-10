@@ -2,8 +2,10 @@
 #
 # The installers and the command-line tools, for Windows, macOS and Linux.
 #
-# A pushed tag v* makes a pre-release of that name. Started by hand, the build becomes a draft
-# release, which only the repository's maintainers see until one publishes it. The installers are
+# A pushed tag v* makes a pre-release of that name. Started by hand with a `tag` (v0.1.0-beta.1),
+# it makes that public pre-release and the tag, on the commit it ran on; started by hand without
+# one, the build becomes a draft release, which only the repository's maintainers see until one
+# publishes it. The installers are
 # not signed yet: Windows' SmartScreen and macOS' Gatekeeper warn (the client's README says how to
 # open them).
 name: Release
@@ -12,6 +14,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "A tag such as v0.1.0-beta.1 for a public pre-release; empty for a draft"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -111,10 +118,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          ASKED: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             tag="${GITHUB_REF_NAME}"; kind="--prerelease"
+          elif [ -n "${ASKED}" ]; then
+            case "${ASKED}" in
+              v[0-9]*) tag="${ASKED}"; kind="--prerelease" ;;
+              *) echo "a release tag starts with v and a digit: ${ASKED}"; exit 1 ;;
+            esac
           else
             tag="build-${GITHUB_RUN_NUMBER}"; kind="--draft --prerelease"
           fi
