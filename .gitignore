@@ -3,3 +3,4 @@ target/
 *.pyc
 # Tauri writes these at every build
 app/src-tauri/gen/
+app/gateway/src-tauri/gen/

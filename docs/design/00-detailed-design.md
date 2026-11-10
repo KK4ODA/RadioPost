@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.23 |
-| **Updated** | 2026-11-09 |
+| **Version** | 0.1.24 |
+| **Updated** | 2026-11-10 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The concept](../concept/00-concept.md) |
@@ -161,6 +161,7 @@ messages as queued at KK4ODA-1 until a gateway that is online confirms them (RP-
 | Store | The outgoing queue, copies placed ahead, partial uploads, the replay cache, credentials seen. | RP-3 §7 |
 | Modem host | Talks RPMI to one adapter per radio. | RP-4 |
 | Rules check | Bands and segments for automatic control, when the modem does not check them. | RP-4 §8 |
+| Interface | RadioPost Gateway, the gateway's own desktop application: setup, registration, start and stop, the session under way, the sessions carried, the post offices' answers; the same panel served for a browser on a gateway with no screen. | RP-5 §6.4 |
 | Forwarder | When cut off: calls partners in their windows, offers session records with `PROOF`, takes inward mail and checks its placements, and hands mail between its own users. As a partner: takes records, reports them or forwards them on, holds forward items. | RP-7 |
 
 ### 5.3 The post office
@@ -338,3 +339,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.21 | 2026-11-09 | D17: the dictionary's rule (RP-2 0.2.0); D32: trusting post offices (RP-1 0.5.0); D33: radiopost.org's enrollment. Phase 0's open questions settled but the data still owed. |
 | 0.1.22 | 2026-11-09 | §7: the conformance tester's outline, in its own document. |
 | 0.1.23 | 2026-11-09 | The TCP adapter: TLS on the Internet only; plain TCP on an amateur mesh, which is on the air (RP-4 0.5.0). |
+| 0.1.24 | 2026-11-10 | §5.2: the gateway's interface, an application of its own with its own installer, as the author chose. |

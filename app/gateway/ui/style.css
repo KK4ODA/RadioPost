@@ -1,0 +1,112 @@
+/* SPDX-License-Identifier: MIT OR Apache-2.0 */
+:root {
+  --bg: #f6f7f8; --panel: #ffffff; --line: #d9dde1; --text: #1b1f23; --muted: #5d6670;
+  --key: #1b1f23; --key-text: #ffffff; --accent: #1d5fa8;
+  --ok: #1f7a3d; --busy: #9a6400; --bad: #b3261e; --session: #1d5fa8;
+  --mono: ui-monospace, "SF Mono", Consolas, "Liberation Mono", monospace;
+  --face: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --control-h: 32px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181b; --panel: #1e2125; --line: #33383e; --text: #e3e6e9; --muted: #9aa3ad;
+    --key: #dde0e3; --key-text: #16181b; --accent: #7fb2ec;
+    --ok: #5cc17f; --busy: #e0a83a; --bad: #ef6f66; --session: #7fb2ec;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 var(--face);
+       display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr);
+       height: 100vh; overflow: hidden; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { height: var(--control-h); padding: 0 14px; border: 1px solid var(--line); border-radius: 6px;
+         background: var(--panel); cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--key); color: var(--key-text); border-color: var(--key); }
+button.quiet { background: transparent; }
+button:disabled { opacity: .5; cursor: default; }
+input, select, textarea { width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px;
+                          background: var(--panel); }
+input, select { height: var(--control-h); }
+input:disabled, textarea:disabled, select:disabled { opacity: .6; }
+select.narrow { width: auto; }
+label { display: block; margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+label input, label select, label textarea { display: block; margin-top: 3px; color: var(--text);
+                                           font-size: 15px; }
+label.check { display: flex; gap: 6px; align-items: center; }
+label.check input { width: auto; height: auto; margin: 0; }
+h1 { font-size: 20px; margin: 18px 0 10px; }
+h2 { font-size: 13px; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+.mono { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+.row { display: flex; gap: 8px; margin: 4px 0 12px; flex-wrap: wrap; }
+.note { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+.ok { color: var(--ok); }
+.bad { color: var(--bad); }
+
+.top { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--panel);
+       border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.brand { font-weight: 700; letter-spacing: .01em; }
+.who { color: var(--muted); flex: 1; font-family: var(--mono); font-size: 13px; min-width: 0;
+       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.state { font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line);
+         white-space: nowrap; }
+.state[data-state="opening"] { color: var(--busy); border-color: var(--busy); }
+.state[data-state="listening"] { color: var(--ok); border-color: var(--ok); }
+.state[data-state="session"] { color: var(--session); border-color: var(--session); }
+.state[data-state="problem"] { color: var(--bad); border-color: var(--bad); }
+
+main { padding: 16px 24px; overflow: auto; min-width: 0; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px;
+        margin-bottom: 14px; }
+.card.notice { border-color: var(--busy); }
+.card.notice p { margin: 0 0 10px; }
+p.card.notice { margin: 0 0 14px; }
+.card.session { border-color: var(--session); }
+.big { font-size: 15px; margin: 0 0 6px; }
+.entries { list-style: none; padding: 0; margin: 0 0 8px; }
+.entries li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 0; }
+.entries li.check { display: block; padding: 0 0 8px; }
+.entries li.check span { display: block; }
+.entries li.check span + span { font-size: 13px; }
+.fields { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
+.fields dt { color: var(--muted); }
+.fields dd { margin: 0; }
+
+.table-wrap { overflow-x: auto; }
+.list { width: 100%; border-collapse: collapse; }
+.list th { text-align: left; font-size: 13px; color: var(--muted); font-weight: 600; padding: 6px 8px;
+           border-bottom: 1px solid var(--line); white-space: nowrap; }
+.nowrap { white-space: nowrap; }
+.list td { padding: 7px 8px; border-bottom: 1px solid var(--line); }
+.list td:first-child { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.list .n { text-align: right; font-variant-numeric: tabular-nums; }
+.list tr.failed td:last-child { color: var(--bad); }
+.empty { color: var(--muted); }
+
+#setup { max-width: 720px; }
+#back { margin-bottom: 6px; }
+.channels { border-collapse: collapse; margin-bottom: 4px; }
+.channels th { text-align: left; font-size: 13px; color: var(--muted); font-weight: 600; padding: 0 8px 4px 0; }
+.channels td { padding: 0 8px 6px 0; }
+.channels input { width: 9em; }
+details { margin-top: 8px; color: var(--muted); font-size: 13px; }
+details summary { cursor: pointer; margin-bottom: 8px; }
+
+.log { border-top: 1px solid var(--line); background: var(--panel); }
+.log pre { margin: 0; padding: 8px 16px; height: 8.5em; overflow: auto; font-family: var(--mono);
+           font-size: 12px; color: var(--muted); }
+.log pre:empty::before { content: "What the gateway does shows here."; }
+.toast { position: fixed; right: 16px; bottom: 150px; background: var(--key); color: var(--key-text);
+         padding: 8px 14px; border-radius: 6px; max-width: 460px; }
+.toast.bad { background: var(--bad); color: #fff; }
+
+@media (max-width: 860px) {
+  .cards { grid-template-columns: 1fr; gap: 0; }
+}
+@media (max-width: 640px) {
+  body { height: auto; overflow: visible; }
+  main { padding: 12px 16px; }
+  .list th:nth-child(3), .list td:nth-child(3), .list th:nth-child(4), .list td:nth-child(4) { display: none; }
+  .list td:last-child { min-width: 12em; }
+}

@@ -1,0 +1,149 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RadioPost Gateway</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand" title="RadioPost Gateway: users call it by radio, and it carries their mail to their post offices">RadioPost Gateway</div>
+    <div class="who" id="who" title="The gateway's callsign, and the account it is registered under"></div>
+    <div class="state" id="state" data-state="stopped" title="What the gateway is doing">Stopped</div>
+    <button class="primary" id="start" title="Answer calls: the gateway claims its callsign at the modem and listens">Start</button>
+    <button id="stop" title="Stop answering: a session under way ends, and the modem is let go" hidden>Stop</button>
+    <button class="quiet" id="setup-open" title="The gateway's callsign and modem, its registration, and its post offices">Setup</button>
+  </header>
+
+  <main>
+    <section id="station-view">
+      <div class="card notice" id="not-ready" hidden>
+        <p id="not-ready-text"></p>
+        <button class="primary" id="setup-go">Set up the gateway</button>
+      </div>
+
+      <div class="cards">
+        <section class="card" aria-label="Modem">
+          <h2 title="The modem the gateway answers on: Aether HF's control API, or an RPMI adapter">Modem</h2>
+          <p class="big mono" id="modem"></p>
+          <p class="note" id="modem-state"></p>
+        </section>
+        <section class="card" aria-label="Post offices">
+          <h2 title="Each post office the gateway knows of, and whether it let the gateway log in at the last check (every ten minutes while it answers)">Post offices</h2>
+          <ul class="entries" id="checks"></ul>
+          <button class="quiet" id="check" title="Log in at each post office now">Check now</button>
+        </section>
+        <section class="card" aria-label="Registration">
+          <h2 title="The gateway's own credential, from its registration with its operator's post office (RP-5 §6.4)">Registration</h2>
+          <p id="registration"></p>
+        </section>
+      </div>
+
+      <section class="card session" id="session" hidden aria-label="Session under way">
+        <h2>Session under way</h2>
+        <dl class="fields">
+          <dt title="The station that called">Caller</dt><dd id="s-remote" class="mono"></dd>
+          <dt title="The account its credential names">Account</dt><dd id="s-account"></dd>
+          <dt>Since</dt><dd id="s-since"></dd>
+          <dt title="Messages the caller sent that its post office took">Sent</dt><dd id="s-in"></dd>
+          <dt title="Messages the caller picked up">Picked up</dt><dd id="s-out"></dd>
+        </dl>
+      </section>
+
+      <h1>Sessions</h1>
+      <div class="table-wrap">
+      <table class="list" aria-label="Sessions carried">
+        <thead><tr>
+          <th title="When the station called">When</th>
+          <th title="The station that called">Caller</th>
+          <th title="The account its credential names">Account</th>
+          <th title="How long the session lasted">Length</th>
+          <th class="n" title="Messages the caller sent that its post office took">Sent</th>
+          <th class="n" title="Messages the caller picked up">Picked up</th>
+          <th title="How it ended">Result</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      </div>
+      <p class="empty" id="empty">No session yet.</p>
+    </section>
+
+    <section id="setup" hidden>
+      <button id="back" class="quiet">Back</button>
+      <h1>Setup</h1>
+      <p class="card notice" id="held" hidden>The gateway is answering: stop it to change its settings.</p>
+
+      <form class="card" id="gateway-form">
+        <h2>1. The gateway</h2>
+        <label title="The callsign callers call: the operator's callsign with an SSID, such as KK4ODA-1">Callsign
+          <input name="callsign" placeholder="KK4ODA-1" autocomplete="off" spellcheck="false" required>
+        </label>
+        <label title="Aether HF's control API on this computer (ws://127.0.0.1:8515/v1, as Aether runs it), or an RPMI adapter's address (host:port)">Modem
+          <input name="modem" spellcheck="false">
+        </label>
+        <label title="The country the gateway operates in, as two letters: it decides which third-party mail it may hand over (RP-6 §5.1)">Country
+          <input name="country" maxlength="2" value="US" spellcheck="false">
+        </label>
+        <label class="check" title="Aether checks the band rules itself. A modem that does not needs its operator to (RP-4 §8)">
+          <input type="checkbox" name="operator_checks_rules"> The modem does not check the band rules: I do
+        </label>
+        <label class="check" title="Answer calls as soon as the app opens, as an unattended gateway should">
+          <input type="checkbox" name="answer_at_start" checked> Answer calls when the app opens
+        </label>
+        <div class="row"><button class="primary" type="submit">Save</button></div>
+        <p class="note" id="key-line" hidden>The gateway's key: <span class="mono" id="key"></span></p>
+      </form>
+
+      <form class="card" id="register-form">
+        <h2>2. Registration</h2>
+        <p class="note">Registers the gateway with your post office, logged in as you through the RadioPost app on this computer. The post office lists the gateway for its users and issues it a credential.</p>
+        <p class="note" id="enrolled"></p>
+        <label title="The RadioPost app's home, where its enrollment is kept">RadioPost app's home
+          <input name="home" spellcheck="false">
+        </label>
+        <h2 title="Where callers find the gateway: each dial frequency and Aether's bandwidth there">Channels</h2>
+        <table class="channels" aria-label="Channels">
+          <thead><tr><th>Dial, MHz</th><th>Bandwidth</th><th></th></tr></thead>
+          <tbody id="channel-rows"></tbody>
+        </table>
+        <div class="row"><button type="button" class="quiet" id="add-channel">Add a channel</button></div>
+        <label title="The Maidenhead grid square, such as EM73">Grid
+          <input name="grid" maxlength="8" spellcheck="false">
+        </label>
+        <label title="Where it is, in words: a town and state">Place
+          <input name="place">
+        </label>
+        <label title="When it answers: always, or in words such as 1800-0200 UTC">Hours
+          <input name="hours" value="always">
+        </label>
+        <div class="row"><button class="primary" type="submit">Register</button></div>
+        <details>
+          <summary>A credential issued by other means</summary>
+          <label title="A credential a post office issued for the gateway's key, in hexadecimal">Credential
+            <textarea name="credential" rows="3" spellcheck="false"></textarea>
+          </label>
+          <div class="row"><button type="button" id="keep-credential">Keep credential</button></div>
+        </details>
+      </form>
+
+      <form class="card" id="po-form">
+        <h2>3. Post offices (optional)</h2>
+        <p class="note">The gateway finds each post office in DNS. Name one here only when its DNS records are not published yet.</p>
+        <ul class="entries" id="po-list"></ul>
+        <label>Domain <input name="domain" placeholder="radiopost.org" spellcheck="false"></label>
+        <label title="The post office's API address, https://…/rp/v1; empty to forget it">API address <input name="url" placeholder="https://po.radiopost.org/rp/v1" spellcheck="false"></label>
+        <div class="row"><button type="submit">Save</button></div>
+      </form>
+
+      <p class="note" id="where"></p>
+    </section>
+  </main>
+
+  <footer class="log" aria-label="Log"><pre id="log"></pre></footer>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>

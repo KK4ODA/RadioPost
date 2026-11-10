@@ -122,6 +122,14 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   the post office puts them in new messages from `postmaster@` for the next call. A serial is
   asked for whether its message was picked up or not: the vector's three sessions are what catch
   the narrower rule. `gateway/tests/online.rs` carries it end to end, from an email at the door.
+  RadioPost Gateway (`app/gateway`, the author's choice: its own app and installer): the gateway
+  answers on a thread of its own (`runner`), its state in `monitor` (sessions in `sessions.json`,
+  the log, the post offices' logins every ten minutes), its panel in `panel.rs` with the page in
+  `app/gateway/ui` (port 8621; `radiopost-gateway panel` serves it headless), and the window in
+  `app/gateway/src-tauri` (`radiopost-gateway-app`, its own lockfile, CI's `app · gateway` job).
+  `station::run` waits for a modem that is away and stops when asked; `serve` is `run` with no one
+  to ask. A gateway's credential names the gateway as its operator (RP-5 §6.4) and lasts 90 days:
+  registering again replaces it. `tests/common` holds the gateway tests' post office and clients.
   `core/api` (`radiopost-api`) is RP-5 over HTTPS (login, calls, enrollment, DNS over HTTPS), shared
   by the gateway and the client; the client's `online` module uses it (enroll, renew, settings —
   `PUT` replaces them whole, so the client merges —, accept list, `report`). `app/src-tauri` has its

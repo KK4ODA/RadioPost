@@ -218,6 +218,13 @@ impl Gateway {
         (!self.queued.is_empty()).then(|| self.queued.remove(0))
     }
 
+    /// The account the caller's credential names, once read (RP-3 §5.1): whether the post office
+    /// let the session open is what the session's events and notes say.
+    #[must_use]
+    pub fn account(&self) -> Option<&str> {
+        (!self.address.is_empty()).then_some(self.address.as_str())
+    }
+
     /// What to keep beyond the session: credentials seen, pieces of uploads.
     pub fn take_notes(&mut self) -> Vec<Note> {
         std::mem::take(&mut self.notes)

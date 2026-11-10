@@ -34,13 +34,16 @@ office or modem adapter from the specifications, and it will work with everyone 
 
 ## Status
 
-Phase 1 has begun: the core library in [`core/`](core/README.md) builds RadioPost's objects and
-runs RP-3's sessions, and its modem interface (RP-4) carries them between two stations, through a
-simulated channel or through two [Aether HF](https://github.com/KK4ODA/aether-hf) modems and the
-Aether adapter, each checked against the test vectors. The `radiopost` client carries mail between
-two stations, on the command line, from its panel in a browser, or as a desktop application
-([`app/client`](app/client/README.md)); [on-air tests](docs/user/on-air-tests.md) between two
-stations with Aether HF can begin. The specifications are **drafts**:
+Phases 1 and 2 are built: the core library in [`core/`](core/README.md) builds RadioPost's objects
+and runs RP-3's sessions, checked against the test vectors, and its modem interface (RP-4) carries
+them through [Aether HF](https://github.com/KK4ODA/aether-hf) or a simulated channel. The
+`radiopost` client carries mail to another station or through a gateway, on the command line, from
+its panel in a browser, or as a desktop application ([`app/client`](app/client/README.md)); the
+gateway answers users' calls and carries their sessions to their post offices, as a desktop
+application of its own, RadioPost Gateway ([`app/gateway`](app/gateway/README.md),
+[the operator's guide](docs/user/gateway.md)); and the post office service runs beside a mail
+server and exchanges ordinary email ([the operator's guide](docs/user/post-office.md)).
+[On-air tests](docs/user/on-air-tests.md) between two stations with Aether HF can begin. The specifications are **drafts**:
 anything may change, and nothing is ready to deploy. The project's own post office will be `radiopost.org`. The first modem is
 [Aether HF](https://github.com/KK4ODA/aether-hf), an open-source HF modem; VARA, ARDOP and AX.25
 packet follow through adapters.

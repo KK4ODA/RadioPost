@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<!-- SPDX-License-Identifier: CC-BY-4.0. Drawn by tools/figures/icons.py. -->
+<rect x="3.84" y="3.84" width="56.32" height="56.32" rx="12.8" fill="#1d5fa8"/>
+<g fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+<rect x="15.36" y="28.16" width="33.28" height="21.76"/>
+<path d="M15.36 28.16L32 40.96L48.64 28.16"/>
+<path d="M26.8611 22.4526A7.68 7.68 0 0 1 37.1389 22.4526"/>
+<path d="M22.5786 17.6965A14.08 14.08 0 0 1 41.4214 17.6965"/>
+<path d="M18.2962 12.9404A20.48 20.48 0 0 1 45.7038 12.9404"/>
+</g>
+</svg>

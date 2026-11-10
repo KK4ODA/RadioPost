@@ -4,7 +4,8 @@
 # are what the reference makes, the figures are what their generators draw, and the documents'
 # versions, links and cross-references agree (standard library only: nothing is installed but
 # Python and ruff). The Rust workspace in core/ is formatted, linted and tested against the vectors,
-# and the desktop application (app/src-tauri, Tauri) is built, linted and tested on its own.
+# and the two desktop applications (app/src-tauri, the client, and app/gateway/src-tauri, the
+# gateway; Tauri) are built, linted and tested on their own.
 name: Check
 
 on:
@@ -91,16 +92,24 @@ jobs:
         working-directory: core
         run: cargo test --locked
 
-      - name: The client's panel parses
-        # a module, as the page loads it: a .mjs copy, since node reads a .js file as a script
+      - name: The panels parse
+        # modules, as the pages load them: .mjs copies, since node reads a .js file as a script
         run: |
           cp app/ui/app.js "$RUNNER_TEMP/app.mjs"
           node --check "$RUNNER_TEMP/app.mjs"
+          cp app/gateway/ui/app.js "$RUNNER_TEMP/gateway.mjs"
+          node --check "$RUNNER_TEMP/gateway.mjs"
 
   app:
-    name: app · desktop
+    name: app · ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: desktop, dir: app/src-tauri }
+          - { name: gateway, dir: app/gateway/src-tauri }
     steps:
       - uses: actions/checkout@v7
 
@@ -119,18 +128,18 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: app/src-tauri
+          workspaces: ${{ matrix.dir }}
           # kept from main only: Actions storage is shared across the account
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Format
-        working-directory: app/src-tauri
+        working-directory: ${{ matrix.dir }}
         run: cargo fmt -- --check
 
       - name: Lint
-        working-directory: app/src-tauri
+        working-directory: ${{ matrix.dir }}
         run: cargo clippy --all-targets -- -D warnings
 
       - name: Test
-        working-directory: app/src-tauri
+        working-directory: ${{ matrix.dir }}
         run: cargo test --locked

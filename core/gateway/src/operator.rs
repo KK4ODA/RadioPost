@@ -33,6 +33,28 @@ fn user_of(home: &Path) -> Result<(Account, Credential), String> {
     ))
 }
 
+/// The RadioPost app's home on this computer, where its operator's enrollment is:
+/// `$RADIOPOST_HOME`, else `.radiopost` in the user's home directory (as the client has it).
+#[must_use]
+pub fn client_home() -> std::path::PathBuf {
+    if let Ok(h) = std::env::var("RADIOPOST_HOME") {
+        return h.into();
+    }
+    let base = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".into());
+    std::path::PathBuf::from(base).join(".radiopost")
+}
+
+/// Who the client's home at `home` is enrolled as: its credential's body.
+///
+/// # Errors
+///
+/// It holds no device key or no credential.
+pub fn enrolled_as(home: &Path) -> Result<radiopost::credential::Body, String> {
+    user_of(home).map(|(_, c)| c.body)
+}
+
 /// Registers the gateway in `dir` with the post office of the user whose client's home is
 /// `home`, with `record`'s fields (channels, grid, place, hours) beside its callsign and
 /// operator, and keeps the credential the post office issues (`credential.hex`).

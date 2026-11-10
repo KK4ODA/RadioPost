@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 #
-# The installers and the command-line tools, for Windows, macOS and Linux.
+# The installers of the two desktop applications (RadioPost, the client, and RadioPost Gateway)
+# and the command-line tools, for Windows, macOS and Linux.
 #
 # A pushed tag v* makes a pre-release of that name. Started by hand with a `tag` (v0.1.0-beta.1),
 # it makes that public pre-release and the tag, on the commit it ran on; started by hand without
@@ -31,7 +32,8 @@ jobs:
   build:
     name: build · ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    # two Tauri applications and the tools, each a release build
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
@@ -58,8 +60,13 @@ jobs:
         with:
           node-version: 22
 
-      - name: The desktop application's installers
+      - name: The client's installers
         working-directory: app/src-tauri
+        shell: bash
+        run: npx --yes @tauri-apps/cli@2 build --bundles ${{ matrix.bundles }}
+
+      - name: The gateway's installers
+        working-directory: app/gateway/src-tauri
         shell: bash
         run: npx --yes @tauri-apps/cli@2 build --bundles ${{ matrix.bundles }}
 
@@ -90,7 +97,8 @@ jobs:
             (cd out && tar -a -c -f "$tools.zip" "$tools")
           fi
           rm -r "out/$tools"
-          find app/src-tauri/target/release/bundle -maxdepth 2 -type f \
+          find app/src-tauri/target/release/bundle app/gateway/src-tauri/target/release/bundle \
+            -maxdepth 2 -type f \
             \( -name '*.deb' -o -name '*.AppImage' -o -name '*.msi' -o -name '*-setup.exe' \
                -o -name '*.dmg' \) -exec cp {} out/ \;
           ls -l out
@@ -132,7 +140,8 @@ jobs:
           else
             tag="build-${GITHUB_RUN_NUMBER}"; kind="--draft --prerelease"
           fi
-          notes="Built from ${GITHUB_SHA::7}. The installers are not signed yet: Windows'
+          notes="Built from ${GITHUB_SHA::7}. RadioPost is the client; RadioPost Gateway is the
+          gateway, for the computer at a gateway's radio. The installers are not signed yet: Windows'
           SmartScreen asks once (More info, Run anyway), and on macOS open the app with Control-click,
           Open. The tools archive holds radiopost, radiopost-aether, radiopost-tcp, rpmi-loopback,
           radiopost-issue, radiopost-tester, radiopost-gateway and radiopost-po. SHA256SUMS lists

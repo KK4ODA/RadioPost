@@ -4,8 +4,12 @@
 //!
 //! [`radiopost::session::gateway::Gateway`] is the session's engine; [`upstream`] reaches the post
 //! office; [`station`] answers calls on an RPMI modem and keeps what outlives a session;
-//! [`operator`] registers the gateway with its operator's post office.
+//! [`operator`] registers the gateway with its operator's post office; [`monitor`] keeps what it
+//! is doing for its operator, [`runner`] runs it on a thread of its own, and [`panel`] shows it.
 
+pub mod monitor;
 pub mod operator;
+pub mod panel;
+pub mod runner;
 pub mod station;
 pub mod upstream;

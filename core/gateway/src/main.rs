@@ -5,19 +5,24 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Arc;
 
-use ed25519_dalek::SigningKey;
 use radiopost::base64url;
 use radiopost_gateway::operator;
+use radiopost_gateway::panel::Panel;
+use radiopost_gateway::runner::Runner;
 use radiopost_gateway::station::{self, Settings};
 use serde_json::{Value as Json, json};
 
 const USAGE: &str = "\
-usage: radiopost-gateway --dir DIR COMMAND
+usage: radiopost-gateway [--dir DIR] COMMAND
+
+DIR is the gateway's directory: $RADIOPOST_GATEWAY, else .radiopost-gateway in your home
+directory, as the RadioPost Gateway app has it.
 
   init --callsign CALL --modem ADDR [--country US] [--operator-checks-rules]
                      make a gateway: its key and settings. ADDR is an RPMI adapter's
-                     host:port, or Aether's control API (ws://127.0.0.1:8515/v1/ws)
+                     host:port, or Aether's control API (ws://127.0.0.1:8515/v1)
   register --home HOME [--grid G] [--place TEXT] [--channel HZ,MODE,MODEM,BW]...
                      register the gateway with your post office (RP-5 §6.4), logged in
                      as you with your client's key and credential in HOME, and keep the
@@ -32,7 +37,10 @@ usage: radiopost-gateway --dir DIR COMMAND
                      resolver, the tester's
   block --domain D   carry no sessions to a domain's post office (RP-1 §7.3)
   key                the gateway's public key
-  serve              answer calls and carry each session to the caller's post office";
+  serve              answer calls and carry each session to the caller's post office
+  panel [--port N] [--ui DIR]
+                     serve the gateway's panel on this computer (port 8621) and say where;
+                     it answers calls when the gateway is set to answer at start";
 
 struct Args {
     words: Vec<String>,
@@ -61,17 +69,7 @@ impl Args {
     }
 }
 
-fn hex(bytes: &[u8]) -> String {
-    radiopost::cbor::hex(bytes)
-}
-
 fn init(dir: &Path, a: &Args) -> Result<(), String> {
-    if Settings::load(dir).is_ok() {
-        return Err("this directory already holds a gateway".into());
-    }
-    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let mut seed = [0u8; 32];
-    getrandom::fill(&mut seed).map_err(|e| e.to_string())?;
     let settings = Settings {
         callsign: a.need("--callsign")?.to_uppercase(),
         modem: a.need("--modem")?,
@@ -81,14 +79,14 @@ fn init(dir: &Path, a: &Args) -> Result<(), String> {
         blocked: Vec::new(),
         only: None,
         operator_checks_rules: a.has("--operator-checks-rules"),
+        answer_at_start: true,
     };
-    station::write(dir, "key.hex", &hex(&seed))?;
-    settings.save(dir)?;
+    station::make(dir, &settings)?;
     println!(
         "gateway {} made in {}\nits key: {}",
         settings.callsign,
         dir.display(),
-        base64url::encode(SigningKey::from_bytes(&seed).verifying_key().as_bytes())
+        base64url::encode(station::key(dir)?.verifying_key().as_bytes())
     );
     println!(
         "next: radiopost-gateway --dir {} register --home YOUR_CLIENT_HOME",
@@ -129,6 +127,23 @@ fn register(dir: &Path, a: &Args) -> Result<(), String> {
     Ok(())
 }
 
+/// The panel, for a gateway with no screen: on loopback, for a browser on the same machine.
+fn panel(dir: &Path, a: &Args) -> Result<(), String> {
+    let runner = Arc::new(Runner::new(dir).echoing());
+    let port = a.one("--port").unwrap_or_else(|| "8621".into());
+    let at = Panel::new(runner.clone(), a.one("--ui").map(PathBuf::from))
+        .start(&format!("127.0.0.1:{port}"))?;
+    println!("the panel is at http://{at}/");
+    if Settings::load(dir).is_ok_and(|s| s.answer_at_start) {
+        if let Err(e) = runner.start() {
+            println!("not answering: {e}");
+        }
+    }
+    loop {
+        std::thread::park();
+    }
+}
+
 fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
     match command {
         "init" => init(dir, a),
@@ -142,17 +157,7 @@ fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
         "credential" => {
             let file = a.need("--file")?;
             let bytes = std::fs::read(&file).map_err(|e| format!("{file}: {e}"))?;
-            let bytes = std::str::from_utf8(&bytes)
-                .ok()
-                .and_then(station::unhex)
-                .unwrap_or(bytes);
-            let body = radiopost::credential::Credential::decode(&bytes)
-                .ok_or("that file is not a credential (RP-1 §4)")?
-                .body;
-            if body.device != station::key(dir)?.verifying_key().to_bytes() {
-                return Err("that credential is for another key than the gateway's".into());
-            }
-            station::write(dir, "credential.hex", &radiopost::cbor::hex(&bytes))?;
+            let body = station::keep_credential(dir, &bytes)?;
             println!(
                 "{} for {}, credential {}",
                 body.operator, body.address, body.serial
@@ -180,6 +185,7 @@ fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
             Ok(())
         }
         "serve" => station::serve(dir, &mut |line| println!("{line}")),
+        "panel" => panel(dir, a),
         _ => Err(USAGE.into()),
     }
 }
@@ -188,7 +194,8 @@ fn main() -> ExitCode {
     let words: Vec<String> = std::env::args().skip(1).collect();
     let a = Args { words };
     let (Some(dir), Some(command)) = (
-        a.one("--dir"),
+        a.one("--dir")
+            .or_else(|| Some(station::default_dir().display().to_string())),
         a.words
             .iter()
             .enumerate()

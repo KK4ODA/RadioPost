@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
-"""The client's icon: an envelope under two radio arcs, on a graphite tile.
+"""The applications' icons: an envelope under radio arcs, on a tile.
 
-Writes the desktop application's icons (`app/src-tauri/icons/`: PNGs, a Windows ICO and a macOS
-ICNS) and the
-panel's favicon (`app/ui/icon.svg`) from one geometry. Standard library only. The PNGs are drawn at
-512 pixels, two samples a side, and the smaller ones averaged down from it.
+The client's is graphite with two arcs; the gateway's is blue with three, a station that answers.
+Writes each desktop application's icons (`app/src-tauri/icons/`, `app/gateway/src-tauri/icons/`:
+PNGs, a Windows ICO and a macOS ICNS) and its panel's favicon (`app/ui/icon.svg`,
+`app/gateway/ui/icon.svg`) from one geometry. Standard library only. The PNGs are drawn at 512
+pixels, two samples a side, and the smaller ones averaged down from it.
 
     python tools/figures/icons.py           # write them
     python tools/figures/icons.py --check   # fail if a file differs from what this draws
@@ -18,14 +19,38 @@ import math
 import struct
 import sys
 import zlib
+from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-ICONS = ROOT / "app" / "src-tauri" / "icons"
-FAVICON = ROOT / "app" / "ui" / "icon.svg"
 
-TILE = (0x1B, 0x1F, 0x23)  # the panel's graphite key
-INK = (0xE3, 0xE6, 0xE9)  # its light text on dark
+
+@dataclass(frozen=True)
+class Variant:
+    """One application's icon: its tile, its ink, its arcs, and where its files go."""
+
+    icons: Path
+    favicon: Path
+    tile: tuple[int, int, int]
+    ink: tuple[int, int, int]
+    arcs: tuple[float, ...]  # radii
+
+
+INK = (0xE3, 0xE6, 0xE9)  # the panels' light text on dark
+CLIENT = Variant(
+    icons=ROOT / "app" / "src-tauri" / "icons",
+    favicon=ROOT / "app" / "ui" / "icon.svg",
+    tile=(0x1B, 0x1F, 0x23),  # the panel's graphite key
+    ink=INK,
+    arcs=(0.12, 0.22),
+)
+GATEWAY = Variant(
+    icons=ROOT / "app" / "gateway" / "src-tauri" / "icons",
+    favicon=ROOT / "app" / "gateway" / "ui" / "icon.svg",
+    tile=(0x1D, 0x5F, 0xA8),  # the panels' accent blue
+    ink=(0xFF, 0xFF, 0xFF),
+    arcs=(0.12, 0.22, 0.32),
+)
 
 # The geometry, in a unit square, y down.
 TILE_BOX = (0.06, 0.94)
@@ -34,7 +59,6 @@ STROKE = 0.05
 ENVELOPE = (0.24, 0.44, 0.76, 0.78)  # left, top, right, bottom
 FLAP_TIP = (0.5, 0.64)
 ARC_CENTRE = (0.5, 0.44)
-ARCS = (0.12, 0.22)  # radii
 ARC_SPREAD = math.radians(42)  # each side of straight up
 
 
@@ -64,7 +88,7 @@ def in_tile(x: float, y: float) -> bool:
     return math.hypot(x - cx, y - cy) <= TILE_RADIUS
 
 
-def inked(x: float, y: float) -> bool:
+def inked(x: float, y: float, arcs: tuple[float, ...]) -> bool:
     half = STROKE / 2
     if any(segment_distance(x, y, a, b) <= half for a, b in SEGMENTS):
         return True
@@ -72,10 +96,10 @@ def inked(x: float, y: float) -> bool:
     if dy <= 0 or abs(math.atan2(dx, dy)) > ARC_SPREAD:
         return False
     r = math.hypot(dx, dy)
-    return any(abs(r - radius) <= half for radius in ARCS)
+    return any(abs(r - radius) <= half for radius in arcs)
 
 
-def render(size: int, samples: int) -> bytes:
+def render(size: int, samples: int, v: Variant) -> bytes:
     """RGBA pixels, row by row, each pixel the average of samples x samples points."""
     out = bytearray()
     n = samples * samples
@@ -88,11 +112,11 @@ def render(size: int, samples: int) -> bytes:
                     y = (row + (i + 0.5) / samples) / size
                     if in_tile(x, y):
                         tile += 1
-                        ink += inked(x, y)
+                        ink += inked(x, y, v.arcs)
             if tile == 0:
                 out += b"\0\0\0\0"
                 continue
-            mix = [round(t + (k - t) * ink / tile) for t, k in zip(TILE, INK, strict=True)]
+            mix = [round(t + (k - t) * ink / tile) for t, k in zip(v.tile, v.ink, strict=True)]
             out += bytes([*mix, round(255 * tile / n)])
     return bytes(out)
 
@@ -193,7 +217,7 @@ def icns_pixels(data: bytes) -> list[bytes]:
     return out
 
 
-def svg() -> str:
+def svg(v: Variant) -> str:
     def p(v: float) -> str:
         return f"{v * 64:g}"
 
@@ -201,14 +225,14 @@ def svg() -> str:
     side = hi - lo
     flap = f"M{p(LEFT)} {p(TOP)}L{p(FLAP_TIP[0])} {p(FLAP_TIP[1])}L{p(RIGHT)} {p(TOP)}"
     arcs = []
-    for r in ARCS:
+    for r in v.arcs:
         dx, dy = r * math.sin(ARC_SPREAD), r * math.cos(ARC_SPREAD)
         cx, cy = ARC_CENTRE
         arcs.append(
             f'<path d="M{p(cx - dx)} {p(cy - dy)}A{p(r)} {p(r)} 0 0 1 {p(cx + dx)} {p(cy - dy)}"/>'
         )
-    ink = "#{:02x}{:02x}{:02x}".format(*INK)
-    tile = "#{:02x}{:02x}{:02x}".format(*TILE)
+    ink = "#{:02x}{:02x}{:02x}".format(*v.ink)
+    tile = "#{:02x}{:02x}{:02x}".format(*v.tile)
     return (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">\n'
         "<!-- SPDX-License-Identifier: CC-BY-4.0. Drawn by tools/figures/icons.py. -->\n"
@@ -221,9 +245,9 @@ def svg() -> str:
     )
 
 
-def main() -> int:
-    check = "--check" in sys.argv[1:]
-    big = render(512, 2)
+def write(v: Variant, check: bool) -> list[Path]:
+    """Writes one application's icons, or with `check` lists those that differ."""
+    big = render(512, 2, v)
     sizes = {512: big, 256: shrink(big, 512, 2), 128: shrink(big, 512, 4), 32: shrink(big, 512, 16)}
     pngs = {
         "icon.png": 512,
@@ -232,37 +256,42 @@ def main() -> int:
         "32x32.png": 32,
     }
     wrong = []
-    ICONS.mkdir(parents=True, exist_ok=True)
+    v.icons.mkdir(parents=True, exist_ok=True)
     for name, size in pngs.items():
-        path = ICONS / name
+        path = v.icons / name
         if check:
             if not path.exists() or png_pixels(path.read_bytes()) != sizes[size]:
                 wrong.append(path)
         else:
             path.write_bytes(png(sizes[size], size))
     icon = ico([(s, png(sizes[s], s)) for s in (32, 128, 256)])
-    path = ICONS / "icon.ico"
+    path = v.icons / "icon.ico"
     if check:
         if not path.exists() or ico_pixels(path.read_bytes()) != [sizes[s] for s in (32, 128, 256)]:
             wrong.append(path)
     else:
         path.write_bytes(icon)
     family = (32, 128, 256, 512)
-    path = ICONS / "icon.icns"
+    path = v.icons / "icon.icns"
     if check:
         if not path.exists() or icns_pixels(path.read_bytes()) != [sizes[s] for s in family]:
             wrong.append(path)
     else:
         path.write_bytes(icns([(s, png(sizes[s], s)) for s in family]))
     if check:
-        if not FAVICON.exists() or FAVICON.read_text() != svg():
-            wrong.append(FAVICON)
+        if not v.favicon.exists() or v.favicon.read_text() != svg(v):
+            wrong.append(v.favicon)
     else:
-        FAVICON.write_text(svg())
+        v.favicon.write_text(svg(v))
+        print(f"wrote {len(pngs) + 2} icons in {v.icons.relative_to(ROOT)} and {v.favicon.name}")
+    return wrong
+
+
+def main() -> int:
+    check = "--check" in sys.argv[1:]
+    wrong = [path for v in (CLIENT, GATEWAY) for path in write(v, check)]
     for path in wrong:
         print(f"{path.relative_to(ROOT)} is not what icons.py draws", file=sys.stderr)
-    if not check:
-        print(f"wrote {len(pngs) + 2} icons in {ICONS.relative_to(ROOT)} and {FAVICON.name}")
     return 1 if wrong else 0
 
 

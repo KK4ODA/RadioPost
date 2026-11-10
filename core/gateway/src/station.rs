@@ -7,8 +7,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::io;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError};
-use std::time::Duration;
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::time::{Duration, Instant};
 
 use ed25519_dalek::SigningKey;
 use radiopost::ErrorCode;
@@ -20,6 +20,7 @@ use rpmi::host::{Carrier, Direction, Engine, Event, Host};
 use rpmi::tcp::Connection;
 use serde::{Deserialize, Serialize};
 
+use crate::monitor::{Check, Monitor};
 use crate::upstream::{self, Account};
 
 /// RP-3 §8: nothing heard for this long ends the session.
@@ -52,6 +53,9 @@ pub struct Settings {
     /// The modem does not check the band rules, and the operator does (RP-4 §8).
     #[serde(default)]
     pub operator_checks_rules: bool,
+    /// The gateway app answers calls as soon as it starts (the command line's `serve` always does).
+    #[serde(default = "yes")]
+    pub answer_at_start: bool,
 }
 
 impl Settings {
@@ -79,6 +83,42 @@ impl Settings {
     }
 }
 
+/// Keeps a credential a post office issued for the gateway's key (raw bytes, or hexadecimal
+/// text), as `credential.hex`, and returns its body.
+///
+/// # Errors
+///
+/// It is not a credential, it is for another key, or it cannot be written.
+pub fn keep_credential(dir: &Path, bytes: &[u8]) -> Result<radiopost::credential::Body, String> {
+    let bytes = std::str::from_utf8(bytes)
+        .ok()
+        .and_then(unhex)
+        .unwrap_or_else(|| bytes.to_vec());
+    let body = radiopost::credential::Credential::decode(&bytes)
+        .ok_or("that is not a credential (RP-1 §4)")?
+        .body;
+    if body.device != key(dir)?.verifying_key().to_bytes() {
+        return Err("that credential is for another key than the gateway's".into());
+    }
+    write(dir, "credential.hex", &radiopost::cbor::hex(&bytes))?;
+    Ok(body)
+}
+
+/// Makes a gateway in `dir`: its key and its settings.
+///
+/// # Errors
+///
+/// The directory already holds a gateway, or cannot be written.
+pub fn make(dir: &Path, settings: &Settings) -> Result<(), String> {
+    if dir.join("gateway.json").exists() {
+        return Err("this directory already holds a gateway".into());
+    }
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let seed: [u8; 32] = random();
+    write(dir, "key.hex", &radiopost::cbor::hex(&seed))?;
+    settings.save(dir)
+}
+
 /// The gateway's own key, `key.hex` in `dir`.
 ///
 /// # Errors
@@ -93,6 +133,23 @@ pub fn key(dir: &Path) -> Result<SigningKey, String> {
 
 fn us() -> String {
     "US".into()
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// The gateway's directory when none is named: `$RADIOPOST_GATEWAY`, else `.radiopost-gateway` in
+/// the user's home directory.
+#[must_use]
+pub fn default_dir() -> PathBuf {
+    if let Ok(d) = std::env::var("RADIOPOST_GATEWAY") {
+        return PathBuf::from(d);
+    }
+    let base = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".into());
+    PathBuf::from(base).join(".radiopost-gateway")
 }
 
 fn resolver() -> String {
@@ -215,6 +272,56 @@ impl Station {
             return Ok(url.clone());
         }
         lookup(&s.resolver, domain).ok_or(ErrorCode::UnknownPostOffice)
+    }
+
+    /// The gateway's own credential's body: its operator, address and validity.
+    #[must_use]
+    pub fn credential(&self) -> Option<radiopost::credential::Body> {
+        radiopost::credential::Credential::decode(&self.account.credential).map(|c| c.body)
+    }
+
+    /// Logs in at each post office the gateway knows of, as the gateway (RP-5 §3): its own
+    /// account's, and those named in its settings. A post office that lets it in will open its
+    /// users' sessions.
+    #[must_use]
+    pub fn check(&self) -> Vec<Check> {
+        let mut domains: Vec<String> = self.settings.post_offices.keys().cloned().collect();
+        if let Some(own) = self
+            .credential()
+            .and_then(|b| b.address.rsplit_once('@').map(|(_, d)| d.to_lowercase()))
+            && !domains.contains(&own)
+        {
+            domains.insert(0, own);
+        }
+        domains
+            .into_iter()
+            .map(|domain| {
+                let at = now();
+                let Ok(url) = self.post_office(&domain) else {
+                    return Check {
+                        domain,
+                        url: None,
+                        ok: false,
+                        said: "not found: no URL in the settings, and none in DNS".into(),
+                        at,
+                    };
+                };
+                let http =
+                    upstream::Http::new(&url, self.account.clone(), Arc::new(Mutex::new(None)));
+                let (ok, said) = match http.login() {
+                    Ok(_) => (true, "the gateway logged in".to_owned()),
+                    Err(ErrorCode::PostOfficeUnreachable) => (false, "no answer".to_owned()),
+                    Err(code) => (false, format!("refused the gateway: {}", code.name())),
+                };
+                Check {
+                    domain,
+                    url: Some(url),
+                    ok,
+                    said,
+                    at,
+                }
+            })
+            .collect()
     }
 
     fn upstreams(&mut self) -> Upstreams {
@@ -358,8 +465,19 @@ impl Engine for Answering {
 /// adapter started in this process (RP-4 §9.1).
 fn adapter_for(modem: &str) -> Result<SocketAddr, String> {
     if modem.starts_with("ws://") {
-        radiopost_aether::serve::listen("127.0.0.1:0", modem)
-            .map_err(|e| format!("cannot start the Aether adapter: {e}"))
+        // one adapter for each Aether this process reaches: it serves each host in turn
+        static STARTED: OnceLock<Mutex<HashMap<String, SocketAddr>>> = OnceLock::new();
+        let mut started = STARTED
+            .get_or_init(Mutex::default)
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if let Some(at) = started.get(modem) {
+            return Ok(*at);
+        }
+        let at = radiopost_aether::serve::listen("127.0.0.1:0", modem)
+            .map_err(|e| format!("cannot start the Aether adapter: {e}"))?;
+        started.insert(modem.to_owned(), at);
+        Ok(at)
     } else {
         modem
             .parse()
@@ -424,12 +542,21 @@ impl Modem {
     }
 }
 
+/// Why the modem could not be opened.
+enum Unopened {
+    /// It may open later: it is not running yet, or it refused for now.
+    Later(String),
+    /// It never will as the gateway is set: the operator must change something.
+    Never(String),
+}
+
 /// Opens the modem: `hello`, the gateway's callsign, and `listen` on (RP-4 §3, §4).
-fn open(station: &Station) -> Result<Modem, String> {
-    let at = adapter_for(&station.settings.modem)?;
-    let conn = Connection::open(at).map_err(|e| format!("cannot reach the modem at {at}: {e}"))?;
+fn open(station: &Station) -> Result<Modem, Unopened> {
+    let at = adapter_for(&station.settings.modem).map_err(Unopened::Never)?;
+    let conn = Connection::open(at)
+        .map_err(|e| Unopened::Later(format!("cannot reach the modem at {at}: {e}")))?;
     conn.set_timeout(Some(Duration::from_millis(250)))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| Unopened::Later(e.to_string()))?;
     let mut modem = Modem {
         conn,
         host: Host::new(),
@@ -437,48 +564,120 @@ fn open(station: &Station) -> Result<Modem, String> {
     let hello = modem
         .host
         .hello(concat!("radiopost-gateway ", env!("CARGO_PKG_VERSION")));
-    let Event::Hello { caps, .. } = modem.ask(&hello)? else {
-        return Err("the modem did not say hello".into());
+    let Event::Hello { caps, .. } = modem.ask(&hello).map_err(Unopened::Later)? else {
+        return Err(Unopened::Later("the modem did not say hello".into()));
     };
     if !caps.regulatory && !station.settings.operator_checks_rules {
-        return Err(
+        return Err(Unopened::Never(
             "this modem does not check the band rules (RP-4 §8): the gateway's operator must, \
-                    and says so with `operator_checks_rules` in gateway.json"
+             and says so in the gateway's settings (`operator_checks_rules` in gateway.json)"
                 .into(),
-        );
+        ));
     }
     let calls = modem.host.callsigns(&[station.settings.callsign.as_str()]);
-    modem.ask(&calls)?;
+    modem.ask(&calls).map_err(Unopened::Later)?;
     let listen = modem.host.listen(true);
-    modem.ask(&listen)?;
+    modem.ask(&listen).map_err(Unopened::Later)?;
     Ok(modem)
 }
 
-/// Answers calls until the process ends, carrying each session (RP-3 §9).
+/// Waits up to `d`, or less when the gateway is asked to stop.
+fn pause(monitor: &Monitor, d: Duration) {
+    let until = Instant::now() + d;
+    while Instant::now() < until && !monitor.stopping() {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// Opens the modem, trying again every 5 seconds while it cannot be reached: `None` when the
+/// gateway was asked to stop first.
 ///
 /// # Errors
 ///
-/// The modem cannot be opened when the gateway starts.
+/// The modem never will open as the gateway is set.
+fn open_when_able(
+    station: &Station,
+    monitor: &Monitor,
+    tell: &mut dyn FnMut(&str),
+) -> Result<Option<Modem>, String> {
+    let mut said = None;
+    loop {
+        if monitor.stopping() {
+            return Ok(None);
+        }
+        match open(station) {
+            Ok(m) => return Ok(Some(m)),
+            Err(Unopened::Never(e)) => return Err(e),
+            Err(Unopened::Later(e)) => {
+                if said.as_ref() != Some(&e) {
+                    tell(&format!("waiting for the modem: {e}"));
+                    said = Some(e.clone());
+                }
+                monitor.set_state("opening", Some(e));
+                pause(monitor, Duration::from_secs(5));
+            }
+        }
+    }
+}
+
+/// Answers calls until the process ends, carrying each session (RP-3 §9), and says what
+/// happens on `say`.
+///
+/// # Errors
+///
+/// The gateway is not set up, or its modem never will open as it is set.
 pub fn serve(dir: &Path, say: &mut dyn FnMut(&str)) -> Result<(), String> {
+    run(dir, &Monitor::new(), say)
+}
+
+/// Answers calls until `monitor` is asked to stop, carrying each session (RP-3 §9): it waits for
+/// the modem while it cannot be reached, and opens it again when it goes away. What happens goes
+/// to `monitor` and to `say`.
+///
+/// # Errors
+///
+/// The gateway is not set up, or its modem never will open as it is set.
+pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(), String> {
+    let mut tell = |line: &str| {
+        monitor.log(line);
+        say(line);
+    };
     let mut station = Station::load(dir)?;
-    let mut modem = open(&station)?;
-    say(&format!(
+    monitor.set_state("opening", None);
+    let Some(mut modem) = open_when_able(&station, monitor, &mut tell)? else {
+        return stopped(monitor, &mut tell);
+    };
+    let listening = format!(
         "listening as {} on {}",
         station.settings.callsign, station.settings.modem
-    ));
+    );
+    tell(&listening);
+    monitor.set_state("listening", None);
     loop {
+        if monitor.stopping() {
+            let off = modem.host.listen(false);
+            let _ = modem.conn.send(&off);
+            modem.conn.close();
+            return stopped(monitor, &mut tell);
+        }
         let event = match modem.next() {
             Ok(Some(e)) => e,
             Ok(None) => continue,
             Err(e) => {
-                say(&format!(
+                tell(&format!(
                     "the modem's adapter went away ({e}); opening it again"
                 ));
-                std::thread::sleep(Duration::from_secs(5));
-                match open(&station) {
-                    Ok(m) => modem = m,
-                    Err(e) => say(&format!("cannot open the modem: {e}")),
+                monitor.set_state(
+                    "opening",
+                    Some(format!("the modem's adapter went away: {e}")),
+                );
+                pause(monitor, Duration::from_secs(5));
+                match open_when_able(&station, monitor, &mut tell)? {
+                    Some(m) => modem = m,
+                    None => return stopped(monitor, &mut tell),
                 }
+                tell(&listening);
+                monitor.set_state("listening", None);
                 continue;
             }
         };
@@ -488,17 +687,34 @@ pub fn serve(dir: &Path, say: &mut dyn FnMut(&str)) -> Result<(), String> {
             ..
         } = &event
         {
-            say(&format!("{remote} called"));
-            match carry(&mut station, &mut modem, &event) {
-                Ok(()) => say(&format!("the session with {remote} is over")),
-                Err(e) => say(&format!("the session with {remote} ended: {e}")),
+            tell(&format!("{remote} called"));
+            monitor.begin(remote);
+            let result = carry(&mut station, &mut modem, &event, monitor);
+            match &result {
+                Ok(()) => tell(&format!("the session with {remote} is over")),
+                Err(e) => tell(&format!("the session with {remote} ended: {e}")),
             }
+            monitor.end(&result);
         }
     }
 }
 
-/// One session, from the link coming up until the caller hangs up or the link is quiet too long.
-fn carry(station: &mut Station, modem: &mut Modem, connected: &Event) -> Result<(), String> {
+/// The loop stopped as the operator asked.
+#[allow(clippy::unnecessary_wraps, reason = "what `run` returns, in one place")]
+fn stopped(monitor: &Monitor, tell: &mut dyn FnMut(&str)) -> Result<(), String> {
+    tell("stopped answering");
+    monitor.set_state("stopped", None);
+    Ok(())
+}
+
+/// One session, from the link coming up until the caller hangs up, the link is quiet too long, or
+/// the gateway is asked to stop.
+fn carry(
+    station: &mut Station,
+    modem: &mut Modem,
+    connected: &Event,
+    monitor: &Monitor,
+) -> Result<(), String> {
     let country = station.settings.country.clone();
     let engine = Gateway::new(
         station.config(),
@@ -508,10 +724,21 @@ fn carry(station: &mut Station, modem: &mut Modem, connected: &Event) -> Result<
     let mut carrier = Carrier::new(Answering(engine));
     // each event is handed to the engine once: a quiet read hands it nothing
     let mut event = Some(connected.clone());
-    let mut quiet_since = std::time::Instant::now();
+    let mut quiet_since = Instant::now();
+    let hang_up = |carrier: &mut Carrier<Answering>, modem: &mut Modem| {
+        if let Some(link) = carrier.link() {
+            let bye = modem.host.disconnect(link);
+            let _ = modem.conn.send(&bye);
+        }
+        carrier.engine_mut().link_lost()
+    };
     let result = loop {
         if let Some(e) = event.take() {
-            let (requests, _) = carrier.on_event(&mut modem.host, &e);
+            let (requests, events) = carrier.on_event(&mut modem.host, &e);
+            for e in &events {
+                monitor.event(e);
+            }
+            monitor.account(carrier.engine().0.account());
             if let Some(err) = requests.iter().find_map(|r| modem.conn.send(r).err()) {
                 carrier.engine_mut().link_lost();
                 break Err(format!("the modem's adapter: {err}"));
@@ -520,19 +747,19 @@ fn carry(station: &mut Station, modem: &mut Modem, connected: &Event) -> Result<
         if carrier.is_ended() {
             break Ok(());
         }
+        if monitor.stopping() {
+            hang_up(&mut carrier, modem);
+            break Err("the operator stopped the gateway".to_owned());
+        }
         match modem.next() {
             Ok(Some(e)) => {
-                quiet_since = std::time::Instant::now();
+                quiet_since = Instant::now();
                 event = Some(e);
             }
             Ok(None) if quiet_since.elapsed() < QUIET => {}
             Ok(None) => {
                 // RP-3 §8: the station called asks the modem to disconnect
-                if let Some(link) = carrier.link() {
-                    let bye = modem.host.disconnect(link);
-                    let _ = modem.conn.send(&bye);
-                }
-                carrier.engine_mut().link_lost();
+                hang_up(&mut carrier, modem);
                 break Err("nothing heard for 300 seconds".to_owned());
             }
             Err(e) => {
@@ -542,6 +769,11 @@ fn carry(station: &mut Station, modem: &mut Modem, connected: &Event) -> Result<
         }
     };
     let notes = carrier.engine_mut().0.take_notes();
+    for note in &notes {
+        if let Note::PostOffice(code) = note {
+            monitor.post_office_failed(*code);
+        }
+    }
     station.keep(notes);
     result
 }
