@@ -233,6 +233,56 @@
       ]
     },
     {
+      "name": "maria-house",
+      "fields": {
+        "v": 1,
+        "from": "maria@example.com",
+        "to": [
+          "facundo@radiopost.org"
+        ],
+        "date": 1794233400,
+        "subject": "The house",
+        "body": "Two photos of the house, and a video.\n",
+        "flags": 2,
+        "held": [
+          {
+            "name": "house-1.jpg",
+            "type": "image/jpeg",
+            "size": 40000,
+            "ref_hex": "5c3a4758cde43b1b"
+          },
+          {
+            "name": "house-2.jpg",
+            "type": "image/jpeg",
+            "size": 40000,
+            "ref_hex": "99c6c1110b776ef2"
+          },
+          {
+            "name": "house.mp4",
+            "type": "video/mp4",
+            "size": 70000,
+            "ref_hex": "af26623189409ab5"
+          }
+        ]
+      },
+      "diagnostic": "{1: 1, 2: \"maria@example.com\", 3: [\"facundo@radiopost.org\"], 5: 1794233400, 6: \"The house\", 7: \"Two photos of the house, and a video.\\n\", 11: 2, 12: [{1: \"house-1.jpg\", 2: \"image/jpeg\", 3: 40000, 4: h'5c3a4758cde43b1b'}, {1: \"house-2.jpg\", 2: \"image/jpeg\", 3: 40000, 4: h'99c6c1110b776ef2'}, {1: \"house.mp4\", 2: \"video/mp4\", 3: 70000, 4: h'af26623189409ab5'}]}",
+      "canonical_hex": "a8010102716d61726961406578616d706c652e636f6d038175666163756e646f40726164696f706f73742e6f7267051a6af1d438066954686520686f75736507782654776f2070686f746f73206f662074686520686f7573652c20616e64206120766964656f2e0a0b020c83a4016b686f7573652d312e6a7067026a696d6167652f6a70656703199c4004485c3a4758cde43b1ba4016b686f7573652d322e6a7067026a696d6167652f6a70656703199c40044899c6c1110b776ef2a40169686f7573652e6d70340269766964656f2f6d7034031a000111700448af26623189409ab5",
+      "content_id_hex": "35f1cafcf4278b6824cf84bb",
+      "content_id_text": "gxy4v7hue6fwqjgpqs5q",
+      "air": [
+        {
+          "compression": 0,
+          "hex": "00a8010102716d61726961406578616d706c652e636f6d038175666163756e646f40726164696f706f73742e6f7267051a6af1d438066954686520686f75736507782654776f2070686f746f73206f662074686520686f7573652c20616e64206120766964656f2e0a0b020c83a4016b686f7573652d312e6a7067026a696d6167652f6a70656703199c4004485c3a4758cde43b1ba4016b686f7573652d322e6a7067026a696d6167652f6a70656703199c40044899c6c1110b776ef2a40169686f7573652e6d70340269766964656f2f6d7034031a000111700448af26623189409ab5",
+          "exact": true
+        },
+        {
+          "compression": 1,
+          "hex": "015bc1c8c854989b589499e8905a91985b9093aa979c9fcbdc589a96985c9a9792ef50949892995f905f5ca2975f94ce2a95f5f18a055b664846aa42467e69712a7b855a4879be4241467e497eb1427e9a42094c464721312f452151a12c3325355f8f8b9b89a779096336584ad7502fab209d292b3337313d553fab20359d59728e038b478c957bc4d927d6d2707546d8d5cd3c765090bb3cefd312c64cb03abddc0213a64cb045fa4026b31403a360018bc77ab524c34e87595b01",
+          "exact": false
+        }
+      ]
+    },
+    {
       "name": "experimental-key",
       "fields": {
         "v": 1,

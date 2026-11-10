@@ -263,6 +263,7 @@ impl Panel {
                 Ok(json!({"lines": a.log.get(since..).unwrap_or(&[]), "next": a.log.len()}))
             }
             (Method::Post, "/api/compose") => self.compose(body),
+            (Method::Post, "/api/held") => self.ask_for_held(body),
             (Method::Post, "/api/key") => {
                 self.busy()?;
                 let store = Store::open(&self.home)?;
@@ -400,7 +401,35 @@ impl Panel {
                        "size": f.get(3).and_then(Cbor::as_bytes).map_or(0, <[u8]>::len)})
             })
             .collect();
+        let serial = store
+            .inbox
+            .iter()
+            .find(|a| a.id == id)
+            .and_then(|a| a.serial);
+        v["held"] = Store::held(&m)
+            .into_iter()
+            .map(|(name, kind, size, r)| {
+                let asked = serial.is_some_and(|s| store.files.contains(&(s, r)));
+                json!({"name": name, "type": kind, "size": size, "asked": asked})
+            })
+            .collect();
         Ok(v)
+    }
+
+    /// RP-3 §5.6: asks, on the next call to a gateway, for a received message's held attachments,
+    /// those named or all of them.
+    fn ask_for_held(&self, body: &Value) -> Result<Value, Error> {
+        self.busy()?;
+        let mut store = Store::open(&self.home)?;
+        let id = store.find(body["id"].as_str().unwrap_or(""))?;
+        let names: Vec<String> = body["names"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|n| n.as_str().map(str::to_owned))
+            .collect();
+        let asked = store.ask_for_held(&id, &names)?;
+        Ok(json!({"asked": asked}))
     }
 
     fn compose(&self, body: &Value) -> Result<Value, Error> {
@@ -456,7 +485,8 @@ impl Panel {
         Ok(json!({
             "me": me, "device": device, "trusted": trusted, "post_office": store.post_office,
             "counts": {"outbox": store.outbox.len(), "inbox": store.inbox.len(),
-                       "sent": store.sent.len(), "reports": store.reports.len()},
+                       "sent": store.sent.len(), "reports": store.reports.len(),
+                       "files": store.files.len()},
             "activity": {"state": a.state, "remote": a.remote, "failed": a.failed},
             "log": a.log.len(),
         }))

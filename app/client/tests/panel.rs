@@ -219,3 +219,56 @@ fn listening_from_the_panel_can_be_stopped() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// RP-3 §5.6: a received message's held attachments are shown, and one is asked for on the next
+/// call to a gateway.
+#[test]
+fn a_held_attachment_is_asked_for_from_the_panel() {
+    let dir = scratch("panel-held");
+    let mut store = store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    let house = common::message("maria-house");
+    store
+        .received(&house, "N1CALL-10", 1_794_235_200, Some(422))
+        .expect("kept");
+    let c = Client {
+        at: Panel::new(&dir.join("facundo"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let id = house.content_id().text();
+    let m = c.get(&format!("/api/message?id={}", &id[..6]));
+    let held: Vec<(&str, bool)> = m["held"]
+        .as_array()
+        .expect("held")
+        .iter()
+        .map(|f| (f["name"].as_str().expect("a name"), f["asked"] == true))
+        .collect();
+    assert_eq!(
+        held,
+        [
+            ("house-1.jpg", false),
+            ("house-2.jpg", false),
+            ("house.mp4", false)
+        ]
+    );
+    let asked = c
+        .post(
+            "/api/held",
+            &json!({"id": &id[..6], "names": ["house-2.jpg"]}),
+        )
+        .expect("asked");
+    assert_eq!(asked["asked"], json!(["house-2.jpg"]));
+    let m = c.get(&format!("/api/message?id={}", &id[..6]));
+    assert_eq!(m["held"][1]["asked"], true);
+    assert_eq!(m["held"][0]["asked"], false);
+    assert_eq!(c.get("/api/state")["counts"]["files"], 1);
+    assert!(
+        c.post(
+            "/api/held",
+            &json!({"id": &id[..6], "names": ["nothing.jpg"]})
+        )
+        .is_err(),
+        "no such attachment"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

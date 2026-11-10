@@ -1451,6 +1451,434 @@
           }
         }
       ]
+    },
+    {
+      "what": "held attachments asked for once their message is picked up: none, a serial not in the mailbox, a ref its message does not hold, one too large for the air; then the two photos, one asked twice; a later session lists them",
+      "held": [
+        {
+          "ref": "XDpHWM3kOxs",
+          "data": [
+            "held photo 1",
+            40000
+          ]
+        },
+        {
+          "ref": "mcbBEQt3bvI",
+          "data": [
+            "held photo 2",
+            40000
+          ]
+        },
+        {
+          "ref": "ryZiMYlAmrU",
+          "data": [
+            "held video",
+            70000
+          ]
+        }
+      ],
+      "exchanges": [
+        {
+          "note": "Mail arrives for facundo@radiopost.org: #422, 'The house', its attachments held."
+        },
+        {
+          "at": 1794235240,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHbQAVI8-QDORv9sP0GgkxQ06I6wdE_aEOY7OdMq53SZJ86TFWng3UB",
+              "signature": "lDwTA_GjC4XSz23r6P0UoEkZfGbJLkNO6ubQHRT3mD3PEft5Y80KSc9MDtifhkqGJzLZeswy4wRyFX_4x4VPAQ",
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+              "started": 1794235240,
+              "gateway_session": "ec7b31841ec47c47",
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 201,
+            "body": {
+              "session": "s_NW_ilWmh-QN7oZhM",
+              "expires": 1794238840,
+              "waiting": [
+                {
+                  "serial": 419,
+                  "id": "i42cuqd7g7jrrgxx67aq",
+                  "from": "maria@example.com",
+                  "subject": "Are you safe?",
+                  "size": 277,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": true
+                },
+                {
+                  "serial": 420,
+                  "id": "htpi3p474h4u3ourjhiq",
+                  "from": "eoc@radiopost.org",
+                  "subject": "Shelter roster",
+                  "size": 1298,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": false
+                },
+                {
+                  "serial": 421,
+                  "id": "cpwfawr3mrq37rql7fza",
+                  "from": "maria@example.com",
+                  "subject": "Photo",
+                  "size": 6122,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": true
+                },
+                {
+                  "serial": 422,
+                  "id": "gxy4v7hue6fwqjgpqs5q",
+                  "from": "maria@example.com",
+                  "subject": "The house",
+                  "size": 228,
+                  "priority": 0,
+                  "held": true,
+                  "third_party": true
+                }
+              ],
+              "more": 0,
+              "accept": [
+                {
+                  "id": "kdj2eowb2e7wqq4y5ttq",
+                  "offset": 0
+                },
+                {
+                  "id": "voo5eze7hjgflj4douaq",
+                  "offset": 0
+                }
+              ],
+              "decline": []
+            }
+          }
+        },
+        {
+          "note": "#422 comes down, its attachments listed as held."
+        },
+        {
+          "at": 1794235250,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions/s_NW_ilWmh-QN7oZhM/pickups",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "serials": [
+                422
+              ]
+            }
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "at": 1794235251,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "DELETE",
+            "path": "/sessions/s_NW_ilWmh-QN7oZhM",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "note": "Facundo reads it, and asks for its photos on his next call: #422 waits no more."
+        },
+        {
+          "at": 1794235500,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHcbAVIync7tWDhvd8GgA",
+              "signature": "JExrIC_AqkQNRAFqG--5F3qxoOSluMvuJHRh5j5rBRZNEI_wzYPN-qaPnRQ4TL7j5blWYU5ETl0bWr8Sw4_9DQ",
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+              "started": 1794235500,
+              "gateway_session": "ec7b31841ec47c47",
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 201,
+            "body": {
+              "session": "s_uTZ1ttFsDyWbKclP",
+              "expires": 1794239100,
+              "waiting": [
+                {
+                  "serial": 419,
+                  "id": "i42cuqd7g7jrrgxx67aq",
+                  "from": "maria@example.com",
+                  "subject": "Are you safe?",
+                  "size": 277,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": true
+                },
+                {
+                  "serial": 420,
+                  "id": "htpi3p474h4u3ourjhiq",
+                  "from": "eoc@radiopost.org",
+                  "subject": "Shelter roster",
+                  "size": 1298,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": false
+                },
+                {
+                  "serial": 421,
+                  "id": "cpwfawr3mrq37rql7fza",
+                  "from": "maria@example.com",
+                  "subject": "Photo",
+                  "size": 6122,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": true
+                }
+              ],
+              "more": 0,
+              "accept": [],
+              "decline": []
+            }
+          }
+        },
+        {
+          "at": 1794235510,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions/s_uTZ1ttFsDyWbKclP/files",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "files": []
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        },
+        {
+          "at": 1794235511,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions/s_uTZ1ttFsDyWbKclP/files",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "files": [
+                {
+                  "serial": 999,
+                  "ref": "XDpHWM3kOxs"
+                }
+              ]
+            }
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "type": "about:blank",
+              "title": "Unknown message",
+              "status": 404,
+              "code": 15,
+              "name": "unknown-message"
+            }
+          }
+        },
+        {
+          "at": 1794235512,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions/s_uTZ1ttFsDyWbKclP/files",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "files": [
+                {
+                  "serial": 419,
+                  "ref": "XDpHWM3kOxs"
+                }
+              ]
+            }
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "type": "about:blank",
+              "title": "Unknown message",
+              "status": 404,
+              "code": 15,
+              "name": "unknown-message"
+            }
+          }
+        },
+        {
+          "at": 1794235513,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions/s_uTZ1ttFsDyWbKclP/files",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "files": [
+                {
+                  "serial": 422,
+                  "ref": "ryZiMYlAmrU"
+                }
+              ]
+            }
+          },
+          "response": {
+            "status": 413,
+            "body": {
+              "type": "about:blank",
+              "title": "Too large",
+              "status": 413,
+              "code": 11,
+              "name": "too-large"
+            }
+          }
+        },
+        {
+          "at": 1794235514,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions/s_uTZ1ttFsDyWbKclP/files",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "files": [
+                {
+                  "serial": 422,
+                  "ref": "XDpHWM3kOxs"
+                },
+                {
+                  "serial": 422,
+                  "ref": "mcbBEQt3bvI"
+                },
+                {
+                  "serial": 422,
+                  "ref": "XDpHWM3kOxs"
+                }
+              ]
+            }
+          },
+          "response": {
+            "status": 202
+          }
+        },
+        {
+          "at": 1794235520,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "DELETE",
+            "path": "/sessions/s_uTZ1ttFsDyWbKclP",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "note": "Facundo calls again later: the photos wait for him as two new messages."
+        },
+        {
+          "at": 1794235800,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pgF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAQaavHdmAVIeFVm0H-Ry-4GgA",
+              "signature": "AZPcislxz1xb8qXA7otxBwSz_QbRhNf2uqdZY9NChIUav8GJDXrDwbQiVHpsLs9VFX3Nh3h1yAPi5vhgAK7UDg",
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+              "started": 1794235800,
+              "gateway_session": "ec7b31841ec47c47",
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 201,
+            "body": {
+              "session": "s_AOGdXgju0qfnnOsL",
+              "expires": 1794239400,
+              "waiting": [
+                {
+                  "serial": 419,
+                  "id": "i42cuqd7g7jrrgxx67aq",
+                  "from": "maria@example.com",
+                  "subject": "Are you safe?",
+                  "size": 277,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": true
+                },
+                {
+                  "serial": 420,
+                  "id": "htpi3p474h4u3ourjhiq",
+                  "from": "eoc@radiopost.org",
+                  "subject": "Shelter roster",
+                  "size": 1298,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": false
+                },
+                {
+                  "serial": 421,
+                  "id": "cpwfawr3mrq37rql7fza",
+                  "from": "maria@example.com",
+                  "subject": "Photo",
+                  "size": 6122,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": true
+                },
+                {
+                  "serial": 423,
+                  "id": "fosluhxxe4crssuth3qq",
+                  "from": "postmaster@radiopost.org",
+                  "subject": "Attachments: The house",
+                  "size": 40159,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": true
+                },
+                {
+                  "serial": 424,
+                  "id": "3xomk7dynu7luolz2h5a",
+                  "from": "postmaster@radiopost.org",
+                  "subject": "Attachments: The house",
+                  "size": 40159,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": true
+                }
+              ],
+              "more": 0,
+              "accept": [],
+              "decline": []
+            }
+          }
+        }
+      ]
     }
   ],
   "report": [

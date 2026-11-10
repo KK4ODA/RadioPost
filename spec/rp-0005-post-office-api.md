@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.12.1 |
+| **Version** | 0.13.0 |
 | **Updated** | 2026-11-10 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -243,8 +243,10 @@ failure with its code (§1), and otherwise `201`:
 * `accept` / `decline`: the post office's view of the user's offers, which the gateway passes on
   in `WELCOME`. A `decline` entry is `{"id", "code", "name"}`, with `already-have`, `too-large` or
   `refused-by-policy`.
-* `waiting`: every message not yet picked up, in RP-3 §6.1's order. `third_party` marks mail whose
-  sender is not shown to be licensed (RP-6 §5.1); the gateway lists it only as RP-6 §5.1 allows.
+* `waiting`: every message not yet picked up, in RP-3 §6.1's order. `held` is set when the message
+  lists attachments held at the post office (RP-2 `flags` 2): the gateway sets RP-3's `held` flag.
+  `third_party` marks mail whose sender is not shown to be licensed (RP-6 §5.1); the gateway lists
+  it only as RP-6 §5.1 allows.
 * `credential`: a renewed credential (§6.2), when `renew` was asked and the post office issued
   one. The gateway hands it to the client in `CREDENTIAL` (RP-3 §5.8).
 
@@ -254,7 +256,7 @@ failure with its code (§1), and otherwise `201`:
 |---|---|
 | `GET /sessions/{s}/waiting?after={serial}&limit={n}` | The next page of the waiting list (RP-3 `REQUEST` `more`). |
 | `GET /sessions/{s}/messages/{serial}` | One waiting message: `{"serial": 419, "id": "c1…", "air": "AXic…"}`. A serial the session's `waiting` did not list: `404` `unknown-message`. |
-| `POST /sessions/{s}/files` | `{"files": [{"serial": 419, "ref": "…"}]}`: send these held attachments. The post office answers `202` and later puts them in the mailbox as a new message, which the next waiting list shows. |
+| `POST /sessions/{s}/files` | `{"files": [{"serial": 422, "ref": "…"}]}` (`ref` in base64url): send these held attachments. The post office answers `202` and puts them in the mailbox as RP-6 §2.5 says, in new messages that the next waiting list shows. `malformed` when `files` is not a non-empty list of such entries; `404` `unknown-message` for a serial that is not in the user's mailbox, picked up or not, or a `ref` its message does not list; `413` `too-large` for an attachment too large for the air even alone. A refused request sends nothing. |
 
 The post office makes a message's air form once and serves those same bytes every time it is
 asked, and in every copy placed ahead (§5.8). A user whose download broke resumes it through any
@@ -540,3 +542,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.11.2 | 2026-11-09 | §5.2, §5.6: the examples' content IDs are real ones (RP-0 §6.3) |
 | 0.12.0 | 2026-11-10 | §5.2: a statement in challenge form, whose challenge the gateway issued and checked, is taken once; a second time it is `signature-invalid`. Found by building the gateway: no post office could open such a session. Test vectors (`api-exchanges.json`). |
 | 0.12.1 | 2026-11-10 | §6.1: a refused enrollment leaves its code good; only one that succeeds uses it. Found by the conformance tester (P-03): the reference used a code at any attempt. Test vectors. |
+| 0.13.0 | 2026-11-10 | §5.2: `held` in a waiting entry is set when the message lists held attachments (it had always been false). §5.3: `files`' entries, `ref` in base64url, and its refusals; what is sent is RP-6 §2.5. |

@@ -100,6 +100,20 @@ impl<T: Transport> Upstream for Session<T> {
         }
     }
 
+    fn files(&mut self, asked: &[(u64, Vec<u8>)]) -> Result<(), ErrorCode> {
+        let sid = self.session.clone().ok_or(ErrorCode::UnknownMessage)?;
+        let body = json!({"files": asked.iter()
+            .map(|(serial, r)| json!({"serial": serial, "ref": base64url::encode(r)}))
+            .collect::<Vec<_>>()});
+        match self
+            .transport
+            .request("POST", &format!("/sessions/{sid}/files"), Some(&body))?
+        {
+            (202, _) => Ok(()),
+            (_, body) => Err(code_of(body.as_ref())),
+        }
+    }
+
     fn close(&mut self) {
         if let Some(sid) = self.session.take() {
             let _ = self

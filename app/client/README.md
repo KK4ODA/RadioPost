@@ -32,7 +32,8 @@ radiopost [--home DIR] COMMAND
 | `compose --to ADDR … [--cc ADDR] [--subject TEXT] [--priority 0\|1\|2] [--attach FILE]… [--body FILE]` | Writes a message into the outbox; the text from standard input without `--body`. |
 | `import FILE` | Puts a message in its canonical encoding (RP-2) in the outbox. |
 | `outbox`, `inbox`, `sent` | Lists a folder. |
-| `show ID` | Shows a message; `ID` is the start of its content ID. |
+| `show ID` | Shows a message; `ID` is the start of its content ID. Attachments too large for the radio say *Held at the post office*. |
+| `attachments [ID [NAME]…]` | Asks, on the next call to a gateway, for a received message's held attachments, all or those named (RP-3 §5.6); without `ID`, what will be asked for. They come on the call after, in a new message from the post office (RP-6 §2.5). |
 | `reports` | The station-to-station sessions waiting to be reported to the post office (RP-5 §6.6). |
 | `call CALLSIGN [--station] [--fetch all\|none\|BYTES]` | Calls a gateway, or with `--station` another client's station. |
 | `listen` | Answers one station's call. |
@@ -59,7 +60,8 @@ For a test on the air between two stations with Aether HF, see
 `radiopost panel` serves the page in `app/ui/` (plain HTML, CSS and JavaScript, no build step,
 light or dark as the system is) and a JSON API under `/api/`, on the loopback interface only, as
 the Aether app serves its own. It shows the folders, reads and writes messages with attachments,
-calls a station or listens for one, sends the reports, and holds the setup: enrollment with a code,
+asks for held attachments (the reader's *Ask on the next call*), calls a station or listens for
+one, sends the reports, and holds the setup: enrollment with a code,
 the post office and renewal, the accept list, the device key, a credential imported by hand and
 the post offices trusted. A session runs on a thread of its own; while it runs, the panel changes
 nothing in the home. `--ui DIR` serves the page from a directory, for working on it.
@@ -109,7 +111,9 @@ On the air, the adapter is the modem's: `radiopost-aether` for Aether HF (`adapt
 The home (`--home`, else `$RADIOPOST_HOME`, else `.radiopost` in the user's home directory) holds
 the device seed, the credential, the trusted keys, each message's canonical encoding named by its
 content ID, partial messages to resume (RP-3 §7) and `state.json`: the folders, the next serial,
-the station called's replay cache (RP-1 §6.3), what each gateway holds, and the reports. Files are
+the station called's replay cache (RP-1 §6.3), what each gateway holds, the reports, each received
+message's serial at the post office, and the held attachments to ask for. A request leaves the home
+once a gateway has answered it; a link broken before that keeps it for the next call. Files are
 written whole or not at all, and a message received is on disk before its `RECEIPT` goes out (RP-3
 §5.4).
 
@@ -120,7 +124,7 @@ both stations' proofs, waits in `state.json` until `report` (or the panel's Send
 ## Tests
 
 `tests/panel.rs`: the panel's guards, a message written with an attachment and carried by a call
-made from the panel, and listening stopped. `tests/two_clients.rs`: two clients replay session-03
+made from the panel, a held attachment asked for, and listening stopped. `tests/two_clients.rs`: two clients replay session-03
 byte for byte through the loopback adapter
 with the vector's clocks and draws, and end with the folders the session says and the reports
 `vectors/direct.json` has; the program itself sets up two homes, composes, listens and calls; and it

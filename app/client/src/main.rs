@@ -39,6 +39,10 @@ usage: radiopost [--home DIR] COMMAND ...
   import FILE              put a message, in its canonical encoding (RP-2), in the outbox
   outbox | inbox | sent    list a folder
   show ID                  show a message (ID: the start of its content ID)
+  attachments [ID [NAME]...]
+                           ask on the next call to a gateway for a received message's attachments
+                           held at the post office, all or those named (RP-3 §5.6); without ID,
+                           what will be asked for
   reports                  the station-to-station sessions waiting to be reported (RP-5 §6.6)
   conformance --adapter HOST:PORT | conformance off
                            conformance mode: reach only the conformance tester's test adapter
@@ -245,6 +249,12 @@ fn show(m: &Message) -> String {
             f.get(1).and_then(Value::as_text).unwrap_or("?"),
             f.get(2).and_then(Value::as_text).unwrap_or("?"),
             f.get(3).and_then(Value::as_bytes).map_or(0, <[u8]>::len)
+        );
+    }
+    for (name, kind, size, _) in Store::held(m) {
+        let _ = writeln!(
+            out,
+            "Held at the post office: {name} ({kind}, {size} bytes)"
         );
     }
     out.push('\n');
@@ -464,6 +474,17 @@ fn run(words: &[String]) -> Result<(), Error> {
             let prefix = args.rest.first().ok_or("show ID")?;
             let id = store.find(prefix)?;
             println!("{}", show(&store.message(&id)?));
+        }
+        "attachments" => {
+            if let Some((prefix, names)) = args.rest.split_first() {
+                let id = store.find(prefix)?;
+                let asked = store.ask_for_held(&id, names)?;
+                println!("asked on the next call to a gateway: {}", asked.join(", "));
+            } else {
+                for line in store.files_asked_for() {
+                    println!("{line}");
+                }
+            }
         }
         "call" => {
             let remote = args

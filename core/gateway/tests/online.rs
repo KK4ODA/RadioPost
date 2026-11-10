@@ -362,3 +362,161 @@ fn a_client_whose_clock_is_off_signs_the_challenge_and_gets_through() {
         office.state.replay
     );
 }
+
+/// An email whose two attachments together are over the post office's `max_air_bytes`: both are
+/// held (RP-6 §2.4 step 5).
+fn email_with_large_attachments(photo: &[u8], video: &[u8]) -> Vec<u8> {
+    let b64 = |data: &[u8]| {
+        let mut t = radiopost::base64url::encode(data)
+            .replace('-', "+")
+            .replace('_', "/");
+        while t.len() % 4 != 0 {
+            t.push('=');
+        }
+        t.as_bytes()
+            .chunks(76)
+            .map(|c| String::from_utf8_lossy(c).into_owned())
+            .collect::<Vec<_>>()
+            .join("\r\n")
+    };
+    format!(
+        "From: Maria <maria@example.com>\r\n\
+         To: club@test.example\r\n\
+         Subject: The house\r\n\
+         Message-ID: <house@example.com>\r\n\
+         MIME-Version: 1.0\r\n\
+         Content-Type: multipart/mixed; boundary=\"b\"\r\n\
+         \r\n\
+         --b\r\n\
+         Content-Type: text/plain; charset=utf-8\r\n\
+         \r\n\
+         Here is the house, a photo and a walk round.\r\n\
+         --b\r\n\
+         Content-Type: image/jpeg\r\n\
+         Content-Disposition: attachment; filename=\"house.jpg\"\r\n\
+         Content-Transfer-Encoding: base64\r\n\
+         \r\n\
+         {}\r\n\
+         --b\r\n\
+         Content-Type: video/mp4\r\n\
+         Content-Disposition: attachment; filename=\"house.mp4\"\r\n\
+         Content-Transfer-Encoding: base64\r\n\
+         \r\n\
+         {}\r\n\
+         --b--\r\n",
+        b64(photo),
+        b64(video)
+    )
+    .into_bytes()
+}
+
+/// RP-3 §5.6, RP-5 §5.3, RP-6 §2.5: an email's attachments too large for the radio are held; the
+/// user picks the message up, asks for one attachment by name, and on the next call receives it,
+/// in a new message from the post office.
+#[test]
+fn a_held_attachment_is_asked_for_by_radio_and_comes_on_the_next_call() {
+    let dir = scratch("held");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (_server, at_user, at_gateway) = loopback();
+    let (_gw, rx) = gateway(&dir, &running, &base, &po_key, at_gateway);
+    let mut user = client(
+        &dir.join("wd5ema"),
+        &running,
+        &po_key,
+        "club@test.example",
+        "WD5EMA",
+    );
+    let photo: Vec<u8> = (0..30_000u32).map(|i| (i * 7 % 251) as u8).collect();
+    let video: Vec<u8> = (0..50_000u32).map(|i| (i * 13 % 241) as u8).collect();
+    running
+        .email_in(
+            "maria@example.com",
+            &["club@test.example".into()],
+            &email_with_large_attachments(&photo, &video),
+        )
+        .expect("taken");
+
+    let call = |user: &mut Store| {
+        let mut said = Vec::new();
+        let report = session::call(
+            user,
+            "KK4ODA-1",
+            Kind::Gateway,
+            &Options::new(&at_user.to_string()),
+            &mut |s| said.push(s.to_owned()),
+        )
+        .expect("called");
+        assert_eq!(report.failed, None, "{said:?}");
+        let lines = session_lines(&rx);
+        assert!(
+            lines.iter().any(|l| l == "the session with WD5EMA is over"),
+            "{lines:?}"
+        );
+        (report, said)
+    };
+
+    // the first call: the message, its attachments held
+    let (report, said) = call(&mut user);
+    assert_eq!(report.received.len(), 1, "{said:?}");
+    let original = user.message(&report.received[0]).expect("kept");
+    let held = Store::held(&original);
+    let names: Vec<&str> = held.iter().map(|(n, ..)| n.as_str()).collect();
+    assert_eq!(names, ["house.jpg", "house.mp4"]);
+    assert_eq!(held[0].2, 30_000);
+
+    // the user asks for the photo
+    let asked = user
+        .ask_for_held(&report.received[0], &["house.jpg".into()])
+        .expect("asked");
+    assert_eq!(asked, ["house.jpg"]);
+    assert_eq!(user.files.len(), 1);
+    // kept in the home, with the serial it is asked by
+    let reopened = Store::open(&dir.join("wd5ema")).expect("the home");
+    assert_eq!(reopened.files, user.files);
+    assert_eq!(reopened.inbox[0].serial, Some(user.files[0].0));
+    assert_eq!(
+        reopened.files_asked_for(),
+        [format!(
+            "house.jpg, 30000 bytes, of {}",
+            &report.received[0].text()[..6]
+        )]
+    );
+    let unknown = user.ask_for_held(&report.received[0], &["house.png".into()]);
+    assert!(unknown.is_err(), "{unknown:?}");
+
+    // the second call asks; the gateway says how the post office took it
+    let (report, said) = call(&mut user);
+    assert_eq!(report.received, [], "{said:?}");
+    assert!(
+        said.iter()
+            .any(|s| s
+                == "notice: Your attachments are in a new message, waiting for your next call."),
+        "{said:?}"
+    );
+    assert_eq!(user.files, [], "{said:?}");
+
+    // the third call brings the photo, in a message from the post office
+    let (report, said) = call(&mut user);
+    assert_eq!(report.received.len(), 1, "{said:?}");
+    let came = user.message(&report.received[0]).expect("kept");
+    assert_eq!(came.from(), Some("postmaster@test.example"));
+    let map = came.map();
+    assert_eq!(
+        map.get(radiopost::message::key::SUBJECT)
+            .and_then(radiopost::cbor::Value::as_text),
+        Some("Attachments: The house")
+    );
+    let files = map
+        .get(radiopost::message::key::FILES)
+        .and_then(radiopost::cbor::Value::as_array)
+        .expect("files");
+    assert_eq!(files.len(), 1);
+    assert_eq!(
+        files[0].get(1).and_then(radiopost::cbor::Value::as_text),
+        Some("house.jpg")
+    );
+    assert_eq!(
+        files[0].get(3).and_then(radiopost::cbor::Value::as_bytes),
+        Some(photo.as_slice())
+    );
+}

@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.10.0 |
-| **Updated** | 2026-11-09 |
+| **Version** | 0.11.0 |
+| **Updated** | 2026-11-10 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2; carried by RP-4 |
@@ -228,7 +228,7 @@ The caller asks for more.
 | Key | Name | Type | Meaning |
 |---|---|---|---|
 | 1 | `send` | array of uint | Send these waiting messages (serials). |
-| 2 | `files` | array of [serial, ref] | Ask the post office for these held attachments (RP-2 §2, `held`). They arrive later as a new waiting message from the post office. |
+| 2 | `files` | array of [serial, ref] | Ask for these held attachments (RP-2 §2, `held`). The gateway asks the post office (RP-5 §5.3) and says how that went in a `NOTICE` before its `DONE`; the attachments come as new waiting messages (RP-6 §2.5). |
 | 3 | `more` | bool | List the waiting messages not yet listed (`WELCOME` `more`). The gateway answers with another `WELCOME`. |
 | 4 | `ids` | array of bstr .size 12 | Send these waiting messages, by content ID: those listed with serial 0 (RP-7 §4.4). |
 
@@ -459,3 +459,4 @@ has one example of each PDU, and frames that must be refused.
 | 0.8.0 | 2026-11-09 | Station to station (§10): the station called cannot tell from an offer whom a message is for, so it accepts what it has room for and the caller sends only messages for its account; one addressed elsewhere is refused in `RECEIPT`. Found by writing the session engines. |
 | 0.9.0 | 2026-11-09 | A gateway always ends `WELCOME`'s transmission with `DONE` (§5.2), and how a station knows its turn has come (§5.7): `session-01` and the example (§12) had left that `DONE` out, so the client could not tell the gateway's turn was over. The example's credential hash and third-party flags brought up to date. Found by writing the session engines. |
 | 0.10.0 | 2026-11-09 | A frame over the receiver's `max_pdu` is answered `ERROR` `too-large` (§2): the section named only frames that do not decode. A `pdus.json` case. Found by writing the conformance tester. |
+| 0.11.0 | 2026-11-10 | §5.6: a gateway passes `files` to the post office and says in a `NOTICE` how that went; what comes is RP-6 §2.5. |

@@ -373,3 +373,172 @@ fn uploads_and_downloads_resume_across_gateways_as_session_02_says() {
             .all(|m| m.picked)
     );
 }
+
+/// One call as session-01's client makes it, then `REQUEST` asking for `files` of #422
+/// (`maria-house`), held at radiopost.org: the PDUs of the gateway's answer, and the post office.
+/// `maria-house`'s held attachments: each its name and ref.
+fn held_refs(w: &World) -> Vec<(String, Vec<u8>)> {
+    use radiopost::cbor::Value;
+    w.messages["maria-house"]
+        .map()
+        .get(key::HELD)
+        .and_then(Value::as_array)
+        .expect("held attachments")
+        .iter()
+        .map(|f| {
+            (
+                f.get(1)
+                    .and_then(Value::as_text)
+                    .expect("a name")
+                    .to_owned(),
+                f.get(4).and_then(Value::as_bytes).expect("a ref").to_vec(),
+            )
+        })
+        .collect()
+}
+
+/// `make.py`'s `HELD_FILES`: each of `maria-house`'s held attachments' data, by its ref.
+fn held_data(w: &World) -> HashMap<Vec<u8>, Vec<u8>> {
+    held_refs(w)
+        .iter()
+        .map(|(name, r)| {
+            let (label, n) = match name.as_str() {
+                "house-1.jpg" => ("held photo 1", 40_000),
+                "house-2.jpg" => ("held photo 2", 40_000),
+                _ => ("held video", 70_000),
+            };
+            (r.clone(), stream(label, n))
+        })
+        .collect()
+}
+
+fn ask_for_held(
+    w: &World,
+    names: &[&str],
+) -> (Vec<radiopost::cbor::Value>, Arc<Mutex<PostOffice>>) {
+    use radiopost::cbor::Value;
+    let (office, mut tokens) = post_office_with(
+        w,
+        &[
+            (419, "maria-419"),
+            (420, "eoc-420"),
+            (421, "maria-421"),
+            (422, "maria-house"),
+        ],
+        &["gateway-n1call-10"],
+    );
+    let token = tokens.remove(0);
+    let data = held_data(w);
+    office
+        .lock()
+        .expect("lock")
+        .keep_held(Box::new(move |r| data.get(r).cloned()), 65_536);
+    let time = T_SESSION + 41;
+    let cfg = GatewayConfig {
+        callsign: "N1CALL-10".into(),
+        time,
+        session_id: stream("session-01 id", 8).try_into().expect("8 bytes"),
+        challenge: [0; 16],
+        caps: Caps {
+            compression: vec![0, 1],
+            max_pdu: 4096,
+            renew: false,
+        },
+        piece: 4096,
+        credentials: vec![w.credentials["facundo"].0.clone()],
+        uploads: HashMap::new(),
+    };
+    let up = office.clone();
+    let upstreams: Upstreams = Box::new(move |_| {
+        Ok(upstream::in_process(
+            up.clone(),
+            token.clone(),
+            Arc::new(move || time),
+        ))
+    });
+    let mut gateway = Gateway::new(
+        cfg,
+        upstreams,
+        Box::new(|call| radiopost::thirdparty::may_hand(call, "US")),
+    );
+    let session = vectors("session-01.json");
+    let hello = &session["transmissions"][0];
+    assert_eq!(hello["from"], "client");
+    gateway.receive(&unhex(hello["bytes_hex"].as_str().expect("hex")));
+    gateway.transmit().expect("WELCOME");
+    let held = held_refs(w);
+    let files: Vec<Value> = names
+        .iter()
+        .map(|name| {
+            let r = &held
+                .iter()
+                .find(|(n, _)| n == name)
+                .expect("a held attachment")
+                .1;
+            Value::Array(vec![Value::Uint(422), Value::Bytes(r.clone())])
+        })
+        .collect();
+    let request = Value::int_map(vec![
+        (0, Value::Uint(radiopost::pdu::kind::REQUEST)),
+        (2, Value::Array(files)),
+    ]);
+    gateway.receive(&radiopost::pdu::frame(&request).expect("a frame"));
+    let answer = gateway.transmit().expect("an answer");
+    let mut deframer = radiopost::pdu::Deframer::new();
+    deframer.push(&answer);
+    let mut pdus = Vec::new();
+    while let Some(p) = deframer.next(65_536) {
+        pdus.push(p.expect("a PDU"));
+    }
+    gateway.link_closed();
+    (pdus, office)
+}
+
+/// RP-3 §5.6 `files`: the gateway asks the post office (RP-5 §5.3) and says how it went in a
+/// `NOTICE` before its `DONE`.
+#[test]
+fn held_attachments_asked_for_are_passed_on_with_a_notice() {
+    use radiopost::cbor::Value;
+    use radiopost::pdu::kind;
+    let w = world();
+    let said = |pdus: &[Value]| -> Vec<(u64, Option<String>)> {
+        pdus.iter()
+            .map(|p| {
+                (
+                    radiopost::pdu::kind_of(p).expect("a kind"),
+                    p.get(1).and_then(Value::as_text).map(str::to_owned),
+                )
+            })
+            .collect()
+    };
+
+    let (pdus, office) = ask_for_held(&w, &["house-1.jpg", "house-2.jpg"]);
+    let ok = radiopost::session::gateway::files_notice(Ok(()));
+    assert_eq!(said(&pdus), [(kind::NOTICE, Some(ok)), (kind::DONE, None)]);
+    let office = office.lock().expect("lock");
+    let new: Vec<(u64, &str)> = office.state.mailboxes["facundo@radiopost.org"]
+        .iter()
+        .filter(|m| m.serial > 422)
+        .map(|m| (m.serial, m.from.as_str()))
+        .collect();
+    assert_eq!(
+        new,
+        [
+            (423, "postmaster@radiopost.org"),
+            (424, "postmaster@radiopost.org")
+        ]
+    );
+    drop(office);
+
+    let (pdus, office) = ask_for_held(&w, &["house.mp4"]);
+    let too_large = radiopost::session::gateway::files_notice(Err(radiopost::ErrorCode::TooLarge));
+    assert_eq!(
+        said(&pdus),
+        [(kind::NOTICE, Some(too_large)), (kind::DONE, None)]
+    );
+    assert_eq!(
+        office.lock().expect("lock").state.mailboxes["facundo@radiopost.org"].len(),
+        4,
+        "nothing sent"
+    );
+}

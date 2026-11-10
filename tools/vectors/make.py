@@ -384,6 +384,24 @@ def messages() -> dict[str, dict[str, Any]]:
             }
         ],
     }
+    m["maria-house"] = {
+        "v": 1,
+        "from": "maria@example.com",
+        "to": ["facundo@radiopost.org"],
+        "date": T_SESSION - 1800,
+        "subject": "The house",
+        "body": "Two photos of the house, and a video.\n",
+        "flags": 2,
+        "held": [
+            {
+                "name": name,
+                "type": kind,
+                "size": HELD_FILES[name][1],
+                "ref": stream(f"held-ref {name}", 8),
+            }
+            for name, kind in HELD_KINDS
+        ],
+    }
     m["experimental-key"] = {
         "v": 1,
         "from": "ana@hampost.org",
@@ -481,6 +499,20 @@ def to_json(value: Any) -> Any:
     if isinstance(value, list):
         return [to_json(v) for v in value]
     return value
+
+
+# RP-6 §2.5: maria-house's attachments, held at radiopost.org: each its data's stream label and
+# size. Two photos fit the air one at a time, not together; the video never does.
+HELD_FILES = {
+    "house-1.jpg": ("held photo 1", 40000),
+    "house-2.jpg": ("held photo 2", 40000),
+    "house.mp4": ("held video", 70000),
+}
+HELD_KINDS = [
+    ("house-1.jpg", "image/jpeg"),
+    ("house-2.jpg", "image/jpeg"),
+    ("house.mp4", "video/mp4"),
+]
 
 
 def file_map(f: dict[str, Any]) -> dict[int, Any]:
@@ -2931,7 +2963,103 @@ def api_cases() -> list[dict[str, Any]]:
             "exchanges": ex.log,
         }
     )
+    cases.append(held_case(good))
     return cases
+
+
+HELD_CASE = (
+    "held attachments asked for once their message is picked up: none, a serial not in the "
+    "mailbox, a ref its message does not hold, one too large for the air; then the two photos, "
+    "one asked twice; a later session lists them"
+)
+
+
+def held_case(good: dict[str, Any]) -> dict[str, Any]:
+    """RP-5 §5.3, RP-6 §2.5: maria-house arrives as #422, its attachments held."""
+    office, ex, tokens = case_office()
+    held = MESSAGES["maria-house"]["held"]
+    for h in held:
+        label, n = HELD_FILES[h["name"]]
+        office.held[h["ref"]] = stream(label, n)
+    fields = MESSAGES["maria-house"]
+    office.now = fields["date"]
+    ex.note("Mail arrives for facundo@radiopost.org: #422, 'The house', its attachments held.")
+    office.deliver(
+        "facundo@radiopost.org",
+        422,
+        air0("maria-house"),
+        sender=fields["from"],
+        subject=fields["subject"],
+        priority=0,
+        third_party=third_party("maria-house"),
+    )
+    gw = "N1CALL-10"
+
+    def again(at: int, label: str) -> dict[str, Any]:
+        """A later call by Facundo: a statement of its own, offering nothing."""
+        stmt = rp.statement(
+            "facundo@radiopost.org", "KK4ODA", "N1CALL-10", [], time=at, nonce=stream(label, 8)
+        )
+        signature = rp.sign(rp.CTX_SESSION, cbor.encode(stmt), SECRET["device:facundo"])
+        return dict(
+            good,
+            statement=jws.b64u(cbor.encode(stmt)),
+            signature=jws.b64u(signature),
+            started=at,
+        )
+
+    sid = ex.call(T_SESSION + 40, gw, "POST", "/sessions", good, tokens[gw])["session"]
+    ex.note("#422 comes down, its attachments listed as held.")
+    ex.call(T_SESSION + 50, gw, "POST", f"/sessions/{sid}/pickups", {"serials": [422]}, tokens[gw])
+    ex.call(T_SESSION + 51, gw, "DELETE", f"/sessions/{sid}", None, tokens[gw])
+    ex.note("Facundo reads it, and asks for its photos on his next call: #422 waits no more.")
+    asked_at = T_SESSION + 300
+    sid = ex.call(
+        asked_at, gw, "POST", "/sessions", again(asked_at, "api held nonce 1"), tokens[gw]
+    )["session"]
+    path = f"/sessions/{sid}/files"
+    ref = {h["name"]: jws.b64u(h["ref"]) for h in held}
+    asks = [
+        [],
+        [{"serial": 999, "ref": ref["house-1.jpg"]}],
+        [{"serial": 419, "ref": ref["house-1.jpg"]}],
+        [{"serial": 422, "ref": ref["house.mp4"]}],
+        [
+            {"serial": 422, "ref": ref["house-1.jpg"]},
+            {"serial": 422, "ref": ref["house-2.jpg"]},
+            {"serial": 422, "ref": ref["house-1.jpg"]},
+        ],
+    ]
+    for i, files in enumerate(asks):
+        ex.call(asked_at + 10 + i, gw, "POST", path, {"files": files}, tokens[gw])
+    ex.call(asked_at + 20, gw, "DELETE", f"/sessions/{sid}", None, tokens[gw])
+    ex.note("Facundo calls again later: the photos wait for him as two new messages.")
+    later = T_SESSION + 600
+    ex.call(later, gw, "POST", "/sessions", again(later, "api held nonce 2"), tokens[gw])
+    # RP-6 §2.5, worked out from the spec: two messages from postmaster@, one photo each (together
+    # they are over max_air_bytes), the duplicate sent once, third-party as maria-house is.
+    waiting = [e for e in ex.log if "request" in e][-1]["response"]["body"]["waiting"]
+    new = [w for w in waiting if w["serial"] > 422]
+    assert [(w["serial"], w["from"], w["subject"]) for w in new] == [
+        (423, "postmaster@radiopost.org", "Attachments: The house"),
+        (424, "postmaster@radiopost.org", "Attachments: The house"),
+    ]
+    assert all(w["third_party"] and not w["held"] and w["size"] <= 65536 for w in new)
+    assert 422 not in [w["serial"] for w in waiting]  # picked up
+    first = next(e for e in ex.log if "request" in e)["response"]["body"]["waiting"]
+    assert [w["held"] for w in first if w["serial"] == 422] == [True]
+    for serial, name in [(423, "house-1.jpg"), (424, "house-2.jpg")]:
+        w = next(x for x in office.mailboxes["facundo@radiopost.org"] if x.serial == serial)
+        m = cbor.decode(rp.air_decode(w.air))
+        label, n = HELD_FILES[name]
+        assert m[8] == [{1: name, 2: "image/jpeg", 3: stream(label, n)}]
+        assert m[7] == f"{name}, {n} bytes\n"
+        assert m[10] == encoded("maria-house")[1] and m[5] == asked_at + 14
+    return {
+        "what": HELD_CASE,
+        "held": [{"ref": jws.b64u(h["ref"]), "data": list(HELD_FILES[h["name"]])} for h in held],
+        "exchanges": ex.log,
+    }
 
 
 def api_report() -> list[dict[str, Any]]:
@@ -3020,6 +3148,19 @@ def make_api_exchanges() -> dict[str, Any]:
                 "refused not-authorized",
                 "404 unknown-message",
                 "404 unknown-message",
+            ],
+            HELD_CASE: [
+                "201",
+                "204",
+                "204",
+                "201",
+                "400 malformed",
+                "404 unknown-message",
+                "404 unknown-message",
+                "413 too-large",
+                "202",
+                "204",
+                "201",
             ],
         },
         answers,

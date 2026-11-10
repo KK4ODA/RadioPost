@@ -116,6 +116,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   asked for `MAIL FROM` but never sent to; its judgements are functions of what was found. The
   door logs each decision with addresses and a reason (`mail::rcpt_why`, `data_why`), never
   the message.
+  Held attachments by radio (RP-3 §5.6 `files`, RP-5 §5.3, RP-6 §2.5): the client asks by serial
+  and `ref` (`radiopost attachments`, kept in `state.json` until a gateway's `DONE` answers the
+  `REQUEST`), the gateway passes them to the post office and says how it went in a `NOTICE`, and
+  the post office puts them in new messages from `postmaster@` for the next call. A serial is
+  asked for whether its message was picked up or not: the vector's three sessions are what catch
+  the narrower rule. `gateway/tests/online.rs` carries it end to end, from an email at the door.
   `core/api` (`radiopost-api`) is RP-5 over HTTPS (login, calls, enrollment, DNS over HTTPS), shared
   by the gateway and the client; the client's `online` module uses it (enroll, renew, settings —
   `PUT` replaces them whole, so the client merges —, accept list, `report`). `app/src-tauri` has its

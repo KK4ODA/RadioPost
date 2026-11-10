@@ -59,6 +59,17 @@ enum State {
     Over,
 }
 
+/// Where the held attachments' request stands (RP-3 §5.6 `files`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FilesAsked {
+    /// Not sent.
+    Not,
+    /// In a `REQUEST` handed to the link.
+    Sent,
+    /// The gateway's `DONE` came after it.
+    Answered,
+}
+
 /// The caller's side of a session.
 pub struct Client {
     hello_proof: Option<Proof>,
@@ -73,6 +84,10 @@ pub struct Client {
     to_send: Option<Vec<(usize, u64)>>,
     peer_caps: Caps,
     requests: Vec<u64>,
+    /// Held attachments to ask for (RP-3 §5.6 `files`), whether the `REQUEST` carrying them went,
+    /// and whether the gateway's `DONE` answered it.
+    files: Vec<(u64, Vec<u8>)>,
+    files_asked: FilesAsked,
     awaiting_done: bool,
     awaiting_receipt: BTreeSet<ContentId>,
     sent_done: bool,
@@ -104,6 +119,8 @@ impl Client {
             to_send: None,
             peer_caps: Caps::from_value(None),
             requests: Vec::new(),
+            files: Vec::new(),
+            files_asked: FilesAsked::Not,
             awaiting_done: false,
             awaiting_receipt: BTreeSet::new(),
             sent_done: false,
@@ -206,6 +223,20 @@ impl Client {
         std::mem::take(&mut self.events)
     }
 
+    /// Held attachments to ask for in this call (RP-3 §5.6 `files`), each by its message's
+    /// serial and its `ref`. A call to another station asks for none: there is no post office.
+    pub fn ask_for_files(&mut self, files: Vec<(u64, Vec<u8>)>) {
+        self.files = files;
+    }
+
+    /// Whether the held attachments were asked for and the gateway answered: its `DONE` came after
+    /// the `REQUEST` carrying them, and its `NOTICE` before that said how the post office took
+    /// them. Until then a broken link leaves them to ask for on the next call.
+    #[must_use]
+    pub fn files_answered(&self) -> bool {
+        self.files_asked == FilesAsked::Answered
+    }
+
     /// Both stations' proofs, once the station called has proved itself (RP-3 §10): what a
     /// station-to-station session is reported with (RP-5 §6.6).
     #[must_use]
@@ -267,7 +298,12 @@ impl Client {
                     self.events.push(Event::NotTaken { id, code });
                 }
             }
-            Some(kind::DONE) => self.awaiting_done = false,
+            Some(kind::DONE) => {
+                self.awaiting_done = false;
+                if self.files_asked == FilesAsked::Sent {
+                    self.files_asked = FilesAsked::Answered;
+                }
+            }
             Some(kind::NOTICE) => {
                 let text = pdu.get(1).and_then(Value::as_text).unwrap_or_default();
                 self.events.push(Event::Notice(text.to_owned()));
@@ -452,15 +488,29 @@ impl Client {
                 self.awaiting_receipt.insert(out.id());
             }
             pdus.extend(self.receipts.take_pdu());
-            if self.requests.is_empty() {
+            let files = if self.cfg.station.is_none() && self.files_asked == FilesAsked::Not {
+                std::mem::take(&mut self.files)
+            } else {
+                Vec::new()
+            };
+            if self.requests.is_empty() && files.is_empty() {
                 pdus.push(done());
                 self.sent_done = true;
             } else {
-                let serials = self.requests.iter().map(|s| Value::Uint(*s)).collect();
-                pdus.push(Value::int_map(vec![
-                    (0, Value::Uint(kind::REQUEST)),
-                    (1, Value::Array(serials)),
-                ]));
+                let mut request = vec![(0, Value::Uint(kind::REQUEST))];
+                if !self.requests.is_empty() {
+                    let serials = self.requests.iter().map(|s| Value::Uint(*s)).collect();
+                    request.push((1, Value::Array(serials)));
+                }
+                if !files.is_empty() {
+                    let asked = files
+                        .into_iter()
+                        .map(|(serial, r)| Value::Array(vec![Value::Uint(serial), Value::Bytes(r)]))
+                        .collect();
+                    request.push((2, Value::Array(asked)));
+                    self.files_asked = FilesAsked::Sent;
+                }
+                pdus.push(Value::int_map(request));
                 self.awaiting_done = true;
             }
         } else {

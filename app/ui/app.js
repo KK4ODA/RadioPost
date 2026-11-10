@@ -126,6 +126,27 @@ async function openMessage(id) {
     li.textContent = `${f.name} (${f.type}, ${f.size} bytes)`;
     return li;
   }));
+  $("r-held").replaceChildren(...m.held.map((f) => {
+    const li = document.createElement("li");
+    li.textContent = `${f.name} (${f.type}, ${f.size} bytes), held at the post office `;
+    const ask = document.createElement("button");
+    ask.type = "button";
+    ask.textContent = f.asked ? "Asked for" : "Ask on the next call";
+    ask.disabled = f.asked;
+    ask.title = "Ask for it on your next call to a gateway: it comes on the call after, in a new message";
+    ask.addEventListener("click", async () => {
+      try {
+        await api("held", {id, names: [f.name]});
+        ask.textContent = "Asked for";
+        ask.disabled = true;
+        toast(`${f.name} will be asked for on your next call to a gateway`);
+      } catch (e) {
+        toast(e.message, true);
+      }
+    });
+    li.append(ask);
+    return li;
+  }));
   $("r-body").textContent = m.body;
   show("reader");
 }

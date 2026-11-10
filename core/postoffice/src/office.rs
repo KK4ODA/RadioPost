@@ -7,6 +7,7 @@
 //! the clock, real random numbers and the network, and saves [`State`] after each change.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 
 use ed25519_dalek::SigningKey;
 use radiopost::ErrorCode;
@@ -33,6 +34,9 @@ pub const CODE_S: u64 = 7 * 86_400;
 /// Where a post office's random values come from: `(what, n)` gives `n` bytes for the named use.
 /// The service draws from the system; the vectors' replay from their published stream.
 pub type Draw = Box<dyn FnMut(&str, usize) -> Vec<u8> + Send>;
+
+/// Where a held attachment's data is found, by its `ref` (RP-6 §2.5).
+pub type Held = Box<dyn Fn(&[u8]) -> Option<Vec<u8>> + Send>;
 
 /// What a post office is: its domains, its address on the Internet, its key, and the post offices
 /// whose credentials it accepts.
@@ -157,9 +161,21 @@ impl Waiting {
         base64url::decode(&self.air).map_or(0, |a| a.len())
     }
 
+    /// The message, from its air form.
+    fn message(&self) -> Option<Message> {
+        base64url::decode(&self.air).and_then(|a| Message::from_air(&a).ok())
+    }
+
+    /// RP-2 `flags` 2: it lists attachments held at the post office.
+    fn held(&self) -> bool {
+        self.message()
+            .and_then(|m| m.map().get(key::FLAGS).and_then(cbor::Value::as_u64))
+            .is_some_and(|f| f & 2 != 0)
+    }
+
     fn entry(&self) -> Json {
         json!({"serial": self.serial, "id": self.id, "from": self.from, "subject": self.subject,
-               "size": self.size(), "priority": self.priority, "held": false,
+               "size": self.size(), "priority": self.priority, "held": self.held(),
                "third_party": self.third_party})
     }
 }
@@ -341,6 +357,8 @@ pub struct PostOffice {
     /// What it keeps.
     pub state: State,
     draw: Draw,
+    held: Held,
+    max_air_bytes: u64,
     now: u64,
 }
 
@@ -395,8 +413,16 @@ impl PostOffice {
             config,
             state,
             draw,
+            held: Box::new(|_| None),
+            max_air_bytes: 65_536,
             now: 0,
         }
+    }
+
+    /// Where it finds the attachments it held (RP-6 §2.5), and its `max_air_bytes` (RP-5 §4.1).
+    pub fn keep_held(&mut self, held: Held, max_air_bytes: u64) {
+        self.held = held;
+        self.max_air_bytes = max_air_bytes;
     }
 
     fn fresh(&mut self, what: &str, n: usize) -> Vec<u8> {
@@ -1002,8 +1028,173 @@ impl PostOffice {
                 self.picked_up(&session.address, &serials);
                 Response::empty()
             }
+            ("POST", ["files"]) => self.files(&session.address, body),
             _ => problem(ErrorCode::UnknownMessage, Some(404)),
         }
+    }
+
+    /// RP-5 §5.3, RP-6 §2.5: held attachments asked for, sent in new messages.
+    fn files(&mut self, address: &str, body: &Json) -> Response {
+        let Some(asked) = body
+            .get("files")
+            .and_then(Json::as_array)
+            .filter(|a| !a.is_empty())
+        else {
+            return problem(ErrorCode::Malformed, None);
+        };
+        // the held entries asked for, by message, in the order first asked
+        let mut by_message: Vec<(Waiting, Message, Vec<cbor::Value>)> = Vec::new();
+        for entry in asked {
+            let serial = entry.get("serial").and_then(Json::as_u64);
+            let r = unb64(entry, "ref").filter(|r| !r.is_empty());
+            let (Some(serial), Some(r)) = (serial, r) else {
+                return problem(ErrorCode::Malformed, None);
+            };
+            // picked up or not: the user reads the held list once the message has come
+            let w = self
+                .state
+                .mailboxes
+                .get(address)
+                .and_then(|b| b.iter().find(|w| w.serial == serial))
+                .cloned();
+            let Some((w, original)) = w.and_then(|w| w.message().map(|m| (w, m))) else {
+                return problem(ErrorCode::UnknownMessage, None);
+            };
+            let listed = original
+                .map()
+                .get(key::HELD)
+                .and_then(cbor::Value::as_array)
+                .and_then(|h| {
+                    h.iter()
+                        .find(|f| f.get(4).and_then(cbor::Value::as_bytes) == Some(&r[..]))
+                })
+                .cloned();
+            let Some(listed) = listed.filter(|_| (self.held)(&r).is_some()) else {
+                return problem(ErrorCode::UnknownMessage, None);
+            };
+            match by_message.iter_mut().find(|(x, _, _)| x.serial == serial) {
+                Some((_, _, chosen)) => {
+                    if !chosen.contains(&listed) {
+                        chosen.push(listed);
+                    }
+                }
+                None => by_message.push((w, original, vec![listed])),
+            }
+        }
+        let mut made: Vec<(bool, Vec<u8>)> = Vec::new();
+        for (w, original, entries) in &by_message {
+            let mut group: Vec<cbor::Value> = Vec::new();
+            for listed in entries {
+                let mut more = group.clone();
+                more.push(listed.clone());
+                if self.held_air(address, original, &more).is_some() {
+                    group = more;
+                    continue;
+                }
+                let one = vec![listed.clone()];
+                let (Some(air), Some(_)) = (
+                    self.held_air(address, original, &group),
+                    self.held_air(address, original, &one),
+                ) else {
+                    return problem(ErrorCode::TooLarge, None);
+                };
+                made.push((w.third_party, air));
+                group = one;
+            }
+            match self.held_air(address, original, &group) {
+                Some(air) => made.push((w.third_party, air)),
+                None => return problem(ErrorCode::TooLarge, None),
+            }
+        }
+        for (third_party, air) in made {
+            let Ok(m) = Message::from_air(&air) else {
+                continue;
+            };
+            let field = |k| m.map().get(k);
+            let subject = field(key::SUBJECT)
+                .and_then(cbor::Value::as_text)
+                .unwrap_or("")
+                .to_owned();
+            let priority = field(key::PRIORITY)
+                .and_then(cbor::Value::as_u64)
+                .unwrap_or(0);
+            let from = m.from().unwrap_or("").to_owned();
+            let serial = self.next_mailbox_serial(address);
+            self.deliver(
+                address,
+                serial,
+                &air,
+                &from,
+                &subject,
+                priority,
+                third_party,
+            );
+        }
+        Response {
+            status: 202,
+            body: None,
+        }
+    }
+
+    /// RP-6 §2.5: the air form of the message bringing these held attachments of `original`,
+    /// or `None` when it is over `max_air_bytes` (or one's data is gone).
+    fn held_air(
+        &self,
+        address: &str,
+        original: &Message,
+        listed: &[cbor::Value],
+    ) -> Option<Vec<u8>> {
+        let mut files = Vec::new();
+        let mut body = String::new();
+        for f in listed {
+            let name = f.get(1).and_then(cbor::Value::as_text).unwrap_or("");
+            let kind = f.get(2).and_then(cbor::Value::as_text).unwrap_or("");
+            let data = (self.held)(f.get(4).and_then(cbor::Value::as_bytes)?)?;
+            let _ = writeln!(body, "{name}, {} bytes", data.len());
+            files.push(cbor::Value::int_map(vec![
+                (1, cbor::Value::text(name)),
+                (2, cbor::Value::text(kind)),
+                (3, cbor::Value::Bytes(data)),
+            ]));
+        }
+        let subject = original
+            .map()
+            .get(key::SUBJECT)
+            .and_then(cbor::Value::as_text)
+            .unwrap_or("");
+        let mut fields = vec![
+            (key::V, cbor::Value::Uint(1)),
+            (
+                key::FROM,
+                cbor::Value::text(&format!("postmaster@{}", domain_of(address))),
+            ),
+            (
+                key::TO,
+                cbor::Value::Array(vec![cbor::Value::text(address)]),
+            ),
+            (key::DATE, cbor::Value::Uint(self.now)),
+            (
+                key::SUBJECT,
+                cbor::Value::text(&format!("Attachments: {subject}")),
+            ),
+            (key::BODY, cbor::Value::text(&body)),
+            (key::FILES, cbor::Value::Array(files)),
+            (
+                key::REPLY_TO,
+                cbor::Value::Bytes(original.content_id().0.to_vec()),
+            ),
+        ];
+        if let Some(p) = original
+            .map()
+            .get(key::PRIORITY)
+            .and_then(cbor::Value::as_u64)
+            .filter(|p| *p != 0)
+        {
+            fields.push((key::PRIORITY, cbor::Value::Uint(p)));
+        }
+        let message = Message::from_map(&cbor::Value::int_map(fields)).ok()?;
+        let air = message.air_form(Compression::None);
+        (air.len() as u64 <= self.max_air_bytes).then_some(air)
     }
 
     /// RP-5 §5.4, in its order: in the statement, decodes to its ID, from the address.

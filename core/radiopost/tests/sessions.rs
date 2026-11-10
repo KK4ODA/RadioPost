@@ -254,6 +254,79 @@ fn session_01_the_client_side() {
     );
 }
 
+/// The client of `session-01` with held attachments to ask for.
+fn asking_client(w: &World, file: &Json) -> Client {
+    let cfg = ClientConfig {
+        credential: w.credentials["facundo"].clone(),
+        device: w.device("device:facundo"),
+        called: "N1CALL-10".into(),
+        time: file["context"]["client_clock"].as_u64().expect("clock"),
+        nonce: nonce_of(&turns(file)[0]),
+        outbox: vec![w.out("facundo-reply"), w.out("facundo-to-ana")],
+        cursor: 418,
+        auto: AUTO,
+        partials: vec![],
+        caps: client_caps(),
+        credential_cached: true,
+        piece: 4096,
+        station: None,
+    };
+    let mut client = Client::new(cfg, Box::new(|_| vec![420])).expect("a client");
+    client.ask_for_files(vec![(417, b"held-ref".to_vec())]);
+    client
+}
+
+/// The PDUs of a transmission.
+fn pdus_of(bytes: &[u8]) -> Vec<Value> {
+    let mut d = radiopost::pdu::Deframer::new();
+    d.push(bytes);
+    std::iter::from_fn(|| d.next(65_536).map(|p| p.expect("a PDU"))).collect()
+}
+
+/// RP-3 §5.6: held attachments go in the caller's `REQUEST` as key 2, beside the serials it asks
+/// for; the gateway's `DONE` after it is the answer. A link broken before that leaves them to ask
+/// for again.
+#[test]
+fn held_attachments_ride_in_the_request() {
+    let w = world();
+    let file = vectors("session-01.json");
+    let t = turns(&file);
+    let reply = |client: &mut Client| {
+        assert_eq!(cbor::hex(&client.hello()), cbor::hex(&t[0].bytes));
+        client.receive(&t[1].bytes);
+        client.transmit().expect("the client's turn")
+    };
+
+    let mut client = asking_client(&w, &file);
+    let third = pdus_of(&reply(&mut client));
+    let request = third.last().expect("a REQUEST");
+    assert_eq!(
+        request.diagnostic(),
+        "{0: 6, 1: [420], 2: [[417, h'68656c642d726566']]}"
+    );
+    assert!(!client.files_answered(), "not answered yet");
+    client.receive(&t[3].bytes);
+    assert!(client.files_answered(), "the gateway's DONE answers it");
+
+    let mut broken = asking_client(&w, &file);
+    reply(&mut broken);
+    broken.link_broken();
+    assert!(!broken.files_answered(), "broken before the answer");
+}
+
+/// A call to another station asks for no held attachments: there is no post office. The session
+/// is `session-03`'s, byte for byte.
+#[test]
+fn a_station_call_asks_for_no_held_attachments() {
+    let w = world();
+    let file = vectors("session-03.json");
+    let mut client = station_caller(&w, &file);
+    client.ask_for_files(vec![(1, b"held-ref".to_vec())]);
+    replay_client(&mut client, &file, "caller");
+    assert!(client.is_over());
+    assert!(!client.files_answered());
+}
+
 #[test]
 fn session_02_broken_and_resumed() {
     let w = world();

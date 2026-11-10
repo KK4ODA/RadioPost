@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use ed25519_dalek::SigningKey;
+use radiopost::base64url;
 use radiopost::credential::{PostOfficeKey, Trust};
 use radiopost::crypto;
 use radiopost::message::{Compression, Message, key};
@@ -354,11 +355,28 @@ fn each_api_case_is_answered_as_rp5_says() {
         if what == "the user's credential revoked" {
             office.state.revoked.push(w.credentials["facundo"].2);
         }
+        // RP-6 §2.5: the attachments radiopost.org held, each its data's stream label and size
+        if let Some(held) = case.get("held").and_then(Json::as_array) {
+            let data: HashMap<Vec<u8>, Vec<u8>> = held
+                .iter()
+                .map(|h| {
+                    let r = base64url::decode(h["ref"].as_str().expect("ref")).expect("b64");
+                    let label = h["data"][0].as_str().expect("label");
+                    let n = usize::try_from(h["data"][1].as_u64().expect("size")).expect("size");
+                    (r, stream(label, n))
+                })
+                .collect();
+            office.keep_held(Box::new(move |r| data.get(r).cloned()), 65_536);
+        }
         replay(
             &mut office,
             case["exchanges"].as_array().expect("exchanges"),
             what,
-            |_, _| {},
+            |office, note| {
+                if note.starts_with("Mail arrives for facundo@radiopost.org: #422,") {
+                    deliver(office, &w, "facundo@radiopost.org", 422, "maria-house");
+                }
+            },
         );
     }
 }

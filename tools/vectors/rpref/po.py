@@ -90,7 +90,7 @@ class Waiting:
             "subject": self.subject,
             "size": len(self.air),
             "priority": self.priority,
-            "held": False,
+            "held": bool(cbor.decode(rp.air_decode(self.air)).get(11, 0) & 2),
             "third_party": self.third_party,
         }
 
@@ -131,6 +131,8 @@ class PostOffice:
     tokens: dict[str, dict[str, Any]] = field(default_factory=dict)
     sessions: dict[str, Session] = field(default_factory=dict)
     replay: dict[tuple[str, bytes], int] = field(default_factory=dict)
+    held: dict[bytes, bytes] = field(default_factory=dict)  # RP-6 §2.5: attachments by ref
+    max_air_bytes: int = 65536  # RP-5 §4.1
     issued: int = 0  # how many random values drawn, so each draw is new
     next_serial: int = 1  # the serial of the next credential this post office issues
 
@@ -398,7 +400,82 @@ class PostOffice:
                 return problem("unknown-message")
             self.picked_up(session.address, serials)
             return 204, None
+        if method == "POST" and rest == ["files"]:
+            return self._files(session, mailbox, body)
         return problem("unknown-message", 404)
+
+    def _files(
+        self, session: Session, mailbox: dict[int, Waiting], body: dict[str, Any]
+    ) -> Response:
+        """RP-5 §5.3, RP-6 §2.5: held attachments asked for, sent in new messages."""
+        asked = body.get("files")
+        if not isinstance(asked, list) or not asked:
+            return problem("malformed")
+        by_message: dict[int, list[dict[int, Any]]] = {}  # serial -> held entries, in order
+        for entry in asked:
+            serial = entry.get("serial") if isinstance(entry, dict) else None
+            ref = jws.unb64u(entry.get("ref", "")) if isinstance(entry, dict) else None
+            if not isinstance(serial, int) or isinstance(serial, bool) or not ref:
+                return problem("malformed")
+            if serial not in mailbox:  # picked up or not: the user reads the list once it came
+                return problem("unknown-message")
+            original = cbor.decode(rp.air_decode(mailbox[serial].air))
+            listed = next((h for h in original.get(12, []) if h.get(4) == ref), None)
+            if listed is None or ref not in self.held:
+                return problem("unknown-message")
+            chosen = by_message.setdefault(serial, [])
+            if listed not in chosen:
+                chosen.append(listed)
+        made: list[tuple[Waiting, bytes]] = []
+        for serial, entries in by_message.items():
+            original_waiting = mailbox[serial]
+            original = cbor.decode(rp.air_decode(original_waiting.air))
+            group: list[dict[int, Any]] = []
+            for listed in entries:
+                if self._held_air(session.address, original, [*group, listed]) is not None:
+                    group.append(listed)
+                    continue
+                if not group:
+                    return problem("too-large", 413)
+                made.append((original_waiting, self._held_air(session.address, original, group)))
+                group = [listed]
+                if self._held_air(session.address, original, group) is None:
+                    return problem("too-large", 413)
+            made.append((original_waiting, self._held_air(session.address, original, group)))
+        for original_waiting, air in made:
+            serial = max((w.serial for w in self.mailboxes.get(session.address, [])), default=0) + 1
+            message = cbor.decode(rp.air_decode(air))
+            self.deliver(
+                session.address,
+                serial,
+                air,
+                sender=message[2],
+                subject=message[6],
+                priority=message.get(9, 0),
+                third_party=original_waiting.third_party,
+            )
+        return 202, None
+
+    def _held_air(
+        self, address: str, original: dict[int, Any], listed: list[dict[int, Any]]
+    ) -> bytes | None:
+        """RP-6 §2.5: the message bringing these held attachments, or None when its air form is
+        over `max_air_bytes`."""
+        files = [{"name": h[1], "type": h[2], "data": self.held[h[4]]} for h in listed]
+        fields: dict[str, Any] = {
+            "v": 1,
+            "from": "postmaster@" + address.rpartition("@")[2],
+            "to": [address],
+            "date": self.now,
+            "subject": "Attachments: " + original.get(6, ""),
+            "body": "".join(f"{f['name']}, {len(f['data'])} bytes\n" for f in files),
+            "files": files,
+            "reply_to": rp.content_id(cbor.encode(original)),
+        }
+        if original.get(9):
+            fields["priority"] = original[9]
+        air = rp.air_form(mail.encode_fields(fields), 0)
+        return air if len(air) <= self.max_air_bytes else None
 
     def take(self, stmt: dict[int, Any], messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """RP-5 §5.4, in its order: in the statement, decodes to its ID, from the address."""

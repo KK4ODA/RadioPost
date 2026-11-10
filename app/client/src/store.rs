@@ -87,6 +87,9 @@ pub struct Arrived {
     pub station: String,
     /// When.
     pub at: u64,
+    /// Its serial in the mailbox at the post office, when it came from one: what its held
+    /// attachments are asked for by (RP-3 §5.6).
+    pub serial: Option<u64>,
 }
 
 /// The client's home directory.
@@ -110,6 +113,9 @@ pub struct Store {
     pub reports: Vec<Value>,
     /// The post office's API base URL, when it is not to be found in DNS (RP-1 §7.1).
     pub post_office: Option<String>,
+    /// Held attachments to ask for on the next call to a gateway (RP-3 §5.6 `files`): each its
+    /// message's serial and its `ref`.
+    pub files: Vec<(u64, Vec<u8>)>,
 }
 
 fn id_list(v: &Value) -> Vec<ContentId> {
@@ -146,6 +152,7 @@ impl Store {
             gateways: serde_json::Map::new(),
             reports: Vec::new(),
             post_office: None,
+            files: Vec::new(),
         };
         let path = home.join("state.json");
         if !path.exists() {
@@ -178,6 +185,7 @@ impl Store {
                             id: ContentId::from_text(x["id"].as_str()?)?,
                             station: x["station"].as_str()?.to_owned(),
                             at: x["at"].as_u64()?,
+                            serial: x["serial"].as_u64(),
                         })
                     })
                     .collect()
@@ -198,6 +206,14 @@ impl Store {
         store.gateways = state["gateways"].as_object().cloned().unwrap_or_default();
         store.reports = state["reports"].as_array().cloned().unwrap_or_default();
         store.post_office = state["post_office"].as_str().map(str::to_owned);
+        store.files = state["files"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| Some((x["serial"].as_u64()?, unhex(x["ref"].as_str()?)?)))
+                    .collect()
+            })
+            .unwrap_or_default();
         Ok(store)
     }
 
@@ -219,7 +235,7 @@ impl Store {
             })).collect::<Vec<_>>(),
             "sent": self.sent.iter().map(ContentId::text).collect::<Vec<_>>(),
             "inbox": self.inbox.iter().map(|a| json!({
-                "id": a.id.text(), "station": a.station, "at": a.at,
+                "id": a.id.text(), "station": a.station, "at": a.at, "serial": a.serial,
             })).collect::<Vec<_>>(),
             "next_serial": self.next_serial,
             "seen": self.seen.iter().map(|(address, nonce, at)| json!({
@@ -228,6 +244,9 @@ impl Store {
             "gateways": self.gateways,
             "reports": self.reports,
             "post_office": self.post_office,
+            "files": self.files.iter().map(|(serial, r)| json!({
+                "serial": serial, "ref": hex(r),
+            })).collect::<Vec<_>>(),
         });
         let text = serde_json::to_string_pretty(&state).map_err(|e| e.to_string())?;
         write(&self.home.join("state.json"), text.as_bytes())
@@ -444,16 +463,110 @@ impl Store {
     /// # Errors
     ///
     /// It cannot be kept.
-    pub fn received(&mut self, message: &Message, station: &str, at: u64) -> Result<(), Error> {
+    pub fn received(
+        &mut self,
+        message: &Message,
+        station: &str,
+        at: u64,
+        serial: Option<u64>,
+    ) -> Result<(), Error> {
         let id = self.keep(message)?;
         if !self.inbox.iter().any(|a| a.id == id) {
             self.inbox.push(Arrived {
                 id,
                 station: station.to_owned(),
                 at,
+                serial,
             });
         }
         self.save()
+    }
+
+    /// The attachments a received message lists as held at the post office (RP-2 key 12): each
+    /// its name, type, size and `ref`.
+    #[must_use]
+    pub fn held(message: &Message) -> Vec<(String, String, u64, Vec<u8>)> {
+        message
+            .map()
+            .get(radiopost::message::key::HELD)
+            .and_then(radiopost::cbor::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|f| {
+                Some((
+                    f.get(1)?.as_text()?.to_owned(),
+                    f.get(2)
+                        .and_then(radiopost::cbor::Value::as_text)
+                        .unwrap_or("")
+                        .to_owned(),
+                    f.get(3)
+                        .and_then(radiopost::cbor::Value::as_u64)
+                        .unwrap_or(0),
+                    f.get(4)?.as_bytes()?.to_vec(),
+                ))
+            })
+            .collect()
+    }
+
+    /// Asks, on the next call to a gateway, for the held attachments of the received message
+    /// `id` named in `names` (all of them when `names` is empty): the names asked for.
+    ///
+    /// # Errors
+    ///
+    /// The message is not in the inbox, came from no post office, lists no such attachment, or
+    /// the state cannot be written.
+    pub fn ask_for_held(&mut self, id: &ContentId, names: &[String]) -> Result<Vec<String>, Error> {
+        let arrived = self
+            .inbox
+            .iter()
+            .find(|a| a.id == *id)
+            .ok_or("that message is not in the inbox")?;
+        let serial = arrived
+            .serial
+            .ok_or("that message came from no post office, so it holds nothing for it")?;
+        let held = Store::held(&self.message(id)?);
+        if held.is_empty() {
+            return Err("that message has no attachments held at the post office".into());
+        }
+        let mut asked = Vec::new();
+        for name in names {
+            if !held.iter().any(|(n, ..)| n == name) {
+                return Err(format!("that message holds no attachment named {name}"));
+            }
+        }
+        for (name, _, _, r) in held {
+            if !names.is_empty() && !names.contains(&name) {
+                continue;
+            }
+            if !self.files.iter().any(|(s, x)| *s == serial && *x == r) {
+                self.files.push((serial, r));
+            }
+            asked.push(name);
+        }
+        self.save()?;
+        Ok(asked)
+    }
+
+    /// What will be asked for on the next call to a gateway, a line each: the attachment's name,
+    /// size and the message it belongs to.
+    #[must_use]
+    pub fn files_asked_for(&self) -> Vec<String> {
+        self.files
+            .iter()
+            .map(|(serial, r)| {
+                let found = self
+                    .inbox
+                    .iter()
+                    .filter(|a| a.serial == Some(*serial))
+                    .find_map(|a| {
+                        let m = self.message(&a.id).ok()?;
+                        let (name, _, size, _) =
+                            Store::held(&m).into_iter().find(|(.., x)| x == r)?;
+                        Some(format!("{name}, {size} bytes, of {}", &a.id.text()[..6]))
+                    });
+                found.unwrap_or_else(|| format!("an attachment of message #{serial}"))
+            })
+            .collect()
     }
 
     // -- partials --------------------------------------------------------------------------------

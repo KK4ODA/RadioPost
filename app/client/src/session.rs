@@ -16,7 +16,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use radiopost::ContentId;
 use radiopost::message::{Compression, Message};
 use radiopost::session::called::{Called, CalledConfig};
-use radiopost::session::client::{Client, ClientConfig};
+use radiopost::session::client::{Chooser, Client, ClientConfig};
 use radiopost::session::{Caps, Event as SessionEvent, Outgoing, Proof, Proofs, WaitingEntry};
 use rpmi::base64;
 use rpmi::host::{Carrier, Direction, Engine, Event, Host};
@@ -461,7 +461,7 @@ fn apply(
             message,
             air,
         } => {
-            store.received(&message, &report.remote, stats.now)?;
+            store.received(&message, &report.remote, stats.now, serial)?;
             let id = message.content_id();
             stats.received.push((id, air));
             store.drop_partial(&id);
@@ -606,18 +606,11 @@ pub fn call(
         piece: 4096,
         station: (kind == Kind::Station).then(|| store.trust()).transpose()?,
     };
-    let chooser = Box::new(move |entries: &[WaitingEntry]| {
-        entries
-            .iter()
-            .filter(|e| match fetch {
-                Fetch::All => true,
-                Fetch::UpTo(n) => e.size <= n,
-                Fetch::Nothing => false,
-            })
-            .map(|e| e.serial)
-            .collect()
-    });
-    let client = Client::new(cfg, chooser).map_err(|e| format!("cannot start a session: {e}"))?;
+    let mut client =
+        Client::new(cfg, chooser(fetch)).map_err(|e| format!("cannot start a session: {e}"))?;
+    if kind == Kind::Gateway {
+        ask_for_files(&mut client, store, say);
+    }
     let mut carrier = Carrier::new(Calling(client));
     let result = carry(
         &mut modem,
@@ -628,6 +621,9 @@ pub fn call(
         &mut stats,
         say,
     );
+    if carrier.engine().0.files_answered() {
+        store.files.clear();
+    }
     if kind == Kind::Station
         && let Some(r) = report_of(carrier.engine().0.proofs(), "caller", &stats)
     {
@@ -644,6 +640,34 @@ pub fn call(
     say(&format!("the session with {remote} is over"));
     modem.conn.close();
     Ok(report)
+}
+
+/// What the user fetches of what waits: all, what is no larger than a size, or nothing.
+fn chooser(fetch: Fetch) -> Chooser {
+    Box::new(move |entries: &[WaitingEntry]| {
+        entries
+            .iter()
+            .filter(|e| match fetch {
+                Fetch::All => true,
+                Fetch::UpTo(n) => e.size <= n,
+                Fetch::Nothing => false,
+            })
+            .map(|e| e.serial)
+            .collect()
+    })
+}
+
+/// Hands the engine the held attachments the user asked for (RP-3 §5.6), on a call to a gateway.
+fn ask_for_files(client: &mut Client, store: &Store, say: &mut dyn FnMut(&str)) {
+    let files = store.files.clone();
+    if !files.is_empty() {
+        say(&format!(
+            "asking for {} held attachment{}",
+            files.len(),
+            if files.len() == 1 { "" } else { "s" }
+        ));
+        client.ask_for_files(files);
+    }
 }
 
 /// Listens for a station's call and carries its session (RP-3 §10), then returns.

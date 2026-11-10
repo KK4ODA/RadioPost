@@ -234,7 +234,13 @@ impl Running {
             trust: trust_of(&settings, &key),
             key,
         };
-        let office = PostOffice::new(config, files.state()?, draw);
+        let mut office = PostOffice::new(config, files.state()?, draw);
+        // RP-6 §2.5: the door keeps held attachments as `held/<ref in hex>`
+        let held_dir = dir.join("held");
+        office.keep_held(
+            Box::new(move |r| std::fs::read(held_dir.join(radiopost::cbor::hex(r))).ok()),
+            settings.info.max_air_bytes,
+        );
         Ok(Running {
             office: Mutex::new(office),
             settings: Mutex::new(settings),

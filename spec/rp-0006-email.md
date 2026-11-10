@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.5.0 |
+| **Version** | 0.6.0 |
 | **Updated** | 2026-11-10 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -149,6 +149,30 @@ message (RP-2) for the radio, once, and gives it the account's next **serial** (
 
 Test vectors: `vectors/email-in.json`. Its first two emails become `maria-419` and `maria-421` of
 `vectors/messages.json` exactly.
+
+### 2.5 Held attachments asked for
+
+A post office keeps the attachments it held (§2.4 step 5) for as long as it keeps the message that
+lists them, picked up or not: a user reads the list only once the message has come. The user asks
+for some by the message's serial and each attachment's `ref` (RP-3 §5.6 `files`, RP-5 §5.3), and
+the post office puts them in the user's mailbox as a new message:
+
+* from `postmaster@` the domain, to the user, dated when asked;
+* subject `Attachments: ` and the subject of the message that listed them;
+* `reply_to` that message's content ID, and its priority;
+* `files`: the attachments asked for, in the order asked, each with the name and type that message
+  listed and its data;
+* a body of one line for each: its name, `, `, and its size in bytes, as in `map.pdf, 2400 bytes`;
+* marked third-party (§5.1) when that message is.
+
+Attachments of different messages come in different messages, in the order first asked. When
+the attachments of one message would make an air form larger than the post office's
+`max_air_bytes` (RP-5 §4.1), they come in as many messages as it takes, each with as many of the
+next ones as fit. An attachment that does not fit in a message alone cannot travel by radio: the
+request is refused (`413` `too-large`, RP-5 §5.3) and nothing is sent. An attachment asked for
+twice in one request is sent once.
+
+Test vectors: `vectors/api-exchanges.json`, the case of held attachments asked for.
 
 ---
 
@@ -356,3 +380,4 @@ and the session files.
 | 0.3.1 | 2026-11-09 | §3.1: the example `Message-ID` holds a real content ID (RP-0 §6.3) |
 | 0.4.0 | 2026-11-10 | §2.1: one `DATA` reply for every recipient: when they differ, the first refusal refuses the message. Found by building the door. |
 | 0.5.0 | 2026-11-10 | §2.1: the door judges only the post office's accounts, so `postmaster@` and other mailboxes of the mail server reach it (the door had refused them). The DMARC and DKIM verdicts are the mail server's when it gives them, else the post office's own checks (Stalwart 1.1 gives its hooks none), and never the message's own `Authentication-Results`; a check that cannot be finished for now answers `451 4.7.1`. Found by setting up the pilot's server. |
+| 0.6.0 | 2026-11-10 | §2.5: held attachments asked for: the message they come in, split by `max_air_bytes`, one too large for the air refused. RP-5 §5.3 had said they come later as a new message and nothing more. |

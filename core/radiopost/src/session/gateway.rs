@@ -51,6 +51,12 @@ pub trait Upstream {
     /// # Errors
     /// The code the post office answered with.
     fn picked_up(&mut self, serials: &[u64]) -> Result<(), ErrorCode>;
+    /// Held attachments the user asked for, each by its message's serial and its `ref`
+    /// (RP-5 §5.3): the post office puts them in the mailbox as new messages (RP-6 §2.5).
+    ///
+    /// # Errors
+    /// The code the post office answered with.
+    fn files(&mut self, asked: &[(u64, Vec<u8>)]) -> Result<(), ErrorCode>;
     /// The session is over (RP-5 §5.7).
     fn close(&mut self);
 }
@@ -264,9 +270,19 @@ impl Gateway {
                     .flatten()
                     .filter_map(Value::as_u64)
                     .collect();
-                self.answer(&asked, true);
+                let files: Vec<(u64, Vec<u8>)> = pdu
+                    .get(2)
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|f| match f.as_array()? {
+                        [serial, r] => Some((serial.as_u64()?, r.as_bytes()?.to_vec())),
+                        _ => None,
+                    })
+                    .collect();
+                self.answer(&asked, &files, true);
             }
-            (State::Exchange, Some(kind::DONE)) => self.answer(&[], false),
+            (State::Exchange, Some(kind::DONE)) => self.answer(&[], &[], false),
             (_, Some(kind::ERROR)) => {
                 let code = pdu
                     .get(1)
@@ -622,8 +638,8 @@ impl Gateway {
     }
 
     /// The caller's turn ended with `DONE` or `REQUEST`: its mail handed in and receipted, then
-    /// what it asked for and `DONE`.
-    fn answer(&mut self, asked: &[u64], requested: bool) {
+    /// what it asked for, a `NOTICE` saying how its held attachments were asked for, and `DONE`.
+    fn answer(&mut self, asked: &[u64], files: &[(u64, Vec<u8>)], requested: bool) {
         let finished = std::mem::take(&mut self.finished);
         if !finished.is_empty() {
             let results = match self.upstream.as_mut() {
@@ -660,11 +676,42 @@ impl Gateway {
                     pdus.extend(self.message_pdus(*serial, 0));
                 }
             }
+            if !files.is_empty() {
+                let result = match self.upstream.as_mut() {
+                    Some(up) => up.files(files),
+                    None => Err(ErrorCode::PostOfficeUnreachable),
+                };
+                let text = files_notice(result);
+                self.events.push(Event::Notice(text.clone()));
+                pdus.push(Value::int_map(vec![
+                    (0, Value::Uint(kind::NOTICE)),
+                    (1, Value::Text(text)),
+                ]));
+            }
             pdus.push(done());
         }
         if !pdus.is_empty() {
             self.queued.push(transmission(&pdus));
         }
+    }
+}
+
+/// What a `NOTICE` tells the user of held attachments asked for (RP-3 §5.6).
+#[must_use]
+pub fn files_notice(result: Result<(), ErrorCode>) -> String {
+    match result {
+        Ok(()) => "Your attachments are in a new message, waiting for your next call.".into(),
+        Err(ErrorCode::TooLarge) => {
+            "An attachment you asked for is too large to send by radio: nothing was sent.".into()
+        }
+        Err(ErrorCode::UnknownMessage) => {
+            "The attachments you asked for are not held for a message of this call.".into()
+        }
+        Err(ErrorCode::PostOfficeUnreachable) => {
+            "Your post office cannot be reached now: ask for the attachments on a later call."
+                .into()
+        }
+        Err(code) => format!("Your attachments could not be asked for ({code})."),
     }
 }
 

@@ -74,6 +74,8 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 .fields dt { color: var(--muted); }
 .fields dd { margin: 0; }
 .files { padding-left: 18px; color: var(--muted); }
+.files.held button { margin-left: 8px; }
+.files:empty { display: none; }
 #back { margin-bottom: 14px; }
 .body { white-space: pre-wrap; font: inherit; background: var(--panel); border: 1px solid var(--line);
         border-radius: 6px; padding: 14px; margin: 0; }

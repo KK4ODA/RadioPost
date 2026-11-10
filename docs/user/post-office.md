@@ -261,7 +261,7 @@ its settings (`config.json`) and an empty state, and prints:
 | `hook_token` | none | The bearer token Stalwart sends with each hook (`--hook-token`). |
 | `smtp` | none | Stalwart's submission port as a URL: `smtps://` (implicit TLS, port 465), or `smtp://…?tls=required` on 587. Without it, outgoing email waits in `outgoing`. |
 | `info.max_email_bytes` | 10 MB | The largest email the door takes (RP-6 §2.1). |
-| `info.max_air_bytes` | 64 kB | The largest message for the radio; larger attachments are held (RP-6 §2.4). |
+| `info.max_air_bytes` | 64 kB | The largest message for the radio; larger attachments are held (RP-6 §2.4) in `held/`, each named by its `ref` in hex, until the user asks for them by radio (RP-6 §2.5). |
 
 `/etc/systemd/system/radiopost-po.service`:
 
@@ -352,13 +352,16 @@ failed. Then:
 4. The user answers by radio: within a minute the answer arrives at the outside address, with a
    `Radio-Path:` header and the footer, signed by DKIM (the receiver's "show original" says
    `dkim=pass`, `spf=pass`, `dmarc=pass`).
-5. Send an encrypted email (PGP): refused at `DATA`.
-6. Write to `postmaster@` from outside: it arrives in Stalwart's mailbox for it.
+5. Send an email with two photos of about 40 kB each: together they are over 64 kB, so it comes
+   down with both listed as held. The user asks for one (`radiopost attachments ID NAME`, or *Ask
+   on the next call* in the panel) and calls again: the gateway says *Your attachments are in a
+   new message*, and the next call brings it, from `postmaster@`. A file over 64 kB on its own
+   cannot come by radio: asking for it gets *too large*.
+6. Send an encrypted email (PGP): refused at `DATA`.
+7. Write to `postmaster@` from outside: it arrives in Stalwart's mailbox for it.
 
 ## 10. What is not built yet
 
-* **Held attachments** are kept in `held/` in the post office's directory, but a user cannot yet
-  ask for them by radio (RP-5 §5.3 `files`).
 * **The two mailboxes are separate.** Mail read in a mail program is still offered by radio
   (`radio_skips_read` is not built), mail sent by radio does not appear in the mail program's
   Sent folder, mail a user sends from a mail program to another user here stays in the mail
