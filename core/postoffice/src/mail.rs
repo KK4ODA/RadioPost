@@ -22,7 +22,6 @@ pub const OK_RCPT: &str = "250 2.1.5";
 /// `DATA` taken.
 pub const OK_DATA: &str = "250 2.0.0";
 /// No such mailbox.
-pub const NO_MAILBOX: &str = "550 5.1.1";
 /// Not on the accept list, not signed by a post office, or failed DMARC.
 pub const NOT_LISTED: &str = "550 5.7.1";
 /// Over `max_email_bytes`.
@@ -201,11 +200,13 @@ pub fn reported_message_id(email: &Email<'_>) -> Option<String> {
     })
 }
 
-/// §2.1 at `RCPT TO`: the reply to a recipient, given the envelope sender (empty for null).
+/// §2.1 at `RCPT TO`: the reply to a recipient, given the envelope sender (empty for null). An
+/// address that is no account of the post office is not the door's to judge: the mail server
+/// delivers it to a mailbox of its own (`postmaster@`, RFC 5321 §4.5.1) or refuses it.
 #[must_use]
 pub fn rcpt(sender: &str, recipient: &str, door: &Door<'_>) -> &'static str {
     let Some(accept) = door.accounts.get(&recipient.to_lowercase()) else {
-        return NO_MAILBOX;
+        return OK_RCPT;
     };
     let known = door
         .known_post_offices
@@ -228,7 +229,7 @@ pub fn data(
     door: &Door<'_>,
 ) -> &'static str {
     let Some(accept) = door.accounts.get(&recipient.to_lowercase()) else {
-        return NO_MAILBOX;
+        return OK_DATA;
     };
     let Some(email) = parse(raw) else {
         return NOT_LISTED;

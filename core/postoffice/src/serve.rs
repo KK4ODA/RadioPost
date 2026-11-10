@@ -9,7 +9,7 @@
 
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use ed25519_dalek::SigningKey;
 use radiopost::base64url;
@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
 use tiny_http::{Header, Method, Response as Http, Server};
 
+use crate::auth::Checker;
 use crate::documents::Info;
 use crate::office::{Config, Draw, PostOffice, Request, State};
 
@@ -214,6 +215,7 @@ pub struct Running {
     office: Mutex<PostOffice>,
     settings: Mutex<Settings>,
     files: Files,
+    checker: OnceLock<Result<Checker, String>>,
 }
 
 impl Running {
@@ -237,7 +239,27 @@ impl Running {
             office: Mutex::new(office),
             settings: Mutex::new(settings),
             files,
+            checker: OnceLock::new(),
         })
+    }
+
+    /// The door's sender checks (RP-6 §2.1), made ready at their first use: for a mail server
+    /// that gives the door no verdicts.
+    pub(crate) fn checker(&self) -> Result<&Checker, String> {
+        self.checker
+            .get_or_init(|| {
+                let base = self.settings().base_url;
+                let host = base
+                    .split_once("://")
+                    .map_or(base.as_str(), |(_, rest)| rest)
+                    .split(['/', ':'])
+                    .next()
+                    .unwrap_or_default()
+                    .to_owned();
+                Checker::new(&host)
+            })
+            .as_ref()
+            .map_err(Clone::clone)
     }
 
     /// The post office, locked.

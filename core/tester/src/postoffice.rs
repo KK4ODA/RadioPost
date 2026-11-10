@@ -7,6 +7,7 @@
 //!
 //! Every request is scripted here from RP-5's and RP-6's text; the verdicts are theirs.
 
+use std::fmt::Write as _;
 use std::io::{Read as _, Write as _};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
@@ -355,44 +356,54 @@ impl Po {
         Ok(r)
     }
 
-    /// The door, called as an MTA hook in the draft's shape: the reply at `RCPT TO`, then at
-    /// `DATA` when the recipient was taken.
+    /// The door, called as an MTA hook in Stalwart's shape, the mail server's verdicts in its
+    /// `serverHeaders` (the DMARC result, and the domains in `dkim` a DKIM signature passes for):
+    /// the reply at `RCPT TO`, then at `DATA` when the recipient was taken.
     fn door(
         &self,
         from: Option<&str>,
         to: &str,
         email: &str,
         dmarc: &str,
+        dkim: &[String],
     ) -> Result<(String, Option<String>), String> {
+        let (head, contents) = email.split_once("\r\n\r\n").unwrap_or((email, ""));
+        let mut headers: Vec<(String, String)> = Vec::new();
+        for line in head.split("\r\n") {
+            if line.starts_with([' ', '\t']) {
+                if let Some((_, v)) = headers.last_mut() {
+                    v.push_str(line);
+                    v.push_str("\r\n");
+                }
+            } else if let Some((n, v)) = line.split_once(':') {
+                headers.push((n.to_owned(), format!("{v}\r\n")));
+            }
+        }
+        let mut results = format!(" tester.radiopost.org; dmarc={dmarc}");
+        for d in dkim {
+            let _ = write!(results, "; dkim=pass header.d={d}");
+        }
+        results.push_str("\r\n");
         let ask = |stage: &str| -> Result<String, String> {
             let body = json!({
-                "stage": stage, "action": "accept",
-                "envelope": {"from": {"address": from}, "to": [{"address": to}]},
-                "rawMessage": mailserver::base64_encode(email.as_bytes()),
-                "senderAuth": {"dmarc": dmarc},
+                "context": {"stage": stage, "protocol": {"version": 1},
+                            "client": {"ip": "192.0.2.1", "helo": "mail.example.com"}},
+                "envelope": {"from": {"address": from.unwrap_or("")}, "to": [{"address": to}]},
+                "message": {
+                    "headers": headers.iter().map(|(n, v)| json!([n, v])).collect::<Vec<_>>(),
+                    "serverHeaders": [["Authentication-Results", results]],
+                    "contents": contents,
+                    "size": email.len(),
+                },
             });
             let (_, rest) = self.door.split_once("://").unwrap_or(("", &self.door));
             let (host, path) = rest
                 .split_once('/')
                 .map_or((rest, "/".to_owned()), |(h, p)| (h, format!("/{p}")));
             let (status, text) = http(host, "POST", &path, None, Some(&body.to_string()))?;
-            if status == 204 {
-                return Ok(if stage == "rcpt" {
-                    "250 2.1.5"
-                } else {
-                    "250 2.0.0"
-                }
-                .into());
-            }
             let j: Json = serde_json::from_str(&text)
                 .map_err(|_| format!("the door answered {status} {text:?}"))?;
-            let set = j["set"].as_array().cloned().unwrap_or_default();
-            let action = set
-                .iter()
-                .find(|s| s["path"] == "/action")
-                .and_then(|s| s["value"].as_str())
-                .unwrap_or("accept");
-            if action == "accept" {
+            if j["action"] == "accept" {
                 return Ok(if stage == "rcpt" {
                     "250 2.1.5"
                 } else {
@@ -400,14 +411,11 @@ impl Po {
                 }
                 .into());
             }
-            let r = set
-                .iter()
-                .find(|s| s["path"] == "/response")
-                .map_or(Json::Null, |s| s["value"].clone());
+            let r = &j["response"];
             Ok(format!(
                 "{} {}",
-                r["code"],
-                r["enhancedCode"].as_str().unwrap_or("")
+                r["status"],
+                r["enhanced_status"].as_str().unwrap_or("")
             ))
         };
         let rcpt = ask("rcpt")?;
@@ -1226,22 +1234,23 @@ impl Run<'_> {
                 ));
                 continue;
             }
-            let mut email = case["email"]
+            let email = case["email"]
                 .as_str()
                 .unwrap_or("")
                 .replace("<kdj2eowb2e7wqq4y5ttq@radiopost.org>", &message_id);
-            for d in case["dkim_pass"].as_array().cloned().unwrap_or_default() {
-                email = format!(
-                    "Authentication-Results: mx.radiopost.org; dkim=pass header.d={}\r\n{email}",
-                    d.as_str().unwrap_or("")
-                );
-            }
+            let dkim: Vec<String> = case["dkim_pass"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|d| d.as_str().map(str::to_owned))
+                .collect();
             let from = case["mail_from"].as_str().filter(|f| !f.is_empty());
             let (rcpt, data) = po.door(
                 from,
                 case["rcpt_to"].as_str().unwrap_or(""),
                 &email,
                 case["dmarc"].as_str().unwrap_or("none"),
+                &dkim,
             )?;
             t.push(format!("{what}: RCPT {rcpt}, DATA {data:?}"));
             let want_data = case["expect"]["data"].as_str().map(str::to_owned);
@@ -1298,7 +1307,7 @@ impl Run<'_> {
             let from = from
                 .rsplit_once('<')
                 .map_or(from.clone(), |(_, a)| a.trim_end_matches('>').to_owned());
-            let (rcpt, data) = po.door(Some(&from), &a.address, raw, "pass")?;
+            let (rcpt, data) = po.door(Some(&from), &a.address, raw, "pass", &[])?;
             if data.as_deref() != Some("250 2.0.0") {
                 return Err(format!(
                     "{}: the door answered {rcpt} / {data:?} to mail from a sender on the list",
@@ -1487,7 +1496,7 @@ impl Run<'_> {
              From: Facundo <facundo@radiopost.org>\r\nSubject: We are fine\r\nMessage-ID: {mid}\r\n--r--\r\n",
             a.address
         );
-        let (_, data) = po.door(None, &a.address, &report, "none")?;
+        let (_, data) = po.door(None, &a.address, &report, "none", &[])?;
         if data.as_deref() != Some("250 2.0.0") {
             return Err(format!(
                 "a delivery report about a message it sent refused at the door: {data:?} (RP-6 §2.1)"
@@ -1536,7 +1545,7 @@ impl Run<'_> {
         let email = "From: Maria <maria@example.com>\r\nTo: facundo@radiopost.org\r\nSubject: By email\r\n\
                      Date: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\n\
                      Content-Type: text/plain; charset=utf-8\r\n\r\nHello.\r\n";
-        po.door(Some("maria@example.com"), &a.address, email, "pass")?;
+        po.door(Some("maria@example.com"), &a.address, email, "pass", &[])?;
         let held = po.waiting(&gw, &a)?;
         for (entry, m) in &held {
             t.push(format!("{entry}"));

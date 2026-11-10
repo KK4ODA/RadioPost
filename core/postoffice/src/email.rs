@@ -7,11 +7,12 @@
 //! are read: Stalwart's MTA hooks (`context.stage`, `message.headers` and `contents`), and the
 //! MTA Hooks Internet-Draft's (`stage`, `rawMessage` in base64), which Stalwart's authors wrote;
 //! the answer takes the shape of the request (Stalwart's reply in its 1.1 form, with
-//! `enhanced_status`). Stalwart 1.1 hands a hook the message as the client sent it, without the
-//! `Authentication-Results` it adds, so its DMARC verdict reaches the door as `none`: the mail
-//! server must refuse DMARC failures itself (`docs/user/post-office.md`). A message taken at
-//! `DATA` is made into its RadioPost message there (§2.4, §3.3, §4) and put in the recipient's
-//! mailbox; held attachments are written to `held/` in the post office's directory.
+//! `enhanced_status`). Only the post office's accounts are judged; any other address is the mail
+//! server's. The DMARC and DKIM verdicts are read from the mail server's own fields (the draft's
+//! `senderAuth`, Stalwart's `serverHeaders`), never from the message's headers; Stalwart 1.1
+//! gives none, and the door then makes the checks itself (`auth`). A message taken at `DATA` is
+//! made into its RadioPost message there (§2.4, §3.3, §4) and put in the recipient's mailbox;
+//! held attachments are written to `held/` in the post office's directory.
 //!
 //! **The sender.** Mail a user sent to addresses this post office does not serve waits in
 //! `outgoing`. Each is made into an email (§3.1) and submitted, one SMTP transaction for the
@@ -21,6 +22,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
+use std::net::IpAddr;
 
 use radiopost::base64url;
 use radiopost::message::Message;
@@ -62,10 +64,16 @@ pub struct Hook {
     pub recipients: Vec<String>,
     /// The whole message, at `data`.
     pub raw: Option<Vec<u8>>,
-    /// The mail server's DMARC result.
+    /// The DMARC result: the mail server's, or the door's own (`auth`).
     pub dmarc: String,
     /// The domains a DKIM signature passed for.
     pub dkim_pass: Vec<String>,
+    /// Whether the mail server gave its verdicts (the draft's `senderAuth`, or the
+    /// `Authentication-Results` among Stalwart's `serverHeaders`); without them the door makes
+    /// the checks itself.
+    pub given: bool,
+    /// The connecting client: its address and the name it gave in EHLO.
+    pub client: Option<(IpAddr, String)>,
     /// The Internet-Draft's shape, not Stalwart's.
     pub draft: bool,
 }
@@ -99,17 +107,15 @@ fn authentication_results(values: &[String], hook: &mut Hook) {
     }
 }
 
-/// The `Authentication-Results` headers of a raw message.
-fn results_in(raw: &[u8]) -> Vec<String> {
-    mail::parse(raw).map_or_else(Vec::new, |m| {
-        m.headers_raw()
-            .filter(|(n, _)| n.eq_ignore_ascii_case("Authentication-Results"))
-            .map(|(_, v)| v.replace("\r\n", "").replace('\n', ""))
-            .collect()
-    })
+/// The client at `ip` that gave `helo`, if both are there.
+fn client_of(ip: Option<&Json>, helo: Option<&Json>) -> Option<(IpAddr, String)> {
+    let ip = ip?.as_str()?.parse().ok()?;
+    let helo = helo.and_then(Json::as_str).unwrap_or("").to_owned();
+    Some((ip, helo))
 }
 
-/// Reads a hook request in either shape.
+/// Reads a hook request in either shape. Verdicts are taken only from where the mail server
+/// writes them, never from the message's own headers, which its sender wrote.
 #[must_use]
 pub fn read_hook(body: &Json) -> Hook {
     let address = |v: &Json| {
@@ -134,9 +140,13 @@ pub fn read_hook(body: &Json) -> Hook {
             .get("rawMessage")
             .and_then(Json::as_str)
             .and_then(standard_base64);
-        if let Some(d) = body.pointer("/senderAuth/dmarc").and_then(Json::as_str) {
-            hook.dmarc = d.to_lowercase();
+        if let Some(auth) = body.get("senderAuth").filter(|a| a.is_object()) {
+            hook.given = true;
+            if let Some(d) = auth.get("dmarc").and_then(Json::as_str) {
+                hook.dmarc = d.to_lowercase();
+            }
         }
+        hook.client = client_of(body.pointer("/client/ip"), body.pointer("/client/ehlo"));
     } else {
         hook.stage = body
             .pointer("/context/stage")
@@ -173,17 +183,17 @@ pub fn read_hook(body: &Json) -> Hook {
         }
         let results: Vec<String> = pairs("serverHeaders")
             .into_iter()
-            .chain(headers)
             .filter(|(n, _)| n.eq_ignore_ascii_case("Authentication-Results"))
             .map(|(_, v)| v)
             .collect();
+        hook.given = !results.is_empty();
         authentication_results(&results, &mut hook);
+        hook.client = client_of(
+            body.pointer("/context/client/ip"),
+            body.pointer("/context/client/helo"),
+        );
     }
-    if let Some(raw) = &hook.raw {
-        let results = results_in(raw);
-        authentication_results(&results, &mut hook);
-    }
-    if hook.dmarc.is_empty() {
+    if hook.given && hook.dmarc.is_empty() {
         hook.dmarc = "none".into();
     }
     hook
@@ -213,11 +223,17 @@ pub fn hook_answer(draft: bool, reply: &str, text: &str) -> (u16, String) {
     (200, answer.to_string())
 }
 
+/// RP-6 §2.1: the sender could not be checked for now (a DNS lookup failed), so the sending
+/// server tries again later.
+pub const TRY_LATER: &str = "451 4.7.1";
+
 /// RP-6 §2.3: what a refusal says, in plain words.
 fn refusal_text(reply: &str, recipient: &str, max_email_bytes: u64) -> String {
     let domain = mail::domain_of(recipient);
     match reply {
-        mail::NO_MAILBOX => format!("<{recipient}> has no mailbox here."),
+        TRY_LATER => format!(
+            "The sender of mail to {domain} could not be checked just now. Please try again later."
+        ),
         mail::NOT_LISTED => format!(
             "<{recipient}> reads mail by amateur radio and takes it only from senders on their \
              list. Ask them to add you. Amateur radio carries no business content."
@@ -248,12 +264,37 @@ impl Running {
         let Ok(json) = serde_json::from_slice::<Json>(body) else {
             return (400, json!({"error": "not JSON"}).to_string());
         };
-        let hook = read_hook(&json);
+        let mut hook = read_hook(&json);
         let settings = self.settings();
         let max = settings.info.max_email_bytes;
+        let accounts = {
+            let mut office = self.office();
+            office.at(now());
+            office.door_accounts()
+        };
+        // The door judges the post office's accounts; any other address at its domains
+        // (postmaster@, abuse@) is the mail server's to deliver or refuse.
+        let account = |r: &String| accounts.contains_key(&r.to_lowercase());
+        let ours: Vec<String> = hook
+            .recipients
+            .iter()
+            .filter(|r| account(r))
+            .cloned()
+            .collect();
+        if hook.stage == "data" && !ours.is_empty() {
+            if !hook.given {
+                self.check_sender(&mut hook);
+            }
+            if hook.dmarc == "temperror" {
+                return hook_answer(
+                    hook.draft,
+                    TRY_LATER,
+                    &refusal_text(TRY_LATER, &ours[0], max),
+                );
+            }
+        }
         let mut office = self.office();
         office.at(now());
-        let accounts = office.door_accounts();
         let known = office.known_post_offices();
         let sent = |id: &str| office.sent_content_id(id).is_some();
         let door = Door {
@@ -266,18 +307,19 @@ impl Running {
             dmarc: &hook.dmarc,
             dkim_pass: &hook.dkim_pass,
         };
-        let ours: Vec<&String> = hook.recipients.iter().filter(|r| self.ours(r)).collect();
         let refused = match hook.stage.as_str() {
-            "rcpt" => ours
+            "rcpt" => hook
+                .recipients
                 .last()
-                .map(|r| (mail::rcpt(&hook.sender, r, &door), (*r).clone()))
+                .filter(|r| account(r))
+                .map(|r| (mail::rcpt(&hook.sender, r, &door), r.clone()))
                 .filter(|(reply, _)| *reply != mail::OK_RCPT),
             "data" => {
                 let raw = hook.raw.as_deref().unwrap_or_default();
                 ours.iter().find_map(|r| {
                     let (rcpt, data) = mail::door(&hook.sender, r, raw, &verdicts, &door);
                     let reply = data.unwrap_or(rcpt);
-                    (reply != mail::OK_DATA).then(|| (reply, (*r).clone()))
+                    (reply != mail::OK_DATA).then(|| (reply, r.clone()))
                 })
             }
             _ => None,
@@ -287,10 +329,10 @@ impl Running {
             return hook_answer(hook.draft, reply, &refusal_text(reply, &recipient, max));
         }
         if hook.stage == "data"
+            && !ours.is_empty()
             && let Some(raw) = &hook.raw
         {
-            let recipients: Vec<String> = ours.into_iter().cloned().collect();
-            if let Err(e) = self.email_in(&hook.sender, &recipients, raw) {
+            if let Err(e) = self.email_in(&hook.sender, &ours, raw) {
                 eprintln!("radiopost-po: an email taken but not made a message: {e}");
             }
         }
@@ -300,6 +342,29 @@ impl Running {
             mail::OK_DATA
         };
         hook_answer(hook.draft, ok, "")
+    }
+
+    /// The door's own sender checks (`auth`), when the mail server gave no verdicts. Without
+    /// the client to check, or with no resolver to check it, the message waits: `temperror`.
+    fn check_sender(&self, hook: &mut Hook) {
+        let (Some((ip, helo)), Some(raw)) = (&hook.client, &hook.raw) else {
+            eprintln!(
+                "radiopost-po: the mail server gave the door neither its verdicts nor the client"
+            );
+            "temperror".clone_into(&mut hook.dmarc);
+            return;
+        };
+        match self.checker() {
+            Ok(checker) => {
+                let found = checker.check(*ip, helo, &hook.sender, raw);
+                hook.dmarc = found.dmarc;
+                hook.dkim_pass = found.dkim_pass;
+            }
+            Err(e) => {
+                eprintln!("radiopost-po: {e}");
+                "temperror".clone_into(&mut hook.dmarc);
+            }
+        }
     }
 
     /// An email taken at the door, made into the RadioPost message of each recipient here and
@@ -615,13 +680,61 @@ mod tests {
         });
         let h = read_hook(&request);
         assert_eq!(h.stage, "data");
-        assert_eq!(h.dmarc, "none");
+        assert!(!h.given, "1.1 gives the door no verdicts");
+        assert_eq!(
+            h.client,
+            Some((
+                "192.0.2.1".parse().expect("an address"),
+                "mail.example.com".to_owned()
+            ))
+        );
         let raw = String::from_utf8(h.raw.expect("the message")).expect("text");
         assert_eq!(
             raw,
             "From: John Doe <john@example.com>\r\nTo: Facundo <facundo@radiopost.org>\r\n\
              Subject: Hello\r\n\r\nHello, world.\r\n"
         );
+    }
+
+    /// Whoever sends a message can write `Authentication-Results` into it: the door reads
+    /// verdicts only from the mail server's own fields.
+    #[test]
+    fn the_messages_own_authentication_results_are_not_read() {
+        let forged = " po.radiopost.org; dkim=pass header.d=hampost.org; dmarc=pass\r\n";
+        let stalwart = json!({
+            "context": {"stage": "data",
+                        "client": {"ip": "203.0.113.9", "helo": "forger.example.net"}},
+            "envelope": {"from": {"address": "eve@hampost.org"},
+                         "to": [{"address": "facundo@radiopost.org"}]},
+            "message": {
+                "headers": [["Authentication-Results", forged],
+                            ["From", " Eve <eve@hampost.org>\r\n"]],
+                "contents": "Hello.\r\n"}
+        });
+        let h = read_hook(&stalwart);
+        assert!(!h.given);
+        assert!(h.dkim_pass.is_empty(), "{:?}", h.dkim_pass);
+        assert_eq!(h.dmarc, "");
+
+        let draft = json!({
+            "stage": "data",
+            "envelope": {"from": {"address": "eve@hampost.org"},
+                         "to": [{"address": "facundo@radiopost.org"}]},
+            "rawMessage": standard(&format!("Authentication-Results:{forged}From: eve@hampost.org\r\n\r\nhi")),
+            "senderAuth": {"dmarc": "none"}
+        });
+        let h = read_hook(&draft);
+        assert!(h.given);
+        assert!(h.dkim_pass.is_empty(), "{:?}", h.dkim_pass);
+        assert_eq!(h.dmarc, "none");
+    }
+
+    fn standard(text: &str) -> String {
+        let b64 = radiopost::base64url::encode(text.as_bytes())
+            .replace('-', "+")
+            .replace('_', "/");
+        let pad = "=".repeat((4 - b64.len() % 4) % 4);
+        format!("{b64}{pad}")
     }
 
     #[test]

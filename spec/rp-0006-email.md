@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.4.0 |
+| **Version** | 0.5.0 |
 | **Updated** | 2026-11-10 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -40,12 +40,27 @@ A post office decides during the SMTP conversation, never after it. A message is
 refused with an SMTP reply the sending server passes back to its sender. A post office MUST NOT
 accept a message and send a refusal later: that sends bounces to forged senders (*backscatter*).
 
-It makes the checks below in order, and the first that fails gives the refusal. The DMARC result and
-which domains a DKIM signature passes for are the mail server's verdicts; RadioPost only reads them.
+The door judges the recipients that are accounts of the post office. Any other address at its
+domains (`postmaster@`, which RFC 5321 §4.5.1 requires, `abuse@`, the operator's own) is not
+RadioPost's to judge: the door lets the mail server have it, and the mail server delivers it to a
+mailbox of its own or refuses it as unknown.
+
+It makes the checks below in order, and the first that fails gives the refusal. They rest on the
+DMARC result for the message's `From:` domain and on which domains a DKIM signature passes for:
+
+* The mail server's verdicts, when it hands them to the door in fields of its own.
+* Otherwise the post office's own: SPF (RFC 7208) for the envelope sender, DKIM (RFC 6376) and
+  DMARC (RFC 7489) for the message, from the connecting client's address and the name it gave in
+  EHLO, the envelope sender and the message as the client sent it. Stalwart 1.1 hands its MTA
+  hooks no verdicts.
+* Never from `Authentication-Results` headers in the message itself: its sender can write them.
+
+A check that cannot be finished for now (a DNS lookup failed, or the door was given neither
+verdicts nor the client) refuses the message with `451 4.7.1`, and the sending server tries again
+later.
 
 | When | Check | Refusal |
 |---|---|---|
-| `RCPT TO` | The recipient exists. | `550 5.1.1` |
 | `RCPT TO` | The envelope sender, or its domain, is on the recipient's accept list (§2.2), or the sender's domain is a RadioPost post office the receiver knows (RP-1 §7.3), or the sender is null (`MAIL FROM:<>`, as delivery reports are sent). | `550 5.7.1` (§2.3) |
 | `DATA` | The message passes DMARC for its `From:` domain, when that domain publishes DMARC. | `550 5.7.1` |
 | `DATA` | The `From:` address, or its domain, is on the accept list, or is a known RadioPost post office's domain passing DKIM. (The header sender can differ from the envelope sender.) With a null sender instead: the message is a delivery status report (RFC 3464) about a message this post office sent, named by its `Message-ID` (§3.1). | `550 5.7.1` |
@@ -55,8 +70,8 @@ which domains a DKIM signature passes for are the mail server's verdicts; RadioP
 
 A message taken is answered `250 2.0.0`, a recipient taken `250 2.1.5`.
 
-The `DATA` checks are made for each recipient at this post office, but SMTP gives one reply to
-`DATA` for the whole transaction. When the recipients' answers differ (one is on the `From:`
+The `DATA` checks are made for each recipient that is an account here, but SMTP gives one reply
+to `DATA` for the whole transaction. When the recipients' answers differ (one is on the `From:`
 address's accept list and another is not), the post office refuses the message for every
 recipient with the first refusal, in the order of `RCPT TO`; the sender's server reports it, and a
 sender who writes to each recipient alone reaches those who take it. Recipients at other domains
@@ -340,3 +355,4 @@ and the session files.
 | 0.3.0 | 2026-11-09 | Third-party traffic (§5.1), from §97.115's text: the receiving station's country decides, not the sender's; the post office flags mail whose sender is not shown to be licensed; the gateway hands it only to stations of its own country or one with an arrangement, read from the operating callsign, with the US table from the ARRL's list; §5 becomes normative. |
 | 0.3.1 | 2026-11-09 | §3.1: the example `Message-ID` holds a real content ID (RP-0 §6.3) |
 | 0.4.0 | 2026-11-10 | §2.1: one `DATA` reply for every recipient: when they differ, the first refusal refuses the message. Found by building the door. |
+| 0.5.0 | 2026-11-10 | §2.1: the door judges only the post office's accounts, so `postmaster@` and other mailboxes of the mail server reach it (the door had refused them). The DMARC and DKIM verdicts are the mail server's when it gives them, else the post office's own checks (Stalwart 1.1 gives its hooks none), and never the message's own `Authentication-Results`; a check that cannot be finished for now answers `451 4.7.1`. Found by setting up the pilot's server. |

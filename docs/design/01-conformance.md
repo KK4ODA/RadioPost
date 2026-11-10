@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.4.0 |
+| **Version** | 0.4.1 |
 | **Updated** | 2026-11-10 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -76,8 +76,9 @@ tests read.
 
 A post office is started by the tester in a fresh directory for each test, from its driver file
 (`init`, `know`, `dns`, `code`, `serve`, and `door`, the URL of its door); the tester chooses its
-addresses and runs the mail server's two sides: it calls the door in the MTA Hooks draft's shape,
-and takes what the post office submits on a stand-in SMTP port. `radiopost-po`'s is
+addresses and runs the mail server's two sides: it calls the door in Stalwart's shape, its verdicts
+(DMARC, the domains DKIM passes for) in the mail server's `serverHeaders`, and takes what the post
+office submits on a stand-in SMTP port. `radiopost-po`'s is
 `core/tester/drivers/radiopost-po.json`.
 
 An adapter is tested as it runs: the tester connects to it as its host (`--at`), and for the
@@ -247,3 +248,4 @@ RP-0 §3: RP-4, the adapter's side.
 | 0.2.0 | 2026-11-09 | Phase 1's client tests built (`core/tester`): how a program is driven (a driver file, §2.3), which settles how conformance mode is turned on (§7). C-06 asks `too-large` for a frame over `max_pdu`, as RP-3 0.10.0 now says. |
 | 0.3.0 | 2026-11-09 | Phase 1's adapter tests built: how an adapter is reached (§2.3); A-02 also checks a host that leaves (RP-4 0.5.0), and A-03 says what it covers. |
 | 0.4.0 | 2026-11-10 | Phase 2's tests built: a gateway's and a post office's conformance mode and driver files (§2.3), the test post office, G-01, G-02, G-04, G-07 to G-09, P-01 to P-04, P-07 to P-10 and C-12 (§6). Writing them found a gateway that replayed a caller's last transmission while the link was quiet, and a post office that used an enrollment code at a refused attempt (RP-5 0.12.1). |
+| 0.4.1 | 2026-11-10 | §2.3: the tester calls a post office's door in Stalwart's shape, the mail server's verdicts in `serverHeaders`, since a door no longer reads them from the message's own headers (RP-6 0.5.0). |

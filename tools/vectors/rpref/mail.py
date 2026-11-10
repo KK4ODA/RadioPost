@@ -138,7 +138,6 @@ PGP_MESSAGE = "-----BEGIN PGP MESSAGE-----"
 
 OK_RCPT = "250 2.1.5"
 OK_DATA = "250 2.0.0"
-NO_MAILBOX = "550 5.1.1"
 NOT_LISTED = "550 5.7.1"
 TOO_LARGE = "552 5.3.4"
 NOT_ALLOWED = "554 5.7.1"
@@ -211,7 +210,8 @@ def door(envelope: dict[str, Any], raw: bytes, ctx: dict[str, Any]) -> dict[str,
     accounts = ctx["accounts"]
     known = [d.lower() for d in ctx["known_post_offices"]]
     if recipient.lower() not in accounts:
-        return {"rcpt": NO_MAILBOX, "data": None}
+        # not an account (postmaster@): the mail server's to deliver or refuse
+        return {"rcpt": OK_RCPT, "data": OK_DATA}
     accept = accounts[recipient.lower()]
     null_sender = not sender
     if not (null_sender or on_list(sender, accept) or domain_of(sender) in known):

@@ -5333,9 +5333,9 @@ def make_email_door() -> dict[str, Any]:
             base,
         ),
         (
-            "an address that does not exist",
+            "an address that is no account (`postmaster@`): the mail server's",
             "maria@example.com",
-            "nobody@radiopost.org",
+            "postmaster@radiopost.org",
             maria,
             base,
         ),
@@ -5454,7 +5454,7 @@ def make_email_door() -> dict[str, Any]:
         cases,
         {
             "Maria, on Facundo's list, DMARC pass": taken,
-            "an address that does not exist": ("550 5.1.1", None),
+            "an address that is no account (`postmaster@`): the mail server's": taken,
             "a sender not on the list": ("550 5.7.1", None),
             "on the list with other capitals": taken,
             "a domain on the list (`@redcross.example`)": taken,

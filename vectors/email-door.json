@@ -39,15 +39,15 @@
       }
     },
     {
-      "what": "an address that does not exist",
+      "what": "an address that is no account (`postmaster@`): the mail server's",
       "mail_from": "maria@example.com",
-      "rcpt_to": "nobody@radiopost.org",
+      "rcpt_to": "postmaster@radiopost.org",
       "email": "From: Maria Alvarez <maria@example.com>\r\nTo: facundo@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
       "dmarc": "pass",
       "dkim_pass": [],
       "expect": {
-        "rcpt": "550 5.1.1",
-        "data": null
+        "rcpt": "250 2.1.5",
+        "data": "250 2.0.0"
       }
     },
     {

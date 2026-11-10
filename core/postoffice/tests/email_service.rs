@@ -97,7 +97,8 @@ fn stalwart(stage: &str, from: &str, to: &str, email: &str) -> Json {
         .map(|(n, v)| json!([n, format!("{v}\r\n")]))
         .collect();
     json!({
-        "context": {"stage": stage, "protocol": {"version": 1}},
+        "context": {"stage": stage, "protocol": {"version": 1},
+                    "client": {"ip": "192.0.2.1", "helo": "mail.example.com"}},
         "envelope": {"from": {"address": from}, "to": [{"address": to}]},
         "message": {"headers": headers, "contents": contents, "size": email.len()}
     })
@@ -413,4 +414,77 @@ fn email_comes_in_at_the_door_and_goes_out_by_smtp() {
     );
     let answer: Json = serde_json::from_str(&body).expect("JSON");
     assert_eq!(answer["set"][1]["value"]["code"], 550);
+}
+
+/// Stalwart 1.1 gives the door no verdicts, so the door checks the sender itself (RP-6 §2.1).
+/// Here DNS is `mail-auth`'s test resolver: every name is missing, and a name with
+/// `_dns_error.` in it fails for now. And an address that is no account is the mail server's.
+#[test]
+fn the_door_checks_senders_itself_and_leaves_other_addresses_to_the_mail_server() {
+    let dir = scratch("checks");
+    let running = post_office(&dir);
+    {
+        let mut office = running.office();
+        office.at(serve::now());
+        office.add_code("7Q4F-AZ9K", "facundo@test.example", "KK4ODA", 3);
+        office.state.accept.insert(
+            "facundo@test.example".into(),
+            vec!["maria@example.com".into(), "@_dns_error.example.com".into()],
+        );
+    }
+    let door = serve::serve_hooks(running.clone(), "127.0.0.1:0").expect("the door");
+    let answer = |request: &Json| -> Json {
+        let (_, body) = post(&door, "door-secret", request);
+        serde_json::from_str(&body).expect("JSON")
+    };
+
+    // no DMARC record for example.com: taken
+    let a = answer(&stalwart(
+        "data",
+        "maria@example.com",
+        "facundo@test.example",
+        MARIA,
+    ));
+    assert_eq!(a["action"], "accept", "{a}");
+
+    // a lookup that fails for now: the sending server is asked to try again
+    let flaky = MARIA.replace("maria@example.com", "maria@_dns_error.example.com");
+    let a = answer(&stalwart(
+        "data",
+        "maria@_dns_error.example.com",
+        "facundo@test.example",
+        &flaky,
+    ));
+    assert_eq!(a["action"], "reject", "{a}");
+    assert_eq!(a["response"]["status"], 451);
+    assert_eq!(a["response"]["enhanced_status"], "4.7.1");
+
+    // no verdicts and no client to check: the same
+    let mut blind = stalwart("data", "maria@example.com", "facundo@test.example", MARIA);
+    blind["context"]["client"] = Json::Null;
+    let a = answer(&blind);
+    assert_eq!(a["response"]["status"], 451, "{a}");
+    assert_eq!(
+        running.office().state.mailboxes["facundo@test.example"].len(),
+        1,
+        "only the first is in the mailbox"
+    );
+
+    // postmaster@ is no account: the door lets the mail server have it, and files nothing
+    for stage in ["rcpt", "data"] {
+        let a = answer(&stalwart(
+            stage,
+            "stranger@example.net",
+            "postmaster@test.example",
+            MARIA,
+        ));
+        assert_eq!(a["action"], "accept", "{stage}: {a}");
+    }
+    assert!(
+        !running
+            .office()
+            .state
+            .mailboxes
+            .contains_key("postmaster@test.example")
+    );
 }

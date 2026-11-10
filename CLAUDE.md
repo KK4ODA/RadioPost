@@ -99,11 +99,18 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   zone served as DNS over HTTPS; conformance mode is *given* the test post office's URL, since it
   is plain HTTP and RP-1 §7.1 ignores such a record) and `postoffice` (it starts the post office
   from its driver for each test and plays users, a gateway, a `hampost.org` user and the mail
-  server: the door called in the MTA Hooks draft's shape, `mailserver`'s stand-in SMTP). Writing
-  them found the gateway's session loop handing the engine the last event again at each quiet
-  read (fixed: `event.take()`), and enrollment codes used at a refused attempt (RP-5 0.12.1). The
-  loopback channel drops what is in flight when a link breaks: a test that breaks a link after
-  sending waits for it to cross.
+  server: the door called in Stalwart's shape with verdicts in `serverHeaders`, `mailserver`'s
+  stand-in SMTP). Writing them found the gateway's session loop handing the engine the last event
+  again at each quiet read (fixed: `event.take()`), and enrollment codes used at a refused attempt
+  (RP-5 0.12.1). The loopback channel drops what is in flight when a link breaks: a test that
+  breaks a link after sending waits for it to cross.
+  Setting up the pilot's server (Stalwart 1.1, RP-6 0.5.0) found three things about the door:
+  1.1 gives each hook header value with its line ending; it gives hooks no verdicts, so the door
+  checks SPF, DKIM and DMARC itself (`postoffice/src/auth.rs`, `mail-auth` 0.13, the last series
+  on mail-parser 0.11; its tests fill the lookup cache and build with `mail-auth`'s `test`
+  feature, which makes any other name NXDOMAIN and a name with `_dns_error.` fail for now); and
+  the door had refused `postmaster@`. Verdicts are never read from the message's own
+  `Authentication-Results`.
   `core/api` (`radiopost-api`) is RP-5 over HTTPS (login, calls, enrollment, DNS over HTTPS), shared
   by the gateway and the client; the client's `online` module uses it (enroll, renew, settings —
   `PUT` replaces them whole, so the client merges —, accept list, `report`). `app/src-tauri` has its
