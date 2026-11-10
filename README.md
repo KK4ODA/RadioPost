@@ -43,7 +43,8 @@ gateway answers users' calls and carries their sessions to their post offices, a
 application of its own, RadioPost Gateway ([`app/gateway`](app/gateway/README.md),
 [the operator's guide](docs/user/gateway.md)); and the post office service runs beside a mail
 server and exchanges ordinary email ([the operator's guide](docs/user/post-office.md)).
-[On-air tests](docs/user/on-air-tests.md) between two stations with Aether HF can begin. The specifications are **drafts**:
+On-air tests can begin: [between two stations](docs/user/on-air-tests.md), and
+[email through a gateway](docs/user/on-air-gateway.md) once `radiopost.org` is live. The specifications are **drafts**:
 anything may change, and nothing is ready to deploy. The project's own post office will be `radiopost.org`. The first modem is
 [Aether HF](https://github.com/KK4ODA/aether-hf), an open-source HF modem; VARA, ARDOP and AX.25
 packet follow through adapters.

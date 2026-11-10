@@ -134,8 +134,9 @@ with:
 
 ## 7. What these tests do not cover yet
 
-* **Post offices and gateways** (Phase 2). Mail reaches only the other station. Each station keeps
-  a report of the session (the panel counts them), for its post office when there is one; that is
-  when a copy to anyone else (a `Cc`, an email address) goes on.
+* **Post offices and gateways.** Mail reaches only the other station. Each station keeps a report
+  of the session (the panel counts them), for its post office when there is one; that is when a
+  copy to anyone else (a `Cc`, an email address) goes on. Email through a gateway has
+  [a guide of its own](on-air-gateway.md).
 * **Renewal.** A credential lasts 90 days; the operator issues a new one after that.
 * **One session at a time.** **Listen** answers one call, then stops.
