@@ -2814,6 +2814,32 @@ def api_cases() -> list[dict[str, Any]]:
             (T_SESSION + 70, gw, "POST", "/sessions", good),
         ],
     )
+    # RP-3 §5.2: a client whose clock was off signs the gateway's challenge instead
+    challenged = rp.statement(
+        "facundo@radiopost.org",
+        "KK4ODA",
+        "N1CALL-10",
+        stmt[6],
+        challenge=stream("api cases challenge", 16),
+    )
+    signed_challenge = dict(
+        good,
+        statement=jws.b64u(cbor.encode(challenged)),
+        signature=jws.b64u(
+            rp.sign(rp.CTX_SESSION, cbor.encode(challenged), SECRET["device:facundo"])
+        ),
+    )
+    case(
+        "a statement in challenge form: the client's clock was off",
+        [(T_SESSION + 40, gw, "POST", "/sessions", signed_challenge)],
+    )
+    case(
+        "the same challenge twice",
+        [
+            (T_SESSION + 40, gw, "POST", "/sessions", signed_challenge),
+            (T_SESSION + 70, gw, "POST", "/sessions", signed_challenge),
+        ],
+    )
     case(
         "a message removed from the statement after signing",
         [(T_SESSION + 40, gw, "POST", "/sessions", fewer)],
@@ -2936,6 +2962,8 @@ def make_api_exchanges() -> dict[str, Any]:
             "the post office's clock 601 s after `started`": ["422 time-skew"],
             "`started` 601 s after the statement's time": ["422 time-skew"],
             "the same statement twice: a replay": ["201", "422 time-skew"],
+            "a statement in challenge form: the client's clock was off": ["201"],
+            "the same challenge twice": ["201", "422 signature-invalid"],
             "a message removed from the statement after signing": ["422 signature-invalid"],
             "the user's credential revoked": ["422 credential-revoked"],
             "carried by a gateway the statement does not name": ["403 not-authorized"],

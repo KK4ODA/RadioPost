@@ -676,10 +676,18 @@ impl PostOffice {
                 Some((a.clone(), bytes.try_into().ok()?))
             })
             .collect();
+        // RP-5 §5.2: the gateway issued a challenge-form statement's challenge and checked it
+        // (RP-1 §6.3 step 6); the post office takes it as issued, once.
+        let challenge = stmt.challenge().filter(|c| {
+            let c = hex(c);
+            !self.state.replay.iter().any(|(a, n, t)| {
+                a == &stmt.address && n == &c && started.saturating_sub(*t) < REPLAY_S
+            })
+        });
         let fresh = Freshness {
             now: started,
             seen: &seen,
-            challenge: None,
+            challenge,
             sent_nonce: None,
         };
         statement::verify(&stmt, &signature, &cbody, called, &fresh)?;
@@ -695,8 +703,12 @@ impl PostOffice {
         if started.abs_diff(self.now) > TIME_WINDOW_S {
             return problem(ErrorCode::TimeSkew, None);
         }
-        if let Some(nonce) = stmt.nonce() {
-            let key = (stmt.address.clone(), hex(&nonce));
+        let once = stmt
+            .nonce()
+            .map(|n| hex(&n))
+            .or_else(|| stmt.challenge().map(|c| hex(&c)));
+        if let Some(once) = once {
+            let key = (stmt.address.clone(), once);
             self.state
                 .replay
                 .retain(|(a, n, _)| (a, n) != (&key.0, &key.1));

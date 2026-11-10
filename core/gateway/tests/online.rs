@@ -144,18 +144,20 @@ fn loopback() -> (Server, SocketAddr, SocketAddr) {
     (server, at_user, at_gateway)
 }
 
-#[test]
-#[allow(clippy::too_many_lines, reason = "one story, told in order")]
-fn a_user_calls_the_gateway_and_mail_moves_both_ways() {
-    let dir = scratch("online");
-    let (running, base, po_key) = post_office(&dir.join("po"));
-    let (_server, at_user, at_gateway) = loopback();
-
+/// A registered gateway, KK4ODA-1, answering calls, and its directory; it says the lines it
+/// writes on `lines`.
+fn gateway(
+    dir: &Path,
+    running: &Running,
+    base: &str,
+    po_key: &SigningKey,
+    at_gateway: SocketAddr,
+) -> (PathBuf, std::sync::mpsc::Receiver<String>) {
     // the gateway's operator, KK4ODA, registers it from their own client's home
     let _operator = client(
         &dir.join("kk4oda"),
-        &running,
-        &po_key,
+        running,
+        po_key,
         "facundo@test.example",
         "KK4ODA",
     );
@@ -166,7 +168,7 @@ fn a_user_calls_the_gateway_and_mail_moves_both_ways() {
         callsign: "KK4ODA-1".into(),
         modem: at_gateway.to_string(),
         country: "US".into(),
-        post_offices: BTreeMap::from([("test.example".into(), base.clone())]),
+        post_offices: BTreeMap::from([("test.example".into(), base.to_owned())]),
         resolver: String::new(),
         blocked: Vec::new(),
         only: None,
@@ -184,6 +186,56 @@ fn a_user_calls_the_gateway_and_mail_moves_both_ways() {
     assert!(said.starts_with("KK4ODA-1 registered"), "{said}");
     assert!(running.office().state.gateways.contains_key("KK4ODA-1"));
 
+    let (tx, rx) = std::sync::mpsc::channel();
+    let gw_dir = gw.clone();
+    thread::spawn(move || {
+        let _ = station::serve(&gw_dir, &mut |line| {
+            let _ = tx.send(line.to_owned());
+        });
+    });
+    let first = rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("the gateway says something");
+    assert!(first.starts_with("listening as KK4ODA-1"), "{first}");
+    (gw, rx)
+}
+
+fn draft(from: &str, to: &str, subject: &str, body: &str) -> radiopost::message::Message {
+    Draft {
+        from: from.into(),
+        to: vec![to.into()],
+        cc: Vec::new(),
+        date: serve::now(),
+        subject: subject.into(),
+        body: body.into(),
+        files: Vec::new(),
+        priority: 0,
+        reply_to: None,
+    }
+    .message()
+    .expect("a message")
+}
+
+/// Lines the gateway writes until a session ends.
+fn session_lines(rx: &std::sync::mpsc::Receiver<String>) -> Vec<String> {
+    let mut lines = Vec::new();
+    while let Ok(line) = rx.recv_timeout(Duration::from_secs(10)) {
+        let over = line.contains("is over") || line.contains("ended");
+        lines.push(line);
+        if over {
+            break;
+        }
+    }
+    lines
+}
+
+#[test]
+fn a_user_calls_the_gateway_and_mail_moves_both_ways() {
+    let dir = scratch("online");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (_server, at_user, at_gateway) = loopback();
+    let (gw, rx) = gateway(&dir, &running, &base, &po_key, at_gateway);
+
     // the user, WD5EMA: one message out, and one waiting at the post office
     let mut user = client(
         &dir.join("wd5ema"),
@@ -192,39 +244,19 @@ fn a_user_calls_the_gateway_and_mail_moves_both_ways() {
         "club@test.example",
         "WD5EMA",
     );
-    let out = Draft {
-        from: "club@test.example".into(),
-        to: vec!["maria@example.com".into()],
-        cc: Vec::new(),
-        date: serve::now(),
-        subject: "Net tonight".into(),
-        body: "Check-ins start at 8 pm on 3.590.\n".into(),
-        files: Vec::new(),
-        priority: 0,
-        reply_to: None,
-    }
-    .message()
-    .expect("a message");
+    let out = draft(
+        "club@test.example",
+        "maria@example.com",
+        "Net tonight",
+        "Check-ins start at 8 pm on 3.590.\n",
+    );
     let out_id = user.queue(&out).expect("queued");
-    let waiting = Draft {
-        from: "maria@example.com".into(),
-        to: vec!["club@test.example".into()],
-        subject: "Re: Net tonight".into(),
-        body: "Count me in.\n".into(),
-        ..Draft {
-            from: String::new(),
-            to: Vec::new(),
-            cc: Vec::new(),
-            date: serve::now(),
-            subject: String::new(),
-            body: String::new(),
-            files: Vec::new(),
-            priority: 0,
-            reply_to: None,
-        }
-    }
-    .message()
-    .expect("a message");
+    let waiting = draft(
+        "maria@example.com",
+        "club@test.example",
+        "Re: Net tonight",
+        "Count me in.\n",
+    );
     {
         let mut office = running.office();
         let serial = office.next_mailbox_serial("club@test.example");
@@ -238,19 +270,6 @@ fn a_user_calls_the_gateway_and_mail_moves_both_ways() {
             false,
         );
     }
-
-    // the gateway answers calls
-    let (tx, rx) = std::sync::mpsc::channel();
-    let gw_dir = gw.clone();
-    thread::spawn(move || {
-        let _ = station::serve(&gw_dir, &mut |line| {
-            let _ = tx.send(line.to_owned());
-        });
-    });
-    let first = rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("the gateway says something");
-    assert!(first.starts_with("listening as KK4ODA-1"), "{first}");
 
     let mut said = Vec::new();
     let report = session::call(
@@ -268,14 +287,7 @@ fn a_user_calls_the_gateway_and_mail_moves_both_ways() {
     assert_eq!(user.outbox.iter().map(|w| w.id).collect::<Vec<_>>(), []);
 
     // the gateway's own account of it
-    let mut lines = Vec::new();
-    while let Ok(line) = rx.recv_timeout(Duration::from_secs(10)) {
-        let over = line.contains("is over") || line.contains("ended");
-        lines.push(line);
-        if over {
-            break;
-        }
-    }
+    let lines = session_lines(&rx);
     assert!(
         lines.iter().any(|l| l == "the session with WD5EMA is over"),
         "{lines:?}"
@@ -295,4 +307,55 @@ fn a_user_calls_the_gateway_and_mail_moves_both_ways() {
     // and the gateway kept the caller's credential, to be named by hash next time (RP-3 §5.1)
     let held = std::fs::read_to_string(gw.join("held.json")).expect("held");
     assert!(held.contains("credentials"), "{held}");
+}
+
+/// RP-1 §6.3 step 5, RP-3 §5.2, RP-5 §5.2: a laptop whose clock is an hour off signs the
+/// gateway's challenge instead, and the post office takes it.
+#[test]
+fn a_client_whose_clock_is_off_signs_the_challenge_and_gets_through() {
+    let dir = scratch("skewed");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (_server, at_user, at_gateway) = loopback();
+    let (_gw, rx) = gateway(&dir, &running, &base, &po_key, at_gateway);
+
+    let mut user = client(
+        &dir.join("wd5ema"),
+        &running,
+        &po_key,
+        "club@test.example",
+        "WD5EMA",
+    );
+    let out = draft(
+        "club@test.example",
+        "maria@example.com",
+        "Clock",
+        "My clock is wrong.\n",
+    );
+    let out_id = user.queue(&out).expect("queued");
+    let mut opts = Options::new(&at_user.to_string());
+    opts.clock = Some(serve::now() - 3600);
+    let mut said = Vec::new();
+    let report = session::call(&mut user, "KK4ODA-1", Kind::Gateway, &opts, &mut |s| {
+        said.push(s.to_owned());
+    })
+    .expect("called");
+    assert_eq!(report.failed, None, "{said:?}");
+    assert_eq!(report.delivered, [out_id], "{said:?}");
+    let lines = session_lines(&rx);
+    assert!(
+        lines.iter().any(|l| l == "the session with WD5EMA is over"),
+        "{lines:?}"
+    );
+    let office = running.office();
+    assert_eq!(office.state.outgoing.len(), 1);
+    // the challenge is in the post office's replay cache: the same statement cannot open another
+    assert!(
+        office
+            .state
+            .replay
+            .iter()
+            .any(|(a, n, _)| a == "club@test.example" && n.len() == 32),
+        "{:?}",
+        office.state.replay
+    );
 }

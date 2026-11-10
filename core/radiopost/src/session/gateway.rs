@@ -23,7 +23,7 @@ use crate::crypto::ContentId;
 use crate::error::ErrorCode;
 use crate::message::Message;
 use crate::pdu::{Deframer, kind};
-use crate::statement::{Form, Statement};
+use crate::statement::{Form, Statement, TIME_WINDOW_S};
 
 /// A user's post office, as a gateway reaches it for one session (RP-5 §5).
 pub trait Upstream {
@@ -320,11 +320,7 @@ impl Gateway {
         self.hello = Some(hello);
         let signature = pdu.get(15).and_then(Value::as_bytes).map(<[u8]>::to_vec);
         if signature.is_none() {
-            self.state = State::Challenged;
-            self.queued.push(transmission(&[
-                self.welcome_waiting(1, Some(self.cfg.challenge))
-            ]));
-            return;
+            return self.challenge();
         }
         self.open(signature.as_deref(), None);
     }
@@ -340,11 +336,7 @@ impl Gateway {
         let signature = hello.get(15).and_then(Value::as_bytes).map(<[u8]>::to_vec);
         self.hello = Some(hello);
         if signature.is_none() {
-            self.state = State::Challenged;
-            self.queued.push(transmission(&[
-                self.welcome_waiting(1, Some(self.cfg.challenge))
-            ]));
-            return;
+            return self.challenge();
         }
         self.open(signature.as_deref(), None);
     }
@@ -389,6 +381,12 @@ impl Gateway {
             };
             Form::Time { time, nonce }
         };
+        // RP-1 §6.3 step 5: a clock more than 600 s off is answered with a challenge (RP-3 §5.2)
+        if let Form::Time { time, .. } = form
+            && time.abs_diff(self.cfg.time) > TIME_WINDOW_S
+        {
+            return self.challenge();
+        }
         let stmt = Statement {
             address: text(3),
             operator: text(4),
@@ -429,11 +427,21 @@ impl Gateway {
                 self.notes.push(Note::Credential(cred));
                 self.welcome_ready(&hello, &a);
             }
+            // the post office's replay cache saw the nonce, or its clock disagrees: a challenge
+            Err(ErrorCode::TimeSkew) if challenge.is_none() => self.challenge(),
             Err(code) => {
                 self.notes.push(Note::PostOffice(code));
                 self.fail(code);
             }
         }
+    }
+
+    /// `WELCOME` `sign`: the caller signs the gateway's challenge (RP-3 §5.2, §5.3).
+    fn challenge(&mut self) {
+        self.state = State::Challenged;
+        self.queued.push(transmission(&[
+            self.welcome_waiting(1, Some(self.cfg.challenge))
+        ]));
     }
 
     /// A `WELCOME` that is not `ready`: `sign` (1) or `credential` (2).

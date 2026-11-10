@@ -838,6 +838,171 @@
       ]
     },
     {
+      "what": "a statement in challenge form: the client's clock was off",
+      "exchanges": [
+        {
+          "at": 1794235240,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pQF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAaBTFDTojrB0T9oQ5js5wdQDcdSG7sBHFljzrig0OosdQ",
+              "signature": "3xdJScfIZg2MQnsITYCq8CvAKsTxJ94ho7peL6FtOzC935Lksvvy1LyAS7pOi7aKsdegcYr3qrY1LmFiRJFGDg",
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+              "started": 1794235240,
+              "gateway_session": "ec7b31841ec47c47",
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 201,
+            "body": {
+              "session": "s_NW_ilWmh-QN7oZhM",
+              "expires": 1794238840,
+              "waiting": [
+                {
+                  "serial": 419,
+                  "id": "i42cuqd7g7jrrgxx67aq",
+                  "from": "maria@example.com",
+                  "subject": "Are you safe?",
+                  "size": 277,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": true
+                },
+                {
+                  "serial": 420,
+                  "id": "htpi3p474h4u3ourjhiq",
+                  "from": "eoc@radiopost.org",
+                  "subject": "Shelter roster",
+                  "size": 1298,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": false
+                },
+                {
+                  "serial": 421,
+                  "id": "cpwfawr3mrq37rql7fza",
+                  "from": "maria@example.com",
+                  "subject": "Photo",
+                  "size": 6122,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": true
+                }
+              ],
+              "more": 0,
+              "accept": [
+                {
+                  "id": "kdj2eowb2e7wqq4y5ttq",
+                  "offset": 0
+                }
+              ],
+              "decline": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "the same challenge twice",
+      "exchanges": [
+        {
+          "at": 1794235240,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pQF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAaBTFDTojrB0T9oQ5js5wdQDcdSG7sBHFljzrig0OosdQ",
+              "signature": "3xdJScfIZg2MQnsITYCq8CvAKsTxJ94ho7peL6FtOzC935Lksvvy1LyAS7pOi7aKsdegcYr3qrY1LmFiRJFGDg",
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+              "started": 1794235240,
+              "gateway_session": "ec7b31841ec47c47",
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 201,
+            "body": {
+              "session": "s_NW_ilWmh-QN7oZhM",
+              "expires": 1794238840,
+              "waiting": [
+                {
+                  "serial": 419,
+                  "id": "i42cuqd7g7jrrgxx67aq",
+                  "from": "maria@example.com",
+                  "subject": "Are you safe?",
+                  "size": 277,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": true
+                },
+                {
+                  "serial": 420,
+                  "id": "htpi3p474h4u3ourjhiq",
+                  "from": "eoc@radiopost.org",
+                  "subject": "Shelter roster",
+                  "size": 1298,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": false
+                },
+                {
+                  "serial": 421,
+                  "id": "cpwfawr3mrq37rql7fza",
+                  "from": "maria@example.com",
+                  "subject": "Photo",
+                  "size": 6122,
+                  "priority": 0,
+                  "held": false,
+                  "third_party": true
+                }
+              ],
+              "more": 0,
+              "accept": [
+                {
+                  "id": "kdj2eowb2e7wqq4y5ttq",
+                  "offset": 0
+                }
+              ],
+              "decline": []
+            }
+          }
+        },
+        {
+          "at": 1794235270,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/sessions",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "statement": "pQF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnAmZLSzRPREEDaU4xQ0FMTC0xMAaBTFDTojrB0T9oQ5js5wdQDcdSG7sBHFljzrig0OosdQ",
+              "signature": "3xdJScfIZg2MQnsITYCq8CvAKsTxJ94ho7peL6FtOzC935Lksvvy1LyAS7pOi7aKsdegcYr3qrY1LmFiRJFGDg",
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+              "started": 1794235240,
+              "gateway_session": "ec7b31841ec47c47",
+              "cursor": 418
+            }
+          },
+          "response": {
+            "status": 422,
+            "body": {
+              "type": "about:blank",
+              "title": "Signature invalid",
+              "status": 422,
+              "code": 8,
+              "name": "signature-invalid"
+            }
+          }
+        }
+      ]
+    },
+    {
       "what": "a message removed from the statement after signing",
       "exchanges": [
         {
