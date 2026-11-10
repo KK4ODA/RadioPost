@@ -72,6 +72,9 @@ fn make(dir: &std::path::Path) -> (String, String, SigningKey) {
             post_offices: Vec::new(),
         },
         known: Vec::new(),
+        hooks: None,
+        hook_token: None,
+        smtp: None,
     };
     files
         .write(

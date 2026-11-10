@@ -71,6 +71,9 @@ fn post_office(dir: &Path) -> (Arc<Running>, String, SigningKey) {
             post_offices: Vec::new(),
         },
         known: Vec::new(),
+        hooks: None,
+        hook_token: None,
+        smtp: None,
     };
     files
         .write(

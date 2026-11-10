@@ -38,6 +38,16 @@ pub struct Settings {
     /// `not_before`, `not_after`).
     #[serde(default)]
     pub known: Vec<Json>,
+    /// Where the mail server's MTA hooks reach the door (RP-6 §2.1); none, no door.
+    #[serde(default)]
+    pub hooks: Option<String>,
+    /// The bearer token the mail server sends with each hook; needed off the loopback interface.
+    #[serde(default)]
+    pub hook_token: Option<String>,
+    /// Where email leaves (RP-6 §3): the mail server's SMTP submission, as a URL
+    /// (`smtp://user:password@127.0.0.1:587?tls=required`); none, mail waits in `outgoing`.
+    #[serde(default)]
+    pub smtp: Option<String>,
 }
 
 /// The files in a post office's directory.
@@ -107,9 +117,24 @@ impl Files {
     ///
     /// It could not be written.
     pub fn write(&self, name: &str, text: &str) -> Result<(), String> {
+        self.write_bytes(name, text.as_bytes())
+    }
+
+    /// Writes a file whole, as [`Files::write`], making its directory if need be.
+    ///
+    /// # Errors
+    ///
+    /// It could not be written.
+    pub fn write_bytes(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
         let path = self.path(name);
-        let fresh = self.path(&format!(".{name}.new"));
-        std::fs::write(&fresh, text).map_err(|e| format!("{}: {e}", fresh.display()))?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        }
+        let file = path
+            .file_name()
+            .map_or_else(String::new, |f| f.to_string_lossy().into_owned());
+        let fresh = path.with_file_name(format!(".{file}.new"));
+        std::fs::write(&fresh, bytes).map_err(|e| format!("{}: {e}", fresh.display()))?;
         std::fs::rename(&fresh, &path).map_err(|e| format!("{}: {e}", path.display()))
     }
 }
@@ -222,7 +247,20 @@ impl Running {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    fn save(&self, office: &PostOffice) {
+    /// Its settings, as they stand.
+    pub(crate) fn settings(&self) -> Settings {
+        self.settings
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Its directory's files.
+    pub(crate) fn files(&self) -> &Files {
+        &self.files
+    }
+
+    pub(crate) fn save(&self, office: &PostOffice) {
         let text = serde_json::to_string_pretty(&office.state).unwrap_or_default();
         if let Err(e) = self.files.write("state.json", &text) {
             eprintln!("radiopost-po: cannot save the state: {e}");
@@ -324,6 +362,9 @@ impl Running {
                 }
                 let code = new_code();
                 office.add_code(&code, &text("address"), &text("operator"), f);
+                if !text("name").is_empty() {
+                    office.state.names.insert(text("address"), text("name"));
+                }
                 Ok(
                     json!({"code": code, "address": text("address"), "operator": text("operator"),
                           "flags": f}),
@@ -356,6 +397,10 @@ impl Running {
                     Some(d) => Ok(json!({"revoked": office.revoke_device(&d)})),
                     None => Err("a device key, base64url".to_owned()),
                 }
+            }
+            ("POST", "/name") => {
+                office.state.names.insert(text("address"), text("name"));
+                Ok(json!({"address": text("address"), "name": text("name")}))
             }
             ("GET", "/outgoing") => Ok(json!({"outgoing": office.state.outgoing})),
             ("GET", "/status") => Ok(json!({
@@ -463,4 +508,87 @@ pub fn serve(running: Arc<Running>, listen: &str, admin: &str) -> Result<(String
         }
     });
     Ok((api_at, ops_at))
+}
+
+/// Serves the door to the mail server's MTA hooks on `addr` (RP-6 §2.1). Returns the address
+/// taken.
+///
+/// # Errors
+///
+/// The address could not be taken, or it is off the loopback interface with no `hook_token`.
+pub fn serve_hooks(running: Arc<Running>, addr: &str) -> Result<String, String> {
+    let token = running.settings().hook_token;
+    let server = Server::http(addr).map_err(|e| format!("{addr}: {e}"))?;
+    let at = server.server_addr().to_string();
+    let loopback = server
+        .server_addr()
+        .to_ip()
+        .is_some_and(|a| a.ip().is_loopback());
+    if !loopback && token.is_none() {
+        return Err(format!(
+            "the door's port {addr} is off the loopback interface: set `hook_token`"
+        ));
+    }
+    std::thread::spawn(move || {
+        for mut request in server.incoming_requests() {
+            let given = request
+                .headers()
+                .iter()
+                .find(|h| h.field.equiv("Authorization"))
+                .and_then(|h| h.value.as_str().strip_prefix("Bearer ").map(str::to_owned));
+            if token.is_some() && given != token {
+                let _ = request.respond(Http::from_string("").with_status_code(401));
+                continue;
+            }
+            let mut body = Vec::new();
+            let _ = request.as_reader().take(64 << 20).read_to_end(&mut body);
+            let (status, text) = running.hook(&body);
+            let mut answer = Http::from_string(text).with_status_code(status);
+            if status != 204 {
+                answer = answer.with_header(header("Content-Type", "application/json"));
+            }
+            let _ = request.respond(answer);
+        }
+    });
+    Ok(at)
+}
+
+/// Sends the mail waiting to go on by email through the mail server at `url` (RP-6 §3), every
+/// 20 seconds, until the process ends; says what happened with `say`.
+///
+/// # Errors
+///
+/// The URL is not an SMTP URL.
+pub fn send_mail(
+    running: Arc<Running>,
+    url: &str,
+    say: impl Fn(&str) + Send + 'static,
+) -> Result<(), String> {
+    use lettre::Transport as _;
+    let transport = lettre::SmtpTransport::from_url(url)
+        .map_err(|e| format!("{url}: {e}"))?
+        .build();
+    std::thread::spawn(move || {
+        loop {
+            let send = |from: &str, to: &[String], email: &[u8]| -> Result<(), (bool, String)> {
+                let parse = |a: &str| {
+                    a.parse::<lettre::Address>()
+                        .map_err(|e| (true, e.to_string()))
+                };
+                let to: Vec<lettre::Address> =
+                    to.iter().map(|a| parse(a)).collect::<Result<_, _>>()?;
+                let envelope = lettre::address::Envelope::new(Some(parse(from)?), to)
+                    .map_err(|e| (true, e.to_string()))?;
+                transport
+                    .send_raw(&envelope, email)
+                    .map(|_| ())
+                    .map_err(|e| (e.is_permanent(), e.to_string()))
+            };
+            for line in running.send_waiting(&send) {
+                say(&line);
+            }
+            std::thread::sleep(std::time::Duration::from_secs(20));
+        }
+    });
+    Ok(())
 }

@@ -75,6 +75,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   front, an operator's port on loopback (`code`, `deliver`, `revoke`, `outgoing`, `status`), state
   in `state.json` written whole after each request. Mail it accepts for other domains waits in
   `outgoing` for RP-6's email out. `radiopost::base64url` is RP-0 §4.2's encoding.
+  RP-6 is `postoffice/src/mail.rs` (the port of `rpref/mail.py`, MIME by Stalwart's `mail-parser`
+  0.11: the newest needs Rust 1.98, over the workspace's 1.85) and `email.rs` (the door as an MTA
+  hook, read in Stalwart's shape and the MTA Hooks draft's, `ietf.org/archive/id/draft-degennaro-mta-hooks-01.txt`;
+  outgoing mail by `lettre`, which fails a whole transaction on one refused recipient, so a refused
+  group is tried one by one). `mail-parser` strips a `Message-ID`'s angle brackets; the post office
+  keeps them. `docs/user/post-office.md` is the operator's guide, written before the server.
   Station-to-station mail moves to `sent` and its RP-5 §6.6 report is kept (D30), from the proofs
   the engines now keep (`Client::proofs`, `Called::proofs`); the replay test matches session-03
   byte for byte and `direct.json`'s two reports. The engines report their own refusals

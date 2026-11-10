@@ -215,6 +215,41 @@ fn strip_text(v: &mut Json) {
     }
 }
 
+/// An `smtp` entry (RP-6 §2.1): the door's answers for the accept lists as they stand.
+fn door(office: &PostOffice, smtp: &Json, what: &str) {
+    use radiopost_postoffice::mail;
+    let accounts = office.door_accounts();
+    let known = office.known_post_offices();
+    let none = |_: &str| false;
+    let dkim: Vec<String> = smtp["dkim_pass"]
+        .as_array()
+        .expect("dkim_pass")
+        .iter()
+        .map(|d| d.as_str().expect("a domain").to_owned())
+        .collect();
+    let (rcpt, data) = mail::door(
+        smtp["mail_from"].as_str().expect("from"),
+        smtp["rcpt_to"].as_str().expect("to"),
+        smtp["email"].as_str().expect("email").as_bytes(),
+        &mail::Verdicts {
+            dmarc: smtp["dmarc"].as_str().expect("dmarc"),
+            dkim_pass: &dkim,
+        },
+        &mail::Door {
+            accounts: &accounts,
+            known_post_offices: &known,
+            max_email_bytes: 10_485_760,
+            sent: &none,
+        },
+    );
+    assert_eq!(rcpt, smtp["expect"]["rcpt"], "{what}: RCPT TO");
+    assert_eq!(
+        data.map_or(Json::Null, Json::from),
+        smtp["expect"]["data"],
+        "{what}: DATA"
+    );
+}
+
 /// Replays exchanges against `office`: each request at its clock, each answer as the vector's.
 /// A `deliver` hook handles the notes that say mail arrives.
 fn replay(
@@ -226,6 +261,9 @@ fn replay(
     for (i, step) in steps.iter().enumerate() {
         if let Some(n) = step.get("note").and_then(Json::as_str) {
             note(office, n);
+        }
+        if let Some(smtp) = step.get("smtp") {
+            door(office, smtp, &format!("{what}, step {i}"));
         }
         let Some(r) = step.get("request").filter(|r| r.is_object()) else {
             continue;

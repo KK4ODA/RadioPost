@@ -228,6 +228,43 @@ pub struct Session {
     pub expires: u64,
     /// The gateway's RP-3 session ID, for `Radio-Path` (RP-6 §3.2).
     pub gateway_session: String,
+    /// How the session came, for the mail it hands in (RP-6 §3.2, §4).
+    #[serde(default)]
+    pub route: Route,
+}
+
+/// How mail handed in by radio came: for its `Radio-Path` (RP-6 §3.2) and the message part
+/// between post offices (RP-6 §4).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Route {
+    /// The operator's callsign from the session statement.
+    pub operator: String,
+    /// The gateways, the one called first.
+    pub gateways: Vec<String>,
+    /// The session's start (`started`).
+    pub started: u64,
+    /// The gateway's session ID, hex.
+    pub session: String,
+    /// The proof (RP-1 §6.4): the credential, the statement and its signature, base64url.
+    pub credential: String,
+    /// The statement.
+    pub statement: String,
+    /// Its signature.
+    pub signature: String,
+}
+
+impl Route {
+    fn of(body: &Json, operator: &str, gateways: Vec<String>) -> Route {
+        Route {
+            operator: operator.to_owned(),
+            gateways,
+            started: body.get("started").and_then(Json::as_u64).unwrap_or(0),
+            session: text(body, "gateway_session").to_owned(),
+            credential: text(body, "credential").to_owned(),
+            statement: text(body, "statement").to_owned(),
+            signature: text(body, "signature").to_owned(),
+        }
+    }
 }
 
 /// Mail a user sent that goes on to addresses this post office does not serve (RP-6).
@@ -239,8 +276,12 @@ pub struct Outgoing {
     pub air: String,
     /// The recipients it goes to.
     pub to: Vec<String>,
-    /// The session that carried it: (gateway, gateway session), for `Radio-Path` (RP-6 §3.2).
-    pub path: Option<(String, String)>,
+    /// How it came by radio, when it did (RP-6 §3.2, §4).
+    #[serde(default)]
+    pub route: Option<Route>,
+    /// When it was queued, Unix seconds.
+    #[serde(default)]
+    pub queued: u64,
 }
 
 /// Everything a post office keeps between requests.
@@ -283,6 +324,14 @@ pub struct State {
     pub serials_of: BTreeMap<String, Vec<u64>>,
     /// Mail waiting to go on by email (RP-6).
     pub outgoing: Vec<Outgoing>,
+    /// Every account it has made (RP-6 §2.1: the recipient exists).
+    pub accounts: BTreeSet<String>,
+    /// Each account's display name, for the email it sends (RP-6 §3.1).
+    pub names: BTreeMap<String, String>,
+    /// The content ID, hex, of each email it sent from RadioPost, by `Message-ID` (RP-6 §3.1).
+    pub sent_ids: BTreeMap<String, String>,
+    /// The `Message-ID` of each email it made a message of, by content ID, hex (RP-6 §2.4 step 8).
+    pub email_ids: BTreeMap<String, String>,
 }
 
 /// A post office: what it is, what it keeps, and where its random values come from.
@@ -468,6 +517,7 @@ impl PostOffice {
 
     /// A new enrollment code for an account (RP-5 §6.1), good for a week.
     pub fn add_code(&mut self, code: &str, address: &str, operator: &str, flags: u64) {
+        self.state.accounts.insert(address.to_lowercase());
         self.state.codes.insert(
             code.to_owned(),
             Code {
@@ -477,6 +527,117 @@ impl PostOffice {
                 expires: self.now.saturating_add(CODE_S),
             },
         );
+    }
+
+    // -- email (RP-6) -------------------------------------------------------------------------
+
+    /// Each account's accept list, by address in lowercase, for the door (RP-6 §2.1): every
+    /// account it has made.
+    #[must_use]
+    pub fn door_accounts(&self) -> BTreeMap<String, Vec<String>> {
+        let mut out = BTreeMap::new();
+        let made = self
+            .state
+            .accounts
+            .iter()
+            .chain(self.state.mailboxes.keys())
+            .chain(self.state.accept.keys())
+            .chain(self.state.codes.values().map(|c| &c.address));
+        for a in made {
+            let list = self
+                .state
+                .accept
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case(a))
+                .map(|(_, l)| l.clone())
+                .unwrap_or_default();
+            out.insert(a.to_lowercase(), list);
+        }
+        out
+    }
+
+    /// The RadioPost post offices it knows (RP-1 §7.3): its own domains and those whose
+    /// credentials it accepts.
+    #[must_use]
+    pub fn known_post_offices(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.config.domains.clone();
+        out.extend(self.config.trust.keys.keys().cloned());
+        out.sort();
+        out.dedup();
+        out
+    }
+
+    /// The content ID of an email it sent from RadioPost, by its `Message-ID` (RP-6 §3.1).
+    #[must_use]
+    pub fn sent_content_id(&self, message_id: &str) -> Option<[u8; 12]> {
+        let text = self.state.sent_ids.get(message_id)?;
+        let bytes: Vec<u8> = (0..text.len())
+            .step_by(2)
+            .filter_map(|i| u8::from_str_radix(text.get(i..i + 2)?, 16).ok())
+            .collect();
+        bytes.try_into().ok()
+    }
+
+    /// The `Message-ID` of the email a message was made of, by its content ID (RP-6 §2.4 step 8).
+    #[must_use]
+    pub fn email_message_id(&self, content_id: &[u8]) -> Option<String> {
+        self.state.email_ids.get(&hex(content_id)).cloned()
+    }
+
+    /// An email left: it keeps the `Message-ID` it was sent under (RP-6 §3.1).
+    pub fn email_sent(&mut self, message_id: &str, content_id: &ContentId) {
+        self.state
+            .sent_ids
+            .insert(message_id.to_owned(), hex(&content_id.0));
+    }
+
+    /// An account's `attach_bytes` (RP-5 §6.3), or the post office's own.
+    #[must_use]
+    pub fn attach_bytes(&self, address: &str, max_air_bytes: u64) -> u64 {
+        self.state
+            .settings
+            .get(address)
+            .and_then(|s| s.get("attach_bytes"))
+            .and_then(Json::as_u64)
+            .unwrap_or(max_air_bytes)
+            .min(max_air_bytes)
+    }
+
+    /// A message made from an email (RP-6 §2.4, §3.3, §4) arrives for an account: it gets the
+    /// next serial, and the email's `Message-ID` is kept. Returns the serial.
+    pub fn email_arrived(
+        &mut self,
+        address: &str,
+        message: &Message,
+        third_party: bool,
+        message_id: Option<&str>,
+    ) -> u64 {
+        let air = message.air_form(Compression::None);
+        let field = |k| message.map().get(k);
+        let subject = field(key::SUBJECT)
+            .and_then(cbor::Value::as_text)
+            .unwrap_or("")
+            .to_owned();
+        let priority = field(key::PRIORITY)
+            .and_then(cbor::Value::as_u64)
+            .unwrap_or(0);
+        let from = message.from().unwrap_or("").to_owned();
+        let serial = self.next_mailbox_serial(address);
+        self.deliver(
+            address,
+            serial,
+            &air,
+            &from,
+            &subject,
+            priority,
+            third_party,
+        );
+        if let Some(id) = message_id {
+            self.state
+                .email_ids
+                .insert(hex(&message.content_id().0), id.to_owned());
+        }
+        serial
     }
 
     /// Revokes every credential issued for a device key (RP-1 §8, RP-5 §6.2).
@@ -508,6 +669,7 @@ impl PostOffice {
     ) -> Vec<u8> {
         let serial = self.state.next_serial;
         self.state.next_serial += 1;
+        self.state.accounts.insert(address.to_lowercase());
         self.state
             .serials_of
             .entry(hex(&device))
@@ -738,6 +900,7 @@ impl PostOffice {
             waiting: waiting.iter().map(|w| w.serial).collect(),
             expires: self.now + SESSION_S,
             gateway_session: text(body, "gateway_session").to_owned(),
+            route: Route::of(body, &stmt.operator, vec![gateway.operator.clone()]),
         };
         let expires = session.expires;
         self.state.sessions.insert(sid.clone(), session);
@@ -819,9 +982,12 @@ impl PostOffice {
                     .and_then(Json::as_array)
                     .cloned()
                     .unwrap_or_default();
-                let path = Some((session.gateway.clone(), session.gateway_session.clone()));
-                let results =
-                    self.take(&session.address, &session.offers, &messages, path.as_ref());
+                let results = self.take(
+                    &session.address,
+                    &session.offers,
+                    &messages,
+                    Some(&session.route),
+                );
                 Response::ok(200, json!({"results": results}))
             }
             ("POST", ["pickups"]) => {
@@ -846,7 +1012,7 @@ impl PostOffice {
         address: &str,
         offers: &[String],
         messages: &[Json],
-        path: Option<&(String, String)>,
+        route: Option<&Route>,
     ) -> Vec<Json> {
         let mut results = Vec::new();
         for m in messages {
@@ -883,7 +1049,7 @@ impl PostOffice {
             if fresh {
                 self.written_to(address, &message);
                 self.deliver_here(&message, "");
-                self.send_on(&message, "", path.cloned());
+                self.send_on(&message, "", route.cloned());
             }
             let status = if fresh { "accepted" } else { "duplicate" };
             results.push(json!({"id": id, "status": status}));
@@ -924,7 +1090,7 @@ impl PostOffice {
 
     /// What goes on by email: every recipient this post office does not serve, but the one that
     /// has it already (RP-6).
-    fn send_on(&mut self, message: &Message, has_it: &str, path: Option<(String, String)>) {
+    fn send_on(&mut self, message: &Message, has_it: &str, route: Option<Route>) {
         let to: Vec<String> = message
             .recipients()
             .iter()
@@ -936,7 +1102,8 @@ impl PostOffice {
                 id: message.content_id().text(),
                 air: base64url::encode(&message.air_form(Compression::None)),
                 to,
-                path,
+                route,
+                queued: self.now,
             });
         }
     }
@@ -1079,8 +1246,13 @@ impl PostOffice {
                 .and_then(Json::as_array)
                 .cloned()
                 .unwrap_or_default();
-            let carried = Some((called.clone(), text(&s, "gateway_session").to_owned()));
-            let results = self.take(&stmt.address, &offers, &messages, carried.as_ref());
+            let gateways = if path.is_empty() {
+                vec![gateway.operator.clone()]
+            } else {
+                path.clone()
+            };
+            let route = Route::of(&s, &stmt.operator, gateways);
+            let results = self.take(&stmt.address, &offers, &messages, Some(&route));
             let pickups: Vec<u64> = s
                 .get("pickups")
                 .and_then(Json::as_array)

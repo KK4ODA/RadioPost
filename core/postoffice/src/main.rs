@@ -18,15 +18,19 @@ usage: radiopost-po --dir DIR COMMAND
 
   init --domain D --base-url URL --operator CALL --contact EMAIL [--country US]
        [--listen 127.0.0.1:8770] [--admin 127.0.0.1:8771] [--jmap URL] [--imap HOST:PORT]
+       [--hooks 127.0.0.1:8772] [--hook-token T] [--smtp smtp://USER:PASS@127.0.0.1:587]
                      make a post office: its key, settings and state; print its DNS records
-  serve              serve the API (plain HTTP: put HTTPS in front) and the operator's port
+  serve              serve the API (plain HTTP: put HTTPS in front), the operator's port, the
+                     door for the mail server's MTA hooks, and send email out by SMTP
   dns                the DNS records to publish (RP-1 §7.1)
   know --domain D --public KEY [--api URL] [--not-before T --not-after T]
                      accept credentials of another post office (restart to take effect)
-  code --address A --operator CALL [--send] [--receive] [--role]
+  code --address A --operator CALL [--send] [--receive] [--role] [--name NAME]
                      a one-time enrollment code (RP-5 §6.1), good for a week
+  name --address A --name NAME
+                     the display name of the account's email (RP-6 §3.1)
   deliver --to ADDR --from ADDR --subject TEXT --air FILE [--licensed]
-                     put a message's air form in a mailbox (until email arrives, RP-6)
+                     put a message's air form in a mailbox by hand
   revoke --device KEY revoke every credential of a device key (base64url or hex)
   outgoing           the mail waiting to go on by email
   status             accounts, gateways, codes, sessions";
@@ -99,6 +103,9 @@ fn init(files: &Files, a: &Args) -> Result<(), String> {
             post_offices: Vec::new(),
         },
         known: Vec::new(),
+        hooks: Some(a.one("--hooks").unwrap_or_else(|| "127.0.0.1:8772".into())),
+        hook_token: a.one("--hook-token"),
+        smtp: a.one("--smtp"),
     };
     let hex: String = radiopost::cbor::hex(&seed);
     files.write("key.hex", &(hex + "\n"))?;
@@ -197,12 +204,31 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
         "serve" => {
             let settings = files.settings()?;
             let running = Arc::new(Running::load(&dir, serve::system_draw())?);
-            let (api, ops) = serve::serve(running, &settings.listen, &settings.admin)?;
+            let (api, ops) = serve::serve(running.clone(), &settings.listen, &settings.admin)?;
             eprintln!(
                 "radiopost-po: {} on http://{api} (for {}), operator's port {ops}",
                 settings.domains.join(", "),
                 settings.base_url
             );
+            if let Some(hooks) = &settings.hooks {
+                let at = serve::serve_hooks(running.clone(), hooks)?;
+                eprintln!(
+                    "radiopost-po: the door answers the mail server's MTA hooks on http://{at}"
+                );
+            }
+            match &settings.smtp {
+                Some(url) => {
+                    serve::send_mail(running, url, |line| {
+                        eprintln!("radiopost-po: email out: {line}");
+                    })?;
+                    eprintln!(
+                        "radiopost-po: email leaves through the mail server's submission port"
+                    );
+                }
+                None => {
+                    eprintln!("radiopost-po: no `smtp` in config.json: email waits in `outgoing`");
+                }
+            }
             loop {
                 std::thread::park();
             }
@@ -226,7 +252,7 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
                 flags = vec!["send", "receive"];
             }
             let body = json!({"address": a.need("--address")?, "operator": a.need("--operator")?,
-                              "flags": flags});
+                              "flags": flags, "name": a.one("--name").unwrap_or_default()});
             let answer = admin(&files, "POST", "/code", &body)?;
             println!(
                 "{}  for {} ({}), good for a week",
@@ -234,6 +260,11 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
                 answer["address"].as_str().unwrap_or(""),
                 answer["operator"].as_str().unwrap_or("")
             );
+            Ok(())
+        }
+        "name" => {
+            let body = json!({"address": a.need("--address")?, "name": a.need("--name")?});
+            admin(&files, "POST", "/name", &body)?;
             Ok(())
         }
         "deliver" => {
