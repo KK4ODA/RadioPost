@@ -8,9 +8,11 @@
 //!
 //! * [`client::Client`]: the caller, calling a gateway or another client.
 //! * [`called::Called`]: a client that answers a call, station to station (RP-3 §10).
+//! * [`gateway::Gateway`]: a gateway, carrying the session to the user's post office.
 
 pub mod called;
 pub mod client;
+pub mod gateway;
 
 use std::collections::HashMap;
 
@@ -342,6 +344,19 @@ impl Inbound {
             }
             _ => fail(ErrorCode::Malformed),
         }
+    }
+
+    /// Resume one message from pieces an earlier session left (RP-3 §7).
+    fn resume_one(&mut self, id: ContentId, held: Vec<u8>, total: u64) {
+        self.pieces.insert(
+            id,
+            Partial {
+                id,
+                held,
+                total,
+                serial: None,
+            },
+        );
     }
 
     /// What is held when the link breaks.

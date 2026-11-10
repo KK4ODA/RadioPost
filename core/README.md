@@ -1,15 +1,16 @@
 # RadioPost core
 
-The Rust workspace of RadioPost's programs (design D27, D28). So far it holds eight crates; the
+The Rust workspace of RadioPost's programs (design D27, D28). So far it holds nine crates; the
 adapters in `../adapters/` and the client in `../app/` are members here, so that one lockfile and
 one CI job hold them all:
 
 | Crate | What it is |
 |---|---|
-| `radiopost` | RadioPost's objects as the specifications define them: deterministic CBOR (RP-0 §4.1), key IDs, signatures with a context and COSE_Sign1 (RP-0 §5), content IDs (RP-0 §6.3), messages and their air forms (RP-2), credentials (RP-1 §4, §5), session statements (RP-1 §6), PDU framing (RP-3 §2, §4), and the session protocol's engines (RP-3): the caller (`session::client`) and a client that answers a call (`session::called`, RP-3 §10). |
+| `radiopost` | RadioPost's objects as the specifications define them: deterministic CBOR (RP-0 §4.1), key IDs, signatures with a context and COSE_Sign1 (RP-0 §5), content IDs (RP-0 §6.3), messages and their air forms (RP-2), credentials (RP-1 §4, §5), session statements (RP-1 §6), PDU framing (RP-3 §2, §4), and the session protocol's engines (RP-3): the caller (`session::client`), a client that answers a call (`session::called`, RP-3 §10), and a gateway online (`session::gateway`, RP-3 §5, §9: it reaches the post office through an `Upstream` the program supplies, called in line). Also the DNS records and the trust in post offices they give (`dns`, RP-1 §7.1, §7.3), JWS (`jws`), base64url (`base64url`), and which stations a gateway may hand third-party mail to (`thirdparty`, RP-6 §5.1). |
 | `radiopost-client` (`../app/client`) | The client ([its README](../app/client/README.md)): the device key and credential, the trusted post offices, the mail and its folders, and RP-3 sessions over any RPMI adapter, as the `radiopost` program, on the command line or as a panel in a browser (`../app/ui`). A station-to-station session's report (RP-5 §6.6) is kept for when there is a post office to send it to. |
 | `radiopost-aether` (`../adapters/aether`) | The RPMI adapter for Aether HF (RP-4 §9.1): each host that connects gets its own WebSocket to Aether's control API, and its callsigns are a claim there, so several hosts share one station. `bridge` maps one host onto one Aether connection with no input or output; `serve` and the `radiopost-aether` program put it on a port. |
 | `radiopost-postoffice` (`postoffice`) | A post office's service (design §5.3): the RP-5 API (`office`: accounts, enrollment codes, credentials and renewal, logins and tokens, sessions, mail handed in, pickups, offline gateways' reports, copies placed ahead, the accept list, station-to-station reports), its public documents signed as JWS (`documents`, RP-1 §7, §8), and the service (`serve`): plain HTTP behind an HTTPS front, a loopback port for its operator's commands, its state saved after each request. `radiopost-po` makes a post office (`init` prints its DNS records), serves it, and gives enrollment codes. Email in and out (RP-6) and the mail server come next. |
+| `radiopost-gateway` (`gateway`) | A gateway, online (design §5.2): `upstream` reaches a post office's API over HTTPS with the gateway's own credential (or a post office in this process, for tests), `station` answers calls on any RPMI modem (an adapter's port, or Aether's control API through the Aether adapter in this process) and carries each session to the caller's post office, found in its settings or by DNS over HTTPS, keeping the callers' credentials and broken uploads between sessions; `operator` registers the gateway with its operator's post office (RP-5 §6.4), logged in from the operator's own client home. `radiopost-gateway` makes, registers and runs one. Copies placed ahead, the offline queue and forwarding are Phases 3 and 4. |
 | `radiopost-tcp` (`../adapters/tcp`) | The TCP adapter (RP-4 §9.5): RPMI to its host, and links that are TCP connections to other TCP adapters, opened with one line each way. TLS on the Internet (`tls`: the answering adapter's certificate, its own if it has none, checked by the web's roots or by a fingerprint the operators exchange); plain on an amateur mesh, which is on the air. For trying RadioPost between two stations over the Internet before going on the air. |
 | `radiopost-issue` (`issuer`) | A post office's key and the credentials it issues (RP-1 §4), for on-air tests before the post office service exists (Phase 2): `radiopost-issue key`, `issue`, `trust`. The vectors' keys are published and never go on the air. |
 | `radiopost-tester` (`tester`) | The conformance tester ([its outline](../docs/design/01-conformance.md)): it plays a gateway, or another client's station, against a client through its own RPMI adapter (`harness::TestAdapter`), scripted from RP-3's tables with this workspace's encodings and none of its session engines, and says test by test whether the client did what RP-3 and RP-1 require (C-01 to C-08, and C-11, which takes five minutes). A driver file says how to run the program under test; `drivers/radiopost.json` is this client's. It also plays the host, and through a second instance the far station's host, of any modem adapter (A-01 to A-04: RP-4's lines, a conversation, a second host, session-01 carried across). |
@@ -72,7 +73,14 @@ In `radiopost-postoffice`, `tests/vectors.rs` replays every exchange of `api-exc
 `api-account.json` and `direct.json` from the state each starts from, with the vectors' published
 randomness, so tokens, nonces and session IDs come out the same; `tests/service.rs` drives the real
 HTTP service through an enrollment, a login, settings, the signed documents and a restart. The
-core's `tests/vectors.rs` also replays `jws.json`.
+core's `tests/vectors.rs` also replays `jws.json`, `dns.json` and `third-party.json`.
+
+In `radiopost-gateway`, `tests/session01.rs` drives the gateway's engine with the client's side of
+`session-01`, the post office itself behind it in this process, and requires the gateway's side
+byte for byte; then `session-02`'s two sessions through two gateways, the second resuming what the
+first held. `tests/online.rs` runs it all for real: the gateway registered from its operator's
+client home over HTTP, a user's client calling it through the loopback adapter, the session
+carried to the post office service over HTTP, mail going both ways and marked picked up.
 
 In `radiopost-tcp`, `tests/two_adapters.rs` joins two adapters, plain and over TLS, and checks
 the links and each refusal; `tests/conformance.rs` runs A-01 to A-04 against two of them. The

@@ -443,3 +443,88 @@ fn public_documents_are_signed_and_checked_as_rp0_and_rp1_say() {
         assert_eq!(got, text(c, "expect"), "{}", text(c, "what"));
     }
 }
+
+#[test]
+fn third_party_mail_is_listed_only_where_rp6_5_1_allows() {
+    let file = vectors("third-party.json");
+    let country = text(&file["context"], "gateway_country");
+    for c in file["callsign_cases"].as_array().expect("callsign cases") {
+        let call = text(c, "callsign");
+        assert_eq!(
+            radiopost::thirdparty::station_designator(call).as_deref(),
+            c["where"].as_str(),
+            "{}",
+            text(c, "what")
+        );
+        assert_eq!(
+            radiopost::thirdparty::may_hand(call, country),
+            c["expect"].as_bool().expect("expect"),
+            "{}",
+            text(c, "what")
+        );
+    }
+    let flagged: Vec<bool> = file["waiting"]
+        .as_array()
+        .expect("waiting")
+        .iter()
+        .map(|w| w["third_party"].as_bool().expect("a flag"))
+        .collect();
+    for c in file["listing_cases"].as_array().expect("listing cases") {
+        let may = radiopost::thirdparty::may_hand(text(c, "operator"), country);
+        let held_back = flagged.iter().filter(|f| **f && !may).count() as u64;
+        assert_eq!(
+            Some(held_back),
+            c["held_back"].as_u64(),
+            "{}",
+            text(c, "operator")
+        );
+    }
+    // the table's own prefixes as written
+    assert_eq!(radiopost::thirdparty::prefixes("LO–LW").len(), 9);
+}
+
+#[test]
+fn dns_records_are_read_and_post_offices_trusted_as_rp1_7_says() {
+    use radiopost::dns::{Found, parse, trusts};
+    let file = vectors("dns.json");
+    for r in file["records"].as_array().expect("records") {
+        let got = parse(text(r, "txt")).map(|t| serde_json::to_value(t).expect("JSON"));
+        let want = (!r["result"].is_null()).then(|| r["result"].clone());
+        assert_eq!(got, want, "{}", text(r, "what"));
+    }
+    let found: std::collections::BTreeMap<String, Found> = file["found"]
+        .as_object()
+        .expect("found")
+        .iter()
+        .map(|(d, how)| {
+            let how = how.as_str().expect("how");
+            let f = how
+                .strip_prefix("list:")
+                .map_or(Found::Dns, |by| Found::ListOf(by.to_owned()));
+            (d.clone(), f)
+        })
+        .collect();
+    let list = |v: &Json| -> Vec<String> {
+        v.as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    for c in file["trust_cases"].as_array().expect("trust cases") {
+        let only = (!c["only"].is_null()).then(|| list(&c["only"]));
+        assert_eq!(
+            trusts(
+                text(c, "domain"),
+                &found,
+                &list(&c["blocked"]),
+                only.as_deref()
+            ),
+            c["expect"].as_bool().expect("expect"),
+            "{}",
+            text(c, "what")
+        );
+    }
+}

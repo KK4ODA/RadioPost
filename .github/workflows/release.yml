@@ -67,7 +67,8 @@ jobs:
         working-directory: core
         run: >
           cargo build --release --locked -p radiopost-client -p radiopost-aether -p rpmi
-          -p radiopost-issue -p radiopost-tcp -p radiopost-tester
+          -p radiopost-issue -p radiopost-tcp -p radiopost-tester -p radiopost-gateway
+          -p radiopost-postoffice
 
       - name: Collect
         shell: bash
@@ -78,7 +79,7 @@ jobs:
           tools="radiopost-tools-${{ matrix.name }}"
           mkdir -p "out/$tools"
           for b in radiopost radiopost-aether radiopost-tcp rpmi-loopback radiopost-issue \
-              radiopost-tester; do
+              radiopost-tester radiopost-gateway radiopost-po; do
             cp "core/target/release/$b$exe" "out/$tools/"
           done
           cp LICENSE-MIT LICENSE-APACHE app/client/README.md "out/$tools/"
@@ -134,6 +135,7 @@ jobs:
           notes="Built from ${GITHUB_SHA::7}. The installers are not signed yet: Windows'
           SmartScreen asks once (More info, Run anyway), and on macOS open the app with Control-click,
           Open. The tools archive holds radiopost, radiopost-aether, radiopost-tcp, rpmi-loopback,
-          radiopost-issue and radiopost-tester. SHA256SUMS lists every file's checksum."
+          radiopost-issue, radiopost-tester, radiopost-gateway and radiopost-po. SHA256SUMS lists
+          every file's checksum."
           gh release create "$tag" dist/* $kind --target "$GITHUB_SHA" \
             --title "RadioPost ${tag}" --notes "$notes"

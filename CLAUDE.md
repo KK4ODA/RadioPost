@@ -79,6 +79,15 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   the engines now keep (`Client::proofs`, `Called::proofs`); the replay test matches session-03
   byte for byte and `direct.json`'s two reports. The engines report their own refusals
   (`Event::Refused`), found by running two clients that trusted no post office.
+  `core/gateway` (`radiopost-gateway`) is Phase 2's gateway, online: the engine is
+  `radiopost::session::gateway` (sans-IO but for an `Upstream` it calls in line; `tests/session01.rs`
+  has it write session-01's and session-02's gateway sides byte for byte against the real post
+  office in-process), `upstream::Http` logs in with the gateway's credential (ureq, again on a 401),
+  `station` answers calls on an RPMI modem and finds post offices in `gateway.json` or by DNS over
+  HTTPS (RP-1 §7.1, `radiopost::dns`), `operator::register` registers it from the operator's client
+  home (RP-5 §6.4). `tests/online.rs` is the whole path: client → loopback adapter → gateway program
+  → post office service over HTTP. A post office's base URL is what the gateway signs at login and
+  registration, so a test's post office takes the URL of the port it listens on.
   `app/ui` is the client's panel (no build step), served with a JSON API by `radiopost panel`
   (`panel.rs`: loopback only, the `Host` checked, changes need `X-RadioPost: 1`; a session on its
   own thread, the home unchanged by the panel while it runs). `app/src-tauri` (`radiopost-app`, its
