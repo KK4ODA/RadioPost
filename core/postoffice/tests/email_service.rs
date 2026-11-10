@@ -88,19 +88,18 @@ fn post(at: &str, token: &str, body: &Json) -> (u16, String) {
     )
 }
 
-/// Stalwart's shape of a hook call.
+/// Stalwart 1.1's shape of a hook call: each header value keeps its leading space and line ending.
 fn stalwart(stage: &str, from: &str, to: &str, email: &str) -> Json {
     let (head, contents) = email.split_once("\r\n\r\n").unwrap_or((email, ""));
     let headers: Vec<Json> = head
         .split("\r\n")
         .filter_map(|l| l.split_once(':'))
-        .map(|(n, v)| json!([n, v]))
+        .map(|(n, v)| json!([n, format!("{v}\r\n")]))
         .collect();
     json!({
         "context": {"stage": stage, "protocol": {"version": 1}},
         "envelope": {"from": {"address": from}, "to": [{"address": to}]},
-        "message": {"headers": headers, "serverHeaders": [], "contents": contents,
-                    "size": email.len()}
+        "message": {"headers": headers, "contents": contents, "size": email.len()}
     })
 }
 

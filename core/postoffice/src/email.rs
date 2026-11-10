@@ -6,9 +6,12 @@
 //! answers whether to take the recipient or the message (RP-6 §2.1, §2.3). Two shapes of request
 //! are read: Stalwart's MTA hooks (`context.stage`, `message.headers` and `contents`), and the
 //! MTA Hooks Internet-Draft's (`stage`, `rawMessage` in base64), which Stalwart's authors wrote;
-//! the answer takes the shape of the request. A message taken at `DATA` is made into its
-//! RadioPost message there (§2.4, §3.3, §4) and put in the recipient's mailbox; held
-//! attachments are written to `held/` in the post office's directory.
+//! the answer takes the shape of the request (Stalwart's reply in its 1.1 form, with
+//! `enhanced_status`). Stalwart 1.1 hands a hook the message as the client sent it, without the
+//! `Authentication-Results` it adds, so its DMARC verdict reaches the door as `none`: the mail
+//! server must refuse DMARC failures itself (`docs/user/post-office.md`). A message taken at
+//! `DATA` is made into its RadioPost message there (§2.4, §3.3, §4) and put in the recipient's
+//! mailbox; held attachments are written to `held/` in the post office's directory.
 //!
 //! **The sender.** Mail a user sent to addresses this post office does not serve waits in
 //! `outgoing`. Each is made into an email (§3.1) and submitted, one SMTP transaction for the
@@ -157,16 +160,12 @@ pub fn read_hook(body: &Json) -> Hook {
         let headers = pairs("headers");
         if let Some(contents) = body.pointer("/message/contents").and_then(Json::as_str) {
             let mut raw = String::new();
+            // Stalwart 1.1 gives each value with its leading space and its line ending; older
+            // versions gave neither.
             for (n, v) in &headers {
-                let _ = write!(
-                    raw,
-                    "{n}:{}\r\n",
-                    if v.starts_with(' ') {
-                        v.clone()
-                    } else {
-                        format!(" {v}")
-                    }
-                );
+                let space = if v.starts_with([' ', '\t']) { "" } else { " " };
+                let end = if v.ends_with('\n') { "" } else { "\r\n" };
+                let _ = write!(raw, "{n}:{space}{v}{end}");
             }
             raw.push_str("\r\n");
             raw.push_str(contents);
@@ -209,8 +208,7 @@ pub fn hook_answer(draft: bool, reply: &str, text: &str) -> (u16, String) {
         ]})
     } else {
         json!({"action": "reject",
-               "response": {"status": code, "enhancedStatus": enhanced, "message": text,
-                            "disconnect": false}})
+               "response": {"status": code, "enhanced_status": enhanced, "message": text}})
     };
     (200, answer.to_string())
 }
@@ -590,6 +588,42 @@ mod tests {
         assert_eq!(h.raw.as_deref(), Some(&b"From: x@y.z\r\n\r\nhi"[..]));
     }
 
+    /// Stalwart 1.1's request, as its documentation gives it: each header value keeps its
+    /// leading space and its line ending, and no `Authentication-Results` comes with it.
+    #[test]
+    fn stalwart_1_1_headers_keep_their_line_endings() {
+        let request = json!({
+            "context": {
+                "stage": "data",
+                "client": {"ip": "192.0.2.1", "port": 34567, "ptr": "mail.example.com",
+                           "helo": "mail.example.com", "activeConnections": 1},
+                "server": {"name": "Stalwart v1.1.0", "port": 25, "ip": "192.0.2.2"},
+                "queue": {"id": "1d6f4a2b3c"},
+                "protocol": {"version": 1}
+            },
+            "envelope": {"from": {"address": "john@example.com"},
+                         "to": [{"address": "facundo@radiopost.org"}]},
+            "message": {
+                "headers": [
+                    ["From", " John Doe <john@example.com>\r\n"],
+                    ["To", " Facundo <facundo@radiopost.org>\r\n"],
+                    ["Subject", " Hello\r\n"]
+                ],
+                "contents": "Hello, world.\r\n",
+                "size": 158
+            }
+        });
+        let h = read_hook(&request);
+        assert_eq!(h.stage, "data");
+        assert_eq!(h.dmarc, "none");
+        let raw = String::from_utf8(h.raw.expect("the message")).expect("text");
+        assert_eq!(
+            raw,
+            "From: John Doe <john@example.com>\r\nTo: Facundo <facundo@radiopost.org>\r\n\
+             Subject: Hello\r\n\r\nHello, world.\r\n"
+        );
+    }
+
     #[test]
     fn answers_take_the_shape_of_the_request() {
         assert_eq!(hook_answer(true, "250 2.0.0", "").0, 204);
@@ -601,7 +635,8 @@ mod tests {
         let j: serde_json::Value = serde_json::from_str(&body).expect("JSON");
         assert_eq!(j["action"], "reject");
         assert_eq!(j["response"]["status"], 550);
-        assert_eq!(j["response"]["enhancedStatus"], "5.7.1");
+        assert_eq!(j["response"]["enhanced_status"], "5.7.1");
+        assert_eq!(j["response"]["message"], "Ask them to add you.");
         let (_, body) = hook_answer(true, "554 5.7.1", "No.");
         let j: serde_json::Value = serde_json::from_str(&body).expect("JSON");
         assert_eq!(j["set"][0]["value"], "reject");
