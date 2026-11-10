@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.23 |
-| **Updated** | 2026-11-09 |
+| **Version** | 0.1.24 |
+| **Updated** | 2026-11-10 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The concept](../concept/00-concept.md) |
@@ -17,6 +17,10 @@ connection, and the decisions behind them.
 building a client, a gateway, a post office or a modem adapter implements, and where this document
 and a specification disagree, the specification is right. This document is the map and the
 reasoning.
+
+RadioPost is not meant to replace Winlink (concept §1). It is a common protocol for amateurs to
+experiment with and to build their own programs and applications on, which is why the
+specifications come first and the programs described here have no special standing.
 
 ---
 
@@ -87,7 +91,7 @@ reasoning; the specifications hold the result.
 | D16 | **Mail leaves from the sender's post office** (RP-6 §3.1). | Only that server can sign for the domain, so the mail is delivered, not filtered. | Sending from the gateway (fails DKIM, SPF and DMARC). |
 | D17 | **DEFLATE as the baseline**; Zstandard optional; a dictionary only if it earns its place (RP-2 §4): trained on a corpus RadioPost writes and publishes, adopted if it makes messages under 1 000 bytes at least 20 % smaller than DEFLATE at their median. Phase 1 ships without it. | DEFLATE is everywhere. A dictionary keeps verbatim strings of what it was trained on and must be published, so real mail can never be its training data. | Zstandard only (not in every small environment yet); volunteers' mail after the pilot (private strings in a public dictionary); no dictionary (gives up the gain on short messages). |
 | D18 | **Forwarding uses the same session protocol** (RP-7). | One protocol to implement and test; proofs travel with messages. | A separate store-and-forward protocol. |
-| D19 | **A modem may be shared**: each host holds its own callsigns, answering switch and links (RP-4 §1.1). | During the move from Winlink, a gateway runs both systems on one radio, and two modems cannot share one sound card. A call names a callsign, so the callsign decides whose call it is, as AGWPE already does. | One program at a time (the operator must choose a system); routing by an SSID convention (callsigns are the operator's choice); a switchboard program between them (one more program to run). |
+| D19 | **A modem may be shared**: each host holds its own callsigns, answering switch and links (RP-4 §1.1). | RadioPost does not replace Winlink: a station that offers both runs them on one radio, and two modems cannot share one sound card. A call names a callsign, so the callsign decides whose call it is, as AGWPE already does. | One program at a time (the operator must choose a system); routing by an SSID convention (callsigns are the operator's choice); a switchboard program between them (one more program to run). |
 | D20 | **In a station-to-station session the station called proves itself too**, with a statement over the caller's nonce (RP-1 §6.5, RP-3 §10). | Anyone can transmit any callsign, so the caller has no other way to know who answered, or whose mail it is taking. The caller's own nonce makes the statement fresh with no clock to compare. | Trusting the callsign (forged with a microphone); a challenge from the caller (one more exchange); a time-form statement checked against the clock (fails when the clocks disagree, with no way to ask again). |
 | D21 | **A cut-off gateway calls its partner, and one session carries both directions** (RP-7 §1, §2). | Only the partner's windows need agreeing, and only the station that needs the link starts transmitting. The cut-off gateway is the partner's client: its queue goes out as offers, its users' mail comes back as the partner's waiting list, in the five transmissions of RP-3. | Both gateways calling each other on schedules (two schedules, twice the transmissions); the partner pushing inward mail (the cut-off gateway must listen at agreed times, and the partner start transmissions it may not be allowed to). |
 | D22 | **Inward mail carries the post office's signature** (a placement, RP-7 §4.2). | A forwarding gateway could otherwise hand a cut-off area mail "from the post office" that it made up. The cut-off gateway already holds the post office's keys, and mail from the Internet has no sender's proof to carry. | Trusting the partner (any station can transmit any callsign); end-to-end proof only (Internet mail has none). |
@@ -338,3 +342,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.21 | 2026-11-09 | D17: the dictionary's rule (RP-2 0.2.0); D32: trusting post offices (RP-1 0.5.0); D33: radiopost.org's enrollment. Phase 0's open questions settled but the data still owed. |
 | 0.1.22 | 2026-11-09 | §7: the conformance tester's outline, in its own document. |
 | 0.1.23 | 2026-11-09 | The TCP adapter: TLS on the Internet only; plain TCP on an amateur mesh, which is on the air (RP-4 0.5.0). |
+| 0.1.24 | 2026-11-10 | The purpose, stated: not a replacement for Winlink, but a common protocol to experiment with and build on. D19's reason reworded to match: a station runs both systems, not a move from one to the other. |

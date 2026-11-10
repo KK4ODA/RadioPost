@@ -1,6 +1,6 @@
 # RadioPost: a federated mail system for amateur radio
 
-*Concept document, 2026-11-09. A detailed design follows it. Licence:
+*Concept document, 2026-11-10. A detailed design follows it. Licence:
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).*
 
 **RadioPost** lets licensed amateurs send and receive ordinary email by radio, through gateways
@@ -38,7 +38,9 @@ they are the newer word.
 * **One protocol over any modem**: Aether, VARA, ARDOP, AX.25 packet, or plain TCP.
 * **Open**: a published protocol with test vectors, and open-source client, gateway program and
   post office service.
-* **Not compatible with Winlink's programs, by choice.** It has a new client of its own.
+* **Not a replacement for Winlink.** RadioPost is a common, published protocol for amateurs to
+  experiment with and build their own programs on. It is not compatible with Winlink's programs,
+  by choice, and has a new client of its own; a station can run both systems on one radio.
 
 ![Figure 1. The network at a glance](fig/fig1-overview.svg)
 
@@ -51,13 +53,21 @@ office over the Internet. He never needs a gateway that "belongs" to radiopost.o
 ## 1. Why build it
 
 Winlink works. It has hundreds of gateways, carries email both ways, has forms, and is used in
-emergencies. What we want to change is its shape:
+emergencies. RadioPost is not meant to replace it, and nobody is asked to leave it: a station can
+run both systems on one radio, sharing a modem (RP-4 §1.1).
 
-* Everything goes through central servers (the CMS) run by one team. A gateway needs that team's
-  authorisation, and its channel appears in their list.
-* The gateway software and the main client are closed. Our recent gateway work went largely into
-  working around the behaviour of a closed gateway program.
-* Addresses are callsigns at one domain (`KK4ODA@winlink.org`).
+RadioPost is built for something Winlink is not: a place where amateurs can experiment, and
+develop their own programs and applications on a common protocol. That needs a different shape:
+
+* **No centre.** Winlink's mail goes through central servers (the CMS) run by one team, and a
+  gateway needs that team's authorisation. Here anyone licensed adds a gateway, and any group a
+  post office, without asking.
+* **Everything published.** Winlink's gateway software and main client are closed, so what they do
+  can only be learned by watching them. Here the protocols are written down, with test vectors and
+  a conformance tester, and the programs are open: anyone can write a client, a gateway, a post
+  office, a modem adapter or an application of their own, and it works with everyone else's.
+* **Ordinary addresses.** Winlink's addresses are callsigns at one domain (`KK4ODA@winlink.org`).
+  Here each post office has its own domain, and an address is an ordinary email address.
 
 **Goals.**
 
@@ -69,10 +79,10 @@ emergencies. What we want to change is its shape:
 | G4 | Any gateway serves any user. |
 | G5 | Mail keeps moving when the Internet fails, as far as the radio reaches. |
 | G6 | It runs over different modems. |
-| G7 | It is open and documented: a published specification, test vectors and open-source code. |
+| G7 | It is open and documented, so that anyone can experiment with it and build their own programs on it: a published specification, test vectors and open-source code. |
 | G8 | It follows the amateur rules (Part 97 in the US) by design. |
 
-**Not goals.** Compatibility with Winlink's programs or its B2F protocol. Encryption on the air,
+**Not goals.** Replacing Winlink. Compatibility with Winlink's programs or its B2F protocol. Encryption on the air,
 which the rules forbid. Being an email provider for people who are not amateurs. A single domain
 served by several post offices (a later option, §12).
 

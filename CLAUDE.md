@@ -169,6 +169,9 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
 - The name RadioPost; the project's post office domain `radiopost.org` (registered 2026-11-09,
   null-MX/SPF/DMARC records until the post office is live).
 - No compatibility with Winlink's programs or B2F; a new client.
+- (2026-11-10) RadioPost is not meant to replace Winlink. It is an environment for amateurs to
+  experiment and develop their own applications on a common protocol; the documents say so
+  (README, concept §1, the design's introduction) and never speak of a move from Winlink.
 - Priorities for the Internet-down features: copies placed ahead, the gateway's queue, then
   forwarding by radio.
 - Stalwart as the post office's mail server (others possible behind JMAP/SMTP); the door answers
