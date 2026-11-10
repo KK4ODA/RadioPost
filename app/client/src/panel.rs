@@ -26,6 +26,7 @@ use serde_json::{Value, json};
 use tiny_http::{Header, Method, Request, Response, Server};
 
 use crate::compose::{Draft, File, media_type};
+use crate::online;
 use crate::session::{self, Kind, Options};
 use crate::store::{Error, Store, unhex};
 
@@ -313,11 +314,67 @@ impl Panel {
                 self.run(Some(callsign), kind, &text("adapter"))
             }
             (Method::Post, "/api/listen") => self.run(None, Kind::Station, &text("adapter")),
+            (
+                Method::Post,
+                "/api/enroll" | "/api/post-office" | "/api/renew" | "/api/report" | "/api/accept",
+            ) => self.online(path, body),
             (Method::Post, "/api/stop") => {
                 self.stop.store(true, Ordering::Relaxed);
                 Ok(json!({}))
             }
             _ => Err(format!("no {method} {path}")),
+        }
+    }
+
+    /// The post office over the Internet (RP-5 §6): enrollment, the post office's address,
+    /// renewal, reports and the accept list.
+    fn online(&self, path: &str, body: &Value) -> Result<Value, Error> {
+        let text = |name: &str| body[name].as_str().unwrap_or("").trim().to_owned();
+        match path {
+            "/api/enroll" => {
+                self.busy()?;
+                let mut store = Store::open(&self.home)?;
+                let url = text("url");
+                let said = online::enroll(
+                    &mut store,
+                    (!url.is_empty()).then_some(url.as_str()),
+                    &text("address"),
+                    &text("operator"),
+                    &text("code"),
+                )?;
+                Ok(json!({"said": said}))
+            }
+            "/api/post-office" => {
+                self.busy()?;
+                let mut store = Store::open(&self.home)?;
+                let url = text("url");
+                store.post_office = (!url.is_empty()).then(|| url.trim_end_matches('/').to_owned());
+                store.save()?;
+                self.state()
+            }
+            "/api/renew" => {
+                self.busy()?;
+                let store = Store::open(&self.home)?;
+                Ok(json!({"said": online::renew(&store)?}))
+            }
+            "/api/report" => {
+                self.busy()?;
+                let mut store = Store::open(&self.home)?;
+                Ok(json!({"lines": online::send_reports(&mut store)?}))
+            }
+            "/api/accept" => {
+                let store = Store::open(&self.home)?;
+                let list = |k: &str| -> Vec<String> {
+                    body[k]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|e| e.as_str().map(|e| e.trim().to_owned()))
+                        .collect()
+                };
+                Ok(json!({"entries": online::accept_list(&store, &list("add"), &list("remove"))?}))
+            }
+            _ => Err(format!("no POST {path}")),
         }
     }
 
@@ -397,7 +454,7 @@ impl Panel {
         trusted.sort();
         let a = lock(&self.activity);
         Ok(json!({
-            "me": me, "device": device, "trusted": trusted,
+            "me": me, "device": device, "trusted": trusted, "post_office": store.post_office,
             "counts": {"outbox": store.outbox.len(), "inbox": store.inbox.len(),
                        "sent": store.sent.len(), "reports": store.reports.len()},
             "activity": {"state": a.state, "remote": a.remote, "failed": a.failed},

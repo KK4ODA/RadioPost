@@ -17,6 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 radiopost = { path = "../../core/radiopost" }
+radiopost-api = { path = "../../core/api" }
 rpmi = { path = "../../core/rpmi" }
 radiopost-aether = { path = "../../adapters/aether" }
 ed25519-dalek = "3"
@@ -27,6 +28,7 @@ unicode-normalization = "0.1"
 
 [dev-dependencies]
 radiopost-tester = { path = "../../core/tester" }
+radiopost-postoffice = { path = "../../core/postoffice" }
 
 [lints]
 workspace = true

@@ -815,6 +815,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "radiopost-api"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "radiopost",
+ "serde_json",
+ "ureq",
+]
+
+[[package]]
 name = "radiopost-client"
 version = "0.1.0"
 dependencies = [
@@ -822,6 +832,8 @@ dependencies = [
  "getrandom 0.3.4",
  "radiopost",
  "radiopost-aether",
+ "radiopost-api",
+ "radiopost-postoffice",
  "radiopost-tester",
  "rpmi",
  "serde_json",
@@ -837,13 +849,13 @@ dependencies = [
  "getrandom 0.3.4",
  "radiopost",
  "radiopost-aether",
+ "radiopost-api",
  "radiopost-client",
  "radiopost-postoffice",
  "rpmi",
  "serde",
  "serde_json",
  "sha2 0.11.0",
- "ureq",
 ]
 
 [[package]]

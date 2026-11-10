@@ -94,6 +94,10 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   home (RP-5 §6.4). `tests/online.rs` is the whole path: client → loopback adapter → gateway program
   → post office service over HTTP. A post office's base URL is what the gateway signs at login and
   registration, so a test's post office takes the URL of the port it listens on.
+  `core/api` (`radiopost-api`) is RP-5 over HTTPS (login, calls, enrollment, DNS over HTTPS), shared
+  by the gateway and the client; the client's `online` module uses it (enroll, renew, settings —
+  `PUT` replaces them whole, so the client merges —, accept list, `report`). `app/src-tauri` has its
+  own lockfile: a new dependency of the client changes it (`cargo metadata` there refreshes it).
   `app/ui` is the client's panel (no build step), served with a JSON API by `radiopost panel`
   (`panel.rs`: loopback only, the `Host` checked, changes need `X-RadioPost: 1`; a session on its
   own thread, the home unchanged by the panel while it runs). `app/src-tauri` (`radiopost-app`, its

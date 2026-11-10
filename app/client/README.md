@@ -5,9 +5,11 @@
 line, as a panel in a browser (`radiopost panel`), or as the desktop application (`app/src-tauri`,
 Tauri, design D27), which shows the same panel in a window of its own.
 
-Phase 1 carries mail **station to station** (RP-3 §10). Calling a gateway works as RP-3 §5 says,
-but there is no gateway to call until Phase 2, nor yet enrollment (RP-5 §6.1): a credential is
-imported as a post office issued it.
+It carries mail **station to station** (RP-3 §10) and through **gateways** (RP-3 §5), and talks
+to its post office over the Internet when there is one (RP-5 §6): it enrolls with the one-time
+code the post office's operator gives, renews its credential, changes its settings and accept
+list, and reports its station-to-station sessions. A credential issued by hand (`radiopost-issue`,
+for tests before a post office) is imported with `init`.
 
 ## Commands
 
@@ -21,6 +23,12 @@ radiopost [--home DIR] COMMAND
 | `init --credential FILE [--device-key FILE]` | Keeps the credential a post office issued for this device's key (raw or hex). |
 | `trust DOMAIN PUBLIC_HEX [NOT_BEFORE NOT_AFTER]` | Trusts a post office key (RP-1 §7.3: the operator decides). |
 | `whoami` | The account and callsign the credential is for. |
+| `enroll --address ADDR --operator CALL --code CODE [--post-office URL]` | Enrolls this device with the operator's one-time code (RP-5 §6.1), making its key if there is none, keeps the credential, and remembers the post office. Without `--post-office`, the domain's DNS records name it (RP-1 §7.1); its key is trusted from them too when none is trusted yet. |
+| `post-office URL` | The post office's API, when DNS does not name it. |
+| `renew` | A new credential for this device (RP-5 §6.2). |
+| `settings [--set JSON]` | The account's settings at the post office (RP-5 §6.3); `--set` changes the members it names (`null` removes one). |
+| `accept [--add ENTRY]… [--remove ENTRY]…` | The accept list: who may email this account (RP-5 §6.5, RP-6 §2.2). |
+| `report` | Sends the station-to-station sessions waiting to the post office (RP-5 §6.6); each one answered leaves the home. |
 | `compose --to ADDR … [--cc ADDR] [--subject TEXT] [--priority 0\|1\|2] [--attach FILE]… [--body FILE]` | Writes a message into the outbox; the text from standard input without `--body`. |
 | `import FILE` | Puts a message in its canonical encoding (RP-2) in the outbox. |
 | `outbox`, `inbox`, `sent` | Lists a folder. |
@@ -51,8 +59,9 @@ For a test on the air between two stations with Aether HF, see
 `radiopost panel` serves the page in `app/ui/` (plain HTML, CSS and JavaScript, no build step,
 light or dark as the system is) and a JSON API under `/api/`, on the loopback interface only, as
 the Aether app serves its own. It shows the folders, reads and writes messages with attachments,
-calls a station or listens for one, and holds the setup: the device key, the credential and the
-post offices trusted. A session runs on a thread of its own; while it runs, the panel changes
+calls a station or listens for one, sends the reports, and holds the setup: enrollment with a code,
+the post office and renewal, the accept list, the device key, a credential imported by hand and
+the post offices trusted. A session runs on a thread of its own; while it runs, the panel changes
 nothing in the home. `--ui DIR` serves the page from a directory, for working on it.
 
 Only this computer's own pages reach it: a request must name the panel's own host, so a page that
@@ -106,7 +115,7 @@ written whole or not at all, and a message received is on disk before its `RECEI
 
 A message a station takes moves to `sent`. Its other recipients get it when the session is
 reported to the post office (D30, RP-5 §6.6), not over the air again; each session's report, with
-both stations' proofs, waits in `state.json` until the client can send it (Phase 2).
+both stations' proofs, waits in `state.json` until `report` (or the panel's Send reports) sends it.
 
 ## Tests
 
@@ -115,4 +124,8 @@ made from the panel, and listening stopped. `tests/two_clients.rs`: two clients 
 byte for byte through the loopback adapter
 with the vector's clocks and draws, and end with the folders the session says and the reports
 `vectors/direct.json` has; the program itself sets up two homes, composes, listens and calls; and it
-refuses a credential for another device's key.
+refuses a credential for another device's key. `tests/online.rs`: against a post office service
+over HTTP, two users enroll with the program (a wrong code and a used code refused), change a
+setting and the accept list and renew, carry a station-to-station session, and report it: the
+other station's copy filed as picked up, the email copy waiting to go out; and a device enrolls
+from the panel.

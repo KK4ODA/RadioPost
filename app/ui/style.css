@@ -95,3 +95,6 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
   .side { border-right: 0; border-bottom: 1px solid var(--line); }
   main { padding: 16px; }
 }
+.entries { list-style: none; padding: 0; margin: 0 0 8px; }
+.entries li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 0; }
+.card .note { margin-bottom: 8px; }

@@ -19,7 +19,6 @@ use radiopost::session::{Caps, Event as SessionEvent};
 use rpmi::host::{Carrier, Direction, Engine, Event, Host};
 use rpmi::tcp::Connection;
 use serde::{Deserialize, Serialize};
-use serde_json::Value as Json;
 
 use crate::upstream::{self, Account};
 
@@ -330,31 +329,7 @@ impl Station {
 /// RP-1 §7.1: a domain's API record, by DNS over HTTPS.
 #[must_use]
 pub fn lookup(resolver: &str, domain: &str) -> Option<String> {
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(15)))
-        .build()
-        .into();
-    let mut response = agent
-        .get(resolver)
-        .query("name", format!("_radiopost.{domain}"))
-        .query("type", "TXT")
-        .header("Accept", "application/dns-json")
-        .call()
-        .ok()?;
-    let answer: Json = serde_json::from_str(&response.body_mut().read_to_string().ok()?).ok()?;
-    answer
-        .get("Answer")?
-        .as_array()?
-        .iter()
-        .filter_map(|a| a.get("data")?.as_str())
-        .map(|d| {
-            d.split('"')
-                .filter(|s| !s.trim().is_empty())
-                .collect::<String>()
-        })
-        .filter_map(|txt| radiopost::dns::parse(&txt))
-        .find(|t| t.get("t").map(String::as_str) == Some("api"))
-        .and_then(|t| t.get("url").cloned())
+    radiopost_api::lookup(resolver, domain)
 }
 
 /// The gateway's engine on a link: the caller speaks first, and hangs up (RP-3 §8).

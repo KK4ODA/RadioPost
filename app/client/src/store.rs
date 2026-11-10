@@ -108,6 +108,8 @@ pub struct Store {
     /// Station-to-station sessions to report to the post office, oldest first, each as RP-5
     /// §6.6's `sessions` entry.
     pub reports: Vec<Value>,
+    /// The post office's API base URL, when it is not to be found in DNS (RP-1 §7.1).
+    pub post_office: Option<String>,
 }
 
 fn id_list(v: &Value) -> Vec<ContentId> {
@@ -143,6 +145,7 @@ impl Store {
             seen: Vec::new(),
             gateways: serde_json::Map::new(),
             reports: Vec::new(),
+            post_office: None,
         };
         let path = home.join("state.json");
         if !path.exists() {
@@ -194,6 +197,7 @@ impl Store {
             .unwrap_or_default();
         store.gateways = state["gateways"].as_object().cloned().unwrap_or_default();
         store.reports = state["reports"].as_array().cloned().unwrap_or_default();
+        store.post_office = state["post_office"].as_str().map(str::to_owned);
         Ok(store)
     }
 
@@ -223,6 +227,7 @@ impl Store {
             })).collect::<Vec<_>>(),
             "gateways": self.gateways,
             "reports": self.reports,
+            "post_office": self.post_office,
         });
         let text = serde_json::to_string_pretty(&state).map_err(|e| e.to_string())?;
         write(&self.home.join("state.json"), text.as_bytes())

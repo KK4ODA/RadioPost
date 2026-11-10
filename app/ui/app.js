@@ -47,6 +47,11 @@ async function refresh() {
   $("reports").textContent = s.counts.reports
     ? `${s.counts.reports} session${s.counts.reports > 1 ? "s" : ""} to report to the post office`
     : "";
+  $("report").hidden = !s.counts.reports;
+  $("po-state").textContent = s.post_office
+    ? `Reached at ${s.post_office}.`
+    : "Found by its domain's DNS records.";
+  if (!$("po-url").matches(":focus")) $("po-url").value = s.post_office || "";
   const a = s.activity;
   const label = {idle: "Idle", calling: `Calling ${a.remote || ""}`, listening: "Listening",
                  session: `In session with ${a.remote || ""}`}[a.state];
@@ -169,6 +174,45 @@ async function act(path, body) {
   }
 }
 
+function showAccept(entries) {
+  $("accept").replaceChildren(...entries.map((e) => {
+    const li = document.createElement("li");
+    const span = document.createElement("span");
+    span.textContent = e;
+    const b = document.createElement("button");
+    b.className = "quiet";
+    b.textContent = "Remove";
+    b.title = `Take ${e} off the list`;
+    b.addEventListener("click", () => changeAccept({remove: [e]}));
+    li.append(span, b);
+    return li;
+  }));
+}
+
+async function changeAccept(change) {
+  try {
+    showAccept((await api("accept", change)).entries);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function enroll(event) {
+  event.preventDefault();
+  const form = $("enroll");
+  try {
+    const r = await api("enroll", {
+      address: form.address.value, operator: form.operator.value, code: form.code.value,
+      url: form.url.value,
+    });
+    form.reset();
+    toast(r.said);
+    await refresh();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
 function wire() {
   try {
     const kept = localStorage.getItem("radiopost.adapter");
@@ -194,6 +238,27 @@ function wire() {
     await act("credential", {hex: $("cred-hex").value});
     $("cred-hex").value = "";
   });
+  $("enroll").addEventListener("submit", enroll);
+  $("po-save").addEventListener("click", () => act("post-office", {url: $("po-url").value}));
+  $("renew").addEventListener("click", async () => {
+    try { toast((await api("renew", {})).said); await refresh(); } catch (e) { toast(e.message, true); }
+  });
+  $("report").addEventListener("click", async () => {
+    try {
+      const r = await api("report", {});
+      toast(r.lines.join("; ") || "Nothing to report.");
+      await refresh();
+    } catch (e) {
+      toast(e.message, true);
+    }
+  });
+  $("accept-add").addEventListener("click", async () => {
+    const entry = $("accept-new").value.trim();
+    if (!entry) return;
+    await changeAccept({add: [entry]});
+    $("accept-new").value = "";
+  });
+  $("accept-load").addEventListener("click", () => changeAccept({}));
   $("t-save").addEventListener("click", async () => {
     await act("trust", {domain: $("t-domain").value, public: $("t-key").value});
     $("t-key").value = "";

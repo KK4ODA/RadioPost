@@ -42,6 +42,7 @@
           <input id="adapter" value="ws://127.0.0.1:8515/v1" spellcheck="false">
         </label>
         <p class="note" id="reports" title="Station-to-station sessions kept to report to the post office when there is Internet (RP-5 §6.6)"></p>
+        <button class="quiet" id="report" title="Send the sessions kept to your post office over the Internet, so your mailbox and sent mail agree with what crossed the air (RP-5 §6.6)" hidden>Send reports</button>
       </section>
 
       <button class="quiet" id="setup-open" title="This device's key, its credential and the post offices it trusts">Setup</button>
@@ -91,6 +92,34 @@
 
       <section id="setup" hidden>
         <h1>Setup</h1>
+        <form class="card" id="enroll">
+          <h2>Enroll with your post office</h2>
+          <p class="note">Your post office's operator gives you a one-time code once they have seen your licence. Over the Internet.</p>
+          <label title="Your RadioPost address">Address <input name="address" placeholder="facundo@radiopost.org" required spellcheck="false" autocomplete="email"></label>
+          <label title="Your callsign, as on your licence">Callsign <input name="operator" placeholder="KK4ODA" required spellcheck="false" autocomplete="off"></label>
+          <label title="The one-time code the operator gave you">Code <input name="code" placeholder="7Q4F-AZ9K" required spellcheck="false" autocomplete="off"></label>
+          <label title="The post office's API, when its domain's DNS does not name it">Post office (if not in DNS) <input name="url" placeholder="https://po.radiopost.org/rp/v1" spellcheck="false"></label>
+          <button class="primary" type="submit" title="Make this device's key if needed, enroll it, and keep the credential">Enroll</button>
+        </form>
+        <div class="card">
+          <h2>Post office</h2>
+          <p id="po-state"></p>
+          <label title="Its API's base URL, when DNS does not say">API <input id="po-url" placeholder="https://po.radiopost.org/rp/v1" spellcheck="false"></label>
+          <div class="row">
+            <button id="po-save" title="Use this post office">Save</button>
+            <button class="quiet" id="renew" title="A new credential for this device, over the Internet (RP-5 §6.2)">Renew credential</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Accept list</h2>
+          <p class="note">Email reaches you only from these addresses and domains (@domain). Writing to someone adds them.</p>
+          <ul class="entries" id="accept"></ul>
+          <div class="row">
+            <input id="accept-new" placeholder="maria@example.com or @redcross.org" spellcheck="false">
+            <button id="accept-add" title="Add it">Add</button>
+            <button class="quiet" id="accept-load" title="Read the list from your post office">Read</button>
+          </div>
+        </div>
         <div class="card">
           <h2>This device's key</h2>
           <p class="mono" id="device" title="Give this public key to your post office when you enroll"></p>

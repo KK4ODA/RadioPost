@@ -9,6 +9,7 @@ use std::process::ExitCode;
 use radiopost::credential::PostOfficeKey;
 use radiopost::message::{Message, key};
 use radiopost_client::compose::{Draft, File, media_type};
+use radiopost_client::online;
 use radiopost_client::session::{self, Fetch, Kind, Options, Packing};
 use radiopost_client::store::{Error, Store, unhex};
 
@@ -22,6 +23,16 @@ usage: radiopost [--home DIR] COMMAND ...
   trust DOMAIN PUBLIC_HEX [NOT_BEFORE NOT_AFTER]
                            trust a post office key (RP-1 §7.3)
   whoami                   the account and callsign the credential is for
+  enroll --address ADDR --operator CALL --code CODE [--post-office URL]
+                           enroll this device with the code the post office's operator gave
+                           (RP-5 §6.1), making its key if there is none, and keep the credential
+  post-office URL          the post office's API, when DNS does not say (RP-1 §7.1)
+  renew                    a new credential for this device, over the Internet (RP-5 §6.2)
+  report                   send the station-to-station sessions waiting to the post office
+                           (RP-5 §6.6)
+  settings [--set JSON]    the account's settings at the post office (RP-5 §6.3)
+  accept [--add ENTRY]... [--remove ENTRY]...
+                           the accept list: addresses, or @domain (RP-5 §6.5)
   compose --to ADDR [--to ADDR] [--cc ADDR] [--subject TEXT] [--priority 0|1|2]
           [--attach FILE]... [--body FILE]
                            write a message into the outbox; the text from stdin without --body
@@ -397,6 +408,45 @@ fn run(words: &[String]) -> Result<(), Error> {
                     .one("--adapter")
                     .ok_or("conformance --adapter HOST:PORT, or conformance off")?;
                 store.set_conformance(Some(&at))?;
+            }
+        }
+        "enroll" => {
+            let said = online::enroll(
+                &mut store,
+                args.one("--post-office").as_deref(),
+                &args.one("--address").ok_or("enroll needs --address")?,
+                &args.one("--operator").ok_or("enroll needs --operator")?,
+                &args.one("--code").ok_or("enroll needs --code")?,
+            )?;
+            println!("{said}");
+        }
+        "post-office" => {
+            let url = args.rest.first().ok_or("post-office URL")?;
+            store.post_office = Some(url.trim_end_matches('/').to_owned());
+            store.save()?;
+        }
+        "renew" => println!("{}", online::renew(&store)?),
+        "report" => {
+            let said = online::send_reports(&mut store)?;
+            if said.is_empty() {
+                println!("nothing to report");
+            }
+            for line in said {
+                println!("{line}");
+            }
+        }
+        "settings" => {
+            let change = args
+                .one("--set")
+                .map(|t| serde_json::from_str::<serde_json::Value>(&t))
+                .transpose()
+                .map_err(|e| format!("--set: {e}"))?;
+            let now = online::settings(&store, change.as_ref())?;
+            println!("{}", serde_json::to_string_pretty(&now).unwrap_or_default());
+        }
+        "accept" => {
+            for entry in online::accept_list(&store, &args.all("--add"), &args.all("--remove"))? {
+                println!("{entry}");
             }
         }
         "reports" => {
