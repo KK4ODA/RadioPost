@@ -23,15 +23,30 @@
         <li><button data-folder="inbox" title="Messages received">Inbox <span class="count" id="n-inbox"></span></button></li>
         <li><button data-folder="outbox" title="Messages waiting to be sent">Outbox <span class="count" id="n-outbox"></span></button></li>
         <li><button data-folder="sent" title="Messages another station has taken">Sent <span class="count" id="n-sent"></span></button></li>
+        <li><button data-folder="waiting" title="What waited at your post office at the last call to a gateway: mark what to fetch on the next call">Waiting <span class="count" id="n-waiting"></span></button></li>
       </ul>
 
       <section class="station" aria-label="Station">
         <h2>Station</h2>
-        <label title="The callsign to call: another client's station, or a gateway">Call
-          <input id="callsign" placeholder="N0CALL" autocomplete="off" spellcheck="false">
+        <div class="kinds" role="radiogroup" aria-label="Whom to call">
+          <label class="check" title="A gateway carries your mail to and from your post office (RP-3 §9)">
+            <input type="radio" name="kind" value="gateway" checked> A gateway
+          </label>
+          <label class="check" title="Station to station (RP-3 §10): the other station proves who it is">
+            <input type="radio" name="kind" value="station"> Another client's station
+          </label>
+        </div>
+        <label title="The callsign to call">Call
+          <input id="callsign" placeholder="KK4ODA-1" autocomplete="off" spellcheck="false">
         </label>
-        <label class="check" title="Station to station (RP-3 §10): the other station proves who it is">
-          <input type="checkbox" id="direct" checked> Another client's station
+        <button class="quiet" id="gateways-open" title="The gateways your post office lists, where to find them, and how far away">Choose a gateway</button>
+        <label id="fetch-label" title="What to fetch of the mail waiting for you; what you mark in Waiting comes too, and small messages come anyway">Fetch
+          <select id="fetch">
+            <option value="all">Everything waiting</option>
+            <option value="10000">Up to 10 kB each</option>
+            <option value="50000">Up to 50 kB each</option>
+            <option value="none">Only the list of what waits</option>
+          </select>
         </label>
         <div class="row">
           <button id="call" title="Call the station and carry a session">Call</button>
@@ -56,6 +71,40 @@
           <tbody id="rows"></tbody>
         </table>
         <p class="empty" id="empty" hidden>Nothing here.</p>
+      </section>
+
+      <section id="waiting-view" hidden>
+        <h1>Waiting</h1>
+        <p class="note" id="waiting-note"></p>
+        <table class="list" aria-label="Messages waiting at the post office">
+          <thead><tr>
+            <th title="Fetch it on the next call to a gateway, whatever the Fetch setting says">Fetch</th>
+            <th title="Who wrote it">From</th><th title="What it is about">Subject</th>
+            <th class="n" title="Its size on the air">Size</th>
+          </tr></thead>
+          <tbody id="waiting-rows"></tbody>
+        </table>
+      </section>
+
+      <section id="gateways-view" hidden>
+        <h1>Gateways</h1>
+        <p class="note" id="gateways-note"></p>
+        <div class="row">
+          <button id="gateways-refresh" title="Fetch the list from your post office now, over the Internet; it is kept for when there is none">Refresh over the Internet</button>
+          <label class="inline" title="Your Maidenhead grid square, to list the nearest gateways first">Your grid
+            <input id="grid" maxlength="6" placeholder="EM73" spellcheck="false">
+          </label>
+          <button class="quiet" id="grid-save">Save</button>
+        </div>
+        <table class="list" aria-label="Gateways">
+          <thead><tr>
+            <th title="Its callsign">Gateway</th><th title="Where it is">Where</th>
+            <th class="n" title="From your grid square">Distance</th>
+            <th title="Each dial frequency, upper sideband, and Aether's bandwidth there">Channels</th>
+            <th title="When it answers">Hours</th><th></th>
+          </tr></thead>
+          <tbody id="gateway-rows"></tbody>
+        </table>
       </section>
 
       <article id="reader" hidden aria-live="polite">

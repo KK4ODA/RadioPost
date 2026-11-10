@@ -69,7 +69,7 @@ certificate for itself and prints its fingerprint (`SHA-256 5c0e…`): send that
 must pass TCP port 8774 to this computer. In RadioPost, click **Listen**.
 
 **Station B** (it calls): `radiopost-tcp --trust <A's fingerprint> --peer <A's callsign>=<A's
-address>:8774`, then **Call** A's callsign with **Another client's station** ticked.
+address>:8774`, then chooses **Another client's station** and **Call**s A's callsign.
 
 The link is TLS: encryption is allowed on the Internet, which is not the air. Put
 `ws://127.0.0.1:8515/v1` back in the **Modem** box afterwards. (On an amateur mesh network such as
@@ -90,7 +90,7 @@ says *Listening*.
 
 1. Click **Write**, address the message to A's address (`ana@test.radiopost.org`), give it a
    subject and a few lines, and click **Put in outbox**.
-2. In *Station*, enter A's callsign under *Call*, keep **Another client's station** ticked, and
+2. In *Station*, choose **Another client's station**, enter A's callsign under *Call*, and
    click **Call**.
 
 The log at the bottom of each window says what happens: the call, each station proving who it is,

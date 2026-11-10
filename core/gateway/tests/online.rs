@@ -380,3 +380,217 @@ fn a_held_attachment_is_asked_for_by_radio_and_comes_on_the_next_call() {
         Some(photo.as_slice())
     );
 }
+
+/// One HTTP exchange with a panel on loopback, as its page makes one: the status and the JSON.
+fn panel_http(
+    at: SocketAddr,
+    method: &str,
+    path: &str,
+    body: &serde_json::Value,
+) -> (u16, serde_json::Value) {
+    use std::io::{Read as _, Write as _};
+    let mut s = std::net::TcpStream::connect(at).expect("the panel");
+    let body = if method == "POST" {
+        body.to_string()
+    } else {
+        String::new()
+    };
+    write!(
+        s,
+        "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nX-RadioPost: 1\r\n\
+         Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        at.port(),
+        body.len()
+    )
+    .expect("sent");
+    let mut text = String::new();
+    s.read_to_string(&mut text).expect("an answer");
+    let status = text[9..12].parse().expect("a status");
+    let json = text
+        .split_once("\r\n\r\n")
+        .and_then(|(_, b)| serde_json::from_str(b).ok())
+        .unwrap_or_default();
+    (status, json)
+}
+
+/// Text that does not shrink much under DEFLATE: `n` hex digits of a fixed stream.
+fn noise(n: usize) -> String {
+    let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+    (0..n)
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            char::from_digit(u32::try_from(x % 16).expect("a digit"), 16).expect("hex")
+        })
+        .collect()
+}
+
+/// A call to KK4ODA-1 made from the client's panel, fetching `fetch`: the panel's state once it
+/// is over, the call having succeeded.
+fn call_from_panel(
+    panel: SocketAddr,
+    at_user: SocketAddr,
+    fetch: &serde_json::Value,
+) -> serde_json::Value {
+    let (status, said) = panel_http(
+        panel,
+        "POST",
+        "/api/call",
+        &json!({"callsign": "KK4ODA-1", "station": false, "adapter": at_user.to_string(),
+                "fetch": fetch}),
+    );
+    assert_eq!(status, 200, "{said}");
+    let until = std::time::Instant::now() + Duration::from_secs(30);
+    loop {
+        let (_, state) = panel_http(panel, "GET", "/api/state", &json!(null));
+        if state["activity"]["state"] == "idle" {
+            assert_eq!(
+                state["activity"]["failed"],
+                serde_json::Value::Null,
+                "{state}"
+            );
+            return state;
+        }
+        assert!(
+            std::time::Instant::now() < until,
+            "the call never ends: {state}"
+        );
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// The client's panel, as a user finds a gateway and chooses what to fetch: the post office's
+/// gateway list fetched and checked against its key (RP-5 §4.4); a call that fetches only the
+/// list of what waits (RP-3 §6.2); one message marked; the next call fetches it alone.
+#[test]
+fn a_user_finds_the_gateway_and_fetches_what_they_chose() {
+    use radiopost_client::panel::Panel;
+
+    let dir = scratch("choose");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (_server, at_user, at_gateway) = loopback();
+    let (_gw, rx) = gateway(&dir, &running, &base, &po_key, at_gateway);
+    let mut user = client(
+        &dir.join("wd5ema"),
+        &running,
+        &po_key,
+        "club@test.example",
+        "WD5EMA",
+    );
+    user.post_office = Some(base.clone());
+    user.save().expect("saved");
+    let mut serials = Vec::new();
+    for subject in ["Antenna plans", "Net minutes", "Field day"] {
+        let m = draft(
+            "maria@example.com",
+            "club@test.example",
+            subject,
+            &noise(3000),
+        );
+        assert!(
+            m.air_form(Compression::Deflate).len() > 1000,
+            "more than comes unasked"
+        );
+        let mut office = running.office();
+        let serial = office.next_mailbox_serial("club@test.example");
+        office.deliver(
+            "club@test.example",
+            serial,
+            &m.air_form(Compression::Deflate),
+            "maria@example.com",
+            subject,
+            0,
+            false,
+        );
+        serials.push(serial);
+    }
+    let panel = Panel::new(&dir.join("wd5ema"), None)
+        .start("127.0.0.1:0")
+        .expect("a port");
+    let call = |fetch: serde_json::Value| call_from_panel(panel, at_user, &fetch);
+
+    // the gateway list, from the post office over the Internet, kept in the home
+    let (status, list) = panel_http(panel, "POST", "/api/gateways", &json!({}));
+    assert_eq!(status, 200, "{list}");
+    assert_eq!(list["domain"], "test.example");
+    assert_eq!(list["gateways"][0]["callsign"], "KK4ODA-1");
+    assert_eq!(list["gateways"][0]["channels"][0]["dial_hz"], 7_101_000);
+    let (status, ranked) = panel_http(panel, "POST", "/api/grid", &json!({"grid": "em73"}));
+    assert_eq!(status, 200, "{ranked}");
+    assert_eq!(ranked["grid"], "EM73");
+    let (status, _) = panel_http(panel, "POST", "/api/grid", &json!({"grid": "nowhere"}));
+    assert_eq!(status, 400, "not a grid square");
+
+    // the first call fetches only the list of what waits
+    let state = call(json!("none"));
+    assert_eq!(state["counts"]["inbox"], 0, "{state}");
+    assert_eq!(state["counts"]["waiting"], 3, "{state}");
+    session_lines(&rx);
+    let (_, waiting) = panel_http(panel, "GET", "/api/waiting", &json!(null));
+    assert_eq!(waiting["via"], "KK4ODA-1");
+    let listed: Vec<u64> = waiting["entries"]
+        .as_array()
+        .expect("entries")
+        .iter()
+        .map(|e| e["serial"].as_u64().expect("a serial"))
+        .collect();
+    assert_eq!(listed, serials);
+
+    // the user marks the second; a serial that did not wait is refused
+    let (status, marked) = panel_http(panel, "POST", "/api/fetch", &json!({"serial": serials[1]}));
+    assert_eq!(status, 200, "{marked}");
+    assert_eq!(marked["entries"][1]["fetch"], true);
+    assert_eq!(marked["entries"][0]["fetch"], false);
+    let (status, _) = panel_http(panel, "POST", "/api/fetch", &json!({"serial": 9999}));
+    assert_eq!(status, 400);
+
+    // the next call, still fetching only the list, brings the one marked
+    let state = call(json!("none"));
+    assert_eq!(state["counts"]["inbox"], 1, "{state}");
+    session_lines(&rx);
+    let (_, inbox) = panel_http(panel, "GET", "/api/folder?name=inbox", &json!(null));
+    assert_eq!(inbox[0]["subject"], "Net minutes");
+    let (_, waiting) = panel_http(panel, "GET", "/api/waiting", &json!(null));
+    let left: Vec<(u64, bool)> = waiting["entries"]
+        .as_array()
+        .expect("entries")
+        .iter()
+        .map(|e| (e["serial"].as_u64().expect("a serial"), e["fetch"] == true))
+        .collect();
+    assert_eq!(left, [(serials[0], false), (serials[2], false)]);
+    let home = Store::open(&dir.join("wd5ema")).expect("the home");
+    assert!(
+        home.fetch_next.is_empty(),
+        "a mark goes once its message came: {:?}",
+        home.fetch_next
+    );
+}
+
+/// RP-5 §4: a home that trusts another key for its post office refuses the post office's gateway
+/// list, and keeps none.
+#[test]
+fn a_gateway_list_signed_by_another_key_is_refused() {
+    let dir = scratch("stranger");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (_server, _at_user, at_gateway) = loopback();
+    let (_gw, _rx) = gateway(&dir, &running, &base, &po_key, at_gateway);
+    let mut stranger = client(
+        &dir.join("n0call"),
+        &running,
+        &po_key,
+        "n0call@test.example",
+        "N0CALL",
+    );
+    stranger.post_office = Some(base);
+    std::fs::write(
+        dir.join("n0call/trust.json"),
+        json!({"test.example": [{"public": radiopost::cbor::hex(&key().verifying_key().to_bytes()),
+                                 "not_before": 0, "not_after": u64::MAX}]})
+        .to_string(),
+    )
+    .expect("another key trusted");
+    let refused = radiopost_client::online::gateways(&mut stranger).expect_err("refused");
+    assert!(refused.contains("not signed"), "{refused}");
+    assert!(stranger.gateway_list.is_none());
+}

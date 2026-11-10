@@ -98,5 +98,16 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
   main { padding: 16px; }
 }
 .entries { list-style: none; padding: 0; margin: 0 0 8px; }
+.kinds { display: flex; flex-direction: column; gap: 2px; margin: 0 0 10px; }
+.kinds label.check { margin: 0; color: var(--text); font-size: 14px; }
+#gateways-open { margin: -4px 0 10px; padding: 0; height: auto; border: 0; color: var(--accent); }
+label.inline { display: flex; align-items: center; gap: 6px; margin: 0; }
+label.inline input { width: 7em; margin: 0; }
+.list .n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#waiting-view .list td, #gateways-view .list td { cursor: default; }
+.list input[type=checkbox] { width: auto; height: auto; margin: 0; }
+.nowrap { white-space: nowrap; }
+.lines { white-space: pre-line; }
+#waiting-view .note, #gateways-view .note { margin-bottom: 12px; }
 .entries li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 0; }
 .card .note { margin-bottom: 8px; }

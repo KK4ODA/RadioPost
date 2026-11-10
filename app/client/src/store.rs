@@ -7,7 +7,8 @@
 //! <home>/credential      the credential, as the post office issued it (COSE_Sign1)
 //! <home>/trust.json      post office keys by domain
 //! <home>/state.json      the folders, the next serial, the replay cache, what each gateway holds,
-//!                        and the station-to-station sessions still to report (RP-5 §6.6)
+//!                        the station-to-station sessions still to report (RP-5 §6.6), the
+//!                        gateways the post office lists, and what waited at the last call
 //! <home>/messages/<id>   each message's canonical encoding, named by its content ID
 //! <home>/partials/<id>   the start of a message whose link broke, offered next time (RP-3 §7)
 //! ```
@@ -116,6 +117,17 @@ pub struct Store {
     /// Held attachments to ask for on the next call to a gateway (RP-3 §5.6 `files`): each its
     /// message's serial and its `ref`.
     pub files: Vec<(u64, Vec<u8>)>,
+    /// The gateways the post office lists (RP-5 §4.4), kept for when there is no Internet:
+    /// `{"domain", "fetched", "gateways": […]}`.
+    pub gateway_list: Option<Value>,
+    /// The operator's Maidenhead grid square, to rank gateways by distance.
+    pub grid: Option<String>,
+    /// What the post office listed at the last call to a gateway, less what came: `{"via", "at",
+    /// "entries": […]}`, each entry `serial`, `id`, `from`, `subject`, `size`, `priority`, `held`,
+    /// `third_party`.
+    pub waiting: Option<Value>,
+    /// Serials to ask for on the next call to a gateway, whatever the fetch rule says.
+    pub fetch_next: Vec<u64>,
 }
 
 fn id_list(v: &Value) -> Vec<ContentId> {
@@ -153,6 +165,10 @@ impl Store {
             reports: Vec::new(),
             post_office: None,
             files: Vec::new(),
+            gateway_list: None,
+            grid: None,
+            waiting: None,
+            fetch_next: Vec::new(),
         };
         let path = home.join("state.json");
         if !path.exists() {
@@ -214,6 +230,13 @@ impl Store {
                     .collect()
             })
             .unwrap_or_default();
+        store.gateway_list = Some(state["gateway_list"].clone()).filter(Value::is_object);
+        store.grid = state["grid"].as_str().map(str::to_owned);
+        store.waiting = Some(state["waiting"].clone()).filter(Value::is_object);
+        store.fetch_next = state["fetch_next"]
+            .as_array()
+            .map(|a| a.iter().filter_map(Value::as_u64).collect())
+            .unwrap_or_default();
         Ok(store)
     }
 
@@ -247,6 +270,10 @@ impl Store {
             "files": self.files.iter().map(|(serial, r)| json!({
                 "serial": serial, "ref": hex(r),
             })).collect::<Vec<_>>(),
+            "gateway_list": self.gateway_list,
+            "grid": self.grid,
+            "waiting": self.waiting,
+            "fetch_next": self.fetch_next,
         });
         let text = serde_json::to_string_pretty(&state).map_err(|e| e.to_string())?;
         write(&self.home.join("state.json"), text.as_bytes())
@@ -569,6 +596,124 @@ impl Store {
             .collect()
     }
 
+    // -- gateways and what waits ---------------------------------------------------------------
+
+    /// The gateways kept from the post office's list, each with `km`, its distance from the
+    /// operator's grid square when both are known, nearest first; the others after, as listed.
+    #[must_use]
+    pub fn gateways_ranked(&self) -> Vec<Value> {
+        let mut list: Vec<Value> = self
+            .gateway_list
+            .as_ref()
+            .and_then(|l| l["gateways"].as_array())
+            .cloned()
+            .unwrap_or_default();
+        for g in &mut list {
+            let km = match (&self.grid, g["grid"].as_str()) {
+                (Some(mine), Some(theirs)) => crate::grid::km(mine, theirs),
+                _ => None,
+            };
+            g["km"] = km.map_or(Value::Null, |k| json!(k.round()));
+        }
+        list.sort_by(|a, b| match (a["km"].as_f64(), b["km"].as_f64()) {
+            (Some(x), Some(y)) => x.total_cmp(&y),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        });
+        list
+    }
+
+    /// Sets the operator's grid square, or clears it.
+    ///
+    /// # Errors
+    ///
+    /// It is not a grid square of four or six characters, or the state cannot be written.
+    pub fn set_grid(&mut self, grid: Option<&str>) -> Result<(), Error> {
+        self.grid = match grid.map(str::trim).filter(|g| !g.is_empty()) {
+            None => None,
+            Some(g) if crate::grid::centre(g).is_some() => {
+                let (field, rest) = g.split_at(2);
+                let (square, sub) = rest.split_at(2);
+                Some(format!(
+                    "{}{square}{}",
+                    field.to_uppercase(),
+                    sub.to_lowercase()
+                ))
+            }
+            Some(g) => return Err(format!("{g} is not a grid square, such as EM73 or EM73tt")),
+        };
+        self.save()
+    }
+
+    /// What waited at the last call to a gateway, each entry with `fetch` set when it is asked
+    /// for on the next call.
+    #[must_use]
+    pub fn waiting_entries(&self) -> Vec<Value> {
+        self.waiting
+            .as_ref()
+            .and_then(|w| w["entries"].as_array())
+            .into_iter()
+            .flatten()
+            .map(|e| {
+                let mut e = e.clone();
+                let marked = e["serial"]
+                    .as_u64()
+                    .is_some_and(|s| self.fetch_next.contains(&s));
+                e["fetch"] = marked.into();
+                e
+            })
+            .collect()
+    }
+
+    /// Asks, or stops asking, for a message that waited at the last call, on the next call to a
+    /// gateway, whatever the fetch rule says.
+    ///
+    /// # Errors
+    ///
+    /// No such message waited, or the state cannot be written.
+    pub fn fetch_on_next_call(&mut self, serial: u64, on: bool) -> Result<(), Error> {
+        if !self
+            .waiting_entries()
+            .iter()
+            .any(|e| e["serial"].as_u64() == Some(serial))
+        {
+            return Err(format!("no message #{serial} waited at the last call"));
+        }
+        self.fetch_next.retain(|s| *s != serial);
+        if on {
+            self.fetch_next.push(serial);
+        }
+        self.save()
+    }
+
+    /// What a call to `gateway` at `at` found waiting (RP-5 §5.2's entries), less what came in
+    /// it: kept as the waiting list, and the serials that came no longer asked for.
+    pub fn listed(
+        &mut self,
+        gateway: &str,
+        at: u64,
+        entries: &[radiopost::session::WaitingEntry],
+        came: &[u64],
+    ) {
+        use radiopost::session::flags;
+        let left: Vec<Value> = entries
+            .iter()
+            .filter(|e| !came.contains(&e.serial))
+            .map(|e| {
+                json!({
+                    "serial": e.serial, "id": e.id.text(), "from": e.from, "subject": e.subject,
+                    "size": e.size, "priority": e.priority,
+                    "held": e.flags & flags::HELD != 0,
+                    "third_party": e.flags & flags::THIRD_PARTY != 0,
+                })
+            })
+            .collect();
+        let still: Vec<u64> = left.iter().filter_map(|e| e["serial"].as_u64()).collect();
+        self.fetch_next.retain(|s| still.contains(s));
+        self.waiting = Some(json!({"via": gateway, "at": at, "entries": left}));
+    }
+
     // -- partials --------------------------------------------------------------------------------
 
     /// Keeps what a broken link left of a message (RP-3 §7).
@@ -682,5 +827,58 @@ impl Store {
             callsign.to_owned(),
             json!({"cursor": cursor, "credential_cached": credential_cached}),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::Store;
+
+    /// The gateways nearest first from the operator's grid square; those with no grid after, in
+    /// the post office's order; and the grid kept in its usual form.
+    #[test]
+    fn gateways_nearest_first() {
+        let home = std::env::temp_dir().join(format!("radiopost-store-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let mut store = Store::open(&home).expect("a home");
+        store.gateway_list = Some(
+            json!({"domain": "radiopost.org", "fetched": 1, "gateways": [
+                {"callsign": "N1FAR-1", "grid": "IO91"},
+                {"callsign": "N2NONE-1"},
+                {"callsign": "KK4ODA-1", "grid": "EM73"},
+                {"callsign": "W4MID-1", "grid": "FM18"},
+            ]}),
+        );
+        let order = |s: &Store| -> Vec<String> {
+            s.gateways_ranked()
+                .iter()
+                .map(|g| g["callsign"].as_str().expect("a callsign").to_owned())
+                .collect()
+        };
+        assert_eq!(
+            order(&store),
+            ["N1FAR-1", "N2NONE-1", "KK4ODA-1", "W4MID-1"],
+            "no grid: as listed"
+        );
+        store.set_grid(Some("em73TT")).expect("a grid square");
+        assert_eq!(store.grid.as_deref(), Some("EM73tt"));
+        assert_eq!(
+            order(&store),
+            ["KK4ODA-1", "W4MID-1", "N1FAR-1", "N2NONE-1"]
+        );
+        let ranked = store.gateways_ranked();
+        assert!(
+            ranked[0]["km"].as_f64().is_some_and(|k| k < 150.0),
+            "{ranked:?}"
+        );
+        assert!(ranked[3]["km"].is_null());
+        assert!(store.set_grid(Some("XX99")).is_err());
+        let again = Store::open(&home).expect("the home");
+        assert_eq!(again.grid.as_deref(), Some("EM73tt"), "kept");
+        store.set_grid(None).expect("cleared");
+        assert_eq!(store.grid, None);
+        let _ = std::fs::remove_dir_all(&home);
     }
 }

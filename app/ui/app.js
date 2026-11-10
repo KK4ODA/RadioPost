@@ -37,13 +37,36 @@ function when(seconds) {
 }
 
 function show(view) {
-  for (const id of ["list-view", "reader", "composer", "setup"]) $(id).hidden = id !== view;
+  for (const id of ["list-view", "waiting-view", "gateways-view", "reader", "composer", "setup"]) {
+    $(id).hidden = id !== view;
+  }
+}
+
+// a choice kept in this browser: whom to call, what to fetch
+function kept(name, fallback) {
+  try { return localStorage.getItem(`radiopost.${name}`) || fallback; } catch { return fallback; }
+}
+function keep(name, value) {
+  try { localStorage.setItem(`radiopost.${name}`, value); } catch { /* not kept */ }
+}
+
+function kind() {
+  return document.querySelector("input[name=kind]:checked").value;
+}
+
+function showKind() {
+  const gateway = kind() === "gateway";
+  $("fetch-label").hidden = !gateway;
+  $("gateways-open").hidden = !gateway;
+  $("callsign").placeholder = gateway ? "KK4ODA-1" : "N0CALL";
 }
 
 async function refresh() {
   const s = await api("state");
   $("who").textContent = s.me ? `${s.me.address}  ·  ${s.me.operator}` : "No credential yet";
-  for (const name of ["inbox", "outbox", "sent"]) $(`n-${name}`).textContent = s.counts[name] || "";
+  for (const name of ["inbox", "outbox", "sent", "waiting"]) {
+    $(`n-${name}`).textContent = s.counts[name] || "";
+  }
   $("reports").textContent = s.counts.reports
     ? `${s.counts.reports} session${s.counts.reports > 1 ? "s" : ""} to report to the post office`
     : "";
@@ -85,11 +108,97 @@ async function readLog() {
   log.scrollTop = log.scrollHeight;
 }
 
-async function openFolder(name) {
-  folder = name;
+function markFolder(name) {
   for (const b of document.querySelectorAll("[data-folder]")) {
     b.setAttribute("aria-current", String(b.dataset.folder === name));
   }
+}
+
+async function openWaiting() {
+  folder = "waiting";
+  markFolder("waiting");
+  const w = await api("waiting");
+  $("waiting-note").textContent = w.via
+    ? `What waited at your post office at the call to ${w.via}, ${new Date(w.at * 1000).toLocaleString()}. `
+      + "Tick what to fetch on the next call to a gateway."
+    : "No call to a gateway yet: what waits for you shows here after one.";
+  $("waiting-rows").replaceChildren(...w.entries.map((e) => {
+    const tr = document.createElement("tr");
+    tr.className = ["", "priority", "emergency"][e.priority] || "";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = e.fetch;
+    box.title = "Fetch it on the next call to a gateway";
+    box.addEventListener("change", async () => {
+      try {
+        await api("fetch", {serial: e.serial, on: box.checked});
+      } catch (err) {
+        box.checked = !box.checked;
+        toast(err.message, true);
+      }
+    });
+    const cells = [box, e.from, e.subject + (e.held ? " (attachments held)" : ""),
+                   `${(e.size / 1000).toFixed(1)} kB`];
+    cells.forEach((c, i) => {
+      const td = document.createElement("td");
+      if (typeof c === "string") td.textContent = c; else td.append(c);
+      if (i === 3) td.className = "n";
+      tr.append(td);
+    });
+    tr.title = `#${e.serial}${e.third_party ? " · third-party traffic" : ""}`;
+    return tr;
+  }));
+  show("waiting-view");
+}
+
+async function openGateways(refreshing = false) {
+  markFolder("");
+  try {
+    const g = refreshing ? await api("gateways", {}) : await api("gateways");
+    $("gateways-note").textContent = g.domain
+      ? `From ${g.domain}'s post office, fetched ${new Date(g.fetched * 1000).toLocaleString()}. `
+        + "Kept here for when there is no Internet."
+      : "No list yet: refresh it while you have the Internet. It is kept for when you do not.";
+    if (!$("grid").matches(":focus")) $("grid").value = g.grid || "";
+    $("gateway-rows").replaceChildren(...g.gateways.map((gw) => {
+      const tr = document.createElement("tr");
+      // the dial in MHz to the kilohertz, or finer when it needs it: 7.101, 3.5915
+      const mhz = (hz) => (hz / 1e6).toFixed(4).replace(/0$/, "");
+      const channels = (gw.channels || [])
+        .map((c) => `${mhz(c.dial_hz)} MHz, ${c.bandwidth_hz} Hz`).join("\n");
+      const choose = document.createElement("button");
+      choose.textContent = "Choose";
+      choose.title = `Call ${gw.callsign}: tune Aether to one of its channels first`;
+      choose.addEventListener("click", () => {
+        $("callsign").value = gw.callsign;
+        document.querySelector("input[name=kind][value=gateway]").checked = true;
+        keep("kind", "gateway");
+        showKind();
+        toast(`${gw.callsign} chosen. Tune Aether to ${channels.split("\n")[0]}, then Call.`);
+      });
+      const where = [gw.place, gw.grid].filter(Boolean).join(", ");
+      const cells = [gw.callsign, where, gw.km === null ? "" : `${gw.km} km`, channels,
+                     gw.hours || "", choose];
+      cells.forEach((c, i) => {
+        const td = document.createElement("td");
+        if (typeof c === "string") td.textContent = c; else td.append(c);
+        if (i === 2) td.className = "n";
+        if (i === 0) td.className = "mono nowrap";
+        if (i === 3) td.className = "lines";
+        tr.append(td);
+      });
+      return tr;
+    }));
+    show("gateways-view");
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function openFolder(name) {
+  if (name === "waiting") return openWaiting();
+  folder = name;
+  markFolder(name);
   $("folder-title").textContent = name[0].toUpperCase() + name.slice(1);
   $("who-col").textContent = name === "inbox" ? "From" : "To";
   $("who-col").title = name === "inbox" ? "Who wrote it" : "Whom it is for";
@@ -247,10 +356,35 @@ function wire() {
   $("composer").addEventListener("submit", send);
   $("back").addEventListener("click", () => openFolder(folder));
   $("setup-open").addEventListener("click", () => show("setup"));
+  for (const radio of document.querySelectorAll("input[name=kind]")) {
+    radio.checked = radio.value === kept("kind", "gateway");
+    radio.addEventListener("change", () => { keep("kind", kind()); showKind(); });
+  }
+  $("fetch").value = kept("fetch", "all");
+  $("fetch").addEventListener("change", () => keep("fetch", $("fetch").value));
+  showKind();
+  $("gateways-open").addEventListener("click", () => openGateways());
+  $("gateways-refresh").addEventListener("click", async () => {
+    $("gateways-refresh").disabled = true;
+    await openGateways(true);
+    $("gateways-refresh").disabled = false;
+  });
+  $("grid-save").addEventListener("click", async () => {
+    try {
+      await api("grid", {grid: $("grid").value});
+      await openGateways();
+    } catch (e) {
+      toast(e.message, true);
+    }
+  });
   $("call").addEventListener("click", () => {
     const callsign = $("callsign").value.trim();
     if (!callsign) { toast("Whom to call?", true); return; }
-    act("call", {callsign, station: $("direct").checked, adapter: adapter()});
+    const fetchRule = $("fetch").value;
+    act("call", {
+      callsign, station: kind() === "station", adapter: adapter(),
+      fetch: /^[0-9]+$/.test(fetchRule) ? Number(fetchRule) : fetchRule,
+    });
   });
   $("listen").addEventListener("click", () => act("listen", {adapter: adapter()}));
   $("stop").addEventListener("click", () => act("stop", {}));

@@ -390,6 +390,9 @@ struct SessionStats {
     now: u64,
     welcomed: bool,
     top_serial: Option<u64>,
+    /// The waiting list the gateway gave, and the serials that came.
+    listed: Vec<WaitingEntry>,
+    came: Vec<u64>,
     /// The air forms this side offered, by content ID.
     airs: HashMap<ContentId, Vec<u8>>,
     /// What the other station took, and what came in, each with its air form, in order.
@@ -441,6 +444,7 @@ fn apply(
     match e {
         SessionEvent::Listed(entries) => {
             stats.welcomed = true;
+            stats.listed.clone_from(&entries);
             for WaitingEntry {
                 serial,
                 id,
@@ -467,6 +471,7 @@ fn apply(
             store.drop_partial(&id);
             if let Some(s) = serial {
                 stats.top_serial = Some(stats.top_serial.map_or(s, |t| t.max(s)));
+                stats.came.push(s);
             }
             say(&format!(
                 "received {} from {}",
@@ -606,8 +611,8 @@ pub fn call(
         piece: 4096,
         station: (kind == Kind::Station).then(|| store.trust()).transpose()?,
     };
-    let mut client =
-        Client::new(cfg, chooser(fetch)).map_err(|e| format!("cannot start a session: {e}"))?;
+    let mut client = Client::new(cfg, chooser(fetch, store.fetch_next.clone()))
+        .map_err(|e| format!("cannot start a session: {e}"))?;
     if kind == Kind::Gateway {
         ask_for_files(&mut client, store, say);
     }
@@ -635,6 +640,7 @@ pub fn call(
     if kind == Kind::Gateway && stats.welcomed {
         let top = stats.top_serial.map_or(cursor, |t| t.max(cursor));
         store.set_gateway(remote, top, true);
+        store.listed(remote, stats.now, &stats.listed, &stats.came);
     }
     store.save()?;
     say(&format!("the session with {remote} is over"));
@@ -642,15 +648,19 @@ pub fn call(
     Ok(report)
 }
 
-/// What the user fetches of what waits: all, what is no larger than a size, or nothing.
-fn chooser(fetch: Fetch) -> Chooser {
+/// What the user fetches of what waits: all, what is no larger than a size, or nothing, and
+/// whatever they marked to fetch from the last call's waiting list.
+fn chooser(fetch: Fetch, marked: Vec<u64>) -> Chooser {
     Box::new(move |entries: &[WaitingEntry]| {
         entries
             .iter()
-            .filter(|e| match fetch {
-                Fetch::All => true,
-                Fetch::UpTo(n) => e.size <= n,
-                Fetch::Nothing => false,
+            .filter(|e| {
+                marked.contains(&e.serial)
+                    || match fetch {
+                        Fetch::All => true,
+                        Fetch::UpTo(n) => e.size <= n,
+                        Fetch::Nothing => false,
+                    }
             })
             .map(|e| e.serial)
             .collect()

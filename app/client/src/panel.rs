@@ -27,7 +27,7 @@ use tiny_http::{Header, Method, Request, Response, Server};
 
 use crate::compose::{Draft, File, media_type};
 use crate::online;
-use crate::session::{self, Kind, Options};
+use crate::session::{self, Fetch, Kind, Options};
 use crate::store::{Error, Store, unhex};
 
 /// The panel's files, built into the program; `--ui DIR` serves them from disk instead.
@@ -312,9 +312,21 @@ impl Panel {
                 } else {
                     Kind::Gateway
                 };
-                self.run(Some(callsign), kind, &text("adapter"))
+                let fetch = match &body["fetch"] {
+                    Value::Null => Fetch::All,
+                    Value::String(f) if f == "all" => Fetch::All,
+                    Value::String(f) if f == "none" => Fetch::Nothing,
+                    Value::Number(n) => Fetch::UpTo(n.as_u64().ok_or("fetch: a size in bytes")?),
+                    _ => return Err("fetch: all, none or a size in bytes".into()),
+                };
+                self.run(Some(callsign), kind, &text("adapter"), fetch)
             }
-            (Method::Post, "/api/listen") => self.run(None, Kind::Station, &text("adapter")),
+            (Method::Post, "/api/listen") => {
+                self.run(None, Kind::Station, &text("adapter"), Fetch::All)
+            }
+            (_, "/api/gateways" | "/api/grid" | "/api/waiting" | "/api/fetch") => {
+                self.gateway_side(method, path, body)
+            }
             (
                 Method::Post,
                 "/api/enroll" | "/api/post-office" | "/api/renew" | "/api/report" | "/api/accept",
@@ -486,7 +498,7 @@ impl Panel {
             "me": me, "device": device, "trusted": trusted, "post_office": store.post_office,
             "counts": {"outbox": store.outbox.len(), "inbox": store.inbox.len(),
                        "sent": store.sent.len(), "reports": store.reports.len(),
-                       "files": store.files.len()},
+                       "files": store.files.len(), "waiting": store.waiting_entries().len()},
             "activity": {"state": a.state, "remote": a.remote, "failed": a.failed},
             "log": a.log.len(),
         }))
@@ -517,7 +529,58 @@ impl Panel {
     }
 
     /// Starts a call (`remote`) or listening (`None`) on a thread of its own.
-    fn run(&self, remote: Option<String>, kind: Kind, adapter: &str) -> Result<Value, Error> {
+    /// The gateways the post office lists, the operator's grid, what waited at the last call to
+    /// a gateway, and the messages marked to fetch on the next.
+    fn gateway_side(&self, method: &Method, path: &str, body: &Value) -> Result<Value, Error> {
+        let text = |name: &str| body[name].as_str().unwrap_or("").trim().to_owned();
+        match (method, path) {
+            (Method::Get, "/api/gateways") => self.gateways(),
+            (Method::Post, "/api/gateways") => {
+                self.busy()?;
+                let mut store = Store::open(&self.home)?;
+                online::gateways(&mut store)?;
+                self.gateways()
+            }
+            (Method::Post, "/api/grid") => {
+                self.busy()?;
+                let mut store = Store::open(&self.home)?;
+                store.set_grid(Some(&text("grid")))?;
+                self.gateways()
+            }
+            (Method::Get, "/api/waiting") => {
+                let store = Store::open(&self.home)?;
+                let w = store.waiting.clone().unwrap_or(Value::Null);
+                Ok(json!({"via": w["via"], "at": w["at"], "entries": store.waiting_entries()}))
+            }
+            (Method::Post, "/api/fetch") => {
+                self.busy()?;
+                let mut store = Store::open(&self.home)?;
+                let serial = body["serial"].as_u64().ok_or("which message: its serial")?;
+                store.fetch_on_next_call(serial, body["on"].as_bool().unwrap_or(true))?;
+                Ok(json!({"entries": store.waiting_entries()}))
+            }
+            _ => Err(format!("no {method} {path}")),
+        }
+    }
+
+    /// The gateways kept from the post office's list, nearest first, and the grid they are
+    /// ranked from.
+    fn gateways(&self) -> Result<Value, Error> {
+        let store = Store::open(&self.home)?;
+        let list = store.gateway_list.clone().unwrap_or(Value::Null);
+        Ok(json!({
+            "domain": list["domain"], "fetched": list["fetched"], "grid": store.grid,
+            "gateways": store.gateways_ranked(),
+        }))
+    }
+
+    fn run(
+        &self,
+        remote: Option<String>,
+        kind: Kind,
+        adapter: &str,
+        fetch: Fetch,
+    ) -> Result<Value, Error> {
         {
             let mut a = lock(&self.activity);
             if a.state != "idle" {
@@ -538,6 +601,7 @@ impl Panel {
             adapter
         });
         opts.stop = Some(Arc::clone(&self.stop));
+        opts.fetch = fetch;
         let home = self.home.clone();
         let activity = Arc::clone(&self.activity);
         thread::spawn(move || {

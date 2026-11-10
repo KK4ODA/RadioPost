@@ -130,6 +130,13 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `station::run` waits for a modem that is away and stops when asked; `serve` is `run` with no one
   to ask. A gateway's credential names the gateway as its operator (RP-5 §6.4) and lasts 90 days:
   registering again replaces it. `tests/common` holds the gateway tests' post office and clients.
+  The client's gateway side: `online::gateways` fetches RP-5 §4.4's list, its JWS checked with the
+  keys the home trusts for the user's domain (and those its signed `info` adds, RP-1 §7.2), and
+  keeps it in `state.json` for when there is no Internet; `grid.rs` ranks it by distance from the
+  operator's grid square. A gateway call keeps what was listed (`Store::listed`, less what came) as
+  the *Waiting* folder, and serials marked there (`fetch_next`) are fetched whatever `--fetch`
+  says. `gateway/tests/online.rs` drives it all through the client's panel against the real
+  gateway and post office.
   `core/api` (`radiopost-api`) is RP-5 over HTTPS (login, calls, enrollment, DNS over HTTPS), shared
   by the gateway and the client; the client's `online` module uses it (enroll, renew, settings —
   `PUT` replaces them whole, so the client merges —, accept list, `report`). `app/src-tauri` has its

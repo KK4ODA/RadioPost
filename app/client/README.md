@@ -35,7 +35,11 @@ radiopost [--home DIR] COMMAND
 | `show ID` | Shows a message; `ID` is the start of its content ID. Attachments too large for the radio say *Held at the post office*. |
 | `attachments [ID [NAME]…]` | Asks, on the next call to a gateway, for a received message's held attachments, all or those named (RP-3 §5.6); without `ID`, what will be asked for. They come on the call after, in a new message from the post office (RP-6 §2.5). |
 | `reports` | The station-to-station sessions waiting to be reported to the post office (RP-5 §6.6). |
-| `call CALLSIGN [--station] [--fetch all\|none\|BYTES]` | Calls a gateway, or with `--station` another client's station. |
+| `call CALLSIGN [--station] [--fetch all\|none\|BYTES]` | Calls a gateway, or with `--station` another client's station. `--fetch` says what to fetch of what waits: everything (the default), what is no larger on the air than BYTES, or only the list; what `fetch` marked comes whatever it says, and messages up to 1 000 bytes come unasked. |
+| `gateways [--refresh]` | The gateways your post office lists (RP-5 §4.4): where each is, its channels and hours, nearest first when your grid is set. `--refresh` fetches the list over the Internet, its signature checked with the post office's key; it is kept for when there is no Internet. |
+| `grid [SQUARE \| --clear]` | Your Maidenhead grid square (`EM73`, `EM73tt`), to rank gateways by distance. |
+| `waiting` | What waited at your post office at the last call to a gateway: every message not yet picked up (RP-3 §6.2). |
+| `fetch SERIAL… [--not]` | Fetch these waiting messages on the next call to a gateway, whatever `--fetch` says; `--not` stops asking. |
 | `listen` | Answers one station's call. |
 | `panel [--port N] [--ui DIR]` | Serves the panel on this computer (port 8620) and says where to open it. |
 | `conformance --adapter HOST:PORT`, `conformance off` | Conformance mode (below). |
@@ -60,8 +64,9 @@ For a test on the air between two stations with Aether HF, see
 `radiopost panel` serves the page in `app/ui/` (plain HTML, CSS and JavaScript, no build step,
 light or dark as the system is) and a JSON API under `/api/`, on the loopback interface only, as
 the Aether app serves its own. It shows the folders, reads and writes messages with attachments,
-asks for held attachments (the reader's *Ask on the next call*), calls a station or listens for
-one, sends the reports, and holds the setup: enrollment with a code,
+asks for held attachments (the reader's *Ask on the next call*), calls a gateway (with a Fetch
+setting, the post office's gateway list in *Choose a gateway*, and the *Waiting* folder to mark
+what to fetch next) or a station, listens for one, sends the reports, and holds the setup: enrollment with a code,
 the post office and renewal, the accept list, the device key, a credential imported by hand and
 the post offices trusted. A session runs on a thread of its own; while it runs, the panel changes
 nothing in the home. `--ui DIR` serves the page from a directory, for working on it.
@@ -112,7 +117,8 @@ The home (`--home`, else `$RADIOPOST_HOME`, else `.radiopost` in the user's home
 the device seed, the credential, the trusted keys, each message's canonical encoding named by its
 content ID, partial messages to resume (RP-3 §7) and `state.json`: the folders, the next serial,
 the station called's replay cache (RP-1 §6.3), what each gateway holds, the reports, each received
-message's serial at the post office, and the held attachments to ask for. A request leaves the home
+message's serial at the post office, the held attachments to ask for, the post office's gateway
+list and your grid square, what waited at the last call to a gateway, and what to fetch next. A request leaves the home
 once a gateway has answered it; a link broken before that keeps it for the next call. Files are
 written whole or not at all, and a message received is on disk before its `RECEIPT` goes out (RP-3
 §5.4).

@@ -48,6 +48,12 @@ usage: radiopost [--home DIR] COMMAND ...
                            conformance mode: reach only the conformance tester's test adapter
   call CALLSIGN [--station] [--fetch all|none|BYTES] [SESSION OPTIONS]
                            call a gateway, or with --station another client's station (RP-3 §10)
+  gateways [--refresh]     the gateways your post office lists (RP-5 §4.4), nearest first when
+                           your grid is set; --refresh fetches the list over the Internet
+  grid [SQUARE | --clear]  your Maidenhead grid square (EM73 or EM73tt), to rank gateways
+  waiting                  what waited at your post office at the last call to a gateway
+  fetch SERIAL... [--not]  fetch these waiting messages on the next call to a gateway, whatever
+                           --fetch says; --not stops asking for them
   listen [SESSION OPTIONS] answer one station's call (RP-3 §10)
   panel [--port N] [--ui DIR]
                            serve the client's panel on this computer (port 8620) and say where
@@ -90,7 +96,7 @@ struct Args {
     rest: Vec<String>,
 }
 
-const SWITCHES: &[&str] = &["--station", "--plain"];
+const SWITCHES: &[&str] = &["--station", "--plain", "--refresh", "--clear", "--not"];
 
 impl Args {
     fn parse(args: &[String]) -> Result<Args, Error> {
@@ -177,6 +183,37 @@ fn now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
+}
+
+/// A gateway from the post office's list, on one line: callsign, place, distance, channels,
+/// hours.
+fn gateway_line(g: &serde_json::Value) -> String {
+    let channels: Vec<String> = g["channels"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|c| {
+            format!(
+                "{:.4} MHz {} Hz",
+                c["dial_hz"].as_f64().unwrap_or(0.0) / 1e6,
+                c["bandwidth_hz"]
+            )
+        })
+        .collect();
+    let mut place = [g["place"].as_str(), g["grid"].as_str()]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(", ");
+    if let Some(km) = g["km"].as_f64() {
+        let _ = write!(place, ", {km} km");
+    }
+    format!(
+        "{:<10} {place}\n           {}; {}",
+        g["callsign"].as_str().unwrap_or("?"),
+        channels.join(", "),
+        g["hours"].as_str().unwrap_or("hours not said")
+    )
 }
 
 fn line_of(store: &Store, id: &radiopost::ContentId) -> String {
@@ -502,6 +539,72 @@ fn run(words: &[String]) -> Result<(), Error> {
             })?;
             if let Some(why) = report.failed {
                 return Err(why);
+            }
+        }
+        "gateways" => {
+            if args.has("--refresh") {
+                let n = online::gateways(&mut store)?;
+                println!("{n} gateways listed");
+            }
+            let Some(list) = &store.gateway_list else {
+                return Err("no gateway list kept yet: `radiopost gateways --refresh`".into());
+            };
+            println!(
+                "{}'s post office, fetched {}",
+                list["domain"].as_str().unwrap_or("?"),
+                utc(list["fetched"].as_u64().unwrap_or(0))
+            );
+            for g in store.gateways_ranked() {
+                println!("{}", gateway_line(&g));
+            }
+        }
+        "grid" => {
+            if args.has("--clear") {
+                store.set_grid(None)?;
+            } else if let Some(g) = args.rest.first() {
+                store.set_grid(Some(g))?;
+            }
+            println!("{}", store.grid.as_deref().unwrap_or("no grid square set"));
+        }
+        "waiting" => {
+            let Some(w) = &store.waiting else {
+                return Err("no call to a gateway yet".into());
+            };
+            println!(
+                "at the call to {}, {}:",
+                w["via"].as_str().unwrap_or("?"),
+                utc(w["at"].as_u64().unwrap_or(0))
+            );
+            for e in store.waiting_entries() {
+                println!(
+                    "#{:<5} {:>7} bytes  {}  {}{}{}",
+                    e["serial"],
+                    e["size"],
+                    e["from"].as_str().unwrap_or(""),
+                    e["subject"].as_str().unwrap_or(""),
+                    if e["held"] == true {
+                        "  (attachments held)"
+                    } else {
+                        ""
+                    },
+                    if e["fetch"] == true {
+                        "  [fetch on the next call]"
+                    } else {
+                        ""
+                    },
+                );
+            }
+        }
+        "fetch" => {
+            if args.rest.is_empty() {
+                return Err("fetch SERIAL... [--not]".into());
+            }
+            for serial in &args.rest {
+                let n = serial
+                    .trim_start_matches('#')
+                    .parse()
+                    .map_err(|_| format!("{serial} is not a serial"))?;
+                store.fetch_on_next_call(n, !args.has("--not"))?;
             }
         }
         "panel" => {

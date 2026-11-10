@@ -7,13 +7,15 @@
 //! * [`compose`]: writing a message (RP-2).
 //! * [`session`]: calling a gateway or a station, or answering a station, over RPMI.
 //! * [`online`]: the post office over the Internet: enrollment, renewal, settings, the accept
-//!   list, and station-to-station sessions reported (RP-5 §6).
+//!   list, station-to-station sessions reported (RP-5 §6), and the gateways it lists (§4.4).
+//! * [`grid`]: Maidenhead grid squares, to rank gateways by distance.
 //! * [`panel`]: the page in `app/ui/` and its JSON API, served on the loopback interface.
 //!
 //! `radiopost` is its command-line program; the desktop application (Tauri, D27) is built on the
 //! same library.
 
 pub mod compose;
+pub mod grid;
 pub mod online;
 pub mod panel;
 pub mod session;

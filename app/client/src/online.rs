@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! The client and its post office over the Internet (RP-5): enrolling a device with a one-time
 //! code (§6.1), renewing the credential (§6.2), the settings (§6.3) and the accept list (§6.5),
-//! and the station-to-station sessions reported (§6.6), when the user has the Internet.
+//! the station-to-station sessions reported (§6.6), and the gateways the post office lists
+//! (§4.4), when the user has the Internet.
 //!
 //! The post office's API is the one the home names (`post_office`), or the one its domain's DNS
 //! records name (RP-1 §7.1). Its key is trusted as `trust` added it, or from the same records.
 
+use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::sync::{Arc, Mutex};
 
 use ed25519_dalek::SigningKey;
 use radiopost::credential::PostOfficeKey;
+use radiopost::{cbor, crypto, jws};
 use radiopost_api::{Account, Http, RESOLVER, code_of};
 use serde_json::{Value, json};
 
@@ -159,6 +162,57 @@ pub fn renew(store: &Store) -> Result<String, Error> {
         "credential {} for {} ({})",
         body.serial, body.address, body.operator
     ))
+}
+
+/// RP-5 §4.4: the gateways the user's post office lists, its signature checked against the keys
+/// the home trusts for the domain, and those the post office's info document, signed by one of
+/// them, adds (RP-1 §7.2). Kept in the home, for the radio when there is no Internet. Returns how
+/// many it lists.
+///
+/// # Errors
+///
+/// No identity or post office, no answer, or a list the post office's keys did not sign.
+pub fn gateways(store: &mut Store) -> Result<usize, Error> {
+    let domain = domain_of(&store.me()?.address);
+    let base = post_office(store, &domain)?;
+    trust_from_dns(store, &domain);
+    let at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let trusted: HashMap<String, [u8; 32]> = store
+        .trust()?
+        .keys
+        .get(&domain)
+        .into_iter()
+        .flatten()
+        .filter(|k| k.not_before <= at && at <= k.not_after)
+        .map(|k| (cbor::hex(&crypto::kid(&k.public)), k.public))
+        .collect();
+    if trusted.is_empty() {
+        return Err(format!(
+            "this home trusts no key of {domain}'s post office: add it in Setup (`radiopost trust`)"
+        ));
+    }
+    let http = Http::anonymous(&base);
+    let fetch = |path: &str| match http.send_text("GET", path, None, None) {
+        Ok((200, text)) => Ok(text.trim().to_owned()),
+        Ok((status, _)) => Err(format!("{base}{path} answered {status}")),
+        Err(_) => Err(format!("cannot reach {base}")),
+    };
+    let info = fetch("/info").ok();
+    let keys = jws::accepted_keys(&trusted, info.as_deref());
+    let document = jws::verify(&fetch("/gateways")?, &keys).map_err(|code| {
+        format!(
+            "the gateway list is not signed by {domain}'s post office ({})",
+            code.name()
+        )
+    })?;
+    let list = document["gateways"].as_array().cloned().unwrap_or_default();
+    store.gateway_list = Some(json!({
+        "domain": domain, "fetched": at, "issued": document["issued"], "gateways": list,
+    }));
+    store.save()?;
+    Ok(list.len())
 }
 
 /// RP-5 §6.3: the settings, after `change`'s members are set (a member set to `null` is
