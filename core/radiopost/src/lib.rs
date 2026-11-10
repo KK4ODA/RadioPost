@@ -7,10 +7,12 @@
 //! Every type here is checked against the test vectors in `vectors/` (`tests/vectors.rs`). Where
 //! this library and a specification disagree, the specification is right.
 
+pub mod base64url;
 pub mod cbor;
 pub mod credential;
 pub mod crypto;
 pub mod error;
+pub mod jws;
 pub mod message;
 pub mod pdu;
 pub mod session;

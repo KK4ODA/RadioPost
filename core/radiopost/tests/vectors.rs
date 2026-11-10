@@ -402,3 +402,44 @@ fn pdus_frame_and_refuse_as_rp3_says() {
     }
     assert_eq!(hex(&[0x0a, 0xff]), "0aff");
 }
+
+#[test]
+fn public_documents_are_signed_and_checked_as_rp0_and_rp1_say() {
+    let keys = keys();
+    let file = vectors("jws.json");
+    for d in file["documents"].as_array().expect("documents") {
+        let key = SigningKey::from_bytes(&keys.seeds[text(d, "signed_by")]);
+        let payload = radiopost::base64url::decode(text(d, "payload_b64url")).expect("base64url");
+        assert_eq!(
+            radiopost::jws::sign(&payload, &key),
+            text(d, "jws"),
+            "{}",
+            text(d, "name")
+        );
+    }
+    let publics: HashMap<String, [u8; 32]> = keys
+        .seeds
+        .values()
+        .map(|s| {
+            let public = SigningKey::from_bytes(s).verifying_key().to_bytes();
+            (hex(&crypto::kid(&public)), public)
+        })
+        .collect();
+    for c in file["verification"].as_array().expect("verification") {
+        let dns: HashMap<String, [u8; 32]> = c["dns_kids"]
+            .as_array()
+            .expect("dns_kids")
+            .iter()
+            .map(|k| {
+                let k = k.as_str().expect("a kid");
+                (k.to_owned(), publics[k])
+            })
+            .collect();
+        let accepted = radiopost::jws::accepted_keys(&dns, c["info_jws"].as_str());
+        let got = match radiopost::jws::verify(text(c, "jws"), &accepted) {
+            Ok(_) => "ok".to_owned(),
+            Err(e) => e.to_string(),
+        };
+        assert_eq!(got, text(c, "expect"), "{}", text(c, "what"));
+    }
+}

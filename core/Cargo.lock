@@ -608,6 +608,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "radiopost-postoffice"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "getrandom 0.3.4",
+ "radiopost",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tiny_http",
+]
+
+[[package]]
 name = "radiopost-tcp"
 version = "0.1.0"
 dependencies = [
@@ -751,6 +764,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
 dependencies = [
  "serde_core",
+ "serde_derive",
 ]
 
 [[package]]

@@ -67,6 +67,14 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   the web's roots), plain TCP with `--plain` on an amateur mesh, which is on the air (RP-4 0.5.0:
   §9.5 and the design had put TLS on AREDN). One host, one link; for an Internet rehearsal before
   the air (`docs/user/on-air-tests.md` §3).
+  `core/postoffice` (`radiopost-postoffice`, program `radiopost-po`) is Phase 2's post office: a
+  port of `rpref/po.py` that answers every exchange of `api-exchanges`, `api-account` and `direct`
+  exactly (its randomness comes through `Draw`, so the vectors' `stream` replays tokens and session
+  IDs; each vector's setup in `tests/vectors.rs` mirrors `make.py`'s), its signed documents
+  (`radiopost::jws`, replayed against `jws.json`), and the service: plain HTTP behind an HTTPS
+  front, an operator's port on loopback (`code`, `deliver`, `revoke`, `outgoing`, `status`), state
+  in `state.json` written whole after each request. Mail it accepts for other domains waits in
+  `outgoing` for RP-6's email out. `radiopost::base64url` is RP-0 §4.2's encoding.
   Station-to-station mail moves to `sent` and its RP-5 §6.6 report is kept (D30), from the proofs
   the engines now keep (`Client::proofs`, `Called::proofs`); the replay test matches session-03
   byte for byte and `direct.json`'s two reports. The engines report their own refusals

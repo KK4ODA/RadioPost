@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+[package]
+name = "radiopost-postoffice"
+description = "A RadioPost post office's service: accounts, credentials, sessions and copies (RP-5), its public documents (RP-1 §7), served over HTTP."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "radiopost-po"
+path = "src/main.rs"
+
+[dependencies]
+radiopost = { path = "../radiopost" }
+ed25519-dalek = "3"
+getrandom = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+tiny_http = "0.12"
+
+[dev-dependencies]
+sha2 = "0.11"
+
+[lints]
+workspace = true
