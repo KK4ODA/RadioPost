@@ -4,8 +4,8 @@
 use ed25519_dalek::SigningKey;
 
 use super::{
-    Caps, Event, Inbound, Outgoing, Receipts, VERSION, WaitingEntry, done, error_pdu, listed_ids,
-    listed_pairs, msg_pdus, piece_for, transmission,
+    Caps, Event, Inbound, Outgoing, Proof, Proofs, Receipts, VERSION, WaitingEntry, done,
+    error_pdu, listed_ids, listed_pairs, msg_pdus, piece_for, transmission,
 };
 use crate::cbor::Value;
 use crate::credential::{self, Body, Credential, Trust, flags};
@@ -37,7 +37,7 @@ pub struct CalledConfig {
 }
 
 /// The messages its user addressed to an account, each with a serial of its own (RP-3 §10).
-pub type MailFor = Box<dyn FnMut(&str) -> Vec<(u64, Outgoing)>>;
+pub type MailFor = Box<dyn FnMut(&str) -> Vec<(u64, Outgoing)> + Send>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum State {
@@ -49,6 +49,8 @@ enum State {
 
 /// The side of a station-to-station session that was called.
 pub struct Called {
+    own_proof: Option<Proof>,
+    caller_proof: Option<Proof>,
     cfg: CalledConfig,
     mail_for: MailFor,
     me: Body,
@@ -57,6 +59,7 @@ pub struct Called {
     state: State,
     hello: Option<Value>,
     caller: Option<Body>,
+    accepted: Option<(String, [u8; 8])>,
     waiting: Vec<(u64, Outgoing)>,
     sent: Vec<u64>,
     caller_caps: Caps,
@@ -75,6 +78,8 @@ impl Called {
             .ok_or(ErrorCode::CredentialInvalid)?
             .body;
         Ok(Called {
+            own_proof: None,
+            caller_proof: None,
             cfg,
             mail_for,
             me,
@@ -83,6 +88,7 @@ impl Called {
             state: State::Hello,
             hello: None,
             caller: None,
+            accepted: None,
             waiting: Vec::new(),
             sent: Vec::new(),
             caller_caps: Caps::from_value(None),
@@ -121,6 +127,24 @@ impl Called {
         std::mem::take(&mut self.events)
     }
 
+    /// The (address, nonce) of the caller's statement, once accepted in time form: what the
+    /// program adds to the replay cache it gives the next session's `seen` (RP-1 §6.3).
+    #[must_use]
+    pub fn seen(&self) -> Option<&(String, [u8; 8])> {
+        self.accepted.as_ref()
+    }
+
+    /// Both stations' proofs, once the caller's statement is accepted and this station's own made
+    /// (RP-1 §6.5): what a station-to-station session is reported with (RP-5 §6.6).
+    #[must_use]
+    pub fn proofs(&self) -> Option<Proofs> {
+        Some(Proofs {
+            started: self.cfg.time,
+            mine: self.own_proof.clone()?,
+            theirs: self.caller_proof.clone()?,
+        })
+    }
+
     /// The caller's credential body, once checked.
     #[must_use]
     pub fn caller(&self) -> Option<&Body> {
@@ -129,6 +153,7 @@ impl Called {
 
     fn fail(&mut self, code: ErrorCode) {
         self.queued.push(transmission(&[error_pdu(code)]));
+        self.events.push(Event::Refused(code));
         self.state = State::Over;
         self.events.push(Event::End);
     }
@@ -282,6 +307,14 @@ impl Called {
         };
         match verdict {
             Ok(()) => {
+                if let Form::Time { nonce, .. } = &stmt.form {
+                    self.accepted = Some((stmt.address.clone(), *nonce));
+                }
+                self.caller_proof = Some(Proof {
+                    statement: stmt.encode(),
+                    signature: signature.map(<[u8]>::to_vec).unwrap_or_default(),
+                    credential: cred.to_vec(),
+                });
                 self.events.push(Event::StationProved(body.clone()));
                 self.caller = Some(body);
                 self.welcome_ready(&hello);
@@ -335,6 +368,12 @@ impl Called {
                 nonce: nonce.unwrap_or_default(),
             },
         };
+        let signature = stmt.sign(&self.cfg.device);
+        self.own_proof = Some(Proof {
+            statement: stmt.encode(),
+            signature: signature.to_vec(),
+            credential: self.cfg.credential.clone(),
+        });
         // It cannot tell from an offer whom a message is for, so it takes what it has room for.
         let accept = hello
             .get(8)
@@ -361,7 +400,7 @@ impl Called {
             (11, Value::Bool(false)),
             (12, Value::Bool(false)),
             (13, Value::bytes(&self.cfg.credential)),
-            (15, Value::bytes(&stmt.sign(&self.cfg.device))),
+            (15, Value::bytes(&signature)),
         ]);
         // Unasked: what fits the caller's `auto`, and the rest of what it holds in part (§5.2).
         let auto = hello.get(10).and_then(Value::as_u64).unwrap_or(0);
@@ -385,13 +424,14 @@ impl Called {
 
     fn msg(&mut self, pdu: &Value) {
         match self.inbound.take(pdu) {
-            Some(Ok((_, message))) => {
+            Some(Ok((_, message, air))) => {
                 let id = message.content_id();
                 if message.recipients().contains(&self.me.address.as_str()) {
                     self.receipts.complete.push(id);
                     self.events.push(Event::Received {
                         serial: None,
                         message,
+                        air,
                     });
                 } else {
                     // Not for this account: refused and dropped (RP-3 §10).

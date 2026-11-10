@@ -1,0 +1,152 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RadioPost</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand" title="RadioPost: email by amateur radio">RadioPost</div>
+    <div class="who" id="who" title="The account and callsign this client speaks for"></div>
+    <div class="state" id="state" data-state="idle" title="What the station is doing">Idle</div>
+  </header>
+
+  <div class="frame">
+    <nav class="side" aria-label="Folders">
+      <button class="primary" id="write" title="Write a message; it waits in the outbox until a session carries it">Write</button>
+      <ul class="folders">
+        <li><button data-folder="inbox" title="Messages received">Inbox <span class="count" id="n-inbox"></span></button></li>
+        <li><button data-folder="outbox" title="Messages waiting to be sent">Outbox <span class="count" id="n-outbox"></span></button></li>
+        <li><button data-folder="sent" title="Messages another station has taken">Sent <span class="count" id="n-sent"></span></button></li>
+      </ul>
+
+      <section class="station" aria-label="Station">
+        <h2>Station</h2>
+        <label title="The callsign to call: another client's station, or a gateway">Call
+          <input id="callsign" placeholder="N0CALL" autocomplete="off" spellcheck="false">
+        </label>
+        <label class="check" title="Station to station (RP-3 §10): the other station proves who it is">
+          <input type="checkbox" id="direct" checked> Another client's station
+        </label>
+        <div class="row">
+          <button id="call" title="Call the station and carry a session">Call</button>
+          <button id="listen" title="Answer one station's call">Listen</button>
+          <button id="stop" class="quiet" title="Stop listening" hidden>Stop</button>
+        </div>
+        <label title="Aether HF's control API (ws://127.0.0.1:8515/v1, as Aether runs it), or an RPMI adapter's address: radiopost-tcp for a rehearsal over the Internet, rpmi-loopback for tests with no radio">Modem
+          <input id="adapter" value="ws://127.0.0.1:8515/v1" spellcheck="false">
+        </label>
+        <p class="note" id="reports" title="Station-to-station sessions kept to report to the post office when there is Internet (RP-5 §6.6)"></p>
+        <button class="quiet" id="report" title="Send the sessions kept to your post office over the Internet, so your mailbox and sent mail agree with what crossed the air (RP-5 §6.6)" hidden>Send reports</button>
+      </section>
+
+      <button class="quiet" id="setup-open" title="This device's key, its credential and the post offices it trusts">Setup</button>
+    </nav>
+
+    <main>
+      <section id="list-view">
+        <h1 id="folder-title">Inbox</h1>
+        <table class="list" aria-label="Messages">
+          <thead><tr><th id="who-col" title="Who wrote it">From</th><th title="What it is about">Subject</th><th title="When it was written">Date</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <p class="empty" id="empty" hidden>Nothing here.</p>
+      </section>
+
+      <article id="reader" hidden aria-live="polite">
+        <button class="quiet" id="back" title="Back to the folder">Back</button>
+        <h1 id="r-subject"></h1>
+        <dl class="fields">
+          <dt>From</dt><dd id="r-from"></dd>
+          <dt>To</dt><dd id="r-to"></dd>
+          <dt id="r-cc-t">Cc</dt><dd id="r-cc"></dd>
+          <dt>Date</dt><dd id="r-date"></dd>
+          <dt title="The message's content ID, the same at every station that holds it">ID</dt><dd id="r-id" class="mono"></dd>
+        </dl>
+        <ul class="files" id="r-files"></ul>
+        <pre class="body" id="r-body"></pre>
+      </article>
+
+      <form id="composer" hidden>
+        <h1>New message</h1>
+        <label title="Addresses, separated by commas">To <input name="to" required spellcheck="false" placeholder="ana@hampost.org"></label>
+        <label title="Copies, separated by commas">Cc <input name="cc" spellcheck="false"></label>
+        <label title="What it is about">Subject <input name="subject"></label>
+        <label title="Emergency is for emergency traffic only">Priority
+          <select name="priority" class="narrow">
+            <option value="0">Routine</option><option value="1">Priority</option><option value="2">Emergency</option>
+          </select>
+        </label>
+        <label title="Plain text">Text <textarea name="body" rows="12"></textarea></label>
+        <label title="Files carried in the message: keep them small, every byte goes on the air">Attach <input type="file" name="files" multiple></label>
+        <div class="row">
+          <button class="primary" type="submit" title="Put it in the outbox">Put in outbox</button>
+          <button class="quiet" type="button" id="cancel" title="Discard it">Discard</button>
+        </div>
+      </form>
+
+      <section id="setup" hidden>
+        <h1>Setup</h1>
+        <form class="card" id="enroll">
+          <h2>Enroll with your post office</h2>
+          <p class="note">Your post office's operator gives you a one-time code once they have seen your licence. Over the Internet.</p>
+          <label title="Your RadioPost address">Address <input name="address" placeholder="facundo@radiopost.org" required spellcheck="false" autocomplete="email"></label>
+          <label title="Your callsign, as on your licence">Callsign <input name="operator" placeholder="KK4ODA" required spellcheck="false" autocomplete="off"></label>
+          <label title="The one-time code the operator gave you">Code <input name="code" placeholder="7Q4F-AZ9K" required spellcheck="false" autocomplete="off"></label>
+          <label title="The post office's API, when its domain's DNS does not name it">Post office (if not in DNS) <input name="url" placeholder="https://po.radiopost.org/rp/v1" spellcheck="false"></label>
+          <button class="primary" type="submit" title="Make this device's key if needed, enroll it, and keep the credential">Enroll</button>
+        </form>
+        <div class="card">
+          <h2>Post office</h2>
+          <p id="po-state"></p>
+          <label title="Its API's base URL, when DNS does not say">API <input id="po-url" placeholder="https://po.radiopost.org/rp/v1" spellcheck="false"></label>
+          <div class="row">
+            <button id="po-save" title="Use this post office">Save</button>
+            <button class="quiet" id="renew" title="A new credential for this device, over the Internet (RP-5 §6.2)">Renew credential</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Accept list</h2>
+          <p class="note">Email reaches you only from these addresses and domains (@domain). Writing to someone adds them.</p>
+          <ul class="entries" id="accept"></ul>
+          <div class="row">
+            <input id="accept-new" placeholder="maria@example.com or @redcross.org" spellcheck="false">
+            <button id="accept-add" title="Add it">Add</button>
+            <button class="quiet" id="accept-load" title="Read the list from your post office">Read</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>This device's key</h2>
+          <p class="mono" id="device" title="Give this public key to your post office when you enroll"></p>
+          <button id="make-key" title="Make this device's key; it never leaves this computer">Make a key</button>
+        </div>
+        <div class="card">
+          <h2>Credential</h2>
+          <p id="cred-state"></p>
+          <label title="The credential your post office issued for this device's key, in hex">Credential (hex)
+            <textarea id="cred-hex" rows="3" spellcheck="false"></textarea>
+          </label>
+          <button id="cred-save" title="Keep it">Keep credential</button>
+        </div>
+        <div class="card">
+          <h2>Post offices trusted</h2>
+          <p id="trusted"></p>
+          <label title="The post office's domain">Domain <input id="t-domain" placeholder="hampost.org" spellcheck="false"></label>
+          <label title="Its key, 32 bytes in hex, as its DNS records publish it">Key (hex) <input id="t-key" spellcheck="false"></label>
+          <button id="t-save" title="Trust this key: the operator decides (RP-1 §7.3)">Trust</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="log" aria-label="Session log">
+    <pre id="log" title="What the sessions said"></pre>
+  </footer>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>

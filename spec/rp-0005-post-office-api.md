@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.11.2 |
-| **Updated** | 2026-11-09 |
+| **Version** | 0.12.1 |
+| **Updated** | 2026-11-10 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-3 |
@@ -219,8 +219,12 @@ Sent when a user's `HELLO` arrives (RP-3 §9), while the link turns around.
 
 The post office verifies the credential and the statement in RP-1 §6.3's order, with the
 gateway's callsign as the station called and `started` in place of its clock, and then checks
-`started` against its own clock within 600 seconds (`time-skew`). It answers a failure with its
-code (§1), and otherwise `201`:
+`started` against its own clock within 600 seconds (`time-skew`). A statement in challenge form
+(RP-3 §5.2: the client's clock was off) holds the challenge the gateway issued in `WELCOME`, which
+the gateway has checked as RP-1 §6.3 step 6 requires: the post office takes it as issued, once.
+It keeps the pair (`address`, `challenge`) in its replay cache as it keeps a time-form statement's
+(`address`, `nonce`), and answers a challenge already there `signature-invalid`. It answers a
+failure with its code (§1), and otherwise `201`:
 
 ```json
 {
@@ -373,7 +377,8 @@ by email, in person), once the user has shown they hold the callsign (RP-1 §1).
 of the code followed by those of the base URL: it proves the client holds the key. The post office
 checks the code and the operator (a code that is unknown, used, or for another account or
 operator: `403` `not-authorized`) and the signature (`422` `signature-invalid`), and answers
-`{"credential": "gqNk…"}`. The code is then used.
+`{"credential": "gqNk…"}`. The code is then used: only an enrollment that succeeds uses it, so a
+refused attempt (a typing error in the callsign) leaves it good until it expires.
 
 ### 6.2 `POST /credentials`: renewal
 
@@ -533,3 +538,5 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.11.0 | 2026-11-09 | `third_party` in waiting entries and copies, for RP-6 §5.1 (§5.2, §5.8). |
 | 0.11.1 | 2026-11-09 | §6.1: the enrollment code comes once the callsign is shown (RP-1 §1). |
 | 0.11.2 | 2026-11-09 | §5.2, §5.6: the examples' content IDs are real ones (RP-0 §6.3) |
+| 0.12.0 | 2026-11-10 | §5.2: a statement in challenge form, whose challenge the gateway issued and checked, is taken once; a second time it is `signature-invalid`. Found by building the gateway: no post office could open such a session. Test vectors (`api-exchanges.json`). |
+| 0.12.1 | 2026-11-10 | §6.1: a refused enrollment leaves its code good; only one that succeeds uses it. Found by the conformance tester (P-03): the reference used a code at any attempt. Test vectors. |

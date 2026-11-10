@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.1 |
-| **Updated** | 2026-11-09 |
+| **Version** | 0.4.0 |
+| **Updated** | 2026-11-10 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-5 |
@@ -54,6 +54,13 @@ which domains a DKIM signature passes for are the mail server's verdicts; RadioP
 | `DATA` | No executable attachments: no part of type `application/x-msdownload`, `application/x-dosexec` or `application/x-msi`, and no file name ending, in any case, in `.exe`, `.com`, `.scr`, `.pif`, `.bat`, `.cmd`, `.msi`, `.js`, `.jse`, `.vbs`, `.vbe`, `.wsf`, `.hta`, `.jar`, `.ps1` or `.lnk`. | `554 5.7.1` |
 
 A message taken is answered `250 2.0.0`, a recipient taken `250 2.1.5`.
+
+The `DATA` checks are made for each recipient at this post office, but SMTP gives one reply to
+`DATA` for the whole transaction. When the recipients' answers differ (one is on the `From:`
+address's accept list and another is not), the post office refuses the message for every
+recipient with the first refusal, in the order of `RCPT TO`; the sender's server reports it, and a
+sender who writes to each recipient alone reaches those who take it. Recipients at other domains
+the mail server serves are not RadioPost's to judge.
 
 A post office MAY apply ordinary spam filtering as well.
 
@@ -332,3 +339,4 @@ and the session files.
 | 0.2.2 | 2026-11-09 | §3.2: after forwarding, `Radio-Path` names each gateway of the path (RP-7). |
 | 0.3.0 | 2026-11-09 | Third-party traffic (§5.1), from §97.115's text: the receiving station's country decides, not the sender's; the post office flags mail whose sender is not shown to be licensed; the gateway hands it only to stations of its own country or one with an arrangement, read from the operating callsign, with the US table from the ARRL's list; §5 becomes normative. |
 | 0.3.1 | 2026-11-09 | §3.1: the example `Message-ID` holds a real content ID (RP-0 §6.3) |
+| 0.4.0 | 2026-11-10 | §2.1: one `DATA` reply for every recipient: when they differ, the first refusal refuses the message. Found by building the door. |

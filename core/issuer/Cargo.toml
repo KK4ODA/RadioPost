@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+[package]
+name = "radiopost-issue"
+description = "A post office's key and the credentials it issues (RP-1 §4), for testing before the post office service exists."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+radiopost = { path = "../radiopost" }
+ed25519-dalek = "3"
+getrandom = "0.3"
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[lints]
+workspace = true

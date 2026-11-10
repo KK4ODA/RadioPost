@@ -199,7 +199,9 @@ fn received(events: &[Event]) -> Vec<(Option<u64>, ContentId)> {
     events
         .iter()
         .filter_map(|e| match e {
-            Event::Received { serial, message } => Some((*serial, message.content_id())),
+            Event::Received {
+                serial, message, ..
+            } => Some((*serial, message.content_id())),
             _ => None,
         })
         .collect()
@@ -281,7 +283,11 @@ fn session_02_broken_and_resumed() {
     let mut a =
         Client::new(base(&sessions[0], "N1CALL-10"), Box::new(|_| vec![421])).expect("a client");
     let events = replay_client(&mut a, &sessions[0], "client");
-    assert!(delivered(&events).is_empty());
+    assert_eq!(
+        delivered(&events),
+        Vec::<ContentId>::new(),
+        "nothing delivered"
+    );
     assert!(
         a.link_broken().iter().all(|e| !matches!(e, Event::Held(_))),
         "nothing received"
@@ -422,6 +428,18 @@ fn session_03_the_station_called() {
         station.caller().map(|b| b.address.as_str()),
         Some("facundo@radiopost.org")
     );
+    let hello = radiopost::pdu::unframe(&turns(&file)[0].bytes).expect("a HELLO");
+    let nonce: [u8; 8] = hello
+        .get(7)
+        .and_then(Value::as_bytes)
+        .expect("a nonce")
+        .try_into()
+        .expect("8 bytes");
+    assert_eq!(
+        station.seen(),
+        Some(&("facundo@radiopost.org".to_owned(), nonce)),
+        "the replay cache's new entry"
+    );
     assert_eq!(
         received(&events),
         vec![(None, w.messages["facundo-direct"].content_id())]
@@ -430,6 +448,82 @@ fn session_03_the_station_called() {
         delivered(&events),
         vec![w.messages["ana-to-facundo"].content_id()]
     );
+}
+
+fn unbase64url(text: &str) -> Vec<u8> {
+    let value = |c: u8| -> u32 {
+        u32::from(match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'-' => 62,
+            b'_' => 63,
+            _ => panic!("not base64url: {text}"),
+        })
+    };
+    let mut out = Vec::new();
+    for group in text.as_bytes().chunks(4) {
+        let n = group.iter().fold(0u32, |n, &c| (n << 6) | value(c)) << (6 * (4 - group.len()));
+        out.extend_from_slice(&n.to_be_bytes()[1..group.len()]);
+    }
+    out
+}
+
+/// A proof as `direct.json` writes it (RP-5 §6.6).
+fn proof_of(v: &Json) -> radiopost::session::Proof {
+    radiopost::session::Proof {
+        statement: unbase64url(v["statement"].as_str().expect("statement")),
+        signature: unbase64url(v["signature"].as_str().expect("signature")),
+        credential: unbase64url(v["credential"].as_str().expect("credential")),
+    }
+}
+
+/// RP-5 §6.6: after session-03 each engine holds the proofs its station reports, exactly as
+/// `direct.json` has Facundo's and Ana's reports.
+#[test]
+fn session_03_leaves_the_proofs_each_station_reports() {
+    let w = world();
+    let file = vectors("session-03.json");
+    let direct = vectors("direct.json");
+    let case = |what: &str| {
+        direct["cases"]
+            .as_array()
+            .expect("cases")
+            .iter()
+            .find(|c| c["what"] == what)
+            .map(|c| c["session"].clone())
+            .expect("a case")
+    };
+    let (his, hers) = (
+        case("as Facundo reports it"),
+        case("Ana's own report, sent to radiopost.org"),
+    );
+    let mut caller = station_caller(&w, &file);
+    let mut station = ana(&w, &file);
+    assert_eq!(caller.proofs(), None, "nothing proved yet");
+    let mut written = vec![caller.hello()];
+    for _ in 0..8 {
+        let last = written.last().expect("a transmission").clone();
+        let next = if written.len() % 2 == 1 {
+            station.receive(&last);
+            station.transmit()
+        } else {
+            caller.receive(&last);
+            caller.transmit()
+        };
+        match next {
+            Some(t) => written.push(t),
+            None => break,
+        }
+    }
+    for (proofs, report) in [
+        (caller.proofs().expect("the caller's"), &his),
+        (station.proofs().expect("the station's"), &hers),
+    ] {
+        assert_eq!(Some(proofs.started), report["started"].as_u64());
+        assert_eq!(proofs.mine, proof_of(&report["mine"]));
+        assert_eq!(proofs.theirs, proof_of(&report["theirs"]));
+    }
 }
 
 /// The two engines, joined with no vector between them: the same session comes out.
@@ -459,6 +553,51 @@ fn session_03_engine_to_engine() {
     let expected: Vec<Vec<u8>> = turns(&file).into_iter().map(|t| t.bytes).collect();
     assert_eq!(written, expected);
     assert!(caller.is_over());
+}
+
+/// A station that trusts no post office refuses the caller with `ERROR` and says so (RP-1 §5).
+#[test]
+fn the_station_called_says_when_it_refuses() {
+    let w = world();
+    let file = vectors("session-03.json");
+    let mut station = ana(&w, &file);
+    let mut lonely = {
+        let note = w.out("ana-to-facundo");
+        let cfg = CalledConfig {
+            credential: w.credentials["ana"].clone(),
+            device: w.device("device:ana"),
+            time: file["context"]["called_clock"].as_u64().expect("clock"),
+            session_id: [1; 8],
+            challenge: [7; 16],
+            trust: Trust::default(),
+            seen: vec![],
+            caps: client_caps(),
+            piece: 4096,
+        };
+        Called::new(cfg, Box::new(move |_| vec![(1, note.clone())])).expect("a station")
+    };
+    let hello = &turns(&file)[0].bytes;
+    let events = lonely.receive(hello);
+    assert!(
+        events.contains(&Event::Refused(ErrorCode::UnknownPostOffice)),
+        "{events:?}"
+    );
+    let answer = lonely.transmit().expect("an ERROR");
+    assert_eq!(
+        radiopost::pdu::unframe(&answer)
+            .expect("a PDU")
+            .get(0)
+            .and_then(Value::as_u64),
+        Some(radiopost::pdu::kind::ERROR)
+    );
+    // the same HELLO, with the post office trusted, is taken
+    assert!(
+        !station
+            .receive(hello)
+            .iter()
+            .any(|e| matches!(e, Event::Refused(_))),
+        "trusted, it is not refused"
+    );
 }
 
 /// A message for someone else that reaches the station called is refused and dropped (RP-3 §10).

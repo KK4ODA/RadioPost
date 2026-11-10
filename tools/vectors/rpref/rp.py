@@ -378,12 +378,18 @@ def frame(pdu: dict[int, Any]) -> bytes:
     return len(raw).to_bytes(2, "big") + raw
 
 
-def unframe(data: bytes) -> dict[int, Any]:
-    """RP-3 §2: one framed PDU back to its map; ValueError("malformed") when it is not one."""
+def unframe(data: bytes, max_pdu: int = 0xFFFF) -> dict[int, Any]:
+    """RP-3 §2: one framed PDU back to its map, at a receiver that takes PDUs of up to `max_pdu`
+    bytes; ValueError("too-large") for a longer one, ValueError("malformed") for one that is not a
+    PDU."""
     if len(data) < 2:
         raise ValueError("malformed")
     n = int.from_bytes(data[:2], "big")
-    if n == 0 or len(data) != 2 + n:
+    if n == 0:
+        raise ValueError("malformed")
+    if n > max_pdu:
+        raise ValueError("too-large")
+    if len(data) != 2 + n:
         raise ValueError("malformed")
     try:
         pdu = cbor.decode(data[2:])

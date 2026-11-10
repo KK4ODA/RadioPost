@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.5.0 |
-| **Updated** | 2026-11-09 |
+| **Version** | 0.5.1 |
+| **Updated** | 2026-11-10 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -183,7 +183,9 @@ A verifier MUST check, in this order, and stop at the first failure:
    `signature-invalid`: a signature over another challenge is a signature over another statement.
 
 A post office verifying a statement relayed later (RP-5 §5.6) checks 1, 2 and 4, and checks `time`
-against the gateway's reported session time instead of its own clock.
+against the gateway's reported session time instead of its own clock. A post office opening a
+session for a gateway (RP-5 §5.2) takes a challenge-form statement's challenge as the gateway's
+own, which the gateway checked by step 6, and only once.
 
 Test vectors: `vectors/credentials.json` (§4, §5) and `vectors/statements.json` (§6.1–§6.3,
 §6.5).
@@ -342,3 +344,4 @@ A serial MAY be dropped from the list once the credential it names has expired.
 | 0.3.0 | 2026-11-09 | A statement by the station called, in a station-to-station session, over the caller's nonce (§6.5); §6.1 and §6.3 step 3 say whose callsign `gateway` holds. |
 | 0.4.0 | 2026-11-09 | A credential is an untagged COSE_Sign1 (RP-0 §5): the key's ID moves from the body (key 8, now unused) to the protected header, which names Ed25519; 161 to 169 bytes (§4.1, §4.3, §5). |
 | 0.5.0 | 2026-11-09 | Which post offices a gateway trusts: by DNS, or one hop of post office lists; its operator may block or limit (§7.3). |
+| 0.5.1 | 2026-11-10 | §6.3: a post office opening a session takes a challenge-form statement's challenge as the gateway's, once (RP-5 0.12.0). |

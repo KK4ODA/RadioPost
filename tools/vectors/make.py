@@ -1836,6 +1836,17 @@ def make_station() -> dict[str, Any]:
 # -- other PDUs ----------------------------------------------------------------------------------
 
 
+def pdu_of_size(n: int) -> dict[int, Any]:
+    """A `MSG` PDU whose encoding is exactly `n` bytes: the first piece of a longer message."""
+    data = n
+    while True:
+        pdu = {0: 4, 1: encoded("maria-421")[1], 2: 0, 3: 4000, 4: stream("too-large", data)}
+        size = len(cbor.encode(pdu))
+        if size == n:
+            return pdu
+        data -= size - n
+
+
 def make_pdus() -> dict[str, Any]:
     session = {name: pdu for _, pdus in session_pdus() for name, pdu in pdus}
     station = {name: pdu for _, pdus in station_pdus() for name, pdu in pdus}
@@ -1907,12 +1918,18 @@ def make_pdus() -> dict[str, Any]:
             "expect": "malformed",
         },
         {"why": "a frame of length 0", "frame_hex": "0000", "expect": "malformed"},
+        {
+            "why": "a MSG of 1 025 bytes to a station whose `max_pdu` is 1 024",
+            "frame_hex": rp.frame(pdu_of_size(1025)).hex(),
+            "max_pdu": 1024,
+            "expect": "too-large",
+        },
     ]
     out = header("One example of each PDU", {"RP-3": "§2, §4, §5"})
     out["rule"] = (
         "From `diagnostic`, an encoder produces exactly `pdu_hex`, framed as `frame_hex` "
-        "(two bytes of length, big-endian). Every `invalid` frame is answered with ERROR "
-        "`malformed` (RP-3 §2)."
+        "(two bytes of length, big-endian). Every `invalid` frame is answered with ERROR `expect` "
+        "(RP-3 §2), at a receiver whose `max_pdu` is the case's, or 65 535 where it has none."
     )
     out["pdus"] = [pdu_entry(name, p) for name, p in examples]
     out["invalid"] = invalid
@@ -2009,8 +2026,17 @@ def rpmi_errors() -> list[dict[str, Any]]:
     w.note("Nobody answers N9ZZZ: the modem gives up on the call.")
     w.give_up()
     client.request("client", {"op": "connect", "id": 15, "remote": "N1CALL-10"})
+    link = link_of(client, "client")
+    w.note("A `send` with no `ref` is never reported `delivered`; a `ref` may be an integer.")
+    client.request("client", {"op": "send", "link": link, "data": rpmi.encode_data(b"no ref")})
+    client.request(
+        "client", {"op": "send", "link": link, "data": rpmi.encode_data(b"ref 7"), "ref": 7}
+    )
     client.request("client", {"op": "connect", "id": 16, "remote": "N2CALL-5"})
     client.request("client", {"op": "abort", "id": 17, "link": link_of(client, "client")})
+    w.note("A second program tries the client's adapter, which is not shared, and is turned away.")
+    client.open("other")
+    client.request("other", {"op": "hello", "id": 1, "version": [1, 1], "app": "Other mail 2.3"})
     return w.log
 
 
@@ -2151,6 +2177,7 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "KK4ODA client connect 15": "ok, then connected",
                 "KK4ODA client connect 16": "busy",  # max_links is 1
                 "KK4ODA client abort 17": "ok",
+                "KK4ODA other hello 1": "busy",  # not shared: one host (RP-4 §1.1, §3)
             },
         ),
         (
@@ -2182,6 +2209,11 @@ def make_rpmi_conversations() -> dict[str, Any]:
             for k in got.keys() | wanted.keys()
             if got.get(k) != wanted.get(k)
         }
+    # RP-4 §4, §5: `delivered` only for a send with a `ref`, which it carries unchanged.
+    reported = [
+        s["message"]["ref"] for s in errors if s.get("message", {}).get("op") == "delivered"
+    ]
+    assert reported == [7], reported
     out["conversations"] = [
         {
             "name": "session-01 over RPMI",
@@ -2201,7 +2233,10 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "before `callsigns`; an `as` that is not its own; a bandwidth the modem lacks; an "
                 "unknown op; a link that is not its; an `abort` with nothing to abort. Then two "
                 "calls to a station nobody answers for, one aborted and one given up, a call that "
-                "connects, a second call while that link is up, and the link aborted."
+                "connects, two sends on it (with no `ref`, and with an integer `ref`), a second "
+                "call while that link is up, and the link aborted. Last, a second program "
+                "connects to the client's adapter, which is not shared: it is "
+                "turned away `busy`, and the adapter closes its connection."
             ),
             "steps": errors,
         },
@@ -2239,6 +2274,46 @@ RPMI_LINES = [
     ('{"op": "send", "id": 9, "link": "c1", "data": "AQ"}', "base64 without its padding"),
     ('{"op": "tune", "id": 10}', "an op this adapter does not know"),
     ('{"op": "send", "id": 11, "link": "c1", "data": "AQ=="}', "good base64, but no such link"),
+    ('{"op": "callsigns", "id": 12}', "a request without a member it needs"),
+    ('{"op": "listen", "id": 13, "on": "yes"}', "a member of the wrong type"),
+    ('{"op": "connect", "remote": "N1CALL-10"}', "a connect without an id"),
+    (
+        '{"op": "connect", "id": 15, "remote": "N1CALL-10", "bandwidth": "2300"}',
+        "a bandwidth that is a string",
+    ),
+    ('{"op": "hello", "id": 16, "version": 1, "app": "x"}', "a version that is not two integers"),
+    ('{"op": "send", "id": 17, "link": 1, "data": "AQ=="}', "a link that is not a string"),
+    (
+        '{"op": "send", "id": 18, "link": "c1", "data": "AQ==", "ref": 1.5}',
+        "a ref that is neither a string nor an integer",
+    ),
+    ('{"op": "status", "id": 19, "link": 5}', "a member the request does not take, of any type"),
+    ('{"op": "hello", "id": 20, "app": "x"}', "hello without its version"),
+    ('{"op": "hello", "id": 21, "version": [1, 1]}', "hello without its app"),
+    ('{"op": "hello", "id": 22, "version": [1, 1], "app": 5}', "an app that is not a string"),
+    ('{"op": "hello", "id": 23, "version": [1, "1"], "app": "x"}', "a version with a string in it"),
+    (
+        '{"op": "callsigns", "id": 24, "callsigns": ["KK4ODA", 1]}',
+        "a callsign that is not a string",
+    ),
+    ('{"op": "listen", "id": 25}', "listen without on"),
+    ('{"op": "connect", "id": 26}', "connect without remote"),
+    ('{"op": "connect", "id": 27, "remote": 7}', "a remote that is not a string"),
+    (
+        '{"op": "connect", "id": 28, "remote": "N1CALL-10", "as": ["KK4ODA"]}',
+        "an as that is a list",
+    ),
+    ('{"op": "send", "id": 29, "data": "AQ=="}', "send without link"),
+    ('{"op": "send", "id": 30, "link": "c1"}', "send without data"),
+    ('{"op": "send", "id": 31, "link": "c1", "data": 5}', "data that is not a string"),
+    ('{"op": "disconnect", "id": 32}', "disconnect without link"),
+    ('{"op": "disconnect", "id": 33, "link": null}', "a link that is null"),
+    ('{"op": "abort", "id": 34, "link": true}', "an abort's link that is true"),
+    ('{"op": "broadcast", "id": 35}', "broadcast without data"),
+    (
+        '{"op": "broadcast", "id": 36, "data": "AQ==", "ref": {}}',
+        "a broadcast's ref that is an object",
+    ),
 ]
 
 
@@ -2266,6 +2341,31 @@ def make_rpmi_lines() -> dict[str, Any]:
             "base64 without its padding": ("error", "malformed", 9),
             "an op this adapter does not know": ("error", "unsupported", 10),
             "good base64, but no such link": ("error", "not-connected", 11),
+            "a request without a member it needs": ("error", "malformed", 12),
+            "a member of the wrong type": ("error", "malformed", 13),
+            "a connect without an id": ("error", "malformed", None),
+            "a bandwidth that is a string": ("error", "malformed", 15),
+            "a version that is not two integers": ("error", "malformed", 16),
+            "a link that is not a string": ("error", "malformed", 17),
+            "a ref that is neither a string nor an integer": ("error", "malformed", 18),
+            "a member the request does not take, of any type": ("status", None, 19),
+            "hello without its version": ("error", "malformed", 20),
+            "hello without its app": ("error", "malformed", 21),
+            "an app that is not a string": ("error", "malformed", 22),
+            "a version with a string in it": ("error", "malformed", 23),
+            "a callsign that is not a string": ("error", "malformed", 24),
+            "listen without on": ("error", "malformed", 25),
+            "connect without remote": ("error", "malformed", 26),
+            "a remote that is not a string": ("error", "malformed", 27),
+            "an as that is a list": ("error", "malformed", 28),
+            "send without link": ("error", "malformed", 29),
+            "send without data": ("error", "malformed", 30),
+            "data that is not a string": ("error", "malformed", 31),
+            "disconnect without link": ("error", "malformed", 32),
+            "a link that is null": ("error", "malformed", 33),
+            "an abort's link that is true": ("error", "malformed", 34),
+            "broadcast without data": ("error", "malformed", 35),
+            "a broadcast's ref that is an object": ("error", "malformed", 36),
         },
         lambda c: (c["answers"][0]["op"], c["answers"][0].get("code"), c["answers"][0].get("id")),
     )
@@ -2714,6 +2814,32 @@ def api_cases() -> list[dict[str, Any]]:
             (T_SESSION + 70, gw, "POST", "/sessions", good),
         ],
     )
+    # RP-3 §5.2: a client whose clock was off signs the gateway's challenge instead
+    challenged = rp.statement(
+        "facundo@radiopost.org",
+        "KK4ODA",
+        "N1CALL-10",
+        stmt[6],
+        challenge=stream("api cases challenge", 16),
+    )
+    signed_challenge = dict(
+        good,
+        statement=jws.b64u(cbor.encode(challenged)),
+        signature=jws.b64u(
+            rp.sign(rp.CTX_SESSION, cbor.encode(challenged), SECRET["device:facundo"])
+        ),
+    )
+    case(
+        "a statement in challenge form: the client's clock was off",
+        [(T_SESSION + 40, gw, "POST", "/sessions", signed_challenge)],
+    )
+    case(
+        "the same challenge twice",
+        [
+            (T_SESSION + 40, gw, "POST", "/sessions", signed_challenge),
+            (T_SESSION + 70, gw, "POST", "/sessions", signed_challenge),
+        ],
+    )
     case(
         "a message removed from the statement after signing",
         [(T_SESSION + 40, gw, "POST", "/sessions", fewer)],
@@ -2728,6 +2854,45 @@ def api_cases() -> list[dict[str, Any]]:
         [(T_SESSION + 40, "KK4ODA-1", "POST", "/sessions", good)],
     )
     case("no token", [(T_SESSION + 40, "nobody", "POST", "/sessions", good)])
+    tablet = "device:facundo-tablet"
+
+    def enrollment(operator: str, base: str) -> dict[str, Any]:
+        signed = b"7Q4F-AZ9K" + base.encode()
+        return {
+            "address": "facundo@radiopost.org",
+            "operator": operator,
+            "code": "7Q4F-AZ9K",
+            "device": jws.b64u(PUBLIC[tablet]),
+            "signature": jws.b64u(rp.sign(rp.CTX_ENROLL, signed, SECRET[tablet])),
+        }
+
+    case(
+        "an enrollment refused twice, then taken with the same code, which is then used",
+        [
+            (T_ISSUED, "Facundo's tablet", "POST", "/enroll", enrollment("N0CALL", PO_RADIOPOST)),
+            (
+                T_ISSUED + 10,
+                "Facundo's tablet",
+                "POST",
+                "/enroll",
+                enrollment("KK4ODA", "https://elsewhere.example/rp/v1"),
+            ),
+            (
+                T_ISSUED + 20,
+                "Facundo's tablet",
+                "POST",
+                "/enroll",
+                enrollment("KK4ODA", PO_RADIOPOST),
+            ),
+            (
+                T_ISSUED + 30,
+                "Facundo's tablet",
+                "POST",
+                "/enroll",
+                enrollment("KK4ODA", PO_RADIOPOST),
+            ),
+        ],
+    )
     case(
         "a user's token on a gateway endpoint",
         [(T_SESSION + 40, "facundo", "POST", "/sessions", good)],
@@ -2836,10 +3001,18 @@ def make_api_exchanges() -> dict[str, Any]:
             "the post office's clock 601 s after `started`": ["422 time-skew"],
             "`started` 601 s after the statement's time": ["422 time-skew"],
             "the same statement twice: a replay": ["201", "422 time-skew"],
+            "a statement in challenge form: the client's clock was off": ["201"],
+            "the same challenge twice": ["201", "422 signature-invalid"],
             "a message removed from the statement after signing": ["422 signature-invalid"],
             "the user's credential revoked": ["422 credential-revoked"],
             "carried by a gateway the statement does not name": ["403 not-authorized"],
             "no token": ["401 not-authorized"],
+            "an enrollment refused twice, then taken with the same code, which is then used": [
+                "403 not-authorized",
+                "422 signature-invalid",
+                "200",
+                "403 not-authorized",
+            ],
             "a user's token on a gateway endpoint": ["403 not-authorized"],
             HANDED_IN: [
                 "201",
@@ -5545,7 +5718,7 @@ def self_check(name: str, data: dict[str, Any]) -> None:
             )
         for bad in data["invalid"]:
             try:
-                rp.unframe(bytes.fromhex(bad["frame_hex"]))
+                rp.unframe(bytes.fromhex(bad["frame_hex"]), bad.get("max_pdu", 0xFFFF))
             except ValueError as err:
                 assert str(err) == bad["expect"]
                 continue

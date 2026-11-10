@@ -1,0 +1,16 @@
+{
+  "program": "radiopost",
+  "note": "How the conformance tester drives the radiopost client. {bin} is the program, {home} a fresh home for each test. Every command's standard output is read; `key` prints the device's public key in hex, `inbox` and `outbox` list one message a line with its content ID's first 6 characters.",
+  "conformance": ["{bin}", "--home", "{home}", "conformance", "--adapter", "{adapter}"],
+  "key": ["{bin}", "--home", "{home}", "key"],
+  "init": ["{bin}", "--home", "{home}", "init", "--credential", "{credential}"],
+  "trust": ["{bin}", "--home", "{home}", "trust", "{domain}", "{public}", "{not_before}", "{not_after}"],
+  "compose": ["{bin}", "--home", "{home}", "compose", "--to", "{to}", "--subject", "{subject}"],
+  "call": ["{bin}", "--home", "{home}", "call", "{callsign}", "--adapter", "{adapter}"],
+  "call_station": ["{bin}", "--home", "{home}", "call", "{callsign}", "--station", "--adapter", "{adapter}"],
+  "listen": ["{bin}", "--home", "{home}", "listen", "--adapter", "{adapter}"],
+  "inbox": ["{bin}", "--home", "{home}", "inbox"],
+  "outbox": ["{bin}", "--home", "{home}", "outbox"],
+  "post_office": ["{bin}", "--home", "{home}", "post-office", "{url}"],
+  "report": ["{bin}", "--home", "{home}", "report"]
+}

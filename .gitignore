@@ -1,3 +1,5 @@
 __pycache__/
 target/
 *.pyc
+# Tauri writes these at every build
+app/src-tauri/gen/

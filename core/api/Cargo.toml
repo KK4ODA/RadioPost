@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+[package]
+name = "radiopost-api"
+description = "RP-5 over HTTPS for gateways and clients: logging in, requests, enrollment, and post offices found in DNS."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+radiopost = { path = "../radiopost" }
+ed25519-dalek = "3"
+serde_json = { version = "1", features = ["preserve_order"] }
+ureq = "3"
+
+[lints]
+workspace = true

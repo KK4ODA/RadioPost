@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+[package]
+name = "rpmi"
+description = "The RadioPost Modem Interface (RP-4): its lines, a host's side, and a simulated channel of adapters, served over TCP."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[dev-dependencies]
+radiopost = { path = "../radiopost" }
+ed25519-dalek = "3"
+
+[lints]
+workspace = true

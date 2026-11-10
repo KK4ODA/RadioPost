@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+[package]
+name = "radiopost-gateway"
+description = "A RadioPost gateway: users' sessions by radio, carried to their post offices (RP-3, RP-5), over any RPMI modem."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "radiopost-gateway"
+path = "src/main.rs"
+
+[dependencies]
+radiopost = { path = "../radiopost" }
+radiopost-api = { path = "../api" }
+radiopost-postoffice = { path = "../postoffice" }
+rpmi = { path = "../rpmi" }
+radiopost-aether = { path = "../../adapters/aether" }
+ed25519-dalek = "3"
+getrandom = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[dev-dependencies]
+radiopost-tester = { path = "../tester" }
+radiopost-client = { path = "../../app/client" }
+sha2 = "0.11"
+
+[lints]
+workspace = true

@@ -122,6 +122,15 @@ impl Statement {
             Form::Challenge(_) => None,
         }
     }
+
+    /// The challenge, in challenge form.
+    #[must_use]
+    pub fn challenge(&self) -> Option<[u8; 16]> {
+        match self.form {
+            Form::Challenge(c) => Some(c),
+            Form::Time { .. } => None,
+        }
+    }
 }
 
 /// What a verifier checks a statement's freshness against (RP-1 §6.3 steps 5 and 6, §6.5).

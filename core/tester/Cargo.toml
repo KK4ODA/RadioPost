@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+[package]
+name = "radiopost-tester"
+description = "The conformance tester: it plays the other side of RadioPost's protocols against a program, through its own test adapter."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+radiopost = { path = "../radiopost" }
+rpmi = { path = "../rpmi" }
+radiopost-postoffice = { path = "../postoffice" }
+ed25519-dalek = "3"
+getrandom = "0.3"
+serde_json = { version = "1", features = ["preserve_order"] }
+tiny_http = "0.12"
+
+[lints]
+workspace = true

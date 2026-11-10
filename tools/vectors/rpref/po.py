@@ -316,7 +316,14 @@ class PostOffice:
         if result != "ok" or cbody is None:
             return {}, {}, problem(result)
         seen = [k for k, t in self.replay.items() if started - t < rp.REPLAY_S]
-        result = rp.verify_statement(stmt, signature, cbody, me=gateway, now=started, seen=seen)
+        # RP-5 §5.2: the gateway issued a challenge-form statement's challenge and checked it
+        # (RP-1 §6.3 step 6); the post office takes it as issued, once.
+        challenge = stmt.get(7)
+        if challenge is not None and (stmt[1], challenge) in seen:
+            challenge = None
+        result = rp.verify_statement(
+            stmt, signature, cbody, me=gateway, now=started, challenge=challenge, seen=seen
+        )
         if result != "ok":
             return {}, {}, problem(result)
         return stmt, cbody, None
@@ -327,8 +334,8 @@ class PostOffice:
             return failed
         if abs(body["started"] - self.now) > rp.TIME_WINDOW_S:
             return problem("time-skew")
-        if 5 in stmt:
-            self.replay[stmt[1], stmt[5]] = body["started"]
+        if 5 in stmt or 7 in stmt:
+            self.replay[stmt[1], stmt.get(5, stmt.get(7))] = body["started"]
         mailbox = self.mailboxes.get(stmt[1], [])
         waiting = sorted(
             (w for w in mailbox if not w.picked), key=lambda w: (-w.priority, w.serial)
@@ -635,7 +642,7 @@ class PostOffice:
 
     def enroll(self, body: dict[str, Any]) -> Response:
         """RP-5 §6.1: a one-time code, and a signature that proves the new device holds its key."""
-        code = self.codes.pop(body.get("code", ""), None)
+        code = self.codes.get(body.get("code", ""))
         if code is None or (code["address"], code["operator"]) != (
             body.get("address"),
             body.get("operator"),
@@ -648,6 +655,7 @@ class PostOffice:
         signed = body["code"].encode("utf-8") + self.base_url.encode("utf-8")
         if not rp.verify(rp.CTX_ENROLL, signed, signature, device):
             return problem("signature-invalid")
+        del self.codes[body["code"]]  # used: only by an enrollment that succeeds
         credential = self.issue(code["address"], code["operator"], device, code["flags"])
         return 200, {"credential": jws.b64u(credential)}
 

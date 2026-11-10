@@ -138,6 +138,309 @@
           "text": "no such link of this host's"
         }
       ]
+    },
+    {
+      "what": "a request without a member it needs",
+      "line": "{\"op\": \"callsigns\", \"id\": 12}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 12,
+          "code": "malformed",
+          "text": "no `callsigns`"
+        }
+      ]
+    },
+    {
+      "what": "a member of the wrong type",
+      "line": "{\"op\": \"listen\", \"id\": 13, \"on\": \"yes\"}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 13,
+          "code": "malformed",
+          "text": "`on` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "a connect without an id",
+      "line": "{\"op\": \"connect\", \"remote\": \"N1CALL-10\"}",
+      "answers": [
+        {
+          "op": "error",
+          "code": "malformed",
+          "text": "no `id`"
+        }
+      ]
+    },
+    {
+      "what": "a bandwidth that is a string",
+      "line": "{\"op\": \"connect\", \"id\": 15, \"remote\": \"N1CALL-10\", \"bandwidth\": \"2300\"}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 15,
+          "code": "malformed",
+          "text": "`bandwidth` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "a version that is not two integers",
+      "line": "{\"op\": \"hello\", \"id\": 16, \"version\": 1, \"app\": \"x\"}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 16,
+          "code": "malformed",
+          "text": "`version` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "a link that is not a string",
+      "line": "{\"op\": \"send\", \"id\": 17, \"link\": 1, \"data\": \"AQ==\"}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 17,
+          "code": "malformed",
+          "text": "`link` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "a ref that is neither a string nor an integer",
+      "line": "{\"op\": \"send\", \"id\": 18, \"link\": \"c1\", \"data\": \"AQ==\", \"ref\": 1.5}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 18,
+          "code": "malformed",
+          "text": "`ref` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "a member the request does not take, of any type",
+      "line": "{\"op\": \"status\", \"id\": 19, \"link\": 5}",
+      "answers": [
+        {
+          "op": "status",
+          "id": 19,
+          "listening": false,
+          "callsigns": [
+            "KK4ODA"
+          ],
+          "busy": false,
+          "links": []
+        }
+      ]
+    },
+    {
+      "what": "hello without its version",
+      "line": "{\"op\": \"hello\", \"id\": 20, \"app\": \"x\"}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 20,
+          "code": "malformed",
+          "text": "no `version`"
+        }
+      ]
+    },
+    {
+      "what": "hello without its app",
+      "line": "{\"op\": \"hello\", \"id\": 21, \"version\": [1, 1]}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 21,
+          "code": "malformed",
+          "text": "no `app`"
+        }
+      ]
+    },
+    {
+      "what": "an app that is not a string",
+      "line": "{\"op\": \"hello\", \"id\": 22, \"version\": [1, 1], \"app\": 5}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 22,
+          "code": "malformed",
+          "text": "`app` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "a version with a string in it",
+      "line": "{\"op\": \"hello\", \"id\": 23, \"version\": [1, \"1\"], \"app\": \"x\"}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 23,
+          "code": "malformed",
+          "text": "`version` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "a callsign that is not a string",
+      "line": "{\"op\": \"callsigns\", \"id\": 24, \"callsigns\": [\"KK4ODA\", 1]}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 24,
+          "code": "malformed",
+          "text": "`callsigns` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "listen without on",
+      "line": "{\"op\": \"listen\", \"id\": 25}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 25,
+          "code": "malformed",
+          "text": "no `on`"
+        }
+      ]
+    },
+    {
+      "what": "connect without remote",
+      "line": "{\"op\": \"connect\", \"id\": 26}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 26,
+          "code": "malformed",
+          "text": "no `remote`"
+        }
+      ]
+    },
+    {
+      "what": "a remote that is not a string",
+      "line": "{\"op\": \"connect\", \"id\": 27, \"remote\": 7}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 27,
+          "code": "malformed",
+          "text": "`remote` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "an as that is a list",
+      "line": "{\"op\": \"connect\", \"id\": 28, \"remote\": \"N1CALL-10\", \"as\": [\"KK4ODA\"]}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 28,
+          "code": "malformed",
+          "text": "`as` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "send without link",
+      "line": "{\"op\": \"send\", \"id\": 29, \"data\": \"AQ==\"}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 29,
+          "code": "malformed",
+          "text": "no `link`"
+        }
+      ]
+    },
+    {
+      "what": "send without data",
+      "line": "{\"op\": \"send\", \"id\": 30, \"link\": \"c1\"}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 30,
+          "code": "malformed",
+          "text": "no `data`"
+        }
+      ]
+    },
+    {
+      "what": "data that is not a string",
+      "line": "{\"op\": \"send\", \"id\": 31, \"link\": \"c1\", \"data\": 5}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 31,
+          "code": "malformed",
+          "text": "`data` is not standard base64 with padding"
+        }
+      ]
+    },
+    {
+      "what": "disconnect without link",
+      "line": "{\"op\": \"disconnect\", \"id\": 32}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 32,
+          "code": "malformed",
+          "text": "no `link`"
+        }
+      ]
+    },
+    {
+      "what": "a link that is null",
+      "line": "{\"op\": \"disconnect\", \"id\": 33, \"link\": null}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 33,
+          "code": "malformed",
+          "text": "`link` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "an abort's link that is true",
+      "line": "{\"op\": \"abort\", \"id\": 34, \"link\": true}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 34,
+          "code": "malformed",
+          "text": "`link` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "broadcast without data",
+      "line": "{\"op\": \"broadcast\", \"id\": 35}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 35,
+          "code": "malformed",
+          "text": "no `data`"
+        }
+      ]
+    },
+    {
+      "what": "a broadcast's ref that is an object",
+      "line": "{\"op\": \"broadcast\", \"id\": 36, \"data\": \"AQ==\", \"ref\": {}}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 36,
+          "code": "malformed",
+          "text": "`ref` is not of its type"
+        }
+      ]
     }
   ]
 }
