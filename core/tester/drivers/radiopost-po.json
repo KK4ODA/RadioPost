@@ -1,0 +1,10 @@
+{
+  "program": "radiopost-po",
+  "note": "How the conformance tester drives radiopost-po. {bin} is the program, {home} a fresh directory for each test; {base}, {listen}, {admin}, {door} and {smtp} are addresses the tester chose. `code` prints the code first; `dns` prints the RP-1 §7.1 records, one a line; `door` is the URL of the door's MTA hook, which the tester calls in the MTA Hooks draft's shape (stage, envelope, rawMessage, senderAuth).",
+  "init": ["{bin}", "--dir", "{home}", "init", "--domain", "radiopost.org", "--base-url", "{base}", "--operator", "KK4ODA", "--contact", "postmaster@radiopost.org", "--listen", "{listen}", "--admin", "{admin}", "--hooks", "{door}", "--smtp", "smtp://{smtp}"],
+  "know": ["{bin}", "--dir", "{home}", "know", "--domain", "{domain}", "--public", "{public}"],
+  "dns": ["{bin}", "--dir", "{home}", "dns"],
+  "code": ["{bin}", "--dir", "{home}", "code", "--address", "{address}", "--operator", "{operator}", "--name", "{name}"],
+  "serve": ["{bin}", "--dir", "{home}", "serve"],
+  "door": ["http://{door}/"]
+}

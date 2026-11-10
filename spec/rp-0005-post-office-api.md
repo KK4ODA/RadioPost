@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.12.0 |
+| **Version** | 0.12.1 |
 | **Updated** | 2026-11-10 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -377,7 +377,8 @@ by email, in person), once the user has shown they hold the callsign (RP-1 §1).
 of the code followed by those of the base URL: it proves the client holds the key. The post office
 checks the code and the operator (a code that is unknown, used, or for another account or
 operator: `403` `not-authorized`) and the signature (`422` `signature-invalid`), and answers
-`{"credential": "gqNk…"}`. The code is then used.
+`{"credential": "gqNk…"}`. The code is then used: only an enrollment that succeeds uses it, so a
+refused attempt (a typing error in the callsign) leaves it good until it expires.
 
 ### 6.2 `POST /credentials`: renewal
 
@@ -538,3 +539,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.11.1 | 2026-11-09 | §6.1: the enrollment code comes once the callsign is shown (RP-1 §1). |
 | 0.11.2 | 2026-11-09 | §5.2, §5.6: the examples' content IDs are real ones (RP-0 §6.3) |
 | 0.12.0 | 2026-11-10 | §5.2: a statement in challenge form, whose challenge the gateway issued and checked, is taken once; a second time it is `signature-invalid`. Found by building the gateway: no post office could open such a session. Test vectors (`api-exchanges.json`). |
+| 0.12.1 | 2026-11-10 | §6.1: a refused enrollment leaves its code good; only one that succeeds uses it. Found by the conformance tester (P-03): the reference used a code at any attempt. Test vectors. |

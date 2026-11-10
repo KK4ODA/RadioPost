@@ -3,15 +3,15 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.0 |
-| **Updated** | 2026-11-09 |
+| **Version** | 0.4.0 |
+| **Updated** | 2026-11-10 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §7 |
 
 An outline of the program that tells an implementer whether their program does what the
-specifications require. It was Phase 0's last part; Phase 1 builds its first half (§6), as
-`core/tester` (`radiopost-tester`).
+specifications require. It was Phase 0's last part; Phase 1 built its first half and Phase 2 its
+gateway and post office tests (§6), as `core/tester` (`radiopost-tester`).
 
 ---
 
@@ -65,6 +65,20 @@ To be tested, a program offers a mode that:
 * refuses every adapter but the test one, so test keys never reach the air.
 
 It needs nothing else. The program keeps its own clock and random numbers and makes its own keys.
+
+A gateway in conformance mode asks only the tester's DNS resolver (DNS over HTTPS, serving the
+test zone) and reaches the test post office at the URL it is given: the test post office serves
+plain HTTP on the loopback interface, which RP-1 §7.1 has a reader ignore in DNS. Its driver file
+also names `post_office`, `block`, `credential` (a credential the test post office issued for its
+key) and `serve`; `radiopost-gateway`'s is `core/tester/drivers/radiopost-gateway.json`. The test
+post office is the core's own post office on the published test key, whose every exchange the
+tests read.
+
+A post office is started by the tester in a fresh directory for each test, from its driver file
+(`init`, `know`, `dns`, `code`, `serve`, and `door`, the URL of its door); the tester chooses its
+addresses and runs the mail server's two sides: it calls the door in the MTA Hooks draft's shape,
+and takes what the post office submits on a stand-in SMTP port. `radiopost-po`'s is
+`core/tester/drivers/radiopost-po.json`.
 
 An adapter is tested as it runs: the tester connects to it as its host (`--at`), and for the
 tests that need the air, to a second instance joined to it (`--far`) as the far station's host,
@@ -209,7 +223,7 @@ RP-0 §3: RP-4, the adapter's side.
 | Phase | The tester gains | Roles |
 |---|---|---|
 | 1 | The test adapter (and with it the loopback adapter); conformance mode; C-01 to C-08 and C-11; A-01 to A-04 against the TCP adapter. | Client, modem adapter |
-| 2 | The test post office; G-01, G-02, G-04, G-07, G-08, G-09; P-01 to P-04 and P-07 to P-10; C-12. | Gateway, online; post office |
+| 2 | The test post office; G-01, G-02, G-04, G-07, G-08, G-09; P-01 to P-04 and P-07 to P-10; C-12 (built: G-09 checks DNS online, the one hop of lists being for a gateway offline, Phase 3; P-08 leaves out the case of the vectors' own `max_email_bytes`). | Gateway, online; post office |
 | 3 | C-09, C-10; G-03, G-05, G-06; P-05, P-06. | Offline |
 | 4 | F-01 to F-06. | Forwarding gateway |
 | 5 | A-05, and A-01 to A-04 for each new adapter. | More adapters |
@@ -232,3 +246,4 @@ RP-0 §3: RP-4, the adapter's side.
 | 0.1.0 | 2026-11-09 | First outline: what the tester is for, how it plays the other side through its own adapter, conformance mode, the tests by role, what it reports, how it is built and tested, and the order of work. |
 | 0.2.0 | 2026-11-09 | Phase 1's client tests built (`core/tester`): how a program is driven (a driver file, §2.3), which settles how conformance mode is turned on (§7). C-06 asks `too-large` for a frame over `max_pdu`, as RP-3 0.10.0 now says. |
 | 0.3.0 | 2026-11-09 | Phase 1's adapter tests built: how an adapter is reached (§2.3); A-02 also checks a host that leaves (RP-4 0.5.0), and A-03 says what it covers. |
+| 0.4.0 | 2026-11-10 | Phase 2's tests built: a gateway's and a post office's conformance mode and driver files (§2.3), the test post office, G-01, G-02, G-04, G-07 to G-09, P-01 to P-04, P-07 to P-10 and C-12 (§6). Writing them found a gateway that replayed a caller's last transmission while the link was quiet, and a post office that used an enrollment code at a refused attempt (RP-5 0.12.1). |

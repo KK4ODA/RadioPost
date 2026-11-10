@@ -2,9 +2,10 @@
 """Shows that each of the conformance tester's tests can fail (01-conformance.md §5).
 
 For each test, it copies the repository, plants one fault in the copy of the program the test is
-for (the client, or the TCP adapter), builds it, and runs the tester's test against it: the test
-must fail. Run it by hand after changing a test or those programs; it builds once a fault, so it
-takes a few minutes, and C-11 one more (its fault makes the client hang up after 60 s).
+for (the client, the TCP adapter, the gateway or the post office), builds it, and runs the
+tester's test against it: the test must fail. Run it by hand after changing a test or those
+programs; it builds once a fault, so it takes a few minutes, and C-11 one more (its fault makes the
+client hang up after 60 s).
 
     python3 tools/tester/plant.py [C-01 A-02 ...]
 
@@ -24,6 +25,9 @@ REPO = Path(__file__).resolve().parents[2]
 ENGINE = "core/radiopost/src/session/client.rs"
 CALLED = "core/radiopost/src/session/called.rs"
 TCP = "adapters/tcp/src/lib.rs"
+GATEWAY = "core/radiopost/src/session/gateway.rs"
+STATION = "core/gateway/src/station.rs"
+OFFICE = "core/postoffice/src/office.rs"
 
 # test: (file, text, the text with the fault)
 FAULTS = {
@@ -56,6 +60,7 @@ FAULTS = {
         "if message.recipients().contains(&self.me.address.as_str()) {",
         "if true {",
     ),
+    "C-12": ("app/client/src/session.rs", '"role": role,', '"role": "caller",'),
     "C-11": (
         "app/client/src/session.rs",
         "pub const QUIET: Duration = Duration::from_secs(300);",
@@ -65,11 +70,69 @@ FAULTS = {
     "A-02": (TCP, '("direction", "out".into()),', '("direction", "in".into()),'),
     "A-03": (TCP, "if owner.is_some_and(|o| o != c) {", "if false {"),
     "A-04": (TCP, "rpmi::base64::encode(&buf[..n])", "rpmi::base64::encode(&buf[n / 2..n])"),
+    "G-01": (
+        "core/gateway/src/upstream.rs",
+        "fn picked_up(&mut self, serials: &[u64]) -> Result<(), ErrorCode> {",
+        "fn picked_up(&mut self, serials: &[u64]) -> Result<(), ErrorCode> {\n"
+        "        if !serials.is_empty() { return Ok(()); }",
+    ),
+    "G-02": (
+        GATEWAY,
+        "self.notes.push(Note::PostOffice(code));",
+        "self.notes.push(Note::PostOffice(code)); let code = ErrorCode::Internal;",
+    ),
+    "G-04": (
+        STATION,
+        ".filter(|(_, _, _, _, when)| at.saturating_sub(*when) < UPLOAD_KEPT_S)",
+        ".filter(|_| false)",
+    ),
+    "G-07": (
+        GATEWAY,
+        "let max = usize::try_from(self.cfg.caps.max_pdu).unwrap_or(usize::MAX);",
+        "let max = usize::MAX;",
+    ),
+    "G-08": (GATEWAY, "if self.caller_caps.renew {", "if false {"),
+    "G-09": (
+        STATION,
+        "                if blocked.iter().any(|b| b == domain)",
+        "                if false",
+    ),
+    "P-01": (
+        "core/postoffice/src/documents.rs",
+        '"/routes" => json!({"issued": now, "routes": []}),',
+        "",
+    ),
+    "P-02": (
+        OFFICE,
+        "let good = self.state.challenges.remove(&nonce_text).unwrap_or(0) > self.now;",
+        "let good = self.state.challenges.get(&nonce_text).copied().unwrap_or(0) > self.now;",
+    ),
+    "P-03": (OFFICE, 'self.state.codes.remove(text(body, "code"));', ""),
+    "P-04": (OFFICE, "if started.abs_diff(self.now) > TIME_WINDOW_S {", "if false {"),
+    "P-07": (OFFICE, "if !self.state.had.insert(message.content_id().text()) {", "if false {"),
+    "P-08": (
+        "core/postoffice/src/mail.rs",
+        "if sender.is_empty() || on_list(sender, accept) || known {",
+        "if true {",
+    ),
+    "P-09": ("core/postoffice/src/mail.rs", "iso(path.started),", "iso(path.started + 1),"),
+    "P-10": (
+        "core/postoffice/src/email.rs",
+        "office.email_arrived(&address, &made.message, true, message_id.as_deref());",
+        "office.email_arrived(&address, &made.message, false, message_id.as_deref());",
+    ),
+}
+
+# the package each test's program is in, its binary, its driver and the tester's role
+ROLES = {
+    "C": ("radiopost-client", "radiopost", "radiopost.json", "client"),
+    "G": ("radiopost-gateway", "radiopost-gateway", "radiopost-gateway.json", "gateway"),
+    "P": ("radiopost-postoffice", "radiopost-po", "radiopost-po.json", "post-office"),
 }
 
 
-def plant(test: str, scratch: Path) -> str:
-    """Builds the program with `test`'s fault and runs the test; what came of it."""
+def faulty_tree(test: str, scratch: Path) -> Path | str:
+    """A copy of the repository with `test`'s fault planted, or why it could not be."""
     path, text, faulty = FAULTS[test]
     work = scratch / "tree"
     shutil.rmtree(work, ignore_errors=True)
@@ -81,8 +144,16 @@ def plant(test: str, scratch: Path) -> str:
     if original.count(text) != 1:
         return f"MISSED: the fault's text is not in {path} exactly once"
     source.write_text(original.replace(text, faulty))
+    return work
+
+
+def plant(test: str, scratch: Path) -> str:
+    """Builds the program with `test`'s fault and runs the test; what came of it."""
+    work = faulty_tree(test, scratch)
+    if isinstance(work, str):
+        return work
     target = scratch / "target"
-    package = "radiopost-tcp" if test.startswith("A-") else "radiopost-client"
+    package, binary, driver, role = ROLES.get(test[0], ("radiopost-tcp", "", "", ""))
     built = subprocess.run(
         ["cargo", "build", "-q", "-p", package],
         cwd=work / "core",
@@ -94,11 +165,9 @@ def plant(test: str, scratch: Path) -> str:
     if built.returncode != 0:
         return "MISSED: the faulty program did not build: " + built.stderr[-600:]
     tester = str(REPO / "core/target/debug/radiopost-tester")
-    if package == "radiopost-client":
-        driver = str(REPO / "core/tester/drivers/radiopost.json")
-        ran = run_test(
-            [tester, "client", "--driver", driver, "--bin", str(target / "debug/radiopost")], test
-        )
+    if role:
+        command = [tester, role, "--driver", str(REPO / "core/tester/drivers" / driver)]
+        ran = run_test([*command, "--bin", str(target / "debug" / binary)], test)
     else:
         ran = run_adapter(tester, str(target / "debug/radiopost-tcp"), test)
     lines = ran.stdout.splitlines()

@@ -2854,6 +2854,45 @@ def api_cases() -> list[dict[str, Any]]:
         [(T_SESSION + 40, "KK4ODA-1", "POST", "/sessions", good)],
     )
     case("no token", [(T_SESSION + 40, "nobody", "POST", "/sessions", good)])
+    tablet = "device:facundo-tablet"
+
+    def enrollment(operator: str, base: str) -> dict[str, Any]:
+        signed = b"7Q4F-AZ9K" + base.encode()
+        return {
+            "address": "facundo@radiopost.org",
+            "operator": operator,
+            "code": "7Q4F-AZ9K",
+            "device": jws.b64u(PUBLIC[tablet]),
+            "signature": jws.b64u(rp.sign(rp.CTX_ENROLL, signed, SECRET[tablet])),
+        }
+
+    case(
+        "an enrollment refused twice, then taken with the same code, which is then used",
+        [
+            (T_ISSUED, "Facundo's tablet", "POST", "/enroll", enrollment("N0CALL", PO_RADIOPOST)),
+            (
+                T_ISSUED + 10,
+                "Facundo's tablet",
+                "POST",
+                "/enroll",
+                enrollment("KK4ODA", "https://elsewhere.example/rp/v1"),
+            ),
+            (
+                T_ISSUED + 20,
+                "Facundo's tablet",
+                "POST",
+                "/enroll",
+                enrollment("KK4ODA", PO_RADIOPOST),
+            ),
+            (
+                T_ISSUED + 30,
+                "Facundo's tablet",
+                "POST",
+                "/enroll",
+                enrollment("KK4ODA", PO_RADIOPOST),
+            ),
+        ],
+    )
     case(
         "a user's token on a gateway endpoint",
         [(T_SESSION + 40, "facundo", "POST", "/sessions", good)],
@@ -2968,6 +3007,12 @@ def make_api_exchanges() -> dict[str, Any]:
             "the user's credential revoked": ["422 credential-revoked"],
             "carried by a gateway the statement does not name": ["403 not-authorized"],
             "no token": ["401 not-authorized"],
+            "an enrollment refused twice, then taken with the same code, which is then used": [
+                "403 not-authorized",
+                "422 signature-invalid",
+                "200",
+                "403 not-authorized",
+            ],
             "a user's token on a gateway endpoint": ["403 not-authorized"],
             HANDED_IN: [
                 "201",

@@ -1311,7 +1311,7 @@ impl PostOffice {
     /// RP-5 §6.1: a one-time code, and a signature that proves the new device holds its key.
     fn enroll(&mut self, body: &Json) -> Response {
         let code_text = text(body, "code").to_owned();
-        let code = self.state.codes.remove(&code_text);
+        let code = self.state.codes.get(&code_text).cloned();
         let Some(code) = code.filter(|c| {
             c.expires > self.now
                 && c.address == text(body, "address")
@@ -1328,6 +1328,8 @@ impl PostOffice {
         if !crypto::verify(context::API_ENROLL, &signed, &signature, &device) {
             return problem(ErrorCode::SignatureInvalid, None);
         }
+        // used: only by an enrollment that succeeds (RP-5 §6.1)
+        self.state.codes.remove(text(body, "code"));
         let credential = self.issue(&code.address, &code.operator, device, code.flags);
         Response::ok(200, json!({"credential": base64url::encode(&credential)}))
     }

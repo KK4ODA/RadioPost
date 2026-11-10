@@ -22,8 +22,14 @@ usage: radiopost-gateway --dir DIR COMMAND
                      register the gateway with your post office (RP-5 §6.4), logged in
                      as you with your client's key and credential in HOME, and keep the
                      gateway's credential
+  credential --file FILE
+                     keep a credential a post office issued for the gateway's key by other
+                     means than `register` (raw bytes or hex)
   post-office --domain D --url URL
                      reach a domain's post office at URL without asking DNS
+  conformance --resolver URL
+                     conformance mode (the conformance tester's §2.3): ask only this DNS
+                     resolver, the tester's
   block --domain D   carry no sessions to a domain's post office (RP-1 §7.3)
   key                the gateway's public key
   serve              answer calls and carry each session to the caller's post office";
@@ -131,6 +137,31 @@ fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
             let mut s = Settings::load(dir)?;
             s.post_offices
                 .insert(a.need("--domain")?.to_lowercase(), a.need("--url")?);
+            s.save(dir)
+        }
+        "credential" => {
+            let file = a.need("--file")?;
+            let bytes = std::fs::read(&file).map_err(|e| format!("{file}: {e}"))?;
+            let bytes = std::str::from_utf8(&bytes)
+                .ok()
+                .and_then(station::unhex)
+                .unwrap_or(bytes);
+            let body = radiopost::credential::Credential::decode(&bytes)
+                .ok_or("that file is not a credential (RP-1 §4)")?
+                .body;
+            if body.device != station::key(dir)?.verifying_key().to_bytes() {
+                return Err("that credential is for another key than the gateway's".into());
+            }
+            station::write(dir, "credential.hex", &radiopost::cbor::hex(&bytes))?;
+            println!(
+                "{} for {}, credential {}",
+                body.operator, body.address, body.serial
+            );
+            Ok(())
+        }
+        "conformance" => {
+            let mut s = Settings::load(dir)?;
+            s.resolver = a.need("--resolver")?;
             s.save(dir)
         }
         "block" => {

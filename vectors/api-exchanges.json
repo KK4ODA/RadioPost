@@ -1130,6 +1130,107 @@
       ]
     },
     {
+      "what": "an enrollment refused twice, then taken with the same code, which is then used",
+      "exchanges": [
+        {
+          "at": 1793491200,
+          "who": "Facundo's tablet",
+          "request": {
+            "method": "POST",
+            "path": "/enroll",
+            "body": {
+              "address": "facundo@radiopost.org",
+              "operator": "N0CALL",
+              "code": "7Q4F-AZ9K",
+              "device": "q7O8gAmcRYbdIXkWcpnZecUyH_DJcPY0M3Zh9Zextl8",
+              "signature": "wr4Z3yUK-090ZcPytXlk3J2iuJZV0g5AAFUlErnU4fHG3DO0xYKttfbJsGgXt3GZk9NKGnfHluOIRwr3mMKrCA"
+            }
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 403,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        },
+        {
+          "at": 1793491210,
+          "who": "Facundo's tablet",
+          "request": {
+            "method": "POST",
+            "path": "/enroll",
+            "body": {
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA",
+              "code": "7Q4F-AZ9K",
+              "device": "q7O8gAmcRYbdIXkWcpnZecUyH_DJcPY0M3Zh9Zextl8",
+              "signature": "tt596GZhrv1bF2Ij-143AsiKFhQ4uXiezV5t-n9B-N554gb30MgyNNbVrpP1H2a9e2tw29Sov93enSPgOHe_CQ"
+            }
+          },
+          "response": {
+            "status": 422,
+            "body": {
+              "type": "about:blank",
+              "title": "Signature invalid",
+              "status": 422,
+              "code": 8,
+              "name": "signature-invalid"
+            }
+          }
+        },
+        {
+          "at": 1793491220,
+          "who": "Facundo's tablet",
+          "request": {
+            "method": "POST",
+            "path": "/enroll",
+            "body": {
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA",
+              "code": "7Q4F-AZ9K",
+              "device": "q7O8gAmcRYbdIXkWcpnZecUyH_DJcPY0M3Zh9Zextl8",
+              "signature": "wr4Z3yUK-090ZcPytXlk3J2iuJZV0g5AAFUlErnU4fHG3DO0xYKttfbJsGgXt3GZk9NKGnfHluOIRwr3mMKrCA"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQaA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIKuzvIAJnEWG3SF5FnKZ2XnFMh_wyXD2NDN2YfWXsbZfBhpq5oEUBxprXSgUCQJYQGNaqJ9xBu0z37VEEXPgG1AIlBruYdapNXn8_67OkiIIPDtqoqUKdX8eMwIisAxTktRC_Ot9QlS2ib9uIwGh5Qw"
+            }
+          }
+        },
+        {
+          "at": 1793491230,
+          "who": "Facundo's tablet",
+          "request": {
+            "method": "POST",
+            "path": "/enroll",
+            "body": {
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA",
+              "code": "7Q4F-AZ9K",
+              "device": "q7O8gAmcRYbdIXkWcpnZecUyH_DJcPY0M3Zh9Zextl8",
+              "signature": "wr4Z3yUK-090ZcPytXlk3J2iuJZV0g5AAFUlErnU4fHG3DO0xYKttfbJsGgXt3GZk9NKGnfHluOIRwr3mMKrCA"
+            }
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 403,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        }
+      ]
+    },
+    {
       "what": "a user's token on a gateway endpoint",
       "exchanges": [
         {

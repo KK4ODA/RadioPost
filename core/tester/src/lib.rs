@@ -3,13 +3,19 @@
 //! protocols against a program and says, test by test, whether the program did what the
 //! specifications require, and where it did not.
 //!
-//! It holds the client's tests C-01 to C-08 and C-11 ([`client`]), run through the tester's own
-//! RPMI adapter ([`harness::TestAdapter`]), and the modem adapter's tests A-01 to A-04
+//! It holds the client's tests C-01 to C-08, C-11 and C-12 ([`client`]), run through the
+//! tester's own RPMI adapter ([`harness::TestAdapter`]); the gateway's G-01, G-02, G-04, G-07,
+//! G-08 and G-09 ([`gateway`]), with the tester's own post office behind ([`office`]); the post
+//! office's P-01 to P-04 and P-07 to P-10 ([`postoffice`]); and the modem adapter's A-01 to A-04
 //! ([`adapter`]).
 
 pub mod adapter;
 pub mod client;
+pub mod gateway;
 pub mod harness;
+pub mod mailserver;
+pub mod office;
+pub mod postoffice;
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -22,6 +28,10 @@ pub const KEYS_JSON: &str = include_str!("../../../vectors/keys.json");
 
 /// The RPMI lines an adapter reads, and its answers (`vectors/rpmi-lines.json`).
 pub const RPMI_LINES_JSON: &str = include_str!("../../../vectors/rpmi-lines.json");
+/// The door's cases (`vectors/email-door.json`), for P-08.
+pub const EMAIL_DOOR_JSON: &str = include_str!("../../../vectors/email-door.json");
+/// Emails and the messages they make (`vectors/email-in.json`), for P-09.
+pub const EMAIL_IN_JSON: &str = include_str!("../../../vectors/email-in.json");
 /// `session-01`, which A-04 carries between two instances of an adapter.
 pub const SESSION_01_JSON: &str = include_str!("../../../vectors/session-01.json");
 
@@ -103,12 +113,195 @@ pub const CLIENT_TESTS: &[ClientTest] = &[
         run: |r, t| r.c08(t),
     },
     ClientTest {
+        id: "C-12",
+        checks: "A station-to-station session reported to the post office with both proofs (RP-5 §6.6)",
+        slow: false,
+        run: |r, t| r.c12(t),
+    },
+    ClientTest {
         id: "C-11",
         checks: "300 seconds of nothing end the session, and the caller hangs up (RP-3 §8)",
         slow: true,
         run: |r, t| r.c11(t),
     },
 ];
+
+/// A test of the gateway role.
+pub struct GatewayTest {
+    /// Its ID.
+    pub id: &'static str,
+    /// What it checks.
+    pub checks: &'static str,
+    run: fn(&mut gateway::Run<'_>, &mut Vec<String>, bool) -> harness::Outcome,
+}
+
+/// The gateway's tests, in order (Phase 2: a gateway online).
+pub const GATEWAY_TESTS: &[GatewayTest] = &[
+    GatewayTest {
+        id: "G-01",
+        checks: "An online session: the post office asked while the link turns around, WELCOME, mail both ways, pickups reported, the session closed (RP-3 §9, RP-5 §5.2–§5.7)",
+        run: |r, t, _| r.g01(t),
+    },
+    GatewayTest {
+        id: "G-02",
+        checks: "Credentials and statements refused in order, each with its code; a skewed clock or a replay answered with a challenge (RP-1 §5, §6.3, RP-3 §5.9)",
+        run: |r, t, _| r.g02(t),
+    },
+    GatewayTest {
+        id: "G-04",
+        checks: "A download resumed at another gateway, an upload at the same one (RP-3 §7)",
+        run: |r, t, _| r.g04(t),
+    },
+    GatewayTest {
+        id: "G-07",
+        checks: "A misbehaving caller: a frame over the limit, an unknown type, a message not accepted, and (--slow) a caller that never hangs up (RP-3 §2, §4, §5.4, §8)",
+        run: |r, t, slow| r.g07(t, slow),
+    },
+    GatewayTest {
+        id: "G-08",
+        checks: "A credential renewed by radio (RP-3 §5.8, RP-5 §6.2)",
+        run: |r, t, _| r.g08(t),
+    },
+    GatewayTest {
+        id: "G-09",
+        checks: "Post offices found in the DNS it is given, and a blocked one unknown (RP-1 §7.1, §7.3)",
+        run: |r, t, _| r.g09(t),
+    },
+];
+
+/// Runs the gateway's tests, telling `progress` of each verdict as it comes.
+///
+/// # Errors
+///
+/// The driver or the test keys cannot be read.
+pub fn run_gateway(
+    plan: &ClientPlan,
+    mut progress: impl FnMut(&Verdict),
+) -> Result<Vec<Verdict>, String> {
+    let driver = harness::Driver::new(&plan.driver, &plan.bin)?;
+    let mut run = gateway::Run {
+        driver: &driver,
+        offices: harness::PostOffices::from_json(KEYS_JSON)?,
+        scratch: plan.scratch.clone(),
+    };
+    let mut verdicts = Vec::new();
+    for t in GATEWAY_TESTS {
+        if !wanted(t.id, &plan.only) {
+            continue;
+        }
+        let started = Instant::now();
+        let mut transcript = Vec::new();
+        let slow = plan.slow || plan.only.iter().any(|o| o.eq_ignore_ascii_case(t.id));
+        let (passed, why) = match (t.run)(&mut run, &mut transcript, slow && plan.slow) {
+            Ok(()) => (Some(true), String::new()),
+            Err(e) => (Some(false), e),
+        };
+        let v = Verdict {
+            id: t.id,
+            checks: t.checks,
+            passed,
+            why,
+            transcript,
+            seconds: started.elapsed().as_secs_f64(),
+        };
+        progress(&v);
+        verdicts.push(v);
+    }
+    Ok(verdicts)
+}
+
+/// A test of the post office role.
+pub struct PostOfficeTest {
+    /// Its ID.
+    pub id: &'static str,
+    /// What it checks.
+    pub checks: &'static str,
+    run: fn(&mut postoffice::Run<'_>, &mut Vec<String>) -> harness::Outcome,
+}
+
+/// The post office's tests, in order (Phase 2).
+pub const POST_OFFICE_TESTS: &[PostOfficeTest] = &[
+    PostOfficeTest {
+        id: "P-01",
+        checks: "Its public documents as JWS under its key, and its DNS records (RP-1 §7, RP-5 §4)",
+        run: |r, t| r.p01(t),
+    },
+    PostOfficeTest {
+        id: "P-02",
+        checks: "Logging in and tokens; 401 against 403 (RP-5 §2, §3)",
+        run: |r, t| r.p02(t),
+    },
+    PostOfficeTest {
+        id: "P-03",
+        checks: "Enrollment with a code, and renewal (RP-5 §6.1, §6.2)",
+        run: |r, t| r.p03(t),
+    },
+    PostOfficeTest {
+        id: "P-04",
+        checks: "Sessions: the checks in order, messages taken and refused, pickups, a challenge taken once (RP-5 §5.2–§5.7)",
+        run: |r, t| r.p04(t),
+    },
+    PostOfficeTest {
+        id: "P-07",
+        checks: "Station-to-station sessions reported (RP-5 §6.6)",
+        run: |r, t| r.p07(t),
+    },
+    PostOfficeTest {
+        id: "P-08",
+        checks: "The door: each refusal in order, and the accept list (RP-6 §2.1, §2.2)",
+        run: |r, t| r.p08(t),
+    },
+    PostOfficeTest {
+        id: "P-09",
+        checks: "Email to message and back, Radio-Path, the part between post offices, a bounce (RP-6 §2.4, §3, §4)",
+        run: |r, t| r.p09(t),
+    },
+    PostOfficeTest {
+        id: "P-10",
+        checks: "Third-party mail flagged (RP-6 §5.1, RP-5 §5.2)",
+        run: |r, t| r.p10(t),
+    },
+];
+
+/// Runs the post office's tests, telling `progress` of each verdict as it comes.
+///
+/// # Errors
+///
+/// The driver or the test keys cannot be read.
+pub fn run_post_office(
+    plan: &ClientPlan,
+    mut progress: impl FnMut(&Verdict),
+) -> Result<Vec<Verdict>, String> {
+    let driver = harness::Driver::new(&plan.driver, &plan.bin)?;
+    let mut run = postoffice::Run {
+        driver: &driver,
+        offices: harness::PostOffices::from_json(KEYS_JSON)?,
+        scratch: plan.scratch.clone(),
+    };
+    let mut verdicts = Vec::new();
+    for t in POST_OFFICE_TESTS {
+        if !wanted(t.id, &plan.only) {
+            continue;
+        }
+        let started = Instant::now();
+        let mut transcript = Vec::new();
+        let (passed, why) = match (t.run)(&mut run, &mut transcript) {
+            Ok(()) => (Some(true), String::new()),
+            Err(e) => (Some(false), e),
+        };
+        let v = Verdict {
+            id: t.id,
+            checks: t.checks,
+            passed,
+            why,
+            transcript,
+            seconds: started.elapsed().as_secs_f64(),
+        };
+        progress(&v);
+        verdicts.push(v);
+    }
+    Ok(verdicts)
+}
 
 /// What to run against a client.
 pub struct ClientPlan {

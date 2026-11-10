@@ -1119,6 +1119,176 @@ impl Run<'_> {
         Ok(())
     }
 
+    /// C-12: a station-to-station session reported over the Internet (RP-5 §6.6): called by the
+    /// tester's station, the program carries a session, then reports it to the test post office,
+    /// with both proofs and the messages that crossed.
+    ///
+    /// # Errors
+    ///
+    /// The first deviation found.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the session, then the report, in order"
+    )]
+    pub fn c12(&mut self, peer_out: &mut Vec<String>) -> Outcome {
+        let trust = self.offices.trust();
+        let office = crate::office::TestOffice::start(&self.offices)?;
+        let caller_key = new_key();
+        let caller_cred = self.offices.issue(
+            CALLER_ADDRESS,
+            CALLER,
+            &caller_key.verifying_key().to_bytes(),
+        );
+        let (adapter, prog) = self.setup("C-12", 4096)?;
+        prog.compose(CALLER_ADDRESS, "For the caller", "Waiting for you.")?;
+        let mine = mail(CALLER_ADDRESS, &prog.address, "For the program", "To you.");
+        let running = prog.listen()?;
+        let mut peer = adapter.peer(&[CALLER], false)?;
+        let nonce = random::<8>();
+        let hello = caller_hello(&prog.operator, &[&mine], nonce, &caller_cred, &caller_key);
+        let result = (|| {
+            peer.call_within(&prog.operator, Duration::from_secs(30))?;
+            peer.send(std::slice::from_ref(&hello));
+            let w = peer.expect("WELCOME")?;
+            let Station { accepted, waiting } = check_station_welcome(&w, &prog, &trust, nonce)?;
+            let turn = program_turn(&mut peer, 4096, &HashMap::new())?;
+            let listed: Vec<(ContentId, u64)> =
+                waiting.iter().map(|(_, id, size)| (*id, *size)).collect();
+            let got = check_sent(&turn, &listed)?;
+            let from = accepted
+                .iter()
+                .find(|(id, _)| *id == mine.content_id())
+                .map_or(0, |(_, o)| usize::try_from(*o).unwrap_or(0));
+            let mut out = msgs(&mine, from, 4000, None);
+            out.push(receipt(&got, &[]));
+            out.push(done());
+            peer.send(&out);
+            let _ = program_turn_answering(&mut peer, 4096, &HashMap::new(), &[mine.content_id()])?;
+            peer.hang_up();
+            Ok((w, got))
+        })();
+        let (_, said) = running.finish(Duration::from_secs(15));
+        peer_out.extend(peer.transcript);
+        let (welcome, got) =
+            result.map_err(|e: String| format!("{e}\nthe program said: {}", said.trim()))?;
+        let home = prog.home.to_string_lossy().into_owned();
+        prog.driver
+            .run("post_office", &[("home", &home), ("url", &office.base)], "")?;
+        let out = prog.driver.run("report", &[("home", &home)], "")?;
+        peer_out.push(format!("the program reported: {}", out.trim()));
+        let log = office.exchanges();
+        let direct = log
+            .iter()
+            .find(|e| e.method == "POST" && e.path == "/direct")
+            .ok_or("the program sent no report to its post office (RP-5 §6.6)")?;
+        peer_out.push(format!(
+            "POST /direct → {} {}",
+            direct.status,
+            direct.answer.clone().unwrap_or_default()
+        ));
+        let body = direct.body.clone().unwrap_or_default();
+        let sessions = body["sessions"].as_array().cloned().unwrap_or_default();
+        let [session] = sessions.as_slice() else {
+            return Err(format!(
+                "{} sessions reported, where one crossed the air",
+                sessions.len()
+            ));
+        };
+        let b64 = |v: &serde_json::Value| {
+            v.as_str()
+                .and_then(radiopost::base64url::decode)
+                .unwrap_or_default()
+        };
+        if session["role"] != "called" {
+            return Err("`role` is not `called`, the program's part (RP-5 §6.6)".into());
+        }
+        if session["started"].as_u64() != welcome.get(10).and_then(Value::as_u64) {
+            return Err(
+                "`started` is not the station called's clock as WELCOME gave it (RP-5 §6.6)".into(),
+            );
+        }
+        // theirs: the caller's statement as HELLO gave it, its signature and credential
+        let theirs = &session["theirs"];
+        let stmt = Statement::decode(&b64(&theirs["statement"]))
+            .ok_or("`theirs.statement` is not a statement")?;
+        let hello_sig = hello
+            .get(15)
+            .and_then(Value::as_bytes)
+            .map(<[u8]>::to_vec)
+            .unwrap_or_default();
+        if stmt.address != CALLER_ADDRESS
+            || stmt.nonce() != Some(nonce)
+            || b64(&theirs["signature"]) != hello_sig
+            || b64(&theirs["credential"]) != caller_cred
+        {
+            return Err("`theirs` is not the caller's statement, signature and credential from HELLO (RP-5 §6.6)".into());
+        }
+        // mine: the program's own statement over the caller's nonce (RP-1 §6.5)
+        let mine_proof = &session["mine"];
+        let own = Statement::decode(&b64(&mine_proof["statement"]))
+            .ok_or("`mine.statement` is not a statement")?;
+        let cred = credential::verify(&b64(&mine_proof["credential"]), &trust, now(), 0)
+            .map_err(|r| format!("`mine.credential` does not verify: {}", r.code.name()))?;
+        let fresh = Freshness {
+            now: now(),
+            seen: &[],
+            challenge: None,
+            sent_nonce: Some(nonce),
+        };
+        statement::verify(&own, &b64(&mine_proof["signature"]), &cred, CALLER, &fresh).map_err(
+            |c| {
+                format!(
+                    "`mine` is not the program's proof over the caller's nonce: {} (RP-1 §6.5)",
+                    c.name()
+                )
+            },
+        )?;
+        if cred.address != prog.address {
+            return Err("`mine` is not the program's account".into());
+        }
+        let ids = |k: &str| -> Vec<String> {
+            session[k]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|m| m["id"].as_str().map(str::to_owned))
+                .collect()
+        };
+        if ids("received") != [mine.content_id().text()] {
+            return Err(format!(
+                "`received` lists {:?}: the message the program took (RP-5 §6.6)",
+                ids("received")
+            ));
+        }
+        let sent: Vec<String> = got.iter().map(ContentId::text).collect();
+        if ids("sent") != sent {
+            return Err(format!(
+                "`sent` lists {:?} where the caller listed {sent:?} complete (RP-5 §6.6)",
+                ids("sent")
+            ));
+        }
+        if direct.status != 200 {
+            return Err(format!(
+                "the test post office refused the report: {}",
+                direct.status
+            ));
+        }
+        let again = prog.driver.run("report", &[("home", &home)], "")?;
+        let reports = office
+            .exchanges()
+            .iter()
+            .filter(|e| e.path == "/direct")
+            .count();
+        if reports != 1 {
+            return Err(format!(
+                "the report was sent again ({reports} reports): an answered session leaves the home. It said: {}",
+                again.trim()
+            ));
+        }
+        Ok(())
+    }
+
     /// C-11: 300 seconds of nothing end the session, and the caller hangs up (RP-3 §8). It takes
     /// five minutes.
     ///

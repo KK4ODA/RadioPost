@@ -10,5 +10,7 @@
   "call_station": ["{bin}", "--home", "{home}", "call", "{callsign}", "--station", "--adapter", "{adapter}"],
   "listen": ["{bin}", "--home", "{home}", "listen", "--adapter", "{adapter}"],
   "inbox": ["{bin}", "--home", "{home}", "inbox"],
-  "outbox": ["{bin}", "--home", "{home}", "outbox"]
+  "outbox": ["{bin}", "--home", "{home}", "outbox"],
+  "post_office": ["{bin}", "--home", "{home}", "post-office", "{url}"],
+  "report": ["{bin}", "--home", "{home}", "report"]
 }

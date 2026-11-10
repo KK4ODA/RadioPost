@@ -94,6 +94,16 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   home (RP-5 §6.4). `tests/online.rs` is the whole path: client → loopback adapter → gateway program
   → post office service over HTTP. A post office's base URL is what the gateway signs at login and
   registration, so a test's post office takes the URL of the port it listens on.
+  The tester's Phase 2 roles: `gateway` (it plays the caller through the test adapter, with
+  `office`'s test post office behind — the core's own post office on the test key — and a test DNS
+  zone served as DNS over HTTPS; conformance mode is *given* the test post office's URL, since it
+  is plain HTTP and RP-1 §7.1 ignores such a record) and `postoffice` (it starts the post office
+  from its driver for each test and plays users, a gateway, a `hampost.org` user and the mail
+  server: the door called in the MTA Hooks draft's shape, `mailserver`'s stand-in SMTP). Writing
+  them found the gateway's session loop handing the engine the last event again at each quiet
+  read (fixed: `event.take()`), and enrollment codes used at a refused attempt (RP-5 0.12.1). The
+  loopback channel drops what is in flight when a link breaks: a test that breaks a link after
+  sending waits for it to cross.
   `core/api` (`radiopost-api`) is RP-5 over HTTPS (login, calls, enrollment, DNS over HTTPS), shared
   by the gateway and the client; the client's `online` module uses it (enroll, renew, settings —
   `PUT` replaces them whole, so the client merges —, accept list, `report`). `app/src-tauri` has its

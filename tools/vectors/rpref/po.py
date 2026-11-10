@@ -642,7 +642,7 @@ class PostOffice:
 
     def enroll(self, body: dict[str, Any]) -> Response:
         """RP-5 §6.1: a one-time code, and a signature that proves the new device holds its key."""
-        code = self.codes.pop(body.get("code", ""), None)
+        code = self.codes.get(body.get("code", ""))
         if code is None or (code["address"], code["operator"]) != (
             body.get("address"),
             body.get("operator"),
@@ -655,6 +655,7 @@ class PostOffice:
         signed = body["code"].encode("utf-8") + self.base_url.encode("utf-8")
         if not rp.verify(rp.CTX_ENROLL, signed, signature, device):
             return problem("signature-invalid")
+        del self.codes[body["code"]]  # used: only by an enrollment that succeeds
         credential = self.issue(code["address"], code["operator"], device, code["flags"])
         return 200, {"credential": jws.b64u(credential)}
 

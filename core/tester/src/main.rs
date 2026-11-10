@@ -14,6 +14,17 @@ usage:
       says how to run the program (core/tester/drivers/radiopost.json is the radiopost client's);
       the program is put in conformance mode in a fresh home for each test. C-11 takes five
       minutes: it runs with --slow, or when named in --only.
+  radiopost-tester gateway --driver FILE --bin PROGRAM [--only ID,...] [--slow] [--json FILE]
+                           [--scratch DIR]
+      test a gateway online (G-01, G-02, G-04, G-07 to G-09): the tester calls it through its
+      own modem adapter and runs the post office behind it (core/tester/drivers/
+      radiopost-gateway.json is radiopost-gateway's driver). G-07's 300-second wait runs with
+      --slow.
+  radiopost-tester post-office --driver FILE --bin PROGRAM [--only ID,...] [--json FILE]
+                               [--scratch DIR]
+      test a post office (P-01 to P-04, P-07 to P-10): the tester starts it in a fresh directory
+      for each test, and plays its users, a gateway, another post office's user and the mail
+      server around it (core/tester/drivers/radiopost-po.json is radiopost-po's driver).
   radiopost-tester adapter --at HOST:PORT [--far HOST:PORT] [--reach REMOTE] [--only ID,...]
                            [--json FILE]
       test a modem adapter (A-01 to A-04): the one whose hosts connect at --at, and for A-02 and
@@ -109,6 +120,57 @@ fn client(args: &Args) -> Result<ExitCode, String> {
     Ok(finish("client", &bin, &verdicts, args.one("--json")))
 }
 
+fn plan(args: &Args, role: &str) -> Result<(ClientPlan, bool), String> {
+    let driver_file = args
+        .one("--driver")
+        .ok_or_else(|| format!("{role} needs --driver FILE"))?;
+    let bin = args
+        .one("--bin")
+        .ok_or_else(|| format!("{role} needs --bin PROGRAM"))?;
+    let text = std::fs::read_to_string(&driver_file).map_err(|e| format!("{driver_file}: {e}"))?;
+    let driver = serde_json::from_str(&text).map_err(|e| format!("{driver_file}: {e}"))?;
+    let (scratch, keep) = match args.one("--scratch") {
+        Some(dir) => (PathBuf::from(dir), true),
+        None => (
+            std::env::temp_dir().join(format!("radiopost-tester-{}", std::process::id())),
+            false,
+        ),
+    };
+    Ok((
+        ClientPlan {
+            driver,
+            bin,
+            scratch,
+            only: args.list("--only"),
+            slow: args.has("--slow"),
+        },
+        keep,
+    ))
+}
+
+fn gateway(args: &Args) -> Result<ExitCode, String> {
+    let (plan, keep) = plan(args, "gateway")?;
+    let verdicts = radiopost_tester::run_gateway(&plan, say)?;
+    if !keep {
+        let _ = std::fs::remove_dir_all(&plan.scratch);
+    }
+    Ok(finish("gateway", &plan.bin, &verdicts, args.one("--json")))
+}
+
+fn post_office(args: &Args) -> Result<ExitCode, String> {
+    let (plan, keep) = plan(args, "post-office")?;
+    let verdicts = radiopost_tester::run_post_office(&plan, say)?;
+    if !keep {
+        let _ = std::fs::remove_dir_all(&plan.scratch);
+    }
+    Ok(finish(
+        "post office",
+        &plan.bin,
+        &verdicts,
+        args.one("--json"),
+    ))
+}
+
 fn adapter(args: &Args) -> Result<ExitCode, String> {
     let at = args.one("--at").ok_or("adapter needs --at HOST:PORT")?;
     let plan = radiopost_tester::adapter::Plan {
@@ -131,6 +193,8 @@ fn main() -> ExitCode {
     let result = match words.first().map(String::as_str) {
         Some("client") => client(&args),
         Some("adapter") => adapter(&args),
+        Some("gateway") => gateway(&args),
+        Some("post-office") => post_office(&args),
         _ => {
             println!("{USAGE}");
             return ExitCode::from(2);

@@ -25,6 +25,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 
 [dev-dependencies]
+radiopost-tester = { path = "../tester" }
 radiopost-client = { path = "../../app/client" }
 sha2 = "0.11"
 

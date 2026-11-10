@@ -25,6 +25,7 @@ unicode-normalization = "0.1"
 lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "hostname"] }
 
 [dev-dependencies]
+radiopost-tester = { path = "../tester" }
 sha2 = "0.11"
 
 [lints]

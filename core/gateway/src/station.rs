@@ -506,13 +506,16 @@ fn carry(station: &mut Station, modem: &mut Modem, connected: &Event) -> Result<
         Box::new(move |call| radiopost::thirdparty::may_hand(call, &country)),
     );
     let mut carrier = Carrier::new(Answering(engine));
-    let mut event = connected.clone();
+    // each event is handed to the engine once: a quiet read hands it nothing
+    let mut event = Some(connected.clone());
     let mut quiet_since = std::time::Instant::now();
     let result = loop {
-        let (requests, _) = carrier.on_event(&mut modem.host, &event);
-        if let Some(e) = requests.iter().find_map(|r| modem.conn.send(r).err()) {
-            carrier.engine_mut().link_lost();
-            break Err(format!("the modem's adapter: {e}"));
+        if let Some(e) = event.take() {
+            let (requests, _) = carrier.on_event(&mut modem.host, &e);
+            if let Some(err) = requests.iter().find_map(|r| modem.conn.send(r).err()) {
+                carrier.engine_mut().link_lost();
+                break Err(format!("the modem's adapter: {err}"));
+            }
         }
         if carrier.is_ended() {
             break Ok(());
@@ -520,7 +523,7 @@ fn carry(station: &mut Station, modem: &mut Modem, connected: &Event) -> Result<
         match modem.next() {
             Ok(Some(e)) => {
                 quiet_since = std::time::Instant::now();
-                event = e;
+                event = Some(e);
             }
             Ok(None) if quiet_since.elapsed() < QUIET => {}
             Ok(None) => {

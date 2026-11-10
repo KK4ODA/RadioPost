@@ -71,6 +71,18 @@ impl Driver {
             .collect())
     }
 
+    /// A template's first word with the values put in: a URL the program serves (its door).
+    ///
+    /// # Errors
+    ///
+    /// The driver has no such template.
+    pub fn template(&self, name: &str, vars: &[(&str, &str)]) -> Result<String, String> {
+        self.words(name, vars)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| format!("the driver's `{name}` is empty"))
+    }
+
     /// Runs a command to its end; its standard output.
     ///
     /// # Errors
@@ -164,7 +176,9 @@ pub fn now() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-fn unhex(s: &str) -> Option<Vec<u8>> {
+/// Hexadecimal text as bytes.
+#[must_use]
+pub fn unhex(s: &str) -> Option<Vec<u8>> {
     let s = s.trim();
     (s.len() % 2 == 0)
         .then(|| {
@@ -259,6 +273,30 @@ impl PostOffices {
             });
         }
         trust
+    }
+
+    /// The test key of a domain.
+    #[must_use]
+    pub fn key_of(&self, domain: &str) -> Option<&SigningKey> {
+        self.keys
+            .iter()
+            .find(|(d, ..)| d == domain)
+            .map(|(_, k, ..)| k)
+    }
+
+    /// A credential with the body given, signed by its address's domain's test key: for the
+    /// credentials a test needs wrong (expired, of an unknown domain).
+    ///
+    /// # Panics
+    ///
+    /// When no test key of the address's domain is valid now.
+    #[must_use]
+    pub fn issue_body(&mut self, body: &Body) -> Vec<u8> {
+        let domain = body.address.rsplit_once('@').map_or("", |(_, d)| d);
+        let key = self
+            .key_of(domain)
+            .unwrap_or_else(|| panic!("no test key for {domain}"));
+        Credential::issue(body, key).encode()
     }
 
     /// A credential for `address`'s account, valid from now for 30 days, may send and receive.
@@ -427,6 +465,8 @@ pub struct TestAdapter {
     server: Server,
     /// Where the program connects.
     pub program_at: SocketAddr,
+    /// Where each program connects, when the test runs several (two gateways).
+    pub programs_at: Vec<SocketAddr>,
     tester_station: usize,
 }
 
@@ -437,6 +477,15 @@ impl TestAdapter {
     ///
     /// No port could be taken.
     pub fn new(frame_bytes: usize) -> Result<TestAdapter, String> {
+        TestAdapter::with_programs(frame_bytes, 1)
+    }
+
+    /// A test adapter with `programs` stations for programs under test, each with its own port.
+    ///
+    /// # Errors
+    ///
+    /// No port could be taken.
+    pub fn with_programs(frame_bytes: usize, programs: usize) -> Result<TestAdapter, String> {
         let caps = Caps {
             bandwidths: vec![500, 2300],
             max_links: 1,
@@ -456,16 +505,26 @@ impl TestAdapter {
             frame_bytes: frame,
         };
         let mut ch = Channel::new();
-        let program = ch.add_station(station("program", "p", frame_bytes));
+        let stations: Vec<usize> = (0..programs.max(1))
+            .map(|i| {
+                ch.add_station(station(
+                    &format!("program{i}"),
+                    &format!("p{i}"),
+                    frame_bytes,
+                ))
+            })
+            .collect();
         let tester_station = ch.add_station(station("tester", "t", 4096));
         // a call nobody answers fails in 3 s: the tester calls a program until it listens
         let server = Server::new(ch, Duration::from_secs(3));
-        let program_at = server
-            .listen(program, "127.0.0.1:0")
-            .map_err(|e| e.to_string())?;
+        let programs_at = stations
+            .iter()
+            .map(|s| server.listen(*s, "127.0.0.1:0").map_err(|e| e.to_string()))
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(TestAdapter {
             server,
-            program_at,
+            program_at: programs_at[0],
+            programs_at,
             tester_station,
         })
     }
@@ -564,6 +623,8 @@ impl Peer {
             match self.event(Duration::from_millis(100)) {
                 Some(Event::Connected { link, .. }) => {
                     self.link = Some(link);
+                    // a new link starts a new stream: nothing of a broken one carries over
+                    self.stream = Deframer::new();
                     return Ok(());
                 }
                 Some(Event::Failed { code, .. }) => {
