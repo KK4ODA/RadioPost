@@ -79,7 +79,9 @@ AREDN, which is on the air, both use `--plain`: nothing on the air is encrypted.
 
 Agree a frequency in the band's digital segment, a time, and who calls first. Start Aether on
 both stations and check it works with the radio (its *Tune* or a probe), at the bandwidth you
-agree (500 or 2300 Hz, Aether's setting).
+agree (500 or 2300 Hz, Aether's setting). Set each station's Aether to the callsign of its
+credential (say KK4ODA at one station and WD5EMA at the other): RadioPost answers and calls as
+that callsign, and Aether hands it every call to it while RadioPost runs.
 
 **Station A** (it answers): in RadioPost's *Station* area, click **Listen**. The badge at the top
 says *Listening*.
@@ -111,7 +113,9 @@ session and leaves the other station waiting.
   they do not allow.
 * **Identification.** Aether sends each station's Morse identifier at the end of the session: always
   for a US callsign (§97.119), and as its settings say for others. RadioPost adds nothing on the air
-  of its own.
+  of its own. Aether sends nothing in Morse during a session, and §97.119(a) asks for the callsign
+  at least every ten minutes, so keep each session under ten minutes: a few short messages, small
+  files.
 * **No encryption.** RadioPost signs; it never encrypts (RP-0 §5). Anyone can read every message.
 * **Third-party traffic.** Messages between the two operators themselves are not third-party
   traffic. Do not carry mail for others in these tests.
