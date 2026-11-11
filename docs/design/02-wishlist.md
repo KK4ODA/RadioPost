@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.2 |
+| **Version** | 0.2.3 |
 | **Updated** | 2026-11-11 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -123,13 +123,13 @@ rules:
 | W17 | Gateways ranked by propagation | Radio | Low | Fits today; optional addition for measurements | Planned |
 | W18 | Mail coming down compressed | Radio | High | Fits today | Proposed |
 | W19 | Shorter short messages: a dictionary | Radio | Low | Optional addition; breaking if made required | Planned |
-| W20 | A VARA HF and FM adapter | Adapters | Low | Fits today | Planned |
+| W20 | An adapter for VARA-style modems: VARA and Mercury | Adapters | Medium | Fits today; G11 to name Mercury | Planned |
 | W21 | An ARDOP adapter | Adapters | Low | Needs specification review | Planned |
 | W22 | An AX.25 packet adapter | Adapters | Low | Fits today | Planned |
 | W23 | A phone version | Radio | Low | Fits today; optional addition for RPMI across devices | Planned |
 | W24 | Block a caller by address or callsign | Operation | Medium | Fits today | Planned |
 | W25 | The gateway renews its own credential | — | — | — | Consolidated into W8 |
-| W26 | One gateway, several radios | Operation | Low | Fits today | Planned |
+| W26 | One gateway, several modems | Operation | Medium | Fits today; G11 to name Mercury | Planned |
 | W27 | Copies placed ahead | Offline | High | Fits today | Planned |
 | W28 | The gateway's queue while offline, and its reports | Offline | High | Fits today | Planned |
 | W29 | The sender's client follows queued mail | Offline | High | Fits today | Planned |
@@ -522,22 +522,24 @@ The gateway's operator refuses one account, or one station, that misuses the gat
 | Status | Planned. |
 | Author decision | None yet. |
 
-### W26. One gateway, several radios
+### W26. One gateway, several modems
 
-One gateway program serves HF and VHF packet, or two HF bands, each on its own radio.
+One gateway answers callers whatever modem they run: Aether HF and Mercury on the same channel, or
+HF and VHF packet, each modem on a radio of its own or sharing one.
 
 | | |
 |---|---|
-| Requested by | The plan: design §5.2 (*Modem host*); the county EOC of concept §2. Requesters: 0. |
+| Requested by | The plan: design §5.2 (*Modem host*); the county EOC of concept §2. The author (KK4ODA), 2026-11-11: Aether HF and Mercury on one gateway. Requesters: 1. |
 | Component | Gateway. |
-| Compatibility | **Fits today**: one RPMI connection per adapter (RP-4 §2); every channel in the record (RP-5 §4.4). |
+| Compatibility | **Fits today.** The gateway holds one RPMI connection per adapter (RP-4 §2), and its record lists every channel with its modem (RP-5 §4.4): the same dial twice, once per modem, is allowed. Two modems on one radio need no protocol either: the gateway turns `listen` off on the others while one has a call or a link (RP-4 §4), and each modem hears the other's signal as busy (RP-4 §5). Listing a Mercury channel needs a modem name RP-5 §4.4 does not have: an **optional protocol addition** (§13, G11). |
 | Existing coverage | Planned; one modem per gateway today. |
-| Dependencies | W22 for packet. |
-| Effort | Medium. |
-| Priority | **Low.** |
-| Recommendation | Accept, with W22 and W30. |
+| Dependencies | W20 for Mercury; W22 for packet; W40, since Mercury checks no band rules; G11. |
+| Effort | Medium for a modem per radio. Large for two modems on one radio: shared audio and keying, the gateway holding one modem quiet while the other works, a guide, and tests with two real modems. |
+| Priority | **Medium.** A gateway that serves both modems' users doubles who can reach it; it is not needed for the pilot. |
+| Recommendation | Accept, as one capability configured per radio: modems on separate radios run side by side, and modems sharing a radio take turns, the gateway keeping the others from answering while one has a call or link. |
 | Status | Planned. |
 | Author decision | None yet. |
+| Notes | On one radio, both modems hear the same audio, which the operating system can share; only one may transmit at a time, and the radio's keying must be shared too: through rigctld or FLRig, which Aether supports and which Mercury's Hamlib keying can reach, since only one program can hold a CAT port. Two callers at the same instant could each be answered once; the gateway aborts the later, and the two calls had already collided on the air. Aether's gate checks only Aether's transmissions. Design D19 says two modems cannot share one sound card: true for transmitting, not for listening. |
 
 ### W36. One mailbox, by radio and by mail program
 
@@ -550,7 +552,7 @@ read, including from members with no licence who use only a mail program.
 | Requested by | The plan: concept §3.1 (email-only members), §5.4; RP-5 §6.3, `radio_skips_read`. Requesters: 0. Includes W12. |
 | Component | Post office. |
 | Compatibility | **Fits today.** Email-only members hold no credential (RP-1 §1), and their mail to radio users is third-party traffic (RP-6 §5.1). |
-| Existing coverage | Partly built: the radio's mailbox and the mail program's are separate ([the post office guide](../user/post-office.md), §10). Mail a mail-program user sends to another user here never reaches the radio. |
+| Existing coverage | Partly built: the radio's mailbox and the mail program's are separate ([the post office guide](../user/post-office.md), §11). Mail a mail-program user sends to another user here never reaches the radio. |
 | Dependencies | None. |
 | Effort | Large: JMAP both ways, and every path mail takes inside the post office. |
 | Priority | **High.** Mail that never reaches the radio is mail silently lost to a radio user, and pilot users with the Internet will meet it at once. |
@@ -584,10 +586,10 @@ A post office that loses its server loses no mail, and is rebuilt in hours.
 | Requested by | The plan: concept §8.5; the pilot is to run with nightly off-site backups and a backup mail server (concept §12). Requesters: 0. |
 | Component | Post office. |
 | Compatibility | **Fits today**: one operator's servers; no protocol. |
-| Existing coverage | Planned; the post office guide sets up one server. |
+| Existing coverage | Planned. radiopost.org's mail has been live since 2026-11-11 (CLAUDE.md), and the post office guide sets up one server with no word on backups. |
 | Dependencies | None. |
 | Effort | Medium. |
-| Priority | **Critical** for the backups: the pilot holds real users' mail and keys. The backup mail server is **Medium**. |
+| Priority | **Critical** for the backups: the pilot's server now holds real mail, its users' accounts and the post office's key. The backup mail server is **Medium**. |
 | Recommendation | Accept: backups now, and a restore tried once; the backup mail server after. |
 | Status | Planned. |
 | Author decision | None yet. |
@@ -767,23 +769,24 @@ Write to an address for a catalogue, a weather report or a blank form, and get t
 
 ## 10. Adapters and interoperability
 
-### W20. A VARA HF and VARA FM adapter
+### W20. An adapter for VARA-style modems: VARA HF, VARA FM and Mercury
 
-Use RadioPost with the modem many stations already run.
+Use RadioPost with VARA, which many stations already run, or with Mercury, Rhizomatica's open
+HF modem, as a client or a gateway.
 
 | | |
 |---|---|
-| Requested by | The plan: concept §7, design §5.4, Phase 5. Requesters: 0. |
+| Requested by | The plan: concept §7, design §5.4, Phase 5 (VARA). The author (KK4ODA), 2026-11-11 (Mercury). Requesters: 1. |
 | Component | Adapter. |
-| Compatibility | **Fits today**: RP-4 §9.2 maps VARA's published commands. No delivery reports (RP-3 keeps its own receipts), not shareable, no band rules checked (RP-4 §8). |
-| Existing coverage | Planned, Phase 5. |
-| Dependencies | W40 for an unattended gateway on VARA. |
-| Effort | Medium. |
-| Priority | **Low** by the order of work; likely the adapter users ask for most. |
-| Recommendation | Accept, after W40. |
+| Compatibility | **Fits today.** Mercury offers a VARA-compatible TNC interface (its `docs/TNC.md`: commands on port 8300, data on 8301), so RP-4 §9.2's mapping serves both; a note in RP-4 §9 on where Mercury differs is informative, a PATCH. Neither can be shared: a host holds the single `MYCALL` list. Neither checks band rules (RP-4 §8). Mercury's `BUFFER 0` means the other station has acknowledged everything, so its adapter can report `delivered`; VARA's means only sent. Naming Mercury in a gateway's record needs G11. |
+| Existing coverage | Planned for VARA, Phase 5. Mercury is new to the plan. |
+| Dependencies | W40 for an unattended gateway; G11 to list Mercury channels. |
+| Effort | Medium: one adapter, with each modem's differences. |
+| Priority | **Medium.** The author asks for Mercury, and the two modems reach many users. |
+| Recommendation | **Modify**: one adapter for both, built and tested against Mercury first. Mercury is open source and runs on Linux, so the adapter and the tester's A-01 to A-04 can run against a real modem in CI; VARA is proprietary and is never run by the project, so it follows from its published commands. Whether Mercury joins Phase 5's adapters, ahead of ARDOP, is the author's call. |
 | Status | Planned. |
 | Author decision | VARA is a black box (CLAUDE.md): only its published command list is used. |
-| Notes | A session over VARA cannot be read by an open monitor (W42): its air interface is not published. |
+| Notes | Mercury's air interface is published (FreeDV and codec2 OFDM modes, documented in its repository), so an open monitor (W42) can read sessions over it, which it cannot over VARA. Mercury is GPL-3.0; the adapter talks to it over TCP, as the post office talks to Stalwart, so RadioPost's licences are unaffected. |
 
 ### W21. An ARDOP adapter
 
@@ -851,7 +854,7 @@ automatic-control segments.
 |---|---|
 | Requested by | The plan: design §5.2 (*Rules check*), concept §7; RP-4 §8 requires it of the host or its operator. Requesters: 0. |
 | Component | Gateway; the client too, for W16. |
-| Compatibility | **Fits today** with the dial taken from the gateway's settings or registered channels (RP-5 §4.4), judged against its country's table (RP-7 §5.1). Reading the radio's own dial is an **optional protocol addition** to RP-4: RPMI carries no frequency (§13, G3). |
+| Compatibility | **Fits today** with the dial taken from the gateway's settings or registered channels (RP-5 §4.4), judged against its country's table (RP-7 §5.1), or read by the gateway itself from the rigctld or FLRig its modems key through (W26). Reading the dial from the modem is an **optional protocol addition** to RP-4: RPMI carries no frequency (§13, G3). |
 | Existing coverage | Partly built: a setting says the operator checks ([the gateway guide](../user/gateway.md), §2); the gateway checks nothing itself. |
 | Dependencies | W14's RP-4 addition to read the dial (§12, T1); W41 outside the US. |
 | Effort | Medium. |
@@ -904,7 +907,8 @@ Where wishes share a need, building it once serves them all. None of these is a 
 
 | # | Thread | Wishes | What to do once |
 |---|---|---|---|
-| T1 | The modem's dial | W14, W40, W16 | One optional RP-4 addition to read and set the dial, with its rule for a shared modem (G3, G8). |
+| T1 | The modem's dial | W14, W40, W16, W26 | One optional RP-4 addition to read and set the dial, with its rule for a shared modem (G3, G8). Where the modems key through rigctld or FLRig, a gateway can read the dial there itself, with no addition. |
+| T8 | Modem names | W20, W26, W44 | One registry of modem names, and what a client does with one it does not know (G11): gateway lists, the filter by modem, a new adapter. |
 | T2 | Credentials that never lapse unattended | W8 | One renewal rule for clients and gateways, by any open path. |
 | T3 | The post office's air forms | W18, W19 | One rule for which compressions a post office uses (G2), settled before the dictionary. |
 | T4 | Broadcasts | W33, W34 | One broadcast format, only if one of them shows a need mail cannot meet. |
@@ -931,6 +935,7 @@ document.
 | G8 | RP-4 §1.1 | What belongs to the whole station on a shared modem, such as the dial, or a whole Aether profile (RP-4 §9.1 leaves the bandwidth open in the same way). | One host can move every other host's station, even to another radio. | Refuse a station-wide change while another host's link or call is up. | W14, W44 |
 | G9 | RP-3 §8 | Whether a second session may follow on the same link. | A client with several accounts pays a call for each. | Leave it, or allow it when both sides say so. | W7 |
 | G10 | RP-1 §6.3 | Step 2 requires the statement's `operator` to equal the credential's, yet `operator` is the callsign "as on the air" (RP-1 §6.1, RP-3 §5.1), and RP-6 §5.1 and D31 read where a station is from a prefix or suffix on it (`VE3/KK4ODA`). | A user abroad who signs with the host country's prefix is refused unless enrolled again for it; one who keeps the plain callsign is taken for a station at home, and the third-party check judges the wrong country. | Compare the base callsign, and let the statement carry the prefix and suffix: a change every verifier must make, cheapest while the specifications are Drafts. | W44 |
+| G11 | RP-5 §4.4 | Its `modem` values (`aether`, `vara-hf`, `vara-fm`, `ardop`, `ax25`, `tcp`) are a list with no registry, no way to add one, and no rule for a value a client does not know. | A gateway offering Mercury has no agreed name for it, and clients may treat an unknown name differently. | A registry of modem names in RP-0 §9, `mercury` its first new entry, and a client ignoring a channel whose modem it does not know. | W20, W26, W44 |
 
 ---
 
@@ -967,3 +972,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.2.0 | 2026-11-11 | Rebuilt to the author's brief: verdicts as the brief names them, with *needs specification review*; priorities Critical, High, Medium, Low; a recommendation, a status and the author's decision for each wish; principles (§2) and shared threads (§12). W9 folded into W27, W12 into W36, W25 into W8; W39 deferred. W31 proposed for Phase 3, W32 for the application layer, W36 to fill the accept list from mail-program mail; W21 needs specification review. Gaps G8, G9; what each gap costs. Statements about the rules say whose reading they are. |
 | 0.2.1 | 2026-11-11 | The author's first wish: W44, one install for several radios, recommended as RadioPost following Aether's profiles rather than keeping its own. Thread T7, the modem's rate; gap G10, a portable callsign against the credential's; G8 covers a profile switch. §5 renamed *Setup, accounts and configuration*. |
 | 0.2.2 | 2026-11-11 | W44: the author decided on switching between radios only; two radios at once deferred (§14). |
+| 0.2.3 | 2026-11-11 | The author's wish for Aether HF and Mercury on one gateway, merged: W26 becomes *one gateway, several modems* (on separate radios or sharing one), W20 *an adapter for VARA-style modems*, Mercury included, built against Mercury first; both Medium. W40 may read the dial from rigctld or FLRig; thread T8, modem names; gap G11. W38: radiopost.org's mail is live, still with no backups. W36 cites the post office guide's §11. |
