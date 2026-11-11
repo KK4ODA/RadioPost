@@ -570,6 +570,17 @@ mod tests {
         assert!(!newer("", "0.1.0"));
     }
 
+    /// The project's update key, as `core/update/updater.pub` holds it, reads as a minisign
+    /// public key: a key lost or mangled in the file fails here, not in the field.
+    #[test]
+    fn the_projects_key_reads() {
+        let key = super::public_key();
+        assert!(!key.is_empty(), "core/update/updater.pub holds no key");
+        let text = super::unbase64(key).expect("base64 text");
+        let read = minisign_verify::PublicKey::decode(&text);
+        assert!(read.is_ok(), "not a minisign public key: {text}");
+    }
+
     #[test]
     fn only_release_pages_are_opened() {
         for bad in [
