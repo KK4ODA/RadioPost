@@ -14,6 +14,11 @@ the RadioPost app, and the gateway, which its operator runs with RadioPost Gatew
   the radio as Aether's own manual says. RadioPost uses Aether as its modem: Aether keys the radio,
   checks the band rules, and sends the Morse identifier at the end of each session. Set Aether's
   callsign to yours.
+* **Aether keying the radio itself** (Aether's Setup step 2: CAT, serial, rigctld, FLRig, CM108
+  or VOX, not *Host*), with its ports as they are. RadioPost talks to Aether's control port,
+  8515 (`ws://127.0.0.1:8515/v1`). The host programs port, 8300, is for Winlink Express and VarAC;
+  RadioPost never uses it, and it stays at 8300. Close Winlink Express or VarAC while you test if
+  they use the same callsign: one program at a time answers for a callsign at Aether.
 * **RadioPost**, from the [releases](https://github.com/KK4ODA/RadioPost/releases): the installer
   named `RadioPost` for Windows (`…-setup.exe`), macOS (`.dmg`) or Linux (`.deb` or
   `.AppImage`). The installers are not signed yet: on Windows, SmartScreen asks once (More info,

@@ -12,6 +12,22 @@ session to the user's own post office over the Internet (RP-3 §9, RP-5 §5).
   Aether's own manual says. Aether keys the radio, checks the band rules and sends the Morse
   identifier at the end of each session. Set Aether's callsign to the gateway's, with its SSID
   (say `KK4ODA-1`).
+* **Aether keying the radio itself**: in Aether's Setup step 2, CAT, serial, rigctld, FLRig,
+  CM108 or VOX, not *Host*. Keyed by a host program, Aether transmits only through that program,
+  and RadioPost's sessions do not reach the air. On a computer that also runs RMS Trimode with
+  Aether set that way, close Trimode and change Aether's keying; an Aether profile for each makes
+  the switch one click.
+* **Aether's ports left as they are.** Aether listens on two ports, and RadioPost uses one:
+
+  | Port | What it is | Who uses it |
+  |---|---|---|
+  | 8515 | Aether's control port | RadioPost (client and gateway), Aether's own window |
+  | 8300, and 8301 for data | Aether's host programs port, the VARA-style one | RMS Trimode, Winlink Express, VarAC |
+
+  RadioPost Gateway's **Modem** address, `ws://127.0.0.1:8515/v1`, is the control port. Nothing
+  about the host programs port is set in RadioPost. Keep it at 8300, and never at 8515: on the
+  control port's number, Aether stops at start (*host interface: 127.0.0.1:8515 is already in
+  use*).
 * **An Internet connection.** The gateway only makes outgoing connections, so a home router needs
   no change.
 * **RadioPost Gateway**, from the [releases](https://github.com/KK4ODA/RadioPost/releases): the
@@ -20,7 +36,10 @@ session to the user's own post office over the Internet (RP-3 §9, RP-5 §5).
   once (More info, then Run anyway); on macOS, open it with Control-click, then Open.
 * **RadioPost**, the client, on the same computer, enrolled as you with your post office (its
   Setup, with the code your post office's operator gave you). The gateway registers in your name
-  through it. It needs nothing else: you can keep using RadioPost on another computer.
+  through it. It needs nothing else: you can keep using RadioPost on another computer. Each
+  computer enrolls with a code of its own, since each has its own key: an enrollment on another
+  computer does not count here, and copying its `.radiopost` folder would put one key on two
+  computers.
 
 ## 2. Setup
 
@@ -35,7 +54,8 @@ over (RP-6 §5.1). Leave *The modem does not check the band rules* clear: Aether
 makes its key; it is shown under the form.
 
 **2. Registration.** The form shows the account the RadioPost app on this computer is enrolled
-as. Under **Channels**, give each dial frequency (MHz, upper sideband) where callers will find the
+as. **RadioPost app's home** is the folder where that app keeps its key and credential
+(`.radiopost` in your user folder): leave it. Under **Channels**, give each dial frequency (MHz, upper sideband) where callers will find the
 gateway, and Aether's bandwidth there (500 or 2300 Hz). **Grid** and **Place** help callers choose
 a gateway near them; **Hours** says when it answers (`always`, or in words). Click **Register**.
 Your post office lists the gateway for its users and issues it a credential, valid for 90 days.
@@ -141,7 +161,10 @@ another; Setup shows where):
 | You see | Do |
 |---|---|
 | Waiting for the modem: *cannot reach the modem* | Start Aether. Check the Modem address in Setup. |
-| Waiting for the modem: *the modem refused* | Another program holds the callsign at Aether, or Aether refused it: Aether's log says why. |
+| Waiting for the modem: *the modem refused* | Another program holds the callsign at Aether (RMS Trimode, if it uses the same one), or Aether refused it: Aether's log says why. |
+| Aether HF stops at start: *host interface: 127.0.0.1:8515 is already in use* | Aether's host programs port was set to 8515, its control port's number. Open Aether's `station.toml` (in PowerShell, `notepad "$env:APPDATA\aether-hf\station.toml"`), write `bind = "127.0.0.1:8300"` under `[host]`, save, and start Aether again. |
+| Register: *… .radiopost holds no device key* | The RadioPost app on this computer is not enrolled: enroll it in its Setup, with a code of its own (§1). |
+| *This modem does not check the band rules* | Aether's band rules are off, as they are when a host program keys the radio. Set Aether's keying and its rules profile (Aether's Setup steps 1 and 2). |
 | A post office *not found* | Its DNS records are not published: name it in Setup, step 3. |
 | A post office *refused the gateway* | The credential has run out or was revoked: register again (Setup, step 2). |
 | A session ended *nothing heard for 300 seconds* | The path faded or the caller left: the caller's mail is resumed on its next call (RP-3 §7). |
