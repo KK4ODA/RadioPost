@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.0 |
+| **Version** | 0.2.1 |
 | **Updated** | 2026-11-11 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -147,6 +147,7 @@ rules:
 | W41 | Rules tables for other countries | Rules | Low | Optional addition (RP-6, RP-7) | Planned |
 | W42 | A monitor that decodes sessions off the air | Rules | Medium | Fits today | Planned |
 | W43 | A public test service | Adapters | Low | Fits today | Proposed |
+| W44 | One install, several radios | Setup | Medium | Fits today; needs specification review for a portable callsign | Proposed |
 
 Groups: *Mail* (§4), *Setup* (§5), *Radio* (§6), *Operation* (§7), *Offline* (§8),
 *Applications* (§9), *Adapters* (§10), *Rules* (§11). Consolidated and deferred wishes are in §14.
@@ -263,7 +264,7 @@ delivered to the recipient's mail server.
 
 ---
 
-## 5. Setup, enrollment and accounts
+## 5. Setup, accounts and configuration
 
 ### W7. Several accounts in one client
 
@@ -351,6 +352,26 @@ Receive mail at `kk4oda@radiopost.org` as well as at the chosen name.
 | Recommendation | Accept, receiving only. |
 | Status | Planned. |
 | Author decision | None yet. |
+
+### W44. One install, several radios
+
+Use one RadioPost and one Aether with every radio on the computer. Pick the radio, and everything
+that depends on it follows, instead of keeping a copy of the program for each radio as Winlink
+users do.
+
+| | |
+|---|---|
+| Requested by | The author (KK4ODA), 2026-11-11. Requesters: 1. |
+| Component | Client and the Aether adapter; Aether itself. For a gateway, W26. |
+| Compatibility | **Fits today.** What differs between radios is the modem's business (RP-4 §1: keying, frequencies, modulation), and Aether keeps it in profiles. The rest is the client's own: which modem it uses and what it shows. Switching Aether's profile from RadioPost goes through Aether's own control API inside the Aether adapter, outside RPMI, so it obliges no one else. A profile that operates under another callsign (`KK4ODA/M`, `VE3/KK4ODA`) **needs specification review** (§13, G10). |
+| Existing coverage | Partly built, on Aether's side. Its profiles (Aether's ADR-0011) are made for "two radios, or a base and a truck": one per radio, with its sound card, keying, bandwidth, drive and dials. Under Aether's app, a profile that changes the sound card or the keying port restarts the modem by itself in a few seconds. RadioPost has one *Modem* field and nothing per radio. |
+| Dependencies | W7 (accounts stay separate from radios); W26 for a gateway; T7 (§12). Two radios at once needs Aether to run a modem per radio in one install: Aether's work, not RadioPost's. |
+| Effort | Small for a guide and for showing which radio is active; medium to switch from RadioPost and to list only the gateways the radio can reach. |
+| Priority | **Medium.** Common among operators with HF and VHF, or a base and a mobile; most of it already works, and few will know it. |
+| Recommendation | **Modify.** No RadioPost profiles beside Aether's: one list, kept by the modem, so the two can never disagree. RadioPost (1) shows which Aether profile is active; (2) switches it from its own window, through Aether; (3) lists the gateways this radio's modem and bandwidth can reach, from RPMI's `hello` (RP-4 §3) and the channels in the gateway list (RP-5 §4.4); (4) chooses what to fetch by time on the air at the rate the modem last reported (RP-4 §5), so a fast link fetches everything and a slow one only small messages, with no setting per radio. First, and now: a guide section on setting up several radios with one install. With other modems, the client keeps a short list of modem addresses. |
+| Status | Proposed. |
+| Author decision | None yet. |
+| Notes | Recommend against a profiles request in RPMI: other modems have none (VARA users keep a copy per radio too), so every adapter would carry it for one modem's sake. A profile switch changes the whole station: on an Aether shared with another program, such as a gateway, it moves that program's radio too, so it should be refused while another program's session or call is up (§13, G8). Whether Aether refuses it is to be checked. The restart drops RadioPost's claim; the gateway reconnects by itself, and the client should too. |
 
 ---
 
@@ -889,6 +910,7 @@ Where wishes share a need, building it once serves them all. None of these is a 
 | T4 | Broadcasts | W33, W34 | One broadcast format, only if one of them shows a need mail cannot meet. |
 | T5 | Unattended operation | W15, W16, W27, W28, W30 | The rules check (W40) for every modem but Aether, and an honest note of what the rules allow (§1). |
 | T6 | One mailbox | W36 | Absorbs W12, and most of W37 once mail sent from a mail program fills the accept list. |
+| T7 | The rate the modem reports | W3, W44 | One estimate of time on the air (RP-4 §5, `quality`), used both to show how long the outbox will take and to choose what to fetch. |
 
 ---
 
@@ -906,8 +928,9 @@ document.
 | G5 | Concept §6.2 | *Delivered to the recipient's provider* is promised; nothing reports it (RP-5, RP-6). | Users are promised what no program can show. | Drop it from the concept, or an optional client endpoint in RP-5 §6. | W6 |
 | G6 | Design §5.1 | Says the client keeps mail as `.eml`; the client keeps the canonical encoding. | Design and program disagree. | Export `.eml`, and say so in the design. | W5 |
 | G7 | RP-2 §4 | Dictionary 1 "becomes a requirement" once adopted. | A change others cannot ignore, where a negotiated option would not be one. | Decide with the corpus's numbers, with G2. | W19 |
-| G8 | RP-4 §1.1 | What belongs to the whole station on a shared modem, such as the dial (RP-4 §9.1 leaves the bandwidth open in the same way). | One host can move every other host's station. | Refuse a station-wide change while another host's link or call is up. | W14 |
+| G8 | RP-4 §1.1 | What belongs to the whole station on a shared modem, such as the dial, or a whole Aether profile (RP-4 §9.1 leaves the bandwidth open in the same way). | One host can move every other host's station, even to another radio. | Refuse a station-wide change while another host's link or call is up. | W14, W44 |
 | G9 | RP-3 §8 | Whether a second session may follow on the same link. | A client with several accounts pays a call for each. | Leave it, or allow it when both sides say so. | W7 |
+| G10 | RP-1 §6.3 | Step 2 requires the statement's `operator` to equal the credential's, yet `operator` is the callsign "as on the air" (RP-1 §6.1, RP-3 §5.1), and RP-6 §5.1 and D31 read where a station is from a prefix or suffix on it (`VE3/KK4ODA`). | A user abroad who signs with the host country's prefix is refused unless enrolled again for it; one who keeps the plain callsign is taken for a station at home, and the third-party check judges the wrong country. | Compare the base callsign, and let the statement carry the prefix and suffix: a change every verifier must make, cheapest while the specifications are Drafts. | W44 |
 
 ---
 
@@ -941,3 +964,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 |---|---|---|
 | 0.1.0 | 2026-11-10 | First draft: how a wish is recorded; seeded with what the concept and the design promise and have not built, and two things found in the programs (W1 to W43); the gaps found on the way (G1 to G7); what the design has already set aside. |
 | 0.2.0 | 2026-11-11 | Rebuilt to the author's brief: verdicts as the brief names them, with *needs specification review*; priorities Critical, High, Medium, Low; a recommendation, a status and the author's decision for each wish; principles (§2) and shared threads (§12). W9 folded into W27, W12 into W36, W25 into W8; W39 deferred. W31 proposed for Phase 3, W32 for the application layer, W36 to fill the accept list from mail-program mail; W21 needs specification review. Gaps G8, G9; what each gap costs. Statements about the rules say whose reading they are. |
+| 0.2.1 | 2026-11-11 | The author's first wish: W44, one install for several radios, recommended as RadioPost following Aether's profiles rather than keeping its own. Thread T7, the modem's rate; gap G10, a portable callsign against the credential's; G8 covers a profile switch. §5 renamed *Setup, accounts and configuration*. |
