@@ -111,7 +111,9 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   checks SPF, DKIM and DMARC itself (`postoffice/src/auth.rs`, `mail-auth` 0.13, the last series
   on mail-parser 0.11; its tests fill the lookup cache and build with `mail-auth`'s `test`
   feature, which makes any other name NXDOMAIN and a name with `_dns_error.` fail for now); and
-  the door had refused `postmaster@`. Verdicts are never read from the message's own
+  the door had refused `postmaster@`. Stalwart's `authenticated_as` is the account's name, the
+  full address there though the service signs in as `radiopost`: Must Match Sender's rule names
+  both. Verdicts are never read from the message's own
   `Authentication-Results`. `radiopost-po check` (`postoffice/src/check.rs`) looks at a post
   office from outside: DNS (`radiopost_api::query`, any record type by DNS over HTTPS), reverse
   DNS, `info` over HTTPS, the door with its token, and the submission port signed in to and

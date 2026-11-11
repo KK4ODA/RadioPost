@@ -342,21 +342,35 @@ pub fn submission(url: &str) -> Result<Submission, String> {
 }
 
 /// What the mail server said when asked to take mail from `sender`, signed in as `user`.
+///
+/// A refusal quotes the server. Stalwart's `authenticated_as` is the account's name, which can be
+/// its full address even when it signs in with the short name (the pilot's Stalwart 1.1), so the
+/// advice names both.
 #[must_use]
 pub fn mail_from(user: &str, sender: &str, reply: Result<u16, (u16, String)>) -> Line {
-    match reply {
-        Ok(code) if (200..300).contains(&code) => ok(format!(
-            "submission: signed in as {user}, and may send as {sender}"
-        )),
-        Ok(code) | Err((code, _)) if code == 501 || code == 550 || code == 553 => fail(format!(
-            "submission: {user} may not send as {sender} ({code}): in Stalwart's AUTH stage, \
-             Must Match Sender needs `false` when authenticated_as == '{user}'"
-        )),
-        Ok(code) => fail(format!("submission: MAIL FROM <{sender}> answered {code}")),
-        Err((code, text)) => fail(format!(
-            "submission: MAIL FROM <{sender}> answered {code} {text}"
-        )),
+    let (code, said) = match reply {
+        Ok(code) if (200..300).contains(&code) => {
+            return ok(format!(
+                "submission: signed in as {user}, and may send as {sender}"
+            ));
+        }
+        Ok(code) => (code, code.to_string()),
+        Err((code, text)) if text.is_empty() => (code, code.to_string()),
+        Err((code, text)) => (code, text),
+    };
+    if !matches!(code, 501 | 550 | 553) {
+        return fail(format!("submission: MAIL FROM <{sender}> answered {said}"));
     }
+    let names = match sender.rsplit_once('@') {
+        Some((_, domain)) if !user.contains('@') => {
+            format!("authenticated_as == '{user}' || authenticated_as == '{user}@{domain}'")
+        }
+        _ => format!("authenticated_as == '{user}'"),
+    };
+    fail(format!(
+        "submission: {user} may not send as {sender} ({said}): in Stalwart's AUTH stage, \
+         Must Match Sender needs `false` if {names}"
+    ))
 }
 
 /// What came of signing in.
@@ -735,10 +749,19 @@ mod tests {
         assert_eq!(mail_from(u, s, Ok(250)).verdict, Verdict::Ok);
         let refused = mail_from(u, s, Err((501, "501 5.5.4 You are not allowed".into())));
         assert_eq!(refused.verdict, Verdict::Fail);
+        for part in [
+            "Must Match Sender",
+            "You are not allowed",
+            "authenticated_as == 'radiopost' || authenticated_as == 'radiopost@radiopost.org'",
+        ] {
+            assert!(refused.text.contains(part), "{part}: {}", refused.text);
+        }
+        let full = mail_from("radiopost@radiopost.org", s, Ok(553));
         assert!(
-            refused.text.contains("Must Match Sender"),
+            full.text
+                .ends_with("if authenticated_as == 'radiopost@radiopost.org'"),
             "{}",
-            refused.text
+            full.text
         );
         assert_eq!(
             mail_from(u, s, Err((421, "421 later".into()))).verdict,

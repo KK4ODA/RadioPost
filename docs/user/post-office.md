@@ -211,8 +211,11 @@ The door makes RP-6 §2.1's full check for the RadioPost accounts itself (§5.7)
    digits only, since it goes in a URL: `openssl rand -hex 24` makes one. The service submits each
    user's mail under that user's address, which Stalwart allows only an account's own addresses
    unless told otherwise: in **AUTH Stage**, give Must Match Sender a rule, `false` if
-   `authenticated_as == 'radiopost'`, otherwise `true`; as JSON,
-   `{"match": {"0": {"if": "authenticated_as == 'radiopost'", "then": "false"}}, "else": "true"}`.
+   `authenticated_as == 'radiopost' || authenticated_as == 'radiopost@radiopost.org'`, otherwise
+   `true`. `authenticated_as` is the account's name, which on the pilot's Stalwart 1.1 is its full
+   address even when the service signs in as plain `radiopost`; a rule naming only one form
+   leaves every user's mail refused (`501 5.5.4 You are not allowed to send from this
+   address`), and `check` says so. Restart Stalwart after saving.
    If Stalwart refuses the service's login as `radiopost`, give the full address instead, written
    `radiopost%40radiopost.org` in the URL.
 2. **The MTA hook** (Settings, MTA, Filters, MTA Hooks): URL `http://127.0.0.1:8772/`; stages
