@@ -3,126 +3,157 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.0 |
-| **Updated** | 2026-11-10 |
+| **Version** | 0.2.0 |
+| **Updated** | 2026-11-11 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §9 and §10 |
 
-What the author and users ask the client, the gateway and the programs around them to do, in one
-list: grouped, given a proposed priority, and checked against the specifications.
+What the author and users ask the client, the gateway, the post office, the adapters and the
+applications built on RadioPost to do, in one list: grouped, prioritized, checked against the
+specifications, and judged. A wish is listed with a recommendation, which may be to build it, to
+build something better, to fold it into another, to wait, or not to build it.
 
-RadioPost is a common protocol that other people will write their own clients, gateways and
-applications for. A feature that works only in our programs, or that needs a protocol change other
-implementers cannot ignore, costs everyone. So every wish says what it would ask of the
-specifications before anyone decides to do it.
+RadioPost is a common protocol that other people will write their own programs for. A feature that
+works only in our programs, or that needs a protocol change other implementers cannot ignore,
+costs everyone. So every wish says what it would ask of the specifications before anyone decides
+to do it.
 
 The list starts with what the [concept](../concept/00-concept.md) and the detailed design promise
-and have not built, marked as *the plan*, so that new wishes land in a list that already knows the
-plan. Nothing is built because it is listed here, and no specification changes because of this
-list: a wish taken up goes through the specifications' own process (RP-0 §8.4).
+and have not built, so that new wishes land in a list that already knows the plan. Nothing is built
+because it is listed, and no specification changes because of this list: a wish taken up goes
+through the specifications' own process (RP-0 §8.4).
 
 ---
 
 ## 1. How to read it
 
-Each wish has a number (W1, W2, …), never reused, which it keeps if it moves to another group. A
-wish that repeats one already listed is merged into it, and its count rises. Under its name, one or
-two sentences say what the user gets, and a table says the rest:
+Each wish has an ID (W1, W2, …) that it keeps for good, wherever it moves. A wish that repeats one
+already listed is merged into it, and its count of requesters rises; a wish folded into another
+keeps its ID in the summary, pointing to the wish it joined. Under its name, one or two sentences
+say what the user gets. A table gives the rest:
 
 | Row | Holds |
 |---|---|
-| Asked | *The plan* (where the concept, the design or a specification promises it); *found* (seen while reading the documents and the programs, asked by no one yet); the author; users by callsign or name. Then how many people asked. |
-| Program | Client, gateway, post office, adapter, or *on top* (an application carried in messages), or tools. |
-| Compatibility | The verdict below, with the sections it rests on. |
-| Status | Built, partly built, specified (written in a specification, not built), planned (named in the concept or the design, with its phase or decision), or new. |
-| Depends on | Other wishes, or phases of the order of work (design §9). |
-| Size | Small, medium or large, with why. |
-| Priority | The proposed priority and its reason. The author's own call is marked **decided**, with the date; a reshuffle does not reopen it. |
-| Notes | Where needed: how two wishes pull against each other, a rule to watch, a gap in a specification. |
+| Requested by | *The plan* (the concept, the design or a specification promises it), the author, users by callsign or name, or *the editor* (proposed while keeping this list: not a request, and never counted as demand). Then the number of independent requesters. |
+| Component | Client, gateway, post office, adapter, application layer, or several. |
+| Compatibility | One of the verdicts below, with the sections it rests on. |
+| Existing coverage | Planned (with its phase or decision), partly built, specified but not built, or new. |
+| Dependencies | Other wishes, or phases of the order of work (design §9). |
+| Effort | Small: days, one program, no protocol. Medium: weeks, several programs, or an optional addition with its test vectors. Large: a phase's worth, or a protocol change through several programs. |
+| Priority | Critical, High, Medium or Low, with the reason. |
+| Recommendation | Accept, modify, consolidate, defer, or recommend against. |
+| Status | Proposed, under review, accepted, planned, in progress, implemented, deferred or rejected. |
+| Author decision | The author's own call, with its date and source. A decided point is not reopened by a later reshuffle, only by new evidence. |
+| Notes | Alternatives, conflicts, uncertainties, what it adds to the complexity budget (§2). |
 
-**Compatibility.** RP-0 §8.2 sets the kinds of change. While the specifications are Drafts every
-change to a requirement raises only their MINOR number, so a verdict says which kind the change is
-by nature: whether a program written to today's text keeps working.
+**Compatibility verdicts.** RP-0 §8.2 sets the kinds of change. While the specifications are
+Drafts, every change to a requirement raises only their MINOR number, so a verdict names the kind
+of change by its nature: whether a program written to today's text keeps working.
 
 | Verdict | Means |
 |---|---|
-| **Fits today** | No protocol change. The sections it relies on are named. |
-| **Minor addition** | An addition other implementations can ignore: a new optional key, endpoint, request or code (RP-0 §8.2, MINOR). The specification and what is added are named. |
-| **Major change** | A change other implementations cannot ignore (RP-0 §8.2, MAJOR). What breaks is named. |
-| **On top** | An application carried in ordinary messages, with no change below it. |
-| **Conflicts** | With the amateur rules (nothing encrypted on the air, third-party traffic, unattended operation), with a decision in the design or by the author, or with another wish. What it conflicts with is named. |
+| **Fits today** | No protocol change; the sections it relies on are named. |
+| **Optional protocol addition** | An addition other implementations can ignore: an optional key, request, endpoint or code (RP-0 §8.2, MINOR). |
+| **Breaking protocol change** | A change other implementations cannot ignore (RP-0 §8.2, MAJOR); what breaks is named. |
+| **Application-layer capability** | An application carried in ordinary RadioPost messages, with nothing changed below it. |
+| **Conflict** | With the amateur rules, a design decision, the author's decisions in CLAUDE.md, another wish, or a protocol guarantee; the conflict is named, and a compliant way to meet the need is looked for. |
+| **Needs specification review** | The specifications are silent or ambiguous on the point, so no verdict can be given without inventing one. |
 
-**Size.** Small: days, one program, no protocol. Medium: weeks, or several programs, or a minor
-addition with its test vectors. Large: a phase's worth, or a protocol change through several
-programs.
+Statements about the rules say whether they come from a rule's text, from a RadioPost or Aether
+document's reading of it, or need checking. None of this is legal advice.
 
-**Priority.**
+**Priorities.** No scores: each priority has its reason.
 
 | | Means |
 |---|---|
-| **P1** | Now: needed for the pilot (Phase 2 on the air with users), or small and asked for by many. |
-| **P2** | Next: Phase 3's work, or wanted by many and fits today. |
-| **P3** | Later: Phases 4 and 5, or needs an addition to a specification and few have asked. |
-| **P4** | Someday: large, needs a change others cannot ignore, or one person's wish against the plan. |
-
-A proposal weighs how many asked, whether the pilot needs it, whether it fits today, what it
-unblocks, and its size: a wish many users want that fits today ranks above one person's wish that
-needs a major version.
+| **Critical** | Without it, mail or a user's standing is at risk, or the pilot cannot run safely. |
+| **High** | It would earn one of the next release's three slots: the pilot's users need it, or it is the next phase's core. |
+| **Medium** | Wanted and worth doing; nothing urgent waits on it. |
+| **Low** | Later, or until users show a need. |
 
 ---
 
-## 2. Summary
+## 2. Principles
 
-| # | Wish | Group | Program | Asked | Priority | Compatibility | Status |
-|---|---|---|---|---|---|---|---|
-| W1 | Reply and forward | Mail | client | plan | P1 | fits today | planned |
-| W2 | An address book and groups | Mail | client | plan | P2 | fits today | planned |
-| W3 | Photos made small, and the time on the air shown | Mail | client | plan | P2 | fits today | planned |
-| W4 | The full text of a trimmed message | Mail | client, gateway, post office | plan | P3 | minor: RP-3, RP-5, RP-6 | new (gap G1) |
-| W5 | Mail kept as `.eml` files | Mail | client | plan | P3 | fits today | planned |
-| W6 | Where each message is | Mail | client, post office | plan | P2 | fits today; minor (RP-5) for *delivered* | partly built |
-| W7 | Several accounts in one client | Accounts | client | plan | P2 | fits today, a call each | planned |
-| W8 | The credential renewed by radio | Accounts | client | plan | P1 | fits today | partly built |
-| W9 | Usual gateways set in the panel | Accounts | client | plan | P2 | fits today | partly built |
-| W10 | Enrollment with an LoTW certificate | Accounts | post office | plan | P2 | fits today | partly built |
-| W11 | A trustee manages a role mailbox | Accounts | post office | plan | P3 | fits today | partly built |
-| W12 | Email-only members | Accounts | post office | plan | P2 | fits today | waits on W36 |
-| W13 | A callsign alias address | Accounts | post office | plan | P3 | fits today | planned |
-| W14 | Choosing a gateway tunes the radio | Radio | client, adapter | plan | P2 | minor: RP-4 | planned |
-| W15 | Keep listening for stations | Radio | client | found | P2 | fits today | new |
-| W16 | Scheduled connections | Radio | client | plan | P3 | fits today | planned |
-| W17 | Gateways ranked by propagation and measurements | Radio | client, gateway, post office | plan | P3 | fits today; minor (RP-5) for measurements | planned |
-| W18 | Mail coming down compressed | Radio | post office | found | P1 | fits today | new |
-| W19 | Shorter short messages: a dictionary | Radio | all | plan | P3 | minor; major if made a requirement | planned (D17) |
-| W20 | A VARA HF and FM adapter | Radio | adapter | plan | P3 | fits today | planned, Phase 5 |
-| W21 | An ARDOP adapter | Radio | adapter | plan | P3 | fits today | planned, Phase 5 |
-| W22 | An AX.25 packet adapter | Radio | adapter | plan | P3 | fits today | planned, Phase 5 |
-| W23 | A phone version | Radio | client | plan | P3 | fits today; minor (RP-4) for RPMI across devices | planned, Phase 5 |
-| W24 | Block a caller by address or callsign | Gateway | gateway | plan | P2 | fits today | partly built |
-| W25 | The gateway renews its own credential | Gateway | gateway | plan | P2 | fits today | partly built |
-| W26 | One gateway, several radios | Gateway | gateway | plan | P3 | fits today | planned |
-| W27 | Copies placed ahead | Offline | post office, gateway | plan | P2, order decided | fits today | specified, Phase 3 |
-| W28 | The gateway's queue while offline, and its reports | Offline | gateway, post office | plan | P2, order decided | fits today | specified, Phase 3 |
-| W29 | The sender's client follows queued mail | Offline | client | plan | P2 | fits today | specified, Phase 3 |
-| W30 | Forwarding by radio | Offline | gateway, post office | plan | P3, order decided | fits today | specified, Phase 4 |
-| W31 | Local delivery at a cut-off gateway | Offline | gateway, client | plan | P3 | fits today | specified, Phase 4 |
-| W32 | Forms | Forms | client, post office | plan | P3 | minor: a new spec, RP-2, RP-6 (or on top) | planned, Phase 5 |
-| W33 | Position reports | Forms | client, on top | plan | P3 | on top; minor as broadcasts | planned |
-| W34 | Bulletins | Forms | on top, client | plan | P3 | on top; minor as broadcasts | planned |
-| W35 | Services that answer by mail | Forms | on top | plan | P3 | on top | planned |
-| W36 | One mailbox, by radio and by mail program | Post office | post office | plan | P2 | fits today | partly built |
-| W37 | The accept list on a web page | Post office | post office | plan | P3 | fits today | planned |
-| W38 | Backups and a backup mail server | Post office | post office | plan | P1 | fits today | planned |
-| W39 | A domain served by several post offices | Post office | post office, all | plan | P4 | major: RP-1, RP-3 | a later option |
-| W40 | The gateway checks the band rules itself | Rules | gateway | plan | P3 | fits today; minor (RP-4) to read the dial | partly built |
-| W41 | Rules tables for other countries | Rules | gateway, specs | plan | P3 | minor: RP-6, RP-7 | planned |
-| W42 | A monitor that decodes sessions off the air | Rules | on top | plan | P2 | fits today | planned |
-| W43 | A public test service | Implementers | tools | plan | P3 | fits today | not settled |
+The wishes are judged against what the project has already decided. These are reminders, not new
+rules:
+
+1. **The specifications are the contract** (design §1, RP-0 §3). A feature only our programs can
+   use is weighed as a cost to everyone else's.
+2. **The protocol stays small and stable.** In order of preference: improve what exists; change a
+   program's own behaviour or defaults; an application carried in ordinary messages; an optional
+   addition others can ignore (RP-0 §8.2); and only for a benefit that pays for it, a change others
+   cannot ignore.
+3. **Small on the air, few turnarounds** (design §2, principles 3 and 4). Air time is the scarcest
+   thing RadioPost has; a feature that adds bytes or exchanges to every session must earn them.
+4. **Open on the air** (design §2, principle 2; RP-0 §7). Nothing encrypted, every encoding
+   published.
+5. **Nobody guesses, and no mail is silently lost** (design §2, principle 7; D25). Reliability and
+   the integrity of mail come before convenience.
+6. **Works without the Internet where it matters** (design §2, principle 6; concept goal G5).
+7. **Federated, with no centre** (design §2, principle 8; D9, D32).
+8. **Simple by default.** An occasional operator sends and receives with no settings to learn;
+   expert options stay out of the way until wanted.
+9. **Complexity has a budget.** A substantial wish says what it adds to screens, modes, settings,
+   tests, documents and the protocol, and whether something else can be simplified in return.
 
 ---
 
-## 3. Composing and reading mail
+## 3. Summary
+
+| ID | Wish | Group | Priority | Compatibility | Status |
+|---|---|---|---|---|---|
+| W1 | Reply and forward | Mail | High | Fits today | Planned |
+| W2 | An address book and groups | Mail | Medium | Fits today | Planned |
+| W3 | Photos made small, and the time on the air shown | Mail | Medium | Fits today | Planned |
+| W4 | The full text of a trimmed message | Mail | Low | Fits today as modified; optional addition as asked | Proposed |
+| W5 | Mail kept as `.eml` files | Mail | Low | Fits today | Planned |
+| W6 | Where each message is | Mail | Medium | Fits today; optional addition for *delivered* | Planned |
+| W7 | Several accounts in one client | Setup | Medium | Fits today, a call each | Planned |
+| W8 | Credentials renewed before they lapse | Setup | High | Fits today | Planned |
+| W9 | Usual gateways set in the panel | — | — | — | Consolidated into W27 |
+| W10 | Enrollment with an LoTW certificate | Setup | Medium | Fits today | Planned |
+| W11 | A trustee manages a role mailbox | Setup | Low | Fits today | Planned |
+| W12 | Email-only members | — | — | — | Consolidated into W36 |
+| W13 | A callsign alias address | Setup | Low | Fits today | Planned |
+| W14 | Choosing a gateway tunes the radio | Radio | Medium | Optional addition (RP-4) | Planned |
+| W15 | Keep listening for stations | Radio | Medium | Fits today | Proposed |
+| W16 | Scheduled connections | Radio | Low | Fits today | Planned |
+| W17 | Gateways ranked by propagation | Radio | Low | Fits today; optional addition for measurements | Planned |
+| W18 | Mail coming down compressed | Radio | High | Fits today | Proposed |
+| W19 | Shorter short messages: a dictionary | Radio | Low | Optional addition; breaking if made required | Planned |
+| W20 | A VARA HF and FM adapter | Adapters | Low | Fits today | Planned |
+| W21 | An ARDOP adapter | Adapters | Low | Needs specification review | Planned |
+| W22 | An AX.25 packet adapter | Adapters | Low | Fits today | Planned |
+| W23 | A phone version | Radio | Low | Fits today; optional addition for RPMI across devices | Planned |
+| W24 | Block a caller by address or callsign | Operation | Medium | Fits today | Planned |
+| W25 | The gateway renews its own credential | — | — | — | Consolidated into W8 |
+| W26 | One gateway, several radios | Operation | Low | Fits today | Planned |
+| W27 | Copies placed ahead | Offline | High | Fits today | Planned |
+| W28 | The gateway's queue while offline, and its reports | Offline | High | Fits today | Planned |
+| W29 | The sender's client follows queued mail | Offline | High | Fits today | Planned |
+| W30 | Forwarding by radio | Offline | Medium | Fits today | Planned |
+| W31 | Local delivery at a cut-off gateway | Offline | Medium | Fits today | Planned |
+| W32 | Forms | Applications | Medium | Application layer (recommended); optional addition (RP-2 key 13) | Planned |
+| W33 | Position reports | Applications | Low | Application layer; optional addition as broadcasts | Planned |
+| W34 | Bulletins | Applications | Low | Application layer; optional addition as broadcasts | Planned |
+| W35 | Services that answer by mail | Applications | Low | Application layer | Planned |
+| W36 | One mailbox, by radio and by mail program | Operation | High | Fits today | Planned |
+| W37 | The accept list on a web page | Operation | Low | Fits today | Planned |
+| W38 | Backups and a backup mail server | Operation | Critical | Fits today | Planned |
+| W39 | A domain served by several post offices | — | — | Breaking (RP-1, RP-3) | Deferred |
+| W40 | The gateway checks the band rules itself | Rules | Medium | Fits today; optional addition to read the dial | Planned |
+| W41 | Rules tables for other countries | Rules | Low | Optional addition (RP-6, RP-7) | Planned |
+| W42 | A monitor that decodes sessions off the air | Rules | Medium | Fits today | Planned |
+| W43 | A public test service | Adapters | Low | Fits today | Proposed |
+
+Groups: *Mail* (§4), *Setup* (§5), *Radio* (§6), *Operation* (§7), *Offline* (§8),
+*Applications* (§9), *Adapters* (§10), *Rules* (§11). Consolidated and deferred wishes are in §14.
+
+---
+
+## 4. Composing and reading mail
 
 ### W1. Reply and forward
 
@@ -130,14 +161,17 @@ Answer a message and keep its thread, at the other end too. Pass a message on to
 
 | | |
 |---|---|
-| Asked | The plan: concept §10, first version. 0 people. |
-| Program | Client. |
-| Compatibility | **Fits today.** A reply sets `reply_to` to the content ID of the message it answers (RP-2 §2, key 10). The post office then restores `In-Reply-To` and `References` (RP-6 §3.1), so the recipient's mail program files the answer in its thread. A forward is a new message carrying the text and the `files`. |
-| Status | Planned, not built: the client has no Reply or Forward and never sets `reply_to`. |
-| Depends on | Nothing. |
-| Size | Small: the reader and the composer; no protocol. |
-| Priority | **P1.** Pilot users answer email by radio, and today each answer starts a new thread at the recipient's end. |
-| Notes | Attachments held at the post office (RP-2 §2, `held`) cannot be forwarded until fetched (RP-6 §2.5): their `ref` means something only to the recipient's own post office. |
+| Requested by | The plan: concept §10, first version. Requesters: 0. |
+| Component | Client. |
+| Compatibility | **Fits today.** A reply sets `reply_to` (RP-2 §2, key 10); the post office restores `In-Reply-To` and `References` from it (RP-6 §3.1), so the recipient's mail program threads the answer. A forward is a new message with the text and the `files`. |
+| Existing coverage | Planned for the first version; not built. The client never sets `reply_to`. |
+| Dependencies | None. |
+| Effort | Small: the reader and the composer. |
+| Priority | **High.** Pilot users answer email by radio, and today each answer starts a new thread at the other end. |
+| Recommendation | Accept. |
+| Status | Planned. |
+| Author decision | None yet. |
+| Notes | Held attachments cannot be forwarded until fetched (RP-6 §2.5): their `ref` means something only to the recipient's own post office. |
 
 ### W2. An address book and groups
 
@@ -145,58 +179,69 @@ Pick recipients by name. Write to a group (a net, a shelter team) in one step.
 
 | | |
 |---|---|
-| Asked | The plan: concept §10, first version. 0 people. |
-| Program | Client. |
+| Requested by | The plan: concept §10, first version. Requesters: 0. |
+| Component | Client. |
 | Compatibility | **Fits today.** The client's own; a group becomes addresses in `to` or `cc` (RP-2 §2). |
-| Status | Planned, not built. |
-| Depends on | Nothing. |
-| Size | Medium: a store, its page in the panel, and import from the usual contact files. |
-| Priority | **P2.** Everyone will want it early; nothing waits on it. |
-| Notes | Every address goes on the air and onto the sender's accept list (RP-5 §6.5). A large group costs air time on every message. A list address at the post office, one address on the air, is the other way to do it, and would be a wish of its own (on top). |
+| Existing coverage | Planned; not built. |
+| Dependencies | None. |
+| Effort | Medium: a store, its page in the panel, and import of the usual contact files. |
+| Priority | **Medium.** Everyone will want it; nothing waits on it. |
+| Recommendation | Accept, as a client feature. |
+| Status | Planned. |
+| Author decision | None yet. |
+| Notes | Every address goes on the air and onto the accept list (RP-5 §6.5). If groups grow large, a list address at the post office (one address on the air) is the cheaper way, and an application-layer wish of its own. |
 
 ### W3. Photos made small, and the time on the air shown
 
-Attach a photo without thinking about its size. See before calling how long the outbox will take.
+Attach a photo without thinking about its size. See, before calling, how long the outbox will take.
 
 | | |
 |---|---|
-| Asked | The plan: concept §10, first version. 0 people. |
-| Program | Client. |
-| Compatibility | **Fits today.** Files travel in `files` (RP-2 §2). The post office already shrinks photos from email the same way (RP-6 §2.4, step 5: JPEG, 640 pixels on the long side). The estimate uses the rate the modem reports during a session (RP-4 §5, `quality`, `rate_bps`), and before one the rate of the last session. |
-| Status | Planned, not built. |
-| Depends on | Nothing. |
-| Size | Medium: an image library in the client, and the estimate in the composer and the outbox. |
-| Priority | **P2.** Saves air time for every user who attaches a photo; nothing waits on it. |
-| Notes | Aether's rate runs from 36 bit/s to several kbit/s, so the estimate is a range until a session has measured the path. |
+| Requested by | The plan: concept §10, first version. Requesters: 0. |
+| Component | Client. |
+| Compatibility | **Fits today.** Files travel in `files` (RP-2 §2). The estimate uses the rate the modem reports (RP-4 §5, `quality`, `rate_bps`), and before a session the last session's rate. |
+| Existing coverage | Planned; not built. |
+| Dependencies | None. |
+| Effort | Medium: an image library in the client; the estimate in the composer and the outbox. |
+| Priority | **Medium.** Saves air time for everyone who attaches a photo. |
+| Recommendation | Accept, shrinking by the post office's own rule (RP-6 §2.4, step 5: JPEG, 640 pixels on the long side), so photos look the same whichever way they travel. |
+| Status | Planned. |
+| Author decision | None yet. |
+| Notes | Aether runs from 36 bit/s to several kbit/s, so the estimate is a range until a session has measured the path. |
 
 ### W4. The full text of a trimmed message
 
-Ask for the earlier messages a reply quoted, which the post office cut before sending it by radio.
+See the earlier messages a reply quoted, which the post office cut before sending it by radio.
 
 | | |
 |---|---|
-| Asked | The plan: RP-2 §6 says a client SHOULD let the user ask for the full text. 0 people. |
-| Program | Client, gateway, post office. |
-| Compatibility | **Minor addition** to RP-3, RP-5 and RP-6. Nothing carries the request today: RP-3 §5.6's `REQUEST` asks for messages and held attachments, and RP-5 §5.3 for held attachments only. It needs an optional `REQUEST` key (the serials whose full text is wanted), an endpoint beside RP-5 §5.3's `files`, and RP-6 §2.5's way of answering: the full text as a new message from `postmaster@`. A gateway that does not know the key ignores it (RP-0 §4.1) and says nothing, so the client should say the request may not have been understood. |
-| Status | New: RP-2 §6 promises it, with no way to ask (§12, G1). |
-| Depends on | Nothing. |
-| Size | Medium: three specifications, their vectors, three programs. |
-| Priority | **P3.** No one has asked yet, and the trimmed part is usually the user's own earlier message. |
-| Notes | A reading that needs no protocol covers most cases: the client shows the message `reply_to` names when it holds it, which it usually does, since the user wrote it. |
+| Requested by | The plan: RP-2 §6 says a client SHOULD let the user ask for the full text. Requesters: 0. |
+| Component | Client; as asked, also the gateway and the post office. |
+| Compatibility | As asked, an **optional protocol addition** to RP-3, RP-5 and RP-6: nothing carries the request today (§13, G1). As modified below, **fits today**. |
+| Existing coverage | Promised by RP-2 §6, with no way to ask. |
+| Dependencies | None. |
+| Effort | Small as modified; medium as asked (three specifications, their vectors, three programs). |
+| Priority | **Low.** No one has asked. |
+| Recommendation | **Modify.** What a reply cut is usually the user's own earlier message, which the client holds: show the message `reply_to` names from the client's store. Ask for a protocol addition only if users miss history they do not hold. |
+| Status | Proposed. |
+| Author decision | None yet. |
 
 ### W5. Mail kept as `.eml` files
 
-Open the client's mail with any mail program, and back it up as ordinary files.
+Open the client's mail in any mail program, and back it up as ordinary files.
 
 | | |
 |---|---|
-| Asked | The plan: concept §10 and design §5.1 say the client keeps mail as `.eml` files. 0 people. |
-| Program | Client. |
-| Compatibility | **Fits today.** RP-6 §3.1 says how a message becomes an email; the client can write the same file. The content ID still comes from the canonical encoding (RP-2 §3), so the client keeps that too, as design §5.1 says. |
-| Status | Not built: the client keeps each message's canonical encoding, named by its content ID. The design and the program disagree (§12, G6). |
-| Depends on | Nothing. |
-| Size | Small for an export; medium to make `.eml` the store. |
-| Priority | **P3.** Matters for trust and backups; no one has asked. |
+| Requested by | The plan: concept §10 and design §5.1 say the client keeps mail as `.eml`. Requesters: 0. |
+| Component | Client. |
+| Compatibility | **Fits today.** RP-6 §3.1 says how a message becomes an email. |
+| Existing coverage | Not built: the client keeps each message's canonical encoding (RP-2 §3). The design and the program disagree (§13, G6). |
+| Dependencies | None. |
+| Effort | Small for export and import; medium to change the store. |
+| Priority | **Low.** Matters for trust and backups; no one has asked. |
+| Recommendation | **Modify**: export and import `.eml`, keep the canonical store (the content ID comes from it), and have design §5.1 say so. Changing the design is the author's call. |
+| Status | Planned. |
+| Author decision | None yet. |
 
 ### W6. Where each message is
 
@@ -205,17 +250,20 @@ delivered to the recipient's mail server.
 
 | | |
 |---|---|
-| Asked | The plan: concept §6.2. 0 people. |
-| Program | Client; post office for the last state. |
-| Compatibility | **Fits today** up to *at the post office*: a `RECEIPT` from a gateway that said `online` means the post office holds the message (RP-3 §5.5), and from a cut-off gateway that it is queued there (RP-7 §3.6). **Minor addition** for *delivered*: nothing tells the client that the recipient's server took it, and only failures come back, as a message (RP-6 §3.3). An optional client endpoint in RP-5 §6, asked over the Internet, costs no air time; a state carried by radio would. |
-| Status | Partly built: the outbox and the sent folder. *Queued at* is Phase 3 (W29). *Delivered* has no mechanism (§12, G5). |
-| Depends on | W29 for *queued at*. |
-| Size | Medium. |
-| Priority | **P2.** Users of a system built for outages will want to know where their mail is; *delivered* can wait. |
+| Requested by | The plan: concept §6.2. Requesters: 0. |
+| Component | Client; the post office for *delivered*. |
+| Compatibility | **Fits today** up to *at the post office*: a `RECEIPT` from a gateway that said `online` means the post office holds it (RP-3 §5.5); from a cut-off gateway, that it is queued (RP-7 §3.6). *Delivered* is an **optional protocol addition**: nothing reports it, and only failures come back, as messages (RP-6 §3.3; §13, G5). |
+| Existing coverage | Partly built: the outbox and the sent folder. |
+| Dependencies | W29 for *queued at a gateway*. |
+| Effort | Small for the states the radio reports; medium with *delivered*. |
+| Priority | **Medium.** Users of a system built for outages need to know where their mail is. |
+| Recommendation | **Modify**: show what the radio already reports; leave *delivered* until users ask, since a failure already arrives as a message. |
+| Status | Planned. |
+| Author decision | None yet. |
 
 ---
 
-## 4. Accounts, setup and enrollment
+## 5. Setup, enrollment and accounts
 
 ### W7. Several accounts in one client
 
@@ -223,42 +271,35 @@ Work a personal address and a role mailbox (`shelter3@`) from one client.
 
 | | |
 |---|---|
-| Asked | The plan: concept §10, first version. 0 people. |
-| Program | Client. |
-| Compatibility | **Fits today**, one session per account. Each operator of a role mailbox has a credential of their own (RP-1 §3), and a client can hold several. But `HELLO` carries one address and one signed statement (RP-3 §5.1, RP-1 §6.1), so each account is its own call. Both accounts in one session would be a **major change** to RP-1 and RP-3. |
-| Status | Planned, not built: a client home holds one credential. |
-| Depends on | Nothing. |
-| Size | Medium: the home, the panel, the account chosen at each call. |
-| Priority | **P2.** Role mailboxes are central to emergency work; a call per account will do at first. |
-| Notes | A middle way, a **minor addition** to RP-3 §8: a link may carry a second session after the first ends, when both stations say they can (`caps`). It saves the modem's call and answer, not the session's five transmissions. |
+| Requested by | The plan: concept §10, first version. Requesters: 0. |
+| Component | Client. |
+| Compatibility | **Fits today**, one call per account: each operator of a role mailbox holds their own credential (RP-1 §3), but `HELLO` carries one address and one statement (RP-3 §5.1, RP-1 §6.1). Several accounts in one session is a **breaking protocol change** to RP-1 and RP-3. |
+| Existing coverage | Planned; not built. A client home holds one credential. |
+| Dependencies | None. |
+| Effort | Medium: the home, the panel, choosing the account for each call. |
+| Priority | **Medium.** Role mailboxes are central to emergency work; a call each will do at first. |
+| Recommendation | Accept, a call per account. Recommend against several accounts in one session (§14). |
+| Status | Planned. |
+| Author decision | None yet. |
+| Notes | Whether a second session may follow the first on the same link, saving the modem's call, is not said (RP-3 §8; §13, G9). |
 
-### W8. The credential renewed by radio
+### W8. Credentials renewed before they lapse
 
-Keep a credential valid with no Internet: the client asks for a new one during an ordinary session.
-
-| | |
-|---|---|
-| Asked | The plan: RP-1 §4.2. 0 people. |
-| Program | Client. |
-| Compatibility | **Fits today**: `renew` in `HELLO`'s `caps` (RP-3 §5.1), passed to the post office (RP-5 §5.2), the new credential returned in `CREDENTIAL` (RP-3 §5.8). |
-| Status | Partly built: the gateway asks the post office and hands the credential back, and the client keeps one it is sent; but the client never asks (it sends `renew` false). |
-| Depends on | Nothing. |
-| Size | Small: ask when fewer than a set number of days remain (30, say). |
-| Priority | **P1.** A pilot user who reaches the post office only by radio loses the credential after 90 days, and an expired credential cannot be renewed: the device enrolls again (RP-5 §6.2). |
-
-### W9. Usual gateways set in the panel
-
-Name the gateways where copies of your mail should wait (concept §6.1).
+Nobody has to enroll again because a date passed: the client renews by radio or Internet,
+whichever it reaches first, and the gateway renews its own.
 
 | | |
 |---|---|
-| Asked | The plan: concept §10, first version. 0 people. |
-| Program | Client. |
-| Compatibility | **Fits today**: `usual_gateways` (RP-5 §6.3). |
-| Status | Partly built: `radiopost settings --set` changes it on the command line; the panel has no place for it. |
-| Depends on | W27: until copies are placed ahead, the setting does nothing. |
-| Size | Small: a list in Setup, picked from the gateway list. |
-| Priority | **P2**, with W27. |
+| Requested by | The plan: RP-1 §4.2; RP-5 §6.2 (a gateway renews too). Requesters: 0. Includes W25. |
+| Component | Client, gateway. |
+| Compatibility | **Fits today.** By radio: `renew` in `HELLO`'s `caps` (RP-3 §5.1), passed on (RP-5 §5.2), returned in `CREDENTIAL` (RP-3 §5.8). Over the Internet: RP-5 §6.2, for clients and gateways. |
+| Existing coverage | Partly built. The gateway passes `renew` on, and the client keeps a credential it is sent, but never asks. The client renews over the Internet when told to; the gateway is registered again by hand, with a warning two weeks ahead ([the gateway guide](../user/gateway.md), §2). |
+| Dependencies | None. |
+| Effort | Small. |
+| Priority | **High.** An expired credential cannot be renewed (RP-5 §6.2): a radio-only user must re-enroll through the Internet and the sysop, and an unattended gateway stops carrying sessions. |
+| Recommendation | Accept, with one rule for every credential: once under 30 days remain, renew at the first chance by whatever path is open; tell the user only when that keeps failing. |
+| Status | Planned. |
+| Author decision | None yet. |
 
 ### W10. Enrollment with a Logbook of the World certificate
 
@@ -266,43 +307,33 @@ Join radiopost.org without waiting for the sysop: prove the callsign with an LoT
 
 | | |
 |---|---|
-| Asked | The plan: D33. 0 people. |
-| Program | Post office (its web page, or the client signing its challenge). |
-| Compatibility | **Fits today**: how a post office checks a licence is its own business (RP-1 §1), and the check ends in the one-time code RP-5 §6.1 takes. If any client should do it with any post office, the challenge and its answer become a **minor addition** to RP-5 §6. |
-| Status | Partly built: the sysop's check and the code are built (`radiopost-po code`); the LoTW path is not. |
-| Depends on | Nothing. |
-| Size | Medium: reading an LoTW certificate and checking it against the ARRL's. |
-| Priority | **P2.** The sysop's check becomes the bottleneck once the pilot grows past a handful of testers. |
+| Requested by | The plan: D33. Requesters: 0. |
+| Component | Post office; the client or a web page signs the challenge. |
+| Compatibility | **Fits today**: a post office checks licences its own way (RP-1 §1), ending in the code RP-5 §6.1 takes. An **optional protocol addition** to RP-5 §6 only if every client should do it with every post office. |
+| Existing coverage | Partly built: the sysop's check and the code (`radiopost-po code`). |
+| Dependencies | None. |
+| Effort | Medium: reading an LoTW certificate and checking it against the ARRL's. |
+| Priority | **Medium.** The sysop becomes the bottleneck once the pilot passes a handful of testers. |
+| Recommendation | Accept, as the post office's own, outside RP-5. |
+| Status | Planned. |
+| Author decision | **Decided** (2026-11-09, D33, CLAUDE.md): radiopost.org enrolls on an LoTW certificate or the sysop's check. |
 
 ### W11. A trustee manages a role mailbox
 
-The trustee of `shelter3@` authorises and removes the volunteers who may use it, without the post
-office's sysop.
+The trustee of `shelter3@` adds and removes the volunteers who may use it, without the sysop.
 
 | | |
 |---|---|
-| Asked | The plan: concept §3.1, RP-1 §1. 0 people. |
-| Program | Post office. |
-| Compatibility | **Fits today**: accounts are the post office's business (RP-1 §1). Each operator still gets a credential with the `role` flag (RP-1 §4.1), and removing one is a revocation (RP-1 §8). |
-| Status | Partly built: the sysop issues each operator's code with `--role`. |
-| Depends on | Nothing. |
-| Size | Medium: a trustee's page or commands, and who may act as trustee. |
-| Priority | **P3**; rises when an emergency group runs a post office. |
-
-### W12. Email-only members
-
-Agency staff with no licence read and write the group's mail in an ordinary mail program, and reach
-its radio users.
-
-| | |
-|---|---|
-| Asked | The plan: concept §3.1. 0 people. |
-| Program | Post office. |
-| Compatibility | **Fits today**: they hold no credential and never transmit (RP-1 §1). Their mail to radio users is third-party traffic, flagged by the post office and checked by the gateway (RP-6 §5.1). |
-| Status | Waits on W36: mail a mail-program user sends to another user of the same post office stays in the mail programs ([the post office guide](../user/post-office.md), §10). |
-| Depends on | W36. |
-| Size | Small once W36 is built. |
-| Priority | **P2**, with W36. |
+| Requested by | The plan: concept §3.1, RP-1 §1. Requesters: 0. |
+| Component | Post office. |
+| Compatibility | **Fits today**: accounts are the post office's business (RP-1 §1); each operator gets a credential with `role` (RP-1 §4.1), and removing one is a revocation (RP-1 §8). |
+| Existing coverage | Partly built: the sysop issues each operator's code with `--role`. |
+| Dependencies | None. |
+| Effort | Medium: the trustee's commands or page, and who counts as trustee. |
+| Priority | **Low** until an emergency group runs a post office. |
+| Recommendation | Defer until then. |
+| Status | Planned. |
+| Author decision | None yet. |
 
 ### W13. A callsign alias address
 
@@ -310,17 +341,20 @@ Receive mail at `kk4oda@radiopost.org` as well as at the chosen name.
 
 | | |
 |---|---|
-| Asked | The plan: concept §3.1. 0 people. |
-| Program | Post office. |
-| Compatibility | **Fits today** for receiving: an alias in the mail server, judged at the door as the account it reaches (RP-6 §2.1). Sending *as* the alias would need a credential for that address, since the post office checks `from` against the statement's address (RP-5 §5.4); replies go out from the chosen name. |
-| Status | Planned, not built. Whether Stalwart hands the door an alias as its account is still to be tried. |
-| Depends on | Nothing. |
-| Size | Small. |
-| Priority | **P3.** |
+| Requested by | The plan: concept §3.1. Requesters: 0. |
+| Component | Post office. |
+| Compatibility | **Fits today** for receiving: an alias in the mail server, judged at the door as its account (RP-6 §2.1). Sending *as* the alias needs a credential for it, since `from` must be the statement's address (RP-5 §5.4). |
+| Existing coverage | Planned; not built. Whether Stalwart hands the door an alias as its account is to be tried. |
+| Dependencies | None. |
+| Effort | Small. |
+| Priority | **Low.** |
+| Recommendation | Accept, receiving only. |
+| Status | Planned. |
+| Author decision | None yet. |
 
 ---
 
-## 5. Sessions and the radio
+## 6. Sessions and radio operation
 
 ### W14. Choosing a gateway tunes the radio
 
@@ -328,14 +362,17 @@ Pick a gateway from the list, and the radio goes to its channel.
 
 | | |
 |---|---|
-| Asked | The plan: concept §10, first version. 0 people. |
-| Program | Client, adapters. |
-| Compatibility | **Minor addition** to RP-4: an optional request to set and read the dial (say `tune`, with `dial_hz` and `mode`, and a `caps` member saying the adapter can). An adapter that cannot answers `unsupported`, as for any request it does not know (RP-4 §2). Aether can set and read its radio's dial; VARA's published commands cannot (RP-4 §9.2). The client could drive Aether's own control API beside RPMI today, but only with Aether, which is what RP-4 exists to avoid. |
-| Status | Planned, not built: the panel says which channel to tune Aether to, and the operator tunes by hand. |
-| Depends on | Nothing. W40 can use the same request to read the dial. |
-| Size | Medium: RP-4 and its vectors, the Aether adapter, the client. |
-| Priority | **P2.** Every call starts with it, and it removes a common mistake: calling on the wrong channel. |
-| Notes | On a shared modem (RP-4 §1.1) a new dial moves every program on the station, so the adapter should refuse it (`busy`) while another program's link or call is up. RPMI carries no frequency at all today (§12, G3). |
+| Requested by | The plan: concept §10, first version. Requesters: 0. |
+| Component | Client, adapters. |
+| Compatibility | **Optional protocol addition** to RP-4: a request to read and set the dial, with a `caps` member; an adapter that cannot answers `unsupported` (RP-4 §2). Aether can; VARA's published commands cannot (RP-4 §9.2). Driving Aether's own API beside RPMI works today, but only with Aether, which is what RP-4 exists to avoid. |
+| Existing coverage | Planned; not built. The panel says which channel to tune to. |
+| Dependencies | None. Shares its addition with W40 (§12, T1). |
+| Effort | Medium: RP-4 and its vectors, the Aether adapter, the client. |
+| Priority | **Medium.** Every call starts with tuning, and it removes a common mistake. |
+| Recommendation | Accept, with one RP-4 addition designed for W14 and W40 together. |
+| Status | Planned. |
+| Author decision | None yet. |
+| Notes | **Needs specification review** on a shared modem: RP-4 §1.1 gives each host its callsigns, answering and links, and says nothing of what belongs to the whole station, like the dial (§13, G8). |
 
 ### W15. Keep listening for stations
 
@@ -343,14 +380,17 @@ Leave the client answering station-to-station calls, not just the first.
 
 | | |
 |---|---|
-| Asked | Found: [the on-air tests guide](../user/on-air-tests.md), §7: *Listen* answers one call, then stops. 0 people. |
-| Program | Client. |
+| Requested by | The editor, from [the on-air tests guide](../user/on-air-tests.md), §7: *Listen* answers one call, then stops. Requesters: 0. |
+| Component | Client. |
 | Compatibility | **Fits today**: `listen` (RP-4 §4) stays on. |
-| Status | New. |
-| Depends on | Nothing. |
-| Size | Small. |
-| Priority | **P2.** Station-to-station tests are what testers do first. |
-| Notes | A client answering with nobody at the radio is under automatic control. In the US that is allowed only in the §97.221(b) segments, since Aether's signals are wider than 500 Hz by the FCC's measure; Aether's gate enforces it (RP-4 §8). |
+| Existing coverage | New. |
+| Dependencies | None. |
+| Effort | Small. |
+| Priority | **Medium.** Station-to-station tests are what testers do first. |
+| Recommendation | Accept. |
+| Status | Proposed. |
+| Author decision | None yet. |
+| Notes | A station answering with nobody at it is under automatic control (§97.221). Aether's own documents read every Aether signal as wider than 500 Hz, which confines it to the §97.221(b) segments, and Aether's gate enforces that reading (RP-4 §8). That reading is Aether's; this list has not checked it. |
 
 ### W16. Scheduled connections
 
@@ -358,28 +398,34 @@ Call a gateway at set times to collect and send mail, unattended.
 
 | | |
 |---|---|
-| Asked | The plan: concept §10, later. 0 people. |
-| Program | Client. |
+| Requested by | The plan: concept §10, later. Requesters: 0. |
+| Component | Client. |
 | Compatibility | **Fits today**: ordinary calls (RP-3). |
-| Status | Planned, not built. |
-| Depends on | W40, with any modem but Aether. |
-| Size | Medium: a schedule, retries, and a report of what each call did. |
-| Priority | **P3.** |
-| Notes | A call with nobody at the radio is automatic control: in the US only in the automatic-control segments (§97.221(b); RP-7 §5.1 has the table). Aether refuses elsewhere; with another modem the client must check (RP-4 §8). |
+| Existing coverage | Planned; not built. |
+| Dependencies | W40 with any modem but Aether. |
+| Effort | Medium: the schedule, retries, a report of each call. |
+| Priority | **Low.** |
+| Recommendation | Defer until users ask. |
+| Status | Planned. |
+| Author decision | None yet. |
+| Notes | An unattended call is automatic control: allowed in the US only in the segments of §97.221(b) (RP-7 §5.1 has them). Aether refuses elsewhere; with another modem the client must check (RP-4 §8). |
 
-### W17. Gateways ranked by propagation and by what the network has measured
+### W17. Gateways ranked by propagation
 
 The gateway list puts first the gateways the user can probably reach now, not just the nearest.
 
 | | |
 |---|---|
-| Asked | The plan: concept §9 and §10, later. 0 people. |
-| Program | Client; gateways and post offices for measurements. |
-| Compatibility | **Fits today** for a prediction: the list gives each gateway's grid and channels (RP-5 §4.4), and a propagation model needs nothing more. **Minor addition** for measurements: an optional member of RP-5 §4.4, or a new public document, holding what gateways heard and from where (the SNRs their modems report, RP-4 §5). |
-| Status | Planned, not built. Ranking by distance is built. |
-| Depends on | Nothing, for a prediction. |
-| Size | Medium for a prediction; large for measurements. |
-| Priority | **P3.** |
+| Requested by | The plan: concept §9 and §10, later. Requesters: 0. |
+| Component | Client; for measurements, gateways and post offices too. |
+| Compatibility | **Fits today** for a prediction: grid and channels are in the list (RP-5 §4.4). Ranking by what gateways measured is an **optional protocol addition** to RP-5 §4.4 or a new public document. |
+| Existing coverage | Planned; ranking by distance is built. |
+| Dependencies | None for a prediction. |
+| Effort | Medium for a prediction; large for measurements. |
+| Priority | **Low.** |
+| Recommendation | **Modify**: a prediction only; defer measurements until a prediction proves too poor. |
+| Status | Planned. |
+| Author decision | None yet. |
 
 ### W18. Mail coming down compressed
 
@@ -387,73 +433,35 @@ Mail from the Internet takes less air time on its way down.
 
 | | |
 |---|---|
-| Asked | Found while reading the programs. The concept counts on it: a 14 kB HTML email becomes about 1.1 kB (concept §5.1). 0 people. |
-| Program | Post office. |
-| Compatibility | **Fits today**: every station must take DEFLATE (RP-2 §4, code 1), and gateways pass the post office's air form on unchanged (RP-3 §7). |
-| Status | New: the post office makes every air form uncompressed (code 0), as the reference that makes the test vectors does, so that they stay byte for byte. The client already sends its own mail compressed when that is smaller. |
-| Depends on | Nothing. |
-| Size | Small in the program. The vectors' downloads would change, or the program would compress where the vectors do not. |
-| Priority | **P1.** Air time on every message a pilot user picks up. |
-| Notes | RP-5 §5.3 does not say which compression the post office may use. It makes one air form for every gateway and never sees the caller's `caps`, so only codes 0 and 1 are safe for it (§12, G2). |
+| Requested by | The editor, from reading the post office. Requesters: 0. |
+| Component | Post office. |
+| Compatibility | **Fits today**: every station must take DEFLATE (RP-2 §4, code 1), and gateways pass the post office's air form on as it is (RP-3 §7). |
+| Existing coverage | New. The post office makes every air form uncompressed (code 0), as the reference that makes the vectors does, to keep them byte for byte; the client already compresses what it sends. The concept counts on compression (concept §5.1). |
+| Dependencies | None. |
+| Effort | Small. |
+| Priority | **High.** Air time on every message a pilot user picks up. |
+| Recommendation | Accept. |
+| Status | Proposed. |
+| Author decision | None yet. |
+| Notes | RP-5 §5.3 does not say which compression a post office may use, and it cannot see the caller's `caps`, so only codes 0 and 1 are safe (§13, G2). |
 
-### W19. Shorter short messages: a published dictionary
+### W19. Shorter short messages: a dictionary
 
 Short messages, most of HF traffic, take a fifth less air time or better.
 
 | | |
 |---|---|
-| Asked | The plan: D17, RP-2 §4; design §10 (the corpus is owed). 0 people. |
-| Program | Client, gateway, post office. |
-| Compatibility | **Minor addition** while it stays optional: code 3 is reserved, and each side lists the codes it takes (RP-3 §5.1, `caps`), so a station that does not know it is never sent it. RP-2 §4 says code 3 then *becomes a requirement*: that part is a **major change** once the specification is Stable (§12, G7). |
-| Status | Planned (D17); Phase 1 shipped without it. |
-| Depends on | W18, for any gain on mail coming down. |
-| Size | Medium: write the corpus, train, measure against the 20 % rule, publish. |
-| Priority | **P3.** It is a measurement before it is a feature. |
-| Notes | Pulls against W18 and RP-5 §5.3: the post office makes one air form for every caller, so it can use code 3 only if every caller takes it (the requirement), or if it keeps an air form for each code, which breaks resuming a download through another gateway (RP-3 §7). |
-
-### W20. A VARA HF and VARA FM adapter
-
-Use RadioPost with the modem many stations already run.
-
-| | |
-|---|---|
-| Asked | The plan: concept §7, design §5.4, Phase 5. 0 people. |
-| Program | Adapter. |
-| Compatibility | **Fits today**: RP-4 §9.2 maps VARA's published commands. VARA reports no delivery (RP-3 keeps its own receipts) and cannot be shared (`shared` false). It checks no band rules, so the gateway or its operator must (RP-4 §8, W40). |
-| Status | Planned, Phase 5. |
-| Depends on | W40 for an unattended gateway on VARA. |
-| Size | Medium. |
-| Priority | **P3** by the order of work; likely the adapter users ask for most. |
-| Notes | VARA is a black box: the adapter uses only its published command list (RP-4 §9.2), nothing learned from its signal or its behaviour. A session over VARA cannot be read by an open monitor (W42), because VARA's air interface is not published. |
-
-### W21. An ARDOP adapter
-
-Use RadioPost over ARDOP.
-
-| | |
-|---|---|
-| Asked | The plan: concept §7, design §5.4, Phase 5. 0 people. |
-| Program | Adapter. |
-| Compatibility | **Fits today**, by RP-4 §9.3, which is still to be checked against ARDOP's own specification (design §10). |
-| Status | Planned, Phase 5. |
-| Depends on | W40 for unattended use. |
-| Size | Medium. |
-| Priority | **P3.** |
-
-### W22. An AX.25 packet adapter
-
-Serve local users on VHF and UHF packet through Direwolf or a TNC, as the county EOC does in the
-concept (N2CALL-5).
-
-| | |
-|---|---|
-| Asked | The plan: concept §2 and §7, design §5.4, Phase 5. 0 people. |
-| Program | Adapter. |
-| Compatibility | **Fits today** through AGWPE (RP-4 §9.4). Whether it can be shared depends on how the TNC software treats a callsign two programs register (RP-4 §9.4). |
-| Status | Planned, Phase 5. |
-| Depends on | W26 to run beside HF on one gateway; W40 for unattended use. |
-| Size | Medium. |
-| Priority | **P3.** |
+| Requested by | The plan: D17, RP-2 §4, design §10. Requesters: 0. |
+| Component | Client, gateway, post office. |
+| Compatibility | **Optional protocol addition** while optional: code 3 is reserved and negotiated (RP-3 §5.1, `caps`). RP-2 §4 says it then *becomes a requirement*, a **breaking protocol change** once Stable (§13, G7). |
+| Existing coverage | Planned; the corpus is owed. |
+| Dependencies | W18 for any gain on mail coming down. |
+| Effort | Medium: write the corpus, train, measure, publish. |
+| Priority | **Low.** A measurement before it is a feature. |
+| Recommendation | Defer until the corpus is measured. |
+| Status | Planned. |
+| Author decision | **Decided** (2026-11-09, D17, CLAUDE.md): trained only on a published corpus, adopted only if it beats DEFLATE by a measured margin. |
+| Notes | The post office makes one air form for every caller (RP-5 §5.3), so it can use code 3 only if every caller takes it (the requirement), or by keeping a form per code, which breaks resuming downloads across gateways (RP-3 §7). |
 
 ### W23. A phone version
 
@@ -461,17 +469,20 @@ Read, write and send by radio from a phone.
 
 | | |
 |---|---|
-| Asked | The plan: concept §10, later; design §6; Phase 5. 0 people. |
-| Program | Client. |
-| Compatibility | **Fits today** over the Internet: enrollment and settings are RP-5 §6, and ordinary mail programs already read the mailbox (concept §5.4). By radio, the modem runs on a small computer at the radio. If the adapter runs on the phone and speaks that modem's own interface over the network, it fits today. If RPMI itself crosses from the phone to that computer, it is a **minor addition** to RP-4: §2 allows only the loopback interface or a Unix socket, and RPMI has no authentication, which a network would need (§12, G4). |
-| Status | Planned, Phase 5. |
-| Depends on | Nothing in RadioPost. Aether's own phone plan is on its back burner. |
-| Size | Large. |
-| Priority | **P3.** |
+| Requested by | The plan: concept §10, later; design §6; Phase 5. Requesters: 0. |
+| Component | Client. |
+| Compatibility | **Fits today** over the Internet (RP-5 §6; mail programs already read the mailbox, concept §5.4), and by radio if the adapter runs on the phone and speaks the modem's own interface. RPMI from the phone to the computer at the radio is an **optional protocol addition** to RP-4 (§13, G4). |
+| Existing coverage | Planned, Phase 5. |
+| Dependencies | A modem a phone can drive; Aether's own plan for one is on its back burner. |
+| Effort | Large. |
+| Priority | **Low.** |
+| Recommendation | Defer until such a modem exists. |
+| Status | Planned. |
+| Author decision | None yet. |
 
 ---
 
-## 6. The gateway's operation
+## 7. Gateway and post office operation
 
 ### W24. Block a caller by address or callsign
 
@@ -479,27 +490,16 @@ The gateway's operator refuses one account, or one station, that misuses the gat
 
 | | |
 |---|---|
-| Asked | The plan: concept §9. 0 people. |
-| Program | Gateway. |
-| Compatibility | **Fits today**: `ERROR` `refused-by-policy` after `HELLO`, with a text saying why (RP-3 §5.9, RP-0 §9.3). |
-| Status | Partly built: the operator can block a post office, or allow only some, from the command line (RP-1 §7.3); not an address or a callsign, and nothing in the panel. |
-| Depends on | Nothing. |
-| Size | Small. |
-| Priority | **P2.** Operators need it before a gateway is widely known: §97.219(c) asks them to stop violating traffic once they know of it. |
-
-### W25. The gateway renews its own credential
-
-An unattended gateway keeps working past its credential's 90 days.
-
-| | |
-|---|---|
-| Asked | The plan: RP-5 §6.2 lets a gateway renew. 0 people. |
-| Program | Gateway. |
-| Compatibility | **Fits today** (RP-5 §6.2). |
-| Status | Partly built: the operator registers again, and the app warns two weeks ahead ([the gateway guide](../user/gateway.md), §2). |
-| Depends on | Nothing. |
-| Size | Small. |
-| Priority | **P2.** An unattended gateway whose credential lapses stops carrying sessions. |
+| Requested by | The plan: concept §9. Requesters: 0. |
+| Component | Gateway. |
+| Compatibility | **Fits today**: `ERROR` `refused-by-policy` after `HELLO`, with a text (RP-3 §5.9, RP-0 §9.3). |
+| Existing coverage | Partly built: the operator can block post offices from the command line (RP-1 §7.3); not addresses or callsigns, and nothing in the panel. |
+| Dependencies | None. |
+| Effort | Small. |
+| Priority | **Medium.** Operators need it before a gateway is widely known; they stop violating traffic once they know of it (RP-6 §5.2). |
+| Recommendation | Accept, in the panel too. |
+| Status | Planned. |
+| Author decision | None yet. |
 
 ### W26. One gateway, several radios
 
@@ -507,79 +507,148 @@ One gateway program serves HF and VHF packet, or two HF bands, each on its own r
 
 | | |
 |---|---|
-| Asked | The plan: design §5.2 (*Modem host*: one adapter per radio); the county EOC of concept §2. 0 people. |
-| Program | Gateway. |
-| Compatibility | **Fits today**: one RPMI connection per adapter (RP-4 §2), each channel in the gateway's record (RP-5 §4.4). |
-| Status | Planned, not built: one modem per gateway. |
-| Depends on | W22, for packet. |
-| Size | Medium. |
-| Priority | **P3**, with W22 and W30. |
+| Requested by | The plan: design §5.2 (*Modem host*); the county EOC of concept §2. Requesters: 0. |
+| Component | Gateway. |
+| Compatibility | **Fits today**: one RPMI connection per adapter (RP-4 §2); every channel in the record (RP-5 §4.4). |
+| Existing coverage | Planned; one modem per gateway today. |
+| Dependencies | W22 for packet. |
+| Effort | Medium. |
+| Priority | **Low.** |
+| Recommendation | Accept, with W22 and W30. |
+| Status | Planned. |
+| Author decision | None yet. |
+
+### W36. One mailbox, by radio and by mail program
+
+Mail read in a mail program is not offered again by radio. Mail sent by radio shows in the mail
+program's Sent folder. Mail between users of the same post office reaches them whichever way they
+read, including from members with no licence who use only a mail program.
+
+| | |
+|---|---|
+| Requested by | The plan: concept §3.1 (email-only members), §5.4; RP-5 §6.3, `radio_skips_read`. Requesters: 0. Includes W12. |
+| Component | Post office. |
+| Compatibility | **Fits today.** Email-only members hold no credential (RP-1 §1), and their mail to radio users is third-party traffic (RP-6 §5.1). |
+| Existing coverage | Partly built: the radio's mailbox and the mail program's are separate ([the post office guide](../user/post-office.md), §10). Mail a mail-program user sends to another user here never reaches the radio. |
+| Dependencies | None. |
+| Effort | Large: JMAP both ways, and every path mail takes inside the post office. |
+| Priority | **High.** Mail that never reaches the radio is mail silently lost to a radio user, and pilot users with the Internet will meet it at once. |
+| Recommendation | Accept. Also fill the accept list from mail sent in a mail program, as from mail sent by radio (RP-5 §6.5 names only radio paths): concept §5.1 promises that writing to someone adds them, and that removes most of the need for W37. |
+| Status | Planned. |
+| Author decision | None yet. |
+
+### W37. The accept list on a web page
+
+Add or remove senders from any browser.
+
+| | |
+|---|---|
+| Requested by | The plan: concept §5.1. Requesters: 0. |
+| Component | Post office. |
+| Compatibility | **Fits today**: the post office's own page over the same list (RP-5 §6.5, RP-6 §2.2). |
+| Existing coverage | Planned; the client changes the list. |
+| Dependencies | A login for the page. W36 covers the common case. |
+| Effort | Medium: a page, and a login to keep safe. |
+| Priority | **Low.** |
+| Recommendation | Defer: the client and W36 cover most uses, and a web login is one more thing to secure. |
+| Status | Planned. |
+| Author decision | None yet. |
+
+### W38. Backups and a backup mail server
+
+A post office that loses its server loses no mail, and is rebuilt in hours.
+
+| | |
+|---|---|
+| Requested by | The plan: concept §8.5; the pilot is to run with nightly off-site backups and a backup mail server (concept §12). Requesters: 0. |
+| Component | Post office. |
+| Compatibility | **Fits today**: one operator's servers; no protocol. |
+| Existing coverage | Planned; the post office guide sets up one server. |
+| Dependencies | None. |
+| Effort | Medium. |
+| Priority | **Critical** for the backups: the pilot holds real users' mail and keys. The backup mail server is **Medium**. |
+| Recommendation | Accept: backups now, and a restore tried once; the backup mail server after. |
+| Status | Planned. |
+| Author decision | None yet. |
+| Notes | A backup mail server must refuse as the door does, or it sends bounces to forged senders later (D15, RP-6 §2.1), so it needs the accept lists (concept §13 left this open). Without one, senders retry for days (RFC 5321) and only time is lost. |
 
 ---
 
-## 7. Running without the Internet
+## 8. Offline and disconnected operation
 
-The author has decided the order of these (CLAUDE.md, *Decided by the author*): copies placed
-ahead, then the gateway's queue, then forwarding by radio.
+The author decided the order (CLAUDE.md, *Decided by the author*): copies placed ahead, then the
+gateway's queue, then forwarding by radio.
 
 ### W27. Copies placed ahead
 
 Mail waiting for a user is copied to their usual gateways, so it can be picked up while the
-Internet or the post office is down.
+Internet or the post office is down. The user names those gateways in the client.
 
 | | |
 |---|---|
-| Asked | The plan: concept §6.1, D12, Phase 3. 0 people. |
-| Program | Post office, gateway. |
-| Compatibility | **Fits today**: specified in RP-5 §5.8 and §6.3, with the flag `copy` (RP-3 §5.2) and the serials of RP-3 §6.2. |
-| Status | Specified, not built. |
-| Depends on | W9, for users to name their gateways. |
-| Size | Large: the long poll, the gateway's store, drops and expiry. |
-| Priority | **P2**, first of Phase 3. **Order decided** by the author. |
+| Requested by | The plan: concept §6.1 and §10, D12, Phase 3. Requesters: 0. Includes W9. |
+| Component | Post office, gateway; the client names the gateways. |
+| Compatibility | **Fits today**: RP-5 §5.8 and §6.3, the flag `copy` (RP-3 §5.2), serials (RP-3 §6.2). |
+| Existing coverage | Specified, not built. The setting `usual_gateways` can be changed only from the command line. |
+| Dependencies | Phase 2. |
+| Effort | Large: the long poll, the gateway's store, drops and expiry, the client's setting. |
+| Priority | **High**: first of Phase 3. |
+| Recommendation | Accept. |
+| Status | Planned. |
+| Author decision | **Decided** (CLAUDE.md): first of the Internet-down features. |
 
 ### W28. The gateway's queue while offline, and its reports
 
 A gateway that has lost the Internet still checks callers, takes their mail and serves its copies,
-and reports everything when the Internet is back.
+and reports everything once it is back.
 
 | | |
 |---|---|
-| Asked | The plan: concept §6.2, Phase 3. 0 people. |
-| Program | Gateway, post office. |
+| Requested by | The plan: concept §6.2, Phase 3. Requesters: 0. |
+| Component | Gateway, post office. |
 | Compatibility | **Fits today**: RP-3 §9 and `online` (RP-3 §5.2), keys and revocation lists kept (RP-1 §7.3), `POST /reports` (RP-5 §5.6). |
-| Status | Specified, not built: the gateway works only online. |
-| Depends on | W27, for anything to serve. |
-| Size | Large. |
-| Priority | **P2**, second of Phase 3. **Order decided** by the author. |
+| Existing coverage | Specified, not built: the gateway works only online. |
+| Dependencies | W27. |
+| Effort | Large. |
+| Priority | **High**: second of Phase 3. |
+| Recommendation | Accept, shipped with W29. |
+| Status | Planned. |
+| Author decision | **Decided** (CLAUDE.md): second, after copies placed ahead. |
 
-### W29. The sender's client follows mail queued at a cut-off gateway
+### W29. The sender's client follows queued mail
 
-The user sees mail as queued at a gateway; it is offered again until a post office has it, and the
-user is told if it may have been lost.
+The user sees mail as queued at a gateway; the client offers it again until a post office has it,
+and says so if it may have been lost.
 
 | | |
 |---|---|
-| Asked | The plan: D25. 0 people. |
-| Program | Client. |
+| Requested by | The plan: D25. Requesters: 0. |
+| Component | Client. |
 | Compatibility | **Fits today**: RP-7 §3.6. |
-| Status | Specified, not built. |
-| Depends on | W28. |
-| Size | Medium. |
-| Priority | **P2**, with W28. |
+| Existing coverage | Specified, not built. |
+| Dependencies | W28. |
+| Effort | Medium. |
+| Priority | **High.** Without it, a message a cut-off gateway drops is lost with nobody told (D25). |
+| Recommendation | Accept, and ship with W28, never after it. |
+| Status | Planned. |
+| Author decision | None yet. |
 
-### W30. Forwarding by radio between gateways
+### W30. Forwarding by radio
 
 Mail leaves an area that has lost the Internet, and comes back in, by radio between gateways.
 
 | | |
 |---|---|
-| Asked | The plan: concept §6.3; D18, D21 to D23, D26; Phase 4. 0 people. |
-| Program | Gateway, post office. |
-| Compatibility | **Fits today**: RP-7, whose additions to RP-3 and RP-5 are already made. |
-| Status | Specified, not built. |
-| Depends on | W27, W28; W26 when the partner is reached on another radio; W41 for a gateway outside the US. |
-| Size | Large. |
-| Priority | **P3**, Phase 4. **Order decided** by the author: after the queue. |
+| Requested by | The plan: concept §6.3; D18, D21 to D23, D26; Phase 4. Requesters: 0. |
+| Component | Gateway, post office. |
+| Compatibility | **Fits today**: RP-7, with its additions to RP-3 and RP-5 already made. |
+| Existing coverage | Specified, not built. |
+| Dependencies | W27, W28; W26 when a partner is on another radio; W40 for modems other than Aether; W41 outside the US. |
+| Effort | Large. |
+| Priority | **Medium**: Phase 4. |
+| Recommendation | Accept. |
+| Status | Planned. |
+| Author decision | **Decided** (CLAUDE.md): after the gateway's queue. |
 
 ### W31. Local delivery at a cut-off gateway
 
@@ -587,17 +656,20 @@ Neighbours who use the same cut-off gateway (a shelter and the EOC) exchange mai
 
 | | |
 |---|---|
-| Asked | The plan: D24. 0 people. |
-| Program | Gateway; client (it asks for local messages by content ID, RP-3 §5.6, `ids`). |
-| Compatibility | **Fits today**: RP-7 §4.4. |
-| Status | Specified, not built. |
-| Depends on | W27, W28. |
-| Size | Medium. |
-| Priority | **P3**, with W30. |
+| Requested by | The plan: D24. Requesters: 0. |
+| Component | Gateway; the client asks by content ID (RP-3 §5.6, `ids`). |
+| Compatibility | **Fits today**: RP-7 §4.4, reported with `local_pickups` (RP-5 §5.6). |
+| Existing coverage | Specified, not built. Specified in RP-7, so listed in Phase 4. |
+| Dependencies | W27, W28. It needs no partners and no forwarding. |
+| Effort | Medium. |
+| Priority | **Medium.** In an outage, much of the mail that matters is between neighbours (D24). |
+| Recommendation | **Modify**: build it right after W28, in Phase 3, not with W30. It needs only the copies (which say who the local users are) and the offline reports. This keeps the author's order: forwarding still comes after the queue. |
+| Status | Planned. |
+| Author decision | None yet. |
 
 ---
 
-## 8. Forms and applications
+## 9. Forms and applications
 
 ### W32. Forms
 
@@ -606,14 +678,16 @@ readable copy.
 
 | | |
 |---|---|
-| Asked | The plan: concept §10, later; design §9, Phase 5; RP-2 §2 reserves key 13 for forms. 0 people. |
-| Program | Client; post office for email; a new specification. |
-| Compatibility | **Minor addition**, as RP-2 plans: a forms specification defines key 13, and every form message also carries its text in `body`, so a client that knows no forms still shows it (receivers keep keys they do not know, RP-2 §2). RP-6 then says how a form becomes email and back. **On top** is the other way: a form as an attachment of a published type, nothing changed below; but the post office could not make a readable email of it, and key 13 would stay unused. Choose before building. |
-| Status | Planned, Phase 5; key 13 reserved. |
-| Depends on | Nothing. |
-| Size | Large: a template format, a set of forms, the client's editor and viewer, RP-6's conversion. |
-| Priority | **P3** by the order of work; likely to rise, since emergency groups ask for forms first. |
-| Notes | Templates come from FEMA's public forms, in an open format (concept §10), not from Winlink's: no compatibility with Winlink's programs, by the author's decision. |
+| Requested by | The plan: concept §10, later; design §9, Phase 5; RP-2 §2 reserves key 13 for forms. Requesters: 0. |
+| Component | Client; a published form format. |
+| Compatibility | Recommended: an **application-layer capability**, the form's data as a file of a published type in `files`, with the sender's client writing the readable text in `body`, so any client and any email reader shows it; nothing below changes. As reserved: an **optional protocol addition** defining key 13 (RP-2 §2), with RP-6 saying how a form becomes email. |
+| Existing coverage | Planned, Phase 5; key 13 reserved. |
+| Dependencies | None. |
+| Effort | Large: a template format, a set of forms, an editor and a viewer. |
+| Priority | **Medium**; likely to rise, since emergency groups ask for forms first. |
+| Recommendation | **Modify**: application layer first. Interoperability needs a published form format either way, but as a file it asks nothing of RP-2 or RP-6. Use key 13 only if a measured air-time saving pays for a specification. |
+| Status | Planned. |
+| Author decision | No compatibility with Winlink's programs (CLAUDE.md, decided): templates from FEMA's public forms in an open format (concept §10), not Winlink's. |
 
 ### W33. Position reports
 
@@ -621,14 +695,17 @@ Send where a station is, for a map or a net.
 
 | | |
 |---|---|
-| Asked | The plan: concept §10, later; RP-4 §6 reserves broadcasts for it. 0 people. |
-| Program | Client; a service that collects them, or a new specification. |
-| Compatibility | **On top** as a message to a position service's address: fits today, at the cost of a session each. As a broadcast heard by everyone listening: a new specification, a **minor addition** carried only by modems with `caps.broadcast` (RP-4 §6). |
-| Status | Planned, not built. |
-| Depends on | Nothing. |
-| Size | Medium. |
-| Priority | **P3.** |
-| Notes | Whether a station under automatic control may send such a broadcast must be checked against the rules before it is designed. |
+| Requested by | The plan: concept §10, later; RP-4 §6 reserves broadcasts for it. Requesters: 0. |
+| Component | Client; a service that collects them. |
+| Compatibility | **Application-layer capability** as a message to a position service, at a session each. As a broadcast to everyone listening, an **optional protocol addition** (a new specification) carried only by modems with `caps.broadcast` (RP-4 §6). |
+| Existing coverage | Planned; not built. |
+| Dependencies | None. Shares a broadcast format with W34 (§12, T4). |
+| Effort | Medium. |
+| Priority | **Low.** |
+| Recommendation | Defer; application layer first when wanted. |
+| Status | Planned. |
+| Author decision | None yet. |
+| Notes | Whether a station under automatic control may send such a broadcast must be checked against the rules before a broadcast is designed. |
 
 ### W34. Bulletins
 
@@ -636,14 +713,16 @@ Read a net's or an agency's bulletins.
 
 | | |
 |---|---|
-| Asked | The plan: concept §10, later; RP-4 §6. 0 people. |
-| Program | On top (a list address), or a new specification; client. |
-| Compatibility | **On top** as mail from a list address: fits today, but every reader downloads their own copy. As a broadcast: one transmission for everyone listening, a new specification (**minor addition**), and no acknowledgement, so a missed bulletin still needs the mail copy. |
-| Status | Planned, not built. |
-| Depends on | Nothing for mail; W33's broadcast format if both use one. |
-| Size | Medium for mail; large for broadcasts. |
-| Priority | **P3.** |
-| Notes | Air time pulls one way and simplicity the other: the broadcast saves air on a busy net, and costs a specification and a second way to get the same bulletin. |
+| Requested by | The plan: concept §10, later; RP-4 §6. Requesters: 0. |
+| Component | A list service; the client. |
+| Compatibility | **Application-layer capability** as mail from a list address: every reader downloads a copy. As a broadcast: one transmission for everyone, an **optional protocol addition**, and no acknowledgement, so a missed bulletin still needs the mail copy. |
+| Existing coverage | Planned; not built. |
+| Dependencies | None for mail. |
+| Effort | Medium for mail; large for broadcasts. |
+| Priority | **Low.** |
+| Recommendation | Defer; mail first. Broadcasts only if a busy net shows the air time matters, and then one format with W33. |
+| Status | Planned. |
+| Author decision | None yet. |
 
 ### W35. Services that answer by mail
 
@@ -651,130 +730,74 @@ Write to an address for a catalogue, a weather report or a blank form, and get t
 
 | | |
 |---|---|
-| Asked | The plan: concept §10, later (catalogue requests). 0 people. |
-| Program | On top: a service at a post office, or anywhere on the Internet. |
-| Compatibility | **On top**: ordinary mail both ways. Writing to the service puts it on the accept list (RP-5 §6.5). |
-| Status | Planned, not built. |
-| Depends on | Nothing. |
-| Size | Small for each service. |
-| Priority | **P3.** |
-| Notes | An answer that arrives as ordinary email is third-party mail (RP-6 §5.1), held back from stations in countries without an arrangement; one a RadioPost account sends, with RP-6 §4's part, is not. |
+| Requested by | The plan: concept §10, later (catalogue requests). Requesters: 0. |
+| Component | Application layer: a service at a post office or anywhere on the Internet. |
+| Compatibility | **Application-layer capability**: ordinary mail both ways. Writing to it puts it on the accept list (RP-5 §6.5). |
+| Existing coverage | Planned; nothing needed from RadioPost. |
+| Dependencies | None. |
+| Effort | Small for each service. |
+| Priority | **Low.** |
+| Recommendation | Accept as the application layer's: anyone may run one. |
+| Status | Planned. |
+| Author decision | None yet. |
+| Notes | An answer arriving as ordinary email is third-party mail (RP-6 §5.1), held back from stations in countries without an arrangement. |
 
 ---
 
-## 9. The post office
+## 10. Adapters and interoperability
 
-### W36. One mailbox, by radio and by mail program
+### W20. A VARA HF and VARA FM adapter
 
-Mail read in a mail program is not offered again by radio, mail sent by radio shows in the mail
-program's Sent folder, and mail between users of the same post office reaches them whichever way
-they read.
+Use RadioPost with the modem many stations already run.
 
 | | |
 |---|---|
-| Asked | The plan: concept §5.4; RP-5 §6.3 (`radio_skips_read`). 0 people. |
-| Program | Post office. |
-| Compatibility | **Fits today.** |
-| Status | Partly built: the two mailboxes are separate ([the post office guide](../user/post-office.md), §10). |
-| Depends on | Nothing. |
-| Size | Large: JMAP both ways, and every path mail takes inside the post office. |
-| Priority | **P2.** Pilot users with the Internet will notice at once, and W12 waits on it. |
+| Requested by | The plan: concept §7, design §5.4, Phase 5. Requesters: 0. |
+| Component | Adapter. |
+| Compatibility | **Fits today**: RP-4 §9.2 maps VARA's published commands. No delivery reports (RP-3 keeps its own receipts), not shareable, no band rules checked (RP-4 §8). |
+| Existing coverage | Planned, Phase 5. |
+| Dependencies | W40 for an unattended gateway on VARA. |
+| Effort | Medium. |
+| Priority | **Low** by the order of work; likely the adapter users ask for most. |
+| Recommendation | Accept, after W40. |
+| Status | Planned. |
+| Author decision | VARA is a black box (CLAUDE.md): only its published command list is used. |
+| Notes | A session over VARA cannot be read by an open monitor (W42): its air interface is not published. |
 
-### W37. The accept list on a web page
+### W21. An ARDOP adapter
 
-Add or remove senders from any browser.
-
-| | |
-|---|---|
-| Asked | The plan: concept §5.1. 0 people. |
-| Program | Post office. |
-| Compatibility | **Fits today**: the post office's own page over the same list (RP-5 §6.5, RP-6 §2.2). |
-| Status | Planned, not built: the client changes the list. |
-| Depends on | A login for the page; the user's mail-server account could serve. |
-| Size | Medium. |
-| Priority | **P3.** |
-
-### W38. Backups and a backup mail server
-
-A post office that loses its server loses no mail, and is rebuilt in hours.
+Use RadioPost over ARDOP.
 
 | | |
 |---|---|
-| Asked | The plan: concept §8.5; the pilot is to have nightly off-site backups and a backup mail server at a second company (concept §12). 0 people. |
-| Program | Post office. |
-| Compatibility | **Fits today**: one operator's servers; no protocol. |
-| Status | Planned, not built: the post office guide sets up one server. |
-| Depends on | Nothing. |
-| Size | Medium. |
-| Priority | **P1** for the backups: the pilot holds real users' mail. The backup mail server can follow. |
-| Notes | A backup mail server must refuse as the door does, or it later sends bounces to forged senders (D15, RP-6 §2.1); so it needs the accept lists, which concept §13 left open. With none, senders retry for days (RFC 5321), and only time is lost. |
+| Requested by | The plan: concept §7, design §5.4, Phase 5. Requesters: 0. |
+| Component | Adapter. |
+| Compatibility | **Needs specification review**: RP-4 §9.3's mapping is to be checked against ARDOP's own specification before an adapter is written (design §10). |
+| Existing coverage | Planned, Phase 5. |
+| Dependencies | That check; W40 for unattended use. |
+| Effort | Medium. |
+| Priority | **Low.** |
+| Recommendation | Defer until the check is done. |
+| Status | Planned. |
+| Author decision | None yet. |
 
-### W39. A domain served by several post offices
+### W22. An AX.25 packet adapter
 
-An address that survives any one post office closing.
-
-| | |
-|---|---|
-| Asked | The plan: concept §12, a later option; concept §1 lists it among what is not a goal for now. 0 people. |
-| Program | Post office; gateways and clients. |
-| Compatibility | **Major change**: RP-1 §7.1 allows exactly one API record per domain, and serials (RP-3 §6.2) are one post office's numbering, on which a client's `cursor` relies. |
-| Status | A later option, in no phase. |
-| Depends on | Nothing. |
-| Size | Large. |
-| Priority | **P4.** |
-
----
-
-## 10. The operator's safety and the rules
-
-### W40. The gateway checks the band rules itself
-
-With a modem that checks nothing (VARA, ARDOP, packet), an unattended gateway still keeps to the
-automatic-control segments.
+Serve local users on VHF and UHF packet through Direwolf or a TNC, as the county EOC does in the
+concept (N2CALL-5).
 
 | | |
 |---|---|
-| Asked | The plan: design §5.2 (*Rules check*), concept §7; RP-4 §8 requires it of the host or its operator. 0 people. |
-| Program | Gateway; the client too, for W16. |
-| Compatibility | **Fits today** with the dial taken from the gateway's own settings or its registered channels (RP-5 §4.4), judged against its country's table (RP-7 §5.1). Reading the radio's real dial from the modem is a **minor addition** to RP-4, since RPMI carries no frequency (W14; §12, G3). |
-| Status | Partly built: a setting says the operator checks ([the gateway guide](../user/gateway.md), §2); the gateway checks nothing itself. |
-| Depends on | W14, to read the dial; W41 outside the US. |
-| Size | Medium. |
-| Priority | **P3**: needed before W20 to W22 go unattended. |
-
-### W41. Rules tables for other countries
-
-A gateway outside the US hands over third-party mail, and forwards unattended, by its own country's
-rules.
-
-| | |
-|---|---|
-| Asked | The plan: design §10; RP-6 §5.1, RP-7 §5.1, §8. 0 people. |
-| Program | Gateway; the specifications. |
-| Compatibility | **Minor addition**: a country's table in RP-6 §5.1 or RP-7 §5.1 changes nothing for gateways elsewhere. Each is read from that country's rules, with the date. |
-| Status | Planned: the United States only. Elsewhere the operator enters prefixes and segments (RP-6 §5.1, RP-7 §5.1). |
-| Depends on | Someone reading each country's rules. |
-| Size | Medium for each country. |
-| Priority | **P3**; rises when a gateway outside the US joins. |
-
-### W42. A monitor that decodes sessions off the air
-
-Anyone can record a RadioPost session and read every message in it with an open tool.
-
-| | |
-|---|---|
-| Asked | The plan: concept §11, *Monitoring*. 0 people. |
-| Program | On top: a tool. |
-| Compatibility | **Fits today**: everything on the air is published (RP-0 §7; RP-2 §4; RP-3 §2, §4), and so is Aether's air interface. |
-| Status | Planned, not built. |
-| Depends on | Aether giving a session's bytes from a recording. |
-| Size | Medium. |
-| Priority | **P2.** It is the concept's answer to the "obscured meaning" complaint, and a debugging tool for every implementer. |
-| Notes | Over VARA it cannot exist: VARA's air interface is not published. |
-
----
-
-## 11. For other implementers
+| Requested by | The plan: concept §2 and §7, design §5.4, Phase 5. Requesters: 0. |
+| Component | Adapter. |
+| Compatibility | **Fits today** through AGWPE (RP-4 §9.4). Whether it can be shared depends on the TNC software (RP-4 §9.4). |
+| Existing coverage | Planned, Phase 5. |
+| Dependencies | W26 to run beside HF; W40 for unattended use. |
+| Effort | Medium. |
+| Priority | **Low.** |
+| Recommendation | Accept. |
+| Status | Planned. |
+| Author decision | None yet. |
 
 ### W43. A public test service
 
@@ -783,49 +806,132 @@ Internet, and on the air against a test gateway.
 
 | | |
 |---|---|
-| Asked | The plan: [the conformance tester](01-conformance.md), §7 (not settled). 0 people. |
-| Program | Tools. |
-| Compatibility | **Fits today**: the tester exists (`core/tester`), and the vectors are published (RP-0 §8.6). |
-| Status | Not settled. |
-| Depends on | Real keys for an on-air test gateway: the published test keys never go on the air (the tester's §2.3). |
-| Size | Medium. |
-| Priority | **P3**; rises with the first independent implementation, which RP-0 §8.1 needs before any specification becomes Candidate. |
+| Requested by | The plan: [the conformance tester](01-conformance.md), §7, not settled. Requesters: 0. |
+| Component | Tools. |
+| Compatibility | **Fits today**: the tester exists (`core/tester`); the vectors are published (RP-0 §8.6). |
+| Existing coverage | Not settled. |
+| Dependencies | Real keys for an on-air test gateway: the published test keys never go on the air (the tester's §2.3). |
+| Effort | Medium. |
+| Priority | **Low**; rises with the first independent implementation, which every specification needs before it becomes Candidate (RP-0 §8.1). |
+| Recommendation | Defer until an independent implementer appears. |
+| Status | Proposed. |
+| Author decision | None yet. |
 
 ---
 
-## 12. Gaps found in the specifications and the design
+## 11. Operator safety and regulatory compliance
 
-Each is noted under its wish, and kept here so that none is lost. Nothing is changed in this
-document: a gap is fixed, if at all, through the specification's own process.
+### W40. The gateway checks the band rules itself
 
-| # | Where | What | Wish |
+With a modem that checks nothing (VARA, ARDOP, packet), an unattended gateway still keeps to the
+automatic-control segments.
+
+| | |
+|---|---|
+| Requested by | The plan: design §5.2 (*Rules check*), concept §7; RP-4 §8 requires it of the host or its operator. Requesters: 0. |
+| Component | Gateway; the client too, for W16. |
+| Compatibility | **Fits today** with the dial taken from the gateway's settings or registered channels (RP-5 §4.4), judged against its country's table (RP-7 §5.1). Reading the radio's own dial is an **optional protocol addition** to RP-4: RPMI carries no frequency (§13, G3). |
+| Existing coverage | Partly built: a setting says the operator checks ([the gateway guide](../user/gateway.md), §2); the gateway checks nothing itself. |
+| Dependencies | W14's RP-4 addition to read the dial (§12, T1); W41 outside the US. |
+| Effort | Medium. |
+| Priority | **Medium**: needed before W20 to W22 run unattended. |
+| Recommendation | Accept. |
+| Status | Planned. |
+| Author decision | None yet. |
+
+### W41. Rules tables for other countries
+
+A gateway outside the US hands over third-party mail, and forwards unattended, by its own
+country's rules.
+
+| | |
+|---|---|
+| Requested by | The plan: design §10; RP-6 §5.1, RP-7 §5.1, §8. Requesters: 0. |
+| Component | Gateway; the specifications. |
+| Compatibility | **Optional protocol addition**: a country's table in RP-6 §5.1 or RP-7 §5.1 changes nothing for gateways elsewhere. Each is read from that country's rules, with the date. |
+| Existing coverage | The United States only; elsewhere the operator enters prefixes and segments (RP-6 §5.1, RP-7 §5.1). |
+| Dependencies | Someone reading each country's rules. |
+| Effort | Medium for each country. |
+| Priority | **Low** until a gateway outside the US joins. |
+| Recommendation | Defer until then. |
+| Status | Planned. |
+| Author decision | None yet. |
+
+### W42. A monitor that decodes sessions off the air
+
+Anyone can record a RadioPost session and read every message in it with an open tool.
+
+| | |
+|---|---|
+| Requested by | The plan: concept §11, *Monitoring*. Requesters: 0. |
+| Component | Application layer: a tool. |
+| Compatibility | **Fits today**: everything on the air is published (RP-0 §7; RP-2 §4; RP-3 §2, §4), and so is Aether's air interface. |
+| Existing coverage | Planned; not built. |
+| Dependencies | Aether giving a session's bytes from a recording. |
+| Effort | Medium. |
+| Priority | **Medium.** The concept's answer to the "obscured meaning" complaint, and a debugging tool for every implementer. |
+| Recommendation | Accept. |
+| Status | Planned. |
+| Author decision | None yet. |
+| Notes | Over VARA it cannot exist: VARA's air interface is not published. |
+
+---
+
+## 12. Threads that run through several wishes
+
+Where wishes share a need, building it once serves them all. None of these is a wish of its own.
+
+| # | Thread | Wishes | What to do once |
 |---|---|---|---|
-| G1 | RP-2 §6 | A client SHOULD let the user ask for a trimmed message's full text, but no PDU or endpoint carries the request (RP-3 §5.6, RP-5 §5.3). | W4 |
-| G2 | RP-5 §5.3 | It does not say which compression the post office's air form may use. RP-2 §4 has a sender choose one both ends take, but the post office makes one air form for every gateway and never sees the caller's `caps`, so only codes 0 and 1 are safe. Both the reference and the program use 0. | W18, W19 |
-| G3 | RP-4 | RPMI carries no frequency. RP-4 §8 has the host check the band rules when the modem does not, but gives it no way to learn the dial, and the client cannot tune. | W14, W40 |
-| G4 | RP-4 §2 | The adapter listens on the loopback interface or a Unix socket, and RPMI has no authentication, so it cannot cross from a phone to the computer at the radio. | W23 |
-| G5 | Concept §6.2 | Promises *delivered to the recipient's provider*; nothing in RP-5 or RP-6 reports it. | W6 |
-| G6 | Design §5.1 | Says the client keeps mail as `.eml` files; the client keeps the canonical encoding. | W5 |
-| G7 | RP-2 §4 | Dictionary 1 "becomes a requirement" once adopted: a change others cannot ignore, where a negotiated option would not be one. | W19 |
+| T1 | The modem's dial | W14, W40, W16 | One optional RP-4 addition to read and set the dial, with its rule for a shared modem (G3, G8). |
+| T2 | Credentials that never lapse unattended | W8 | One renewal rule for clients and gateways, by any open path. |
+| T3 | The post office's air forms | W18, W19 | One rule for which compressions a post office uses (G2), settled before the dictionary. |
+| T4 | Broadcasts | W33, W34 | One broadcast format, only if one of them shows a need mail cannot meet. |
+| T5 | Unattended operation | W15, W16, W27, W28, W30 | The rules check (W40) for every modem but Aether, and an honest note of what the rules allow (§1). |
+| T6 | One mailbox | W36 | Absorbs W12, and most of W37 once mail sent from a mail program fills the accept list. |
 
 ---
 
-## 13. Set aside
+## 13. Gaps in the specifications and the design
 
-Wishes refused once, with the reason, so they are not argued again from the start. It starts with
-what the concept and the design have already turned down.
+Each is noted under its wish and kept here for a separate discussion. Nothing is changed in this
+document.
 
-| Wish | Why not | Decided in |
-|---|---|---|
-| Work with Winlink's programs, or speak B2F | A client and protocol of RadioPost's own, by choice. | Concept §1; [CLAUDE.md](../../CLAUDE.md), *Decided by the author* |
-| Encrypted or private mail on the air | The rules forbid messages encoded to obscure their meaning (§97.113(a)(4)). RadioPost signs and never encrypts. | RP-0 §5, §7; concept §1 |
-| Email for people who are not amateurs | RadioPost is not an email provider for the public. Email-only members of a group (W12) are different: their mail reaches radio users as third-party traffic. | Concept §1 |
-| A list of post offices kept by the project | A gatekeeper, against the no-centre design. Gateways trust what DNS shows, and their operators decide. | D9, D32; CLAUDE.md, *Decided by the author* |
-| Gateways that announce what they reach | An announcement would have to be trusted, and one false one draws an area's mail away. | D23 |
-| The gateway sending email itself | It cannot sign for the user's domain, so the mail is filtered or refused. | D16 |
-| Taking mail and bouncing it later | Bounces go to forged senders. | D15 |
-| A dictionary trained on real mail | A dictionary is published and keeps what it learned verbatim. | D17; CLAUDE.md, *Decided by the author* |
-| A password sent over the air | Nothing secret goes over the air; signatures prove who is calling. | Concept §3.3 |
+| # | Where | What is missing | What it costs | A possible approach | Wish |
+|---|---|---|---|---|---|
+| G1 | RP-2 §6 | A client SHOULD let the user ask for a trimmed message's full text; nothing carries the request (RP-3 §5.6, RP-5 §5.3). | A SHOULD no client can meet; implementers may invent private ways. | Say instead: show the message `reply_to` names when the client holds it. | W4 |
+| G2 | RP-5 §5.3 | Which compression the post office's air form may use. It never sees the caller's `caps` (RP-2 §4 has the sender choose one both ends take). | A post office using code 2 would serve mail some clients cannot read; ours serves everything uncompressed. | Code 0 or 1 only, 1 when smaller. | W18, W19 |
+| G3 | RP-4 | Any frequency. RP-4 §8 has the host check the band rules when the modem does not, with no way to learn the dial. | Gateways on other modems trust a configured dial; the client cannot tune. | An optional dial capability (T1). | W14, W40 |
+| G4 | RP-4 §2 | A transport off the machine: loopback or a Unix socket only, and no authentication. | No common way for a phone to drive a modem in another box. | Leave it until a phone needs it. | W23 |
+| G5 | Concept §6.2 | *Delivered to the recipient's provider* is promised; nothing reports it (RP-5, RP-6). | Users are promised what no program can show. | Drop it from the concept, or an optional client endpoint in RP-5 §6. | W6 |
+| G6 | Design §5.1 | Says the client keeps mail as `.eml`; the client keeps the canonical encoding. | Design and program disagree. | Export `.eml`, and say so in the design. | W5 |
+| G7 | RP-2 §4 | Dictionary 1 "becomes a requirement" once adopted. | A change others cannot ignore, where a negotiated option would not be one. | Decide with the corpus's numbers, with G2. | W19 |
+| G8 | RP-4 §1.1 | What belongs to the whole station on a shared modem, such as the dial (RP-4 §9.1 leaves the bandwidth open in the same way). | One host can move every other host's station. | Refuse a station-wide change while another host's link or call is up. | W14 |
+| G9 | RP-3 §8 | Whether a second session may follow on the same link. | A client with several accounts pays a call for each. | Leave it, or allow it when both sides say so. | W7 |
+
+---
+
+## 14. Consolidated, deferred and rejected
+
+Kept so that a wish refused once is not argued again from the start, and an idea not built now is
+not lost. A wish is reconsidered on new evidence, not on being asked again by the same person.
+
+| Idea | Requested by | Why | The alternative | Decided | Reconsider if |
+|---|---|---|---|---|---|
+| W9. Usual gateways set in the panel | The plan | Consolidated into W27: the setting does nothing until copies are placed ahead. | Built as part of W27. | 2026-11-11, the editor's proposal | — |
+| W12. Email-only members | The plan | Consolidated into W36: what they need is its mail path. | Built as part of W36. | 2026-11-11, the editor's proposal | — |
+| W25. The gateway renews its own credential | The plan | Consolidated into W8: one renewal rule for every credential. | Built as part of W8. | 2026-11-11, the editor's proposal | — |
+| W39. A domain served by several post offices | The plan: concept §12, a later option | Not a goal for now (concept §1). A breaking protocol change: RP-1 §7.1 allows one API record per domain, and serials (RP-3 §6.2) are one post office's numbering. | Backups and a quick rebuild (W38); a user who owns their domain can move it. | The concept, 2026-11-09 | A group needs addresses that outlive its post office, and W38 is not enough. |
+| Several accounts in one session (from W7) | The editor | A breaking change to RP-1 and RP-3 to save one call. | A call per account (W7). | 2026-11-11, recommended against; not decided | Emergency operators show the extra call matters. |
+| Work with Winlink's programs, or speak B2F | The concept | A client and protocol of RadioPost's own. | — | **The author**, 2026-11-09 ([CLAUDE.md](../../CLAUDE.md)) | Only by the author. |
+| Encrypted or private mail on the air | The concept | Conflict: the rules forbid messages encoded to obscure their meaning (§97.113(a)(4)); RadioPost signs and never encrypts (RP-0 §5, §7). | Signatures for who sent what; encrypted email is refused at the door (RP-6 §2.1). | The concept and RP-0, 2026-11-09 | The rules change. |
+| Email for people who are not amateurs | The concept, §1 | RadioPost is not a public email provider. | Email-only members of a group (W36). | The concept, 2026-11-09 | — |
+| A list of post offices kept by the project | D9, D32 | A gatekeeper, against the design's having no centre. | DNS, and each operator's own blocks (RP-1 §7.3). | **The author**, 2026-11-09 (D32) | Only by the author. |
+| Gateways that announce what they reach | D23 | An announcement must be trusted; a false one draws an area's mail away. | Configured partners and published routes (RP-7 §6). | The design, 2026-11-09 | Configured partners prove unworkable in a real outage. |
+| The gateway sending email itself | D16 | It cannot sign for the user's domain; the mail is filtered or refused. | Mail leaves from the sender's post office. | The design, 2026-11-09 | — |
+| Taking mail and bouncing it later | D15 | Bounces go to forged senders. | Refusal at the SMTP door. | The design, 2026-11-09 | — |
+| A dictionary trained on real mail | D17 | A dictionary is published and keeps its training text verbatim. | A corpus RadioPost writes and publishes (W19). | **The author**, 2026-11-09 (D17) | Only by the author. |
+| A password sent over the air | The concept, §3.3 | Nothing secret goes over the air. | Signatures prove who is calling. | The concept, 2026-11-09 | — |
 
 ---
 
@@ -834,3 +940,4 @@ what the concept and the design have already turned down.
 | Version | Date | Change |
 |---|---|---|
 | 0.1.0 | 2026-11-10 | First draft: how a wish is recorded; seeded with what the concept and the design promise and have not built, and two things found in the programs (W1 to W43); the gaps found on the way (G1 to G7); what the design has already set aside. |
+| 0.2.0 | 2026-11-11 | Rebuilt to the author's brief: verdicts as the brief names them, with *needs specification review*; priorities Critical, High, Medium, Low; a recommendation, a status and the author's decision for each wish; principles (§2) and shared threads (§12). W9 folded into W27, W12 into W36, W25 into W8; W39 deferred. W31 proposed for Phase 3, W32 for the application layer, W36 to fill the accept list from mail-program mail; W21 needs specification review. Gaps G8, G9; what each gap costs. Statements about the rules say whose reading they are. |
