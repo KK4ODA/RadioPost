@@ -87,6 +87,14 @@ fn the_panel_keeps_other_pages_out() {
     assert!(page.contains("<title>RadioPost</title>"));
     let (status, icon) = http(at, "GET", "/icon.svg", &host, false, &Value::Null);
     assert_eq!((status, icon.starts_with("<svg")), (200, true), "the icon");
+    // what the page marks hidden stays hidden whatever display a class gives it: the update notice
+    // (`.update`, a flex box) showed empty with a blank button until this rule
+    let (status, style) = http(at, "GET", "/style.css", &host, false, &Value::Null);
+    assert_eq!(status, 200, "the stylesheet");
+    assert!(
+        style.contains("[hidden] { display: none !important; }"),
+        "the stylesheet lets a class show what is hidden"
+    );
     // a page that rebinds its own name to this address is refused
     let (status, _) = http(
         at,
