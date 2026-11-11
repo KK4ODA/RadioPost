@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.4 |
+| **Version** | 0.2.5 |
 | **Updated** | 2026-11-11 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -148,6 +148,8 @@ rules:
 | W42 | A monitor that decodes sessions off the air | Rules | Medium | Fits today | Planned |
 | W43 | A public test service | Adapters | Low | Fits today | Proposed |
 | W44 | One install, several radios | Setup | Medium | Fits today; needs specification review for a portable callsign | Proposed |
+| W45 | Station to station under an SSID | Radio | Low | Breaking protocol change, small, failing safe (G12) | Proposed |
+| W46 | Several callsigns in one client, chosen from a list | Setup | Medium | Fits today, a call each | Proposed |
 
 Groups: *Mail* (§4), *Setup* (§5), *Radio* (§6), *Operation* (§7), *Offline* (§8),
 *Applications* (§9), *Adapters* (§10), *Rules* (§11). Consolidated and deferred wishes are in §14.
@@ -276,7 +278,7 @@ Work a personal address and a role mailbox (`shelter3@`) from one client.
 | Component | Client. |
 | Compatibility | **Fits today**, one call per account: each operator of a role mailbox holds their own credential (RP-1 §3), but `HELLO` carries one address and one statement (RP-3 §5.1, RP-1 §6.1). Several accounts in one session is a **breaking protocol change** to RP-1 and RP-3. |
 | Existing coverage | Planned; not built. A client home holds one credential. |
-| Dependencies | None. |
+| Dependencies | W46: several callsigns are several credentials too; build the two as one design. |
 | Effort | Medium: the home, the panel, choosing the account for each call. |
 | Priority | **Medium.** Role mailboxes are central to emergency work; a call each will do at first. |
 | Recommendation | Accept, a call per account. Recommend against several accounts in one session (§14). |
@@ -372,6 +374,27 @@ users do.
 | Status | Proposed. |
 | Author decision | **Decided** (2026-11-11): switching between radios only, one at a time. Two radios at once is deferred (§14). |
 | Notes | Recommend against a profiles request in RPMI: other modems have none (VARA users keep a copy per radio too), so every adapter would carry it for one modem's sake. A profile switch changes the whole station: on an Aether shared with another program, such as a gateway, it moves that program's radio too, so it should be refused while another program's session or call is up (§13, G8). Whether Aether refuses it is to be checked. The restart drops RadioPost's claim; the gateway reconnects by itself, and the client should too. |
+
+
+### W46. Several callsigns in one client, chosen from a list
+
+Work more than one callsign from one client, a club or event callsign beside your own, and pick
+the one for the next call from a list at the top of the window. Calls to any of them are
+answered.
+
+| | |
+|---|---|
+| Requested by | The author (KK4ODA), 2026-11-11. Requesters: 1. |
+| Component | Client: the home, the panel, the claim at the modem (RP-4 §9.1). |
+| Compatibility | **Fits today**, a call each. A callsign on the air is a credential's `operator` (RP-1 §3), so each callsign the client works is a credential of its own: the same account under another callsign the operator holds (a club callsign, as its trustee, when the post office enrolls it), or another account, which is W7. One session carries one credential (RP-3 §5.1): the list chooses the credential for the next call. Answering, the client claims all its callsigns at the modem at once (RP-4 §9.1; Aether's ADR-0106 takes several) and proves itself with the credential whose callsign was called (RP-3 §10, RP-1 §6.5). An SSID of a callsign needs no credential of its own once W45 is in; a prefix or suffix (`KK4ODA/M`) waits on G10. |
+| Existing coverage | New. A client home holds one device key and one credential, shown at the top of the window. RP-5 §6.1 does not stop one device key enrolling for several accounts, and the post office takes it: revoking the device then revokes all its credentials there, which suits a lost computer. |
+| Dependencies | W7 (the same design when the callsigns belong to different accounts); W8 (each credential renews itself); W45 and G10 for SSIDs and portable designators; W44 (a radio's profile may name the callsign it usually works). |
+| Effort | Medium: the home keeps several credentials, each enrolled with a code of its own; a list at the top of the window by callsign and address; the choice used for the next call; every callsign claimed when listening; the renewal and the gateway list per credential. |
+| Priority | **Medium.** Operators with a club or event callsign need it, and so does an operator with stations under several callsigns; one client per callsign is the workaround. |
+| Recommendation | **Accept, as one design with W7.** An identity is a credential, an address and a callsign; the list shows each by callsign and address, the account's mail stays with its account, and one device key serves them all. Simple by default (§2): with one credential the list does not show. |
+| Status | Proposed. |
+| Author decision | None yet. |
+| Notes | Which identity a session used is kept with its record, so a session report (RP-5 §6.6) goes to that account's post office. Listening under several callsigns answers one call at a time, as Aether runs one session at a time. |
 
 ---
 
@@ -500,6 +523,26 @@ Read, write and send by radio from a phone.
 | Recommendation | Defer until such a modem exists. |
 | Status | Planned. |
 | Author decision | None yet. |
+
+
+### W45. Station to station under an SSID
+
+Call a client at `KK4ODA-2`, or answer as `KK4ODA-7`, while its credential says `KK4ODA`: an
+operator's several stations each keep an SSID of their own, so a listener can tell them apart.
+
+| | |
+|---|---|
+| Requested by | The author (KK4ODA), 2026-11-11, planning a test between a laptop and the station's mini PC, both enrolled as KK4ODA. Requesters: 1. |
+| Component | Client; RP-1. |
+| Compatibility | **Breaking protocol change**, small, and failing safe. RP-1 §6.3 step 3 has the called client compare the callsign it was called at (`HELLO` `gateway`, RP-3 §5.1) with its own exactly, and its own is its credential's `operator`, so a call to `KK4ODA-2` is refused `not-authorized` by every client written to today's text (§13, G12). Comparing base callsigns (RP-0 §6.1) there, for a client answering (RP-3 §10), is a change every client must make to answer under an SSID; an older one refuses the call, so nothing is accepted that should not be. Gateways keep the exact comparison: a gateway's credential names its callsign with its SSID (RP-1 §3), and callers choose it by that name in the gateway list (RP-5 §4.4). |
+| Existing coverage | New. Two stations of one operator work today at the bare callsign: `KK4ODA` calls `KK4ODA`, and each identifies as `KK4ODA`. |
+| Dependencies | G10 (the same comparison at step 2, for a prefix or suffix); W46 (the SSIDs a client answers to are its own setting). |
+| Effort | Small: the comparison in the client's engines, the SSIDs claimed at the modem (RP-4 §9.1), test vectors, RP-1's text. |
+| Priority | **Low.** It works today at the bare callsign; the SSID only tells listeners which station is which. |
+| Recommendation | **Accept, with G10**: one change to RP-1 §6.3, base callsigns compared at steps 2 and 3 for clients, made once while the specifications are Drafts. |
+| Status | Proposed. |
+| Author decision | None yet. |
+| Notes | The caller's own SSID needs nothing: its `HELLO` names its credential's `operator`, which the called station's statement echoes (RP-1 §6.5), whatever callsign the modem calls as. |
 
 ---
 
@@ -915,6 +958,7 @@ Where wishes share a need, building it once serves them all. None of these is a 
 | T5 | Unattended operation | W15, W16, W27, W28, W30 | The rules check (W40) for every modem but Aether, and an honest note of what the rules allow (§1). |
 | T6 | One mailbox | W36 | Absorbs W12, and most of W37 once mail sent from a mail program fills the accept list. |
 | T7 | The rate the modem reports | W3, W44 | One estimate of time on the air (RP-4 §5, `quality`), used both to show how long the outbox will take and to choose what to fetch. |
+| T9 | A station's callsigns | W7, W44, W45, W46 | One rule for comparing callsigns, base callsigns for clients (G10, G12), and one place the client keeps which callsigns it answers to and which it calls as. |
 
 ---
 
@@ -936,6 +980,7 @@ document.
 | G9 | RP-3 §8 | Whether a second session may follow on the same link. | A client with several accounts pays a call for each. | Leave it, or allow it when both sides say so. | W7 |
 | G10 | RP-1 §6.3 | Step 2 requires the statement's `operator` to equal the credential's, yet `operator` is the callsign "as on the air" (RP-1 §6.1, RP-3 §5.1), and RP-6 §5.1 and D31 read where a station is from a prefix or suffix on it (`VE3/KK4ODA`). | A user abroad who signs with the host country's prefix is refused unless enrolled again for it; one who keeps the plain callsign is taken for a station at home, and the third-party check judges the wrong country. | Compare the base callsign, and let the statement carry the prefix and suffix: a change every verifier must make, cheapest while the specifications are Drafts. | W44 |
 | G11 | RP-5 §4.4 | Its `modem` values (`aether`, `vara-hf`, `vara-fm`, `ardop`, `ax25`, `tcp`) are a list with no registry, no way to add one, and no rule for a value a client does not know. | A gateway offering Mercury has no agreed name for it, and clients may treat an unknown name differently. | A registry of modem names in RP-0 §9, `mercury` its first new entry, and a client ignoring a channel whose modem it does not know. | W20, W26, W44 |
+| G12 | RP-1 §6.3 | Step 3 compares the callsign a client was called at with its credential's exactly, so a client cannot answer under an SSID of its own callsign (RP-0 §6.1). | An operator's several stations must all answer at the bare callsign, and listeners cannot tell them apart. | For a client answering (RP-3 §10), compare base callsigns, as G10 proposes for step 2; gateways stay exact. | W45 |
 
 ---
 
@@ -974,3 +1019,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.2.2 | 2026-11-11 | W44: the author decided on switching between radios only; two radios at once deferred (§14). |
 | 0.2.3 | 2026-11-11 | The author's wish for Aether HF and Mercury on one gateway, merged: W26 becomes *one gateway, several modems* (on separate radios or sharing one), W20 *an adapter for VARA-style modems*, Mercury included, built against Mercury first; both Medium. W40 may read the dial from rigctld or FLRig; thread T8, modem names; gap G11. W38: radiopost.org's mail is live, still with no backups. W36 cites the post office guide's §11. |
 | 0.2.4 | 2026-11-11 | W8 implemented: credentials renew themselves in their last month, the client's by Internet or radio and the gateway's own. |
+| 0.2.5 | 2026-11-11 | The author's wishes: W45, station to station under an SSID (gap G12, with G10), and W46, several callsigns in one client, chosen from a list (one design with W7); thread T9. |
