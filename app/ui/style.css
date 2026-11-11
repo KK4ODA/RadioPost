@@ -113,6 +113,12 @@ label.inline input { width: 7em; margin: 0; }
 #waiting-view .note, #gateways-view .note { margin-bottom: 12px; }
 .entries li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 0; }
 .card .note { margin-bottom: 8px; }
+/* this computer's enrollment, said where the form would be */
+.enrolled-who { margin: 0 0 4px; font-weight: 600; color: var(--ok); }
+.enrolled-who::before { content: "\2713  "; }
+.enrolled.expired .enrolled-who { color: var(--bad); }
+.enrolled.expired .enrolled-who::before { content: none; }
+#enroll-again { padding: 0; height: auto; border: 0; color: var(--accent); }
 
 /* a newer release, said at the top */
 .top { flex-wrap: wrap; }

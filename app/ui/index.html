@@ -147,13 +147,20 @@
       <section id="setup" hidden>
         <h1>Setup</h1>
         <form class="card" id="enroll">
-          <h2>Enroll with your post office</h2>
+          <h2 id="enroll-title">Enroll with your post office</h2>
+          <div class="enrolled" id="enrolled" role="status" title="This computer's enrollment: the account and callsign its credential names, and how long the credential lasts" hidden>
+            <p class="enrolled-who" id="enrolled-who"></p>
+            <p class="note" id="enrolled-until"></p>
+            <button class="quiet" type="button" id="enroll-again" title="Enroll this computer again with a new code from your post office's operator: for another account, or when the credential has run out or was revoked">Enroll again with a new code</button>
+          </div>
+          <div id="enroll-fields">
           <p class="note">Your post office's operator gives you a one-time code once they have seen your licence. Over the Internet.</p>
           <label title="Your RadioPost address">Address <input name="address" placeholder="facundo@radiopost.org" required spellcheck="false" autocomplete="email"></label>
           <label title="Your callsign, as on your licence">Callsign <input name="operator" placeholder="KK4ODA" required spellcheck="false" autocomplete="off"></label>
           <label title="The one-time code the operator gave you">Code <input name="code" placeholder="7Q4F-AZ9K" required spellcheck="false" autocomplete="off"></label>
           <label title="The post office's API, when its domain's DNS does not name it">Post office (if not in DNS) <input name="url" placeholder="https://po.radiopost.org/rp/v1" spellcheck="false"></label>
-          <button class="primary" type="submit" title="Make this device's key if needed, enroll it, and keep the credential">Enroll</button>
+          <button class="primary" type="submit" id="enroll-go" title="Make this device's key if needed, enroll it, and keep the credential">Enroll</button>
+          </div>
         </form>
         <div class="card">
           <h2>Post office</h2>

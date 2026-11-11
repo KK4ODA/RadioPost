@@ -110,6 +110,7 @@ async function refresh() {
   $("write").disabled = busy || !s.me;
   $("device").textContent = s.device || "No key yet.";
   $("make-key").hidden = Boolean(s.device);
+  showEnrollment(s.me);
   $("cred-state").textContent = s.me
     ? `${s.me.address} (${s.me.operator}), valid until ${new Date(s.me.expires * 1000).toLocaleDateString()}`
     : "No credential yet.";
@@ -348,6 +349,37 @@ async function changeAccept(change) {
   }
 }
 
+// The Setup's enrollment card: once this computer is enrolled it says so in place of the form,
+// which comes back on "Enroll again" or when the credential has run out.
+let enrollOpen = false;
+
+function showEnrollment(me) {
+  const day = (t) => new Date(t * 1000).toLocaleDateString(undefined,
+    {year: "numeric", month: "short", day: "numeric"});
+  const expired = Boolean(me) && me.expires * 1000 <= Date.now();
+  const box = $("enrolled");
+  box.hidden = !me;
+  box.classList.toggle("expired", expired);
+  if (me) {
+    $("enrolled-who").textContent = expired
+      ? `The credential for ${me.address} (${me.operator}) ran out on ${day(me.expires)}.`
+      : `Enrolled as ${me.address} (${me.operator}).`;
+    $("enrolled-until").textContent = expired
+      ? "Enroll again with a new code from your post office's operator."
+      : `Credential good until ${day(me.expires)}. Renew credential, under Post office below, gives a new one while you have the Internet.`;
+  }
+  const open = !me || expired || enrollOpen;
+  $("enroll-title").textContent = me && !expired ? "Enrolled with your post office" : "Enroll with your post office";
+  $("enroll-fields").hidden = !open;
+  $("enroll-again").hidden = open;
+  $("enroll-go").textContent = me ? "Enroll again" : "Enroll";
+  const form = $("enroll");
+  if (me && open && !form.contains(document.activeElement)) {
+    if (!form.address.value) form.address.value = me.address;
+    if (!form.operator.value) form.operator.value = me.operator;
+  }
+}
+
 async function enroll(event) {
   event.preventDefault();
   const form = $("enroll");
@@ -357,6 +389,7 @@ async function enroll(event) {
       url: form.url.value,
     });
     form.reset();
+    enrollOpen = false;
     toast(r.said);
     await refresh();
   } catch (e) {
@@ -416,6 +449,10 @@ function wire() {
     $("cred-hex").value = "";
   });
   $("enroll").addEventListener("submit", enroll);
+  $("enroll-again").addEventListener("click", () => {
+    enrollOpen = true;
+    refresh().then(() => $("enroll").code.focus()).catch(() => {});
+  });
   $("po-save").addEventListener("click", () => act("post-office", {url: $("po-url").value}));
   $("renew").addEventListener("click", async () => {
     try { toast((await api("renew", {})).said); await refresh(); } catch (e) { toast(e.message, true); }

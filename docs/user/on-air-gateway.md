@@ -38,7 +38,8 @@ the RadioPost app, and the gateway, which its operator runs with RadioPost Gatew
    **Address** (`facundo@radiopost.org`), your **Callsign** and the **Code**, leave *Post office*
    empty, and click **Enroll**. RadioPost makes
    this computer's key, finds the post office in DNS, trusts its key from there, and keeps the
-   credential it issues. The top of the window now shows your address and callsign.
+   credential it issues. The top of the window now shows your address and callsign, and Setup's
+   first box says *Enrolled as …* with the date the credential runs out.
 
 The credential lasts 90 days: **Renew credential** in Setup gives a new one while you have the
 Internet.
