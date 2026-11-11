@@ -104,6 +104,132 @@ pub fn keep_credential(dir: &Path, bytes: &[u8]) -> Result<radiopost::credential
     Ok(body)
 }
 
+/// RP-5 §6.2: in its credential's last month ([`radiopost::credential::RENEW_WITHIN`], or `within`
+/// seconds), the gateway asks its own account's post office for a new one, as any account may,
+/// and keeps it; the answering loop takes it up before its next session. `None`: not due.
+///
+/// # Errors
+///
+/// Not registered, the post office not found or not reached, or it refused.
+pub fn renew_if_due(
+    dir: &Path,
+    now: u64,
+    within: u64,
+) -> Result<Option<radiopost::credential::Body>, String> {
+    let station = Station::load(dir)?;
+    let body = station
+        .credential()
+        .ok_or("credential.hex is not a credential")?;
+    if !radiopost::credential::renewal_due(body.expires, now, within) {
+        return Ok(None);
+    }
+    let domain = body
+        .address
+        .rsplit_once('@')
+        .map(|(_, d)| d.to_lowercase())
+        .ok_or("the credential names no account")?;
+    let url = station
+        .post_office(&domain)
+        .map_err(|code| format!("{domain}'s post office: {}", code.name()))?;
+    let mut http = upstream::Http::new(&url, station.account.clone(), Arc::new(Mutex::new(None)));
+    let issued = match http.call("POST", "/credentials", Some(&serde_json::json!({}))) {
+        Ok((200, Some(answer))) => answer
+            .get("credential")
+            .and_then(serde_json::Value::as_str)
+            .and_then(radiopost::base64url::decode)
+            .ok_or("the post office's answer held no credential")?,
+        Ok((status, answer)) => {
+            return Err(format!(
+                "{domain}'s post office refused ({status} {})",
+                radiopost_api::code_of(answer.as_ref()).name()
+            ));
+        }
+        Err(code) => return Err(format!("{domain}'s post office: {}", code.name())),
+    };
+    keep_credential(dir, &issued).map(Some)
+}
+
+/// How often the answering loop asks whether the gateway's credential is due ([`Renewal`]).
+pub const RENEW_EVERY: Duration = Duration::from_secs(600);
+
+/// What a try at renewing comes to, from its thread.
+type Renewed = Result<Option<radiopost::credential::Body>, String>;
+
+/// Renewing the gateway's own credential while it answers (RP-5 §6.2): a try every `every`, on a
+/// thread of its own, so a post office slow to answer holds up no call; the answering loop says
+/// what came of it, and a failure once until it changes. The app and a gateway with no screen
+/// (`radiopost-gateway serve`) both renew this way.
+pub struct Renewal {
+    dir: PathBuf,
+    every: Duration,
+    within: u64,
+    last: Option<Instant>,
+    pending: Option<std::sync::mpsc::Receiver<Renewed>>,
+    said: Option<String>,
+}
+
+impl Renewal {
+    /// Renewing the gateway in `dir`, a try every `every` once it has `within` seconds or less to
+    /// run.
+    #[must_use]
+    pub fn new(dir: &Path, every: Duration, within: u64) -> Renewal {
+        Renewal {
+            dir: dir.to_owned(),
+            every,
+            within,
+            last: None,
+            pending: None,
+            said: None,
+        }
+    }
+
+    /// Says what a finished try came to, and starts the next when it is time and none is under
+    /// way.
+    pub fn tick(&mut self, tell: &mut dyn FnMut(&str)) {
+        if let Some(rx) = &self.pending {
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.pending = None;
+                    self.say(result, tell);
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => return,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => self.pending = None,
+            }
+        }
+        if self.last.is_some_and(|t| t.elapsed() < self.every) {
+            return;
+        }
+        self.last = Some(Instant::now());
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (dir, within) = (self.dir.clone(), self.within);
+        std::thread::spawn(move || {
+            let _ = tx.send(renew_if_due(&dir, now(), within));
+        });
+        self.pending = Some(rx);
+    }
+
+    fn say(&mut self, result: Renewed, tell: &mut dyn FnMut(&str)) {
+        match result {
+            Ok(None) => {}
+            Ok(Some(body)) => {
+                self.said = None;
+                tell(&format!(
+                    "renewed the gateway's credential: serial {}, good for {} days",
+                    body.serial,
+                    body.expires.saturating_sub(now()) / 86_400
+                ));
+            }
+            Err(why) if self.said.as_deref() == Some(why.as_str()) => {}
+            Err(why) => {
+                tell(&format!(
+                    "could not renew the gateway's credential: {why}; trying again later"
+                ));
+                self.said = Some(why);
+            }
+        }
+    }
+}
+
 /// Makes a gateway in `dir`: its key and its settings.
 ///
 /// # Errors
@@ -278,6 +404,29 @@ impl Station {
     #[must_use]
     pub fn credential(&self) -> Option<radiopost::credential::Body> {
         radiopost::credential::Credential::decode(&self.account.credential).map(|c| c.body)
+    }
+
+    /// Takes up the credential kept on disk when it is another than the one in use, as after a
+    /// renewal ([`renew_if_due`]) or a registration while the gateway answers: whether it did. A
+    /// gateway left answering for months logs in with the newest.
+    pub fn reload_credential(&mut self) -> bool {
+        let Some(bytes) = read(&self.dir.join("credential.hex"))
+            .ok()
+            .and_then(|t| unhex(&t))
+        else {
+            return false;
+        };
+        if bytes == self.account.credential
+            || radiopost::credential::Credential::decode(&bytes).is_none()
+        {
+            return false;
+        }
+        self.account = Arc::new(Account {
+            credential: bytes,
+            key: self.account.key.clone(),
+        });
+        self.tokens.clear();
+        true
     }
 
     /// Logs in at each post office the gateway knows of, as the gateway (RP-5 §3): its own
@@ -653,7 +802,9 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
     );
     tell(&listening);
     monitor.set_state("listening", None);
+    let mut renewal = Renewal::new(dir, RENEW_EVERY, radiopost::credential::RENEW_WITHIN);
     loop {
+        renewal.tick(&mut tell);
         if monitor.stopping() {
             let off = modem.host.listen(false);
             let _ = modem.conn.send(&off);
@@ -688,6 +839,9 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
         } = &event
         {
             tell(&format!("{remote} called"));
+            if station.reload_credential() {
+                tell("this session uses the gateway's renewed credential");
+            }
             monitor.begin(remote);
             let result = carry(&mut station, &mut modem, &event, monitor);
             match &result {

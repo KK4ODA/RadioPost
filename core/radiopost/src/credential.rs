@@ -24,6 +24,20 @@ pub mod flags {
 /// RP-1 §5, step 4: how far ahead of a verifier's clock `issued` may be.
 pub const FUTURE_ISSUE_S: u64 = 600;
 
+/// How long before a credential runs out its holder, a client or a gateway, starts renewing it
+/// (RP-1 §4.2, RP-5 §6.2): a third of the 90 days a post office gives. Earlier, each session or
+/// start would have the post office issue a credential for nothing and, by radio, spend air on it;
+/// a month leaves weeks of chances.
+pub const RENEW_WITHIN: u64 = 30 * 86_400;
+
+/// Whether a credential that runs out at `expires` is to be renewed at `now`, renewing in its last
+/// `within` seconds: from then until it runs out, and not after, since a credential that has run
+/// out cannot log in to be renewed (RP-5 §6.2).
+#[must_use]
+pub fn renewal_due(expires: u64, now: u64, within: u64) -> bool {
+    now < expires && expires - now <= within
+}
+
 /// RP-1 §4.1: a credential's body.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Body {

@@ -59,8 +59,10 @@ as. **RadioPost app's home** is the folder where that app keeps its key and cred
 gateway, and Aether's bandwidth there (500 or 2300 Hz). **Grid** and **Place** help callers choose
 a gateway near them; **Hours** says when it answers (`always`, or in words). Click **Register**.
 Your post office lists the gateway for its users and issues it a credential, valid for 90 days.
-Register again before it runs out (the same way: it replaces the registration); the Registration
-box turns red two weeks ahead.
+While the gateway answers, it renews that credential by itself in its last month, with your
+account's post office, and uses the new one from its next session; the log says so. If renewing
+keeps failing (the log says why, once), register again before the credential runs out (the same
+way: it replaces the registration); the Registration box turns red two weeks ahead.
 
 **3. Post offices (optional).** The gateway finds each user's post office in DNS. Name one here
 only while its DNS records are not published yet: its domain and its API address

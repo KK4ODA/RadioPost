@@ -78,6 +78,9 @@ pub struct Options {
     pub quiet: Duration,
     /// Set, it stops a station listening for a call: how a program's window says "stop".
     pub stop: Option<Arc<AtomicBool>>,
+    /// How long before the credential runs out a gateway call asks for a renewed one
+    /// ([`crate::renewal::WITHIN`]).
+    pub renew_within: u64,
 }
 
 impl Options {
@@ -97,6 +100,7 @@ impl Options {
             bandwidth: None,
             quiet: QUIET,
             stop: None,
+            renew_within: crate::renewal::WITHIN,
         }
     }
 
@@ -139,12 +143,13 @@ fn random<const N: usize>() -> [u8; N] {
     b
 }
 
-/// RP-3's capabilities this client offers: every compression, PDUs up to 4 096 bytes.
-fn caps() -> Caps {
+/// RP-3's capabilities this client offers: every compression, PDUs up to 4 096 bytes; `renew` asks
+/// a gateway for a renewed credential (RP-3 §5.8).
+fn caps(renew: bool) -> Caps {
     Caps {
         compression: vec![0, 1, 2],
         max_pdu: 4096,
-        renew: false,
+        renew,
     }
 }
 
@@ -539,6 +544,27 @@ fn apply(
     Ok(())
 }
 
+/// Whether this call asks for a renewed credential in `HELLO` (RP-3 §5.8): a gateway's, in the
+/// credential's last month; a gateway passes the request to the post office, and a station has
+/// none to ask.
+fn asks_renewal(
+    store: &Store,
+    kind: Kind,
+    now: u64,
+    opts: &Options,
+    say: &mut dyn FnMut(&str),
+) -> Result<bool, Error> {
+    let expires = store.me()?.expires;
+    let renew = kind == Kind::Gateway && crate::renewal::due(expires, now, opts.renew_within);
+    if renew {
+        say(&format!(
+            "asking for a renewed credential: this one runs out in {} days",
+            crate::renewal::days_left(expires, now)
+        ));
+    }
+    Ok(renew)
+}
+
 /// Calls `remote` and carries a session: a gateway's (RP-3 §5), or a station's (RP-3 §10), which
 /// must prove who it is.
 ///
@@ -596,6 +622,7 @@ pub fn call(
         outbox.push(o);
     }
     let fetch = opts.fetch;
+    let renew = asks_renewal(store, kind, now, opts, say)?;
     let cfg = ClientConfig {
         credential: store.credential()?,
         device: store.device()?,
@@ -606,7 +633,7 @@ pub fn call(
         cursor,
         auto: opts.auto,
         partials: store.partials(),
-        caps: caps(),
+        caps: caps(renew),
         credential_cached: cached,
         piece: 4096,
         station: (kind == Kind::Station).then(|| store.trust()).transpose()?,
@@ -757,7 +784,7 @@ pub fn answer(
         challenge: opts.challenge.unwrap_or_else(random),
         trust: store.trust()?,
         seen: store.replay_cache(now),
-        caps: caps(),
+        caps: caps(false),
         piece: 4096,
     };
     let called = Called::new(cfg, mail_for).map_err(|e| format!("cannot answer: {e}"))?;

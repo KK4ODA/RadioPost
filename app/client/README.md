@@ -120,6 +120,17 @@ top says when a newer release is out. In the desktop application, **Update and r
 with Tauri's updater; served by `radiopost panel` in a browser, **Download** opens the release's
 page. Either way a file is taken only when the project's update key signed it (`core/update`).
 
+## Renewal
+
+A credential lasts 90 days, and one that has run out cannot be renewed: the device enrolls again
+with a new code (RP-5 §6.2). So in its last month (`renewal::WITHIN`, 30 days) the client renews it
+by itself, by whichever path is open first. The panel asks over the Internet when it starts and
+every hour, between sessions; the badge reads *Renewing credential* while it does, and the log
+says what came of it, a failure once until it changes. A call to a gateway asks for one in
+`HELLO` (RP-3 §5.1, §5.8), from the panel or `radiopost call`, and keeps what the gateway brings.
+`radiopost renew` and Setup's **Renew credential** renew at once. A gateway renews its own
+credential the same way, while it answers ([the gateway's guide](../../docs/user/gateway.md)).
+
 ## What is kept
 
 The home (`--home`, else `$RADIOPOST_HOME`, else `.radiopost` in the user's home directory) holds

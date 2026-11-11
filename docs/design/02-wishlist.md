@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.3 |
+| **Version** | 0.2.4 |
 | **Updated** | 2026-11-11 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -111,7 +111,7 @@ rules:
 | W5 | Mail kept as `.eml` files | Mail | Low | Fits today | Planned |
 | W6 | Where each message is | Mail | Medium | Fits today; optional addition for *delivered* | Planned |
 | W7 | Several accounts in one client | Setup | Medium | Fits today, a call each | Planned |
-| W8 | Credentials renewed before they lapse | Setup | High | Fits today | Planned |
+| W8 | Credentials renewed before they lapse | Setup | High | Fits today | Implemented |
 | W9 | Usual gateways set in the panel | — | — | — | Consolidated into W27 |
 | W10 | Enrollment with an LoTW certificate | Setup | Medium | Fits today | Planned |
 | W11 | A trustee manages a role mailbox | Setup | Low | Fits today | Planned |
@@ -294,13 +294,13 @@ whichever it reaches first, and the gateway renews its own.
 | Requested by | The plan: RP-1 §4.2; RP-5 §6.2 (a gateway renews too). Requesters: 0. Includes W25. |
 | Component | Client, gateway. |
 | Compatibility | **Fits today.** By radio: `renew` in `HELLO`'s `caps` (RP-3 §5.1), passed on (RP-5 §5.2), returned in `CREDENTIAL` (RP-3 §5.8). Over the Internet: RP-5 §6.2, for clients and gateways. |
-| Existing coverage | Partly built. The gateway passes `renew` on, and the client keeps a credential it is sent, but never asks. The client renews over the Internet when told to; the gateway is registered again by hand, with a warning two weeks ahead ([the gateway guide](../user/gateway.md), §2). |
+| Existing coverage | Built (2026-11-11). The rule is `radiopost::credential::RENEW_WITHIN` (30 days) and `renewal_due`. The client's panel renews over the Internet when it starts and every hour, between sessions, and a gateway call asks with `renew` in `HELLO`; the gateway renews its own while it answers, from its answering loop, and takes the new one up before its next session. Each says a failure once until it changes. Before: the gateway passed `renew` on and the client kept a credential it was sent, but never asked; the client renewed over the Internet only when told to, and the gateway was registered again by hand. |
 | Dependencies | None. |
 | Effort | Small. |
 | Priority | **High.** An expired credential cannot be renewed (RP-5 §6.2): a radio-only user must re-enroll through the Internet and the sysop, and an unattended gateway stops carrying sessions. |
 | Recommendation | Accept, with one rule for every credential: once under 30 days remain, renew at the first chance by whatever path is open; tell the user only when that keeps failing. |
-| Status | Planned. |
-| Author decision | None yet. |
+| Status | Implemented. |
+| Author decision | Build it (2026-11-11), after the author found the client's Setup said nothing of the credential's date. |
 
 ### W10. Enrollment with a Logbook of the World certificate
 
@@ -973,3 +973,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.2.1 | 2026-11-11 | The author's first wish: W44, one install for several radios, recommended as RadioPost following Aether's profiles rather than keeping its own. Thread T7, the modem's rate; gap G10, a portable callsign against the credential's; G8 covers a profile switch. §5 renamed *Setup, accounts and configuration*. |
 | 0.2.2 | 2026-11-11 | W44: the author decided on switching between radios only; two radios at once deferred (§14). |
 | 0.2.3 | 2026-11-11 | The author's wish for Aether HF and Mercury on one gateway, merged: W26 becomes *one gateway, several modems* (on separate radios or sharing one), W20 *an adapter for VARA-style modems*, Mercury included, built against Mercury first; both Medium. W40 may read the dial from rigctld or FLRig; thread T8, modem names; gap G11. W38: radiopost.org's mail is live, still with no backups. W36 cites the post office guide's §11. |
+| 0.2.4 | 2026-11-11 | W8 implemented: credentials renew themselves in their last month, the client's by Internet or radio and the gateway's own. |

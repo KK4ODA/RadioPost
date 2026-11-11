@@ -143,7 +143,7 @@ function render(s) {
   $("registration").textContent = !s.credential ? "Not registered."
     : left <= 0 ? `The credential ran out on ${day(s.credential.expires)}: register again (Setup).`
       : left < 14 * 86400
-        ? `The credential runs out on ${day(s.credential.expires)}: register again soon (Setup).`
+        ? `The credential runs out on ${day(s.credential.expires)} and has not renewed itself (the log says why): register again soon (Setup).`
         : `Registered under ${s.credential.address}: credential ${s.credential.serial}, until ${day(s.credential.expires)}.`;
   $("registration").className = s.credential && left < 14 * 86400 ? "bad" : "";
 

@@ -594,3 +594,164 @@ fn a_gateway_list_signed_by_another_key_is_refused() {
     assert!(refused.contains("not signed"), "{refused}");
     assert!(stranger.gateway_list.is_none());
 }
+
+/// RP-1 §4.2, RP-3 §5.8: a client asks for a renewed credential in `HELLO` only in the
+/// credential's last month, and keeps what the post office issues through the gateway.
+#[test]
+fn a_client_renews_its_credential_on_a_gateway_call_when_it_is_due() {
+    let dir = scratch("renew-by-radio");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (_server, at_user, at_gateway) = loopback();
+    let (_gw, _rx) = gateway(&dir, &running, &base, &po_key, at_gateway);
+    let mut user = client(
+        &dir.join("wd5ema"),
+        &running,
+        &po_key,
+        "club@test.example",
+        "WD5EMA",
+    );
+    let before = user.me().expect("a credential");
+    let mut opts = Options::new(&at_user.to_string());
+    let call = |user: &mut radiopost_client::store::Store, opts: &Options| {
+        let mut said = Vec::new();
+        let report = session::call(user, "KK4ODA-1", Kind::Gateway, opts, &mut |s| {
+            said.push(s.to_owned());
+        })
+        .expect("called");
+        assert_eq!(report.failed, None, "{said:?}");
+        said
+    };
+
+    // ninety days to run: nothing asked, nothing changed
+    let said = call(&mut user, &opts);
+    assert!(
+        !said.iter().any(|l| l.starts_with("asking for a renewed")),
+        "{said:?}"
+    );
+    assert_eq!(user.me().expect("a credential").serial, before.serial);
+
+    // renewing in the last hundred days: asked, and the new one kept
+    opts.renew_within = 100 * 86_400;
+    let said = call(&mut user, &opts);
+    assert!(
+        said.iter().any(|l| l
+            .starts_with("asking for a renewed credential: this one runs out in ")
+            && l.ends_with(" days")),
+        "{said:?}"
+    );
+    assert!(
+        said.iter()
+            .any(|l| l == "a renewed credential, kept for the next session"),
+        "{said:?}"
+    );
+    let after = user.me().expect("a credential");
+    assert_ne!(after.serial, before.serial);
+    assert_eq!(
+        (
+            after.address.as_str(),
+            after.operator.as_str(),
+            after.device
+        ),
+        (
+            before.address.as_str(),
+            before.operator.as_str(),
+            before.device
+        )
+    );
+    assert!(after.expires >= before.expires);
+}
+
+/// RP-5 §6.2: in its credential's last month the gateway renews its own credential with its
+/// account's post office, and the gateway already answering takes it up at its next session; with
+/// the post office out of reach it says why once, not at every try.
+#[test]
+fn the_gateway_renews_its_own_credential_and_answers_with_it() {
+    let dir = scratch("gateway-renewal");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (_server, at_user, at_gateway) = loopback();
+    let (gw, rx) = gateway(&dir, &running, &base, &po_key, at_gateway);
+    let credential = || {
+        station::Station::load(&gw)
+            .expect("the gateway")
+            .credential()
+            .expect("a credential")
+    };
+    let before = credential();
+
+    // ninety days to run: not due
+    assert_eq!(
+        station::renew_if_due(&gw, station::now(), radiopost::credential::RENEW_WITHIN),
+        Ok(None)
+    );
+
+    // the answering loop's renewal, with a hundred days' notice: its first try is at once, and
+    // the next an hour on (with every try at once, a credential just renewed would be due again)
+    let mut renewal = station::Renewal::new(&gw, Duration::from_secs(3600), 100 * 86_400);
+    let mut said = Vec::new();
+    let until = std::time::Instant::now() + Duration::from_secs(20);
+    while said.is_empty() {
+        assert!(std::time::Instant::now() < until, "no renewal");
+        renewal.tick(&mut |l: &str| said.push(l.to_owned()));
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert!(
+        said[0].starts_with("renewed the gateway's credential: serial "),
+        "{said:?}"
+    );
+    let after = credential();
+    assert_ne!(after.serial, before.serial);
+    assert_eq!(
+        (
+            after.address.as_str(),
+            after.operator.as_str(),
+            after.device,
+            after.flags
+        ),
+        (
+            before.address.as_str(),
+            before.operator.as_str(),
+            before.device,
+            before.flags
+        )
+    );
+
+    // the gateway already answering uses it from its next session
+    let mut user = client(
+        &dir.join("wd5ema"),
+        &running,
+        &po_key,
+        "club@test.example",
+        "WD5EMA",
+    );
+    let opts = Options::new(&at_user.to_string());
+    let report =
+        session::call(&mut user, "KK4ODA-1", Kind::Gateway, &opts, &mut |_| {}).expect("called");
+    assert_eq!(report.failed, None);
+    let lines = session_lines(&rx);
+    assert!(
+        lines
+            .iter()
+            .any(|l| l == "this session uses the gateway's renewed credential"),
+        "{lines:?}"
+    );
+
+    // its account's post office out of reach: said once, however many tries
+    let mut settings = station::Settings::load(&gw).expect("settings");
+    settings
+        .post_offices
+        .insert("test.example".into(), "http://127.0.0.1:9".into());
+    settings.save(&gw).expect("saved");
+    let mut renewal = station::Renewal::new(&gw, Duration::ZERO, 100 * 86_400);
+    let mut said = Vec::new();
+    let until = std::time::Instant::now() + Duration::from_millis(1500);
+    while std::time::Instant::now() < until {
+        renewal.tick(&mut |l: &str| said.push(l.to_owned()));
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(
+        said[0].starts_with("could not renew the gateway's credential: test.example's post office"),
+        "{said:?}"
+    );
+    assert_eq!(credential().serial, after.serial, "nothing kept");
+}

@@ -7,6 +7,10 @@
 //! on a thread of its own with a store of its own; while it runs, the panel changes nothing in the
 //! home, so the two never write over each other.
 //!
+//! While it is open, the panel renews the credential over the Internet in its last month
+//! ([`crate::renewal`]): when it starts and every hour, between sessions, as the activity
+//! `renewing`.
+//!
 //! Only this machine's own pages reach it: a request must name the panel's own host (so a page
 //! that rebinds a name to 127.0.0.1 is refused), and a change must carry `X-RadioPost: 1`, which
 //! another site's page cannot send without a preflight the panel never grants.
@@ -59,7 +63,7 @@ const FILES: &[(&str, &str, &str)] = &[
 /// What the station is doing, for the panel.
 #[derive(Debug, Default)]
 struct Activity {
-    /// `idle`, `calling`, `listening` or `session`.
+    /// `idle`, `calling`, `listening`, `session`, or `renewing` the credential.
     state: &'static str,
     remote: Option<String>,
     /// How the last session ended, when it failed.
@@ -77,6 +81,16 @@ pub struct Panel {
     stop: Arc<AtomicBool>,
     addr: SocketAddr,
     updates: Arc<Watch>,
+    renewal: Renewal,
+}
+
+/// When the panel renews the credential: first after `first`, then every `every`, once it has
+/// `within` seconds or less to run.
+#[derive(Clone, Copy, Debug)]
+struct Renewal {
+    first: std::time::Duration,
+    every: std::time::Duration,
+    within: u64,
 }
 
 fn lock(a: &Mutex<Activity>) -> MutexGuard<'_, Activity> {
@@ -143,7 +157,29 @@ impl Panel {
                 env!("CARGO_PKG_VERSION"),
                 &radiopost_update::channel(),
             ),
+            renewal: Renewal {
+                first: std::time::Duration::from_secs(5),
+                every: crate::renewal::EVERY,
+                within: crate::renewal::WITHIN,
+            },
         }
+    }
+
+    /// The same panel, renewing first after `first`, then every `every`, once the credential has
+    /// `within` seconds or less to run: for tests, which cannot wait a month.
+    #[must_use]
+    pub fn with_renewal(
+        mut self,
+        first: std::time::Duration,
+        every: std::time::Duration,
+        within: u64,
+    ) -> Panel {
+        self.renewal = Renewal {
+            first,
+            every,
+            within,
+        };
+        self
     }
 
     /// The same panel, showing `updates` (the desktop application's own, which installs).
@@ -174,12 +210,66 @@ impl Panel {
             return Err("the panel listens only on the loopback interface".into());
         }
         self.addr = local;
+        let renewing = self.clone();
+        thread::spawn(move || renewing.keep_renewed());
         thread::spawn(move || {
             for request in server.incoming_requests() {
                 self.handle(request);
             }
         });
         Ok(local)
+    }
+
+    /// Renews the credential over the Internet whenever it is due, for as long as the panel runs.
+    /// A failure is said once until it changes: with no Internet, the hourly try is quiet.
+    fn keep_renewed(&self) {
+        let mut said: Option<String> = None;
+        thread::sleep(self.renewal.first);
+        loop {
+            if let Some(line) = self.renew_now(&mut said) {
+                lock(&self.activity).log.push(line);
+            }
+            thread::sleep(self.renewal.every);
+        }
+    }
+
+    /// One try: what to say of it, if anything. Only between sessions, as the activity `renewing`,
+    /// so a session and a renewal never write the home together.
+    fn renew_now(&self, said: &mut Option<String>) -> Option<String> {
+        let Ok(me) = Store::open(&self.home).and_then(|s| s.me()) else {
+            return None;
+        };
+        let now = now();
+        if !crate::renewal::due(me.expires, now, self.renewal.within) {
+            return None;
+        }
+        {
+            let mut a = lock(&self.activity);
+            if a.state != "idle" {
+                return None;
+            }
+            a.state = "renewing";
+        }
+        let result = Store::open(&self.home).and_then(|store| online::renew(&store));
+        lock(&self.activity).state = "idle";
+        match result {
+            Ok(issued) => {
+                *said = None;
+                Some(format!(
+                    "renewed the credential over the Internet: {issued}"
+                ))
+            }
+            Err(why) if said.as_deref() == Some(why.as_str()) => None,
+            Err(why) => {
+                let line = format!(
+                    "could not renew the credential, which runs out in {} days: {why}; \
+                     trying again every hour, and on the next gateway call",
+                    crate::renewal::days_left(me.expires, now)
+                );
+                *said = Some(why);
+                Some(line)
+            }
+        }
     }
 
     fn handle(&self, mut request: Request) {
@@ -261,6 +351,7 @@ impl Panel {
     fn busy(&self) -> Result<(), Error> {
         match lock(&self.activity).state {
             "idle" => Ok(()),
+            "renewing" => Err("renewing the credential: try again in a moment".into()),
             _ => Err("a session is under way: try again when it ends".into()),
         }
     }
@@ -618,8 +709,10 @@ impl Panel {
     ) -> Result<Value, Error> {
         {
             let mut a = lock(&self.activity);
-            if a.state != "idle" {
-                return Err("a session is under way".into());
+            match a.state {
+                "idle" => {}
+                "renewing" => return Err("renewing the credential: try again in a moment".into()),
+                _ => return Err("a session is under way".into()),
             }
             a.state = if remote.is_some() {
                 "calling"

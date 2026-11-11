@@ -41,8 +41,9 @@ the RadioPost app, and the gateway, which its operator runs with RadioPost Gatew
    credential it issues. The top of the window now shows your address and callsign, and Setup's
    first box says *Enrolled as …* with the date the credential runs out.
 
-The credential lasts 90 days: **Renew credential** in Setup gives a new one while you have the
-Internet.
+The credential lasts 90 days. In its last month RadioPost renews it by itself: over the Internet
+while its window is open, or on a call to a gateway. The log at the bottom says when it did, and
+says why once if it could not. **Renew credential** in Setup does it at once.
 
 ## 3. Find the gateway
 

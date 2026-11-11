@@ -98,7 +98,8 @@ async function refresh() {
   if (!$("po-url").matches(":focus")) $("po-url").value = s.post_office || "";
   const a = s.activity;
   const label = {idle: "Idle", calling: `Calling ${a.remote || ""}`, listening: "Listening",
-                 session: `In session with ${a.remote || ""}`}[a.state];
+                 session: `In session with ${a.remote || ""}`,
+                 renewing: "Renewing credential"}[a.state];
   const state = $("state");
   state.dataset.state = a.state === "idle" && a.failed ? "failed" : a.state;
   state.textContent = a.state === "idle" && a.failed ? "Last session failed" : label;
@@ -116,7 +117,9 @@ async function refresh() {
     : "No credential yet.";
   $("trusted").textContent = s.trusted.length ? s.trusted.join(", ") : "None yet.";
   if (s.log !== logNext) await readLog();
-  if (lastState !== "idle" && a.state === "idle") await openFolder(folder);
+  // a session that ends shows what it brought; a renewal changes no folder, and must not close
+  // a message being written
+  if (lastState !== "idle" && lastState !== "renewing" && a.state === "idle") await openFolder(folder);
   lastState = a.state;
   return s;
 }
@@ -366,7 +369,7 @@ function showEnrollment(me) {
       : `Enrolled as ${me.address} (${me.operator}).`;
     $("enrolled-until").textContent = expired
       ? "Enroll again with a new code from your post office's operator."
-      : `Credential good until ${day(me.expires)}. Renew credential, under Post office below, gives a new one while you have the Internet.`;
+      : `Credential good until ${day(me.expires)}. RadioPost renews it by itself in its last month, over the Internet or on a gateway call.`;
   }
   const open = !me || expired || enrollOpen;
   $("enroll-title").textContent = me && !expired ? "Enrolled with your post office" : "Enroll with your post office";

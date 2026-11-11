@@ -352,3 +352,119 @@ fn a_device_enrolls_from_the_panel() {
     );
     assert_eq!(status, 400, "{refused}");
 }
+
+/// A GET of the panel's API at `at`, its JSON answer.
+fn panel_get(at: std::net::SocketAddr, path: &str) -> serde_json::Value {
+    use std::io::{Read as _, Write as _};
+    let mut s = std::net::TcpStream::connect(at).expect("the panel");
+    write!(
+        s,
+        "GET {path} HTTP/1.1\r\nHost: {at}\r\nConnection: close\r\n\r\n"
+    )
+    .expect("asked");
+    let mut answer = String::new();
+    s.read_to_string(&mut answer).expect("answered");
+    let body = answer.split_once("\r\n\r\n").map_or("", |(_, b)| b);
+    serde_json::from_str(body).expect("JSON")
+}
+
+/// The panel's log at `at`, every line.
+fn panel_log(at: std::net::SocketAddr) -> Vec<String> {
+    panel_get(at, "/api/log?since=0")["lines"]
+        .as_array()
+        .expect("lines")
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Facundo's home at `home`, enrolled with the post office at `base` with a code its operator
+/// made.
+fn enroll(running: &Running, base: &str, public: &str, home: &Path) {
+    radiopost(home, &["trust", "test.example", public]).expect("trusted");
+    let (_, answer) = running.admin(
+        "POST",
+        "/code",
+        json!({"address": "facundo@test.example", "operator": "KK4ODA", "flags": ["send", "receive"]})
+            .to_string()
+            .as_bytes(),
+    );
+    let code = serde_json::from_str::<serde_json::Value>(&answer).expect("JSON")["code"]
+        .as_str()
+        .expect("a code")
+        .to_owned();
+    let address = ["--address", "facundo@test.example", "--operator", "KK4ODA"];
+    let mut args = vec!["enroll"];
+    args.extend(address);
+    args.extend(["--code", &code, "--post-office", base]);
+    radiopost(home, &args).expect("enrolled");
+}
+
+/// RP-1 §4.2: the open window renews the credential over the Internet in its last month, says so
+/// in its log, and with no post office to reach says why once, not at every try.
+#[test]
+fn the_open_window_renews_the_credential_in_its_last_month() {
+    use radiopost_client::panel::Panel;
+    use radiopost_client::renewal;
+
+    let dir = scratch("renewal");
+    let (running, base, public) = post_office(&dir.join("po"));
+    let home = dir.join("facundo");
+    enroll(&running, &base, &public, &home);
+    let me = || {
+        Store::open(&home)
+            .expect("home")
+            .me()
+            .expect("a credential")
+    };
+    let before = me();
+
+    // a credential just issued has 90 days: not due, and nothing is asked
+    let store = Store::open(&home).expect("home");
+    assert_eq!(
+        renewal::renew_if_due(&store, serve::now(), renewal::WITHIN),
+        Ok(None)
+    );
+    assert_eq!(me().serial, before.serial);
+
+    // a window renewing in the last 100 days finds it due when it opens, and tries again in an
+    // hour (with every try at once, a credential just renewed would be due again)
+    let within = 100 * 86_400;
+    let at = Panel::new(&home, None)
+        .with_renewal(Duration::ZERO, Duration::from_secs(3600), within)
+        .start("127.0.0.1:0")
+        .expect("a panel");
+    let until = std::time::Instant::now() + Duration::from_secs(20);
+    while me().serial == before.serial {
+        assert!(std::time::Instant::now() < until, "not renewed");
+        thread::sleep(Duration::from_millis(50));
+    }
+    let after = me();
+    let same = |b: &radiopost::credential::Body| (b.address.clone(), b.operator.clone(), b.device);
+    assert_eq!(same(&after), same(&before));
+    assert!(after.expires >= before.expires, "{after:?}");
+    let lines = panel_log(at);
+    let renewed = "renewed the credential over the Internet: credential";
+    assert!(lines.iter().any(|l| l.starts_with(renewed)), "{lines:?}");
+    assert_eq!(panel_get(at, "/api/state")["activity"]["state"], "idle");
+
+    // with its post office out of reach, a window trying every 50 ms says why once
+    let mut store = Store::open(&home).expect("home");
+    store.post_office = Some("http://127.0.0.1:9".into());
+    store.save().expect("saved");
+    let away = Panel::new(&home, None)
+        .with_renewal(Duration::ZERO, Duration::from_millis(50), within)
+        .start("127.0.0.1:0")
+        .expect("a panel");
+    thread::sleep(Duration::from_millis(1500));
+    let log = panel_log(away);
+    let failed: Vec<&String> = log
+        .iter()
+        .filter(|l| l.starts_with("could not renew the credential, which runs out in"))
+        .collect();
+    assert_eq!(failed.len(), 1, "{log:?}");
+    assert!(failed[0].ends_with("trying again every hour, and on the next gateway call"));
+    assert_eq!(me().serial, after.serial, "nothing kept");
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -154,6 +154,13 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   refuses a tag that is not `v` + the version. A release: bump, commit, push, then the Release
   workflow with that tag; `tools/update_manifests.py` writes the manifests from the signed files.
   No MSI: it takes no pre-release version, and NSIS's setup.exe updates in place.
+  Renewal (W8): `radiopost::credential::RENEW_WITHIN` (30 days) and `renewal_due` are the one rule.
+  The client's `renewal` module and its panel renew over the Internet when the panel starts and
+  every hour, between sessions (activity `renewing`), and a gateway call asks `renew` in `HELLO`
+  (`Options::renew_within`); the gateway's answering loop runs `station::Renewal` (a try every ten
+  minutes on a thread of its own) and takes a renewed credential up before its next session
+  (`Station::reload_credential`). Tests give them a hundred days' notice; with every try at once,
+  a credential just renewed is due again.
   `core/api` (`radiopost-api`) is RP-5 over HTTPS (login, calls, enrollment, DNS over HTTPS), shared
   by the gateway and the client; the client's `online` module uses it (enroll, renew, settings —
   `PUT` replaces them whole, so the client merges —, accept list, `report`). `app/src-tauri` has its
