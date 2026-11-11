@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 [workspace]
 resolver = "3"
-members = ["radiopost", "api", "rpmi", "issuer", "tester", "postoffice", "gateway", "../adapters/aether", "../adapters/tcp", "../app/client"]
+members = ["radiopost", "api", "rpmi", "issuer", "tester", "postoffice", "gateway", "update", "../adapters/aether", "../adapters/tcp", "../app/client"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.0-beta.4"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"

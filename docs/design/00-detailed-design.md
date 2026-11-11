@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.24 |
-| **Updated** | 2026-11-10 |
+| **Version** | 0.1.25 |
+| **Updated** | 2026-11-11 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The concept](../concept/00-concept.md) |
@@ -102,6 +102,7 @@ reasoning; the specifications hold the result.
 | D31 | **Third-party mail is flagged by the post office and checked by the gateway** (RP-6 §5.1, RP-3 §5.2): the post office marks mail whose sender is not shown to be licensed; the gateway hands it only to a station of its own country or one with an arrangement, read from the callsign the station operates under. | §97.115 turns on where the receiving station is, which only the gateway sees, and a portable callsign (`VE3/KK4ODA`) says it on every call. The sender's country never mattered. Licensed senders, RadioPost's own users, are not restricted. | By the account's country (wrong for a user operating abroad); domestic only (withholds mail the rules allow to Canada and most of the Americas); the sender's country (not what the rule asks). |
 | D32 | **Open trust of post offices, the operator deciding** (RP-1 §7.3): a gateway trusts a post office it looked up in DNS, and one hop of the post office lists of those; its operator can block any or limit the gateway to those it names. | Like email: no gatekeeper, so a new post office reaches gateways as its users call. Every message carries the credential of the post office that vouched for its sender, so a dishonest one is found out and blocked. | A list kept by the project (a gatekeeper, against the no-centre design); only what each operator names (new post offices reach few gateways). |
 | D33 | **radiopost.org enrolls on an LoTW certificate or the sysop's check** (RP-1 §1, RP-5 §6.1). | The applicant signs a challenge with the key of their ARRL Logbook of the World certificate, which names their callsign; one without LoTW is checked by the sysop against the licence database, with a code sent to the address the licence record holds. Either is enough. | LoTW only (excludes licensees without it); the sysop only (every new user waits); both (slowest, and still excludes those without LoTW). |
+| D34 | **Every program updates itself from a signed update channel.** Each release carries one version, its programs ask the channel (a rolling release, `channel-beta`) when they start and every six hours, and say when a newer one is out; the desktop applications install it with Tauri's updater, the command-line programs with `update`. A file is taken only when the project's update key signed it. | Users and operators should not have to watch the releases page, and a gateway or post office left running for months must still learn of fixes. A signature, not the download's address, is what a program trusts. | Notices only (every user downloads by hand); updates without signatures (whoever controls the download controls the station); a package repository per platform (several to run). |
 
 ---
 
@@ -340,3 +341,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.22 | 2026-11-09 | §7: the conformance tester's outline, in its own document. |
 | 0.1.23 | 2026-11-09 | The TCP adapter: TLS on the Internet only; plain TCP on an amateur mesh, which is on the air (RP-4 0.5.0). |
 | 0.1.24 | 2026-11-10 | §5.2: the gateway's interface, an application of its own with its own installer, as the author chose. |
+| 0.1.25 | 2026-11-11 | D34: the programs update themselves from a signed update channel, as the author asked. |

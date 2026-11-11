@@ -42,6 +42,7 @@ radiopost [--home DIR] COMMAND
 | `fetch SERIAL… [--not]` | Fetch these waiting messages on the next call to a gateway, whatever `--fetch` says; `--not` stops asking. |
 | `listen` | Answers one station's call. |
 | `panel [--port N] [--ui DIR]` | Serves the panel on this computer (port 8620) and says where to open it. |
+| `update` | Replaces `radiopost`, and the other RadioPost programs beside it, with the newest release's, once it checks that the project's update key signed them. The desktop application updates itself from its window. |
 | `conformance --adapter HOST:PORT`, `conformance off` | Conformance mode (below). |
 
 `call` and `listen` take `--adapter MODEM` and `--bandwidth HZ`. The modem is Aether HF's control
@@ -110,6 +111,14 @@ radiopost --home ana inbox
 ```
 
 On the air, the adapter is the modem's: `radiopost-aether` for Aether HF (`adapters/aether`).
+
+## Updates
+
+Every program carries the release's version (`tools/release.py`). The panel asks the update
+channel (`channel-beta` on the releases page) when it starts and every six hours, and a line at the
+top says when a newer release is out. In the desktop application, **Update and restart** installs it
+with Tauri's updater; served by `radiopost panel` in a browser, **Download** opens the release's
+page. Either way a file is taken only when the project's update key signed it (`core/update`).
 
 ## What is kept
 

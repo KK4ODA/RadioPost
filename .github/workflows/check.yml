@@ -63,6 +63,9 @@ jobs:
       - name: Versions, links and cross-references
         run: uv run --no-project --python ${{ matrix.python }} tools/check_docs.py
 
+      - name: One version in every program
+        run: uv run --no-project --python ${{ matrix.python }} tools/release.py check
+
   core:
     name: core · rust
     runs-on: ubuntu-latest

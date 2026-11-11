@@ -15,9 +15,11 @@ the RadioPost app, and the gateway, which its operator runs with RadioPost Gatew
   checks the band rules, and sends the Morse identifier at the end of each session. Set Aether's
   callsign to yours.
 * **RadioPost**, from the [releases](https://github.com/KK4ODA/RadioPost/releases): the installer
-  named `RadioPost` for Windows (`…-setup.exe` or `.msi`), macOS (`.dmg`) or Linux (`.deb` or
+  named `RadioPost` for Windows (`…-setup.exe`), macOS (`.dmg`) or Linux (`.deb` or
   `.AppImage`). The installers are not signed yet: on Windows, SmartScreen asks once (More info,
   then Run anyway); on macOS, open it with Control-click, then Open.
+  From 0.1.0-beta.5 on, RadioPost says when a newer release is out and updates itself:
+  **Update and restart** at the top of its window.
 * **The Internet, once**, to enroll and to fetch the list of gateways. The tests themselves go by
   radio.
 

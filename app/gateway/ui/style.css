@@ -110,3 +110,9 @@ details summary { cursor: pointer; margin-bottom: 8px; }
   .list th:nth-child(3), .list td:nth-child(3), .list th:nth-child(4), .list td:nth-child(4) { display: none; }
   .list td:last-child { min-width: 12em; }
 }
+
+/* a newer release, said at the top */
+.top { flex-wrap: wrap; }
+.update { flex-basis: 100%; display: flex; align-items: center; gap: 12px; padding: 6px 12px;
+          border: 1px solid var(--session); border-radius: 6px; color: var(--text); }
+.update span { flex: 1; }

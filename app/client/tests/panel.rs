@@ -272,3 +272,45 @@ fn a_held_attachment_is_asked_for_from_the_panel() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// D34: the panel says when a newer release is out, and its update runs the application's own
+/// installer (here a stand-in that only says it ran).
+#[test]
+fn the_panel_says_a_newer_release_is_out_and_installs_it() {
+    use radiopost_update::{Product, Watch};
+    let server = tiny_http::Server::http("127.0.0.1:0").expect("a port");
+    let base = format!(
+        "http://{}",
+        server.server_addr().to_ip().expect("an address")
+    );
+    let manifest = json!({"version": "0.1.0-beta.9", "notes": "Better.",
+        "platforms": {radiopost_update::platform(): {"url": format!("{base}/x"), "signature": "s"}}})
+    .to_string();
+    thread::spawn(move || {
+        for request in server.incoming_requests() {
+            let _ = request.respond(tiny_http::Response::from_string(manifest.clone()));
+        }
+    });
+    let dir = scratch("panel-update");
+    store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    let watch = Watch::new(Product::Client, "0.1.0-beta.4", &base);
+    watch.check();
+    let (tx, rx) = std::sync::mpsc::channel();
+    watch.set_install(std::sync::Arc::new(move || {
+        let _ = tx.send(());
+        Err("a stand-in installer".into())
+    }));
+    let c = Client {
+        at: Panel::new(&dir.join("facundo"), None)
+            .with_updates(std::sync::Arc::clone(&watch))
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let update = &c.get("/api/state")["update"];
+    assert_eq!(update["offer"]["version"], "0.1.0-beta.9");
+    assert_eq!(update["can_install"], true);
+    c.post("/api/update", &json!({})).expect("started");
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("the application's installer ran");
+    let _ = std::fs::remove_dir_all(&dir);
+}

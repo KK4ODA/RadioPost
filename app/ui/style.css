@@ -111,3 +111,9 @@ label.inline input { width: 7em; margin: 0; }
 #waiting-view .note, #gateways-view .note { margin-bottom: 12px; }
 .entries li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 0; }
 .card .note { margin-bottom: 8px; }
+
+/* a newer release, said at the top */
+.top { flex-wrap: wrap; }
+.update { flex-basis: 100%; display: flex; align-items: center; gap: 12px; padding: 6px 12px;
+          border: 1px solid var(--session); border-radius: 6px; color: var(--text); }
+.update span { flex: 1; }

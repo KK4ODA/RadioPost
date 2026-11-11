@@ -22,6 +22,8 @@ use radiopost::base64url;
 use serde_json::{Value, json};
 use tiny_http::{Header, Method, Request, Response, Server};
 
+use radiopost_update::{Product, Watch};
+
 use crate::operator;
 use crate::runner::Runner;
 use crate::station::{self, Settings, Station};
@@ -59,6 +61,7 @@ pub struct Panel {
     runner: Arc<Runner>,
     ui: Option<PathBuf>,
     addr: SocketAddr,
+    updates: Arc<Watch>,
 }
 
 /// A callsign as RP-1 writes one: letters and digits, a `/` part or a `-` SSID allowed.
@@ -78,7 +81,25 @@ impl Panel {
             runner,
             ui,
             addr: SocketAddr::from(([127, 0, 0, 1], 0)),
+            updates: Watch::new(
+                Product::Tools,
+                env!("CARGO_PKG_VERSION"),
+                &radiopost_update::channel(),
+            ),
         }
+    }
+
+    /// The same panel, showing `updates` (the desktop application's own, which installs).
+    #[must_use]
+    pub fn with_updates(mut self, updates: Arc<Watch>) -> Panel {
+        self.updates = updates;
+        self
+    }
+
+    /// What it shows of updates; [`Watch::watch`] starts asking the channel.
+    #[must_use]
+    pub fn updates(&self) -> &Arc<Watch> {
+        &self.updates
     }
 
     /// Serves on `addr` (loopback; port 0 picks one) on a thread of its own; returns the address.
@@ -246,6 +267,14 @@ impl Panel {
                 self.runner.check()?;
                 Ok(self.state())
             }
+            (Method::Post, "/api/update") => {
+                if self.updates.status()["can_install"] == true {
+                    self.updates.install()?;
+                } else {
+                    self.updates.download()?;
+                }
+                Ok(self.state())
+            }
             _ => Err(format!("no {method} {path}")),
         }
     }
@@ -369,6 +398,7 @@ impl Panel {
             "status": self.runner.monitor().status(),
             "client": {"home": home.display().to_string(), "enrolled": enrolled},
             "aether": AETHER,
+            "update": self.updates.status(),
         })
     }
 }

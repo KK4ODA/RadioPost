@@ -16,6 +16,7 @@ path = "src/main.rs"
 [dependencies]
 radiopost = { path = "../radiopost" }
 radiopost-api = { path = "../api" }
+radiopost-update = { path = "../update" }
 radiopost-postoffice = { path = "../postoffice" }
 rpmi = { path = "../rpmi" }
 radiopost-aether = { path = "../../adapters/aether" }

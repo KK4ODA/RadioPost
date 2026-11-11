@@ -2,7 +2,7 @@
 [package]
 name = "radiopost-gateway-app"
 description = "RadioPost Gateway, the desktop application: the gateway and its panel in a window of its own."
-version = "0.1.0"
+version = "0.1.0-beta.4"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -20,6 +20,10 @@ tauri-build = { version = "2", features = [] }
 radiopost-gateway = { path = "../../../core/gateway" }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+# the configuration Tauri builds into the program, its plugins' among it
+serde_json = "1"
+radiopost-update = { path = "../../../core/update" }
 
 [lints.rust]
 unsafe_code = "forbid"

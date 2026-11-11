@@ -374,3 +374,63 @@ fn a_modem_away_is_waited_for_and_the_wait_stopped() {
     assert_eq!(state["running"], false);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A stand-in update channel offering `version` of every program, with a file for this platform.
+fn update_channel(version: &str) -> String {
+    let server = tiny_http::Server::http("127.0.0.1:0").expect("a port");
+    let base = format!(
+        "http://{}",
+        server.server_addr().to_ip().expect("an address")
+    );
+    let manifest = json!({"version": version, "notes": "Better.",
+        "platforms": {radiopost_update::platform(): {"url": format!("{base}/x"), "signature": "s"}}})
+    .to_string();
+    std::thread::spawn(move || {
+        for request in server.incoming_requests() {
+            let _ = request.respond(tiny_http::Response::from_string(manifest.clone()));
+        }
+    });
+    base
+}
+
+/// D34: the panel says when a newer release is out, and its update runs the application's own
+/// installer (here a stand-in that only says it ran).
+#[test]
+fn the_panel_says_a_newer_release_is_out_and_installs_it() {
+    use radiopost_update::{Product, Watch};
+    let dir = scratch("panel-update");
+    let watch = Watch::new(
+        Product::Gateway,
+        "0.1.0-beta.4",
+        &update_channel("0.1.0-beta.9"),
+    );
+    watch.check();
+    let page = Page {
+        at: Panel::new(Arc::new(Runner::new(&dir.join("gateway"))), None)
+            .with_updates(Arc::clone(&watch))
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let update = &page.get("/api/state")["update"];
+    assert_eq!(update["current"], "0.1.0-beta.4");
+    assert_eq!(update["offer"]["version"], "0.1.0-beta.9");
+    assert_eq!(
+        update["can_install"], false,
+        "no installer yet: a download by hand"
+    );
+    let (tx, rx) = std::sync::mpsc::channel();
+    watch.set_install(Arc::new(move || {
+        let _ = tx.send(());
+        Err("a stand-in installer".into())
+    }));
+    assert_eq!(page.get("/api/state")["update"]["can_install"], true);
+    page.post("/api/update", &json!({})).expect("started");
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("the application's installer ran");
+    let until = Instant::now() + Duration::from_secs(5);
+    while page.get("/api/state")["update"]["failed"] != "a stand-in installer" {
+        assert!(Instant::now() < until, "the failure is never said");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -169,3 +169,41 @@ fn the_submission_port_is_signed_in_to_and_asked_for_mail_from() {
     assert_eq!(line.verdict, Verdict::Fail);
     assert!(line.text.contains("cannot connect"), "{}", line.text);
 }
+
+/// D34: the operator's `status` says the program's version, and what the update channel offers
+/// once the post office has asked it (here a stand-in channel offering a newer release).
+#[test]
+fn status_says_the_version_and_a_newer_release() {
+    let running = post_office(&scratch("status"));
+    let (code, body) = running.admin("GET", "/status", b"");
+    assert_eq!(code, 200, "{body}");
+    let status: serde_json::Value = serde_json::from_str(&body).expect("JSON");
+    assert_eq!(status["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(status["update"], serde_json::Value::Null, "not asked yet");
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("a port");
+    let base = format!("http://{}", listener.local_addr().expect("an address"));
+    std::thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            let mut out = stream.try_clone().expect("a stream");
+            let mut request = String::new();
+            let _ = BufReader::new(stream).read_line(&mut request);
+            let manifest = json!({"version": "99.0.0", "platforms": {}}).to_string();
+            let _ = write!(
+                out,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{manifest}",
+                manifest.len()
+            );
+        }
+    });
+    let watch = radiopost_update::Watch::new(
+        radiopost_update::Product::Tools,
+        env!("CARGO_PKG_VERSION"),
+        &base,
+    );
+    watch.check();
+    running.watch_updates(watch);
+    let (_, body) = running.admin("GET", "/status", b"");
+    let status: serde_json::Value = serde_json::from_str(&body).expect("JSON");
+    assert_eq!(status["update"]["offer"]["version"], "99.0.0", "{status}");
+}

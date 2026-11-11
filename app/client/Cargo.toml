@@ -18,6 +18,7 @@ path = "src/main.rs"
 [dependencies]
 radiopost = { path = "../../core/radiopost" }
 radiopost-api = { path = "../../core/api" }
+radiopost-update = { path = "../../core/update" }
 rpmi = { path = "../../core/rpmi" }
 radiopost-aether = { path = "../../adapters/aether" }
 ed25519-dalek = "3"

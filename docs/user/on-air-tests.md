@@ -12,9 +12,11 @@ acts as the test post office.
   the radio as Aether's own manual says. RadioPost uses Aether as its modem: Aether keys the radio,
   checks the band rules, and sends the Morse identifier at the end of each session.
 * **RadioPost**, from the [releases](https://github.com/KK4ODA/RadioPost/releases): the installer
-  for Windows (`…-setup.exe` or `.msi`), macOS (`.dmg`) or Linux (`.deb` or `.AppImage`). The
+  for Windows (`…-setup.exe`), macOS (`.dmg`) or Linux (`.deb` or `.AppImage`). The
   installers are not signed yet: on Windows, SmartScreen asks once (More info, then Run anyway); on
   macOS, open RadioPost with Control-click, then Open.
+  From 0.1.0-beta.5 on, RadioPost says when a newer release is out and updates itself:
+  **Update and restart** at the top of its window.
 
 RadioPost finds Aether at `ws://127.0.0.1:8515/v1`, where Aether listens unless set otherwise. The
 **Modem** box in RadioPost's Station area says where; change it only if Aether's control port is

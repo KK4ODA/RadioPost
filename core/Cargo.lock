@@ -1057,6 +1057,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
+name = "minisign-verify"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22f9645cb765ea72b8111f36c522475d2daa0d22c957a9826437e97534bc4e9e"
+
+[[package]]
 name = "miniz_oxide"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1357,7 +1363,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "radiopost"
-version = "0.1.0"
+version = "0.1.0-beta.4"
 dependencies = [
  "ed25519-dalek",
  "flate2",
@@ -1367,7 +1373,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-aether"
-version = "0.1.0"
+version = "0.1.0-beta.4"
 dependencies = [
  "ed25519-dalek",
  "radiopost",
@@ -1378,7 +1384,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-api"
-version = "0.1.0"
+version = "0.1.0-beta.4"
 dependencies = [
  "ed25519-dalek",
  "radiopost",
@@ -1388,7 +1394,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-client"
-version = "0.1.0"
+version = "0.1.0-beta.4"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -1397,6 +1403,7 @@ dependencies = [
  "radiopost-api",
  "radiopost-postoffice",
  "radiopost-tester",
+ "radiopost-update",
  "rpmi",
  "serde_json",
  "tiny_http",
@@ -1405,7 +1412,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-gateway"
-version = "0.1.0"
+version = "0.1.0-beta.4"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -1415,6 +1422,7 @@ dependencies = [
  "radiopost-client",
  "radiopost-postoffice",
  "radiopost-tester",
+ "radiopost-update",
  "rpmi",
  "serde",
  "serde_json",
@@ -1424,7 +1432,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-issue"
-version = "0.1.0"
+version = "0.1.0-beta.4"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -1434,7 +1442,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-postoffice"
-version = "0.1.0"
+version = "0.1.0-beta.4"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -1444,6 +1452,7 @@ dependencies = [
  "radiopost",
  "radiopost-api",
  "radiopost-tester",
+ "radiopost-update",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -1455,7 +1464,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-tcp"
-version = "0.1.0"
+version = "0.1.0-beta.4"
 dependencies = [
  "radiopost-tester",
  "rcgen",
@@ -1468,7 +1477,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-tester"
-version = "0.1.0"
+version = "0.1.0-beta.4"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -1477,6 +1486,20 @@ dependencies = [
  "rpmi",
  "serde_json",
  "tiny_http",
+]
+
+[[package]]
+name = "radiopost-update"
+version = "0.1.0-beta.4"
+dependencies = [
+ "base64 0.22.1",
+ "minisign-verify",
+ "semver",
+ "serde",
+ "serde_json",
+ "tiny_http",
+ "ureq",
+ "zip",
 ]
 
 [[package]]
@@ -1570,7 +1593,7 @@ dependencies = [
 
 [[package]]
 name = "rpmi"
-version = "0.1.0"
+version = "0.1.0-beta.4"
 dependencies = [
  "ed25519-dalek",
  "radiopost",
@@ -2093,6 +2116,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "typed-path"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54ec2755506471f54baf5e4bb5499d8e510cc1caf271270e778a736bd2d7336c"
+
+[[package]]
 name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2548,6 +2577,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.10",
+]
+
+[[package]]
+name = "zip"
+version = "7.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "268bf6f9ceb991e07155234071501490bb41fd1e39c6a588106dad10ae2a5804"
+dependencies = [
+ "crc32fast",
+ "flate2",
+ "indexmap",
+ "memchr",
+ "typed-path",
 ]
 
 [[package]]

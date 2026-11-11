@@ -1,14 +1,22 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 #
 # The installers of the two desktop applications (RadioPost, the client, and RadioPost Gateway)
-# and the command-line tools, for Windows, macOS and Linux.
+# and the command-line tools, for Windows, macOS and Linux; and the update channel that tells
+# installed programs a newer release is out.
 #
-# A pushed tag v* makes a pre-release of that name. Started by hand with a `tag` (v0.1.0-beta.1),
+# A pushed tag v* makes a pre-release of that name. Started by hand with a `tag` (v0.1.0-beta.5),
 # it makes that public pre-release and the tag, on the commit it ran on; started by hand without
 # one, the build becomes a draft release, which only the repository's maintainers see until one
-# publishes it. The installers are
-# not signed yet: Windows' SmartScreen and macOS' Gatekeeper warn (the client's README says how to
-# open them).
+# publishes it. A tag must be `v` + the version every program carries (`tools/release.py bump`,
+# committed first): the preflight job stops the release otherwise.
+#
+# Updates are signed. The secrets TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+# hold the project's update key (made with `npx @tauri-apps/cli signer generate`; its public half
+# is core/update/updater.pub, built into every program). Each installer an update installs and
+# each tools archive gets a signature; client.json, gateway.json and tools.json say what the
+# release offers, and a tagged release puts them on the rolling `channel-beta` release, where the
+# programs look. A program installs only what that key signed. The installers themselves are not
+# code-signed yet: Windows' SmartScreen and macOS' Gatekeeper warn on a first install.
 name: Release
 
 on:
@@ -17,7 +25,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "A tag such as v0.1.0-beta.1 for a public pre-release; empty for a draft"
+        description: "A tag such as v0.1.0-beta.5 for a public pre-release; empty for a draft"
         required: false
         default: ""
 
@@ -29,8 +37,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  preflight:
+    name: preflight
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: The tag
+        id: tag
+        env:
+          ASKED: ${{ inputs.tag }}
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then tag="${GITHUB_REF_NAME}"; else tag="${ASKED}"; fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: One version, the tag's
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if [ -n "$TAG" ]; then python3 tools/release.py check --tag "$TAG"
+          else python3 tools/release.py check; fi
+
+      - name: The update key
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ] || [ ! -s core/update/updater.pub ]; then
+            echo "::error::the update key is missing: the secret TAURI_SIGNING_PRIVATE_KEY and its public half in core/update/updater.pub (see the comment at the top of this workflow)"
+            exit 1
+          fi
+
   build:
     name: build · ${{ matrix.name }}
+    needs: preflight
     runs-on: ${{ matrix.os }}
     # two Tauri applications and the tools, each a release build
     timeout-minutes: 75
@@ -40,8 +81,12 @@ jobs:
         include:
           # 22.04, so the packages run on the older systems still in use
           - { os: ubuntu-22.04, name: linux-x64, bundles: "deb,appimage" }
-          - { os: windows-latest, name: windows-x64, bundles: "nsis,msi" }
+          # NSIS only: an MSI takes no version such as 0.1.0-beta.5, and setup.exe updates in place
+          - { os: windows-latest, name: windows-x64, bundles: "nsis" }
           - { os: macos-latest, name: macos-arm64, bundles: "app,dmg" }
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
 
@@ -60,15 +105,23 @@ jobs:
         with:
           node-version: 22
 
+      # the updater's files and their signatures, checked against the key the programs carry
+      - name: The update settings
+        shell: bash
+        run: |
+          pub=$(tr -d '\n\r' < core/update/updater.pub)
+          echo "UPDATER={\"bundle\":{\"createUpdaterArtifacts\":true},\"plugins\":{\"updater\":{\"pubkey\":\"${pub}\"}}}" >> "$GITHUB_ENV"
+          echo "VERSION=$(python3 tools/release.py version)" >> "$GITHUB_ENV"
+
       - name: The client's installers
         working-directory: app/src-tauri
         shell: bash
-        run: npx --yes @tauri-apps/cli@2 build --bundles ${{ matrix.bundles }}
+        run: npx --yes @tauri-apps/cli@2 build --bundles ${{ matrix.bundles }} --config "$UPDATER"
 
       - name: The gateway's installers
         working-directory: app/gateway/src-tauri
         shell: bash
-        run: npx --yes @tauri-apps/cli@2 build --bundles ${{ matrix.bundles }}
+        run: npx --yes @tauri-apps/cli@2 build --bundles ${{ matrix.bundles }} --config "$UPDATER"
 
       - name: The command-line tools
         working-directory: core
@@ -90,6 +143,8 @@ jobs:
             cp "core/target/release/$b$exe" "out/$tools/"
           done
           cp LICENSE-MIT LICENSE-APACHE app/client/README.md "out/$tools/"
+          # the version the archive is: `update` checks it against the version on offer
+          echo "$VERSION" > "out/$tools/VERSION"
           # bsdtar (Windows, macOS) writes a zip; GNU tar (Linux) cannot
           if [ "$RUNNER_OS" = "Linux" ]; then
             (cd out && zip -qr "$tools.zip" "$tools")
@@ -97,10 +152,24 @@ jobs:
             (cd out && tar -a -c -f "$tools.zip" "$tools")
           fi
           rm -r "out/$tools"
-          find app/src-tauri/target/release/bundle app/gateway/src-tauri/target/release/bundle \
-            -maxdepth 2 -type f \
-            \( -name '*.deb' -o -name '*.AppImage' -o -name '*.msi' -o -name '*-setup.exe' \
-               -o -name '*.dmg' \) -exec cp {} out/ \;
+          # the tools archive signed, for `radiopost-po update` and the other programs' own
+          npx --yes @tauri-apps/cli@2 signer sign "out/$tools.zip"
+          # the installers, and the signatures of those an update installs
+          for app in app/src-tauri app/gateway/src-tauri; do
+            find "$app/target/release/bundle" -maxdepth 2 -type f \
+              \( -name '*.deb' -o -name '*.AppImage' -o -name '*-setup.exe' -o -name '*.dmg' \
+                 -o -name '*.deb.sig' -o -name '*.AppImage.sig' -o -name '*-setup.exe.sig' \) \
+              -exec cp {} out/ \;
+            # macOS updates with the .app as an archive, named by the app alone: name it fully
+            for f in "$app"/target/release/bundle/macos/*.app.tar.gz; do
+              [ -e "$f" ] || continue
+              name=$(basename "$f" .app.tar.gz)
+              cp "$f" "out/${name}_${VERSION}_aarch64.app.tar.gz"
+              cp "$f.sig" "out/${name}_${VERSION}_aarch64.app.tar.gz.sig"
+            done
+          done
+          # as GitHub would publish them: no spaces in a file's name
+          for f in out/*\ *; do [ -e "$f" ] && mv "$f" "${f// /.}"; done
           ls -l out
 
       - uses: actions/upload-artifact@v7
@@ -111,13 +180,37 @@ jobs:
 
   release:
     name: release
-    needs: build
+    needs: [preflight, build]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+
       - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
+
+      - name: The tag
+        id: tag
+        env:
+          ASKED: ${{ needs.preflight.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "${ASKED}" ]; then
+            case "${ASKED}" in
+              v[0-9]*) tag="${ASKED}"; kind="--prerelease" ;;
+              *) echo "a release tag starts with v and a digit: ${ASKED}"; exit 1 ;;
+            esac
+          else
+            tag="build-${GITHUB_RUN_NUMBER}"; kind="--draft --prerelease"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "kind=${kind}" >> "$GITHUB_OUTPUT"
+
+      - name: The update manifests
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: python3 tools/update_manifests.py dist --tag "$TAG" --repo "$GITHUB_REPOSITORY"
 
       - name: Checksums
         working-directory: dist
@@ -127,24 +220,33 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          ASKED: ${{ inputs.tag }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          KIND: ${{ steps.tag.outputs.kind }}
         run: |
           set -euo pipefail
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            tag="${GITHUB_REF_NAME}"; kind="--prerelease"
-          elif [ -n "${ASKED}" ]; then
-            case "${ASKED}" in
-              v[0-9]*) tag="${ASKED}"; kind="--prerelease" ;;
-              *) echo "a release tag starts with v and a digit: ${ASKED}"; exit 1 ;;
-            esac
-          else
-            tag="build-${GITHUB_RUN_NUMBER}"; kind="--draft --prerelease"
-          fi
           notes="Built from ${GITHUB_SHA::7}. RadioPost is the client; RadioPost Gateway is the
-          gateway, for the computer at a gateway's radio. The installers are not signed yet: Windows'
-          SmartScreen asks once (More info, Run anyway), and on macOS open the app with Control-click,
-          Open. The tools archive holds radiopost, radiopost-aether, radiopost-tcp, rpmi-loopback,
-          radiopost-issue, radiopost-tester, radiopost-gateway and radiopost-po. SHA256SUMS lists
-          every file's checksum."
-          gh release create "$tag" dist/* $kind --target "$GITHUB_SHA" \
-            --title "RadioPost ${tag}" --notes "$notes"
+          gateway, for the computer at a gateway's radio. Installed programs of 0.1.0-beta.5 and
+          later say when a newer release is out and update themselves. The installers are not
+          code-signed yet: Windows' SmartScreen asks once (More info, Run anyway), and on macOS open
+          the app with Control-click, Open. The tools archive holds radiopost, radiopost-aether,
+          radiopost-tcp, rpmi-loopback, radiopost-issue, radiopost-tester, radiopost-gateway and
+          radiopost-po. SHA256SUMS lists every file's checksum."
+          # $KIND holds two words for a draft
+          # shellcheck disable=SC2086
+          gh release create "$TAG" dist/* $KIND --target "$GITHUB_SHA" \
+            --title "RadioPost ${TAG}" --notes "$notes"
+
+      # the rolling release the installed programs ask: a draft offers nothing
+      - name: The update channel
+        if: needs.preflight.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if ! gh release view channel-beta >/dev/null 2>&1; then
+            gh release create channel-beta --prerelease --target "$GITHUB_SHA" \
+              --title "Update channel (beta)" \
+              --notes "What the newest release offers each program: client.json, gateway.json and tools.json. Installed programs read them to say when a newer release is out. Never delete this release."
+          fi
+          gh release upload channel-beta dist/client.json dist/gateway.json dist/tools.json --clobber

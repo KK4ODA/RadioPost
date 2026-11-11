@@ -15,7 +15,7 @@ session to the user's own post office over the Internet (RP-3 §9, RP-5 §5).
 * **An Internet connection.** The gateway only makes outgoing connections, so a home router needs
   no change.
 * **RadioPost Gateway**, from the [releases](https://github.com/KK4ODA/RadioPost/releases): the
-  installer named `RadioPost Gateway` for Windows (`…-setup.exe` or `.msi`), macOS (`.dmg`) or
+  installer named `RadioPost Gateway` for Windows (`…-setup.exe`), macOS (`.dmg`) or
   Linux (`.deb` or `.AppImage`). The installers are not signed yet: on Windows, SmartScreen asks
   once (More info, then Run anyway); on macOS, open it with Control-click, then Open.
 * **RadioPost**, the client, on the same computer, enrolled as you with your post office (its
@@ -74,6 +74,12 @@ app opens. To have it open when you sign in: on Windows, put a shortcut to Radio
 Startup folder (Win+R, `shell:startup`); on macOS, add it to Login Items (System Settings,
 General); on Linux, to your desktop's startup applications.
 
+**Updates.** When a newer release is out, a line at the top of the window says so (the gateway
+asks when it opens and every six hours). **Update and restart** stops the gateway, downloads the
+update, checks that the project's update key signed it, installs it and opens the app again,
+answering as before. On a Linux `.deb` install it asks for your password, as installing a package
+does.
+
 ## 4. The rules
 
 * **Control.** A gateway left answering with nobody at the radio is under **automatic control**.
@@ -113,7 +119,9 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
-`radiopost-gateway serve` answers calls with no panel at all, as before.
+`radiopost-gateway serve` answers calls with no panel at all, as before. To update a gateway
+run this way: `sudo radiopost-gateway update`, then restart it (`sudo systemctl restart` its unit);
+the panel and its log say when a newer release is out.
 
 ## 6. What is kept
 

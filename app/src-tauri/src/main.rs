@@ -7,16 +7,23 @@
 //! to the application (no Tauri commands, no capabilities). Closing the window ends the program;
 //! while a call, a session or listening is under way, it asks first, since closing ends that too and
 //! leaves the other station waiting on the air.
+//!
+//! It updates itself: the panel says when a newer release is out (asked when it opens and every
+//! six hours), and its Update and restart installs it with Tauri's updater, from the update
+//! channel's `client.json`, only when the project's update key signed it (`radiopost-update`).
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::net::SocketAddr;
 use std::path::Path;
+use std::sync::Arc;
 
 use radiopost_client::panel::Panel;
 use radiopost_client::store;
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use radiopost_update::{Install, Product, Watch};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_updater::UpdaterExt as _;
 
 /// The panel's port, the same as `radiopost panel`'s, so what the page keeps (the modem adapter's
 /// address) is kept from one run to the next; another free port when that one is taken.
@@ -24,7 +31,12 @@ const PORT: u16 = 8620;
 
 /// Starts the panel's server for the home at `home`: where it is, and a handle on its state.
 fn start_panel(home: &Path) -> Result<(SocketAddr, Panel), String> {
-    let panel = Panel::new(home, None);
+    let updates = Watch::new(
+        Product::Client,
+        env!("CARGO_PKG_VERSION"),
+        &radiopost_update::channel(),
+    );
+    let panel = Panel::new(home, None).with_updates(updates);
     let at = panel
         .clone()
         .start(&format!("127.0.0.1:{PORT}"))
@@ -42,6 +54,35 @@ fn interrupts(activity: &str) -> Option<&'static str> {
     }
 }
 
+/// The update on offer, downloaded, its signature checked with the project's key, installed, and
+/// the application started again; it returns only when that failed.
+fn installer(app: AppHandle) -> Install {
+    Arc::new(move || {
+        let manifest = format!(
+            "{}/{}",
+            radiopost_update::channel(),
+            Product::Client.manifest()
+        );
+        tauri::async_runtime::block_on(async {
+            let url = manifest.parse().map_err(|e| format!("{manifest}: {e}"))?;
+            let update = app
+                .updater_builder()
+                .endpoints(vec![url])
+                .and_then(tauri_plugin_updater::UpdaterBuilder::build)
+                .map_err(|e| e.to_string())?
+                .check()
+                .await
+                .map_err(|e| format!("the update channel: {e}"))?
+                .ok_or("no update is on offer")?;
+            update
+                .download_and_install(|_, _| {}, || {})
+                .await
+                .map_err(|e| format!("the update: {e}"))?;
+            app.restart()
+        })
+    })
+}
+
 fn main() {
     let home = store::home(None);
     let (at, panel) = match start_panel(&home) {
@@ -52,9 +93,20 @@ fn main() {
         }
     };
     let url = format!("http://{at}/");
+    let updates = Arc::clone(panel.updates());
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .pubkey(radiopost_update::public_key())
+                .build(),
+        )
         .setup(move |app| {
+            // a build made before the project's update key existed installs nothing
+            if !radiopost_update::public_key().is_empty() {
+                updates.set_install(installer(app.handle().clone()));
+            }
+            updates.watch();
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url.parse()?))
                 .title("RadioPost")
                 .inner_size(1100.0, 760.0)

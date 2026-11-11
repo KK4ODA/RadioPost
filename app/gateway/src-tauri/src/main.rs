@@ -8,6 +8,11 @@
 //! capabilities). The gateway answers as soon as the app opens when it is set to, as an unattended
 //! gateway should. Closing the window stops it; while it answers, the window asks first, since
 //! callers then get no answer, and a session under way ends.
+//!
+//! It updates itself: the panel says when a newer release is out (asked when it opens and every
+//! six hours), and its Update and restart stops the gateway, installs the update with Tauri's
+//! updater from the update channel's `gateway.json`, only when the project's update key signed
+//! it (`radiopost-update`), and starts again, answering as it is set to.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -19,18 +24,26 @@ use radiopost_gateway::monitor::Status;
 use radiopost_gateway::panel::Panel;
 use radiopost_gateway::runner::Runner;
 use radiopost_gateway::station::{self, Settings};
-use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use radiopost_update::{Install, Product, Watch};
+use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_updater::UpdaterExt as _;
 
 /// The panel's port, the same as `radiopost-gateway panel`'s; another free port when that one is
 /// taken.
 const PORT: u16 = 8621;
 
 /// Starts the gateway's panel for the gateway in `dir`, and the gateway itself when it is set to
-/// answer at start: where the panel is, and the gateway's runner.
-fn start(dir: &Path) -> Result<(SocketAddr, Arc<Runner>), String> {
+/// answer at start: where the panel is, the gateway's runner, and what the panel shows of
+/// updates.
+fn start(dir: &Path) -> Result<(SocketAddr, Arc<Runner>, Arc<Watch>), String> {
     let runner = Arc::new(Runner::new(dir));
-    let panel = Panel::new(runner.clone(), None);
+    let updates = Watch::new(
+        Product::Gateway,
+        env!("CARGO_PKG_VERSION"),
+        &radiopost_update::channel(),
+    );
+    let panel = Panel::new(runner.clone(), None).with_updates(Arc::clone(&updates));
     let at = panel
         .clone()
         .start(&format!("127.0.0.1:{PORT}"))
@@ -39,7 +52,7 @@ fn start(dir: &Path) -> Result<(SocketAddr, Arc<Runner>), String> {
         // not registered yet, or no credential: the panel says so, and Start is the operator's
         let _ = runner.start();
     }
-    Ok((at, runner))
+    Ok((at, runner, updates))
 }
 
 /// What closing the window would end, in the operator's words; `None` when the gateway is not
@@ -56,9 +69,45 @@ fn interrupts(running: bool, status: &Status) -> Option<String> {
     })
 }
 
+/// The gateway stopped, the update on offer downloaded, its signature checked with the project's
+/// key, installed, and the application started again; it returns only when that failed, the
+/// gateway answering again as it was.
+fn installer(app: AppHandle, runner: Arc<Runner>) -> Install {
+    Arc::new(move || {
+        let was_running = runner.running();
+        runner.stop();
+        let manifest = format!(
+            "{}/{}",
+            radiopost_update::channel(),
+            Product::Gateway.manifest()
+        );
+        let result: Result<(), String> = tauri::async_runtime::block_on(async {
+            let url = manifest.parse().map_err(|e| format!("{manifest}: {e}"))?;
+            let update = app
+                .updater_builder()
+                .endpoints(vec![url])
+                .and_then(tauri_plugin_updater::UpdaterBuilder::build)
+                .map_err(|e| e.to_string())?
+                .check()
+                .await
+                .map_err(|e| format!("the update channel: {e}"))?
+                .ok_or("no update is on offer")?;
+            update
+                .download_and_install(|_, _| {}, || {})
+                .await
+                .map_err(|e| format!("the update: {e}"))?;
+            app.restart()
+        });
+        if was_running {
+            let _ = runner.start();
+        }
+        result
+    })
+}
+
 fn main() {
     let dir = station::default_dir();
-    let (at, runner) = match start(&dir) {
+    let (at, runner, updates) = match start(&dir) {
         Ok(started) => started,
         Err(e) => {
             eprintln!("RadioPost Gateway: the panel cannot start: {e}");
@@ -67,9 +116,20 @@ fn main() {
     };
     let url = format!("http://{at}/");
     let asking_runner = runner.clone();
+    let installing_runner = runner.clone();
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .pubkey(radiopost_update::public_key())
+                .build(),
+        )
         .setup(move |app| {
+            // a build made before the project's update key existed installs nothing
+            if !radiopost_update::public_key().is_empty() {
+                updates.set_install(installer(app.handle().clone(), installing_runner));
+            }
+            updates.watch();
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url.parse()?))
                 .title("RadioPost Gateway")
                 .inner_size(1100.0, 760.0)
@@ -133,7 +193,7 @@ mod tests {
     fn the_panel_the_window_shows() {
         let dir =
             std::env::temp_dir().join(format!("radiopost-gateway-app-{}", std::process::id()));
-        let (at, runner) = start(&dir).expect("the panel starts");
+        let (at, runner, _) = start(&dir).expect("the panel starts");
         assert!(at.ip().is_loopback());
         assert!(!runner.running(), "nothing to answer as");
         let mut s = TcpStream::connect(at).expect("the panel answers");
@@ -147,7 +207,7 @@ mod tests {
         s.read_to_string(&mut page).expect("read");
         assert!(page.contains("<title>RadioPost Gateway</title>"), "{page}");
         // a second copy of the program takes another port
-        let (other, _) = start(&dir).expect("another port");
+        let (other, _, _) = start(&dir).expect("another port");
         assert_ne!(other, at);
         let _ = std::fs::remove_dir_all(&dir);
     }

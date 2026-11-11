@@ -68,8 +68,29 @@ function show(view) {
   $("setup").hidden = view !== "setup";
 }
 
+// a newer release: said at the top, with the update or the download
+function showUpdate(u, name) {
+  const box = $("update");
+  if (!u || !u.offer) { box.hidden = true; return; }
+  box.hidden = false;
+  const text = $("update-text");
+  text.textContent = u.installing
+    ? `Installing ${name} ${u.offer.version}: it restarts by itself.`
+    : u.failed
+      ? `The update to ${u.offer.version} failed: ${u.failed}`
+      : `${name} ${u.offer.version} is out (this is ${u.current}).`;
+  text.title = u.offer.notes || "";
+  const go = $("update-go");
+  go.hidden = u.installing;
+  go.textContent = u.can_install ? "Update and restart" : "Download";
+  go.title = u.can_install
+    ? "Download it, check that the project signed it, install it and restart"
+    : `Open ${u.offer.page} in your browser`;
+}
+
 function render(s) {
   state = s;
+  showUpdate(s.update, "RadioPost Gateway");
   const settings = s.settings;
   const st = s.status;
   const answering = s.running;
@@ -280,6 +301,13 @@ $("stop").addEventListener("click", async () => {
   $("stop").disabled = true;
   await act("stop", {}, render);
   $("stop").disabled = false;
+});
+$("update-go").addEventListener("click", () => {
+  if (state && state.update.can_install && state.running
+      && !window.confirm("The gateway stops answering while it updates, and starts again after. Update now?")) {
+    return;
+  }
+  act("update", {}, render);
 });
 $("check").addEventListener("click", async () => {
   $("check").disabled = true;

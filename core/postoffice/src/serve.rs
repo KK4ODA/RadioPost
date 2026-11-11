@@ -216,9 +216,15 @@ pub struct Running {
     settings: Mutex<Settings>,
     files: Files,
     checker: OnceLock<Result<Checker, String>>,
+    updates: OnceLock<Arc<radiopost_update::Watch>>,
 }
 
 impl Running {
+    /// What the update channel offers, for the operator's `status` (the program asks it).
+    pub fn watch_updates(&self, watch: Arc<radiopost_update::Watch>) {
+        let _ = self.updates.set(watch);
+    }
+
     /// The post office in `dir`, loaded.
     ///
     /// # Errors
@@ -246,6 +252,7 @@ impl Running {
             settings: Mutex::new(settings),
             files,
             checker: OnceLock::new(),
+            updates: OnceLock::new(),
         })
     }
 
@@ -432,6 +439,8 @@ impl Running {
             }
             ("GET", "/outgoing") => Ok(json!({"outgoing": office.state.outgoing})),
             ("GET", "/status") => Ok(json!({
+                "version": env!("CARGO_PKG_VERSION"),
+                "update": self.updates.get().map(|w| w.status()),
                 "accounts": office.state.mailboxes.len(),
                 "gateways": office.state.gateways.keys().collect::<Vec<_>>(),
                 "codes": office.state.codes.len(),

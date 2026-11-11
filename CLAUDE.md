@@ -137,6 +137,19 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   the *Waiting* folder, and serials marked there (`fetch_next`) are fetched whatever `--fetch`
   says. `gateway/tests/online.rs` drives it all through the client's panel against the real
   gateway and post office.
+  Updates (D34): `core/update` (`radiopost-update`) reads the update channel's manifests
+  (`client.json`, `gateway.json`, `tools.json` on the rolling `channel-beta` release, Tauri's
+  updater format), compares versions (semver), checks minisign signatures as Tauri's updater does
+  with the project's key (`core/update/updater.pub`; the private half is the release's secret
+  `TAURI_SIGNING_PRIVATE_KEY`, never in the repository) and replaces the command-line programs
+  (`radiopost-po update` and the others' `update`); `Watch` is what a panel shows, and the Tauri
+  shells give it an installer (`tauri-plugin-updater`, the key and endpoints set in code). Its
+  tests use a throwaway key whose private half was discarded. **One version**: `tools/release.py
+  bump X` writes it in every Cargo manifest, lockfile and the guide's download link (the Tauri
+  configurations take Cargo's); `check` runs in CI and in the release's preflight, which also
+  refuses a tag that is not `v` + the version. A release: bump, commit, push, then the Release
+  workflow with that tag; `tools/update_manifests.py` writes the manifests from the signed files.
+  No MSI: it takes no pre-release version, and NSIS's setup.exe updates in place.
   `core/api` (`radiopost-api`) is RP-5 over HTTPS (login, calls, enrollment, DNS over HTTPS), shared
   by the gateway and the client; the client's `online` module uses it (enroll, renew, settings —
   `PUT` replaces them whole, so the client merges —, accept list, `report`). `app/src-tauri` has its

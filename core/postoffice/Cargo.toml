@@ -16,6 +16,7 @@ path = "src/main.rs"
 [dependencies]
 radiopost = { path = "../radiopost" }
 radiopost-api = { path = "../api" }
+radiopost-update = { path = "../update" }
 ureq = "3"
 ed25519-dalek = "3"
 getrandom = "0.3"

@@ -237,7 +237,7 @@ answers `451 4.7.1`, and the sending server tries again. Addresses that are no R
 
 ```
 apt install -y unzip
-curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.3/radiopost-tools-linux-x64.zip
+curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.4/radiopost-tools-linux-x64.zip
 unzip radiopost-tools-linux-x64.zip
 install -m 0755 radiopost-tools-linux-x64/radiopost-po /usr/local/bin/
 useradd --system --home-dir /var/lib/radiopost --create-home --shell /usr/sbin/nologin radiopost
@@ -360,7 +360,22 @@ failed. Then:
 6. Send an encrypted email (PGP): refused at `DATA`.
 7. Write to `postmaster@` from outside: it arrives in Stalwart's mailbox for it.
 
-## 10. What is not built yet
+## 10. Updating
+
+The post office says when a newer release is out: in its log when it starts and every six hours
+(`journalctl -u radiopost-po`), in `check`, and in `status`. To update:
+
+```
+sudo radiopost-po update
+sudo systemctl restart radiopost-po
+```
+
+`update` fetches the newest release's tools archive for this machine, checks that the project's
+update key signed it, and replaces `radiopost-po` (and any other RadioPost program beside it in
+`/usr/local/bin`). It changes nothing when the signature does not match. The post office's
+directory, its key and its state are not touched.
+
+## 11. What is not built yet
 
 * **The two mailboxes are separate.** Mail read in a mail program is still offered by radio
   (`radio_skips_read` is not built), mail sent by radio does not appear in the mail program's

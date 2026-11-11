@@ -57,6 +57,9 @@ usage: radiopost [--home DIR] COMMAND ...
   listen [SESSION OPTIONS] answer one station's call (RP-3 §10)
   panel [--port N] [--ui DIR]
                            serve the client's panel on this computer (port 8620) and say where
+  update                   replace radiopost, and the other RadioPost programs beside it, with the
+                           newest release's, their signature checked with the project's key
+                           (the desktop application updates itself from its own window)
 
 session options:
   --adapter HOST:PORT      the modem's RPMI adapter (default 127.0.0.1:8600)
@@ -310,6 +313,19 @@ fn run(words: &[String]) -> Result<(), Error> {
         return Ok(());
     };
     let args = Args::parse(rest)?;
+    if command == "update" {
+        // the programs beside this one, not the home: it opens none
+        let exe = std::env::current_exe().map_err(|e| format!("where is this program: {e}"))?;
+        let at = exe.parent().ok_or("this program is in no directory")?;
+        let said = radiopost_update::install_tools(
+            &radiopost_update::channel(),
+            env!("CARGO_PKG_VERSION"),
+            at,
+            radiopost_update::public_key(),
+        )?;
+        println!("{said}");
+        return Ok(());
+    }
     let mut store = Store::open(&radiopost_client::store::home(home_flag.as_deref()))?;
     match command.as_str() {
         "help" | "--help" | "-h" => print!("{HELP}"),
@@ -613,6 +629,7 @@ fn run(words: &[String]) -> Result<(), Error> {
                 store.home(),
                 args.one("--ui").map(PathBuf::from),
             );
+            panel.updates().watch();
             let at = panel.start(&format!("127.0.0.1:{port}"))?;
             println!("the panel is at http://{at}/");
             loop {

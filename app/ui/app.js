@@ -61,8 +61,29 @@ function showKind() {
   $("callsign").placeholder = gateway ? "KK4ODA-1" : "N0CALL";
 }
 
+// a newer release: said at the top, with the update or the download
+function showUpdate(u, name) {
+  const box = $("update");
+  if (!u || !u.offer) { box.hidden = true; return; }
+  box.hidden = false;
+  const text = $("update-text");
+  text.textContent = u.installing
+    ? `Installing ${name} ${u.offer.version}: it restarts by itself.`
+    : u.failed
+      ? `The update to ${u.offer.version} failed: ${u.failed}`
+      : `${name} ${u.offer.version} is out (this is ${u.current}).`;
+  text.title = u.offer.notes || "";
+  const go = $("update-go");
+  go.hidden = u.installing;
+  go.textContent = u.can_install ? "Update and restart" : "Download";
+  go.title = u.can_install
+    ? "Download it, check that the project signed it, install it and restart"
+    : `Open ${u.offer.page} in your browser`;
+}
+
 async function refresh() {
   const s = await api("state");
+  showUpdate(s.update, "RadioPost");
   $("who").textContent = s.me ? `${s.me.address}  ·  ${s.me.operator}` : "No credential yet";
   for (const name of ["inbox", "outbox", "sent", "waiting"]) {
     $(`n-${name}`).textContent = s.counts[name] || "";
@@ -388,6 +409,7 @@ function wire() {
   });
   $("listen").addEventListener("click", () => act("listen", {adapter: adapter()}));
   $("stop").addEventListener("click", () => act("stop", {}));
+  $("update-go").addEventListener("click", () => act("update", {}));
   $("make-key").addEventListener("click", () => act("key", {}));
   $("cred-save").addEventListener("click", async () => {
     await act("credential", {hex: $("cred-hex").value});

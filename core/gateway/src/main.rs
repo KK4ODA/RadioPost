@@ -38,6 +38,8 @@ directory, as the RadioPost Gateway app has it.
   block --domain D   carry no sessions to a domain's post office (RP-1 §7.3)
   key                the gateway's public key
   serve              answer calls and carry each session to the caller's post office
+  update             replace radiopost-gateway, and the other RadioPost programs beside it, with
+                     the newest release's, their signature checked with the project's update key
   panel [--port N] [--ui DIR]
                      serve the gateway's panel on this computer (port 8621) and say where;
                      it answers calls when the gateway is set to answer at start";
@@ -131,8 +133,9 @@ fn register(dir: &Path, a: &Args) -> Result<(), String> {
 fn panel(dir: &Path, a: &Args) -> Result<(), String> {
     let runner = Arc::new(Runner::new(dir).echoing());
     let port = a.one("--port").unwrap_or_else(|| "8621".into());
-    let at = Panel::new(runner.clone(), a.one("--ui").map(PathBuf::from))
-        .start(&format!("127.0.0.1:{port}"))?;
+    let panel = Panel::new(runner.clone(), a.one("--ui").map(PathBuf::from));
+    panel.updates().watch();
+    let at = panel.start(&format!("127.0.0.1:{port}"))?;
     println!("the panel is at http://{at}/");
     if Settings::load(dir).is_ok_and(|s| s.answer_at_start) {
         if let Err(e) = runner.start() {
@@ -186,6 +189,21 @@ fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
         }
         "serve" => station::serve(dir, &mut |line| println!("{line}")),
         "panel" => panel(dir, a),
+        "update" => {
+            let exe = std::env::current_exe().map_err(|e| format!("where is this program: {e}"))?;
+            let at = exe.parent().ok_or("this program is in no directory")?;
+            let said = radiopost_update::install_tools(
+                &radiopost_update::channel(),
+                env!("CARGO_PKG_VERSION"),
+                at,
+                radiopost_update::public_key(),
+            )?;
+            println!("{said}");
+            if said.starts_with("updated") {
+                println!("restart the gateway to run it");
+            }
+            Ok(())
+        }
         _ => Err(USAGE.into()),
     }
 }

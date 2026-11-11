@@ -12,10 +12,12 @@ use radiopost::base64url;
 use radiopost_postoffice::check::{self, Verdict};
 use radiopost_postoffice::documents::Info;
 use radiopost_postoffice::serve::{self, Files, Running, Settings};
+use radiopost_update::{Product, Watch};
 use serde_json::{Value as Json, json};
 
 const USAGE: &str = "\
 usage: radiopost-po --dir DIR COMMAND
+       radiopost-po update
 
   init --domain D --base-url URL --operator CALL --contact EMAIL [--country US]
        [--listen 127.0.0.1:8770] [--admin 127.0.0.1:8771] [--jmap URL] [--imap HOST:PORT]
@@ -37,7 +39,10 @@ usage: radiopost-po --dir DIR COMMAND
   status             accounts, gateways, codes, sessions
   check [--dkim SELECTOR,…] [--resolver URL]
                      the post office checked from outside: its DNS records, reverse DNS, the API
-                     over HTTPS, the door, and the mail server's submission port (no mail sent)";
+                     over HTTPS, the door, and the mail server's submission port (no mail sent)
+  update             replace radiopost-po, and the other RadioPost programs beside it, with the
+                     newest release's, their signature checked with the project's update key
+                     (run it with sudo); then restart the service";
 
 struct Args {
     words: Vec<String>,
@@ -189,6 +194,7 @@ fn check(files: &Files, a: &Args) -> Result<(), String> {
         })
         .unwrap_or_default();
     let mut lines = check::run(&settings, &public, &resolver, &selectors);
+    lines.push(update_line());
     lines.push(match admin(files, "GET", "/status", &Json::Null) {
         Ok(status) => check::Line {
             verdict: Verdict::Note,
@@ -216,6 +222,74 @@ fn check(files: &Files, a: &Args) -> Result<(), String> {
     }
     println!("ready");
     Ok(())
+}
+
+/// Whether a newer release is out, as a line of `check`.
+fn update_line() -> check::Line {
+    let current = env!("CARGO_PKG_VERSION");
+    let (verdict, text) =
+        match radiopost_update::check(&radiopost_update::channel(), Product::Tools, current) {
+            Ok(None) => (
+                Verdict::Ok,
+                format!("RadioPost {current} is the newest release"),
+            ),
+            Ok(Some(offer)) => (
+                Verdict::Note,
+                format!(
+                    "RadioPost {} is out (this is {current}): `sudo radiopost-po update`, then \
+                     restart the service",
+                    offer.version
+                ),
+            ),
+            Err(e) => (Verdict::Note, format!("the update channel: {e}")),
+        };
+    check::Line { verdict, text }
+}
+
+/// `update`: the programs beside this one replaced with the newest release's.
+fn update() -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| format!("where is this program: {e}"))?;
+    let dir = exe.parent().ok_or("this program is in no directory")?;
+    let said = radiopost_update::install_tools(
+        &radiopost_update::channel(),
+        env!("CARGO_PKG_VERSION"),
+        dir,
+        radiopost_update::public_key(),
+    )?;
+    println!("{said}");
+    if said.starts_with("updated") {
+        println!("restart the post office to run it: sudo systemctl restart radiopost-po");
+    }
+    Ok(())
+}
+
+/// Says in the log when a newer release is out: at start, and when the channel offers another
+/// (asked every six hours).
+fn watch_updates(running: &Running) {
+    let watch = Watch::new(
+        Product::Tools,
+        env!("CARGO_PKG_VERSION"),
+        &radiopost_update::channel(),
+    );
+    running.watch_updates(Arc::clone(&watch));
+    std::thread::spawn(move || {
+        let mut said = None;
+        loop {
+            watch.check();
+            if let Some(offer) = watch.offer()
+                && said.as_ref() != Some(&offer.version)
+            {
+                eprintln!(
+                    "radiopost-po: RadioPost {} is out (this is {}): `sudo radiopost-po update`, \
+                     then `sudo systemctl restart radiopost-po`",
+                    offer.version,
+                    env!("CARGO_PKG_VERSION")
+                );
+                said = Some(offer.version);
+            }
+            std::thread::sleep(radiopost_update::EVERY);
+        }
+    });
 }
 
 fn know(files: &Files, a: &Args) -> Result<(), String> {
@@ -250,6 +324,8 @@ fn know(files: &Files, a: &Args) -> Result<(), String> {
 fn serve_all(dir: &std::path::Path, files: &Files) -> Result<(), String> {
     let settings = files.settings()?;
     let running = Arc::new(Running::load(dir, serve::system_draw())?);
+    eprintln!("radiopost-po: RadioPost {}", env!("CARGO_PKG_VERSION"));
+    watch_updates(&running);
     let (api, ops) = serve::serve(running.clone(), &settings.listen, &settings.admin)?;
     eprintln!(
         "radiopost-po: {} on http://{api} (for {}), operator's port {ops}",
@@ -277,6 +353,9 @@ fn serve_all(dir: &std::path::Path, files: &Files) -> Result<(), String> {
 }
 
 fn run(a: &Args, command: &str) -> Result<(), String> {
+    if command == "update" {
+        return update();
+    }
     let dir = PathBuf::from(a.need("--dir")?);
     let files = Files::new(&dir);
     match command {

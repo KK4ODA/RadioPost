@@ -25,6 +25,8 @@ use radiopost::message::{Message, key};
 use serde_json::{Value, json};
 use tiny_http::{Header, Method, Request, Response, Server};
 
+use radiopost_update::{Product, Watch};
+
 use crate::compose::{Draft, File, media_type};
 use crate::online;
 use crate::session::{self, Fetch, Kind, Options};
@@ -74,6 +76,7 @@ pub struct Panel {
     activity: Arc<Mutex<Activity>>,
     stop: Arc<AtomicBool>,
     addr: SocketAddr,
+    updates: Arc<Watch>,
 }
 
 fn lock(a: &Mutex<Activity>) -> MutexGuard<'_, Activity> {
@@ -135,7 +138,25 @@ impl Panel {
             })),
             stop: Arc::new(AtomicBool::new(false)),
             addr: SocketAddr::from(([127, 0, 0, 1], 0)),
+            updates: Watch::new(
+                Product::Tools,
+                env!("CARGO_PKG_VERSION"),
+                &radiopost_update::channel(),
+            ),
         }
+    }
+
+    /// The same panel, showing `updates` (the desktop application's own, which installs).
+    #[must_use]
+    pub fn with_updates(mut self, updates: Arc<Watch>) -> Panel {
+        self.updates = updates;
+        self
+    }
+
+    /// What it shows of updates; [`Watch::watch`] starts asking the channel.
+    #[must_use]
+    pub fn updates(&self) -> &Arc<Watch> {
+        &self.updates
     }
 
     /// Serves on `addr` (loopback; port 0 picks one) on a thread of its own; returns the address.
@@ -331,6 +352,7 @@ impl Panel {
                 Method::Post,
                 "/api/enroll" | "/api/post-office" | "/api/renew" | "/api/report" | "/api/accept",
             ) => self.online(path, body),
+            (Method::Post, "/api/update") => self.update(),
             (Method::Post, "/api/stop") => {
                 self.stop.store(true, Ordering::Relaxed);
                 Ok(json!({}))
@@ -500,6 +522,7 @@ impl Panel {
                        "sent": store.sent.len(), "reports": store.reports.len(),
                        "files": store.files.len(), "waiting": store.waiting_entries().len()},
             "activity": {"state": a.state, "remote": a.remote, "failed": a.failed},
+            "update": self.updates.status(),
             "log": a.log.len(),
         }))
     }
@@ -561,6 +584,18 @@ impl Panel {
             }
             _ => Err(format!("no {method} {path}")),
         }
+    }
+
+    /// Installs the update on offer, through the desktop application; or opens its page for a
+    /// download by hand. An update restarts the program: not while a session is under way.
+    fn update(&self) -> Result<Value, Error> {
+        self.busy()?;
+        if self.updates.status()["can_install"] == true {
+            self.updates.install()?;
+        } else {
+            self.updates.download()?;
+        }
+        self.state()
     }
 
     /// The gateways kept from the post office's list, nearest first, and the grid they are
