@@ -216,8 +216,10 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`), each code file starting with an SPDX line.
 
 ## Decided by the author
-- The name RadioPost; the project's post office domain `radiopost.org` (registered 2026-11-09,
-  null-MX/SPF/DMARC records until the post office is live).
+- The name RadioPost; the project's post office domain `radiopost.org` (registered 2026-11-09;
+  its mail live since 2026-11-11: MX `po.radiopost.org`, SPF `mx`, DMARC `quarantine` with reports
+  to `postmaster@`, to go to `reject` once the reports are clean; Gmail checks the RSA DKIM key
+  and ignores the Ed25519 one).
 - No compatibility with Winlink's programs or B2F; a new client.
 - Priorities for the Internet-down features: copies placed ahead, the gateway's queue, then
   forwarding by radio.
