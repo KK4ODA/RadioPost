@@ -22,6 +22,7 @@ CTX_SESSION = "RadioPost-session-v1"
 CTX_LOGIN = "RadioPost-api-login-v1"
 CTX_ENROLL = "RadioPost-api-enroll-v1"
 CTX_GATEWAY = "RadioPost-api-gateway-v1"
+CTX_APPLY = "RadioPost-api-apply-v1"  # RP-5 §6.7
 CTX_PLACEMENT = "RadioPost-placement-v1"  # RP-7 §4.2
 
 # RP-1 §4.1: credential flags.

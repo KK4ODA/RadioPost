@@ -1,0 +1,1933 @@
+{
+  "radiopost_vectors": "Post office API: applications and the operator endpoints",
+  "format": 1,
+  "specs": {
+    "RP-5": "§3.2, §6.1, §6.7, §7",
+    "RP-0": "§9.2"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "As in api-exchanges.json: each exchange is a request to the post office at its clock and its answer, compared as JSON values. Application IDs, codes and tokens come from the published stream in the order drawn; a credential issued is new bytes from the post office's key (`po:radiopost.org`) for the application's or enrollment's device key.",
+  "context": {
+    "post_office": "radiopost.org",
+    "operators": [
+      "KK4ODA"
+    ],
+    "applications": "open",
+    "next_serial": 1050,
+    "codes_at_start": {
+      "7Q4F-AZ9K": {
+        "address": "facundo@radiopost.org",
+        "operator": "KK4ODA",
+        "flags": 2,
+        "expires": 1794096000
+      }
+    },
+    "cases": "Each case starts from the same post office, except where it says: the applications closed, or other operators."
+  },
+  "story": [
+    {
+      "note": "José applies for jose@radiopost.org from his laptop, and asks how it stands."
+    },
+    {
+      "at": 1794494400,
+      "who": "José's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/applications",
+        "body": {
+          "address": "jose@radiopost.org",
+          "operator": "N5CALL",
+          "name": "José Pérez",
+          "contact": "jose.perez@example.net",
+          "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+          "signature": "pUYxxi9SURY7gnUISw_VWI8fcfUkMmHe72FAJv_0po7M3bcGLhawS6-KEBn0vDI1zBz6xTFyXmenDJ09xa1zDw"
+        }
+      },
+      "response": {
+        "status": 202,
+        "body": {
+          "application": "ap_uLlzQGd0WRe67exop0woBg",
+          "status": "pending",
+          "expires": 1797086400
+        }
+      }
+    },
+    {
+      "at": 1794494460,
+      "who": "José's laptop",
+      "request": {
+        "method": "GET",
+        "path": "/applications/ap_uLlzQGd0WRe67exop0woBg"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "application": "ap_uLlzQGd0WRe67exop0woBg",
+          "status": "pending",
+          "expires": 1797086400
+        }
+      }
+    },
+    {
+      "note": "Facundo, KK4ODA, the operator, logs in: his token may use the operator endpoints."
+    },
+    {
+      "at": 1794498000,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "Tpl3O8xerTnWMiELlUa15pbuJqEiO1csDTeHFr11Dpk",
+          "expires": 1794498300
+        }
+      }
+    },
+    {
+      "at": 1794498000,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+          "nonce": "Tpl3O8xerTnWMiELlUa15pbuJqEiO1csDTeHFr11Dpk",
+          "signature": "rTwEpukm9wTJLh6R7QESlzaUMNm3FXnJYKOxjHJr-IFY0Mtf42O-hZ3tB7Cncs1zhDITc5hV1-T1Y7l4KINlCA"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_skMsW9nGmZM8RzzMKhc16yRv",
+          "expires": 1794501600,
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA",
+          "flags": 3,
+          "office": true
+        }
+      }
+    },
+    {
+      "at": 1794498001,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "GET",
+        "path": "/office/status",
+        "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "accounts": 1,
+          "applications": 1,
+          "codes": 0,
+          "sessions": 0
+        }
+      }
+    },
+    {
+      "at": 1794498002,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "GET",
+        "path": "/office/applications",
+        "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "applications": [
+            {
+              "application": "ap_uLlzQGd0WRe67exop0woBg",
+              "status": "pending",
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "received": 1794494400,
+              "expires": 1797086400
+            }
+          ]
+        }
+      }
+    },
+    {
+      "note": "He has checked N5CALL's licence and approves, with the usual flags."
+    },
+    {
+      "at": 1794498100,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/office/applications/ap_uLlzQGd0WRe67exop0woBg",
+        "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+        "body": {
+          "decision": "approve"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "application": "ap_uLlzQGd0WRe67exop0woBg",
+          "status": "approved",
+          "address": "jose@radiopost.org",
+          "operator": "N5CALL",
+          "name": "José Pérez",
+          "contact": "jose.perez@example.net",
+          "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+          "received": 1794494400,
+          "decided": 1794498100,
+          "flags": 3
+        }
+      }
+    },
+    {
+      "note": "José's laptop asks again, takes its credential and logs in with it."
+    },
+    {
+      "at": 1794498160,
+      "who": "José's laptop",
+      "request": {
+        "method": "GET",
+        "path": "/applications/ap_uLlzQGd0WRe67exop0woBg"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "application": "ap_uLlzQGd0WRe67exop0woBg",
+          "status": "approved",
+          "credential": "hEmiATIERPu9X1ygWFSoAQECGQQaA3Jqb3NlQHJhZGlvcG9zdC5vcmcEZk41Q0FMTAVYID4APCVa_34XTWqvihPZ5U0Q_smIaU0PAn3teb__eOmtBhpq9d40BxprbIU0CQNYQBKAZ0YI-eQqMIxgzw64Agms99FHMh8PHLqtqmEvjnIu8wGOJY8fZp1chdQKTFhdWoZCm_rxWWeSev0dt9YO3w0"
+        }
+      }
+    },
+    {
+      "at": 1794498170,
+      "who": "José's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "aZeRIPs6_nT6xq2kbFAKOgx7qRkaZ0K4d_m7aM0sEzE",
+          "expires": 1794498470
+        }
+      }
+    },
+    {
+      "at": 1794498170,
+      "who": "José's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "hEmiATIERPu9X1ygWFSoAQECGQQaA3Jqb3NlQHJhZGlvcG9zdC5vcmcEZk41Q0FMTAVYID4APCVa_34XTWqvihPZ5U0Q_smIaU0PAn3teb__eOmtBhpq9d40BxprbIU0CQNYQBKAZ0YI-eQqMIxgzw64Agms99FHMh8PHLqtqmEvjnIu8wGOJY8fZp1chdQKTFhdWoZCm_rxWWeSev0dt9YO3w0",
+          "nonce": "aZeRIPs6_nT6xq2kbFAKOgx7qRkaZ0K4d_m7aM0sEzE",
+          "signature": "qKSS8ejwGoiUjyBsGOkmDyPDHW6VWWWQvBgJ3I5_DZGRdchuDl96PwdX4n1l8yrMzBUxXMlCzLPEppM4845IDA"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_38H0mfFcFVqcB3qclpAbWVUK",
+          "expires": 1794501770,
+          "address": "jose@radiopost.org",
+          "operator": "N5CALL",
+          "flags": 3
+        }
+      }
+    },
+    {
+      "note": "Facundo makes a code for his own tablet, which enrolls with it (RP-5 §6.1)."
+    },
+    {
+      "at": 1794498200,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/office/codes",
+        "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+        "body": {
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA",
+          "flags": [
+            "receive"
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "code": "9KTX-NGP3",
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA",
+          "flags": 2,
+          "expires": 1795103000
+        }
+      }
+    },
+    {
+      "at": 1794498300,
+      "who": "Facundo's tablet",
+      "request": {
+        "method": "POST",
+        "path": "/enroll",
+        "body": {
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA",
+          "code": "9KTX-NGP3",
+          "device": "q7O8gAmcRYbdIXkWcpnZecUyH_DJcPY0M3Zh9Zextl8",
+          "signature": "cwQ-FGjFBMph6X-rZPP27aG_mFigpKEVwXFbIh9LvqZ7zOzvgiMHMWGjLXzVoIOsgzbM4lkjcoMsVWxIjkJPAw"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "credential": "hEmiATIERPu9X1ygWFeoAQECGQQbA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIKuzvIAJnEWG3SF5FnKZ2XnFMh_wyXD2NDN2YfWXsbZfBhpq9d78BxprbIX8CQJYQOfXfOo4HjyG1lQKmGn-rwQcq-CRcbzNCIEjDX3HAm8J9WFXfcLCZw1DVFf7tX35FUx_xTTT6A7qX_ldLzZhzwE"
+        }
+      }
+    },
+    {
+      "note": "Lena applies; no licence in her name holds N6CALL, so Facundo declines."
+    },
+    {
+      "at": 1794498400,
+      "who": "Lena's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/applications",
+        "body": {
+          "address": "lena@radiopost.org",
+          "operator": "N6CALL",
+          "name": "Lena Ortiz",
+          "contact": "lena@example.org",
+          "device": "XxDOfHigMNBvfeZ12RYiJJTOOKdAH3G-picAJEXJM40",
+          "signature": "E6UVYvJ0ztHtVYlGbdfopXa8gwqiqn7HxT1946nFdq0jgX99_6dGtGV_mMhsUTtmFugTOiF10Rbq-kC_h8V9DQ"
+        }
+      },
+      "response": {
+        "status": 202,
+        "body": {
+          "application": "ap_QxZ69YO9jwOAXWSxImKbrg",
+          "status": "pending",
+          "expires": 1797090400
+        }
+      }
+    },
+    {
+      "at": 1794498500,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/office/applications/ap_QxZ69YO9jwOAXWSxImKbrg",
+        "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+        "body": {
+          "decision": "decline",
+          "text": "N6CALL is not licensed to Lena Ortiz."
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "application": "ap_QxZ69YO9jwOAXWSxImKbrg",
+          "status": "declined",
+          "address": "lena@radiopost.org",
+          "operator": "N6CALL",
+          "name": "Lena Ortiz",
+          "contact": "lena@example.org",
+          "device": "XxDOfHigMNBvfeZ12RYiJJTOOKdAH3G-picAJEXJM40",
+          "received": 1794498400,
+          "decided": 1794498500,
+          "text": "N6CALL is not licensed to Lena Ortiz."
+        }
+      }
+    },
+    {
+      "at": 1794498600,
+      "who": "Lena's laptop",
+      "request": {
+        "method": "GET",
+        "path": "/applications/ap_QxZ69YO9jwOAXWSxImKbrg"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "application": "ap_QxZ69YO9jwOAXWSxImKbrg",
+          "status": "declined",
+          "text": "N6CALL is not licensed to Lena Ortiz."
+        }
+      }
+    },
+    {
+      "note": "Ruth applies. Facundo cannot tell from the licence database alone that she holds N7CALL, so he sends a code by post to the address on her licence."
+    },
+    {
+      "at": 1794499400,
+      "who": "Ruth's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/applications",
+        "body": {
+          "address": "ruth@radiopost.org",
+          "operator": "N7CALL",
+          "name": "Ruth Bell",
+          "contact": "ruth.bell@example.com",
+          "device": "K_W1ESyBU_w6FSSCAqYYWPAEBHllS5nwmCQ0CiMIpo4",
+          "signature": "3ZcgfsuwgeGL__XODw2L2cMYqT4d6PxFzbAVnfZueVTDR-Wl3j3JsGaqcWZeu68V7aqruPO-T-P3O_8aH4qYDg"
+        }
+      },
+      "response": {
+        "status": 202,
+        "body": {
+          "application": "ap_rfmChLNSNcScx5UZBKxuPw",
+          "status": "pending",
+          "expires": 1797091400
+        }
+      }
+    },
+    {
+      "at": 1794499500,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/office/applications/ap_rfmChLNSNcScx5UZBKxuPw",
+        "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+        "body": {
+          "decision": "postcard"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "application": "ap_rfmChLNSNcScx5UZBKxuPw",
+          "status": "postcard",
+          "address": "ruth@radiopost.org",
+          "operator": "N7CALL",
+          "name": "Ruth Bell",
+          "contact": "ruth.bell@example.com",
+          "device": "K_W1ESyBU_w6FSSCAqYYWPAEBHllS5nwmCQ0CiMIpo4",
+          "received": 1794499400,
+          "decided": 1794499500,
+          "code": "WKJV-CU7D",
+          "code_expires": 1797091500
+        }
+      }
+    },
+    {
+      "at": 1794499600,
+      "who": "Ruth's laptop",
+      "request": {
+        "method": "GET",
+        "path": "/applications/ap_rfmChLNSNcScx5UZBKxuPw"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "application": "ap_rfmChLNSNcScx5UZBKxuPw",
+          "status": "postcard"
+        }
+      }
+    },
+    {
+      "note": "Five days later the card arrives, and Ruth enrolls with its code."
+    },
+    {
+      "at": 1794926400,
+      "who": "Ruth's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/enroll",
+        "body": {
+          "address": "ruth@radiopost.org",
+          "operator": "N7CALL",
+          "code": "WKJV-CU7D",
+          "device": "K_W1ESyBU_w6FSSCAqYYWPAEBHllS5nwmCQ0CiMIpo4",
+          "signature": "U7md4_vrsXQFLbLvrVdxSawrqJIg8A0F1gn0xzETMV28fNg-gD4sRS1gyBZEQ1Pd1cgMw08wvw2HCPbdrLpODg"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "credential": "hEmiATIERPu9X1ygWFSoAQECGQQcA3JydXRoQHJhZGlvcG9zdC5vcmcEZk43Q0FMTAVYICv1tREsgVP8OhUkggKmGFjwBAR5ZUuZ8JgkNAojCKaOBhpq_GdABxprcw5ACQNYQBz73NaOeF7TMeIER882UQp1cMJhMBZpzje-Oqg0ixF39zqswuFbC5Y9zjszXm_-DKDzo39MXN50ivroif6dsQY"
+        }
+      }
+    },
+    {
+      "note": "A new token for Facundo; he makes a code for a shelter's role mailbox."
+    },
+    {
+      "at": 1794926500,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "QRp5ATWQ5VJ7XZLwi46gWEYGFjN-U4deypAwvXmlkuM",
+          "expires": 1794926800
+        }
+      }
+    },
+    {
+      "at": 1794926500,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+          "nonce": "QRp5ATWQ5VJ7XZLwi46gWEYGFjN-U4deypAwvXmlkuM",
+          "signature": "Y4MKrNnEKNDXX6k8RLM0I6OZiEIIakuaHw6hroh5lSZhD1kablaVC4JJizXi9wwWIrZ4E9P-f4-0B86nseoXDg"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_szAAaV4ZvCcUHXSRznTqBaUm",
+          "expires": 1794930100,
+          "address": "facundo@radiopost.org",
+          "operator": "KK4ODA",
+          "flags": 3,
+          "office": true
+        }
+      }
+    },
+    {
+      "at": 1794926501,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/office/codes",
+        "authorization": "Bearer tok_szAAaV4ZvCcUHXSRznTqBaUm",
+        "body": {
+          "address": "shelter5@radiopost.org",
+          "operator": "N5CALL",
+          "flags": [
+            "send",
+            "receive",
+            "role"
+          ],
+          "name": "Shelter 5"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "code": "UNR6-8DP4",
+          "address": "shelter5@radiopost.org",
+          "operator": "N5CALL",
+          "flags": 7,
+          "expires": 1795531301
+        }
+      }
+    },
+    {
+      "note": "Facundo's tablet is lost: he revokes it, and it can no longer log in."
+    },
+    {
+      "at": 1794926600,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "POST",
+        "path": "/office/revoke",
+        "authorization": "Bearer tok_szAAaV4ZvCcUHXSRznTqBaUm",
+        "body": {
+          "device": "q7O8gAmcRYbdIXkWcpnZecUyH_DJcPY0M3Zh9Zextl8"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "revoked": [
+            1051
+          ]
+        }
+      }
+    },
+    {
+      "at": 1794926601,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "GET",
+        "path": "/office/accounts",
+        "authorization": "Bearer tok_szAAaV4ZvCcUHXSRznTqBaUm"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "accounts": [
+            {
+              "address": "facundo@radiopost.org",
+              "waiting": 0,
+              "credentials": [
+                {
+                  "serial": 1051,
+                  "operator": "KK4ODA",
+                  "device": "q7O8gAmcRYbdIXkWcpnZecUyH_DJcPY0M3Zh9Zextl8",
+                  "flags": 2,
+                  "expires": 1802274300,
+                  "revoked": true
+                }
+              ]
+            },
+            {
+              "address": "jose@radiopost.org",
+              "waiting": 0,
+              "credentials": [
+                {
+                  "serial": 1050,
+                  "operator": "N5CALL",
+                  "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+                  "flags": 3,
+                  "expires": 1802274100,
+                  "revoked": false
+                }
+              ],
+              "name": "José Pérez"
+            },
+            {
+              "address": "ruth@radiopost.org",
+              "waiting": 0,
+              "credentials": [
+                {
+                  "serial": 1052,
+                  "operator": "N7CALL",
+                  "device": "K_W1ESyBU_w6FSSCAqYYWPAEBHllS5nwmCQ0CiMIpo4",
+                  "flags": 3,
+                  "expires": 1802702400,
+                  "revoked": false
+                }
+              ],
+              "name": "Ruth Bell"
+            },
+            {
+              "address": "shelter5@radiopost.org",
+              "waiting": 0,
+              "credentials": [],
+              "name": "Shelter 5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "at": 1794926602,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "GET",
+        "path": "/office/applications",
+        "authorization": "Bearer tok_szAAaV4ZvCcUHXSRznTqBaUm"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "applications": [
+            {
+              "application": "ap_uLlzQGd0WRe67exop0woBg",
+              "status": "approved",
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "received": 1794494400,
+              "decided": 1794498100,
+              "flags": 3
+            },
+            {
+              "application": "ap_QxZ69YO9jwOAXWSxImKbrg",
+              "status": "declined",
+              "address": "lena@radiopost.org",
+              "operator": "N6CALL",
+              "name": "Lena Ortiz",
+              "contact": "lena@example.org",
+              "device": "XxDOfHigMNBvfeZ12RYiJJTOOKdAH3G-picAJEXJM40",
+              "received": 1794498400,
+              "decided": 1794498500,
+              "text": "N6CALL is not licensed to Lena Ortiz."
+            },
+            {
+              "application": "ap_rfmChLNSNcScx5UZBKxuPw",
+              "status": "postcard",
+              "address": "ruth@radiopost.org",
+              "operator": "N7CALL",
+              "name": "Ruth Bell",
+              "contact": "ruth.bell@example.com",
+              "device": "K_W1ESyBU_w6FSSCAqYYWPAEBHllS5nwmCQ0CiMIpo4",
+              "received": 1794499400,
+              "decided": 1794499500,
+              "code": "WKJV-CU7D",
+              "code_expires": 1797091500
+            }
+          ]
+        }
+      }
+    },
+    {
+      "at": 1794926603,
+      "who": "Facundo's laptop",
+      "request": {
+        "method": "GET",
+        "path": "/office/status",
+        "authorization": "Bearer tok_szAAaV4ZvCcUHXSRznTqBaUm"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "accounts": 4,
+          "applications": 0,
+          "codes": 1,
+          "sessions": 0
+        }
+      }
+    },
+    {
+      "at": 1794926700,
+      "who": "Facundo's tablet",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "g3eRjWM6rYTcsm_Ft0opUWb8FD8Nv5kNaBf9-XpaDSQ",
+          "expires": 1794927000
+        }
+      }
+    },
+    {
+      "at": 1794926700,
+      "who": "Facundo's tablet",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "hEmiATIERPu9X1ygWFeoAQECGQQbA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIKuzvIAJnEWG3SF5FnKZ2XnFMh_wyXD2NDN2YfWXsbZfBhpq9d78BxprbIX8CQJYQOfXfOo4HjyG1lQKmGn-rwQcq-CRcbzNCIEjDX3HAm8J9WFXfcLCZw1DVFf7tX35FUx_xTTT6A7qX_ldLzZhzwE",
+          "nonce": "g3eRjWM6rYTcsm_Ft0opUWb8FD8Nv5kNaBf9-XpaDSQ",
+          "signature": "iQ0Zp_uROBM03tgRNNPmqf8tEkeNvPARtEj05h_ARFE8f1fTYPBfLucpUSBjzAjgUT70i8QISLa35Gy8SE-vBg"
+        }
+      },
+      "response": {
+        "status": 422,
+        "body": {
+          "type": "about:blank",
+          "title": "Credential revoked",
+          "status": 422,
+          "code": 5,
+          "name": "credential-revoked"
+        }
+      }
+    }
+  ],
+  "cases": [
+    {
+      "what": "a post office that takes no applications",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "pUYxxi9SURY7gnUISw_VWI8fcfUkMmHe72FAJv_0po7M3bcGLhawS6-KEBn0vDI1zBz6xTFyXmenDJ09xa1zDw"
+            }
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Refused by policy",
+              "status": 403,
+              "code": 13,
+              "name": "refused-by-policy"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "an address at another post office's domain",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "jose@hampost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "y_izpkGj7AKI44Xx7fRVMMw_AxsEz1Ce99Qg_omQIDNdgu37qFAugKPZW_hkSb5Y93fzj_SRF-nr9FpRIXvdAg"
+            }
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Refused by policy",
+              "status": 403,
+              "code": 13,
+              "name": "refused-by-policy"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "an address that is an account already",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "facundo@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "AbxkVaBoPmZs6VGnF9uMkQaM_Oc2flym7hXMnhG4KKAxXBuYICYV8LFQzqC-yyo-VHiIFUs35TZNZABoOSXuAQ"
+            }
+          },
+          "response": {
+            "status": 409,
+            "body": {
+              "type": "about:blank",
+              "title": "Already have",
+              "status": 409,
+              "code": 14,
+              "name": "already-have"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "an address in capitals",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "Jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "Fy6cfWLoLFM6t9MSYC27z_Mb2ldp8sNVQ7rd1upQS5UqIssU3oojM12kU8vm9L1aez2_TdXpaP8cFOcbKV4GBA"
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "a callsign with an SSID",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL-1",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "kNQTQQLeAxU7VRQLZtvtZkxitc1VY8a6KuGRbY2qsjVfBgg8Y2aPIjqBMxhbgG0pRjpNNN2e7bActKDTxy2YAA"
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "no contact address",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "pUYxxi9SURY7gnUISw_VWI8fcfUkMmHe72FAJv_0po7M3bcGLhawS6-KEBn0vDI1zBz6xTFyXmenDJ09xa1zDw"
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "signed for another post office's base URL",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "kt5Avs4d8dk-xg2XcQpubyslpgDSnzCT1yVAUF9Polpk25oLlZxJa-XTwbMG7dArE5sMaAxVL6UbeP79DFG3AQ"
+            }
+          },
+          "response": {
+            "status": 422,
+            "body": {
+              "type": "about:blank",
+              "title": "Signature invalid",
+              "status": 422,
+              "code": 8,
+              "name": "signature-invalid"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "an address asked for by an application still pending",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "pUYxxi9SURY7gnUISw_VWI8fcfUkMmHe72FAJv_0po7M3bcGLhawS6-KEBn0vDI1zBz6xTFyXmenDJ09xa1zDw"
+            }
+          },
+          "response": {
+            "status": 202,
+            "body": {
+              "application": "ap_uLlzQGd0WRe67exop0woBg",
+              "status": "pending",
+              "expires": 1797086400
+            }
+          }
+        },
+        {
+          "at": 1794494460,
+          "who": "Lena's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "jose@radiopost.org",
+              "operator": "N6CALL",
+              "name": "Lena Ortiz",
+              "contact": "lena@example.org",
+              "device": "XxDOfHigMNBvfeZ12RYiJJTOOKdAH3G-picAJEXJM40",
+              "signature": "fUS9wq_wA-_ZQnSuRWSc37STx-8vEOxBGrSmPw29YDelR7PLY5E-HR6gcthJdrm-REYVZhumhxjDzNr4WYapBA"
+            }
+          },
+          "response": {
+            "status": 409,
+            "body": {
+              "type": "about:blank",
+              "title": "Already have",
+              "status": 409,
+              "code": 14,
+              "name": "already-have"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "a pending application forgotten after 30 days, then made again",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "pUYxxi9SURY7gnUISw_VWI8fcfUkMmHe72FAJv_0po7M3bcGLhawS6-KEBn0vDI1zBz6xTFyXmenDJ09xa1zDw"
+            }
+          },
+          "response": {
+            "status": 202,
+            "body": {
+              "application": "ap_uLlzQGd0WRe67exop0woBg",
+              "status": "pending",
+              "expires": 1797086400
+            }
+          }
+        },
+        {
+          "at": 1797086399,
+          "who": "José's laptop",
+          "request": {
+            "method": "GET",
+            "path": "/applications/ap_uLlzQGd0WRe67exop0woBg"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "application": "ap_uLlzQGd0WRe67exop0woBg",
+              "status": "pending",
+              "expires": 1797086400
+            }
+          }
+        },
+        {
+          "at": 1797086400,
+          "who": "José's laptop",
+          "request": {
+            "method": "GET",
+            "path": "/applications/ap_uLlzQGd0WRe67exop0woBg"
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "type": "about:blank",
+              "title": "Unknown message",
+              "status": 404,
+              "code": 15,
+              "name": "unknown-message"
+            }
+          }
+        },
+        {
+          "at": 1797086400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "pUYxxi9SURY7gnUISw_VWI8fcfUkMmHe72FAJv_0po7M3bcGLhawS6-KEBn0vDI1zBz6xTFyXmenDJ09xa1zDw"
+            }
+          },
+          "response": {
+            "status": 202,
+            "body": {
+              "application": "ap_OD3-Cg96Lc0uvRtfwJARWg",
+              "status": "pending",
+              "expires": 1799678400
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "an unknown application",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "GET",
+            "path": "/applications/ap_AAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "type": "about:blank",
+              "title": "Unknown message",
+              "status": 404,
+              "code": 15,
+              "name": "unknown-message"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "a user who is not an operator",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "Shelter 3 (N3CALL)",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "expires": 1794494700
+            }
+          }
+        },
+        {
+          "at": 1794494400,
+          "who": "Shelter 3 (N3CALL)",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFioAQECGQQ1A3ZzaGVsdGVyM0ByYWRpb3Bvc3Qub3JnBGZOM0NBTEwFWCBfHY7YHDVavR3J7ZgAglth-pNqZhVWVI-pJHZuGC57GAYaauaBAAcaa10oAAkHWEDkx2PRUBVIe2zQJE3FYsu6ORyy11DFgeuM1KJS-T2Tt6P0F67Mb2GBMZGc97cCkyx3fQJoYSp403c492kgR5MG",
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "signature": "TqxWfE31N87vDNgZeYWYw_ag5KAAh8aFl6h_hu4CxhJjyHEiVGaoyE8-P6SkI7_7D_5YvUIAxM9nkJzHyCbIBA"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+              "expires": 1794498000,
+              "address": "shelter3@radiopost.org",
+              "operator": "N3CALL",
+              "flags": 7
+            }
+          }
+        },
+        {
+          "at": 1794494401,
+          "who": "Shelter 3 (N3CALL)",
+          "request": {
+            "method": "GET",
+            "path": "/office/status",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 403,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "a credential from another post office, with an operator's callsign",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "Ana's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "expires": 1794494700
+            }
+          }
+        },
+        {
+          "at": 1794494400,
+          "who": "Ana's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERIQhnQCgWFGoAQECGQfRA29hbmFAaGFtcG9zdC5vcmcEZk4wQ0FMTAVYINZYGmp6E9hGqIstIDsd-4fjW8LAtFA6wT9WvKLoCs6cBhpq5oEABxprXSgACQNYQGvdZL0i0sKBC212pHzKv5W30mP1nXgXfU7UtznsYIX3yGN8pm2aQ0y6lxy9W8xT6Q6NDG33zbEPbC9Q6KjemwE",
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "signature": "8UHPKRaWYnMmEGbb2tBpNHFTJD_Wp8AkwZRGUySy6MhOdIFObcH7KG-CrgixOG0WIy4BvKmxoyWllF6hWWY9DA"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+              "expires": 1794498000,
+              "address": "ana@hampost.org",
+              "operator": "N0CALL",
+              "flags": 3
+            }
+          }
+        },
+        {
+          "at": 1794494401,
+          "who": "Ana's laptop",
+          "request": {
+            "method": "GET",
+            "path": "/office/status",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 403,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "a gateway's credential, with an operator's callsign",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "expires": 1794494700
+            }
+          }
+        },
+        {
+          "at": 1794494400,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFmoAQECGQQbA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEaEtLNE9EQS0xBVggL2s9kPkHedoS8O1-BJo5ldNc8ngoQyraV2NU22EELJsGGmrmnSAHGmtdRCAJCVhAnaMKb4t0WaorLA7yyD3ph2yYQilUl_b2sVTzUIOmLavcuGSYPcGX2kYz68-txE8WMaWJEhR4o6aSg6YLUIdvAg",
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "signature": "Qp-GcqyOA6MkvNc1pXQYYOPnkDYsGASaGu2f01VjmdOP2JYUL4n5YvGrTKnd99doVAW2RYQu2VW_957uNuhtCQ"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+              "expires": 1794498000,
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA-1",
+              "flags": 9
+            }
+          }
+        },
+        {
+          "at": 1794494401,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "GET",
+            "path": "/office/status",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 403,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "no token",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "nobody",
+          "request": {
+            "method": "GET",
+            "path": "/office/applications"
+          },
+          "response": {
+            "status": 401,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 401,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "a post office that offers no operator endpoints",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "expires": 1794494700
+            }
+          }
+        },
+        {
+          "at": 1794494400,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "signature": "vvj6g6S7gFT7vifjFwtWwx2-YYalvH8gz_4rtIkx7ThOC1f8gixxmqZVBTsuyKZiY-etB4a_oFYpRFqJyIX6Cw"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+              "expires": 1794498000,
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA",
+              "flags": 3
+            }
+          }
+        },
+        {
+          "at": 1794494401,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "GET",
+            "path": "/office/status",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "type": "about:blank",
+              "title": "Unknown message",
+              "status": 404,
+              "code": 15,
+              "name": "unknown-message"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "an application decided twice",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "pUYxxi9SURY7gnUISw_VWI8fcfUkMmHe72FAJv_0po7M3bcGLhawS6-KEBn0vDI1zBz6xTFyXmenDJ09xa1zDw"
+            }
+          },
+          "response": {
+            "status": 202,
+            "body": {
+              "application": "ap_uLlzQGd0WRe67exop0woBg",
+              "status": "pending",
+              "expires": 1797086400
+            }
+          }
+        },
+        {
+          "at": 1794494410,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "Tpl3O8xerTnWMiELlUa15pbuJqEiO1csDTeHFr11Dpk",
+              "expires": 1794494710
+            }
+          }
+        },
+        {
+          "at": 1794494410,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+              "nonce": "Tpl3O8xerTnWMiELlUa15pbuJqEiO1csDTeHFr11Dpk",
+              "signature": "rTwEpukm9wTJLh6R7QESlzaUMNm3FXnJYKOxjHJr-IFY0Mtf42O-hZ3tB7Cncs1zhDITc5hV1-T1Y7l4KINlCA"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_skMsW9nGmZM8RzzMKhc16yRv",
+              "expires": 1794498010,
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA",
+              "flags": 3,
+              "office": true
+            }
+          }
+        },
+        {
+          "at": 1794494411,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/applications/ap_uLlzQGd0WRe67exop0woBg",
+            "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+            "body": {
+              "decision": "decline",
+              "text": "No."
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "application": "ap_uLlzQGd0WRe67exop0woBg",
+              "status": "declined",
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "received": 1794494400,
+              "decided": 1794494411,
+              "text": "No."
+            }
+          }
+        },
+        {
+          "at": 1794494412,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/applications/ap_uLlzQGd0WRe67exop0woBg",
+            "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+            "body": {
+              "decision": "approve"
+            }
+          },
+          "response": {
+            "status": 409,
+            "body": {
+              "type": "about:blank",
+              "title": "Already have",
+              "status": 409,
+              "code": 14,
+              "name": "already-have"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "decisions with the gateway flag, without a reason, unknown, missing; an unknown ID",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "pUYxxi9SURY7gnUISw_VWI8fcfUkMmHe72FAJv_0po7M3bcGLhawS6-KEBn0vDI1zBz6xTFyXmenDJ09xa1zDw"
+            }
+          },
+          "response": {
+            "status": 202,
+            "body": {
+              "application": "ap_uLlzQGd0WRe67exop0woBg",
+              "status": "pending",
+              "expires": 1797086400
+            }
+          }
+        },
+        {
+          "at": 1794494410,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "Tpl3O8xerTnWMiELlUa15pbuJqEiO1csDTeHFr11Dpk",
+              "expires": 1794494710
+            }
+          }
+        },
+        {
+          "at": 1794494410,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+              "nonce": "Tpl3O8xerTnWMiELlUa15pbuJqEiO1csDTeHFr11Dpk",
+              "signature": "rTwEpukm9wTJLh6R7QESlzaUMNm3FXnJYKOxjHJr-IFY0Mtf42O-hZ3tB7Cncs1zhDITc5hV1-T1Y7l4KINlCA"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_skMsW9nGmZM8RzzMKhc16yRv",
+              "expires": 1794498010,
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA",
+              "flags": 3,
+              "office": true
+            }
+          }
+        },
+        {
+          "at": 1794494411,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/applications/ap_uLlzQGd0WRe67exop0woBg",
+            "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+            "body": {
+              "decision": "approve",
+              "flags": [
+                "send",
+                "gateway"
+              ]
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        },
+        {
+          "at": 1794494412,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/applications/ap_uLlzQGd0WRe67exop0woBg",
+            "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+            "body": {
+              "decision": "decline"
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        },
+        {
+          "at": 1794494413,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/applications/ap_uLlzQGd0WRe67exop0woBg",
+            "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+            "body": {
+              "decision": "maybe"
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        },
+        {
+          "at": 1794494414,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/applications/ap_uLlzQGd0WRe67exop0woBg",
+            "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+            "body": {}
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        },
+        {
+          "at": 1794494420,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/applications/ap_AAAAAAAAAAAAAAAAAAAAAA",
+            "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+            "body": {
+              "decision": "approve"
+            }
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "type": "about:blank",
+              "title": "Unknown message",
+              "status": 404,
+              "code": 15,
+              "name": "unknown-message"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "approving an address that has become an account since",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "pUYxxi9SURY7gnUISw_VWI8fcfUkMmHe72FAJv_0po7M3bcGLhawS6-KEBn0vDI1zBz6xTFyXmenDJ09xa1zDw"
+            }
+          },
+          "response": {
+            "status": 202,
+            "body": {
+              "application": "ap_uLlzQGd0WRe67exop0woBg",
+              "status": "pending",
+              "expires": 1797086400
+            }
+          }
+        },
+        {
+          "at": 1794494410,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "Tpl3O8xerTnWMiELlUa15pbuJqEiO1csDTeHFr11Dpk",
+              "expires": 1794494710
+            }
+          }
+        },
+        {
+          "at": 1794494410,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+              "nonce": "Tpl3O8xerTnWMiELlUa15pbuJqEiO1csDTeHFr11Dpk",
+              "signature": "rTwEpukm9wTJLh6R7QESlzaUMNm3FXnJYKOxjHJr-IFY0Mtf42O-hZ3tB7Cncs1zhDITc5hV1-T1Y7l4KINlCA"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_skMsW9nGmZM8RzzMKhc16yRv",
+              "expires": 1794498010,
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA",
+              "flags": 3,
+              "office": true
+            }
+          }
+        },
+        {
+          "at": 1794494411,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/codes",
+            "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+            "body": {
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "code": "MY54-N97E",
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "flags": 3,
+              "expires": 1795099211
+            }
+          }
+        },
+        {
+          "at": 1794494412,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/applications/ap_uLlzQGd0WRe67exop0woBg",
+            "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+            "body": {
+              "decision": "approve"
+            }
+          },
+          "response": {
+            "status": 409,
+            "body": {
+              "type": "about:blank",
+              "title": "Already have",
+              "status": 409,
+              "code": 14,
+              "name": "already-have"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "codes for another domain, a lowercase callsign, the gateway flag; a short key",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "expires": 1794494700
+            }
+          }
+        },
+        {
+          "at": 1794494400,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "signature": "vvj6g6S7gFT7vifjFwtWwx2-YYalvH8gz_4rtIkx7ThOC1f8gixxmqZVBTsuyKZiY-etB4a_oFYpRFqJyIX6Cw"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+              "expires": 1794498000,
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA",
+              "flags": 3,
+              "office": true
+            }
+          }
+        },
+        {
+          "at": 1794494401,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/codes",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "address": "ana@hampost.org",
+              "operator": "N0CALL"
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        },
+        {
+          "at": 1794494402,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/codes",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "address": "ana@radiopost.org",
+              "operator": "n0call"
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        },
+        {
+          "at": 1794494403,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/codes",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "address": "ana@radiopost.org",
+              "operator": "N0CALL",
+              "flags": [
+                "gateway"
+              ]
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        },
+        {
+          "at": 1794494410,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/revoke",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "device": "AAAA"
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.27 |
+| **Version** | 0.1.28 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -107,6 +107,7 @@ reasoning; the specifications hold the result.
 | D32 | **Open trust of post offices, the operator deciding** (RP-1 §7.3): a gateway trusts a post office it looked up in DNS, and one hop of the post office lists of those; its operator can block any or limit the gateway to those it names. | Like email: no gatekeeper, so a new post office reaches gateways as its users call. Every message carries the credential of the post office that vouched for its sender, so a dishonest one is found out and blocked. | A list kept by the project (a gatekeeper, against the no-centre design); only what each operator names (new post offices reach few gateways). |
 | D33 | **radiopost.org enrolls on an LoTW certificate or the sysop's check** (RP-1 §1, RP-5 §6.1). | The applicant signs a challenge with the key of their ARRL Logbook of the World certificate, which names their callsign; one without LoTW is checked by the sysop against the licence database, with a code sent to the address the licence record holds. Either is enough. | LoTW only (excludes licensees without it); the sysop only (every new user waits); both (slowest, and still excludes those without LoTW). |
 | D34 | **Every program updates itself from a signed update channel.** Each release carries one version, its programs ask the channel (a rolling release, `channel-beta`) when they start and every six hours, and say when a newer one is out; the desktop applications install it with Tauri's updater, the command-line programs with `update`. A file is taken only when the project's update key signed it. | Users and operators should not have to watch the releases page, and a gateway or post office left running for months must still learn of fixes. A signature, not the download's address, is what a program trusts. | Notices only (every user downloads by hand); updates without signatures (whoever controls the download controls the station); a package repository per platform (several to run). |
+| D35 | **Applicants ask, operators decide, from the client** (RP-5 §6.7, §7). Anyone with a licence applies from a new device for an address; the post office keeps the application, and its operators, logged in with their own credentials, approve it (the credential goes straight to the waiting device), decline it with a reason, or send a code by post to the address on the licence. The same operator endpoints show the accounts, make codes and revoke devices. | Running a post office had meant a shell on its server for every new user (check the licence by hand, `radiopost-po code`, a mailbox in the mail server, an email with both); the operators already hold a credential the post office issued, so it is their login, with no password to guess and no administration page left open on the Internet. A licence database shows a callsign exists and in whose name, which anyone can read, so the decision stays a person's (or a proof's, D33), with what the post office found shown beside it. | An administration web page with its own passwords (one more secret, open to guessing); a shell inside the client holding the server's login (the laptop becomes the server's key); approving on a licence lookup alone (the data is public, so anyone could pass as anyone); codes only (the applicant waits for a person to send one, and copies it). |
 
 ---
 
@@ -352,3 +353,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.25 | 2026-11-11 | D34: the programs update themselves from a signed update channel, as the author asked. |
 | 0.1.26 | 2026-11-11 | §9: the wishlist, in its own document. |
 | 0.1.27 | 2026-11-12 | The purpose, stated (written 2026-11-10 on a branch, merged now): not a replacement for Winlink, but a common protocol to experiment with and build on. D19's reason reworded to match: a station runs both systems, not a move from one to the other. |
+| 0.1.28 | 2026-11-12 | D35: applications from the client, decided by the operators over the API with their own credentials (RP-5 0.14.0). |

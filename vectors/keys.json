@@ -100,6 +100,27 @@
       "kid_hex": "0112c4ee",
       "not_before": 1794062400,
       "not_after": 1861833600
+    },
+    {
+      "label": "device:jose",
+      "what": "José's laptop, applying for jose@radiopost.org as N5CALL",
+      "seed_hex": "88090bf977d098b7002be8b36fcee79ab3b6becf7789445e19690f1bfde83e49",
+      "public_hex": "3e003c255aff7e174d6aaf8a13d9e54d10fec988694d0f027ded79bfff78e9ad",
+      "kid_hex": "e191ef9d"
+    },
+    {
+      "label": "device:lena",
+      "what": "Lena's laptop, applying for lena@radiopost.org as N6CALL",
+      "seed_hex": "94f43726df9d209a06a89ced4376475882a2290db8016416b110122b1a62b860",
+      "public_hex": "5f10ce7c78a030d06f7de675d916222494ce38a7401f71bea627002445c9338d",
+      "kid_hex": "8cb3badd"
+    },
+    {
+      "label": "device:ruth",
+      "what": "Ruth's laptop, applying for ruth@radiopost.org as N7CALL",
+      "seed_hex": "194ab19183b96bacf594fcff1d7e60bed12e6a7d395b5a3a16949c00c6592dd3",
+      "public_hex": "2bf5b5112c8153fc3a15248202a61858f0040479654b99f09824340a2308a68e",
+      "kid_hex": "872af857"
     }
   ]
 }

@@ -2,7 +2,7 @@
   "radiopost_vectors": "Post office API signatures",
   "format": 1,
   "specs": {
-    "RP-5": "§3.2, §6.1, §6.4",
+    "RP-5": "§3.2, §6.1, §6.4, §6.7",
     "RP-0": "§9.2"
   },
   "made_by": "tools/vectors/make.py",
@@ -33,5 +33,14 @@
     "device_public_hex": "2f6b3d90f90779da12f0ed7e049a3995d35cf27828432ada576354db61042c9b",
     "signed_input_hex": "526164696f506f73742d6170692d676174657761792d7631004b4b344f44412d3168747470733a2f2f706f2e726164696f706f73742e6f72672f72702f7631",
     "signature_hex": "8a83c045bd41454d32a1374345823bfa6c438ced9680f014c8ddb5f8902142ed47048db33e2966142130d06dd3737785bb6b6f1c8b3dde82739a115acb677a0c"
+  },
+  "apply": {
+    "base_url": "https://po.radiopost.org/rp/v1",
+    "address": "jose@radiopost.org",
+    "operator": "N5CALL",
+    "device": "device:jose",
+    "device_public_hex": "3e003c255aff7e174d6aaf8a13d9e54d10fec988694d0f027ded79bfff78e9ad",
+    "signed_input_hex": "526164696f506f73742d6170692d6170706c792d7631006a6f736540726164696f706f73742e6f72670a4e3543414c4c0a68747470733a2f2f706f2e726164696f706f73742e6f72672f72702f7631",
+    "signature_hex": "a54631c62f5251163b8275084b0fd5588f1f71f5243261deef614026fff4a68eccddb7062e16b04baf8a1019f4bc3235cc1cfac531725e67a70c9d3dc5ad730f"
   }
 }

@@ -45,6 +45,18 @@ NONCE_S = 300  # how long a login nonce is good for (RP-5 §3.1)
 CREDENTIAL_S = 90 * 86400  # RP-1 §4.2
 CUT_OFF_S = 900  # RP-7 §4.1: no copies poll for this long, and a gateway is cut off
 ENTRY = re.compile(r"(?:[^@\s]+)?@[a-z0-9-]+(?:\.[a-z0-9-]+)+")  # RP-5 §6.5, in lowercase
+CODE_S = 7 * 86400  # an enrollment code's life (RP-5 §8: within days)
+POSTCARD_S = 30 * 86400  # a code sent by post (RP-5 §7.3: at least 30 days)
+APPLICATION_S = 30 * 86400  # a pending application is kept (RP-5 §6.7: at least 14 days)
+DECIDED_S = 7 * 86400  # a decided one is answered (RP-5 §6.7: at least 7 days)
+CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"  # read out by people: no 0, O, 1 or I
+ACCOUNT = re.compile(r"[a-z0-9._-]{1,64}@[a-z0-9-]+(?:\.[a-z0-9-]+)+")  # RP-5 §6.7
+CONTACT = re.compile(r"[^@\s]{1,64}@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
+BASE_CALL = re.compile(r"[A-Z0-9]{1,10}")  # RP-0 §6.1's base
+CALLSIGN = re.compile(
+    r"(?:[A-Z0-9]{1,10}/)?[A-Z0-9]{1,10}(?:/[A-Z0-9]{1,10})?(?:-(?:1[0-5]|[0-9]))?"
+)
+GRANTABLE = {"send", "receive", "role"}  # RP-5 §7.3: an operator never grants `gateway`
 
 Response = tuple[int, dict[str, Any] | None]
 
@@ -135,6 +147,13 @@ class PostOffice:
     max_air_bytes: int = 65536  # RP-5 §4.1
     issued: int = 0  # how many random values drawn, so each draw is new
     next_serial: int = 1  # the serial of the next credential this post office issues
+    operators: list[str] = field(default_factory=list)  # RP-5 §7.1; none, no operator endpoints
+    applications_open: bool = False  # RP-5 §4.1 `applications`
+    applications: dict[str, dict[str, Any]] = field(default_factory=dict)  # RP-5 §6.7, by ID
+    accounts: set[str] = field(default_factory=set)
+    names: dict[str, str] = field(default_factory=dict)  # display names (RP-6 §3.1)
+    credentials: dict[int, dict[str, Any]] = field(default_factory=dict)  # issued, by serial
+    serials_of: dict[bytes, list[int]] = field(default_factory=dict)  # by device key (RP-5 §6.2)
 
     # -- what happens outside the API --------------------------------------------------------------
 
@@ -198,9 +217,36 @@ class PostOffice:
             self.copies.setdefault(route["via"], []).append(item)
             self.forwarded.setdefault(cut, []).append((route["via"], address, waiting.serial))
 
+    def _add_code(
+        self, code: str, address: str, operator: str, flags: int, life: int = CODE_S
+    ) -> None:
+        """An enrollment code (RP-5 §6.1); the account exists from now, for mail to arrive."""
+        self.accounts.add(address)
+        self.codes[code] = {
+            "address": address,
+            "operator": operator,
+            "flags": flags,
+            "expires": self.now + life,
+        }
+
+    def _new_code(self) -> str:
+        """Eight characters from a 32-letter alphabet, in two groups: `7Q4F-AZ9K`."""
+        raw = self.fresh("code", 8)
+        chars = "".join(CODE_ALPHABET[b % len(CODE_ALPHABET)] for b in raw)
+        return f"{chars[:4]}-{chars[4:]}"
+
     def issue(self, address: str, operator: str, device: bytes, flags: int) -> bytes:
         serial = self.next_serial
         self.next_serial += 1
+        self.accounts.add(address)
+        self.serials_of.setdefault(device, []).append(serial)
+        self.credentials[serial] = {
+            "address": address,
+            "operator": operator,
+            "device": device,
+            "flags": flags,
+            "expires": self.now + CREDENTIAL_S,
+        }
         body = {
             1: 1,
             2: serial,
@@ -226,9 +272,19 @@ class PostOffice:
             return self.login(body or {})
         if (method, route) == ("POST", "/enroll"):
             return self.enroll(body or {})
+        if (method, route) == ("POST", "/applications"):
+            return self._apply(body or {})
+        if method == "GET" and len(parts) == 2 and parts[0] == "applications":
+            return self._application(parts[1])
+        if parts[0] == "office" and not self.operators:
+            return problem("unknown-message", 404)  # RP-5 §7.1: not offered
         user = self.authorise(token)
         if isinstance(user, tuple):
             return user
+        if parts[0] == "office":
+            if not self._is_operator(user):
+                return problem("not-authorized")
+            return self._office(method, parts[1:], body or {})
         is_gateway = bool(user[9] & rp.FLAGS["gateway"])
         gateway_routes = {"sessions", "reports", "copies"}
         anyone = {"/credentials"}  # gateways renew their credentials too (§6.2)
@@ -288,13 +344,24 @@ class PostOffice:
         token = "tok_" + jws.b64u(self.fresh("token", 18))
         expires = min(self.now + TOKEN_S, cbody[7])
         self.tokens[token] = {"body": cbody, "expires": expires}
-        return 200, {
+        answer = {
             "token": token,
             "expires": expires,
             "address": cbody[3],
             "operator": cbody[4],
             "flags": cbody[9],
         }
+        if self.operators and self._is_operator(cbody):
+            answer["office"] = True  # RP-5 §3.2
+        return 200, answer
+
+    def _is_operator(self, cbody: dict[int, Any]) -> bool:
+        """RP-5 §7.1: a credential this post office issued, to one of its operators, no gateway."""
+        return (
+            cbody[3].rpartition("@")[2] in self.domains
+            and cbody[4] in self.operators
+            and not cbody[9] & rp.FLAGS["gateway"]
+        )
 
     def check_session(
         self, body: dict[str, Any], gateway: str, clock: int
@@ -720,9 +787,10 @@ class PostOffice:
     def enroll(self, body: dict[str, Any]) -> Response:
         """RP-5 §6.1: a one-time code, and a signature that proves the new device holds its key."""
         code = self.codes.get(body.get("code", ""))
-        if code is None or (code["address"], code["operator"]) != (
-            body.get("address"),
-            body.get("operator"),
+        if (
+            code is None
+            or code.get("expires", self.now + 1) <= self.now
+            or (code["address"], code["operator"]) != (body.get("address"), body.get("operator"))
         ):
             return problem("not-authorized")
         device = jws.unb64u(body.get("device", ""))
@@ -753,3 +821,222 @@ class PostOffice:
         flags = rp.FLAGS["send"] | rp.FLAGS["gateway"]
         credential = self.issue(user[3], record["callsign"], device, flags)
         return 201, {"credential": jws.b64u(credential)}
+
+    # -- applications (RP-5 §6.7) -----------------------------------------------------------------
+
+    def _alive(self, app: dict[str, Any]) -> bool:
+        """A pending application is kept 30 days; a decided one answered 7 days on."""
+        until = (
+            app["received"] + APPLICATION_S if "decided" not in app else app["decided"] + DECIDED_S
+        )
+        return self.now < until
+
+    def _apply(self, body: dict[str, Any]) -> Response:
+        """RP-5 §6.7: checked in its order; a pending application waits for the operators."""
+        address, operator = body.get("address"), body.get("operator")
+        name, contact = body.get("name"), body.get("contact")
+        device = jws.unb64u(body.get("device", "")) if isinstance(body.get("device"), str) else None
+        signature = (
+            jws.unb64u(body.get("signature", ""))
+            if isinstance(body.get("signature"), str)
+            else None
+        )
+        if not (
+            isinstance(address, str)
+            and ACCOUNT.fullmatch(address)
+            and isinstance(operator, str)
+            and BASE_CALL.fullmatch(operator)
+            and isinstance(name, str)
+            and 1 <= len(name) <= 64
+            and name.strip()
+            and isinstance(contact, str)
+            and len(contact) <= 254
+            and CONTACT.fullmatch(contact)
+            and device is not None
+            and len(device) == 32
+            and signature is not None
+        ):
+            return problem("malformed")
+        if not self.applications_open or address.rpartition("@")[2] not in self.domains:
+            return problem("refused-by-policy")
+        pending = any(
+            a["address"] == address and a["status"] == "pending" and self._alive(a)
+            for a in self.applications.values()
+        )
+        if address in self.accounts or pending:
+            return problem("already-have")
+        signed = f"{address}\n{operator}\n{self.base_url}".encode()
+        if not rp.verify(rp.CTX_APPLY, signed, signature, device):
+            return problem("signature-invalid")
+        aid = "ap_" + jws.b64u(self.fresh("application", 16))
+        self.applications[aid] = {
+            "application": aid,
+            "status": "pending",
+            "address": address,
+            "operator": operator,
+            "name": name,
+            "contact": contact,
+            "device": jws.b64u(device),
+            "received": self.now,
+        }
+        return 202, {
+            "application": aid,
+            "status": "pending",
+            "expires": self.now + APPLICATION_S,
+        }
+
+    def _application(self, aid: str) -> Response:
+        """RP-5 §6.7: what the applicant may see of it."""
+        app = self.applications.get(aid)
+        if app is None or not self._alive(app):
+            return problem("unknown-message", 404)
+        answer: dict[str, Any] = {"application": aid, "status": app["status"]}
+        if app["status"] == "pending":
+            answer["expires"] = app["received"] + APPLICATION_S
+        if app["status"] == "approved":
+            answer["credential"] = app["credential"]
+        if app["status"] == "declined":
+            answer["text"] = app["text"]
+        return 200, answer
+
+    # -- the operator endpoints (RP-5 §7) ---------------------------------------------------------
+
+    def _office(self, method: str, rest: list[str], body: dict[str, Any]) -> Response:
+        if (method, rest) == ("GET", ["status"]):
+            return 200, {
+                "accounts": len(self.accounts),
+                "applications": sum(
+                    a["status"] == "pending" and self._alive(a) for a in self.applications.values()
+                ),
+                "codes": sum(
+                    c.get("expires", self.now + 1) > self.now for c in self.codes.values()
+                ),
+                "sessions": sum(s.expires > self.now for s in self.sessions.values()),
+            }
+        if (method, rest) == ("GET", ["applications"]):
+            alive = [a for a in self.applications.values() if self._alive(a)]
+            return 200, {"applications": [self._entry(a) for a in alive]}
+        if method == "POST" and len(rest) == 2 and rest[0] == "applications":
+            return self._decide(rest[1], body)
+        if (method, rest) == ("GET", ["accounts"]):
+            return 200, {"accounts": [self._account(a) for a in sorted(self.accounts)]}
+        if (method, rest) == ("POST", ["codes"]):
+            return self._make_code(body)
+        if (method, rest) == ("POST", ["revoke"]):
+            device = (
+                jws.unb64u(body.get("device", "")) if isinstance(body.get("device"), str) else None
+            )
+            if device is None or len(device) != 32:
+                return problem("malformed")
+            return 200, {"revoked": self._revoke_device(device)}
+        return problem("unknown-message", 404)
+
+    @staticmethod
+    def _entry(app: dict[str, Any]) -> dict[str, Any]:
+        entry = {k: v for k, v in app.items() if k != "credential"}
+        if app["status"] == "pending":
+            entry["expires"] = app["received"] + APPLICATION_S
+        return entry
+
+    @staticmethod
+    def _flags(given: Any) -> int | None:
+        """RP-5 §7.3: `send`, `receive`, `role` by name; none given, `send` and `receive`."""
+        if given is None:
+            return rp.FLAGS["send"] | rp.FLAGS["receive"]
+        if not isinstance(given, list) or not all(f in GRANTABLE for f in given):
+            return None
+        return sum(rp.FLAGS[f] for f in set(given))
+
+    def _decide(self, aid: str, body: dict[str, Any]) -> Response:
+        app = self.applications.get(aid)
+        if app is None or not self._alive(app):
+            return problem("unknown-message", 404)
+        decision = body.get("decision")
+        flags = self._flags(body.get("flags")) if decision == "approve" else 0
+        text = body.get("text")
+        if (
+            decision not in {"approve", "decline", "postcard"}
+            or flags is None
+            or (decision == "decline" and not (isinstance(text, str) and text))
+        ):
+            return problem("malformed")
+        if app["status"] != "pending" or (
+            decision != "decline" and app["address"] in self.accounts
+        ):
+            return problem("already-have")
+        app["decided"] = self.now
+        if decision == "approve":
+            device = jws.unb64u(app["device"])
+            assert device is not None
+            credential = self.issue(app["address"], app["operator"], device, flags)
+            self.names[app["address"]] = app["name"]
+            app.update(status="approved", flags=flags, credential=jws.b64u(credential))
+        elif decision == "decline":
+            app.update(status="declined", text=text)
+        else:
+            code = self._new_code()
+            both = rp.FLAGS["send"] | rp.FLAGS["receive"]
+            self._add_code(code, app["address"], app["operator"], both, POSTCARD_S)
+            self.names[app["address"]] = app["name"]
+            app.update(status="postcard", code=code, code_expires=self.now + POSTCARD_S)
+        return 200, self._entry(app)
+
+    def _account(self, address: str) -> dict[str, Any]:
+        """RP-5 §7.4: the account, its waiting mail and its credentials not yet expired."""
+        revoked = set(self.revoked.get(self.domains[0], {}).get("serials", []))
+        creds = [
+            {
+                "serial": serial,
+                "operator": c["operator"],
+                "device": jws.b64u(c["device"]),
+                "flags": c["flags"],
+                "expires": c["expires"],
+                "revoked": serial in revoked,
+            }
+            for serial, c in sorted(self.credentials.items())
+            if c["address"] == address and c["expires"] > self.now
+        ]
+        entry: dict[str, Any] = {
+            "address": address,
+            "waiting": sum(not w.picked for w in self.mailboxes.get(address, [])),
+            "credentials": creds,
+        }
+        if address in self.names:
+            entry["name"] = self.names[address]
+        return entry
+
+    def _make_code(self, body: dict[str, Any]) -> Response:
+        """RP-5 §7.5: a code for a new account or a new device of one."""
+        address, operator, name = body.get("address"), body.get("operator"), body.get("name")
+        flags = self._flags(body.get("flags"))
+        if not (
+            isinstance(address, str)
+            and ENTRY.fullmatch(address)
+            and not address.startswith("@")
+            and address.rpartition("@")[2] in self.domains
+            and isinstance(operator, str)
+            and len(operator) <= 20
+            and CALLSIGN.fullmatch(operator)
+            and flags is not None
+            and (name is None or (isinstance(name, str) and 1 <= len(name) <= 64 and name.strip()))
+        ):
+            return problem("malformed")
+        code = self._new_code()
+        self._add_code(code, address, operator, flags)
+        if name is not None:
+            self.names[address] = name
+        return 200, {
+            "code": code,
+            "address": address,
+            "operator": operator,
+            "flags": flags,
+            "expires": self.now + CODE_S,
+        }
+
+    def _revoke_device(self, device: bytes) -> list[int]:
+        """RP-1 §8: every serial issued for the key, and the tokens they gave."""
+        serials = self.serials_of.get(device, [])
+        listed = self.revoked.setdefault(self.domains[0], {"serials": [], "kids": []})
+        listed["serials"].extend(s for s in serials if s not in listed["serials"])
+        self.tokens = {k: v for k, v in self.tokens.items() if v["body"][2] not in serials}
+        return list(serials)

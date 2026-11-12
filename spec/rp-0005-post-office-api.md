@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.13.0 |
-| **Updated** | 2026-11-10 |
+| **Version** | 0.14.0 |
+| **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-3 |
@@ -12,8 +12,10 @@
 
 The HTTPS interface of a post office. **Gateways** use it to carry their users' sessions, report
 pickups, hand in mail queued while offline and receive copies placed ahead. **Clients** use it to
-enroll, renew credentials and change their settings. **Anyone** may read a post office's public
-documents: its keys, revocations, the post offices it knows, its gateways and its radio routes.
+enroll, renew credentials and change their settings. **Applicants** ask for an account, and the
+post office's **operators** decide, look after its accounts and issue codes. **Anyone** may read a
+post office's public documents: its keys, revocations, the post offices it knows, its gateways and
+its radio routes.
 
 Reading and writing the mailbox itself, with a phone or a laptop when there is Internet, uses the
 standard mail protocols (JMAP, IMAP, SMTP submission) of the post office's mail server and is not
@@ -44,7 +46,7 @@ part of this API.
   | 400 | `unsupported-version`, `malformed` |
   | 401 | `not-authorized`, when the request has no token, or one unknown or expired |
   | 403 | `not-authorized` otherwise (the token may not do this), `refused-by-policy` |
-  | 404 | `unknown-message`: no such serial in the session, or no such session of this gateway's |
+  | 404 | `unknown-message`: no such serial in the session, no such session of this gateway's, or no such application (§6.7) |
   | 409 | `already-have` |
   | 413 | `too-large` |
   | 422 | `credential-invalid`, `credential-expired`, `credential-revoked`, `credential-required`, `unknown-post-office`, `signature-invalid`, `time-skew` |
@@ -68,6 +70,8 @@ part of this API.
 | §3 Logging in | Gateways, clients | Credential and signature |
 | §5 Gateway endpoints | Gateways | A token from a credential with the `gateway` flag |
 | §6 Client endpoints | Clients | A token from the account's credential (enrollment: a code) |
+| §6.7 Applications | Anyone asking for an account | None: the new device's signature |
+| §7 Operator endpoints | The post office's operators | A token from an operator's credential (§7.1) |
 
 A request with no token, or an unknown or expired one, is answered `401` `not-authorized`; a token
 without the `gateway` flag on a gateway endpoint, or one with it on a client endpoint other than
@@ -108,6 +112,9 @@ answers:
  "operator": "N1CALL-10", "flags": 9}
 ```
 
+The answer has `"office": true` when the token may use the operator endpoints (§7.1), and no
+`office` member otherwise.
+
 The token is sent as `Authorization: Bearer tok_8Hc…` on later requests. It lasts one hour, or
 until the credential expires if that is sooner, and is bound to the credential: a revocation ends
 it.
@@ -145,6 +152,7 @@ every post office it knows (RP-1 §7.3). Test vectors: `vectors/jws.json`. The p
 | `limits.max_email_bytes` | The largest ordinary email it accepts (RP-6). |
 | `gateways` | `any`: gateways credentialed by any known post office; `listed`: only its own (§4.4). |
 | `mail` | Where its users' ordinary mail programs connect. |
+| `applications` | `open` when it takes applications for accounts (§6.7). Absent, it does not. |
 
 ### 4.2 `GET /revocations`
 
@@ -497,28 +505,181 @@ Then, one result per message, `sent` first, each in the order given:
 The answer is `{"sessions": [...]}`, one entry per session, in order. Sending the same report again
 changes nothing: every message is a `duplicate`.
 
+### 6.7 Applications
+
+Someone with a licence and no account asks for one, from a new device, and waits for the post
+office's operators to decide (§7.3). Nobody has to send them a code first. A post office takes
+applications only when its info document says `"applications": "open"` (§4.1).
+
+**`POST /applications`**, no token:
+
+```json
+{"address": "jose@radiopost.org", "operator": "KJ4ABC", "name": "José Pérez",
+ "contact": "jose.perez@example.net", "device": "Hk3sW…", "signature": "…"}
+```
+
+| Member | Meaning |
+|---|---|
+| `address` | The account asked for, in lowercase: a local part of letters, digits, `.`, `-` and `_` (RP-0 §6.2), at a domain the post office serves. |
+| `operator` | The applicant's callsign as licensed: a base callsign (RP-0 §6.1), with no prefix, suffix or SSID, in uppercase. |
+| `name` | The name the licence is in, 1 to 64 characters, for the operators' check; it becomes the account's display name (RP-6 §3.1). |
+| `contact` | An email address the post office may write to about the application. |
+| `device` | The new device's public key. |
+| `signature` | The device key's signature with context `RadioPost-api-apply-v1` over the UTF-8 bytes of `address`, a line feed (`0x0A`), `operator`, a line feed, then the base URL. It proves the applicant holds the key the credential will be issued for. |
+
+The post office checks, in this order:
+
+1. Every member is there and of the form above. Otherwise `400` `malformed`.
+2. It takes applications, and `address` is at one of its domains. Otherwise `403`
+   `refused-by-policy`.
+3. `address` is not an account already, nor asked for by an application still pending. Otherwise
+   `409` `already-have`.
+4. The signature. Otherwise `422` `signature-invalid`.
+
+It answers `202`:
+
+```json
+{"application": "ap_Qm9vZ2xl…", "status": "pending", "expires": 1796918400}
+```
+
+`application` is the application's ID: `ap_` and 16 random bytes in base64url, which only the
+applicant is given. `expires` is when a pending application is forgotten, at least 14 days on.
+
+**`GET /applications/{id}`**, no token: where the application stands.
+
+| `status` | Also | Means |
+|---|---|---|
+| `pending` | `expires` | Not decided yet. |
+| `approved` | `credential` | The account is made and the credential issued, for the application's device key, with the flags the operator chose (§7.3). The applicant's client takes it as from an enrollment (§6.1). |
+| `declined` | `text` | Refused; `text` says why, for the applicant. |
+| `postcard` | | The operator sends an enrollment code by post to the address on the licence. The applicant enrolls with it (§6.1), from this device or another. |
+
+An unknown ID, or one the post office has forgotten, is `404` `unknown-message`. A decided
+application is answered for at least 7 days after the decision.
+
 ---
 
-## 7. Security considerations *(informative)*
+## 7. Operator endpoints
+
+A post office MAY offer these. They let its operators run it from a client, over the API, with the
+credential they already hold: decide applications, see the accounts, make enrollment codes and
+revoke devices.
+
+### 7.1 Who may
+
+A post office names the callsigns that operate it: at least its info document's `operator`
+(§4.1). A token may use the endpoints of this section when its credential:
+
+* is for an account at one of the post office's own domains, so that the post office issued it;
+* has the callsign of one of its operators as `operator`;
+* does not have the `gateway` flag.
+
+Any other token is answered `403` `not-authorized`; no token, `401`. A post office that does not
+offer them answers `404` `unknown-message`. The login says which tokens may (§3.2).
+
+### 7.2 `GET /office/status`
+
+```json
+{"accounts": 41, "applications": 2, "codes": 1, "sessions": 1}
+```
+
+How many accounts, pending applications, enrollment codes neither used nor expired, and sessions
+open. A post office MAY add members of its own, such as the mail waiting to go on by email (RP-6)
+or how its own checks stand: a client shows them or ignores them.
+
+### 7.3 Applications
+
+**`GET /office/applications`**: every application the post office keeps (§6.7), in the order
+received:
+
+```json
+{"applications": [
+  {"application": "ap_Qm9vZ2xl…", "status": "pending", "address": "jose@radiopost.org",
+   "operator": "KJ4ABC", "name": "José Pérez", "contact": "jose.perez@example.net",
+   "device": "Hk3sW…", "received": 1794326400, "expires": 1796918400}
+]}
+```
+
+A decided entry has `decided`, the time, and what the decision gave: `flags` when approved, `text`
+when declined, `code` and `code_expires` when sent by postcard. A post office MAY add members of
+its own, such as what it found of the callsign in a licence database; a client shows them or
+ignores them.
+
+**`POST /office/applications/{id}`** decides a pending application:
+
+| Body | Does |
+|---|---|
+| `{"decision": "approve", "flags": ["send", "receive"]}` | Makes the account and issues its credential (RP-1 §4) for the application's device key, with these flags: any of `send`, `receive` and `role` (RP-1 §4.1); without `flags`, `send` and `receive`. The application's `name` becomes the account's display name. |
+| `{"decision": "decline", "text": "…"}` | Refuses it; `text` is for the applicant. |
+| `{"decision": "postcard"}` | Makes an enrollment code for the application's account and callsign, with `send` and `receive`, good for at least 30 days, to be sent by post to the address on the licence. |
+
+It answers `200` with the application's entry as `GET /office/applications` lists it. An unknown
+ID is `404` `unknown-message`; another decision, a flag that is not one of the three, or a body
+without `decision`, `400` `malformed`. An application already decided, or one whose address has
+become an account since, is `409` `already-have`, and nothing changes.
+
+### 7.4 `GET /office/accounts`
+
+```json
+{"accounts": [
+  {"address": "facundo@radiopost.org", "name": "Facundo", "waiting": 3,
+   "credentials": [{"serial": 1042, "operator": "KK4ODA", "device": "Hk3sW…", "flags": 3,
+                    "expires": 1802102400, "revoked": false}]}
+]}
+```
+
+Every account, by address: its display name when it has one, how many messages wait in its mailbox
+for a gateway, and the credentials the post office issued for it that have not expired.
+
+### 7.5 `POST /office/codes`
+
+`{"address": "ana@radiopost.org", "operator": "N2CALL", "flags": ["send", "receive"], "name": "Ana"}`
+makes an enrollment code (§6.1) for an account, a new one or one that exists (a new device). `flags`
+and `name` are optional, as in §7.3. Answers `200`:
+
+```json
+{"code": "7Q4F-AZ9K", "address": "ana@radiopost.org", "operator": "N2CALL", "flags": 3,
+ "expires": 1794931200}
+```
+
+An address that is not at one of its domains, or a member of the wrong form, is `400` `malformed`.
+
+### 7.6 `POST /office/revoke`
+
+`{"device": "Hk3sW…"}` revokes every credential the post office issued for a device key (RP-1 §8),
+as when a device is lost, and ends their tokens. Answers `200` `{"revoked": [1042, 1077]}`, the
+serials. A device key that is not 32 bytes is `400` `malformed`.
+
+---
+
+## 8. Security considerations *(informative)*
 
 * A gateway can do nothing for a user without that user's fresh signed statement, so a stolen
   gateway token cannot read anyone's mail.
 * Tokens are short-lived and bound to a credential; revoking the credential ends the token.
 * Everything a gateway hands in carries the user's statement, so a post office can always say which
   account sent a message and through which gateway (RP-1 §6.4).
-* Enrollment codes are one-time and SHOULD expire within days.
+* Enrollment codes are one-time and SHOULD expire within days; one sent by post, within weeks.
+* An application proves only that the applicant holds a device key. Whether they hold the callsign
+  is for the operators to establish before approving (RP-1 §1): a licence database shows that a
+  callsign exists and in whose name, which anyone can read, so it is evidence, not proof. A
+  credential lets its holder's mail be taken as a licensee's (RP-6 §5.1).
+* The operator endpoints can make accounts and revoke devices. Only a credential the post office
+  issued itself can use them, so another post office cannot issue one that does.
 
 ---
 
-## 8. Test vectors
+## 9. Test vectors
 
-`vectors/direct.json` (§6.6: session-03 reported by both stations, sent again, refused to a
+`vectors/api-office.json` (§6.7 and §7: an application approved, its credential collected and
+used, another declined, one sent by postcard and enrolled with its code; the operator's status,
+accounts, codes and revocation; and the refusals of both), `vectors/direct.json` (§6.6: session-03 reported by both stations, sent again, refused to a
 gateway, and nine cases), `vectors/api-account.json` (renewal over the Internet and by radio, a gateway's, an expired and a
 revoked credential; the accept list read and changed, shared by a role mailbox's operators, filled
 by mail sent, and its effect at the door), `vectors/api-exchanges.json` (enrollment, a gateway registered, logins, session-01
 at the post office, copies placed ahead and dropped, an offline gateway's report, and the
-failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures of §3.2, §6.1 and
-§6.4).
+failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures of §3.2, §6.1,
+§6.4 and §6.7).
 
 ---
 
@@ -543,3 +704,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.12.0 | 2026-11-10 | §5.2: a statement in challenge form, whose challenge the gateway issued and checked, is taken once; a second time it is `signature-invalid`. Found by building the gateway: no post office could open such a session. Test vectors (`api-exchanges.json`). |
 | 0.12.1 | 2026-11-10 | §6.1: a refused enrollment leaves its code good; only one that succeeds uses it. Found by the conformance tester (P-03): the reference used a code at any attempt. Test vectors. |
 | 0.13.0 | 2026-11-10 | §5.2: `held` in a waiting entry is set when the message lists held attachments (it had always been false). §5.3: `files`' entries, `ref` in base64url, and its refusals; what is sent is RP-6 §2.5. |
+| 0.14.0 | 2026-11-12 | Applications (§6.7): an account asked for from a new device, signed under `RadioPost-api-apply-v1`, and collected once an operator decides; `applications` in the info document (§4.1). Operator endpoints (§7): the post office's operators run it with their own credentials (status, applications, accounts, codes, revocation); `office` in the login's answer (§3.2). Security considerations and test vectors renumbered §8 and §9. Test vectors (`api-office.json`). |

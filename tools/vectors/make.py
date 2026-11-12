@@ -41,6 +41,7 @@ T_SESSION = 1794235200  # 2026-11-09T14:40:00Z
 T_STATION = T_SESSION + 4 * 3600  # session-03: station to station, 18:40Z
 T_RESUME = T_SESSION + 6 * 3600  # session-02: the first of three, 20:40Z
 T_ACCOUNT = T_SESSION + 2 * DAY  # api-account.json: renewal and the accept list
+T_OFFICE = T_SESSION + 3 * DAY  # api-office.json: applications and the operator endpoints
 T_WINDOW = 1794492900  # session-04: N1CALL-10's window opens, 2026-11-12T14:15:00Z (:15 hourly)
 T_CUT = T_WINDOW - 6 * 3600  # Atlanta loses the Internet
 
@@ -94,6 +95,9 @@ KEY_LABELS = [
         T_SESSION - 2 * DAY,
         T_KEYS_UNTIL + 365 * DAY,
     ),
+    ("device:jose", "José's laptop, applying for jose@radiopost.org as N5CALL", None, None),
+    ("device:lena", "Lena's laptop, applying for lena@radiopost.org as N6CALL", None, None),
+    ("device:ruth", "Ruth's laptop, applying for ruth@radiopost.org as N7CALL", None, None),
 ]
 
 SECRET = {label: seed(label) for label, *_ in KEY_LABELS}
@@ -154,7 +158,8 @@ def answer_of(e: dict[str, Any]) -> str:
     """An API answer in a few words: the status, and the error's name if it is one."""
     body = e["response"].get("body") or {}
     status = str(e["response"]["status"])
-    return f"{status} {body['name']}" if "name" in body and "status" in body else status
+    problem = "name" in body and "type" in body and "status" in body
+    return f"{status} {body['name']}" if problem else status
 
 
 # -- keys.json -----------------------------------------------------------------------------------
@@ -2649,10 +2654,12 @@ def post_office() -> po.PostOffice:
         draw=stream,
     )
     office.next_serial = 1050
+    office.accounts.add("facundo@radiopost.org")
     office.codes["7Q4F-AZ9K"] = {
         "address": "facundo@radiopost.org",
         "operator": "KK4ODA",
         "flags": rp.FLAGS["receive"],
+        "expires": T_ISSUED + po.CODE_S,
     }
     return office
 
@@ -4912,6 +4919,491 @@ def make_api_account() -> dict[str, Any]:
     return out
 
 
+# -- api-office.json -----------------------------------------------------------------------------
+
+APPLICANTS = {  # who applies: their device, account, callsign, name and contact
+    "jose": ("device:jose", "jose@radiopost.org", "N5CALL", "José Pérez", "jose.perez@example.net"),
+    "lena": ("device:lena", "lena@radiopost.org", "N6CALL", "Lena Ortiz", "lena@example.org"),
+    "ruth": ("device:ruth", "ruth@radiopost.org", "N7CALL", "Ruth Bell", "ruth.bell@example.com"),
+}
+
+
+def application(who: str, base: str = PO_RADIOPOST, **change: str) -> dict[str, Any]:
+    """RP-5 §6.7's body, signed by the applicant's new device; `change` alters it after."""
+    device, address, operator, name, contact = APPLICANTS[who]
+    fields = {"address": address, "operator": operator, "name": name, "contact": contact}
+    fields |= change
+    signed = f"{fields['address']}\n{fields['operator']}\n{base}".encode()
+    return fields | {
+        "device": jws.b64u(PUBLIC[device]),
+        "signature": jws.b64u(rp.sign(rp.CTX_APPLY, signed, SECRET[device])),
+    }
+
+
+def office_post_office(operators: list[str] | None = None) -> po.PostOffice:
+    """radiopost.org taking applications, run by KK4ODA (RP-5 §4.1, §7.1)."""
+    office = post_office()
+    office.operators = ["KK4ODA"] if operators is None else operators
+    office.applications_open = True
+    return office
+
+
+def enrolled(who: str, code: str, address: str, operator: str) -> dict[str, Any]:
+    """RP-5 §6.1's body for `who`'s device with `code`."""
+    device = APPLICANTS[who][0] if who in APPLICANTS else who
+    signed = code.encode() + PO_RADIOPOST.encode()
+    return {
+        "address": address,
+        "operator": operator,
+        "code": code,
+        "device": jws.b64u(PUBLIC[device]),
+        "signature": jws.b64u(rp.sign(rp.CTX_ENROLL, signed, SECRET[device])),
+    }
+
+
+def office_story() -> list[dict[str, Any]]:
+    """Three applications decided three ways, and the operator's other endpoints."""
+    office = office_post_office()
+    ex = Exchanges(office)
+    at = T_OFFICE
+    tablet = "device:facundo-tablet"
+    ex.note("José applies for jose@radiopost.org from his laptop, and asks how it stands.")
+    jose = ex.call(at, "José's laptop", "POST", "/applications", application("jose"))
+    jid = jose["application"]
+    ex.call(at + 60, "José's laptop", "GET", f"/applications/{jid}")
+    ex.note("Facundo, KK4ODA, the operator, logs in: his token may use the operator endpoints.")
+    op = ex.login(at + 3600, "Facundo's laptop", "facundo")
+    ex.call(at + 3601, "Facundo's laptop", "GET", "/office/status", None, op)
+    ex.call(at + 3602, "Facundo's laptop", "GET", "/office/applications", None, op)
+    ex.note("He has checked N5CALL's licence and approves, with the usual flags.")
+    ex.call(
+        at + 3700,
+        "Facundo's laptop",
+        "POST",
+        f"/office/applications/{jid}",
+        {"decision": "approve"},
+        op,
+    )
+    ex.note("José's laptop asks again, takes its credential and logs in with it.")
+    approved = ex.call(at + 3760, "José's laptop", "GET", f"/applications/{jid}")
+    cred = jws.unb64u(approved["credential"])
+    assert cred is not None
+    ex.login_with(at + 3770, "José's laptop", cred, "device:jose")
+    ex.note("Facundo makes a code for his own tablet, which enrolls with it (RP-5 §6.1).")
+    made = ex.call(
+        at + 3800,
+        "Facundo's laptop",
+        "POST",
+        "/office/codes",
+        {"address": "facundo@radiopost.org", "operator": "KK4ODA", "flags": ["receive"]},
+        op,
+    )
+    tab_cred = ex.call(
+        at + 3900,
+        "Facundo's tablet",
+        "POST",
+        "/enroll",
+        enrolled(tablet, made["code"], "facundo@radiopost.org", "KK4ODA"),
+    )
+    enrolled_tab = jws.unb64u(tab_cred["credential"])
+    assert enrolled_tab is not None
+    ex.note("Lena applies; no licence in her name holds N6CALL, so Facundo declines.")
+    lid = ex.call(at + 4000, "Lena's laptop", "POST", "/applications", application("lena"))[
+        "application"
+    ]
+    ex.call(
+        at + 4100,
+        "Facundo's laptop",
+        "POST",
+        f"/office/applications/{lid}",
+        {"decision": "decline", "text": "N6CALL is not licensed to Lena Ortiz."},
+        op,
+    )
+    ex.call(at + 4200, "Lena's laptop", "GET", f"/applications/{lid}")
+    ex.note(
+        "Ruth applies. Facundo cannot tell from the licence database alone that she holds N7CALL, "
+        "so he sends a code by post to the address on her licence."
+    )
+    rid = ex.call(at + 5000, "Ruth's laptop", "POST", "/applications", application("ruth"))[
+        "application"
+    ]
+    card = ex.call(
+        at + 5100,
+        "Facundo's laptop",
+        "POST",
+        f"/office/applications/{rid}",
+        {"decision": "postcard"},
+        op,
+    )
+    ex.call(at + 5200, "Ruth's laptop", "GET", f"/applications/{rid}")
+    ex.note("Five days later the card arrives, and Ruth enrolls with its code.")
+    ex.call(
+        at + 5 * DAY,
+        "Ruth's laptop",
+        "POST",
+        "/enroll",
+        enrolled("ruth", card["code"], "ruth@radiopost.org", "N7CALL"),
+    )
+    ex.note("A new token for Facundo; he makes a code for a shelter's role mailbox.")
+    op = ex.login(at + 5 * DAY + 100, "Facundo's laptop", "facundo")
+    ex.call(
+        at + 5 * DAY + 101,
+        "Facundo's laptop",
+        "POST",
+        "/office/codes",
+        {
+            "address": "shelter5@radiopost.org",
+            "operator": "N5CALL",
+            "flags": ["send", "receive", "role"],
+            "name": "Shelter 5",
+        },
+        op,
+    )
+    ex.note("Facundo's tablet is lost: he revokes it, and it can no longer log in.")
+    ex.call(
+        at + 5 * DAY + 200,
+        "Facundo's laptop",
+        "POST",
+        "/office/revoke",
+        {"device": jws.b64u(PUBLIC[tablet])},
+        op,
+    )
+    ex.call(at + 5 * DAY + 201, "Facundo's laptop", "GET", "/office/accounts", None, op)
+    ex.call(at + 5 * DAY + 202, "Facundo's laptop", "GET", "/office/applications", None, op)
+    ex.call(at + 5 * DAY + 203, "Facundo's laptop", "GET", "/office/status", None, op)
+    ex.login_with(at + 5 * DAY + 300, "Facundo's tablet", enrolled_tab, tablet)
+    return ex.log
+
+
+def office_cases() -> list[dict[str, Any]]:
+    """Each refusal of RP-5 §6.7 and §7, on an office of its own."""
+    cases: list[dict[str, Any]] = []
+    at = T_OFFICE
+
+    def case(what: str, steps: Any, office: po.PostOffice | None = None) -> None:
+        ex = Exchanges(office or office_post_office())
+        steps(ex)
+        cases.append({"what": what, "exchanges": ex.log})
+
+    def apply_with(body: dict[str, Any], office: po.PostOffice | None = None, who: str = "José"):
+        return lambda ex: ex.call(at, f"{who}'s laptop", "POST", "/applications", body)
+
+    closed = office_post_office()
+    closed.applications_open = False
+    case("a post office that takes no applications", apply_with(application("jose")), closed)
+    case(
+        "an address at another post office's domain",
+        apply_with(application("jose", address="jose@hampost.org")),
+    )
+    case(
+        "an address that is an account already",
+        apply_with(application("jose", address="facundo@radiopost.org")),
+    )
+    case(
+        "an address in capitals",
+        apply_with(application("jose", address="Jose@radiopost.org")),
+    )
+    case(
+        "a callsign with an SSID",
+        apply_with(application("jose", operator="N5CALL-1")),
+    )
+    case(
+        "no contact address",
+        apply_with({k: v for k, v in application("jose").items() if k != "contact"}),
+    )
+    case(
+        "signed for another post office's base URL",
+        apply_with(application("jose", base="https://po.hampost.org/rp/v1")),
+    )
+
+    def twice(ex: Exchanges) -> None:
+        ex.call(at, "José's laptop", "POST", "/applications", application("jose"))
+        ex.call(
+            at + 60,
+            "Lena's laptop",
+            "POST",
+            "/applications",
+            application("lena", address="jose@radiopost.org"),
+        )
+
+    case("an address asked for by an application still pending", twice)
+
+    def forgotten(ex: Exchanges) -> None:
+        aid = ex.call(at, "José's laptop", "POST", "/applications", application("jose"))[
+            "application"
+        ]
+        ex.call(at + 30 * DAY - 1, "José's laptop", "GET", f"/applications/{aid}")
+        ex.call(at + 30 * DAY, "José's laptop", "GET", f"/applications/{aid}")
+        ex.call(at + 30 * DAY, "José's laptop", "POST", "/applications", application("jose"))
+
+    case("a pending application forgotten after 30 days, then made again", forgotten)
+    case(
+        "an unknown application",
+        lambda ex: ex.call(at, "José's laptop", "GET", "/applications/ap_AAAAAAAAAAAAAAAAAAAAAA"),
+    )
+
+    def not_operator(ex: Exchanges) -> None:
+        tok = ex.login(at, "Shelter 3 (N3CALL)", "shelter3-n3call")
+        ex.call(at + 1, "Shelter 3 (N3CALL)", "GET", "/office/status", None, tok)
+
+    case("a user who is not an operator", not_operator)
+
+    def elsewhere(ex: Exchanges) -> None:
+        tok = ex.login(at, "Ana's laptop", "ana")
+        ex.call(at + 1, "Ana's laptop", "GET", "/office/status", None, tok)
+
+    case(
+        "a credential from another post office, with an operator's callsign",
+        elsewhere,
+        office_post_office(["KK4ODA", "N0CALL"]),
+    )
+
+    def gateway(ex: Exchanges) -> None:
+        tok = ex.login(at, "KK4ODA-1", "gateway-kk4oda-1")
+        ex.call(at + 1, "KK4ODA-1", "GET", "/office/status", None, tok)
+
+    case(
+        "a gateway's credential, with an operator's callsign",
+        gateway,
+        office_post_office(["KK4ODA", "KK4ODA-1"]),
+    )
+    case(
+        "no token",
+        lambda ex: ex.call(at, "nobody", "GET", "/office/applications"),
+    )
+    plain = office_post_office([])
+
+    def not_offered(ex: Exchanges) -> None:
+        tok = ex.login(at, "Facundo's laptop", "facundo")
+        ex.call(at + 1, "Facundo's laptop", "GET", "/office/status", None, tok)
+
+    case("a post office that offers no operator endpoints", not_offered, plain)
+
+    def decided_twice(ex: Exchanges) -> None:
+        aid = ex.call(at, "José's laptop", "POST", "/applications", application("jose"))[
+            "application"
+        ]
+        tok = ex.login(at + 10, "Facundo's laptop", "facundo")
+        ex.call(
+            at + 11,
+            "Facundo's laptop",
+            "POST",
+            f"/office/applications/{aid}",
+            {"decision": "decline", "text": "No."},
+            tok,
+        )
+        ex.call(
+            at + 12,
+            "Facundo's laptop",
+            "POST",
+            f"/office/applications/{aid}",
+            {"decision": "approve"},
+            tok,
+        )
+
+    case("an application decided twice", decided_twice)
+
+    def bad_decisions(ex: Exchanges) -> None:
+        aid = ex.call(at, "José's laptop", "POST", "/applications", application("jose"))[
+            "application"
+        ]
+        tok = ex.login(at + 10, "Facundo's laptop", "facundo")
+        for i, body in enumerate(
+            [
+                {"decision": "approve", "flags": ["send", "gateway"]},
+                {"decision": "decline"},
+                {"decision": "maybe"},
+                {},
+            ]
+        ):
+            ex.call(
+                at + 11 + i, "Facundo's laptop", "POST", f"/office/applications/{aid}", body, tok
+            )
+        ex.call(
+            at + 20,
+            "Facundo's laptop",
+            "POST",
+            "/office/applications/ap_AAAAAAAAAAAAAAAAAAAAAA",
+            {"decision": "approve"},
+            tok,
+        )
+
+    case(
+        "decisions with the gateway flag, without a reason, unknown, missing; an unknown ID",
+        bad_decisions,
+    )
+
+    def taken_meanwhile(ex: Exchanges) -> None:
+        aid = ex.call(at, "José's laptop", "POST", "/applications", application("jose"))[
+            "application"
+        ]
+        tok = ex.login(at + 10, "Facundo's laptop", "facundo")
+        ex.call(
+            at + 11,
+            "Facundo's laptop",
+            "POST",
+            "/office/codes",
+            {"address": "jose@radiopost.org", "operator": "N5CALL"},
+            tok,
+        )
+        ex.call(
+            at + 12,
+            "Facundo's laptop",
+            "POST",
+            f"/office/applications/{aid}",
+            {"decision": "approve"},
+            tok,
+        )
+
+    case("approving an address that has become an account since", taken_meanwhile)
+
+    def bad_codes(ex: Exchanges) -> None:
+        tok = ex.login(at, "Facundo's laptop", "facundo")
+        for i, body in enumerate(
+            [
+                {"address": "ana@hampost.org", "operator": "N0CALL"},
+                {"address": "ana@radiopost.org", "operator": "n0call"},
+                {"address": "ana@radiopost.org", "operator": "N0CALL", "flags": ["gateway"]},
+            ]
+        ):
+            ex.call(at + 1 + i, "Facundo's laptop", "POST", "/office/codes", body, tok)
+        ex.call(at + 10, "Facundo's laptop", "POST", "/office/revoke", {"device": "AAAA"}, tok)
+
+    case("codes for another domain, a lowercase callsign, the gateway flag; a short key", bad_codes)
+    return cases
+
+
+def make_api_office() -> dict[str, Any]:
+    story = office_story()
+    cases = office_cases()
+    out = header(
+        "Post office API: applications and the operator endpoints",
+        {"RP-5": "§3.2, §6.1, §6.7, §7", "RP-0": "§9.2"},
+    )
+    out["rule"] = (
+        "As in api-exchanges.json: each exchange is a request to the post office at its clock and "
+        "its answer, compared as JSON values. Application IDs, codes and tokens come from the "
+        "published stream in the order drawn; a credential issued is new bytes from the post "
+        "office's key (`po:radiopost.org`) for the application's or enrollment's device key."
+    )
+    out["context"] = {
+        "post_office": "radiopost.org",
+        "operators": ["KK4ODA"],
+        "applications": "open",
+        "next_serial": 1050,
+        "codes_at_start": {
+            "7Q4F-AZ9K": {
+                "address": "facundo@radiopost.org",
+                "operator": "KK4ODA",
+                "flags": 2,
+                "expires": T_ISSUED + 7 * DAY,
+            }
+        },
+        "cases": "Each case starts from the same post office, except where it says: the "
+        "applications closed, or other operators.",
+    }
+    story_answers = [answer_of(e) for e in story if "request" in e]
+    assert story_answers == [  # RP-5 §6.1, §6.7, §7, read from the specification
+        "202",  # José applies
+        "200",  # pending
+        "200",
+        "200",  # challenge, token with `office`
+        "200",
+        "200",  # status, applications
+        "200",  # approved
+        "200",  # José's credential
+        "200",
+        "200",  # José logs in
+        "200",
+        "200",  # a code for the tablet, which enrolls
+        "202",
+        "200",
+        "200",  # Lena applies, declined, sees why
+        "202",
+        "200",
+        "200",  # Ruth applies, postcard, sees it
+        "200",  # Ruth enrolls with the card's code
+        "200",
+        "200",  # a new token
+        "200",  # a code for Shelter 5
+        "200",  # the tablet revoked
+        "200",
+        "200",
+        "200",  # accounts, applications, status
+        "200",
+        "422 credential-revoked",  # the tablet, revoked
+    ], story_answers
+    logins = [e for e in story if e.get("request", {}).get("path") == "/auth/token"]
+    assert [e["response"]["body"].get("office") for e in logins] == [True, None, True, None]
+    confirm(  # RP-5 §6.7, §7
+        cases,
+        {
+            "a post office that takes no applications": ["403 refused-by-policy"],
+            "an address at another post office's domain": ["403 refused-by-policy"],
+            "an address that is an account already": ["409 already-have"],
+            "an address in capitals": ["400 malformed"],
+            "a callsign with an SSID": ["400 malformed"],
+            "no contact address": ["400 malformed"],
+            "signed for another post office's base URL": ["422 signature-invalid"],
+            "an address asked for by an application still pending": ["202", "409 already-have"],
+            "a pending application forgotten after 30 days, then made again": [
+                "202",
+                "200",
+                "404 unknown-message",
+                "202",
+            ],
+            "an unknown application": ["404 unknown-message"],
+            "a user who is not an operator": ["200", "200", "403 not-authorized"],
+            "a credential from another post office, with an operator's callsign": [
+                "200",
+                "200",
+                "403 not-authorized",
+            ],
+            "a gateway's credential, with an operator's callsign": [
+                "200",
+                "200",
+                "403 not-authorized",
+            ],
+            "no token": ["401 not-authorized"],
+            "a post office that offers no operator endpoints": [
+                "200",
+                "200",
+                "404 unknown-message",
+            ],
+            "an application decided twice": ["202", "200", "200", "200", "409 already-have"],
+            "decisions with the gateway flag, without a reason, unknown, missing; an unknown ID": [
+                "202",
+                "200",
+                "200",
+                "400 malformed",
+                "400 malformed",
+                "400 malformed",
+                "400 malformed",
+                "404 unknown-message",
+            ],
+            "approving an address that has become an account since": [
+                "202",
+                "200",
+                "200",
+                "200",
+                "409 already-have",
+            ],
+            "codes for another domain, a lowercase callsign, the gateway flag; a short key": [
+                "200",
+                "200",
+                "400 malformed",
+                "400 malformed",
+                "400 malformed",
+                "400 malformed",
+            ],
+        },
+        answers,
+    )
+    out["story"] = story
+    out["cases"] = cases
+    return out
+
+
 # -- email-door.json, email-in.json, email-out.json --------------------------------------------
 
 
@@ -5739,7 +6231,8 @@ def make_api() -> dict[str, Any]:
     code = "7Q4F-AZ9K"
     enroll_in = code.encode() + PO_RADIOPOST.encode()
     reg_in = b"KK4ODA-1" + PO_RADIOPOST.encode()
-    out = header("Post office API signatures", {"RP-5": "§3.2, §6.1, §6.4", "RP-0": "§9.2"})
+    apply_in = f"jose@radiopost.org\nN5CALL\n{PO_RADIOPOST}".encode()
+    out = header("Post office API signatures", {"RP-5": "§3.2, §6.1, §6.4, §6.7", "RP-0": "§9.2"})
     out["rule"] = (
         "Each `signature_hex` is the device key's Ed25519 signature over `signed_input_hex`."
     )
@@ -5770,6 +6263,15 @@ def make_api() -> dict[str, Any]:
         "signed_input_hex": rp.signed_input(rp.CTX_GATEWAY, reg_in).hex(),
         "signature_hex": rp.sign(rp.CTX_GATEWAY, reg_in, SECRET["device:gateway-kk4oda-1"]).hex(),
     }
+    out["apply"] = {
+        "base_url": PO_RADIOPOST,
+        "address": "jose@radiopost.org",
+        "operator": "N5CALL",
+        "device": "device:jose",
+        "device_public_hex": PUBLIC["device:jose"].hex(),
+        "signed_input_hex": rp.signed_input(rp.CTX_APPLY, apply_in).hex(),
+        "signature_hex": rp.sign(rp.CTX_APPLY, apply_in, SECRET["device:jose"]).hex(),
+    }
     return out
 
 
@@ -5798,6 +6300,7 @@ FILES = {
     "email-out.json": make_email_out,
     "api-exchanges.json": make_api_exchanges,
     "api-account.json": make_api_account,
+    "api-office.json": make_api_office,
     "forwarding.json": make_forwarding,
     "local-delivery.json": make_local_delivery,
     "queued.json": make_queued,
@@ -5874,6 +6377,8 @@ def self_check(name: str, data: dict[str, Any]) -> None:
         check_email_out(data)
     if name == "api-account.json":
         check_account(data)
+    if name == "api-office.json":
+        check_office(data)
     if name == "session-04.json":
         check_forwarding_session(data)
     if name == "credentials.json":
@@ -6179,6 +6684,28 @@ def check_direct(data: dict[str, Any]) -> None:
                 assert r["sent_on"] == [a for a in to if a != address(session["theirs"])]
             else:
                 assert address(session["mine"]) in to and r["serial"] > 0
+
+
+def check_office(data: dict[str, Any]) -> None:
+    """Each credential handed out verifies, for the application's or enrollment's device key."""
+    devices: dict[str, str] = {}  # application ID -> its device key
+    for log in [data["story"]] + [c["exchanges"] for c in data["cases"]]:
+        for e in log:
+            req, res = e.get("request", {}), e.get("response", {})
+            body = res.get("body") or {}
+            if req.get("path") == "/applications" and res.get("status") == 202:
+                devices[body["application"]] = req["body"]["device"]
+            if "credential" not in body or req.get("path") == "/auth/token":
+                continue
+            raw = jws.unb64u(body["credential"])
+            assert raw is not None
+            result, cbody = rp.verify_credential(raw, po_keys(), {}, e["at"], [])
+            assert result == "ok" and cbody is not None
+            if req["path"] == "/enroll":
+                wanted = req["body"]["device"]
+            else:
+                wanted = devices[req["path"].rsplit("/", 1)[1]]
+            assert jws.b64u(cbody[5]) == wanted
 
 
 def check_account(data: dict[str, Any]) -> None:

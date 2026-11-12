@@ -14,12 +14,12 @@ adapter from them.
 
 | Spec | Title | Status | Version | Governs |
 |---|---|---|---|---|
-| [RP-0](rp-0000-conventions.md) | Conventions | Draft | 0.5.1 | Requirement words, encodings, cryptography, identifiers, roles, how specs change, registries |
+| [RP-0](rp-0000-conventions.md) | Conventions | Draft | 0.6.0 | Requirement words, encodings, cryptography, identifiers, roles, how specs change, registries |
 | [RP-1](rp-0001-identity.md) | Identity | Draft | 0.5.1 | Keys, credentials, session statements, published keys, revocation |
 | [RP-2](rp-0002-messages.md) | Messages | Draft | 0.2.0 | The message, its air form, its content ID |
 | [RP-3](rp-0003-session.md) | Session protocol | Draft | 0.11.0 | Client ↔ gateway over the radio |
 | [RP-4](rp-0004-modem-interface.md) | Modem interface | Draft | 0.6.3 | Client or gateway ↔ modem adapter |
-| [RP-5](rp-0005-post-office-api.md) | Post office API | Draft | 0.13.0 | Gateway or client ↔ post office over HTTPS |
+| [RP-5](rp-0005-post-office-api.md) | Post office API | Draft | 0.14.0 | Gateway or client ↔ post office over HTTPS |
 | [RP-6](rp-0006-email.md) | Email interoperation | Draft | 0.6.0 | Post office ↔ ordinary email |
 | [RP-7](rp-0007-forwarding.md) | Forwarding | Draft | 0.8.0 | Gateway ↔ gateway by radio |
 
@@ -27,7 +27,7 @@ adapter from them.
 
 | You are building | Read |
 |---|---|
-| A client | RP-0, RP-1, RP-2, RP-3 (client side); RP-4 if it drives a modem; RP-5 §6 for enrollment and settings |
+| A client | RP-0, RP-1, RP-2, RP-3 (client side); RP-4 if it drives a modem; RP-5 §6 for enrollment, applications and settings, §7 for a post office's operators |
 | A gateway | RP-0, RP-1, RP-2, RP-3 (gateway side), RP-5 §5; RP-4 to drive modems; RP-7 to forward when cut off |
 | A post office | RP-0, RP-1 (issuing), RP-2, RP-5 (serving), RP-6 |
 | A modem adapter | RP-0 §4, RP-4 |

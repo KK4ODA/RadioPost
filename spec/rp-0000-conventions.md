@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.5.1 |
-| **Updated** | 2026-11-09 |
+| **Version** | 0.6.0 |
+| **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
@@ -284,6 +284,7 @@ As in §2. Numbers are never reused.
 | `RadioPost-api-login-v1` | A post office API login | RP-5 §3.2 |
 | `RadioPost-api-enroll-v1` | A new device's enrollment | RP-5 §6.1 |
 | `RadioPost-api-gateway-v1` | A gateway's registration | RP-5 §6.4 |
+| `RadioPost-api-apply-v1` | An application for an account, from a new device | RP-5 §6.7 |
 | `RadioPost-placement-v1` | A post office's placement of mail for a cut-off gateway, as COSE external data | RP-7 §4.2 |
 
 ### 9.3 Error codes
@@ -329,3 +330,4 @@ means the same thing wherever it appears.
 | 0.4.1 | 2026-11-09 | §8.6: the vectors cover RP-7 too. |
 | 0.5.0 | 2026-11-09 | Signed CBOR objects are untagged COSE_Sign1 with Ed25519 (-19), the context as external data (§5, §9.2). |
 | 0.5.1 | 2026-11-09 | §6.3: the example was not base32; each ID has one text, its unused bits zero; test vectors |
+| 0.6.0 | 2026-11-12 | The context `RadioPost-api-apply-v1` (§9.2), for RP-5's applications. |
