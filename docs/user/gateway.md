@@ -78,7 +78,7 @@ Click **Start**. The badge at the top says what the gateway is doing:
 | Badge | Means |
 |---|---|
 | Stopped | Not answering. |
-| Waiting for the modem | Aether is not running, or not reachable at the Modem address. The gateway tries again every five seconds; the Modem box says why. |
+| Waiting for the modem | Aether is not running, is restarting (saving Aether's Setup restarts it), or is not reachable at the Modem address. The gateway tries again every five seconds and claims its callsign again once Aether is back; the Modem box says why. |
 | Listening | It has claimed its callsign at Aether and answers calls. |
 | Session | A user's session is under way. |
 
@@ -163,6 +163,7 @@ another; Setup shows where):
 | You see | Do |
 |---|---|
 | Waiting for the modem: *cannot reach the modem* | Start Aether. Check the Modem address in Setup. |
+| Callers connect to Aether but the gateway never answers them, though it says *Listening* | RadioPost Gateway 0.1.0-beta.6 and earlier lost Aether when Aether restarted (a Setup save) and never claimed its callsign again; Aether then answered callers itself. Update RadioPost Gateway, or stop and start it after saving Aether's Setup. |
 | Waiting for the modem: *the modem refused* | Another program holds the callsign at Aether (RMS Trimode, if it uses the same one), or Aether refused it: Aether's log says why. |
 | Aether HF stops at start: *host interface: 127.0.0.1:8515 is already in use* | Aether's host programs port was set to 8515, its control port's number. Open Aether's `station.toml` (in PowerShell, `notepad "$env:APPDATA\aether-hf\station.toml"`), write `bind = "127.0.0.1:8300"` under `[host]`, save, and start Aether again. |
 | Register: *… .radiopost holds no device key* | The RadioPost app on this computer is not enrolled: enroll it in its Setup, with a code of its own (§1). |

@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.5.0 |
-| **Updated** | 2026-11-09 |
+| **Version** | 0.6.0 |
+| **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -90,6 +90,20 @@ members. A host MUST ignore events and members it does not know, so that adapter
 
 Test vectors: `vectors/rpmi-lines.json`: lines an adapter reads, and lines it answers with an
 error.
+
+### 2.1 When the modem goes away
+
+An adapter that loses its modem while a host is connected (the modem stopped, restarted, or can no
+longer be reached) tells the host what that ended, `failed` for its call under way and
+`disconnected` with `reason` `failure` for its links, and then closes the host's connection. It
+MUST NOT keep the connection open with no modem behind it: a host waiting for calls would wait for
+ever, and on a shared modem (§1.1) its callsigns would no longer be its own. A host whose
+connection closes connects again and starts from `hello` (§3); nothing it set (`callsigns`,
+`listen`) is kept for it. A host that connects while the modem cannot be reached gets `error`
+`no-modem` (§7) to its requests.
+
+**Why close:** the host cannot tell a quiet modem from a missing one, and a gateway is quiet for
+hours. Closing is the one signal every host already acts on.
 
 ---
 
@@ -258,7 +272,9 @@ Aether's control API (JSON over WebSocket, `ws://127.0.0.1:8515/v1`) carries RPM
 * Every `state` event says whose call or session it is (`owner`, the claim's `id`).
 
 The adapter opens **one WebSocket connection to Aether for each RPMI host**, and closes it when the
-host's connection closes; Aether then lets that host's claim go. A one-shot `POST /v1/<method>`
+host's connection closes; Aether then lets that host's claim go. Aether restarts when its settings
+are saved, which closes every WebSocket and ends every claim: the adapter then closes the host's
+connection (§2.1), and the host claims again on the next. A one-shot `POST /v1/<method>`
 holds no claim. Aether says it has claims by `status.claims`; for an Aether without them, see the
 end of this section.
 
@@ -377,3 +393,4 @@ left, not when the other host holds them.
 | 0.4.0 | 2026-11-09 | Found by writing the Rust adapter and host: a request missing a member it needs, or with one of the wrong type, is `malformed`, and the order of the checks (§2); the members' types, `ref` a string or an integer, and a `connect` needs its `id` (§4); an adapter that is not shared turns a second host away `busy` (§1.1, §3, §7). Test vectors for each. |
 | 0.4.1 | 2026-11-09 | §9.1, found by writing the Aether adapter and running it against Aether 0.2.0-beta.146: `modem`'s name; the adapter's own references for `send`; `busy` while the host's own link is up; broadcasts as unformatted datagrams; a named bandwidth kept with `keep_bandwidth`, and `connected` carrying the one in use. |
 | 0.5.0 | 2026-11-09 | A host that leaves ends its call and its links (§1.1): the Aether adapter had let its callsigns go and left the session up, found by running the conformance tester's A-02 over two Aether daemons. §9.5, found by writing the TCP adapter: the link on an amateur mesh is plain TCP, since a mesh is on the air (RP-0 §5), and TLS only on the Internet; the opening lines two TCP adapters agree a link with (normative), the port, what `remote` may be, and what the caller's host hears. |
+| 0.6.0 | 2026-11-12 | An adapter that loses its modem tells the host what that ended and closes its connection (§2.1, §9.1): two Setup saves restarted a gateway's Aether on the air, the Aether adapter kept RadioPost Gateway's connection open, and the gateway listened for an hour and a half while Aether, its claim gone, answered the gateway's callsign for nobody. |

@@ -83,8 +83,10 @@ fn read_host(stream: TcpStream, to: &mpsc::Sender<FromHost>) {
     }
 }
 
-/// Serves one host until its connection closes. Its link or call is aborted first (RP-4 §1.1);
-/// then Aether's connection closes, which ends the host's claim (ADR-0106).
+/// Serves one host until its connection closes, or Aether's does. A host that leaves has its
+/// link or call aborted first (RP-4 §1.1); then Aether's connection closes, which ends the
+/// host's claim (ADR-0106). Aether going away is told to the host and closes its connection
+/// (RP-4 §2.1).
 pub fn serve(host: &TcpStream, aether: &str) {
     let _ = host.set_nodelay(true);
     let Ok(reader) = host.try_clone() else {
@@ -134,6 +136,13 @@ fn left(bridge: &mut Bridge, ws: &mut WebSocket<MaybeTlsStream<TcpStream>>) {
     }
 }
 
+/// Carries one host until it leaves, or until Aether goes away under it.
+///
+/// Aether going away ends the host's connection too, once the host has been told its link and
+/// its call are over (RP-4 §2.1). Aether restarts whenever its settings are saved, and a claim
+/// lasts only as long as its WebSocket (ADR-0106): kept open, the host's connection would have a
+/// gateway listening for calls that Aether no longer answers for it, and nothing would tell it to
+/// claim again. Closed, it is the host's cue to open the modem afresh.
 fn run(
     bridge: &mut Bridge,
     ws: &mut Option<WebSocket<MaybeTlsStream<TcpStream>>>,
@@ -142,6 +151,7 @@ fn run(
 ) {
     loop {
         let mut outs = Vec::new();
+        let mut lost = false;
         if let Some(socket) = ws.as_mut() {
             match socket.read() {
                 Ok(Ws::Text(text)) => outs.extend(bridge.from_aether(&text)),
@@ -153,6 +163,7 @@ fn run(
                     ) => {}
                 Err(_) => {
                     *ws = None;
+                    lost = true;
                     outs.extend(bridge.modem_lost());
                 }
             }
@@ -188,6 +199,7 @@ fn run(
                         .is_some_and(|s| s.send(Ws::text(request.to_string())).is_ok());
                     if !sent && ws.is_some() {
                         *ws = None;
+                        lost = true;
                         for m in bridge.modem_lost() {
                             if let Out::Host(m) = m {
                                 let mut line = line_of(&m);
@@ -199,6 +211,9 @@ fn run(
                 }
                 Out::CloseHost => return,
             }
+        }
+        if lost {
+            return;
         }
     }
 }

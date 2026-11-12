@@ -30,6 +30,7 @@ tiny_http = "0.12"
 radiopost-tester = { path = "../tester" }
 radiopost-client = { path = "../../app/client" }
 sha2 = "0.11"
+tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
 
 [lints]
 workspace = true
