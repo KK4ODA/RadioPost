@@ -27,6 +27,7 @@ radiopost [--home DIR] COMMAND
 | `post-office URL` | The post office's API, when DNS does not name it. |
 | `renew` | A new credential for this device (RP-5 §6.2). |
 | `settings [--set JSON]` | The account's settings at the post office (RP-5 §6.3); `--set` changes the members it names (`null` removes one). |
+| `addresses [--add 'NAME <ADDR>']… [--remove ADDR]…` | The address list: whom you have written to, each with the name written with it and how often, and any added by hand (an address already listed takes the new name). The panel offers it as you type in To and Cc. It is this computer's own; who may email you is the accept list. |
 | `accept [--add ENTRY]… [--remove ENTRY]…` | The accept list: who may email this account (RP-5 §6.5, RP-6 §2.2). |
 | `report` | Sends the station-to-station sessions waiting to the post office (RP-5 §6.6); each one answered leaves the home. |
 | `compose --to ADDR … [--cc ADDR] [--subject TEXT] [--priority 0\|1\|2] [--attach FILE]… [--body FILE]` | Writes a message into the outbox; the text from standard input without `--body`. Each `--to` or `--cc` may hold several addresses, separated by commas, semicolons or spaces, and `Name <address>` as well as a bare address; each is checked first (RP-0 §6.2), and a malformed one is refused with the reason. |
@@ -75,8 +76,14 @@ the post office and renewal, the accept list, the device key, a credential impor
 the post offices trusted. Each message row has a trash can, and the reader a **Delete** button (or
 the Delete key); the toast that follows has **Undo**. The **Trash** folder says which folder each
 message came from, puts it back (**Restore**) or deletes it for good (**Delete forever**, a second
-click to confirm), and **Empty trash** empties it. A session runs on a thread of its own; while it
-runs, the panel changes nothing in the home, so deleting waits for it to end. `--ui DIR` serves the page from a directory, for working on it.
+click to confirm), and **Empty trash** empties it. **Addresses** is the address list: everyone a
+message is written to is added with the name typed before the address, and To and Cc offer it as
+you type (arrows and Enter or Tab to take one, the × to take an address off the list, with
+Undo); the browser's own memory of those fields is off, since nobody could see or clear it. The
+view finds, adds, renames, writes to and removes addresses, and the reader's *Add to addresses*
+adds a sender. A session runs on a thread of its own; while it
+runs, the panel changes nothing in the home, so deleting waits for it to end; the address list is
+a file of its own and changes at any time. `--ui DIR` serves the page from a directory, for working on it.
 
 Only this computer's own pages reach it: a request must name the panel's own host, so a page that
 rebinds its name to 127.0.0.1 is refused, and a change must carry `X-RadioPost: 1`, which another
@@ -141,7 +148,7 @@ credential the same way, while it answers ([the gateway's guide](../../docs/user
 
 The home (`--home`, else `$RADIOPOST_HOME`, else `.radiopost` in the user's home directory) holds
 the device seed, the credential, the trusted keys, each message's canonical encoding named by its
-content ID, partial messages to resume (RP-3 §7) and `state.json`: the folders and the trash, the next serial,
+content ID, partial messages to resume (RP-3 §7), the address list (`addresses.json`) and `state.json`: the folders and the trash, the next serial,
 the station called's replay cache (RP-1 §6.3), what each gateway holds, the reports, each received
 message's serial at the post office, the held attachments to ask for, the post office's gateway
 list and your grid square, what waited at the last call to a gateway, and what to fetch next. A request leaves the home
@@ -158,7 +165,9 @@ both stations' proofs, waits in `state.json` until `report` (or the panel's Send
 
 `tests/panel.rs`: the panel's guards, a message written with an attachment and carried by a call
 made from the panel, a held attachment asked for, listening stopped, and the trash (deleted,
-restored to its place, deleted for good, emptied, and refused while a session runs). `tests/two_clients.rs`: two clients replay session-03
+restored to its place, deleted for good, emptied, and refused while a session runs), and the
+address list (learned from a message with the names typed, added to and renamed, taken off and
+put back as it was, during a session too). `tests/two_clients.rs`: two clients replay session-03
 byte for byte through the loopback adapter
 with the vector's clocks and draws, and end with the folders the session says and the reports
 `vectors/direct.json` has; the program itself sets up two homes, composes, listens and calls; and it

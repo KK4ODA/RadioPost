@@ -5,6 +5,7 @@
 const $ = (id) => document.getElementById(id);
 let folder = "inbox";
 let logNext = 0;
+let meAddress = "";
 let lastState = "idle";
 
 async function api(path, body) {
@@ -105,7 +106,8 @@ function when(seconds) {
 }
 
 function show(view) {
-  for (const id of ["list-view", "waiting-view", "gateways-view", "reader", "composer", "setup"]) {
+  for (const id of ["list-view", "waiting-view", "gateways-view", "addresses-view", "reader",
+                    "composer", "setup"]) {
     $(id).hidden = id !== view;
   }
 }
@@ -153,6 +155,7 @@ async function refresh() {
   const s = await api("state");
   showUpdate(s.update, "RadioPost");
   $("who").textContent = s.me ? `${s.me.address}  ·  ${s.me.operator}` : "No credential yet";
+  meAddress = s.me ? s.me.address : "";
   for (const name of ["inbox", "outbox", "sent", "waiting", "trash"]) {
     $(`n-${name}`).textContent = s.counts[name] || "";
   }
@@ -326,6 +329,7 @@ function rowActions(m, name) {
 
 async function openFolder(name) {
   if (name === "waiting") return openWaiting();
+  if (name === "addresses") return openAddresses();
   folder = name;
   markFolder(name);
   const trash = name === "trash";
@@ -363,6 +367,180 @@ async function openFolder(name) {
   show("list-view");
 }
 
+// ── the address list ─────────────────────────────────────────────────────────────────────────
+// Kept by the client (addresses.json), learned from every message written, offered as To and Cc
+// are typed, and managed in the Addresses view. The browser's own memory of the fields is off:
+// the user could not see or delete what it kept.
+
+let addressBook = [];
+
+async function loadAddresses() {
+  try { addressBook = (await api("addresses")).entries; } catch { /* kept as it was */ }
+  $("n-addresses").textContent = addressBook.length || "";
+  return addressBook;
+}
+
+function writtenAs(e) {
+  if (!e.name) return e.address;
+  return /[,;"<>]/.test(e.name) ? `"${e.name.replace(/"/g, "")}" <${e.address}>` : `${e.name} <${e.address}>`;
+}
+
+async function changeAddresses(change) {
+  const r = await api("addresses", change);
+  addressBook = r.entries;
+  $("n-addresses").textContent = addressBook.length || "";
+  return r;
+}
+
+async function forgetAddress(address, after) {
+  try {
+    const r = await changeAddresses({remove: address});
+    toast(`${address} is off the address list.`, false, {label: "Undo", run: async () => {
+      await changeAddresses({put_back: r.removed});
+      await after();
+    }});
+    await after();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function writeTo(e) {
+  const form = $("composer");
+  form.reset();
+  form.to.value = `${writtenAs(e)}, `;
+  show("composer");
+  form.subject.focus();
+}
+
+async function openAddresses() {
+  folder = "addresses";
+  markFolder("addresses");
+  await loadAddresses();
+  renderAddresses();
+  show("addresses-view");
+}
+
+function renderAddresses() {
+  const find = $("address-filter").value.trim().toLowerCase();
+  const shown = addressBook.filter((e) => !find
+    || e.address.includes(find) || (e.name || "").toLowerCase().includes(find));
+  $("address-rows").replaceChildren(...shown.map((e) => {
+    const tr = document.createElement("tr");
+    const used = e.uses
+      ? `${e.uses} message${e.uses === 1 ? "" : "s"} · ${when(e.used)}`
+      : "added by hand";
+    [e.name || "", e.address, used].forEach((text, i) => {
+      const td = document.createElement("td");
+      td.textContent = text;
+      if (i === 1) td.className = "mono";
+      if (i === 2) td.className = "date";
+      tr.append(td);
+    });
+    const acts = document.createElement("td");
+    acts.className = "acts";
+    for (const [glyph, title, run] of [
+      ["write", `Write to ${e.address}`, () => writeTo(e)],
+      ["trash", "Take it off the address list", () => forgetAddress(e.address, openAddresses)],
+    ]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "act";
+      b.title = title;
+      b.setAttribute("aria-label", title);
+      b.append(icon(glyph));
+      b.addEventListener("click", (event) => { event.stopPropagation(); run(); });
+      acts.append(b);
+    }
+    tr.append(acts);
+    tr.title = `Write to ${writtenAs(e)}`;
+    tr.addEventListener("click", () => writeTo(e));
+    return tr;
+  }));
+  const empty = $("addresses-empty");
+  empty.hidden = shown.length > 0;
+  empty.textContent = addressBook.length
+    ? "None has that in its name or address."
+    : "No addresses yet. Everyone you write to is added here.";
+}
+
+// Suggestions under To and Cc: the address list's entries that match what is being typed after
+// the last comma, those written to most first. Arrows move, Enter or Tab takes one, Escape
+// closes; the × takes an address off the list there and then.
+function wireSuggestions(input) {
+  const list = input.parentElement.querySelector(".suggestions");
+  let shown = [];
+  let active = -1;
+  const split = () => {
+    const v = input.value;
+    const cut = Math.max(v.lastIndexOf(","), v.lastIndexOf(";"));
+    return [v.slice(0, cut + 1), v.slice(cut + 1).trim().toLowerCase()];
+  };
+  const close = () => { list.hidden = true; shown = []; active = -1; };
+  const pick = (e) => {
+    const [head] = split();
+    input.value = `${head}${head ? " " : ""}${writtenAs(e)}, `;
+    close();
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  };
+  const render = () => {
+    const [head, typed] = split();
+    const taken = head.toLowerCase();
+    shown = !typed ? [] : addressBook
+      .filter((e) => !taken.includes(e.address))
+      .filter((e) => e.address.startsWith(typed) || e.address.includes(typed)
+        || (e.name || "").toLowerCase().split(/\s+/).some((w) => w.startsWith(typed)))
+      .sort((a, b) => (b.uses - a.uses) || (b.used - a.used))
+      .slice(0, 6);
+    if (!shown.length) { close(); return; }
+    active = Math.min(Math.max(active, 0), shown.length - 1);
+    list.replaceChildren(...shown.map((e, i) => {
+      const li = document.createElement("li");
+      li.setAttribute("role", "option");
+      li.setAttribute("aria-selected", String(i === active));
+      const name = document.createElement("span");
+      name.className = "s-name";
+      name.textContent = e.name || "";
+      const addr = document.createElement("span");
+      addr.className = "s-addr";
+      addr.textContent = e.address;
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "s-del";
+      del.title = `Take ${e.address} off the address list`;
+      del.setAttribute("aria-label", del.title);
+      del.append(icon("gone"));
+      del.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        forgetAddress(e.address, async () => { render(); });
+      });
+      li.append(name, addr, del);
+      li.addEventListener("mousedown", (event) => { event.preventDefault(); pick(e); });
+      return li;
+    }));
+    list.hidden = false;
+  };
+  input.addEventListener("input", () => { active = 0; render(); });
+  input.addEventListener("blur", () => setTimeout(close, 120));
+  input.addEventListener("keydown", (event) => {
+    if (list.hidden || !shown.length) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      active = (active + (event.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length;
+      render();
+    } else if (event.key === "Enter" || event.key === "Tab") {
+      if (active < 0) return;
+      event.preventDefault();
+      pick(shown[active]);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+    }
+  });
+}
+
 // what the reader's buttons act on: the folder the message was opened from
 let reading = null;
 
@@ -376,6 +554,17 @@ async function openMessage(id, from = {folder}) {
   $("r-restore").title = trash ? `Put it back in the ${from.was}` : "";
   $("r-subject").textContent = m.subject || "(no subject)";
   $("r-from").textContent = m.from;
+  const known = addressBook.some((e) => e.address === m.from);
+  $("r-from-add").hidden = known || m.from === meAddress;
+  $("r-from-add").onclick = async () => {
+    try {
+      await changeAddresses({add: m.from});
+      $("r-from-add").hidden = true;
+      toast(`${m.from} is on your address list.`);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
   $("r-to").textContent = m.to.join(", ");
   $("r-cc").textContent = m.cc.join(", ");
   $("r-cc").hidden = $("r-cc-t").hidden = !m.cc.length;
@@ -432,6 +621,7 @@ async function send(event) {
       priority: Number(form.priority.value), body: form.body.value, files,
     });
     form.reset();
+    loadAddresses();
     toast("In the outbox: the next session carries it.");
     await refresh();
     await openFolder("outbox");
@@ -535,6 +725,22 @@ function wire() {
     b.addEventListener("click", () => openFolder(b.dataset.folder));
   }
   $("write").addEventListener("click", () => show("composer"));
+  wireSuggestions($("composer").to);
+  wireSuggestions($("composer").cc);
+  $("address-filter").addEventListener("input", renderAddresses);
+  const addAddress = async () => {
+    const typed = $("address-new").value.trim();
+    if (!typed) return;
+    try {
+      await changeAddresses({add: typed});
+      $("address-new").value = "";
+      renderAddresses();
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+  $("address-add").addEventListener("click", addAddress);
+  $("address-new").addEventListener("keydown", (e) => { if (e.key === "Enter") addAddress(); });
   $("cancel").addEventListener("click", () => { $("composer").reset(); openFolder(folder); });
   $("composer").addEventListener("submit", send);
   $("back").addEventListener("click", () => openFolder(folder));
@@ -631,6 +837,7 @@ function wire() {
 
 async function start() {
   wire();
+  await loadAddresses();
   const s = await refresh();
   if (!s.device || !s.me) show("setup");
   else await openFolder("inbox");

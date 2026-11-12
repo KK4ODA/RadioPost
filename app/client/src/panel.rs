@@ -31,6 +31,7 @@ use tiny_http::{Header, Method, Request, Response, Server};
 
 use radiopost_update::{Product, Watch};
 
+use crate::addresses;
 use crate::compose::{Draft, File, media_type};
 use crate::online;
 use crate::session::{self, Fetch, Kind, Options};
@@ -122,16 +123,22 @@ fn summary(m: &Message) -> Value {
     })
 }
 
-fn addresses(v: &Value) -> Result<Vec<String>, Error> {
+/// The addresses in To or Cc, each with the name typed before it: text as a user types it, or a
+/// list of addresses.
+fn named(v: &Value) -> Result<Vec<(Option<String>, String)>, Error> {
     match v {
-        Value::String(s) => crate::compose::parse_addresses(s),
+        Value::String(s) => crate::compose::parse_named(s),
         Value::Array(a) => a
             .iter()
             .filter_map(Value::as_str)
-            .map(crate::compose::checked_address)
+            .map(|x| Ok((None, crate::compose::checked_address(x)?)))
             .collect(),
         _ => Ok(Vec::new()),
     }
+}
+
+fn plain(named: &[(Option<String>, String)]) -> Vec<String> {
+    named.iter().map(|(_, a)| a.clone()).collect()
 }
 
 impl Panel {
@@ -372,6 +379,7 @@ impl Panel {
             }
             (Method::Post, "/api/compose") => self.compose(body),
             (Method::Post, "/api/held") => self.ask_for_held(body),
+            (_, "/api/addresses") => self.addresses(method, body),
             (Method::Post, "/api/delete" | "/api/restore" | "/api/purge" | "/api/empty-trash") => {
                 self.trash(path, body)
             }
@@ -578,10 +586,11 @@ impl Panel {
                 })
             })
             .collect::<Result<Vec<_>, Error>>()?;
+        let (to, cc) = (named(&body["to"])?, named(&body["cc"])?);
         let draft = Draft {
             from: me.address,
-            to: addresses(&body["to"])?,
-            cc: addresses(&body["cc"])?,
+            to: plain(&to),
+            cc: plain(&cc),
             date: now(),
             subject: text("subject"),
             body: body["body"].as_str().unwrap_or("").to_owned(),
@@ -590,6 +599,10 @@ impl Panel {
             reply_to: None,
         };
         let id = store.queue(&draft.message()?)?;
+        // the address list learns whom the message is for; a failure there loses no message
+        if let Err(why) = addresses::remember(&self.home, &[to, cc].concat(), now()) {
+            radiopost::logfile::line(&format!("the address list was not updated: {why}"));
+        }
         Ok(json!({"id": id.text()}))
     }
 
@@ -650,6 +663,35 @@ impl Panel {
             out.push(v);
         }
         Ok(Value::Array(out))
+    }
+
+    /// The address list (it is a file of its own, so it changes during a session too): `add`
+    /// typed text, `remove` an address, or `put_back` an entry removed.
+    fn addresses(&self, method: &Method, body: &Value) -> Result<Value, Error> {
+        let entries = |list: Vec<addresses::Entry>| -> Value {
+            list.iter().map(addresses::Entry::json).collect()
+        };
+        if *method == Method::Get {
+            return Ok(json!({"entries": entries(addresses::list(&self.home))}));
+        }
+        if let Some(typed) = body["add"].as_str() {
+            return Ok(json!({"entries": entries(addresses::add(&self.home, typed)?)}));
+        }
+        if let Some(address) = body["remove"].as_str() {
+            let (gone, left) = addresses::remove(&self.home, address)?;
+            return Ok(json!({"entries": entries(left), "removed": gone.json()}));
+        }
+        let e = &body["put_back"];
+        let entry = addresses::Entry {
+            address: e["address"]
+                .as_str()
+                .ok_or("add, remove or put_back")?
+                .to_owned(),
+            name: e["name"].as_str().map(str::to_owned),
+            used: e["used"].as_u64().unwrap_or(0),
+            uses: e["uses"].as_u64().unwrap_or(0),
+        };
+        Ok(json!({"entries": entries(addresses::put_back(&self.home, entry)?)}))
     }
 
     /// The trash: a message moved there from a folder (`delete`, `folder` and `id`), put back

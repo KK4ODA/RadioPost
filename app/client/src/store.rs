@@ -48,7 +48,7 @@ pub fn unhex(s: &str) -> Option<Vec<u8>> {
 }
 
 /// Writes a file by way of a temporary one, so it is whole or absent.
-fn write(path: &Path, bytes: &[u8]) -> Result<(), Error> {
+pub(crate) fn write(path: &Path, bytes: &[u8]) -> Result<(), Error> {
     let tmp = path.with_extension("tmp");
     fs::write(&tmp, bytes).map_err(|e| format!("cannot write {}: {e}", tmp.display()))?;
     fs::rename(&tmp, path).map_err(|e| format!("cannot write {}: {e}", path.display()))

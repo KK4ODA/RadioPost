@@ -269,6 +269,79 @@ fn listening_from_the_panel_can_be_stopped() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The address list: whom a message was written to is kept with the names typed, one is added
+/// and renamed by hand, one is taken off and put back as it was, and the list changes while a
+/// session runs (it is a file of its own, which the session never writes).
+#[test]
+fn the_address_list_learns_and_forgets() {
+    let dir = scratch("panel-address-list");
+    store_for(&dir.join("ana"), "device:ana", "ana");
+    let c = Client {
+        at: Panel::new(&dir.join("ana"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    assert_eq!(c.get("/api/addresses")["entries"], json!([]));
+    c.post(
+        "/api/compose",
+        &json!({"to": "Maria Perez <maria@example.com>, eoc@radiopost.org",
+                "cc": "\"Lopez, Ana\" <ana@hampost.org>", "subject": "x", "body": "y"}),
+    )
+    .expect("composed");
+    let book = c.get("/api/addresses")["entries"].clone();
+    let names: Vec<(String, String)> = book
+        .as_array()
+        .expect("a list")
+        .iter()
+        .map(|e| {
+            (
+                e["name"].as_str().unwrap_or("").to_owned(),
+                e["address"].as_str().unwrap_or("").to_owned(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        names,
+        [
+            (String::new(), "eoc@radiopost.org".to_owned()),
+            ("Lopez, Ana".to_owned(), "ana@hampost.org".to_owned()),
+            ("Maria Perez".to_owned(), "maria@example.com".to_owned()),
+        ],
+        "{book}"
+    );
+    assert_eq!(book[2]["uses"], 1);
+    assert!(
+        c.post("/api/addresses", &json!({"add": "bob at example"}))
+            .is_err(),
+        "not an address"
+    );
+    let after = c
+        .post("/api/addresses", &json!({"add": "EOC <eoc@radiopost.org>"}))
+        .expect("renamed");
+    assert_eq!(after["entries"][0]["name"], "EOC", "{after}");
+
+    // during a session the list still changes
+    let (_server, _, at_a) = loopback();
+    c.post("/api/listen", &json!({"adapter": at_a.to_string()}))
+        .expect("listening");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while c.get("/api/state")["activity"]["state"] != "listening" {
+        assert!(Instant::now() < deadline, "never listened");
+        thread::sleep(Duration::from_millis(20));
+    }
+    let gone = c
+        .post("/api/addresses", &json!({"remove": "maria@Example.COM"}))
+        .expect("removed");
+    assert_eq!(gone["entries"].as_array().map(Vec::len), Some(2));
+    assert_eq!(gone["removed"]["name"], "Maria Perez");
+    let back = c
+        .post("/api/addresses", &json!({"put_back": gone["removed"]}))
+        .expect("put back");
+    assert_eq!(back["entries"][2], book[2], "as it was, its count with it");
+    c.post("/api/stop", &json!({})).expect("stopped");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The trash: a message deleted from the outbox is listed there with the folder it came from,
 /// goes back, and goes for good; the trash is emptied; and nothing changes while a session runs,
 /// which keeps the folders until it ends.

@@ -9,9 +9,9 @@ use std::process::ExitCode;
 use radiopost::credential::PostOfficeKey;
 use radiopost::message::{Message, key};
 use radiopost_client::compose::{Draft, File, media_type};
-use radiopost_client::online;
 use radiopost_client::session::{self, Fetch, Kind, Options, Packing};
 use radiopost_client::store::{Error, Store, unhex};
+use radiopost_client::{addresses, online};
 
 const HELP: &str = "\
 radiopost: the RadioPost client
@@ -31,6 +31,9 @@ usage: radiopost [--home DIR] COMMAND ...
   report                   send the station-to-station sessions waiting to the post office
                            (RP-5 §6.6)
   settings [--set JSON]    the account's settings at the post office (RP-5 §6.3)
+  addresses [--add 'NAME <ADDR>']... [--remove ADDR]...
+                           the address list: whom you have written to, offered as To and Cc are
+                           typed in the panel; this computer's own, not the accept list
   accept [--add ENTRY]... [--remove ENTRY]...
                            the accept list: addresses, or @domain (RP-5 §6.5)
   compose --to ADDR [--to ADDR] [--cc ADDR] [--subject TEXT] [--priority 0|1|2]
@@ -197,12 +200,12 @@ fn options(args: &Args) -> Result<Options, Error> {
 
 /// The addresses in each `--to` or `--cc` given, as the panel reads its fields: commas,
 /// semicolons or spaces between them, and `Name <address>` as well as a bare address.
-fn typed_addresses(given: &[String]) -> Result<Vec<String>, Error> {
-    let mut found = Vec::new();
+fn typed_addresses(given: &[String]) -> Result<Vec<(Option<String>, String)>, Error> {
+    let mut found: Vec<(Option<String>, String)> = Vec::new();
     for text in given {
-        for a in radiopost_client::compose::parse_addresses(text)? {
-            if !found.contains(&a) {
-                found.push(a);
+        for (name, a) in radiopost_client::compose::parse_named(text)? {
+            if !found.iter().any(|(_, x)| *x == a) {
+                found.push((name, a));
             }
         }
     }
@@ -511,10 +514,15 @@ fn run(words: &[String]) -> Result<(), Error> {
                     data,
                 });
             }
+            let to = typed_addresses(&args.all("--to"))?;
+            let cc = typed_addresses(&args.all("--cc"))?;
+            let plain = |n: &[(Option<String>, String)]| -> Vec<String> {
+                n.iter().map(|(_, a)| a.clone()).collect()
+            };
             let draft = Draft {
                 from: me.address,
-                to: typed_addresses(&args.all("--to"))?,
-                cc: typed_addresses(&args.all("--cc"))?,
+                to: plain(&to),
+                cc: plain(&cc),
                 date: now(),
                 subject: args.one("--subject").unwrap_or_default(),
                 body,
@@ -525,6 +533,7 @@ fn run(words: &[String]) -> Result<(), Error> {
                 reply_to: None,
             };
             let id = store.queue(&draft.message()?)?;
+            addresses::remember(store.home(), &[to, cc].concat(), now())?;
             println!("{}", id.text());
         }
         "import" => {
@@ -610,6 +619,27 @@ fn run(words: &[String]) -> Result<(), Error> {
                 .map_err(|e| format!("--set: {e}"))?;
             let now = online::settings(&store, change.as_ref())?;
             println!("{}", serde_json::to_string_pretty(&now).unwrap_or_default());
+        }
+        "addresses" => {
+            for typed in args.all("--add") {
+                addresses::add(store.home(), &typed)?;
+            }
+            for address in args.all("--remove") {
+                addresses::remove(store.home(), &address)?;
+            }
+            for e in addresses::list(store.home()) {
+                let used = if e.uses == 0 {
+                    "added by hand".to_owned()
+                } else {
+                    format!(
+                        "written to {} time{}, last {}",
+                        e.uses,
+                        if e.uses == 1 { "" } else { "s" },
+                        utc(e.used)
+                    )
+                };
+                println!("{:<40} {used}", e.written());
+            }
         }
         "accept" => {
             for entry in online::accept_list(&store, &args.all("--add"), &args.all("--remove"))? {

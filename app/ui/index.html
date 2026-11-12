@@ -29,6 +29,7 @@
         <li><button data-folder="sent" title="Messages another station has taken">Sent <span class="count" id="n-sent"></span></button></li>
         <li><button data-folder="waiting" title="What waited at your post office at the last call to a gateway: mark what to fetch on the next call">Waiting <span class="count" id="n-waiting"></span></button></li>
         <li><button data-folder="trash" title="Messages you deleted: put them back, or delete them for good. Deleting is on this computer only: your post office and other stations keep what they hold">Trash <span class="count" id="n-trash"></span></button></li>
+        <li class="sep"><button data-folder="addresses" title="Whom you have written to, and addresses you add: offered as you type in To and Cc">Addresses <span class="count" id="n-addresses"></span></button></li>
       </ul>
 
       <section class="station" aria-label="Station">
@@ -115,6 +116,23 @@
         </table>
       </section>
 
+      <section id="addresses-view" hidden>
+        <div class="head">
+          <h1>Addresses</h1>
+          <input id="address-filter" class="filter" type="search" placeholder="Find" spellcheck="false" autocomplete="off" title="Show the addresses whose name or address has this in it">
+        </div>
+        <p class="note">Everyone you write to is added, and they are offered as you type in To and Cc. This list is this computer's own: who may email you is your accept list, in Setup.</p>
+        <div class="row">
+          <input id="address-new" class="grow" placeholder="Maria Perez &lt;maria@example.com&gt;" spellcheck="false" autocomplete="off" title="A name with the address in angle brackets, or the address alone. An address already listed takes the new name">
+          <button id="address-add" title="Add it to the list">Add</button>
+        </div>
+        <table class="list" aria-label="Addresses">
+          <thead><tr><th title="The name written with it">Name</th><th title="The address">Address</th><th title="How many messages you have written to it, and the last">Written to</th><th class="acts"></th></tr></thead>
+          <tbody id="address-rows"></tbody>
+        </table>
+        <p class="empty" id="addresses-empty" hidden></p>
+      </section>
+
       <article id="reader" hidden aria-live="polite">
         <div class="row reader-acts">
           <button class="quiet" id="back" title="Back to the folder">Back</button>
@@ -124,7 +142,7 @@
         </div>
         <h1 id="r-subject"></h1>
         <dl class="fields">
-          <dt>From</dt><dd id="r-from"></dd>
+          <dt>From</dt><dd><span id="r-from"></span> <button class="link" type="button" id="r-from-add" title="Add the sender to your address list" hidden>Add to addresses</button></dd>
           <dt>To</dt><dd id="r-to"></dd>
           <dt id="r-cc-t">Cc</dt><dd id="r-cc"></dd>
           <dt>Date</dt><dd id="r-date"></dd>
@@ -137,8 +155,8 @@
 
       <form id="composer" hidden>
         <h1>New message</h1>
-        <label title="Addresses, separated by commas: maria@example.com, or Maria &lt;maria@example.com&gt;. Each is checked before the message goes in the outbox">To <input name="to" required spellcheck="false" placeholder="ana@hampost.org"></label>
-        <label title="Copies, separated by commas, written as in To">Cc <input name="cc" spellcheck="false"></label>
+        <label title="Addresses, separated by commas: maria@example.com, or Maria &lt;maria@example.com&gt;. Each is checked before the message goes in the outbox. Your address list is offered as you type">To <span class="suggest"><input name="to" required spellcheck="false" autocomplete="off" placeholder="ana@hampost.org" aria-autocomplete="list"><ul class="suggestions" role="listbox" hidden></ul></span></label>
+        <label title="Copies, separated by commas, written as in To">Cc <span class="suggest"><input name="cc" spellcheck="false" autocomplete="off" aria-autocomplete="list"><ul class="suggestions" role="listbox" hidden></ul></span></label>
         <label title="What it is about">Subject <input name="subject"></label>
         <label title="Emergency is for emergency traffic only">Priority
           <select name="priority" class="narrow">
@@ -221,6 +239,7 @@
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-restore" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-write" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-gone" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
   </svg>
 </body>

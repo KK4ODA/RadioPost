@@ -136,6 +136,16 @@ pub fn checked_address(text: &str) -> Result<String, String> {
 ///
 /// The first entry that is not an address.
 pub fn parse_addresses(text: &str) -> Result<Vec<String>, String> {
+    Ok(parse_named(text)?.into_iter().map(|(_, a)| a).collect())
+}
+
+/// As [`parse_addresses`], each address with the name written before it, without its quotes:
+/// what the address list keeps.
+///
+/// # Errors
+///
+/// The first entry that is not an address.
+pub fn parse_named(text: &str) -> Result<Vec<(Option<String>, String)>, String> {
     let mut entries = Vec::new();
     let (mut quoted, mut angled, mut entry) = (false, false, String::new());
     for ch in text.chars() {
@@ -152,16 +162,20 @@ pub fn parse_addresses(text: &str) -> Result<Vec<String>, String> {
         entry.push(ch);
     }
     entries.push(entry);
-    let mut found: Vec<String> = Vec::new();
+    let mut found: Vec<(Option<String>, String)> = Vec::new();
     for entry in entries.iter().map(|e| e.trim()).filter(|e| !e.is_empty()) {
-        let addresses = match (entry.find('<'), entry.rfind('>')) {
+        let named = match (entry.find('<'), entry.rfind('>')) {
             (Some(open), Some(close)) if open < close && entry[close + 1..].trim().is_empty() => {
-                vec![checked_address(&entry[open + 1..close])?]
+                let name = entry[..open].trim().trim_matches('"').trim();
+                vec![(
+                    Some(name.to_owned()).filter(|n| !n.is_empty()),
+                    checked_address(&entry[open + 1..close])?,
+                )]
             }
             (None, None) => entry
                 .split_whitespace()
-                .map(checked_address)
-                .collect::<Result<_, _>>()?,
+                .map(|a| Ok((None, checked_address(a)?)))
+                .collect::<Result<_, String>>()?,
             _ => {
                 return Err(format!(
                     "\u{201c}{entry}\u{201d} is not an email address: write it as \
@@ -169,9 +183,9 @@ pub fn parse_addresses(text: &str) -> Result<Vec<String>, String> {
                 ));
             }
         };
-        for a in addresses {
-            if !found.contains(&a) {
-                found.push(a);
+        for (name, a) in named {
+            if !found.iter().any(|(_, x)| *x == a) {
+                found.push((name, a));
             }
         }
     }

@@ -149,3 +149,29 @@ body[data-busy="true"] .needs-idle { opacity: .4; pointer-events: none; }
 .toast button { height: 26px; padding: 0 10px; background: transparent; color: inherit;
                 border-color: currentColor; }
 @media (hover: none) { .act { opacity: 1; } }
+
+/* the address list, and its suggestions under To and Cc */
+.folders li.sep { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px; }
+.filter { width: 14rem; }
+input.grow { flex: 1; width: auto; min-width: 12rem; }
+#addresses-view .note { margin-bottom: 12px; }
+#addresses-view td.mono { font-size: 13px; }
+button.link { height: auto; padding: 0; border: 0; background: none; color: var(--accent);
+              font-size: 13px; margin-left: 6px; }
+.suggest { position: relative; display: block; }
+.suggestions { position: absolute; z-index: 10; left: 0; right: 0; top: calc(100% + 4px); margin: 0;
+               padding: 4px; list-style: none; background: var(--panel); border: 1px solid var(--line);
+               border-radius: 8px; box-shadow: 0 8px 24px rgb(0 0 0 / .14); }
+.suggestions li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px;
+                  cursor: pointer; color: var(--text); font-size: 14px; }
+.suggestions li[aria-selected="true"] { background: var(--bg); }
+.s-name { font-weight: 600; white-space: nowrap; }
+.s-name:empty { display: none; }
+.s-addr { flex: 1; color: var(--muted); font-family: var(--mono); font-size: 13px;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-del { height: 24px; width: 26px; padding: 0; border-color: transparent; background: transparent;
+         color: var(--muted); display: grid; place-items: center; opacity: 0; }
+.suggestions li:hover .s-del, .suggestions li[aria-selected="true"] .s-del { opacity: 1; }
+.s-del:hover { color: var(--bad); border-color: var(--bad); }
+.s-del .icon { width: 14px; height: 14px; }
+@media (hover: none) { .s-del { opacity: 1; } }
