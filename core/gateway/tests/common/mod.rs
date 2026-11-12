@@ -71,6 +71,7 @@ pub fn post_office(dir: &Path) -> (Arc<Running>, String, SigningKey) {
         hook_token: None,
         smtp: None,
         operators: Vec::new(),
+        lookups: radiopost_postoffice::lookups::LookupSettings::default(),
     };
     files
         .write(

@@ -13,7 +13,7 @@ use radiopost::ErrorCode;
 use serde_json::{Value as Json, json};
 
 use crate::office::problem;
-use crate::serve::{Running, now};
+use crate::serve::{Running, Settings, now};
 
 /// An answer: status, content type, body.
 pub type Answer = (u16, &'static str, String);
@@ -61,12 +61,16 @@ impl Running {
         token: Option<&str>,
         body: Option<&Json>,
     ) -> Option<Answer> {
+        let (route, query) = path.split_once('?').unwrap_or((path, ""));
         let own = matches!(
-            (method, path),
+            (method, route),
             ("GET", "/office/outgoing")
-                | ("POST", "/office/name")
+                | (
+                    "POST",
+                    "/office/name" | "/office/lookup" | "/office/licences"
+                )
                 | ("GET" | "PUT", "/office/settings")
-        );
+        ) || (method == "GET" && route.starts_with("/office/lookup/"));
         if !own {
             return None;
         }
@@ -78,7 +82,7 @@ impl Running {
         let empty = json!({});
         let body = body.unwrap_or(&empty);
         let text = |k: &str| body.get(k).and_then(Json::as_str).unwrap_or("").to_owned();
-        Some(match (method, path) {
+        Some(match (method, route) {
             ("GET", "/office/outgoing") => ok(&json!({"outgoing": self.office().state.outgoing})),
             ("POST", "/office/name") => {
                 let (address, name) = (text("address"), text("name"));
@@ -91,27 +95,75 @@ impl Running {
                 eprintln!("radiopost-po: {who} named {address} {name:?}");
                 ok(&json!({"address": address, "name": name}))
             }
-            ("GET", "/office/settings") => ok(&self.desk_settings()),
-            _ => {
-                let take = match body.get("applications").and_then(Json::as_str) {
-                    Some("open") => true,
-                    Some("closed") => false,
-                    _ => return Some(refused(ErrorCode::Malformed, 400)),
-                };
-                if let Err(e) = self.take_applications(take) {
-                    eprintln!("radiopost-po: cannot save config.json: {e}");
-                    return Some(refused(ErrorCode::Internal, 500));
-                }
-                eprintln!(
-                    "radiopost-po: {who} {} applications",
-                    if take { "opened" } else { "closed" }
-                );
-                ok(&self.desk_settings())
+            ("POST", "/office/lookup") => match self.look_up(&text("application")) {
+                Some(entry) => ok(&entry),
+                None => refused(ErrorCode::UnknownMessage, 404),
+            },
+            ("GET", _) if route.starts_with("/office/lookup/") => {
+                let call = route.trim_start_matches("/office/lookup/").to_uppercase();
+                let name = query
+                    .split('&')
+                    .find_map(|p| p.strip_prefix("name="))
+                    .map(unescape)
+                    .unwrap_or_default();
+                ok(&self.evidence_for(&call, &name, None))
             }
+            ("POST", "/office/licences") => {
+                let started = self.fetch_fcc();
+                eprintln!("radiopost-po: {who} asked for the FCC licence copy to be fetched");
+                ok(&json!({"started": started, "fcc": self.fcc_status()}))
+            }
+            ("GET", "/office/settings") => ok(&self.desk_settings()),
+            _ => match self.put_settings(body) {
+                Ok(said) => {
+                    eprintln!("radiopost-po: {who} changed the settings: {said}");
+                    ok(&self.desk_settings())
+                }
+                Err(400) => refused(ErrorCode::Malformed, 400),
+                Err(_) => refused(ErrorCode::Internal, 500),
+            },
         })
     }
 
-    /// What `/office/settings` shows.
+    /// The operator's port's share of the desk, taken before it locks the post office:
+    /// `GET`/`PUT /settings`, `GET /lookup?call=…&name=…`, `POST /licences` (fetch the copy).
+    pub(crate) fn admin_desk(
+        &self,
+        method: &str,
+        path: &str,
+        body: &Json,
+    ) -> Option<(u16, String)> {
+        let (route, query) = path.split_once('?').unwrap_or((path, ""));
+        let param = |k: &str| {
+            query
+                .split('&')
+                .find_map(|p| p.strip_prefix(&format!("{k}=")))
+                .map(unescape)
+                .unwrap_or_default()
+        };
+        Some(match (method, route) {
+            ("GET", "/settings") => (200, self.desk_settings().to_string()),
+            ("PUT", "/settings") => match self.put_settings(body) {
+                Ok(_) => (200, self.desk_settings().to_string()),
+                Err(_) => (
+                    400,
+                    json!({"error": "a setting of the wrong kind"}).to_string(),
+                ),
+            },
+            ("GET", "/lookup") => (
+                200,
+                self.evidence_for(&param("call").to_uppercase(), &param("name"), None)
+                    .to_string(),
+            ),
+            ("POST", "/licences") => (
+                200,
+                json!({"started": self.fetch_fcc(), "fcc": self.fcc_status()}).to_string(),
+            ),
+            _ => return None,
+        })
+    }
+
+    /// What `/office/settings` shows: never the QRZ password, only whether there is one.
     pub(crate) fn desk_settings(&self) -> Json {
         let settings = self.settings();
         json!({
@@ -124,7 +176,84 @@ impl Running {
             "domains": settings.domains,
             "contact": settings.info.contact,
             "base_url": settings.base_url,
+            "fcc": self.fcc_status(),
+            "qrz": {"username": settings.lookups.qrz_username,
+                    "password": settings.lookups.qrz_password.is_some()},
         })
+    }
+
+    /// `PUT /office/settings`: any of `applications` (`open`, `closed`), `fcc` (true, false),
+    /// `qrz_username` and `qrz_password` (empty clears). Returns what changed, for the log, or
+    /// 400 for a member of the wrong kind, 500 when `config.json` could not be written.
+    fn put_settings(&self, body: &Json) -> Result<String, u16> {
+        let mut said = Vec::new();
+        let applications = match body.get("applications") {
+            None => None,
+            Some(Json::String(s)) if s == "open" || s == "closed" => Some(s == "open"),
+            Some(_) => return Err(400),
+        };
+        let fcc = match body.get("fcc") {
+            None => None,
+            Some(Json::Bool(b)) => Some(*b),
+            Some(_) => return Err(400),
+        };
+        let string = |k: &str| -> Result<Option<String>, u16> {
+            match body.get(k) {
+                None => Ok(None),
+                Some(Json::String(s)) => Ok(Some(s.trim().to_owned())),
+                Some(_) => Err(400),
+            }
+        };
+        let (user, pass) = (string("qrz_username")?, string("qrz_password")?);
+        let mut fetch = false;
+        self.change_settings(|s| {
+            if let Some(open) = applications {
+                s.info.applications = open.then(|| "open".to_owned());
+                s.info.updated = now();
+                said.push(format!(
+                    "applications {}",
+                    if open { "open" } else { "closed" }
+                ));
+            }
+            if let Some(on) = fcc {
+                fetch = on && !s.lookups.fcc;
+                s.lookups.fcc = on;
+                said.push(format!("FCC copy {}", if on { "on" } else { "off" }));
+            }
+            if let Some(u) = user {
+                said.push("QRZ account".into());
+                s.lookups.qrz_username = (!u.is_empty()).then_some(u);
+            }
+            if let Some(p) = pass {
+                s.lookups.qrz_password = (!p.is_empty()).then_some(p);
+            }
+        })
+        .map_err(|e| -> u16 {
+            eprintln!("radiopost-po: cannot save config.json: {e}");
+            500
+        })?;
+        if fetch && self.fcc_stale() {
+            self.fetch_fcc();
+        }
+        Ok(said.join(", "))
+    }
+
+    /// Changes the settings at once, and keeps them in `config.json`.
+    ///
+    /// # Errors
+    ///
+    /// `config.json` could not be written.
+    pub fn change_settings(&self, change: impl FnOnce(&mut Settings)) -> Result<(), String> {
+        let mut settings = self.settings();
+        change(&mut settings);
+        self.files().write(
+            "config.json",
+            &serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?,
+        )?;
+        self.office().config.applications_open =
+            settings.info.applications.as_deref() == Some("open");
+        self.set_settings(settings);
+        Ok(())
     }
 
     /// Opens or closes applications (RP-5 §4.1, §6.7) at once, and keeps it in `config.json`.
@@ -133,16 +262,10 @@ impl Running {
     ///
     /// `config.json` could not be written.
     pub fn take_applications(&self, take: bool) -> Result<(), String> {
-        let mut settings = self.settings();
-        settings.info.applications = take.then(|| "open".to_owned());
-        settings.info.updated = now();
-        self.files().write(
-            "config.json",
-            &serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?,
-        )?;
-        self.set_settings(settings);
-        self.office().config.applications_open = take;
-        Ok(())
+        self.change_settings(|s| {
+            s.info.applications = take.then(|| "open".to_owned());
+            s.info.updated = now();
+        })
     }
 
     /// The members `/office/status` gains from the service (RP-5 §7.2 allows them).
@@ -156,4 +279,29 @@ impl Running {
         status["operators"] = json!(settings.operators());
         status["domains"] = json!(settings.domains);
     }
+}
+
+/// A query value with `+` and `%XX` undone.
+fn unescape(v: &str) -> String {
+    let b = v.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'+' => out.push(b' '),
+            b'%' if i + 2 < b.len() => {
+                let hex = std::str::from_utf8(&b[i + 1..i + 3]).unwrap_or("");
+                match u8::from_str_radix(hex, 16) {
+                    Ok(x) => {
+                        out.push(x);
+                        i += 2;
+                    }
+                    Err(_) => out.push(b'%'),
+                }
+            }
+            c => out.push(c),
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }

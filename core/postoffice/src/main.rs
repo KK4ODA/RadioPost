@@ -37,6 +37,13 @@ usage: radiopost-po --dir DIR COMMAND
   revoke --device KEY revoke every credential of a device key (base64url or hex)
   applications [--open | --close]
                      the applications for accounts (RP-5 §6.7); open or close them
+  licences [--on | --off | --fetch | --from ZIP]
+                     the copy of the FCC's licence database: turn it on or off (fetched each
+                     week), fetch it now, or build it from a downloaded l_amat.zip
+  qrz --username U --password P
+                     look callsigns up in QRZ.com's callbook too, with your account (empty clears)
+  lookup CALL [--name NAME]
+                     what the post office finds of a callsign: the FCC copy, QRZ, its history
   approve ID [--role] | decline ID --text TEXT | postcard ID
                      decide an application: its credential issued, refused with a reason, or a
                      code made to send by post to the address on the licence
@@ -122,6 +129,7 @@ fn init(files: &Files, a: &Args) -> Result<(), String> {
         hook_token: a.one("--hook-token"),
         smtp: a.one("--smtp"),
         operators: Vec::new(),
+        lookups: radiopost_postoffice::lookups::LookupSettings::default(),
     };
     let hex: String = radiopost::cbor::hex(&seed);
     files.write("key.hex", &(hex + "\n"))?;
@@ -363,6 +371,76 @@ fn applications(files: &Files, a: &Args) -> Result<(), String> {
     Ok(())
 }
 
+/// `lookup CALL [--name NAME]`: the evidence the operator's desk shows (D35).
+fn lookup(files: &Files, a: &Args) -> Result<(), String> {
+    let call = a
+        .words
+        .iter()
+        .skip_while(|w| w.as_str() != "lookup")
+        .nth(1)
+        .filter(|w| !w.starts_with("--"))
+        .cloned()
+        .ok_or("which callsign?")?;
+    let name = a.one("--name").unwrap_or_default();
+    let enc = |s: &str| s.replace('%', "%25").replace(' ', "+").replace('&', "%26");
+    let e = admin(
+        files,
+        "GET",
+        &format!("/lookup?call={}&name={}", enc(&call), enc(&name)),
+        &Json::Null,
+    )?;
+    println!("{}", e["verdict"].as_str().unwrap_or(""));
+    for line in e["lines"].as_array().into_iter().flatten() {
+        println!("  {}", line.as_str().unwrap_or(""));
+    }
+    for flag in e["flags"].as_array().into_iter().flatten() {
+        println!("  ! {}", flag.as_str().unwrap_or(""));
+    }
+    Ok(())
+}
+
+/// `licences`: the FCC copy's state; turned on or off, fetched, or built from a file.
+fn licences(dir: &std::path::Path, files: &Files, a: &Args) -> Result<(), String> {
+    if let Some(zip) = a.one("--from") {
+        let out = dir.join("licences");
+        std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+        let n = radiopost_postoffice::licences::build_from_zip(
+            std::path::Path::new(&zip),
+            &out.join("fcc.tsv"),
+        )?;
+        println!("{n} callsigns in {}", out.join("fcc.tsv").display());
+        return Ok(());
+    }
+    if a.has("--on") || a.has("--off") {
+        admin(files, "PUT", "/settings", &json!({"fcc": a.has("--on")}))?;
+    }
+    if a.has("--fetch") {
+        admin(files, "POST", "/licences", &Json::Null)?;
+        println!("fetching the FCC's file: `radiopost-po licences` says when it is done");
+    }
+    let s = admin(files, "GET", "/settings", &Json::Null)?;
+    let f = &s["fcc"];
+    println!(
+        "FCC copy {}: {} callsigns{}{}",
+        if f["on"].as_bool() == Some(true) {
+            "on"
+        } else {
+            "off"
+        },
+        f["count"],
+        if f["fetching"].as_bool() == Some(true) {
+            ", fetching now"
+        } else {
+            ""
+        },
+        f["last"]
+            .as_str()
+            .map(|l| format!(", last fetch: {l}"))
+            .unwrap_or_default()
+    );
+    Ok(())
+}
+
 /// `approve`, `decline`, `postcard`: an application decided (RP-5 §7.3).
 fn decide(files: &Files, a: &Args, command: &str) -> Result<(), String> {
     let id = a
@@ -496,6 +574,15 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
             Ok(())
         }
         "applications" => applications(&files, a),
+        "licences" => licences(&dir, &files, a),
+        "qrz" => {
+            let body = json!({"qrz_username": a.need("--username")?,
+                              "qrz_password": a.one("--password").unwrap_or_default()});
+            admin(&files, "PUT", "/settings", &body)?;
+            println!("QRZ lookups set");
+            Ok(())
+        }
+        "lookup" => lookup(&files, a),
         "approve" | "decline" | "postcard" => decide(&files, a, command),
         "outgoing" | "status" => {
             let answer = admin(&files, "GET", &format!("/{command}"), &Json::Null)?;

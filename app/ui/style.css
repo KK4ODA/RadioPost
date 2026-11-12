@@ -267,6 +267,7 @@ button.link { height: auto; padding: 0; border: 0; background: none; color: var(
 .evidence.bad { border-left-color: var(--bad); }
 .evidence p { margin: 2px 0; }
 .evidence .flag { color: var(--bad); }
+.evidence.warn .flag { color: var(--busy); }
 .decided summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 6px 0; }
 .decided td, #o-accounts td, #o-mail td { cursor: default; }
 .dev { display: flex; gap: 8px; align-items: center; font-size: 13px; }

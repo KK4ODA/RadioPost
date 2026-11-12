@@ -53,6 +53,7 @@ fn post_office(dir: &Path) -> Arc<Running> {
         hook_token: Some("door-secret".into()),
         smtp: None,
         operators: Vec::new(),
+        lookups: radiopost_postoffice::lookups::LookupSettings::default(),
     };
     files
         .write(

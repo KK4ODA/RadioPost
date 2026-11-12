@@ -30,6 +30,8 @@ lettre = { version = "0.11", default-features = false, features = ["smtp-transpo
 # last series on mail-parser 0.11, which keeps the workspace on Rust 1.85; pure-Rust crypto.
 mail-auth = { version = "0.13", default-features = false, features = ["rust-crypto", "dns-hickory"] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
+# the FCC's weekly file of amateur licences (`licences`), as the updater reads its archives
+zip = { version = "7", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]
 radiopost-tester = { path = "../tester" }

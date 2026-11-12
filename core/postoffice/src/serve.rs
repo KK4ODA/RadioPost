@@ -20,6 +20,7 @@ use tiny_http::{Header, Method, Response as Http, Server};
 
 use crate::auth::Checker;
 use crate::documents::Info;
+use crate::lookups::{LookupSettings, Lookups};
 use crate::office::{Config, Draw, PostOffice, Request, State};
 
 /// A post office's settings, as `config.json` holds them.
@@ -52,6 +53,9 @@ pub struct Settings {
     /// More callsigns that operate it, besides the info document's `operator` (RP-5 §7.1).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub operators: Vec<String>,
+    /// What the service looks callsigns up in for its operators: the FCC copy, QRZ.com.
+    #[serde(default, skip_serializing_if = "LookupSettings::is_empty")]
+    pub lookups: LookupSettings,
 }
 
 impl Settings {
@@ -85,6 +89,12 @@ impl Files {
 
     fn path(&self, name: &str) -> PathBuf {
         self.dir.join(name)
+    }
+
+    /// The directory itself.
+    #[must_use]
+    pub fn dir(&self) -> &Path {
+        &self.dir
     }
 
     /// The settings.
@@ -236,9 +246,15 @@ pub struct Running {
     files: Files,
     checker: OnceLock<Result<Checker, String>>,
     updates: OnceLock<Arc<radiopost_update::Watch>>,
+    lookups: Lookups,
 }
 
 impl Running {
+    /// The lookups' queue and state (`lookups`).
+    pub(crate) fn lookups(&self) -> &Lookups {
+        &self.lookups
+    }
+
     /// What the update channel offers, for the operator's `status` (the program asks it).
     pub fn watch_updates(&self, watch: Arc<radiopost_update::Watch>) {
         let _ = self.updates.set(watch);
@@ -274,6 +290,7 @@ impl Running {
             files,
             checker: OnceLock::new(),
             updates: OnceLock::new(),
+            lookups: Lookups::default(),
         })
     }
 
@@ -379,6 +396,12 @@ impl Running {
         } else {
             "application/json"
         };
+        if (method, path) == ("POST", "/applications")
+            && answer.status == 202
+            && let Some(id) = answer.body.as_ref().and_then(|b| b["application"].as_str())
+        {
+            self.queue_lookup(id);
+        }
         let mut body = answer.body;
         if path == "/office/status"
             && answer.status == 200
@@ -432,6 +455,9 @@ impl Running {
                 Ok(()) => (200, self.desk_settings().to_string()),
                 Err(e) => (400, json!({"error": e}).to_string()),
             };
+        }
+        if let Some(answer) = self.admin_desk(method, path, &body) {
+            return answer;
         }
         let mut office = self.office();
         office.at(now());
@@ -561,6 +587,7 @@ fn method_of(m: &Method) -> &'static str {
 ///
 /// An address could not be taken, or the admin address is not on the loopback interface.
 pub fn serve(running: Arc<Running>, listen: &str, admin: &str) -> Result<(String, String), String> {
+    crate::lookups::start(&running);
     let api = Server::http(listen).map_err(|e| format!("{listen}: {e}"))?;
     let ops = Server::http(admin).map_err(|e| format!("{admin}: {e}"))?;
     let api_at = api.server_addr().to_string();

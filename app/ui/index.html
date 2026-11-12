@@ -217,6 +217,8 @@
           <label title="The account, at your post office's domain">Address <input name="address" required spellcheck="false" placeholder="ana@radiopost.org"></label>
           <label title="Their callsign, as on the air">Callsign <input name="operator" required spellcheck="false" autocomplete="off" placeholder="N0CALL"></label>
           <label title="The name on the email the account sends; leave it empty to keep the one it has">Name <input name="name" placeholder="Ana Lopez"></label>
+          <div class="row"><button type="button" class="quiet" id="o-code-check" title="What the post office finds of this callsign and name: the FCC copy, QRZ, and its own history">Check the licence</button></div>
+          <div id="o-code-evidence"></div>
           <label class="check" title="A shared mailbox, such as a shelter's or an EOC's, used by several licensed operators"><input type="checkbox" name="role"> A role mailbox</label>
           <button class="primary" type="submit" title="Make the code">Make code</button>
           <div class="made" id="o-made" hidden>
@@ -239,6 +241,22 @@
             <h2>Applications</h2>
             <label class="check" title="Licensees may ask for an account from the RadioPost client; you decide each one"><input type="checkbox" id="o-take"> Take applications for accounts</label>
             <p class="note" id="o-take-note"></p>
+          </div>
+          <div class="card">
+            <h2>Licence lookups</h2>
+            <p class="note">What the post office finds of each applicant's callsign shows beside the application. It is evidence, not proof: anyone can read who holds a callsign.</p>
+            <label class="check" title="Keep a copy of the FCC's database of every amateur licence on the server, fetched each week (about 200 MB to fetch, 170 MB kept). Lookups stay on the server: no one else learns whom you look up"><input type="checkbox" id="o-fcc"> Look US callsigns up in a copy of the FCC's licence database</label>
+            <p class="note" id="o-fcc-note"></p>
+            <div class="row">
+              <button type="button" id="o-fcc-fetch" title="Fetch the FCC's file now, and build the copy from it">Fetch it now</button>
+            </div>
+            <p class="note">QRZ.com, with your own account: names, places and Logbook of the World users, for callsigns of every country. Without an XML subscription QRZ gives only a few fields.</p>
+            <div class="row">
+              <input id="o-qrz-user" class="grow" placeholder="QRZ username" spellcheck="false" autocomplete="off" title="Your QRZ.com username">
+              <input id="o-qrz-pass" class="grow" type="password" placeholder="Password" autocomplete="new-password" title="Your QRZ.com password: kept in the post office's config.json, never shown again">
+              <button type="button" id="o-qrz-save" title="Look callsigns up in QRZ.com too">Save</button>
+              <button type="button" class="quiet" id="o-qrz-clear" title="Stop looking callsigns up in QRZ.com, and forget the account">Clear</button>
+            </div>
           </div>
           <div class="card">
             <h2>This post office</h2>

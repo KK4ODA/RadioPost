@@ -3094,6 +3094,7 @@ dependencies = [
  "tokio",
  "unicode-normalization",
  "ureq",
+ "zip 7.3.0",
 ]
 
 [[package]]

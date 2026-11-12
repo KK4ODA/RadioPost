@@ -70,6 +70,7 @@ fn settings() -> Settings {
         hook_token: None,
         smtp: None,
         operators: Vec::new(),
+        lookups: radiopost_postoffice::lookups::LookupSettings::default(),
     }
 }
 
@@ -231,6 +232,100 @@ fn the_operator_runs_applications_from_the_client() {
         .clone();
     assert_eq!(jose_account["name"], json!("José"));
     assert_eq!(jose_account["credentials"][0]["operator"], json!("N5CALL"));
+
+    // with the FCC copy on, a new application is looked up as it arrives
+    let mut copy = Vec::new();
+    let rec = |kind: &str, width: usize, fields: &[(usize, &str)]| {
+        let mut f = vec![String::new(); width];
+        f[0] = kind.to_owned();
+        for (i, v) in fields {
+            f[*i] = (*v).to_owned();
+        }
+        f.join("|") + "\n"
+    };
+    radiopost_postoffice::licences::build(
+        rec(
+            "HD",
+            59,
+            &[
+                (1, "7"),
+                (4, "N6CALL"),
+                (5, "A"),
+                (7, "01/02/2024"),
+                (8, "01/02/2034"),
+            ],
+        )
+        .as_bytes(),
+        rec(
+            "EN",
+            30,
+            &[
+                (1, "7"),
+                (4, "N6CALL"),
+                (8, "LENA"),
+                (10, "ORTIZ"),
+                (15, "1 OAK ST"),
+                (16, "MACON"),
+                (17, "GA"),
+                (18, "31201"),
+            ],
+        )
+        .as_bytes(),
+        rec("AM", 18, &[(1, "7"), (4, "N6CALL"), (5, "G")]).as_bytes(),
+        &mut copy,
+    )
+    .expect("a copy");
+    std::fs::create_dir_all(dir.join("licences")).expect("a directory");
+    std::fs::write(dir.join("licences/fcc.tsv"), copy).expect("written");
+    let (status, s) = http(
+        &api,
+        "PUT",
+        "/rp/v1/office/settings",
+        Some(&op),
+        Some(&json!({"fcc": true})),
+    );
+    assert_eq!((status, s["fcc"]["on"].as_bool()), (200, Some(true)), "{s}");
+    let lena = SigningKey::from_bytes(&[6; 32]);
+    let signed = format!("lena@test.example\nN6CALL\n{BASE}");
+    let body = json!({"address": "lena@test.example", "operator": "N6CALL", "name": "Lena Ortiz",
+        "contact": "lena@example.org",
+        "device": base64url::encode(&lena.verifying_key().to_bytes()),
+        "signature": base64url::encode(&crypto::sign(context::API_APPLY, signed.as_bytes(), &lena))});
+    let (status, applied) = http(&api, "POST", "/rp/v1/applications", None, Some(&body));
+    assert_eq!(status, 202, "{applied}");
+    let mut evidence = Json::Null;
+    for _ in 0..50 {
+        let (_, list) = http(&api, "GET", "/rp/v1/office/applications", Some(&op), None);
+        evidence = list["applications"][1]["evidence"].clone();
+        if !evidence.is_null() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert_eq!(evidence["verdict"], "good", "{evidence}");
+    assert_eq!(
+        evidence["mail_to"],
+        json!(["LENA ORTIZ", "1 OAK ST", "MACON, GA 31201"])
+    );
+    let (_, found) = http(
+        &api,
+        "GET",
+        "/rp/v1/office/lookup/N0CALL?name=No+Body",
+        Some(&op),
+        None,
+    );
+    assert_eq!(found["verdict"], "bad", "{found}");
+    assert_eq!(
+        http(
+            &api,
+            "GET",
+            "/rp/v1/office/lookup/N6CALL",
+            Some(&jose_token),
+            None
+        )
+        .0,
+        403
+    );
 
     // the server's own commands see the same
     let (_, listed) = http(&admin, "GET", "/applications", None, None);

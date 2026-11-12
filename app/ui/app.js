@@ -1068,10 +1068,16 @@ function applicantCard(a) {
     el("dl", {class: "fields"},
       el("dt", {text: "Address"}), el("dd", {class: "mono", text: a.address}),
       el("dt", {text: "Email now"}), el("dd", {class: "mono", text: a.contact})),
-    evidenceBlock(a),
+    evidenceBlock(a) || el("p", {class: "note", text: "Looking the callsign up\u2026"}),
     el("div", {class: "row"}, approve,
       el("label", {class: "check", title: "A shared mailbox, used by several licensed operators"}, role, " Role mailbox"),
-      decline, postcard, whyRow));
+      decline, postcard,
+      el("button", {class: "quiet", text: "Look up again", title: "Ask the FCC copy and QRZ again",
+        onclick: async () => {
+          try { await desk("POST", "/office/lookup", {application: a.application}); await renderApplications(); }
+          catch (e) { toast(e.message, true); }
+        }}),
+      whyRow));
 }
 
 async function renderApplications() {
@@ -1117,10 +1123,12 @@ function printCard(a) {
   const w = window.open("", "_blank", "width=640,height=480");
   if (!w) { toast("The browser would not open the card: allow pop-ups for the panel.", true); return; }
   const until = a.code_expires ? new Date(a.code_expires * 1000).toLocaleDateString() : "";
+  const mailTo = (a.evidence && a.evidence.mail_to) || [];
   const esc = (s) => String(s || "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
   w.document.write(`<!doctype html><meta charset="utf-8"><title>RadioPost postcard for ${esc(a.operator)}</title>
 <style>body{font:15px system-ui,sans-serif;margin:24px}.card{border:1px dashed #888;border-radius:10px;padding:24px;max-width:520px}
 .code{font:600 34px ui-monospace,monospace;letter-spacing:.1em;margin:12px 0}h1{font-size:20px;margin:0 0 8px}p{margin:6px 0}
+.to{margin:18px 0 0 260px;font:16px ui-monospace,monospace;text-transform:uppercase}.small{font:12px system-ui,sans-serif;color:#666;text-transform:none}
 @media print{button{display:none}}</style>
 <div class="card"><h1>RadioPost: your enrollment code</h1>
 <p>${esc(a.name)}, ${esc(a.operator)}</p>
@@ -1128,6 +1136,7 @@ function printCard(a) {
 <p class="code">${esc(a.code)}</p>
 <p>In the RadioPost client: Setup, “I have a code”, then your address, your callsign and this code.</p>
 <p>Good until ${esc(until)}. It works once.</p></div>
+${mailTo.length ? `<div class="to"><p class="small">Mail to, as on the licence:</p><p>${mailTo.map(esc).join("<br>")}</p></div>` : `<p class="small">No address on file here: send it to the address on the licence.</p>`}
 <p><button onclick="print()">Print</button></p>`);
   w.document.close();
 }
@@ -1216,6 +1225,16 @@ async function renderMail() {
 
 async function renderOfficeSettings() {
   const s = await desk("GET", "/office/settings");
+  const f = s.fcc || {};
+  $("o-fcc").checked = Boolean(f.on);
+  $("o-fcc-note").textContent = f.fetching
+    ? "Fetching the FCC's file and building the copy: a minute or two."
+    : f.count
+      ? `${Number(f.count).toLocaleString()} callsigns, copied ${new Date(f.made * 1000).toLocaleDateString()}. A new copy comes each week.${f.last ? ` Last fetch: ${f.last}.` : ""}`
+      : f.on ? "No copy yet." : "";
+  $("o-fcc-fetch").disabled = Boolean(f.fetching) || !f.on;
+  if (!$("o-qrz-user").matches(":focus")) $("o-qrz-user").value = (s.qrz && s.qrz.username) || "";
+  $("o-qrz-pass").placeholder = s.qrz && s.qrz.password ? "Password kept: type to change it" : "Password";
   $("o-take").checked = s.applications === "open";
   $("o-take-note").textContent = s.applications === "open"
     ? "Licensees can apply from the RadioPost client. Each application waits here for you."
@@ -1331,6 +1350,39 @@ function wire() {
   $("o-made-copy").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText($("o-made-code").textContent); toast("Copied."); }
     catch { toast("Select the code and copy it.", true); }
+  });
+  const settingsChange = async (body, said) => {
+    try {
+      await desk("PUT", "/office/settings", body);
+      if (said) toast(said);
+      await renderOfficeSettings();
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+  $("o-fcc").addEventListener("change", () => settingsChange({fcc: $("o-fcc").checked},
+    $("o-fcc").checked ? "The FCC copy is on. A new one is fetched each week." : "The FCC copy is off."));
+  $("o-fcc-fetch").addEventListener("click", async () => {
+    try { await desk("POST", "/office/licences", {}); toast("Fetching the FCC's file."); await renderOfficeSettings(); }
+    catch (e) { toast(e.message, true); }
+  });
+  $("o-qrz-save").addEventListener("click", async () => {
+    const body = {qrz_username: $("o-qrz-user").value.trim()};
+    if ($("o-qrz-pass").value) body.qrz_password = $("o-qrz-pass").value;
+    $("o-qrz-pass").value = "";
+    await settingsChange(body, "QRZ lookups saved.");
+  });
+  $("o-qrz-clear").addEventListener("click", () => settingsChange({qrz_username: "", qrz_password: ""}, "QRZ lookups off."));
+  $("o-code-check").addEventListener("click", async () => {
+    const form = $("o-code");
+    const call = form.operator.value.trim().toUpperCase();
+    if (!call) { toast("Which callsign?", true); return; }
+    try {
+      const e = await desk("GET", `/office/lookup/${encodeURIComponent(call)}?name=${encodeURIComponent(form.name.value.trim())}`);
+      $("o-code-evidence").replaceChildren(evidenceBlock({evidence: e}));
+    } catch (err) {
+      toast(err.message, true);
+    }
   });
   $("o-take").addEventListener("change", async () => {
     try {

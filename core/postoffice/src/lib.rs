@@ -7,9 +7,13 @@ pub mod check;
 pub mod desk;
 pub mod documents;
 pub mod email;
+pub mod evidence;
+pub mod licences;
+pub mod lookups;
 pub mod mail;
 pub mod office;
 pub mod operator;
+pub mod qrz;
 pub mod serve;
 
 pub use office::{Config, Draw, PostOffice, Request, Response, State};
