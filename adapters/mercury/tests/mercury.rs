@@ -111,24 +111,68 @@ impl Modem {
     }
 }
 
-/// Carries one station's transmitted audio to the other's receiver, for as long as both run.
+/// `O_NONBLOCK`, which the standard library does not name: Linux's, and the BSDs' and macOS's.
+#[cfg(target_os = "linux")]
+const O_NONBLOCK: i32 = 0o4000;
+#[cfg(not(target_os = "linux"))]
+const O_NONBLOCK: i32 = 0x0004;
+
+/// One block of audio: 160 samples of Mercury's signed 32-bit little-endian PCM at 8 kHz, 20 ms.
+const BLOCK: usize = 160 * 4;
+
+/// Carries one station's transmitted audio to the other's receiver, at the pace of the air, as
+/// Mercury's own `tests/integration/channel_bridge_test.go` does. A sound card takes 8 kHz
+/// whether or not anyone transmits, so the receiver is given one block every 20 ms: the
+/// transmitter's audio when it has some, silence when not. Mercury writes a transmission's audio
+/// at once, far faster than the air carries it; passed on at once, the other station hears a CALL
+/// before the caller has unkeyed, answers while the caller cannot hear, and no call connects. And
+/// what the receiver does not take is dropped, never queued: Mercury stops reading while its own
+/// buffer is full, and a radio has no buffer to hand it later.
 fn join(from: PathBuf, to: PathBuf) {
+    use std::os::unix::fs::OpenOptionsExt;
     thread::spawn(move || {
-        // each open waits for Mercury's end of the pipe
-        let Ok(mut tx) = File::open(&from) else {
+        let Ok(mut tx) = OpenOptions::new()
+            .read(true)
+            .custom_flags(O_NONBLOCK)
+            .open(&from)
+        else {
             return;
         };
-        let Ok(mut rx) = OpenOptions::new().write(true).open(&to) else {
-            return;
-        };
-        let mut buf = [0u8; 4096];
+        let mut rx: Option<File> = None;
+        let mut pending: Vec<u8> = Vec::new();
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut deadline = Instant::now();
         loop {
-            match tx.read(&mut buf) {
-                Ok(0) | Err(_) => return,
-                Ok(n) => {
-                    if rx.write_all(&buf[..n]).is_err() {
-                        return;
-                    }
+            // everything Mercury has written so far
+            loop {
+                match tx.read(&mut buf) {
+                    Ok(0) => break, // no writer yet, or nothing written
+                    Ok(n) => pending.extend_from_slice(&buf[..n]),
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                    Err(_) => return,
+                }
+            }
+            let now = Instant::now();
+            deadline = deadline.max(now);
+            thread::sleep(deadline - now);
+            deadline += Duration::from_millis(20);
+            let mut block = [0u8; BLOCK];
+            let n = BLOCK.min(pending.len());
+            block[..n].copy_from_slice(&pending[..n]);
+            pending.drain(..n);
+            // the receiver's end opens once Mercury reads it; until then the block is lost
+            if rx.is_none() {
+                rx = OpenOptions::new()
+                    .write(true)
+                    .custom_flags(O_NONBLOCK)
+                    .open(&to)
+                    .ok();
+            }
+            if let Some(f) = rx.as_mut() {
+                match f.write(&block) {
+                    Ok(_) => {} // what the pipe did not take is dropped
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                    Err(_) => rx = None,
                 }
             }
         }
