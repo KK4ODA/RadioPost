@@ -863,14 +863,20 @@ impl Panel {
         self.state()
     }
 
-    /// The gateways kept from the post office's list, nearest first, and the grid they are
-    /// ranked from.
+    /// The gateways kept from the post office's list and those of the post offices it knows
+    /// (RP-5 §4.4), nearest first, and the grid they are ranked from; which post offices' lists
+    /// were taken, which could not be, and the callsigns listed twice.
     fn gateways(&self) -> Result<Value, Error> {
         let store = Store::open(&self.home)?;
         let list = store.gateway_list.clone().unwrap_or(Value::Null);
+        let others: Vec<&String> = list["lists"]
+            .as_object()
+            .map(|l| l.keys().collect())
+            .unwrap_or_default();
         Ok(json!({
             "domain": list["domain"], "fetched": list["fetched"], "grid": store.grid,
-            "gateways": store.gateways_ranked(),
+            "gateways": store.gateways_ranked(), "others": others,
+            "errors": list["errors"], "ambiguous": list["ambiguous"],
         }))
     }
 

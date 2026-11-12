@@ -1,0 +1,469 @@
+{
+  "radiopost_vectors": "Gateway lists read from the home's and every post office it knows",
+  "format": 1,
+  "specs": {
+    "RP-5": "§4.3, §4.4"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "A reader whose home is `home` holds the home's own list (`home_gateways`, already checked) and the home's `/post-offices` (`post_offices`). For a case, it takes the entries of `entries`, in that order; with `home_listed` it takes none (the home's info document says `gateways: \"listed\"`). It fetches each entry's API once (`expect.fetched`, in order): `served` holds what each API answers, `info` and `gateways` as JWS, and an API not in it does not answer. It checks each list with the entry's keys and those the post office's info document adds, signed by one of them (RP-1 §7.2), and leaves out a list that does not verify or does not come (`expect.left_out`, by the entry's domain). `expect.gateways` is every record of the lists taken, with `post_office` the domain of the entry it came by: the home's first; a callsign the home lists comes only from the home; one in two other lists comes from each, and is `ambiguous`. The records' order is not significant.",
+  "home": "radiopost.org",
+  "home_gateways": [
+    {
+      "callsign": "KK4ODA-1",
+      "operator": "KK4ODA",
+      "grid": "EM73",
+      "place": "Atlanta, GA",
+      "channels": [
+        {
+          "dial_hz": 3590000,
+          "mode": "USB",
+          "modem": "aether",
+          "bandwidth_hz": 2300
+        },
+        {
+          "dial_hz": 7101000,
+          "mode": "USB",
+          "modem": "aether",
+          "bandwidth_hz": 2300
+        }
+      ],
+      "hours": "always",
+      "internet": true,
+      "copies": {
+        "users": 50,
+        "days": 7,
+        "max_air_bytes": 16384
+      },
+      "updated": 1793498400
+    },
+    {
+      "callsign": "N2CALL-5",
+      "operator": "N2CALL",
+      "grid": "EM73",
+      "place": "Atlanta, GA: the county EOC",
+      "channels": [
+        {
+          "dial_hz": 7101000,
+          "mode": "USB",
+          "modem": "aether",
+          "bandwidth_hz": 2300
+        }
+      ],
+      "hours": "always",
+      "internet": true,
+      "updated": 1794148800
+    }
+  ],
+  "post_offices": {
+    "issued": 1794148800,
+    "post_offices": [
+      {
+        "domain": "hampost.org",
+        "api": "https://po.hampost.org/rp/v1",
+        "keys": [
+          {
+            "kid": "84219d00",
+            "public": "u_M3pKzebawRJXJ_dE5nKOvPhgLEl3T0vkOmPK11t7Q"
+          }
+        ]
+      },
+      {
+        "domain": "qrp-mail.example",
+        "api": "https://po.qrp-mail.example/rp/v1",
+        "keys": [
+          {
+            "kid": "c276f044",
+            "public": "yPR5n3ukJZWIVF5leIHNXP_44ff0dZ8DcT_Peh_HefI"
+          }
+        ]
+      },
+      {
+        "domain": "qrp.example",
+        "api": "https://po.qrp-mail.example/rp/v1",
+        "keys": [
+          {
+            "kid": "c276f044",
+            "public": "yPR5n3ukJZWIVF5leIHNXP_44ff0dZ8DcT_Peh_HefI"
+          }
+        ]
+      },
+      {
+        "domain": "eoc-mail.example",
+        "api": "https://po.eoc-mail.example/rp/v1",
+        "keys": [
+          {
+            "kid": "d55cf8a2",
+            "public": "7-41bIhhcf03XLd9CUvdG29avyn0BdG6Gi_2h6DM7Uo"
+          }
+        ]
+      },
+      {
+        "domain": "rotated.example",
+        "api": "https://po.rotated.example/rp/v1",
+        "keys": [
+          {
+            "kid": "eb6e34b2",
+            "public": "J62zIyBrqB_7bWUhsLGVkY3D0i1A662wild4FBmLEd4"
+          }
+        ]
+      },
+      {
+        "domain": "forged.example",
+        "api": "https://po.forged.example/rp/v1",
+        "keys": [
+          {
+            "kid": "4c1b2b8c",
+            "public": "0ec3j5D3t8ILv6MIYum6ok1TaFg2HiwJEW1Apqv-DD4"
+          }
+        ]
+      },
+      {
+        "domain": "unreachable.example",
+        "api": "https://po.unreachable.example/rp/v1",
+        "keys": [
+          {
+            "kid": "a204fe81",
+            "public": "vXptJoPKgIg_Q7U1hUXehLOGsuXIKlqhXjo4sQaGLBI"
+          }
+        ]
+      }
+    ]
+  },
+  "served": {
+    "https://po.hampost.org/rp/v1": {
+      "info": "eyJhbGciOiJFZERTQSIsImtpZCI6Ijg0MjE5ZDAwIn0.eyJ2ZXJzaW9uIjoxLCJkb21haW5zIjpbImhhbXBvc3Qub3JnIl0sImtleXMiOlt7ImtpZCI6Ijg0MjE5ZDAwIiwicHVibGljIjoidV9NM3BLemViYXdSSlhKX2RFNW5LT3ZQaGdMRWwzVDB2a09tUEsxMXQ3USIsIm5vdF9iZWZvcmUiOjE3NjcyMjU2MDAsIm5vdF9hZnRlciI6MTgzMDI5NzYwMH1dLCJnYXRld2F5cyI6ImFueSJ9.7ouzEP9zRYK53zav5o31BrLWnlxj3Y9FqWK9LtEOLDpWOoFyLrVM4EvHoik_vFOqIcsZ0uaLFkm38TbWugKuCQ",
+      "gateways": "eyJhbGciOiJFZERTQSIsImtpZCI6Ijg0MjE5ZDAwIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6Ik4xQ0FMTC0xMCIsIm9wZXJhdG9yIjoiTjFDQUxMIiwiZ3JpZCI6IkVNMTAiLCJwbGFjZSI6IkF1c3RpbiwgVFgiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6NzEwMTAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwfV0sImhvdXJzIjoiYWx3YXlzIiwiaW50ZXJuZXQiOnRydWUsInVwZGF0ZWQiOjE3OTQxNDg4MDB9LHsiY2FsbHNpZ24iOiJOMkNBTEwtNSIsIm9wZXJhdG9yIjoiTjJDQUxMIiwiZ3JpZCI6IkVNNzMiLCJwbGFjZSI6IkF0bGFudGEsIGFzIGhhbXBvc3Qub3JnIGxpc3RzIGl0IiwiY2hhbm5lbHMiOlt7ImRpYWxfaHoiOjE0MTAxMDAwLCJtb2RlIjoiVVNCIiwibW9kZW0iOiJhZXRoZXIiLCJiYW5kd2lkdGhfaHoiOjIzMDB9XSwiaG91cnMiOiJhbHdheXMiLCJpbnRlcm5ldCI6dHJ1ZSwidXBkYXRlZCI6MTc5NDE0ODgwMH1dfQ.rHs5AsQiHtZfg2-MOJotMMpYhpC-Qxz6dbTIt6U0eGYxm6DGI5bf8-lmZ7OVRvVoH-dEjtgLT1kUI6U38-NoBQ"
+    },
+    "https://po.qrp-mail.example/rp/v1": {
+      "info": "eyJhbGciOiJFZERTQSIsImtpZCI6ImMyNzZmMDQ0In0.eyJ2ZXJzaW9uIjoxLCJkb21haW5zIjpbInFycC1tYWlsLmV4YW1wbGUiLCJxcnAuZXhhbXBsZSJdLCJrZXlzIjpbeyJraWQiOiJjMjc2ZjA0NCIsInB1YmxpYyI6InlQUjVuM3VrSlpXSVZGNWxlSUhOWFBfNDRmZjBkWjhEY1RfUGVoX0hlZkkiLCJub3RfYmVmb3JlIjoxNzY3MjI1NjAwLCJub3RfYWZ0ZXIiOjE4MzAyOTc2MDB9XSwiZ2F0ZXdheXMiOiJhbnkifQ.y4kw7gAWIFNeK-h0nlSyQVhhOLjDDj-iuU5kBcJBnOWnVKRBtjVFgxwFNyke-Mr87OK0pDevYtLkwE3hxdmmBQ",
+      "gateways": "eyJhbGciOiJFZERTQSIsImtpZCI6ImMyNzZmMDQ0In0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6Ilc1UVJQLTEiLCJvcGVyYXRvciI6Ilc1UVJQIiwiZ3JpZCI6IkVNMTIiLCJwbGFjZSI6IkRhbGxhcywgVFgiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6NzEwMjAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwfV0sImhvdXJzIjoiYWx3YXlzIiwiaW50ZXJuZXQiOnRydWUsInVwZGF0ZWQiOjE3OTQxNDg4MDB9LHsiY2FsbHNpZ24iOiJOOENBTEwtNyIsIm9wZXJhdG9yIjoiTjhDQUxMIiwiZ3JpZCI6IkVOODEiLCJwbGFjZSI6IkRldHJvaXQiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6NzEwMTUwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwfV0sImhvdXJzIjoiYWx3YXlzIiwiaW50ZXJuZXQiOnRydWUsInVwZGF0ZWQiOjE3OTQxNDg4MDB9XX0.zpeRY6-ZqrglC1-DJffGZs1YY3kXiyz_fyjDu8Y-B4wQlb-8t3QOJD9uk92Vbhr833MguWXZFdutX49HXkJ8CA"
+    },
+    "https://po.eoc-mail.example/rp/v1": {
+      "info": "eyJhbGciOiJFZERTQSIsImtpZCI6ImQ1NWNmOGEyIn0.eyJ2ZXJzaW9uIjoxLCJkb21haW5zIjpbImVvYy1tYWlsLmV4YW1wbGUiXSwia2V5cyI6W3sia2lkIjoiZDU1Y2Y4YTIiLCJwdWJsaWMiOiI3LTQxYkloaGNmMDNYTGQ5Q1V2ZEcyOWF2eW4wQmRHNkdpXzJoNkRNN1VvIiwibm90X2JlZm9yZSI6MTc2NzIyNTYwMCwibm90X2FmdGVyIjoxODMwMjk3NjAwfV0sImdhdGV3YXlzIjoiYW55In0.gTxFwKLBX6MX9zFHAPso7obCCJnpx-Y567BAWCOPOXu4i_-WBSJ0FUFExv2G_13Q75MvHzEa0WA_68h-oieyBw",
+      "gateways": "eyJhbGciOiJFZERTQSIsImtpZCI6ImQ1NWNmOGEyIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6Ik44Q0FMTC03Iiwib3BlcmF0b3IiOiJOOENBTEwiLCJncmlkIjoiRU44MiIsInBsYWNlIjoiRGV0cm9pdCBFT0MiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwfV0sImhvdXJzIjoiYWx3YXlzIiwiaW50ZXJuZXQiOnRydWUsInVwZGF0ZWQiOjE3OTQxNDg4MDB9LHsiY2FsbHNpZ24iOiJXNEVPQy0yIiwib3BlcmF0b3IiOiJXNEVPQyIsImdyaWQiOiJFTTc0IiwicGxhY2UiOiJNYWNvbiIsImNoYW5uZWxzIjpbeyJkaWFsX2h6IjozNTkxMDAwLCJtb2RlIjoiVVNCIiwibW9kZW0iOiJhZXRoZXIiLCJiYW5kd2lkdGhfaHoiOjIzMDB9XSwiaG91cnMiOiJhbHdheXMiLCJpbnRlcm5ldCI6dHJ1ZSwidXBkYXRlZCI6MTc5NDE0ODgwMH1dfQ.qPomo0BgKcRIqfU5Wp8sbggrZSzVtWy3aossI4WYvbN9CG6qoS4F5Uz_p99dUxsHTaEi_Bc_JtoojazI657cCw"
+    },
+    "https://po.rotated.example/rp/v1": {
+      "info": "eyJhbGciOiJFZERTQSIsImtpZCI6ImViNmUzNGIyIn0.eyJ2ZXJzaW9uIjoxLCJkb21haW5zIjpbInJvdGF0ZWQuZXhhbXBsZSJdLCJrZXlzIjpbeyJraWQiOiJlYjZlMzRiMiIsInB1YmxpYyI6Iko2MnpJeUJycUJfN2JXVWhzTEdWa1kzRDBpMUE2NjJ3aWxkNEZCbUxFZDQiLCJub3RfYmVmb3JlIjoxNzY3MjI1NjAwLCJub3RfYWZ0ZXIiOjE4MzAyOTc2MDB9LHsia2lkIjoiZWViZDI2MTgiLCJwdWJsaWMiOiJnSnNieXlwTWczbk1COXRDSUwwSURmT3BpYWNIY2UwdjlnVWZ1XzYxX0ZnIiwibm90X2JlZm9yZSI6MTc2NzIyNTYwMCwibm90X2FmdGVyIjoxODMwMjk3NjAwfV0sImdhdGV3YXlzIjoiYW55In0.AqjkWzhdaAyC41F6clYoX1_uEQ5h_AMKuK67sYyvzXxySuK6PBjkob4paquFHSKDAhACXI8l48k_yrIG7g9wDw",
+      "gateways": "eyJhbGciOiJFZERTQSIsImtpZCI6ImVlYmQyNjE4In0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6Ik45Uk9ULTEiLCJvcGVyYXRvciI6Ik45Uk9UIiwiZ3JpZCI6IkVONTIiLCJwbGFjZSI6IkNoaWNhZ28iLCJjaGFubmVscyI6W3siZGlhbF9oeiI6NzEwMzAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwfV0sImhvdXJzIjoiYWx3YXlzIiwiaW50ZXJuZXQiOnRydWUsInVwZGF0ZWQiOjE3OTQxNDg4MDB9XX0.TSCFWaBcSrnkAHQrpc-6j72jzPvdf4rco1m0N6F_CUeUti9IPu3AwLQg42QF1CROzNIhVFy09NC8FqcMNLSYDw"
+    },
+    "https://po.forged.example/rp/v1": {
+      "info": "eyJhbGciOiJFZERTQSIsImtpZCI6IjRjMWIyYjhjIn0.eyJ2ZXJzaW9uIjoxLCJkb21haW5zIjpbImZvcmdlZC5leGFtcGxlIl0sImtleXMiOlt7ImtpZCI6IjRjMWIyYjhjIiwicHVibGljIjoiMGVjM2o1RDN0OElMdjZNSVl1bTZvazFUYUZnMkhpd0pFVzFBcHF2LURENCIsIm5vdF9iZWZvcmUiOjE3NjcyMjU2MDAsIm5vdF9hZnRlciI6MTgzMDI5NzYwMH1dLCJnYXRld2F5cyI6ImFueSJ9.eTLMMK8y34vRI2pV8SvnOWKEM4op6kq4FhjTKoT8Lyl--7qQjRBkUpbjqNLgnqcqx4DoMxT3eMgUCwgoqItIBg",
+      "gateways": "eyJhbGciOiJFZERTQSIsImtpZCI6IjE5NjJjYjJjIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6IlcwQkFELTEiLCJvcGVyYXRvciI6IlcwQkFEIiwiZ3JpZCI6IkVNNDgiLCJwbGFjZSI6IlNvbWV3aGVyZSIsImNoYW5uZWxzIjpbeyJkaWFsX2h6Ijo3MTA0MDAwLCJtb2RlIjoiVVNCIiwibW9kZW0iOiJhZXRoZXIiLCJiYW5kd2lkdGhfaHoiOjIzMDB9XSwiaG91cnMiOiJhbHdheXMiLCJpbnRlcm5ldCI6dHJ1ZSwidXBkYXRlZCI6MTc5NDE0ODgwMH1dfQ.D0X_Di5O3gwi7NoeMr8PeqkyPXzVkdY1xn4AN5C0v6ciRESKiJ3vAQ3FoNwhdpY_yDFOmqsIgq5RsJmACRVqCg"
+    }
+  },
+  "cases": [
+    {
+      "what": "the home's list alone",
+      "entries": [],
+      "home_listed": false,
+      "expect": {
+        "fetched": [],
+        "gateways": [
+          {
+            "callsign": "KK4ODA-1",
+            "operator": "KK4ODA",
+            "grid": "EM73",
+            "place": "Atlanta, GA",
+            "channels": [
+              {
+                "dial_hz": 3590000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              },
+              {
+                "dial_hz": 7101000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              }
+            ],
+            "hours": "always",
+            "internet": true,
+            "copies": {
+              "users": 50,
+              "days": 7,
+              "max_air_bytes": 16384
+            },
+            "updated": 1793498400,
+            "post_office": "radiopost.org"
+          },
+          {
+            "callsign": "N2CALL-5",
+            "operator": "N2CALL",
+            "grid": "EM73",
+            "place": "Atlanta, GA: the county EOC",
+            "channels": [
+              {
+                "dial_hz": 7101000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              }
+            ],
+            "hours": "always",
+            "internet": true,
+            "updated": 1794148800,
+            "post_office": "radiopost.org"
+          }
+        ],
+        "ambiguous": [],
+        "left_out": {}
+      }
+    },
+    {
+      "what": "every post office the home knows",
+      "entries": [
+        "hampost.org",
+        "qrp-mail.example",
+        "qrp.example",
+        "eoc-mail.example",
+        "rotated.example",
+        "forged.example",
+        "unreachable.example"
+      ],
+      "home_listed": false,
+      "expect": {
+        "fetched": [
+          "https://po.hampost.org/rp/v1",
+          "https://po.qrp-mail.example/rp/v1",
+          "https://po.eoc-mail.example/rp/v1",
+          "https://po.rotated.example/rp/v1",
+          "https://po.forged.example/rp/v1",
+          "https://po.unreachable.example/rp/v1"
+        ],
+        "gateways": [
+          {
+            "callsign": "KK4ODA-1",
+            "operator": "KK4ODA",
+            "grid": "EM73",
+            "place": "Atlanta, GA",
+            "channels": [
+              {
+                "dial_hz": 3590000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              },
+              {
+                "dial_hz": 7101000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              }
+            ],
+            "hours": "always",
+            "internet": true,
+            "copies": {
+              "users": 50,
+              "days": 7,
+              "max_air_bytes": 16384
+            },
+            "updated": 1793498400,
+            "post_office": "radiopost.org"
+          },
+          {
+            "callsign": "N2CALL-5",
+            "operator": "N2CALL",
+            "grid": "EM73",
+            "place": "Atlanta, GA: the county EOC",
+            "channels": [
+              {
+                "dial_hz": 7101000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              }
+            ],
+            "hours": "always",
+            "internet": true,
+            "updated": 1794148800,
+            "post_office": "radiopost.org"
+          },
+          {
+            "callsign": "N1CALL-10",
+            "operator": "N1CALL",
+            "grid": "EM10",
+            "place": "Austin, TX",
+            "channels": [
+              {
+                "dial_hz": 7101000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              }
+            ],
+            "hours": "always",
+            "internet": true,
+            "updated": 1794148800,
+            "post_office": "hampost.org"
+          },
+          {
+            "callsign": "W5QRP-1",
+            "operator": "W5QRP",
+            "grid": "EM12",
+            "place": "Dallas, TX",
+            "channels": [
+              {
+                "dial_hz": 7102000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              }
+            ],
+            "hours": "always",
+            "internet": true,
+            "updated": 1794148800,
+            "post_office": "qrp-mail.example"
+          },
+          {
+            "callsign": "N8CALL-7",
+            "operator": "N8CALL",
+            "grid": "EN81",
+            "place": "Detroit",
+            "channels": [
+              {
+                "dial_hz": 7101500,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              }
+            ],
+            "hours": "always",
+            "internet": true,
+            "updated": 1794148800,
+            "post_office": "qrp-mail.example"
+          },
+          {
+            "callsign": "N8CALL-7",
+            "operator": "N8CALL",
+            "grid": "EN82",
+            "place": "Detroit EOC",
+            "channels": [
+              {
+                "dial_hz": 3590000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              }
+            ],
+            "hours": "always",
+            "internet": true,
+            "updated": 1794148800,
+            "post_office": "eoc-mail.example"
+          },
+          {
+            "callsign": "W4EOC-2",
+            "operator": "W4EOC",
+            "grid": "EM74",
+            "place": "Macon",
+            "channels": [
+              {
+                "dial_hz": 3591000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              }
+            ],
+            "hours": "always",
+            "internet": true,
+            "updated": 1794148800,
+            "post_office": "eoc-mail.example"
+          },
+          {
+            "callsign": "N9ROT-1",
+            "operator": "N9ROT",
+            "grid": "EN52",
+            "place": "Chicago",
+            "channels": [
+              {
+                "dial_hz": 7103000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              }
+            ],
+            "hours": "always",
+            "internet": true,
+            "updated": 1794148800,
+            "post_office": "rotated.example"
+          }
+        ],
+        "ambiguous": [
+          "N8CALL-7"
+        ],
+        "left_out": {
+          "forged.example": "signature-invalid",
+          "unreachable.example": "unreachable"
+        }
+      }
+    },
+    {
+      "what": "the home lets only its own gateways in (`listed`)",
+      "entries": [
+        "hampost.org",
+        "qrp-mail.example",
+        "qrp.example",
+        "eoc-mail.example",
+        "rotated.example",
+        "forged.example",
+        "unreachable.example"
+      ],
+      "home_listed": true,
+      "expect": {
+        "fetched": [],
+        "gateways": [
+          {
+            "callsign": "KK4ODA-1",
+            "operator": "KK4ODA",
+            "grid": "EM73",
+            "place": "Atlanta, GA",
+            "channels": [
+              {
+                "dial_hz": 3590000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              },
+              {
+                "dial_hz": 7101000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              }
+            ],
+            "hours": "always",
+            "internet": true,
+            "copies": {
+              "users": 50,
+              "days": 7,
+              "max_air_bytes": 16384
+            },
+            "updated": 1793498400,
+            "post_office": "radiopost.org"
+          },
+          {
+            "callsign": "N2CALL-5",
+            "operator": "N2CALL",
+            "grid": "EM73",
+            "place": "Atlanta, GA: the county EOC",
+            "channels": [
+              {
+                "dial_hz": 7101000,
+                "mode": "USB",
+                "modem": "aether",
+                "bandwidth_hz": 2300
+              }
+            ],
+            "hours": "always",
+            "internet": true,
+            "updated": 1794148800,
+            "post_office": "radiopost.org"
+          }
+        ],
+        "ambiguous": [],
+        "left_out": {}
+      }
+    }
+  ]
+}

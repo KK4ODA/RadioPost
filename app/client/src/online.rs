@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! The client and its post office over the Internet (RP-5): enrolling a device with a one-time
 //! code (§6.1), renewing the credential (§6.2), the settings (§6.3) and the accept list (§6.5),
-//! the station-to-station sessions reported (§6.6), and the gateways the post office lists
-//! (§4.4), when the user has the Internet.
+//! the station-to-station sessions reported (§6.6), and the gateways the post office lists with
+//! those of every post office it knows (§4.4), when the user has the Internet.
 //!
 //! The post office's API is the one the home names (`post_office`), or the one its domain's DNS
 //! records name (RP-1 §7.1). Its key is trusted as `trust` added it, or from the same records.
@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 
 use ed25519_dalek::SigningKey;
 use radiopost::credential::PostOfficeKey;
-use radiopost::{cbor, crypto, jws};
+use radiopost::{cbor, crypto, gateway_list, jws};
 use radiopost_api::{Account, Http, RESOLVER, code_of};
 use serde_json::{Value, json};
 
@@ -314,10 +314,70 @@ pub fn renew(store: &Store) -> Result<String, Error> {
     ))
 }
 
-/// RP-5 §4.4: the gateways the user's post office lists, its signature checked against the keys
-/// the home trusts for the domain, and those the post office's info document, signed by one of
-/// them, adds (RP-1 §7.2). Kept in the home, for the radio when there is no Internet. Returns how
-/// many it lists.
+/// A document from a post office's API, as text.
+fn fetch(api: &str, path: &str) -> Result<String, Error> {
+    let http = Http::anonymous(api);
+    match http.send_text("GET", path, None, None) {
+        Ok((200, text)) => Ok(text.trim().to_owned()),
+        Ok((status, _)) => Err(format!("{api}{path} answered {status}")),
+        Err(_) => Err(format!("cannot reach {api}")),
+    }
+}
+
+/// RP-5 §4.4: the gateway list of each post office the home's `/post-offices` names (`known`),
+/// each API asked once, into `lists` by domain. One that does not answer keeps its last list; one
+/// that does not verify is dropped; each says why in `errors`. Those no longer named are dropped.
+fn other_lists(
+    home: &str,
+    known: &Value,
+    at: u64,
+    lists: &mut serde_json::Map<String, Value>,
+    errors: &mut serde_json::Map<String, Value>,
+) {
+    let entries = gateway_list::entries(known);
+    let asked: Vec<&gateway_list::Entry> = gateway_list::by_api(&entries)
+        .into_iter()
+        .filter(|e| e.domain != home)
+        .collect();
+    lists.retain(|d, _| asked.iter().any(|e| &e.domain == d));
+    for entry in asked {
+        let text = match fetch(&entry.api, "/gateways") {
+            Ok(text) => text,
+            Err(why) => {
+                errors.insert(entry.domain.clone(), json!(why));
+                continue;
+            }
+        };
+        let info = fetch(&entry.api, "/info").ok();
+        match gateway_list::verify_list(entry, info.as_deref(), &text) {
+            Ok(records) => {
+                lists.insert(
+                    entry.domain.clone(),
+                    json!({"api": entry.api, "fetched": at, "gateways": records}),
+                );
+            }
+            Err(code) => {
+                lists.remove(&entry.domain);
+                errors.insert(
+                    entry.domain.clone(),
+                    json!(format!(
+                        "its gateway list is not signed by its keys ({})",
+                        code.name()
+                    )),
+                );
+            }
+        }
+    }
+}
+
+/// RP-5 §4.4: the gateways the user's post office lists, and those of every post office it names
+/// in `/post-offices`. The home's list is checked with the keys the home trusts for the domain and
+/// those its signed info document adds (RP-1 §7.2); each other list with the keys its entry gives,
+/// or that its own info document adds, signed by one of them. Each API is asked once; a list that
+/// does not come keeps the last one checked, and one that does not verify is left out. The home's
+/// record wins a callsign; one listed by two others is kept from each, and named ambiguous. When
+/// the home says `gateways: "listed"`, only its own are taken: it lets no other gateway in (§2).
+/// Kept in the home, for the radio when there is no Internet. Returns how many it lists.
 ///
 /// # Errors
 ///
@@ -343,26 +403,57 @@ pub fn gateways(store: &mut Store) -> Result<usize, Error> {
             "this home trusts no key of {domain}'s post office: add it in Setup (`radiopost trust`)"
         ));
     }
-    let http = Http::anonymous(&base);
-    let fetch = |path: &str| match http.send_text("GET", path, None, None) {
-        Ok((200, text)) => Ok(text.trim().to_owned()),
-        Ok((status, _)) => Err(format!("{base}{path} answered {status}")),
-        Err(_) => Err(format!("cannot reach {base}")),
-    };
-    let info = fetch("/info").ok();
+    let info = fetch(&base, "/info").ok();
     let keys = jws::accepted_keys(&trusted, info.as_deref());
-    let document = jws::verify(&fetch("/gateways")?, &keys).map_err(|code| {
+    let document = jws::verify(&fetch(&base, "/gateways")?, &keys).map_err(|code| {
         format!(
             "the gateway list is not signed by {domain}'s post office ({})",
             code.name()
         )
     })?;
-    let list = document["gateways"].as_array().cloned().unwrap_or_default();
+    let home_gateways = document["gateways"].as_array().cloned().unwrap_or_default();
+    let listed = info
+        .as_deref()
+        .and_then(|i| jws::verify(i, &keys).ok())
+        .is_some_and(|i| i["gateways"] == "listed");
+    // the lists last checked, kept for a post office that does not answer now
+    let mut lists: serde_json::Map<String, Value> = store
+        .gateway_list
+        .as_ref()
+        .and_then(|l| l["lists"].as_object().cloned())
+        .unwrap_or_default();
+    let mut errors = serde_json::Map::new();
+    if listed {
+        lists.clear();
+    } else if let Some(known) = fetch(&base, "/post-offices")
+        .ok()
+        .and_then(|t| jws::verify(&t, &keys).ok())
+    {
+        other_lists(&domain, &known, at, &mut lists, &mut errors);
+    } else {
+        errors.insert(
+            domain.clone(),
+            json!("its list of post offices did not come, or is not signed by its keys"),
+        );
+    }
+    let others: Vec<(String, Vec<Value>)> = lists
+        .iter()
+        .map(|(d, l)| {
+            (
+                d.clone(),
+                l["gateways"].as_array().cloned().unwrap_or_default(),
+            )
+        })
+        .collect();
+    let merged = gateway_list::merge(&domain, &home_gateways, &others);
+    let count = merged.gateways.len();
     store.gateway_list = Some(json!({
-        "domain": domain, "fetched": at, "issued": document["issued"], "gateways": list,
+        "domain": domain, "fetched": at, "issued": document["issued"],
+        "gateways": merged.gateways, "ambiguous": merged.ambiguous,
+        "lists": lists, "errors": errors,
     }));
     store.save()?;
-    Ok(list.len())
+    Ok(count)
 }
 
 /// RP-5 §6.3: the settings, after `change`'s members are set (a member set to `null` is

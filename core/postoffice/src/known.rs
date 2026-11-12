@@ -593,7 +593,23 @@ impl Running {
                     return Some(found.entry(&domain));
                 }
                 let api = k.get("api").and_then(Json::as_str).unwrap_or("");
-                (!api.is_empty()).then(|| json!({"domain": domain, "api": api, "keys": k["keys"]}))
+                // the typed keys as the info document lists keys: each with its ID (RP-5 §4.3)
+                let keys: Vec<Key> = k["keys"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|t| {
+                        let public: [u8; 32] =
+                            base64url::decode(t["public"].as_str()?)?.try_into().ok()?;
+                        Some(Key {
+                            kid: radiopost::cbor::hex(&crypto::kid(&public)),
+                            public: base64url::encode(&public),
+                            not_before: t["not_before"].as_u64().unwrap_or(0),
+                            not_after: t["not_after"].as_u64().unwrap_or(u64::MAX),
+                        })
+                    })
+                    .collect();
+                (!api.is_empty()).then(|| json!({"domain": domain, "api": api, "keys": keys}))
             })
             .collect()
     }

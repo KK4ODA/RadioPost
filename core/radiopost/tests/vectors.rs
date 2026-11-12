@@ -547,3 +547,64 @@ fn dns_records_are_read_and_post_offices_trusted_as_rp1_7_says() {
         assert_eq!(got, text(c, "expect"), "{}", text(c, "what"));
     }
 }
+
+#[test]
+fn gateway_lists_are_read_from_every_post_office_the_home_knows() {
+    use radiopost::gateway_list::{by_api, entries, merge, verify_list};
+    let file = vectors("gateway-lists.json");
+    let home = text(&file, "home");
+    let home_gateways = file["home_gateways"].as_array().expect("the home's");
+    let all = entries(&file["post_offices"]);
+    for c in file["cases"].as_array().expect("cases") {
+        let what = text(c, "what");
+        let wanted: Vec<&str> = c["entries"]
+            .as_array()
+            .expect("entries")
+            .iter()
+            .filter_map(Json::as_str)
+            .collect();
+        let taken: Vec<_> = if c["home_listed"] == true {
+            Vec::new()
+        } else {
+            all.iter()
+                .filter(|e| wanted.contains(&e.domain.as_str()))
+                .cloned()
+                .collect()
+        };
+        let mut fetched = Vec::new();
+        let mut others = Vec::new();
+        let mut left_out = serde_json::Map::new();
+        for entry in by_api(&taken) {
+            fetched.push(Json::String(entry.api.clone()));
+            let served = &file["served"][&entry.api];
+            let Some(list) = served["gateways"].as_str() else {
+                left_out.insert(entry.domain.clone(), "unreachable".into());
+                continue;
+            };
+            match verify_list(entry, served["info"].as_str(), list) {
+                Ok(records) => others.push((entry.domain.clone(), records)),
+                Err(code) => {
+                    left_out.insert(entry.domain.clone(), code.name().into());
+                }
+            }
+        }
+        let merged = merge(home, home_gateways, &others);
+        let expect = &c["expect"];
+        assert_eq!(Json::Array(fetched), expect["fetched"], "{what}: fetched");
+        assert_eq!(
+            Json::Object(left_out),
+            expect["left_out"],
+            "{what}: left out"
+        );
+        assert_eq!(
+            serde_json::to_value(&merged.ambiguous).expect("JSON"),
+            expect["ambiguous"],
+            "{what}: ambiguous"
+        );
+        assert_eq!(
+            Json::Array(merged.gateways),
+            expect["gateways"],
+            "{what}: gateways"
+        );
+    }
+}

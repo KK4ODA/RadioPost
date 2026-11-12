@@ -245,10 +245,11 @@ fn gateway_line(g: &serde_json::Value) -> String {
         let _ = write!(place, ", {km} km");
     }
     format!(
-        "{:<10} {place}\n           {}; {}",
+        "{:<10} {place}\n           {}; {}; listed by {}",
         g["callsign"].as_str().unwrap_or("?"),
         channels.join(", "),
-        g["hours"].as_str().unwrap_or("hours not said")
+        g["hours"].as_str().unwrap_or("hours not said"),
+        g["post_office"].as_str().unwrap_or("its post office")
     )
 }
 
@@ -721,11 +722,15 @@ fn run(words: &[String]) -> Result<(), Error> {
             let Some(list) = &store.gateway_list else {
                 return Err("no gateway list kept yet: `radiopost gateways --refresh`".into());
             };
+            let others = list["lists"].as_object().map_or(0, serde_json::Map::len);
             println!(
-                "{}'s post office, fetched {}",
+                "{}'s post office and {others} it knows, fetched {}",
                 list["domain"].as_str().unwrap_or("?"),
                 utc(list["fetched"].as_u64().unwrap_or(0))
             );
+            for (d, why) in list["errors"].as_object().into_iter().flatten() {
+                println!("  not taken now: {d}: {}", why.as_str().unwrap_or(""));
+            }
             for g in store.gateways_ranked() {
                 println!("{}", gateway_line(&g));
             }

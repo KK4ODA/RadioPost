@@ -50,8 +50,10 @@ says why once if it could not. **Renew credential** in Setup does it at once.
 ## 3. Find the gateway
 
 1. In the *Station* area, choose **A gateway**, then **Choose a gateway**.
-2. Click **Refresh over the Internet**. The list comes from your post office, its signature
-   checked with the post office's key, and is kept for when there is no Internet.
+2. Click **Refresh over the Internet**. The list comes from your post office, and from the post
+   offices it knows, each signature checked with that post office's key; it is kept for when
+   there is no Internet. Under each callsign is the post office that lists it: any gateway takes
+   your calls, wherever it was registered.
 3. Enter **Your grid** (say `EM73`) and **Save**: the nearest gateways come first.
 4. Find **KK4ODA-1**: its channels (dial frequency, upper sideband, and Aether's bandwidth there)
    and its hours. Click **Choose**. Tune Aether to one of its channels, at that bandwidth.

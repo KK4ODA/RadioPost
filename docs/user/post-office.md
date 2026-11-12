@@ -494,7 +494,8 @@ office it **knows** (RP-1 §7.5) is one whose word it takes that its users are l
 * their mail needs no place on an accept list, and mail that keeps its sender's proof (RP-6 §4)
   goes on the air without the third-party flag;
 * its gateways log in here, and its users' station-to-station reports are checked;
-* it is listed in this post office's `/post-offices`, for gateways and clients.
+* it is listed in this post office's `/post-offices`, for gateways and clients: your users'
+  clients list the gateways registered with it beside yours (RP-5 §4.4).
 
 Know only post offices whose operators you trust to check callsigns. At first none is known.
 

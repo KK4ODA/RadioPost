@@ -6407,6 +6407,201 @@ def make_office_cases() -> tuple[dict[str, Any], list[dict[str, Any]]]:
     return office, cases
 
 
+def make_gateway_lists() -> dict[str, Any]:
+    """RP-5 §4.4: a gateway list read from the home's and every post office the home knows."""
+
+    def key(label: str) -> tuple[bytes, bytes]:
+        secret = SECRET.get(label) or seed(label)
+        return secret, ed25519.public_key(secret)
+
+    def signed(payload: dict[str, Any], label: str) -> str:
+        secret, public = key(label)
+        return jws.sign(jws.compact(payload), secret, public)
+
+    def entry_key(label: str) -> dict[str, str]:
+        public = key(label)[1]
+        return {"kid": rp.kid(public).hex(), "public": jws.b64u(public)}
+
+    def gw(
+        callsign: str, grid: str, place: str, dial: int, modem: str = "aether"
+    ) -> dict[str, Any]:
+        return {
+            "callsign": callsign,
+            "operator": callsign.split("-", 1)[0],
+            "grid": grid,
+            "place": place,
+            "channels": [{"dial_hz": dial, "mode": "USB", "modem": modem, "bandwidth_hz": 2300}],
+            "hours": "always",
+            "internet": True,
+            "updated": T_DOCUMENTS,
+        }
+
+    def served(domains: list[str], label: str, records: list[dict[str, Any]], **kw: Any) -> dict:
+        info = {"version": 1, "domains": domains, "keys": [key_entry_of(label)], "gateways": "any"}
+        signer = kw.get("gateways_by", label)
+        if signer != label and kw.get("info_lists_signer"):
+            info["keys"].append(key_entry_of(signer))
+        return {
+            "info": signed(info, label),
+            "gateways": signed({"issued": T_DOCUMENTS, "gateways": records}, signer),
+        }
+
+    def key_entry_of(label: str) -> dict[str, Any]:
+        return {**entry_key(label), "not_before": T_KEYS_FROM, "not_after": T_KEYS_UNTIL}
+
+    apis = {
+        "hampost.org": PO_HAMPOST,
+        "qrp-mail.example": "https://po.qrp-mail.example/rp/v1",
+        "qrp.example": "https://po.qrp-mail.example/rp/v1",
+        "eoc-mail.example": "https://po.eoc-mail.example/rp/v1",
+        "rotated.example": "https://po.rotated.example/rp/v1",
+        "forged.example": "https://po.forged.example/rp/v1",
+        "unreachable.example": "https://po.unreachable.example/rp/v1",
+    }
+    entry_keys = {
+        "hampost.org": "po:hampost.org",
+        "qrp-mail.example": "po:qrp-mail.example",
+        "qrp.example": "po:qrp-mail.example",
+        "eoc-mail.example": "po:eoc-mail.example",
+        "rotated.example": "po:rotated.example",
+        "forged.example": "po:forged.example",
+        "unreachable.example": "po:unreachable.example",
+    }
+    post_offices = {
+        "issued": T_DOCUMENTS,
+        "post_offices": [
+            {"domain": d, "api": apis[d], "keys": [entry_key(entry_keys[d])]} for d in apis
+        ],
+    }
+    home_gateways = [
+        {**GATEWAY_RECORD, "updated": T_ISSUED + 7200},
+        gw("N2CALL-5", "EM73", "Atlanta, GA: the county EOC", 7101000),
+    ]
+    world = {
+        PO_HAMPOST: served(
+            ["hampost.org"],
+            "po:hampost.org",
+            [
+                gw("N1CALL-10", "EM10", "Austin, TX", 7101000),
+                gw("N2CALL-5", "EM73", "Atlanta, as hampost.org lists it", 14101000),
+            ],
+        ),
+        apis["qrp-mail.example"]: served(
+            ["qrp-mail.example", "qrp.example"],
+            "po:qrp-mail.example",
+            [
+                gw("W5QRP-1", "EM12", "Dallas, TX", 7102000),
+                gw("N8CALL-7", "EN81", "Detroit", 7101500),
+            ],
+        ),
+        apis["eoc-mail.example"]: served(
+            ["eoc-mail.example"],
+            "po:eoc-mail.example",
+            [
+                gw("N8CALL-7", "EN82", "Detroit EOC", 3590000),
+                gw("W4EOC-2", "EM74", "Macon", 3591000),
+            ],
+        ),
+        apis["rotated.example"]: served(
+            ["rotated.example"],
+            "po:rotated.example",
+            [gw("N9ROT-1", "EN52", "Chicago", 7103000)],
+            gateways_by="po:rotated.example:new",
+            info_lists_signer=True,
+        ),
+        apis["forged.example"]: served(
+            ["forged.example"],
+            "po:forged.example",
+            [gw("W0BAD-1", "EM48", "Somewhere", 7104000)],
+            gateways_by="po:a-stranger",
+        ),
+    }
+    every = list(apis)
+    cases_in = [
+        ("the home's list alone", [], False),
+        ("every post office the home knows", every, False),
+        ("the home lets only its own gateways in (`listed`)", every, True),
+    ]
+    cases = []
+    for what, domains, listed in cases_in:
+        entries = [e for e in post_offices["post_offices"] if e["domain"] in domains]
+        cases.append(
+            {
+                "what": what,
+                "entries": domains,
+                "home_listed": listed,
+                "expect": po.gateway_list("radiopost.org", home_gateways, listed, entries, world),
+            }
+        )
+
+    def summary(c: dict[str, Any]) -> dict[str, Any]:
+        e = c["expect"]
+        return {
+            "fetched": len(e["fetched"]),
+            "gateways": sorted(f"{g['callsign']}@{g['post_office']}" for g in e["gateways"]),
+            "ambiguous": e["ambiguous"],
+            "left_out": e["left_out"],
+        }
+
+    alone = {
+        "fetched": 0,
+        "gateways": ["KK4ODA-1@radiopost.org", "N2CALL-5@radiopost.org"],
+        "ambiguous": [],
+        "left_out": {},
+    }
+    confirm(  # RP-5 §4.4: the home's record wins; twice elsewhere is ambiguous; `listed` is home's
+        cases,
+        {
+            "the home's list alone": alone,
+            "every post office the home knows": {
+                "fetched": 6,  # qrp-mail.example and qrp.example share one API
+                "gateways": [
+                    "KK4ODA-1@radiopost.org",
+                    "N1CALL-10@hampost.org",
+                    "N2CALL-5@radiopost.org",
+                    "N8CALL-7@eoc-mail.example",
+                    "N8CALL-7@qrp-mail.example",
+                    "N9ROT-1@rotated.example",
+                    "W4EOC-2@eoc-mail.example",
+                    "W5QRP-1@qrp-mail.example",
+                ],
+                "ambiguous": ["N8CALL-7"],
+                "left_out": {
+                    "forged.example": "signature-invalid",
+                    "unreachable.example": "unreachable",
+                },
+            },
+            "the home lets only its own gateways in (`listed`)": alone,
+        },
+        summary,
+    )
+    out = header(
+        "Gateway lists read from the home's and every post office it knows",
+        {"RP-5": "§4.3, §4.4"},
+    )
+    out["rule"] = (
+        "A reader whose home is `home` holds the home's own list (`home_gateways`, already "
+        "checked) and the home's `/post-offices` (`post_offices`). For a case, it takes the "
+        "entries of `entries`, in that order; with `home_listed` it takes none (the home's info "
+        'document says `gateways: "listed"`). It fetches each entry\'s API once '
+        "(`expect.fetched`, in order): `served` holds what each API answers, `info` and "
+        "`gateways` as JWS, and an API not in it does not answer. It checks each list with the "
+        "entry's keys and those the post office's info document adds, signed by one of them "
+        "(RP-1 §7.2), and leaves out a "
+        "list that does not verify or does not come (`expect.left_out`, by the entry's domain). "
+        "`expect.gateways` is every record of the lists taken, with `post_office` the domain of "
+        "the entry it came by: the home's first; a callsign the home lists comes only from the "
+        "home; one in two other lists comes from each, and is `ambiguous`. The records' order is "
+        "not significant."
+    )
+    out["home"] = "radiopost.org"
+    out["home_gateways"] = home_gateways
+    out["post_offices"] = post_offices
+    out["served"] = world
+    out["cases"] = cases
+    return out
+
+
 def make_api() -> dict[str, Any]:
     nonce = stream("login nonce", 32)
     login_in = nonce + PO_RADIOPOST.encode()
@@ -6488,6 +6683,7 @@ FILES = {
     "queued.json": make_queued,
     "direct.json": make_direct,
     "third-party.json": make_third_party,
+    "gateway-lists.json": make_gateway_lists,
 }
 
 

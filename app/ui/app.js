@@ -384,10 +384,14 @@ async function openGateways(refreshing = false) {
   markFolder("");
   try {
     const g = refreshing ? await api("gateways", {}) : await api("gateways");
+    const others = (g.others || []).length;
+    const missed = Object.entries(g.errors || {}).map(([d, why]) => `${d} (${why})`);
     $("gateways-note").textContent = g.domain
-      ? `From ${g.domain}'s post office, fetched ${new Date(g.fetched * 1000).toLocaleString()}. `
-        + "Kept here for when there is no Internet."
+      ? `From ${g.domain}'s post office${others ? ` and ${others} it knows` : ""}, fetched `
+        + `${new Date(g.fetched * 1000).toLocaleString()}. Kept here for when there is no Internet.`
+        + (missed.length ? ` Not taken this time: ${missed.join("; ")}.` : "")
       : "No list yet: refresh it while you have the Internet. It is kept for when you do not.";
+    const twice = new Set(g.ambiguous || []);
     if (!$("grid").matches(":focus")) $("grid").value = g.grid || "";
     $("gateway-rows").replaceChildren(...g.gateways.map((gw) => {
       const tr = document.createElement("tr");
@@ -406,7 +410,14 @@ async function openGateways(refreshing = false) {
         toast(`${gw.callsign} chosen. Tune Aether to ${channels.split("\n")[0]}, then Call.`);
       });
       const where = [gw.place, gw.grid].filter(Boolean).join(", ");
-      const cells = [gw.callsign, where, gw.km === null ? "" : `${gw.km} km`, channels,
+      // which post office lists it; a callsign two other post offices list is shown from each
+      const by = el("div", {class: "note", text: gw.post_office || ""});
+      if (twice.has(gw.callsign)) {
+        by.append(" ", el("span", {class: "tag", text: "listed twice",
+          title: "Two post offices other than yours list this callsign, each its own way"}));
+      }
+      const name = el("div", {}, el("span", {text: gw.callsign}), by);
+      const cells = [name, where, gw.km === null ? "" : `${gw.km} km`, channels,
                      gw.hours || "", choose];
       cells.forEach((c, i) => {
         const td = document.createElement("td");

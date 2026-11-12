@@ -217,6 +217,8 @@ whose credential to serve them to.
 The reader refreshes the lists at least every **6 hours** while online, keeps the last it verified
 of each list it cannot fetch, and uses what it holds while offline.
 
+Test vectors: `vectors/gateway-lists.json`.
+
 ### 4.5 `GET /routes`
 
 This post office's radio routes, for forwarding when the Internet is down. The format is RP-7's
@@ -768,8 +770,9 @@ gateway, and nine cases), `vectors/api-account.json` (renewal over the Internet 
 revoked credential; the accept list read and changed, shared by a role mailbox's operators, filled
 by mail sent, and its effect at the door), `vectors/api-exchanges.json` (enrollment, a gateway registered, logins, session-01
 at the post office, copies placed ahead and dropped, an offline gateway's report, and the
-failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures of §3.2, §6.1,
-§6.4 and §6.7).
+failures above), `vectors/jws.json` (§4), `vectors/gateway-lists.json` (§4.4: a gateway list
+read from the home's and every post office it knows) and `vectors/api.json` (the signatures of
+§3.2, §6.1, §6.4 and §6.7).
 
 ---
 
@@ -796,4 +799,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.13.0 | 2026-11-10 | §5.2: `held` in a waiting entry is set when the message lists held attachments (it had always been false). §5.3: `files`' entries, `ref` in base64url, and its refusals; what is sent is RP-6 §2.5. |
 | 0.14.0 | 2026-11-12 | Applications (§6.7): an account asked for from a new device, signed under `RadioPost-api-apply-v1`, and collected once an operator decides; `applications` in the info document (§4.1). Operator endpoints (§7): the post office's operators run it with their own credentials (status, applications, accounts, codes, revocation); `office` in the login's answer (§3.2). Security considerations and test vectors renumbered §8 and §9. Test vectors (`api-office.json`). |
 | 0.15.0 | 2026-11-12 | Who may become an operator (§7.1): an application naming an operator's callsign is refused (§6.7) and cannot be approved or sent a postcard (§7.3); a code naming one for anyone but the operator asking needs `operates` (§7.5); each refusal carries `operates`; security considerations (§8); test vectors. |
-| 0.16.0 | 2026-11-12 | Gateways across post offices. §4.3: each entry's `api` and keys, one entry per domain. §4.4: a gateway's own post office; a client's gateway list, and the gateways a post office places copies at, come from its home's list and those of the post offices its home knows, checked with their keys; the home's record wins, and a callsign otherwise listed twice is ambiguous; `listed` keeps to the home's. §5.8: copies at gateways registered elsewhere; `placing` in the answer; `wait=0`; items served only to the credential of the post office that listed the gateway; which post offices a gateway polls. §6.3: `usual_gateways` may name them. §2: known post offices are RP-1 §7.5's. A client could list only its own post office's gateways, and a post office placed copies only at the gateways registered with it. |
+| 0.16.0 | 2026-11-12 | Gateways across post offices. §4.3: each entry's `api` and keys, one entry per domain. §4.4: a gateway's own post office; a client's gateway list, and the gateways a post office places copies at, come from its home's list and those of the post offices its home knows, checked with their keys; the home's record wins, and a callsign otherwise listed twice is ambiguous; `listed` keeps to the home's. §5.8: copies at gateways registered elsewhere; `placing` in the answer; `wait=0`; items served only to the credential of the post office that listed the gateway; which post offices a gateway polls. §6.3: `usual_gateways` may name them. §2: known post offices are RP-1 §7.5's. A client could list only its own post office's gateways, and a post office placed copies only at the gateways registered with it. Test vectors (`gateway-lists.json`). |

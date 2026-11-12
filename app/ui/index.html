@@ -101,21 +101,21 @@
         <h1>Gateways</h1>
         <p class="note" id="gateways-note"></p>
         <div class="row">
-          <button id="gateways-refresh" title="Fetch the list from your post office now, over the Internet; it is kept for when there is none">Refresh over the Internet</button>
+          <button id="gateways-refresh" title="Fetch the lists from your post office, and from the post offices it knows, now over the Internet; they are kept for when there is none">Refresh over the Internet</button>
           <label class="inline" title="Your Maidenhead grid square, to list the nearest gateways first">Your grid
             <input id="grid" maxlength="6" placeholder="EM73" spellcheck="false">
           </label>
           <button class="quiet" id="grid-save">Save</button>
         </div>
-        <table class="list" aria-label="Gateways">
+        <div class="scroll"><table class="list" aria-label="Gateways">
           <thead><tr>
-            <th title="Its callsign">Gateway</th><th title="Where it is">Where</th>
+            <th title="Its callsign, and the post office that lists it">Gateway</th><th title="Where it is">Where</th>
             <th class="n" title="From your grid square">Distance</th>
             <th title="Each dial frequency, upper sideband, and Aether's bandwidth there">Channels</th>
             <th title="When it answers">Hours</th><th></th>
           </tr></thead>
           <tbody id="gateway-rows"></tbody>
-        </table>
+        </table></div>
       </section>
 
       <section id="addresses-view" hidden>

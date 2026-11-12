@@ -85,6 +85,59 @@ def refused(cid: str, name: str, text: str) -> dict[str, Any]:
     return {"id": cid, "status": "refused", "code": rp.ERRORS[name], "name": name, "text": text}
 
 
+def gateway_list(
+    home: str,
+    home_gateways: list[dict[str, Any]],
+    home_listed: bool,
+    entries: list[dict[str, Any]],
+    served: dict[str, dict[str, str]],
+) -> dict[str, Any]:
+    """RP-5 §4.4: the gateway list a reader (a client, or a post office for its users) makes.
+
+    `home_gateways` is the home's own list, already checked; `home_listed` is its info document's
+    `gateways: "listed"`; `entries` are the home's `/post-offices` (§4.3); `served` holds, by API,
+    the `info` and `gateways` documents each post office answers with (an API missing from it is
+    unreachable). Returns the APIs asked (`fetched`, each once), the records, each with the
+    `post_office` that listed it, the `ambiguous` callsigns, and the lists `left_out`, by domain,
+    with why.
+    """
+    out = [dict(g, post_office=home) for g in home_gateways]
+    result: dict[str, Any] = {"fetched": [], "gateways": out, "ambiguous": [], "left_out": {}}
+    if home_listed:
+        return result  # the home lets no other gateway in (§2)
+    home_calls = {g["callsign"] for g in home_gateways}
+    others: list[tuple[str, list[dict[str, Any]]]] = []
+    for entry in entries:
+        api = entry["api"]
+        if api in result["fetched"]:
+            continue  # once for each `api`: one post office serving several domains
+        result["fetched"].append(api)
+        documents = served.get(api)
+        if documents is None:
+            result["left_out"][entry["domain"]] = "unreachable"
+            continue
+        keys = {}
+        for k in entry["keys"]:
+            public = jws.unb64u(k["public"])
+            if public is not None and len(public) == 32 and rp.kid(public).hex() == k["kid"]:
+                keys[k["kid"]] = public
+        verdict, payload = jws.verify(
+            documents["gateways"], jws.accepted_keys(keys, documents.get("info"))
+        )
+        if verdict != "ok":
+            result["left_out"][entry["domain"]] = verdict
+            continue
+        others.append((entry["domain"], payload["gateways"]))
+    counted: dict[str, int] = {}
+    for domain, records in others:
+        for g in records:
+            if g["callsign"] not in home_calls:  # the home's record wins
+                counted[g["callsign"]] = counted.get(g["callsign"], 0) + 1
+                out.append(dict(g, post_office=domain))
+    result["ambiguous"] = sorted(c for c, n in counted.items() if n > 1)
+    return result
+
+
 @dataclass
 class Waiting:
     """A message in a mailbox, with the air form the post office made for it once (RP-5 §5.3)."""

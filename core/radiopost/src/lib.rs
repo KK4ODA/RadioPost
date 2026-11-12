@@ -13,6 +13,7 @@ pub mod credential;
 pub mod crypto;
 pub mod dns;
 pub mod error;
+pub mod gateway_list;
 pub mod jws;
 pub mod logfile;
 pub mod message;

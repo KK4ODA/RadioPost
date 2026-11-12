@@ -104,8 +104,14 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   as `seen` when `radiopost::dns::meets` says so (replayed against `dns.json`'s `office_cases`);
   the desk's *Post offices* tab and `radiopost-po post-offices` accept, block and forget them, and
   a settings change rebuilds the trust at once. `tests/known.rs` runs two post offices in one
-  process. RP-5 0.16.0 and RP-7 0.9.0 (D36, D37: gateway lists and copies placed ahead across post
-  offices) are written and not built.
+  process. Gateway lists across post offices (RP-5 §4.4, D36): `radiopost::gateway_list` is the
+  rule with no I/O (`entries` of a `/post-offices`, `by_api`, `verify_list`, `merge`), replayed
+  against `gateway-lists.json` (`rpref/po.py`'s `gateway_list`); the client's `online::gateways`
+  fetches the home's list and each known post office's, keeps the last checked list of each in
+  `gateway_list.lists`, and tags each record with its `post_office`; `tests/gateway_lists.rs`
+  runs five post offices. Copies placed ahead across post offices (RP-5 0.16.0 §5.8, RP-7 0.9.0,
+  D37) are written and not built: the post office will reuse `gateway_list` for its users' usual
+  gateways.
   RP-6 is `postoffice/src/mail.rs` (the port of `rpref/mail.py`, MIME by Stalwart's `mail-parser`
   0.11: the newest needs Rust 1.98, over the workspace's 1.85) and `email.rs` (the door as an MTA
   hook, read in Stalwart's shape and the MTA Hooks draft's, `ietf.org/archive/id/draft-degennaro-mta-hooks-01.txt`;
