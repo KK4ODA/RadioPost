@@ -93,9 +93,10 @@ AREDN, which is on the air, both use `--plain`: nothing on the air is encrypted.
 
 Agree a frequency in the band's digital segment, a time, and who calls first. Start Aether on
 both stations and check it works with the radio (its *Tune* or a probe), at the bandwidth you
-agree (500 or 2300 Hz, Aether's setting). Set each station's Aether to the callsign of its
-credential (say KK4ODA at one station and WD5EMA at the other): RadioPost answers and calls as
-that callsign, and Aether hands it every call to it while RadioPost runs.
+agree (500 or 2300 Hz, Aether's setting). RadioPost answers and calls as the callsign of its
+credential (say KK4ODA at one station and WD5EMA at the other), whatever Aether's own callsign is.
+While RadioPost listens or calls, it answers for the station, and Aether hands it every call to
+that callsign. There is nothing to copy into Aether's Setup.
 
 **Station A** (it answers): in RadioPost's *Station* area, click **Listen**. The badge at the top
 says *Listening*.

@@ -10,8 +10,14 @@ session to the user's own post office over the Internet (RP-3 §9, RP-5 §5).
 
 * **An HF radio and Aether HF 0.2.0-beta.146 or later**, set up and working with the radio as
   Aether's own manual says. Aether keys the radio, checks the band rules and sends the Morse
-  identifier at the end of each session. Set Aether's callsign to the gateway's, with its SSID
-  (say `KK4ODA-1`).
+  identifier at the end of each session.
+* **One place for the gateway's callsign: RadioPost Gateway's Setup** (below). Aether's own
+  callsign, in its Setup step 1, is yours, and need not match the gateway's; do not copy the
+  gateway's into Aether.
+  * While RadioPost Gateway runs, it answers for the station. Aether answers only the gateway's
+    callsign, and from Aether 0.2.0-beta.148 its Setup shows it in place of its own, greyed:
+    *KK4ODA-1 · RadioPost Gateway*.
+  * When the gateway stops, Aether's own callsign comes back.
 * **Aether keying the radio itself**: in Aether's Setup step 2, CAT, serial, rigctld, FLRig,
   CM108 or VOX, not *Host*. Keyed by a host program, Aether transmits only through that program,
   and RadioPost's sessions do not reach the air. On a computer that also runs RMS Trimode with

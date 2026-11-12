@@ -12,8 +12,10 @@ the RadioPost app, and the gateway, which its operator runs with RadioPost Gatew
 
 * An HF radio and a computer with **Aether HF 0.2.0-beta.146 or later**, set up and working with
   the radio as Aether's own manual says. RadioPost uses Aether as its modem: Aether keys the radio,
-  checks the band rules, and sends the Morse identifier at the end of each session. Set Aether's
-  callsign to yours.
+  checks the band rules, and sends the Morse identifier at the end of each session. Aether's own
+  callsign (its Setup step 1) is yours. RadioPost calls as the callsign it was enrolled with,
+  whatever Aether's Setup says: there is nothing to copy into Aether. While RadioPost holds that
+  callsign, from Aether 0.2.0-beta.148, Aether's Setup shows it greyed (*KK4ODA · RadioPost*).
 * **Aether keying the radio itself** (Aether's Setup step 2: CAT, serial, rigctld, FLRig, CM108
   or VOX, not *Host*), with its ports as they are. RadioPost talks to Aether's control port,
   8515 (`ws://127.0.0.1:8515/v1`). The host programs port, 8300, is for Winlink Express and VarAC;
