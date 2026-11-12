@@ -325,6 +325,8 @@ Internet, where anyone can publish a record. Knowing a post office takes its wor
 are licensed, and lets their mail past the accept lists and onto the air unflagged (RP-6 §5.1). A
 post office trusted from DNS alone would give that to anyone who published a record.
 
+Test vectors: `vectors/dns.json`, `office_cases`.
+
 ---
 
 ## 8. Revocation
@@ -376,4 +378,4 @@ A serial MAY be dropped from the list once the credential it names has expired.
 | 0.4.0 | 2026-11-09 | A credential is an untagged COSE_Sign1 (RP-0 §5): the key's ID moves from the body (key 8, now unused) to the protected header, which names Ed25519; 161 to 169 bytes (§4.1, §4.3, §5). |
 | 0.5.0 | 2026-11-09 | Which post offices a gateway trusts: by DNS, or one hop of post office lists; its operator may block or limit (§7.3). |
 | 0.5.1 | 2026-11-10 | §6.3: a post office opening a session takes a challenge-form statement's challenge as the gateway's, once (RP-5 0.12.0). |
-| 0.6.0 | 2026-11-12 | Which post offices a post office knows (§7.5): those its operators accept, their records and documents fetched and refreshed as a gateway's are; what knowing means; others found as mail crosses and kept as seen, for the operators; why it differs from a gateway's trust. §7.3 had covered gateways only, and the door, RP-5 §2 and RP-6 §4 rested on a list each operator typed, with no key rotation followed. |
+| 0.6.0 | 2026-11-12 | Which post offices a post office knows (§7.5): those its operators accept, their records and documents fetched and refreshed as a gateway's are; what knowing means; others found as mail crosses and kept as seen, for the operators; why it differs from a gateway's trust. §7.3 had covered gateways only, and the door, RP-5 §2 and RP-6 §4 rested on a list each operator typed, with no key rotation followed. Test vectors (`dns.json`, `office_cases`). |

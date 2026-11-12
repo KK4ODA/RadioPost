@@ -1,11 +1,11 @@
 {
-  "radiopost_vectors": "`_radiopost` TXT records, and which post offices a gateway trusts",
+  "radiopost_vectors": "`_radiopost` TXT records, which post offices a gateway trusts, and which a post office knows",
   "format": 1,
   "specs": {
-    "RP-1": "§7.1, §7.3"
+    "RP-1": "§7.1, §7.3, §7.5"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "Parsing `txt` gives `result`: the record's tags, or null when it must be ignored. A gateway that learned post offices as `found` says (`dns`, or `list:` and the post office whose list named it) trusts a case's `domain`, given its operator's `blocked` and `only`, when `expect` is true (RP-1 §7.3).",
+  "rule": "Parsing `txt` gives `result`: the record's tags, or null when it must be ignored. A gateway that learned post offices as `found` says (`dns`, or `list:` and the post office whose list named it) trusts a case's `domain`, given its operator's `blocked` and `only`, when `expect` is true (RP-1 §7.3). A post office with `office`'s own domains, the domains its operators `accepted` and `blocked`, and the DNS `zone` (each domain's `_radiopost` TXT records) makes of a domain it meets `expect`: `known`, `seen` (kept for its operators), or `ignored` (RP-1 §7.5). `met` says where it met it; it does not change the answer.",
   "records": [
     {
       "what": "an API record",
@@ -163,6 +163,111 @@
         "radiopost.org"
       ],
       "expect": true
+    }
+  ],
+  "office": {
+    "own": [
+      "radiopost.org"
+    ],
+    "accepted": [
+      "eoc-mail.example",
+      "hampost.org"
+    ],
+    "blocked": [
+      "eoc-mail.example",
+      "spam-relay.example"
+    ],
+    "zone": {
+      "radiopost.org": [
+        "v=RP1; t=api; url=https://po.radiopost.org/rp/v1",
+        "v=RP1; t=key; kid=fbbd5f5c; p=dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY="
+      ],
+      "hampost.org": [
+        "v=RP1; t=api; url=https://po.hampost.org/rp/v1",
+        "v=RP1; t=key; kid=84219d00; p=u/M3pKzebawRJXJ/dE5nKOvPhgLEl3T0vkOmPK11t7Q="
+      ],
+      "qrp-mail.example": [
+        "v=RP1; t=api; url=https://po.qrp-mail.example/rp/v1",
+        "v=RP1; t=key; kid=84219d00; p=u/M3pKzebawRJXJ/dE5nKOvPhgLEl3T0vkOmPK11t7Q="
+      ],
+      "keyless.example": [
+        "v=RP1; t=api; url=https://mail.keyless.example/rp/v1"
+      ],
+      "plain.example": [
+        "v=RP1; t=api; url=http://po.plain.example/rp/v1",
+        "v=RP1; t=key; kid=84219d00; p=u/M3pKzebawRJXJ/dE5nKOvPhgLEl3T0vkOmPK11t7Q="
+      ],
+      "example.com": [],
+      "eoc-mail.example": [
+        "v=RP1; t=api; url=https://po.eoc-mail.example/rp/v1",
+        "v=RP1; t=key; kid=84219d00; p=u/M3pKzebawRJXJ/dE5nKOvPhgLEl3T0vkOmPK11t7Q="
+      ],
+      "spam-relay.example": [
+        "v=RP1; t=api; url=https://po.spam-relay.example/rp/v1",
+        "v=RP1; t=key; kid=84219d00; p=u/M3pKzebawRJXJ/dE5nKOvPhgLEl3T0vkOmPK11t7Q="
+      ]
+    }
+  },
+  "office_cases": [
+    {
+      "domain": "hampost.org",
+      "what": "accepted by its operators, met at the door",
+      "met": "door",
+      "expect": "known"
+    },
+    {
+      "domain": "qrp-mail.example",
+      "what": "a valid API record, met at the door",
+      "met": "door",
+      "expect": "seen"
+    },
+    {
+      "domain": "qrp-mail.example",
+      "what": "named in a known post office's list",
+      "met": "list:hampost.org",
+      "expect": "seen"
+    },
+    {
+      "domain": "qrp-mail.example",
+      "what": "on a credential a gateway showed",
+      "met": "credential",
+      "expect": "seen"
+    },
+    {
+      "domain": "keyless.example",
+      "what": "an API record and no key record, written to",
+      "met": "outgoing",
+      "expect": "seen"
+    },
+    {
+      "domain": "plain.example",
+      "what": "its API record is not https",
+      "met": "door",
+      "expect": "ignored"
+    },
+    {
+      "domain": "example.com",
+      "what": "no `_radiopost` record: ordinary email",
+      "met": "door",
+      "expect": "ignored"
+    },
+    {
+      "domain": "spam-relay.example",
+      "what": "blocked by its operators",
+      "met": "door",
+      "expect": "ignored"
+    },
+    {
+      "domain": "eoc-mail.example",
+      "what": "accepted, then blocked",
+      "met": "credential",
+      "expect": "ignored"
+    },
+    {
+      "domain": "radiopost.org",
+      "what": "its own domain",
+      "met": "outgoing",
+      "expect": "ignored"
     }
   ]
 }

@@ -334,6 +334,15 @@ const TYPES: [(&str, u64); 6] = [
 /// The resolver cannot be reached, does not answer in JSON, or reports a failure other than a
 /// name that does not exist.
 pub fn query(resolver: &str, name: &str, kind: &str) -> Result<Vec<String>, String> {
+    query_signed(resolver, name, kind).map(|(answers, _)| answers)
+}
+
+/// [`query`], and whether the resolver validated the answer with DNSSEC (its `AD` flag).
+///
+/// # Errors
+///
+/// As [`query`].
+pub fn query_signed(resolver: &str, name: &str, kind: &str) -> Result<(Vec<String>, bool), String> {
     let number = TYPES
         .iter()
         .find(|(n, _)| *n == kind)
@@ -359,7 +368,8 @@ pub fn query(resolver: &str, name: &str, kind: &str) -> Result<Vec<String>, Stri
         Some(0 | 3) => {}
         other => return Err(format!("{name} {kind}: the resolver's status is {other:?}")),
     }
-    Ok(answer
+    let signed = answer.get("AD").and_then(Json::as_bool) == Some(true);
+    let answers = answer
         .get("Answer")
         .and_then(Json::as_array)
         .into_iter()
@@ -375,17 +385,36 @@ pub fn query(resolver: &str, name: &str, kind: &str) -> Result<Vec<String>, Stri
                 d.to_owned()
             }
         })
-        .collect())
+        .collect();
+    Ok((answers, signed))
 }
 
 /// RP-1 §7.1: a domain's `_radiopost` TXT records, read by DNS over HTTPS, each as its tags.
 #[must_use]
 pub fn records(resolver: &str, domain: &str) -> Vec<std::collections::BTreeMap<String, String>> {
-    query(resolver, &format!("_radiopost.{domain}"), "TXT")
+    records_signed(resolver, domain)
+        .map(|(r, _)| r)
         .unwrap_or_default()
-        .iter()
-        .filter_map(|txt| radiopost::dns::parse(txt))
-        .collect()
+}
+
+/// [`records`], and whether DNSSEC signed them, with a lookup that failed told apart from a
+/// domain that has none (RP-1 §7.5: a post office keeps what it holds when a refresh fails).
+///
+/// # Errors
+///
+/// The resolver could not be asked, or did not answer.
+pub fn records_signed(
+    resolver: &str,
+    domain: &str,
+) -> Result<(Vec<std::collections::BTreeMap<String, String>>, bool), String> {
+    let (texts, signed) = query_signed(resolver, &format!("_radiopost.{domain}"), "TXT")?;
+    Ok((
+        texts
+            .iter()
+            .filter_map(|txt| radiopost::dns::parse(txt))
+            .collect(),
+        signed,
+    ))
 }
 
 /// RP-1 §7.1: a domain's post office API, from its `t=api` record.

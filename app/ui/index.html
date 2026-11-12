@@ -185,6 +185,7 @@
           <button role="tab" data-otab="accounts" title="Every account, its name and the devices enrolled for it">Accounts</button>
           <button role="tab" data-otab="code" title="A one-time code for a new account, or a new device of one">New code</button>
           <button role="tab" data-otab="mail" title="Mail sent by radio, waiting to go on by email">Mail out <span class="count" id="o-n-mail"></span></button>
+          <button role="tab" data-otab="others" title="Other post offices: those you know, those met that you may know, those you blocked">Post offices <span class="count" id="o-n-others"></span></button>
           <button role="tab" data-otab="health" title="The post office checked from outside and inside, each hour: red means something to fix">Health <span class="count bad" id="o-n-health"></span></button>
           <button role="tab" data-otab="server" title="Jobs on the server (update, restarts, logs) and the backups">Server</button>
           <button role="tab" data-otab="settings" title="Whether the post office takes applications, and who runs it">Settings</button>
@@ -237,6 +238,34 @@
             <thead><tr><th title="The message's content ID">Message</th><th title="Where it goes">To</th><th title="When it was queued">Since</th></tr></thead>
             <tbody id="o-mail-rows"></tbody>
           </table>
+        </div>
+
+        <div class="o-pane" id="o-others" hidden>
+          <p class="note">Mail reaches every other post office as ordinary email. Knowing one takes its word that its users are licensed: their mail needs no place on an accept list and goes on the air unflagged, its gateways log in here, and you list it for gateways and clients. Know only post offices whose operators you trust to check callsigns.</p>
+          <div class="card">
+            <h2>Known</h2>
+            <div class="scroll"><table class="list" aria-label="Post offices known">
+              <thead><tr><th>Post office</th><th>Run by</th><th title="When its DNS records, keys and revocation list were last fetched and checked; again every six hours">Fetched</th><th title="Whether DNSSEC signed its records">DNSSEC</th><th class="acts"></th></tr></thead>
+              <tbody id="o-known"></tbody>
+            </table></div>
+            <div class="row">
+              <input id="o-know" class="grow" placeholder="hampost.org" spellcheck="false" autocomplete="off" title="A post office's domain: its records are fetched from DNS">
+              <button type="button" id="o-know-add" title="Know this post office: its records are fetched from DNS now, and every six hours">Know</button>
+              <button type="button" class="quiet" id="o-know-fetch" title="Fetch the known post offices' records and documents again now">Fetch now</button>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Seen</h2>
+            <p class="note" id="o-seen-note">Post offices met at the door, in mail your users sent, on a credential, or in a known post office's list.</p>
+            <div class="scroll"><table class="list" aria-label="Post offices seen">
+              <thead><tr><th>Post office</th><th>Run by</th><th title="Where it was met, and when last">Met</th><th title="Whether DNSSEC signed its records">DNSSEC</th><th class="acts"></th></tr></thead>
+              <tbody id="o-seen"></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <h2>Blocked</h2>
+            <table class="list" aria-label="Post offices blocked"><tbody id="o-blocked"></tbody></table>
+          </div>
         </div>
 
         <div class="o-pane" id="o-health" hidden>

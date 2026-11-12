@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! RP-1 §7.1 and §7.3: a post office's DNS records read, and which post offices a gateway trusts.
+//! RP-1 §7.1, §7.3 and §7.5: a post office's DNS records read, which post offices a gateway
+//! trusts, and what a post office makes of the domains it meets.
 
 use std::collections::BTreeMap;
 
@@ -83,5 +84,44 @@ pub fn trusts(
             found.get(by) == Some(&Found::Dns) && !blocked.iter().any(|b| b == by)
         }
         None => false,
+    }
+}
+
+/// What a post office makes of a domain it meets (RP-1 §7.5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Meets {
+    /// Its operators accepted it, and have not blocked it.
+    Known,
+    /// It has a valid API record: kept, for its operators to accept or block.
+    Seen,
+    /// Its own domain, one its operators blocked, or one with no valid API record.
+    Ignored,
+}
+
+/// RP-1 §7.5: what a post office whose domains are `own`, and whose operators `accepted` and
+/// `blocked` these, makes of `domain`, whose `_radiopost` records are `records` (as [`parse`]
+/// read them: those to be ignored left out). Where it met the domain changes nothing.
+#[must_use]
+pub fn meets(
+    domain: &str,
+    records: &[BTreeMap<String, String>],
+    own: &[String],
+    accepted: &[String],
+    blocked: &[String],
+) -> Meets {
+    let is = |list: &[String]| list.iter().any(|d| d.eq_ignore_ascii_case(domain));
+    if is(own) || is(blocked) {
+        return Meets::Ignored;
+    }
+    if is(accepted) {
+        return Meets::Known;
+    }
+    if records
+        .iter()
+        .any(|t| t.get("t").map(String::as_str) == Some("api"))
+    {
+        Meets::Seen
+    } else {
+        Meets::Ignored
     }
 }

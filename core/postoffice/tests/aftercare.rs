@@ -144,6 +144,8 @@ fn an_approved_account_gets_its_mailbox_and_its_welcome() {
             applications: Some("open".into()),
         },
         known: Vec::new(),
+        blocked: Vec::new(),
+        resolver: None,
         hooks: None,
         hook_token: None,
         smtp: Some(format!("smtp://{}", smtp.at)),

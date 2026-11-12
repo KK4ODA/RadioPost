@@ -37,10 +37,18 @@ pub struct Settings {
     pub admin: String,
     /// What the info document says.
     pub info: Info,
-    /// The other post offices whose credentials it accepts: domain, `keys` (`public`,
-    /// `not_before`, `not_after`).
+    /// The other post offices its operators accepted (RP-1 §7.5): each `domain`, with an `api`
+    /// and `keys` (`public`, `not_before`, `not_after`) when they were typed rather than found.
+    /// What is fetched of them is kept in the state, and serves before what was typed.
     #[serde(default)]
     pub known: Vec<Json>,
+    /// Post offices its operators blocked (RP-1 §7.5): unknown, and not offered as seen.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked: Vec<String>,
+    /// Where it asks DNS over HTTPS (Google's JSON form) for other post offices' records; none,
+    /// `radiopost_api::RESOLVER`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolver: Option<String>,
     /// Where the mail server's MTA hooks reach the door (RP-6 §2.1); none, no door.
     #[serde(default)]
     pub hooks: Option<String>,
@@ -217,7 +225,9 @@ pub fn system_draw() -> Draw {
     })
 }
 
-/// The post offices a post office knows: itself and those its settings name.
+/// The post offices a post office knows: itself and those its operators accepted and did not
+/// block (RP-1 §7.5), with the keys typed for them. Those fetched are laid over these by
+/// [`PostOffice::trust`](crate::office::PostOffice::trust).
 #[must_use]
 pub fn trust_of(settings: &Settings, key: &SigningKey) -> Trust {
     let mut trust = Trust::default();
@@ -233,9 +243,18 @@ pub fn trust_of(settings: &Settings, key: &SigningKey) -> Trust {
             });
     }
     for k in &settings.known {
-        let Some(domain) = k.get("domain").and_then(Json::as_str) else {
+        let Some(domain) = k
+            .get("domain")
+            .and_then(Json::as_str)
+            .map(str::to_lowercase)
+        else {
             continue;
         };
+        if settings.blocked.contains(&domain) || settings.domains.contains(&domain) {
+            continue;
+        }
+        // known, even before anything is fetched: its keys come when they are
+        trust.keys.entry(domain.clone()).or_default();
         for key in k.get("keys").and_then(Json::as_array).into_iter().flatten() {
             let public = key
                 .get("public")
@@ -245,7 +264,7 @@ pub fn trust_of(settings: &Settings, key: &SigningKey) -> Trust {
             if let Some(public) = public {
                 trust
                     .keys
-                    .entry(domain.to_owned())
+                    .entry(domain.clone())
                     .or_default()
                     .push(PostOfficeKey {
                         public,
@@ -269,6 +288,8 @@ pub struct Running {
     checker: OnceLock<Result<Checker, String>>,
     updates: OnceLock<Arc<radiopost_update::Watch>>,
     lookups: Lookups,
+    /// The other post offices' worker and what waits for it (RP-1 §7.5).
+    pub(crate) known: crate::known::Known,
     pub(crate) care_state: crate::health::Care,
 }
 
@@ -314,6 +335,7 @@ impl Running {
             checker: OnceLock::new(),
             updates: OnceLock::new(),
             lookups: Lookups::default(),
+            known: crate::known::Known::default(),
             care_state: crate::health::Care::default(),
         })
     }
@@ -384,7 +406,11 @@ impl Running {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .clone();
-            if let Some(jws) = self.office().signed_document(&settings.info, path, at) {
+            let mut info = settings.info.clone();
+            if path == "/post-offices" {
+                info.post_offices = self.published_post_offices(&settings);
+            }
+            if let Some(jws) = self.office().signed_document(&info, path, at) {
                 return (200, "application/jose", jws);
             }
         }
@@ -414,7 +440,11 @@ impl Running {
         let mut office = self.office();
         let answer = office.handle(at, &request);
         self.save(&office);
+        let met = office.take_met();
         drop(office);
+        for domain in met {
+            self.met(&domain, "credential"); // RP-1 §7.5: a credential it was shown
+        }
         let kind = if answer.status >= 400 {
             "application/problem+json"
         } else {
@@ -637,6 +667,7 @@ fn method_of(m: &Method) -> &'static str {
 pub fn serve(running: Arc<Running>, listen: &str, admin: &str) -> Result<(String, String), String> {
     crate::lookups::start(&running);
     crate::health::start(&running);
+    crate::known::start(&running);
     let api = Server::http(listen).map_err(|e| format!("{listen}: {e}"))?;
     let ops = Server::http(admin).map_err(|e| format!("{admin}: {e}"))?;
     let api_at = api.server_addr().to_string();

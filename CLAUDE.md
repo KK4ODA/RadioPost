@@ -94,6 +94,18 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   front, an operator's port on loopback (`code`, `deliver`, `revoke`, `outgoing`, `status`), state
   in `state.json` written whole after each request. Mail it accepts for other domains waits in
   `outgoing` for RP-6's email out. `radiopost::base64url` is RP-0 §4.2's encoding.
+  Other post offices (RP-1 §7.5, D38): `postoffice/src/known.rs` fetches each post office the
+  operators accepted (its DNS records, by `radiopost_api::records_signed` with DNSSEC's `AD`; its
+  info document and revocation list) at start and every six hours; `assemble` checks them with no
+  I/O, and `PostOffice::trust` lays what was fetched over the keys typed in `config.json`'s `known`
+  (`know --public`, still the tester's way). Until then other post offices' revocation lists were
+  never read. Domains met at the door, in mail sent out, on a refused credential
+  (`PostOffice::take_met`) and in known post offices' lists are looked up on its thread and kept
+  as `seen` when `radiopost::dns::meets` says so (replayed against `dns.json`'s `office_cases`);
+  the desk's *Post offices* tab and `radiopost-po post-offices` accept, block and forget them, and
+  a settings change rebuilds the trust at once. `tests/known.rs` runs two post offices in one
+  process. RP-5 0.16.0 and RP-7 0.9.0 (D36, D37: gateway lists and copies placed ahead across post
+  offices) are written and not built.
   RP-6 is `postoffice/src/mail.rs` (the port of `rpref/mail.py`, MIME by Stalwart's `mail-parser`
   0.11: the newest needs Rust 1.98, over the workspace's 1.85) and `email.rs` (the door as an MTA
   hook, read in Stalwart's shape and the MTA Hooks draft's, `ietf.org/archive/id/draft-degennaro-mta-hooks-01.txt`;
@@ -277,6 +289,11 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   forwarding by radio.
 - Stalwart as the post office's mail server (others possible behind JMAP/SMTP); the door answers
   its MTA hooks (D29).
+- (2026-11-12) With more than one post office: a client's gateway list read from every post
+  office its own knows, the home's record winning and a callsign listed twice elsewhere ambiguous
+  (D36); copies placed ahead at gateways of other post offices, served only to the credential of
+  the post office that listed the gateway (D37); a post office knows another only by its
+  operators' choice, finding others as mail crosses (D38).
 - (2026-11-09) Rust throughout, specs and code in this repository (D27, D28); credentials and
   placements as COSE_Sign1; station-to-station mail reported to the post office over the Internet;
   radiopost.org enrolls on an LoTW certificate or the sysop's check; third-party mail flagged by the

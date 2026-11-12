@@ -979,6 +979,7 @@ async function probeOffice() {
     $("o-n-mail").textContent = office.status.outgoing ? String(office.status.outgoing) : "";
     const fails = office.status.health ? office.status.health.fails : 0;
     $("o-n-health").textContent = fails ? String(fails) : "";
+    $("o-n-others").textContent = office.status.seen ? String(office.status.seen) : "";
   }
   return office.ok;
 }
@@ -1009,6 +1010,7 @@ async function openOffice(tab = office.tab) {
     if (tab === "applications") await renderApplications();
     if (tab === "accounts") await renderAccounts();
     if (tab === "mail") await renderMail();
+    if (tab === "others") await renderOthers();
     if (tab === "settings") await renderOfficeSettings();
     if (tab === "health") await renderHealth();
     if (tab === "server") await renderServer();
@@ -1282,6 +1284,84 @@ async function renderMail() {
     el("td", {text: m.queued ? day(m.queued) : ""}))));
 }
 
+// ── other post offices: known, seen, blocked (RP-1 §7.5) ──────────────────────────────────────
+
+const metHow = (h) => ({door: "at the door", outgoing: "written to", credential: "a credential"}[h]
+  || (h.startsWith("list:") ? `in ${h.slice(5)}'s list` : h));
+
+async function decidePost(body) {
+  try {
+    await renderOthers(await desk("POST", "/office/post-offices", body));
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function postButton(text, title, body, sure) {
+  const b = el("button", {type: "button", text, title});
+  b.addEventListener("click", (e) => {
+    if (sure) armed(e.currentTarget, sure, () => decidePost(body));
+    else decidePost(body);
+  });
+  return b;
+}
+
+async function renderOthers(given) {
+  const v = given || await desk("GET", "/office/post-offices");
+  const who = (p) => [p.operator, p.country].filter(Boolean).join(", ") || "\u2014";
+  const signed = (p) => (p.api ? (p.dnssec ? "signed" : "not signed") : "");
+  const name = (p, trouble) => el("td", {},
+    el("span", {class: "mono", text: p.domain}),
+    p.contact ? el("div", {class: "note", text: p.contact}) : null,
+    p.error ? el("div", {class: "trouble", text: `${trouble}: ${p.error}`}) : null);
+  const known = v.known || [];
+  $("o-known").replaceChildren(...known.map((p) => el("tr", {},
+    name(p, "The last fetch failed, and what was held is kept"),
+    el("td", {"data-label": "Run by", text: who(p)}),
+    el("td", {"data-label": "Fetched", text: p.found ? day(p.found) : p.typed ? "its key typed, not fetched yet" : "not yet"}),
+    el("td", {"data-label": "DNSSEC", text: signed(p)}),
+    el("td", {class: "acts"},
+      postButton("Forget", "Know it no more; it may be met and seen again", {forget: p.domain}, "Click again to forget it"),
+      postButton("Block", "Know it no more, and do not show it as seen", {block: p.domain}, "Click again to block it")))));
+  if (!known.length) {
+    $("o-known").append(el("tr", {}, el("td", {class: "note", colspan: "5",
+      text: "None yet: your users' mail reaches other post offices as ordinary email."})));
+  }
+  const seen = v.seen || [];
+  $("o-seen").replaceChildren(...seen.map((p) => el("tr", {},
+    name(p, "Not all could be found or checked"),
+    el("td", {"data-label": "Run by", text: who(p)}),
+    el("td", {"data-label": "Met", text: `${(p.how || []).map(metHow).join(", ")}; ${day(p.last)}`}),
+    el("td", {"data-label": "DNSSEC", text: signed(p)}),
+    el("td", {class: "acts"},
+      postButton("Know", "Take its users as licensed: their mail past the accept lists, unflagged on the air", {accept: p.domain}, "Click again to know it"),
+      postButton("Block", "Do not show it again", {block: p.domain})))));
+  if (!seen.length) {
+    $("o-seen").append(el("tr", {}, el("td", {class: "note", colspan: "5", text: "None met yet."})));
+  }
+  const looking = v.looking_up || [];
+  $("o-seen-note").textContent = "Post offices met at the door, in mail your users sent, on a credential, or in a known post office's list."
+    + (looking.length ? ` Being looked up: ${looking.join(", ")}.` : "");
+  const blocked = v.blocked || [];
+  $("o-blocked").replaceChildren(...blocked.map((d) => el("tr", {},
+    el("td", {class: "mono", text: d}),
+    el("td", {class: "acts"}, postButton("Unblock", "It may be met and seen again", {unblock: d})))));
+  if (!blocked.length) $("o-blocked").append(el("tr", {}, el("td", {class: "note", text: "None."})));
+  $("o-n-others").textContent = seen.length ? String(seen.length) : "";
+}
+
+async function knowPost() {
+  const domain = $("o-know").value.trim().toLowerCase();
+  if (!domain) return;
+  try {
+    await renderOthers(await desk("POST", "/office/post-offices", {accept: domain}));
+    $("o-know").value = "";
+    toast(`${domain} known: its records are being fetched`);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
 // ── the server's care: its checks, its jobs, its backups ─────────────────────────────────────
 
 async function renderHealth(fresh = false) {
@@ -1526,6 +1606,9 @@ function wire() {
     b.addEventListener("click", () => openOffice(b.dataset.otab));
   }
   $("o-filter").addEventListener("input", drawAccounts);
+  $("o-know-add").addEventListener("click", knowPost);
+  $("o-know").addEventListener("keydown", (e) => { if (e.key === "Enter") knowPost(); });
+  $("o-know-fetch").addEventListener("click", () => decidePost({refresh: true}));
   $("o-code").addEventListener("submit", makeCode);
   $("o-code").addEventListener("input", () => { $("o-operates").hidden = true; });
   $("o-made-copy").addEventListener("click", async () => {

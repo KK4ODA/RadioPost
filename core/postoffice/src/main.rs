@@ -11,6 +11,7 @@ use ed25519_dalek::SigningKey;
 use radiopost::base64url;
 use radiopost_postoffice::check::{self, Verdict};
 use radiopost_postoffice::documents::Info;
+use radiopost_postoffice::known::{self, Lookup};
 use radiopost_postoffice::serve::{self, Files, Running, Settings};
 use radiopost_update::{Product, Watch};
 use serde_json::{Value as Json, json};
@@ -31,8 +32,15 @@ usage: radiopost-po --dir DIR COMMAND
   serve              serve the API (plain HTTP: put HTTPS in front), the operator's port, the
                      door for the mail server's MTA hooks, and send email out by SMTP
   dns                the DNS records to publish (RP-1 §7.1)
+  know --domain D [--resolver URL]
+                     know another post office (RP-1 §7.5): its DNS records and documents are
+                     fetched, shown, and refreshed every six hours by the service
   know --domain D --public KEY [--api URL] [--not-before T --not-after T]
-                     accept credentials of another post office (restart to take effect)
+                     know one by a key typed here, for one not in DNS yet (restart to take
+                     effect); what is fetched of it later serves first
+  post-offices [--block D | --unblock D | --forget D | --refresh]
+                     the post offices known, seen (met, and not known) and blocked; block one,
+                     unblock it, forget one known, or fetch the known ones again
   code --address A --operator CALL [--send] [--receive] [--role] [--name NAME]
                      a one-time enrollment code (RP-5 §6.1), good for a week
   name --address A --name NAME
@@ -142,6 +150,8 @@ fn init(files: &Files, a: &Args) -> Result<(), String> {
             applications: None,
         },
         known: Vec::new(),
+        blocked: Vec::new(),
+        resolver: None,
         hooks: Some(a.one("--hooks").unwrap_or_else(|| "127.0.0.1:8772".into())),
         hook_token: a.one("--hook-token"),
         smtp: a.one("--smtp"),
@@ -330,10 +340,137 @@ fn watch_updates(running: &Running) {
     });
 }
 
+/// `know`: another post office accepted (RP-1 §7.5), as DNS gives it, or by a key typed here.
 fn know(files: &Files, a: &Args) -> Result<(), String> {
+    let domain = a.need("--domain")?.to_lowercase();
+    if a.has("--public") {
+        return know_typed(files, a, &domain);
+    }
+    let settings = files.settings()?;
+    let resolver = a
+        .one("--resolver")
+        .or(settings.resolver.clone())
+        .unwrap_or_else(|| radiopost_api::RESOLVER.into());
+    match known::fetch(&resolver, &domain, serve::now()) {
+        Lookup::Failed(e) => return Err(format!("DNS did not answer: {e}")),
+        Lookup::NoRecord => {
+            return Err(format!(
+                "{domain} has no RadioPost API record in DNS (RP-1 §7.1): if it is a post office \
+                 not in DNS yet, give its key with --public"
+            ));
+        }
+        Lookup::Found { found, error, .. } => {
+            println!("{domain}");
+            println!("  API      {}", found.api);
+            for k in &found.keys {
+                println!("  key      {}", k.kid);
+            }
+            println!(
+                "  DNSSEC   {}",
+                if found.dnssec { "signed" } else { "not signed" }
+            );
+            for (label, k) in [
+                ("operator", "operator"),
+                ("contact", "contact"),
+                ("country", "country"),
+            ] {
+                if let Some(v) = found.info[k].as_str() {
+                    println!("  {label:<8} {v}");
+                }
+            }
+            if let Some(e) = error {
+                println!("  not whole: {e}; the service keeps trying");
+            }
+        }
+    }
+    match admin(files, "POST", "/post-offices", &json!({"accept": domain})) {
+        Ok(_) => println!("{domain} known; the service fetches it now and every six hours"),
+        Err(e) if e.starts_with("the post office is not running") => {
+            let mut settings = files.settings()?;
+            if !known::accepted(&settings).contains(&domain) {
+                settings.known.push(json!({"domain": domain}));
+            }
+            settings.blocked.retain(|b| b != &domain);
+            files.write(
+                "config.json",
+                &serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?,
+            )?;
+            println!("{domain} known; the service fetches it when it starts");
+        }
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+
+/// `post-offices`: what the service knows, has seen and has blocked; or a decision on one.
+fn post_offices(files: &Files, a: &Args) -> Result<(), String> {
+    let mut decision = None;
+    for action in ["block", "unblock", "forget"] {
+        if let Some(d) = a.one(&format!("--{action}")) {
+            decision = Some(json!({action: d}));
+        }
+    }
+    if a.has("--refresh") {
+        decision = Some(json!({"refresh": true}));
+    }
+    let view = match decision {
+        Some(body) => admin(files, "POST", "/post-offices", &body)?,
+        None => admin(files, "GET", "/post-offices", &Json::Null)?,
+    };
+    let day = |v: &Json| {
+        v.as_u64()
+            .filter(|t| *t > 0)
+            .map_or_else(|| "never".to_owned(), radiopost_postoffice::lookups::day)
+    };
+    println!("Known:");
+    for k in view["known"].as_array().into_iter().flatten() {
+        let error = k["error"]
+            .as_str()
+            .map_or_else(String::new, |e| format!("  last try failed: {e}"));
+        println!(
+            "  {}  {}  fetched {}{error}",
+            k["domain"].as_str().unwrap_or(""),
+            k["api"].as_str().unwrap_or("(nothing fetched yet)"),
+            day(&k["found"])
+        );
+    }
+    println!("Seen (met, not known):");
+    for s in view["seen"].as_array().into_iter().flatten() {
+        let how: Vec<&str> = s["how"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Json::as_str)
+            .collect();
+        println!(
+            "  {}  run by {}  met {} ({})",
+            s["domain"].as_str().unwrap_or(""),
+            s["operator"].as_str().unwrap_or("?"),
+            day(&s["last"]),
+            how.join(", ")
+        );
+    }
+    let blocked: Vec<&str> = view["blocked"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Json::as_str)
+        .collect();
+    println!(
+        "Blocked: {}",
+        if blocked.is_empty() {
+            "none".to_owned()
+        } else {
+            blocked.join(", ")
+        }
+    );
+    Ok(())
+}
+
+/// `know --public`: another post office known by a key typed here, before it is in DNS.
+fn know_typed(files: &Files, a: &Args, domain: &str) -> Result<(), String> {
     let mut settings = files.settings()?;
     let public = key_bytes(&a.need("--public")?).ok_or("--public is not a 32-byte key")?;
-    let domain = a.need("--domain")?;
     let key = json!({
         "kid": radiopost::cbor::hex(&radiopost::crypto::kid(&public)),
         "public": base64url::encode(&public),
@@ -343,13 +480,9 @@ fn know(files: &Files, a: &Args) -> Result<(), String> {
     let entry = json!({"domain": domain, "api": a.one("--api").unwrap_or_default(), "keys": [key]});
     settings
         .known
-        .retain(|k| k.get("domain").and_then(Json::as_str) != Some(domain.as_str()));
-    settings.known.push(entry.clone());
-    settings
-        .info
-        .post_offices
-        .retain(|k| k.get("domain").and_then(Json::as_str) != Some(domain.as_str()));
-    settings.info.post_offices.push(entry);
+        .retain(|k| k.get("domain").and_then(Json::as_str) != Some(domain));
+    settings.known.push(entry);
+    settings.blocked.retain(|b| b != domain);
     files.write(
         "config.json",
         &serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?,
@@ -722,6 +855,7 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
             Ok(())
         }
         "know" => know(&files, a),
+        "post-offices" => post_offices(&files, a),
         "code" => {
             let mut flags = Vec::new();
             for f in ["send", "receive", "role"] {

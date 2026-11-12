@@ -485,7 +485,7 @@ fn third_party_mail_is_listed_only_where_rp6_5_1_allows() {
 
 #[test]
 fn dns_records_are_read_and_post_offices_trusted_as_rp1_7_says() {
-    use radiopost::dns::{Found, parse, trusts};
+    use radiopost::dns::{Found, Meets, meets, parse, trusts};
     let file = vectors("dns.json");
     for r in file["records"].as_array().expect("records") {
         let got = parse(text(r, "txt")).map(|t| serde_json::to_value(t).expect("JSON"));
@@ -526,5 +526,24 @@ fn dns_records_are_read_and_post_offices_trusted_as_rp1_7_says() {
             "{}",
             text(c, "what")
         );
+    }
+    // RP-1 §7.5: what a post office makes of the domains it meets
+    let office = &file["office"];
+    let (own, accepted, blocked) = (
+        list(&office["own"]),
+        list(&office["accepted"]),
+        list(&office["blocked"]),
+    );
+    for c in file["office_cases"].as_array().expect("office cases") {
+        let records: Vec<_> = list(&office["zone"][text(c, "domain")])
+            .iter()
+            .filter_map(|t| parse(t))
+            .collect();
+        let got = match meets(text(c, "domain"), &records, &own, &accepted, &blocked) {
+            Meets::Known => "known",
+            Meets::Seen => "seen",
+            Meets::Ignored => "ignored",
+        };
+        assert_eq!(got, text(c, "expect"), "{}", text(c, "what"));
     }
 }

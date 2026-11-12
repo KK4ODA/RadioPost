@@ -99,6 +99,7 @@ impl Running {
                 "backups: none yet; the first is made tonight".into(),
             )),
         }
+        out.extend(self.known_lines(at));
         if !jobs::runner_installed() {
             out.push(line(
                 Verdict::Note,
@@ -114,6 +115,40 @@ impl Running {
                 Verdict::Note,
                 format!("RadioPost {v} is out: the desk's Server tab installs it"),
             ));
+        }
+        out
+    }
+
+    /// The other post offices it knows (RP-1 §7.5): one fetched before and not for a day fails,
+    /// since its revocations may be missed; one never fetched, known by a key typed for it, is
+    /// noted.
+    fn known_lines(&self, at: u64) -> Vec<Line> {
+        let settings = self.settings();
+        let office = self.office();
+        let mut out = Vec::new();
+        for domain in crate::known::accepted(&settings) {
+            if settings.blocked.contains(&domain) {
+                continue;
+            }
+            let fetched = office.state.post_offices.get(&domain);
+            let why = fetched
+                .and_then(|f| f.error.clone())
+                .unwrap_or_else(|| "not tried yet".into());
+            match fetched.and_then(|f| f.found.as_ref()) {
+                Some(found) if at.saturating_sub(found.at) > 86_400 => out.push(line(
+                    Verdict::Fail,
+                    format!(
+                        "{domain}: last fetched {} days ago, so its revocations may be missed: \
+                         {why}",
+                        at.saturating_sub(found.at) / 86_400
+                    ),
+                )),
+                Some(_) => {}
+                None => out.push(line(
+                    Verdict::Note,
+                    format!("{domain}: known, never fetched from DNS: {why}"),
+                )),
+            }
         }
         out
     }

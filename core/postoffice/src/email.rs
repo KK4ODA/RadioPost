@@ -306,6 +306,13 @@ impl Running {
             .filter(|r| account(r))
             .cloned()
             .collect();
+        // RP-1 §7.5: the domain of mail that reaches the door is met, to be looked up later
+        if hook.stage == "rcpt"
+            && hook.recipients.last().is_some_and(&account)
+            && let Some((_, domain)) = hook.sender.rsplit_once('@')
+        {
+            self.met(domain, "door");
+        }
         if let Some(answer) = self.held_back(&mut hook, &ours, max) {
             return answer;
         }
@@ -510,6 +517,9 @@ impl Running {
         let waiting: Vec<Outgoing> = self.office().state.outgoing.clone();
         let mut said = Vec::new();
         for item in waiting {
+            for r in &item.to {
+                self.met(&mail::domain_of(r), "outgoing"); // RP-1 §7.5: a domain written to
+            }
             let (left, lines) = self.send_one(&item, send);
             said.extend(lines);
             let mut office = self.office();

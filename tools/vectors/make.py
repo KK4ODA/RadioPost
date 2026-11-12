@@ -6313,20 +6313,98 @@ def make_dns() -> dict[str, Any]:
             "inside the operator's limit": True,
         },
     )
+    office, office_cases = make_office_cases()
     out = header(
-        "`_radiopost` TXT records, and which post offices a gateway trusts",
-        {"RP-1": "§7.1, §7.3"},
+        "`_radiopost` TXT records, which post offices a gateway trusts, and which a post office "
+        "knows",
+        {"RP-1": "§7.1, §7.3, §7.5"},
     )
     out["rule"] = (
         "Parsing `txt` gives `result`: the record's tags, or null when it must be ignored. A "
         "gateway that learned post offices as `found` says (`dns`, or `list:` and the post office "
         "whose list named it) trusts a case's `domain`, given its operator's `blocked` and `only`, "
-        "when `expect` is true (RP-1 §7.3)."
+        "when `expect` is true (RP-1 §7.3). A post office with `office`'s own domains, the domains "
+        "its operators `accepted` and `blocked`, and the DNS `zone` (each domain's `_radiopost` "
+        "TXT records) makes of a domain it meets `expect`: `known`, `seen` (kept for its "
+        "operators), or `ignored` (RP-1 §7.5). `met` says where it met it; it does not change the "
+        "answer."
     )
     out["records"] = cases
     out["found"] = found
     out["trust_cases"] = trust_cases
+    out["office"] = office
+    out["office_cases"] = office_cases
     return out
+
+
+def make_office_cases() -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """RP-1 §7.5: what a post office makes of the domains it meets."""
+
+    def records(api: str | None, key: str | None) -> list[str]:
+        out = []
+        if api is not None:
+            out.append(f"v=RP1; t=api; url={api}")
+        if key is not None:
+            pub = PUBLIC[key]
+            out.append(f"v=RP1; t=key; kid={rp.kid(pub).hex()}; p={base64.b64encode(pub).decode()}")
+        return out
+
+    own = {"radiopost.org"}
+    accepted = {"hampost.org", "eoc-mail.example"}
+    blocked = {"eoc-mail.example", "spam-relay.example"}
+    zone = {
+        "radiopost.org": records(PO_RADIOPOST, "po:radiopost.org"),
+        "hampost.org": records(PO_HAMPOST, "po:hampost.org"),
+        "qrp-mail.example": records("https://po.qrp-mail.example/rp/v1", "po:hampost.org"),
+        "keyless.example": records("https://mail.keyless.example/rp/v1", None),
+        "plain.example": records("http://po.plain.example/rp/v1", "po:hampost.org"),
+        "example.com": [],
+        "eoc-mail.example": records("https://po.eoc-mail.example/rp/v1", "po:hampost.org"),
+        "spam-relay.example": records("https://po.spam-relay.example/rp/v1", "po:hampost.org"),
+    }
+    met = [
+        ("hampost.org", "accepted by its operators, met at the door", "door"),
+        ("qrp-mail.example", "a valid API record, met at the door", "door"),
+        ("qrp-mail.example", "named in a known post office's list", "list:hampost.org"),
+        ("qrp-mail.example", "on a credential a gateway showed", "credential"),
+        ("keyless.example", "an API record and no key record, written to", "outgoing"),
+        ("plain.example", "its API record is not https", "door"),
+        ("example.com", "no `_radiopost` record: ordinary email", "door"),
+        ("spam-relay.example", "blocked by its operators", "door"),
+        ("eoc-mail.example", "accepted, then blocked", "credential"),
+        ("radiopost.org", "its own domain", "outgoing"),
+    ]
+    cases = [
+        {
+            "domain": d,
+            "what": what,
+            "met": how,
+            "expect": rp.meets(d, zone[d], own, accepted, blocked),
+        }
+        for d, what, how in met
+    ]
+    confirm(  # RP-1 §7.5: known only by the operators' choice; seen with a valid API record
+        cases,
+        {
+            "accepted by its operators, met at the door": "known",
+            "a valid API record, met at the door": "seen",
+            "named in a known post office's list": "seen",
+            "on a credential a gateway showed": "seen",
+            "an API record and no key record, written to": "seen",
+            "its API record is not https": "ignored",
+            "no `_radiopost` record: ordinary email": "ignored",
+            "blocked by its operators": "ignored",
+            "accepted, then blocked": "ignored",
+            "its own domain": "ignored",
+        },
+    )
+    office = {
+        "own": sorted(own),
+        "accepted": sorted(accepted),
+        "blocked": sorted(blocked),
+        "zone": zone,
+    }
+    return office, cases
 
 
 def make_api() -> dict[str, Any]:

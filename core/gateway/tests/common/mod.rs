@@ -67,6 +67,8 @@ pub fn post_office(dir: &Path) -> (Arc<Running>, String, SigningKey) {
             applications: None,
         },
         known: Vec::new(),
+        blocked: Vec::new(),
+        resolver: None,
         hooks: None,
         hook_token: None,
         smtp: None,

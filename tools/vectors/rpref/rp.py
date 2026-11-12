@@ -315,6 +315,24 @@ def trusts(
     return how.startswith("list:") and found.get(publisher) == "dns" and publisher not in blocked
 
 
+def meets(
+    domain: str, records: list[str], own: set[str], accepted: set[str], blocked: set[str]
+) -> str:
+    """RP-1 §7.5: what a post office makes of a domain it meets, given its `_radiopost` records.
+
+    `known` when its operators accepted it and have not blocked it; `seen` when it has a valid
+    API record (§7.1) and is not the post office's own, known or blocked; else `ignored`. Where it
+    was met (the door, mail its users send, a credential, a known post office's list) does not
+    change the answer.
+    """
+    if domain in own or domain in blocked:
+        return "ignored"
+    if domain in accepted:
+        return "known"
+    tags = [parse_txt(r) for r in records]
+    return "seen" if any(t is not None and t["t"] == "api" for t in tags) else "ignored"
+
+
 # -- RP-1: session statements --------------------------------------------------------------------
 
 

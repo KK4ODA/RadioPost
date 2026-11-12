@@ -6,6 +6,7 @@
 //! [`Draw`], so the vectors' published randomness replays it exactly; the service (`serve`) brings
 //! the clock, real random numbers and the network, and saves [`State`] after each change.
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
@@ -13,7 +14,7 @@ use ed25519_dalek::SigningKey;
 use radiopost::ErrorCode;
 use radiopost::base64url;
 use radiopost::cbor;
-use radiopost::credential::{self, Body, Credential, Trust, flags};
+use radiopost::credential::{self, Body, Credential, Refused, Trust, flags};
 use radiopost::crypto::{self, ContentId, context};
 use radiopost::message::{Compression, Message, key};
 use radiopost::statement::{self, Freshness, REPLAY_S, Statement, TIME_WINDOW_S};
@@ -356,6 +357,10 @@ pub struct State {
     pub applications: Vec<crate::operator::Application>,
     /// What it issued under each serial, for its operators' list of accounts (RP-5 §7.4).
     pub credentials: BTreeMap<u64, crate::operator::Issued>,
+    /// What it last fetched of each post office its operators accepted (RP-1 §7.5).
+    pub post_offices: BTreeMap<String, crate::known::Fetched>,
+    /// The post offices it met and does not know, for its operators (RP-1 §7.5).
+    pub seen: BTreeMap<String, crate::known::Seen>,
 }
 
 /// A post office: what it is, what it keeps, and where its random values come from.
@@ -368,6 +373,9 @@ pub struct PostOffice {
     held: Held,
     max_air_bytes: u64,
     now: u64,
+    /// Domains of credentials it was shown and could not check: post offices it does not know
+    /// (RP-1 §7.5), for the service to look up.
+    met: RefCell<Vec<String>>,
 }
 
 pub(crate) fn hex(bytes: &[u8]) -> String {
@@ -424,6 +432,7 @@ impl PostOffice {
             held: Box::new(|_| None),
             max_air_bytes: 65_536,
             now: 0,
+            met: RefCell::new(Vec::new()),
         }
     }
 
@@ -439,15 +448,49 @@ impl PostOffice {
         (self.draw)(&label, n)
     }
 
-    /// The post offices it knows, with its own revocations.
+    /// The post offices it knows (RP-1 §5, §7.5): its own, with its own revocations, and those
+    /// its operators accepted, with the keys and revocation list last fetched of each, or the
+    /// keys typed for it when nothing has been fetched.
     #[must_use]
     pub fn trust(&self) -> Trust {
         let mut trust = self.config.trust.clone();
+        for (domain, fetched) in &self.state.post_offices {
+            let Some(found) = fetched.found.as_ref() else {
+                continue;
+            };
+            if !trust.keys.contains_key(domain) || self.config.domains.contains(domain) {
+                continue; // no longer known, or its own
+            }
+            trust.keys.insert(domain.clone(), found.trust_keys());
+            trust.revoked.insert(domain.clone(), found.revocations());
+        }
         for domain in &self.config.domains {
             let r = trust.revoked.entry(domain.clone()).or_default();
             r.serials.extend(self.state.revoked.iter().copied());
         }
         trust
+    }
+
+    /// RP-1 §5, noting the domain of a credential from a post office it does not know.
+    fn verify_credential(
+        &self,
+        credential: &[u8],
+        trust: &Trust,
+        clock: u64,
+        need: u64,
+    ) -> Result<Body, Refused> {
+        credential::verify(credential, trust, clock, need).inspect_err(|r| {
+            if r.code == ErrorCode::UnknownPostOffice
+                && let Some(body) = &r.body
+            {
+                self.met.borrow_mut().push(body.domain());
+            }
+        })
+    }
+
+    /// The domains of credentials from post offices it does not know, met since last asked.
+    pub fn take_met(&mut self) -> Vec<String> {
+        std::mem::take(self.met.get_mut())
     }
 
     fn ours(&self, address: &str) -> bool {
@@ -845,7 +888,7 @@ impl PostOffice {
         else {
             return problem(ErrorCode::Malformed, None);
         };
-        let cbody = match credential::verify(&credential, &self.trust(), self.now, 0) {
+        let cbody = match self.verify_credential(&credential, &self.trust(), self.now, 0) {
             Ok(b) => b,
             Err(r) => return problem(r.code, None),
         };
@@ -903,8 +946,9 @@ impl PostOffice {
             } else {
                 flags::SEND
             };
-        let cbody =
-            credential::verify(&credential, &self.trust(), clock, need).map_err(|r| r.code)?;
+        let cbody = self
+            .verify_credential(&credential, &self.trust(), clock, need)
+            .map_err(|r| r.code)?;
         let seen: Vec<(String, [u8; 8])> = self
             .state
             .replay
@@ -1667,10 +1711,12 @@ impl PostOffice {
             | if any("received") { flags::RECEIVE } else { 0 };
         let theirs_need = if any("received") { flags::SEND } else { 0 };
         let trust = self.trust();
-        let mine_body =
-            credential::verify(&mine.0, &trust, started, mine_need).map_err(|r| r.code)?;
-        let theirs_body =
-            credential::verify(&theirs.0, &trust, started, theirs_need).map_err(|r| r.code)?;
+        let mine_body = self
+            .verify_credential(&mine.0, &trust, started, mine_need)
+            .map_err(|r| r.code)?;
+        let theirs_body = self
+            .verify_credential(&theirs.0, &trust, started, theirs_need)
+            .map_err(|r| r.code)?;
         if mine_body.address != user.address || !self.ours(&user.address) {
             return Err(ErrorCode::NotAuthorized);
         }

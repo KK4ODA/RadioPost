@@ -73,6 +73,8 @@ fn make(dir: &std::path::Path) -> (String, String, SigningKey) {
             applications: None,
         },
         known: Vec::new(),
+        blocked: Vec::new(),
+        resolver: None,
         hooks: None,
         hook_token: None,
         smtp: None,

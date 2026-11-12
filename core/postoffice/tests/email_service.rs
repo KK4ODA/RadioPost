@@ -49,6 +49,8 @@ fn post_office(dir: &Path) -> Arc<Running> {
             applications: None,
         },
         known: Vec::new(),
+        blocked: Vec::new(),
+        resolver: None,
         hooks: None,
         hook_token: Some("door-secret".into()),
         smtp: None,

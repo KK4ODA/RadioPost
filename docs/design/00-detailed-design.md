@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.32 |
+| **Version** | 0.1.33 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -362,3 +362,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.30 | 2026-11-12 | §5.4: the Mercury adapter identifies the station after each session (RP-4 0.6.5). |
 | 0.1.31 | 2026-11-12 | D35: nobody becomes an operator by applying, and a code that makes one is confirmed (RP-5 0.15.0). |
 | 0.1.32 | 2026-11-12 | More than one post office, drafted for the author: D36, gateway lists from every post office the home knows; D37, copies placed ahead at gateways of other post offices; D38, a post office knows another by its operators' choice (RP-1 0.6.0, RP-5 0.16.0, RP-6 0.6.1, RP-7 0.9.0). The parts of §5 and §8 that change with them. |
+| 0.1.33 | 2026-11-12 | D36 to D38 decided by the author. D38 built: the post office's known, seen and blocked post offices (RP-1 §7.5), followed in DNS. |

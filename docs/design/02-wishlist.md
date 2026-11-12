@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.4 |
+| **Version** | 0.3.5 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -689,7 +689,7 @@ server up with one program instead of a page of commands.
 | Requested by | The author (KK4ODA), 2026-11-12: running radiopost.org had meant pasting Debian commands; a dashboard, registration approved by FCC and QRZ lookups, a terminal holding the login. Requesters: 1. |
 | Component | Post office, client; RP-5. |
 | Compatibility | **Optional addition** (RP-5 0.14.0): applications (§6.7) and the operator endpoints (§7), which a post office may offer and a client may use; the rest is `radiopost-po`'s own members and endpoints under `/office/`, which RP-5 §7.2 and §7.3 allow and other clients ignore. |
-| Existing coverage | Built (2026-11-12), design D35. The desk in the client (for the post office's operators, logged in with their own credential): applications approved, declined or sent a postcard, with the FCC copy's and QRZ's evidence; accounts and their devices; codes; mail out; the hourly checks, with an email when one turns red; jobs the server's administrator runs from a fixed list through a root-owned systemd unit; nightly backups and sealed ones downloaded; a terminal by the system's own SSH; the server's state copied for a Claude session. Approving makes the mailbox in Stalwart (or by a program) and emails the welcome. `radiopost-po install` sets a Debian server up step by step. Other post offices are still known only by `radiopost-po know` (gap G15). |
+| Existing coverage | Built (2026-11-12), design D35. The desk in the client (for the post office's operators, logged in with their own credential): applications approved, declined or sent a postcard, with the FCC copy's and QRZ's evidence; accounts and their devices; codes; mail out; the hourly checks, with an email when one turns red; jobs the server's administrator runs from a fixed list through a root-owned systemd unit; nightly backups and sealed ones downloaded; a terminal by the system's own SSH; the server's state copied for a Claude session. Approving makes the mailbox in Stalwart (or by a program) and emails the welcome. `radiopost-po install` sets a Debian server up step by step. Other post offices (gap G15, built 2026-11-12): known, seen and blocked on the desk's *Post offices* tab, followed in DNS. |
 | Dependencies | W10 (LoTW) would let an application be approved without a person. |
 | Effort | Large. |
 | Priority | **High.** Every new user needed a shell on the server. |
@@ -1043,7 +1043,7 @@ document.
 | G12 | RP-1 §6.3 | Step 3 compares the callsign a client was called at with its credential's exactly, so a client cannot answer under an SSID of its own callsign (RP-0 §6.1). | An operator's several stations must all answer at the bare callsign, and listeners cannot tell them apart. | For a client answering (RP-3 §10), compare base callsigns, as G10 proposes for step 2; gateways stay exact. | W45 |
 | G13 | RP-5 §4.4 | A client's gateway list is one post office's registrations; nothing says how to read the others'. | A user never sees the gateways registered with other post offices, though any gateway serves them. | Read from every post office the home lists, the home's record winning: drafted in RP-5 0.16.0, D36. | W17 |
 | G14 | RP-5 §5.8, RP-7 §4.1 | Copies at a gateway registered with another post office: where its record is found, how the gateway learns to poll there, and whose credential may collect them. A route through such a gateway has the same gaps. | Users' usual gateways must be registered with their own post office; the program skips the others without a word. | The record from the known post offices' lists, `placing` in the poll's answer, items only to the listing post office's credential: drafted in RP-5 0.16.0 and RP-7 0.9.0, D37. | W27, W30 |
-| G15 | RP-1 §7.3 | Which post offices a post office knows: §7.3 covers gateways only, and the door, RP-5 §2 and RP-6 §4 rest on it. | Each operator types the others' keys, which are never refreshed: a rotated key, or a revocation, is missed, and a new post office is found by nobody. | Known by the operators' choice, found as mail crosses, followed in DNS: drafted in RP-1 0.6.0 §7.5, D38. | W49 |
+| G15 | RP-1 §7.3 | Which post offices a post office knows: §7.3 covers gateways only, and the door, RP-5 §2 and RP-6 §4 rest on it. | Each operator types the others' keys, which are never refreshed: a rotated key, or a revocation, is missed, and a new post office is found by nobody. | Known by the operators' choice, found as mail crosses, followed in DNS: RP-1 0.6.0 §7.5, D38. **Built** (2026-11-12). | W49 |
 
 ---
 
@@ -1089,3 +1089,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.2 | 2026-11-12 | W20: the author's decision, built: the Mercury adapter identifies the station with `CQFRAME` after each session. |
 | 0.3.3 | 2026-11-12 | W20: the Mercury adapter passes A-01 to A-04 against two real Mercury 1.9.23 processes. |
 | 0.3.4 | 2026-11-12 | Gaps G13 to G15, found when asked how post offices work together: gateway lists, copies placed ahead and routes across post offices, and which post offices a post office knows; noted under W17, W27, W30 and W49, with the drafts that would close them (D36 to D38). |
+| 0.3.5 | 2026-11-12 | The author decided D36 to D38; G15 built: the post office knows others by its operators' choice, follows them in DNS, and shows those it met on the desk (W49). |

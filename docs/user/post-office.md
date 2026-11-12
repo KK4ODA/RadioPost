@@ -473,6 +473,7 @@ the service's own additions over HTTPS, as your credential.
 | Mail out | What waits to go on by email. |
 | Health | Every check, as `check` does it from outside, and what only the server sees: free disk, email stuck going out, last night's backup, whether the jobs runner is installed, a newer release. The service checks every hour and emails the contact address when a check turns red, and when all pass again. Give the DKIM selectors here once. |
 | Server | **Jobs** the server's administrator does for you: update, restart the post office or the mail server, copy the certificate, the services, both logs, disk, firewall, ports, logins, Debian's updates, `check`. The service asks; a root-owned systemd unit (`radiopost-po-jobs.path`) runs the job from a fixed list, programs and arguments with no shell, and its output comes back here. The installer puts the unit in place (`radiopost-po --dir /var/lib/radiopost jobs --install`). **Backups**: one each night beside the service, the last seven; *Download a backup* seals one with a passphrase of yours (PBKDF2, then ChaCha20-Poly1305) and keeps it on your computer in `RadioPost backups`. **When you need more**: a terminal on the server through your computer's own SSH, and *Copy for Claude*, the server's state (versions, checks, settings, the jobs' last output; no mail, names or keys) to paste into a Claude session. |
+| Post offices | The other post offices you know, those seen and not known (*Know*, *Block*), and those blocked (§13). |
 | Settings | Take applications; licence lookups (the FCC copy, QRZ); mailboxes; who operates it. |
 
 To restore a backup on a new server: install it (above), stop the service, then
@@ -484,3 +485,39 @@ systemctl start radiopost-po
 
 The mail server keeps its own mailboxes: back up `/var/lib/stalwart` with Stalwart stopped, or
 with its own tools.
+
+## 13. Other post offices
+
+Mail reaches every other post office as ordinary email, whether this one knows it or not. A post
+office it **knows** (RP-1 §7.5) is one whose word it takes that its users are licensed:
+
+* their mail needs no place on an accept list, and mail that keeps its sender's proof (RP-6 §4)
+  goes on the air without the third-party flag;
+* its gateways log in here, and its users' station-to-station reports are checked;
+* it is listed in this post office's `/post-offices`, for gateways and clients.
+
+Know only post offices whose operators you trust to check callsigns. At first none is known.
+
+**Seen.** The service notes the domains it meets: at the door, in mail your users send, on a
+credential it is shown, in a known post office's list. It looks each up in DNS on a thread of its
+own, and keeps those with a RadioPost record as *seen*, with who runs it and whether DNSSEC signed
+its records. The desk's **Post offices** tab shows them: *Know* one, or *Block* it so that it is not
+shown again. From the server:
+
+```
+radiopost-po --dir /var/lib/radiopost know --domain hampost.org
+radiopost-po --dir /var/lib/radiopost post-offices
+radiopost-po --dir /var/lib/radiopost post-offices --block spam-relay.example
+```
+
+`know` shows what it found in DNS before it takes the post office. For each post office it knows,
+the service fetches its DNS records, info document and revocation list at once and every six
+hours, and checks them: the documents must be signed by a key in its DNS, and the info document
+must name the domain. A key the other post office rotates is followed, and a credential it revokes
+is refused here from the next fetch. When a fetch fails, what was last fetched whole is kept and
+the desk says why; one not fetched for a day turns the health check red, since its revocations may
+be missed.
+
+`config.json` holds `known` (the domains you accepted; an entry may carry an `api` and `keys` typed
+with `know --public` for a post office not in DNS yet, used until one is fetched), `blocked`, and
+`resolver` (where DNS is asked over HTTPS; Google's when unset).

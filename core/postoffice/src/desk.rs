@@ -73,6 +73,7 @@ impl Running {
                         | "/office/mailboxes/check"
                 )
                 | ("GET" | "PUT", "/office/settings")
+                | ("GET" | "POST", "/office/post-offices")
         ) || (method == "GET" && route.starts_with("/office/lookup/"))
             || matches!(
                 (method, route),
@@ -128,6 +129,15 @@ impl Running {
             }
             ("GET", "/office/settings") => ok(&self.desk_settings()),
             ("POST", "/office/mailboxes/check") => ok(&self.check_mailboxes()),
+            ("GET", "/office/post-offices") => ok(&self.post_offices_view()),
+            ("POST", "/office/post-offices") => match self.post_office_decision(body) {
+                Ok(said) => {
+                    eprintln!("radiopost-po: {who}: {said}");
+                    ok(&self.post_offices_view())
+                }
+                Err(400) => refused(ErrorCode::Malformed, 400),
+                Err(_) => refused(ErrorCode::Internal, 500),
+            },
             _ => match self.put_settings(body) {
                 Ok(said) => {
                     eprintln!("radiopost-po: {who} changed the settings: {said}");
@@ -170,6 +180,19 @@ impl Running {
                     .to_string(),
             ),
             ("POST", "/mailboxes/check") => (200, self.check_mailboxes().to_string()),
+            ("GET", "/post-offices") => (200, self.post_offices_view().to_string()),
+            ("POST", "/post-offices") => match self.post_office_decision(body) {
+                Ok(said) => {
+                    eprintln!("radiopost-po: the operator's port: {said}");
+                    (200, self.post_offices_view().to_string())
+                }
+                Err(_) => (
+                    400,
+                    json!({"error": "one of accept, block, unblock, forget with a domain not \
+                                     this post office's, or refresh"})
+                    .to_string(),
+                ),
+            },
             ("POST", "/health") => (200, self.health_now().to_string()),
             ("POST", "/licences") => (
                 200,
@@ -379,6 +402,20 @@ impl Running {
         Ok(said.join(", "))
     }
 
+    /// `POST /office/post-offices`: one of `{"accept": D}`, `{"block": D}`, `{"unblock": D}`,
+    /// `{"forget": D}`, or `{"refresh": true}` (RP-1 §7.5).
+    fn post_office_decision(&self, body: &Json) -> Result<String, u16> {
+        if body.get("refresh").and_then(Json::as_bool) == Some(true) {
+            return self.decide_post_office("refresh", "");
+        }
+        for action in ["accept", "block", "unblock", "forget"] {
+            if let Some(domain) = body.get(action).and_then(Json::as_str) {
+                return self.decide_post_office(action, domain);
+            }
+        }
+        Err(400)
+    }
+
     /// Changes the settings at once, and keeps them in `config.json`.
     ///
     /// # Errors
@@ -391,8 +428,12 @@ impl Running {
             "config.json",
             &serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?,
         )?;
-        self.office().config.applications_open =
-            settings.info.applications.as_deref() == Some("open");
+        {
+            let mut office = self.office();
+            office.config.applications_open = settings.info.applications.as_deref() == Some("open");
+            // the post offices its operators accept or block count at once (RP-1 §7.5)
+            office.config.trust = crate::serve::trust_of(&settings, &office.config.key);
+        }
         self.set_settings(settings);
         Ok(())
     }
@@ -441,6 +482,7 @@ impl Running {
         status["version"] = json!(env!("CARGO_PKG_VERSION"));
         status["update"] = json!(self.update_status());
         status["outgoing"] = json!(office.state.outgoing.len());
+        status["seen"] = json!(office.state.seen.len()); // RP-1 §7.5: for the operators to decide
         status["applications_open"] = json!(settings.info.applications.as_deref() == Some("open"));
         status["operators"] = json!(settings.operators());
         status["domains"] = json!(settings.domains);

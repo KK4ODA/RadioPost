@@ -13,6 +13,7 @@ pub mod evidence;
 pub mod health;
 pub mod install;
 pub mod jobs;
+pub mod known;
 pub mod licences;
 pub mod lookups;
 pub mod mail;

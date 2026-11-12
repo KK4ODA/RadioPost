@@ -113,7 +113,21 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 label.inline { display: flex; align-items: center; gap: 6px; margin: 0; }
 label.inline input { width: 7em; margin: 0; }
 .list .n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-#waiting-view .list td, #gateways-view .list td { cursor: default; }
+#waiting-view .list td, #gateways-view .list td, #o-others .list td { cursor: default; }
+#o-others td.acts button { margin-left: 6px; }
+#o-others th { white-space: nowrap; }
+.scroll { overflow-x: auto; }
+@media (max-width: 640px) {
+  #o-others .list thead { display: none; }
+  #o-others .list, #o-others .list tbody, #o-others .list tr, #o-others .list td {
+    display: block; width: auto; }
+  #o-others .list tr { border-bottom: 1px solid var(--line); padding: 6px 0; }
+  #o-others .list td { border-bottom: none; padding: 2px 8px; }
+  #o-others td.acts { text-align: left; }
+  #o-others td[data-label]:not(:empty)::before { content: attr(data-label) ": "; color: var(--muted); }
+  #o-others td.acts button { margin: 6px 6px 0 0; }
+}
+.trouble { color: var(--bad); font-size: 13px; }
 .list input[type=checkbox] { width: auto; height: auto; margin: 0; }
 .nowrap { white-space: nowrap; }
 .lines { white-space: pre-line; }

@@ -66,6 +66,8 @@ fn settings() -> Settings {
             applications: None,
         },
         known: Vec::new(),
+        blocked: Vec::new(),
+        resolver: None,
         hooks: None,
         hook_token: None,
         smtp: None,

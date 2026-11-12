@@ -35,8 +35,9 @@ pub struct Info {
     pub not_before: u64,
     /// The end of its key's validity.
     pub not_after: u64,
-    /// The post offices it knows and trusts, as `/post-offices` lists them (RP-5 §4.3).
-    #[serde(default)]
+    /// The post offices it knows, as `/post-offices` lists them (RP-5 §4.3): filled from the
+    /// known post offices when the list is published, never kept in `config.json`.
+    #[serde(default, skip_serializing)]
     pub post_offices: Vec<Json>,
     /// `open` when it takes applications for accounts (RP-5 §4.1, §6.7).
     #[serde(default, skip_serializing_if = "Option::is_none")]
