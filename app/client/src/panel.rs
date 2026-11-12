@@ -467,6 +467,10 @@ impl Panel {
             (Method::Post, p) if ONLINE.contains(&p) => self.online(path, body),
             (Method::Post, "/api/office") => self.office(body),
             (Method::Post, "/api/office-backup") => self.office_backup(body),
+            (Method::Post, "/api/terminal") => {
+                let target = body["target"].as_str().unwrap_or("").trim();
+                Ok(json!({"opened": crate::terminal::open(target)?}))
+            }
             (Method::Post, "/api/update") => self.update(),
             (Method::Post, "/api/stop") => {
                 self.stop.store(true, Ordering::Relaxed);

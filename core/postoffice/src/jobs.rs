@@ -105,6 +105,21 @@ pub fn table(dir: &Path, exe: &Path) -> Vec<Job> {
             commands: vec![cmd(&["df", "-h", "/", &dir])],
         },
         Job {
+            name: "firewall",
+            what: "The firewall's rules",
+            commands: vec![cmd(&["ufw", "status", "verbose"])],
+        },
+        Job {
+            name: "ports",
+            what: "What listens on which port",
+            commands: vec![cmd(&["ss", "-tlnp"])],
+        },
+        Job {
+            name: "logins",
+            what: "Who logged in to the server lately",
+            commands: vec![cmd(&["last", "-n", "20", "-a"])],
+        },
+        Job {
             name: "system-updates",
             what: "Debian's security updates, now rather than tonight",
             commands: vec![cmd(&["unattended-upgrade", "-v"])],

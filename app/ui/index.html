@@ -260,6 +260,22 @@
             <div id="o-jobs"></div>
           </div>
           <div class="card">
+            <h2>When you need more</h2>
+            <p class="note">For what no job does, a terminal on the server: this computer's own SSH, with the key in its own agent. The desk keeps no password and no key of the server's.</p>
+            <div class="row">
+              <input id="o-ssh" class="grow" placeholder="root@po.radiopost.org" spellcheck="false" autocomplete="off" title="The server's login, user@host (or user@host:port)">
+              <button type="button" id="o-term" title="Open a terminal on this computer, logged in to the server by SSH">Open a terminal</button>
+            </div>
+            <details class="hint">
+              <summary>Setting up the key, once</summary>
+              <p class="note">On Windows, in PowerShell: <code>ssh-keygen -t ed25519</code>, then put the line in <code>%USERPROFILE%\.ssh\id_ed25519.pub</code> in the server's <code>/root/.ssh/authorized_keys</code> (your hosting provider's panel has a place for SSH keys). With a passphrase, <code>Start-Service ssh-agent</code> and <code>ssh-add</code> keep it unlocked while you are logged in.</p>
+            </details>
+            <div class="row">
+              <button type="button" class="quiet" id="o-claude" title="Copy what a Claude session needs to help with the server: versions, checks, settings and the jobs' last output. No mail, no names, no keys">Copy for Claude</button>
+            </div>
+            <textarea id="o-claude-text" rows="10" spellcheck="false" readonly hidden></textarea>
+          </div>
+          <div class="card">
             <h2>Backups</h2>
             <p class="note">Each night the server keeps a backup beside itself, the last seven. Keep one on this computer too, sealed with a passphrase, in case the server is lost: it holds the post office's key.</p>
             <table class="list" aria-label="Backups on the server">

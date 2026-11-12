@@ -984,6 +984,7 @@ function officeSummary() {
   const s = office.status || {};
   $("o-domain").textContent = (s.domains || []).join(", ");
   if (s.domains && s.domains[0]) $("o-code").address.placeholder = `ana@${s.domains[0]}`;
+  if (!$("o-ssh").value && s.domains && s.domains[0]) $("o-ssh").placeholder = `root@po.${s.domains[0]}`;
   const parts = [`${s.accounts ?? 0} accounts`, `${s.applications ?? 0} waiting`,
                  `${s.codes ?? 0} codes out`, `${s.sessions ?? 0} sessions open`];
   if (s.outgoing) parts.push(`${s.outgoing} going out by email`);
@@ -1296,6 +1297,37 @@ async function renderServer() {
   if (!(b.backups || []).length) $("o-backups").append(el("tr", {}, el("td", {class: "note", colspan: "3", text: "None yet: the first is made tonight."})));
 }
 
+// what a Claude session needs to help with the server: no mail, no names, no keys
+async function forClaude() {
+  const [status, health, jobs, settings] = await Promise.all([
+    desk("GET", "/office/status"), desk("GET", "/office/health"),
+    desk("GET", "/office/jobs"), desk("GET", "/office/settings")]);
+  const out = [];
+  out.push(`# RadioPost post office ${(status.domains || []).join(", ")}: the server, for a Claude session`);
+  out.push("");
+  out.push(`radiopost-po ${status.version || "?"}${status.update && status.update.offer ? ` (${status.update.offer.version} is out)` : ""}. ` +
+    "The guide it was set up by: docs/user/post-office.md in KK4ODA/RadioPost (Debian, Stalwart behind Caddy).");
+  out.push(`Accounts ${status.accounts}, applications waiting ${status.applications}, codes out ${status.codes}, ` +
+    `sessions open ${status.sessions}, email waiting to go out ${status.outgoing ?? 0}.`);
+  out.push(`Applications ${settings.applications}; FCC copy ${settings.fcc && settings.fcc.on ? `on (${settings.fcc.count} callsigns)` : "off"}; ` +
+    `QRZ ${settings.qrz && settings.qrz.username ? "on" : "off"}; mailboxes ${(settings.mailboxes && settings.mailboxes.kind) || "by hand"}; ` +
+    `submission port ${settings.smtp ? "set" : "not set"}; DKIM selectors ${(settings.dkim || []).join(", ") || "none given"}.`);
+  out.push("");
+  out.push(`## Checks (${health.at ? new Date(health.at * 1000).toISOString() : "never"})`);
+  for (const l of health.lines || []) out.push(`${l.verdict.toUpperCase().padEnd(4)}  ${l.text}`);
+  out.push("");
+  out.push(`## Jobs (runner ${jobs.runner ? "installed" : "NOT installed"})`);
+  for (const j of jobs.jobs || []) {
+    if (!j.last) continue;
+    out.push(`### ${j.name}: ${j.last.ok ? "done" : "FAILED"} ${new Date(j.last.finished * 1000).toISOString()}`);
+    const lines = (j.last.output || "").trimEnd().split("\n");
+    out.push("```", ...lines.slice(-60), "```");
+  }
+  out.push("");
+  out.push("What I need help with: ");
+  return out.join("\n");
+}
+
 async function downloadBackup() {
   const p1 = $("o-pass1").value;
   if (p1.length < 12) { toast("A passphrase of 12 characters or more.", true); return; }
@@ -1487,6 +1519,24 @@ function wire() {
   $("o-dkim-save").addEventListener("click", () => settingsChange(
     {dkim: $("o-dkim").value.split(/[\s,]+/).filter(Boolean)}, "The hourly check asks for these from now on."));
   $("o-backup").addEventListener("click", downloadBackup);
+  $("o-ssh").value = kept("ssh", "");
+  $("o-term").addEventListener("click", async () => {
+    const target = $("o-ssh").value.trim();
+    keep("ssh", target);
+    try { toast(`Opened ${(await api("terminal", {target})).opened}`); } catch (e) { toast(e.message, true); }
+  });
+  $("o-claude").addEventListener("click", async () => {
+    try {
+      const text = await forClaude();
+      const area = $("o-claude-text");
+      area.value = text;
+      area.hidden = false;
+      try { await navigator.clipboard.writeText(text); toast("Copied: paste it into a Claude session, and say what you need."); }
+      catch { area.select(); toast("Select the text below and copy it.", true); }
+    } catch (e) {
+      toast(e.message, true);
+    }
+  });
   $("o-mb-save").addEventListener("click", () => {
     const m = {kind: $("o-mb-kind").value, url: $("o-mb-url").value.trim(), command: $("o-mb-cmd").value.trim()};
     if ($("o-mb-key").value) m.api_key = $("o-mb-key").value;

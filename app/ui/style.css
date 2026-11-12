@@ -309,3 +309,7 @@ button.link { height: auto; padding: 0; border: 0; background: none; color: var(
            border-radius: 6px; padding: 8px; font-family: var(--mono); font-size: 12px; margin: 6px 0 0; }
 details.card summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; }
 details.card[open] summary { margin-bottom: 8px; }
+details.hint summary { cursor: pointer; color: var(--accent); font-size: 13px; margin: 2px 0 8px; }
+details.hint code, .note code { font-family: var(--mono); font-size: 12px; background: var(--bg);
+                                padding: 0 4px; border-radius: 4px; }
+#o-claude-text { font-family: var(--mono); font-size: 12px; margin-top: 8px; }

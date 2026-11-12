@@ -13,6 +13,7 @@
 //!   radio.
 //! * [`grid`]: Maidenhead grid squares, to rank gateways by distance.
 //! * [`panel`]: the page in `app/ui/` and its JSON API, served on the loopback interface.
+//! * [`terminal`]: a terminal on the post office's server, over SSH, for its operators.
 //!
 //! `radiopost` is its command-line program; the desktop application (Tauri, D27) is built on the
 //! same library. Both keep what they say in [`LOG_FILE`] in the home ([`logfile`]).
@@ -29,3 +30,4 @@ pub mod panel;
 pub mod renewal;
 pub mod session;
 pub mod store;
+pub mod terminal;
