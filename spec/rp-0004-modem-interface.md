@@ -270,7 +270,7 @@ Aether's control API (JSON over WebSocket, `ws://127.0.0.1:8515/v1`) carries RPM
 * Each program **claims** the callsigns it answers for, and the first claim on a callsign holds it.
 * A claim starts with answering off, and lasts as long as the WebSocket connection that made it.
 * Every `state` event says whose call or session it is (`owner`, the claim's `id`).
-* From 0.2.0-beta.148 (its
+* From 0.2.0-beta.149 (its
   [ADR-0108](https://github.com/KK4ODA/aether-hf/blob/master/docs/adr/0108-every-program-speaks-for-the-station-and-setup-says-whose-callsign-it-is.md)),
   while any claim stands, its program speaks for the station. Aether's own callsigns that no
   program holds are not answered, and Aether's Setup shows the program's callsign in their
@@ -313,7 +313,7 @@ identifier itself. A future Aether may speak RPMI natively.
 **Beside a program on Aether's VARA-compatible port.** RMS Trimode, Winlink Express or VarAC on
 Aether's VARA-compatible host port holds the callsigns its `MYCALL` names. While such a program is
 attached, Aether answers none of its own callsigns that the program does not hold (from
-0.2.0-beta.148, the same holds while an RPMI host's claim stands). Give the
+0.2.0-beta.149, the same holds while an RPMI host's claim stands). Give the
 RadioPost host callsigns of its own: `N1CALL-10` beside Trimode's `N1CALL-1`, for example. Each
 program then answers only for its own callsigns, is told nothing of the other's sessions, and
 sees them as `busy`.
@@ -407,4 +407,4 @@ left, not when the other host holds them.
 | 0.5.0 | 2026-11-09 | A host that leaves ends its call and its links (§1.1): the Aether adapter had let its callsigns go and left the session up, found by running the conformance tester's A-02 over two Aether daemons. §9.5, found by writing the TCP adapter: the link on an amateur mesh is plain TCP, since a mesh is on the air (RP-0 §5), and TLS only on the Internet; the opening lines two TCP adapters agree a link with (normative), the port, what `remote` may be, and what the caller's host hears. |
 | 0.6.0 | 2026-11-12 | An adapter that loses its modem tells the host what that ended and closes its connection (§2.1, §9.1): two Setup saves restarted a gateway's Aether on the air, the Aether adapter kept RadioPost Gateway's connection open, and the gateway listened for an hour and a half while Aether, its claim gone, answered the gateway's callsign for nobody. |
 | 0.6.1 | 2026-11-12 | §9.1: what Aether 0.2.0-beta.147 does itself when a host's WebSocket closes (ends its call or session), and that under automatic control it answers calls only for a listening claim (its ADR-0107). |
-| 0.6.2 | 2026-11-12 | §9.1: from Aether 0.2.0-beta.148 (its ADR-0108) a claim speaks for the station. Aether's own callsigns are not answered while one stands, and its Setup shows the program's callsign; nothing asks the operator to copy a host's callsign into Aether. |
+| 0.6.2 | 2026-11-12 | §9.1: from Aether 0.2.0-beta.149 (its ADR-0108) a claim speaks for the station. Aether's own callsigns are not answered while one stands, and its Setup shows the program's callsign; nothing asks the operator to copy a host's callsign into Aether. |

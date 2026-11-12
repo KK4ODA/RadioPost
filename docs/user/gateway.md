@@ -15,7 +15,7 @@ session to the user's own post office over the Internet (RP-3 §9, RP-5 §5).
   callsign, in its Setup step 1, is yours, and need not match the gateway's; do not copy the
   gateway's into Aether.
   * While RadioPost Gateway runs, it answers for the station. Aether answers only the gateway's
-    callsign, and from Aether 0.2.0-beta.148 its Setup shows it in place of its own, greyed:
+    callsign, and from Aether 0.2.0-beta.149 its Setup shows it in place of its own, greyed:
     *KK4ODA-1 · RadioPost Gateway*.
   * When the gateway stops, Aether's own callsign comes back.
 * **Aether keying the radio itself**: in Aether's Setup step 2, CAT, serial, rigctld, FLRig,
