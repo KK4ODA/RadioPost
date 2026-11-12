@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.6.5 |
+| **Version** | 0.6.6 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -465,8 +465,10 @@ carries the callsign and which every Mercury decodes and reports as `CQFRAME <ca
 Mercury keys a CQ frame at once, whatever is on the air, so the adapter chooses the moment. It sends
 one only when no call, link or `ABORT`'s DISCONNECT frame of the station's is under way and Mercury
 is not answering a call. The station called identifies first, two seconds after the session's end,
-clear of the other station's last answer. The caller waits until it hears that `CQFRAME`, or 35
-seconds, and then identifies, so the two do not key at once. A `connect` waits until the station has
+clear of the other station's last answer. The caller waits until it hears that `CQFRAME`, and then
+0.7 s more, or 35 seconds, and then identifies, so the two do not key at once. A frame decodes about
+0.2 s before its sender unkeys, and a radio takes about 0.34 s to turn from sending to hearing:
+Mercury waits the same 0.7 s before it answers a frame (its `ARQ_CHANNEL_GUARD_MS`). A `connect` waits until the station has
 identified. Mercury reports the CQ frame's transmission with `PENDING` and `CANCELPENDING`, which
 the adapter does not take for a call. A station still identifies after its host has gone.
 
@@ -497,3 +499,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 0.6.3 | 2026-11-12 | §9.1: the adapter offers the program's log to Aether (`share.include`, Aether 0.2.0-beta.150), which puts it in the files a station shares; the log names no correspondent and no subject. |
 | 0.6.4 | 2026-11-12 | §9.6, Mercury, found by writing its adapter from Mercury's `docs/TNC.md` and its source: the mapping; one program at a time; `LISTEN OFF` held until nothing of the host's is up, since Mercury's ends a session unsaid; no `CONNECT` for a second after a command that Mercury may answer with a `DISCONNECTED` of no session; `BUFFER` as delivery, and when its 0 is believed; the callsigns Mercury can carry; and that Mercury neither checks band rules nor identifies the station. |
 | 0.6.5 | 2026-11-12 | §9.6: the Mercury adapter identifies the station with `CQFRAME` after each session, and after answers that came to none; the station called first, the caller once it has heard it; a `connect` waits for it, and so its `ok` comes at once and Mercury's refusal is `failed` `refused`. |
+| 0.6.6 | 2026-11-12 | §9.6, found by running the adapter on two Mercury 1.9.23 processes: the caller waits 0.7 s after it has heard the called station's `CQFRAME`, as Mercury waits before it answers a frame; without it the caller keyed 0.13 s before the called station had unkeyed. |

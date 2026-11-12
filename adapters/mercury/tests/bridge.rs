@@ -364,6 +364,7 @@ fn a_call_goes_out_under_the_callsign_it_names_at_the_bandwidth_it_names() {
         "the station identifies first"
     );
     rig.modem("CQFRAME N1CALL-10 500");
+    assert_eq!(asked(&rig.later(700)), ["CQFRAME KK4ODA-7 500"]);
     rig.modem("OK");
     rig.modem("PENDING");
     assert_eq!(
@@ -924,10 +925,10 @@ fn the_caller_identifies_after_the_station_it_called() {
     );
     // another station's CQ is not the one waited for
     assert_eq!(rig.modem("CQFRAME W1AW 2300"), Vec::<Out>::new());
-    assert_eq!(
-        asked(&rig.modem("CQFRAME n1call-10 2300")),
-        ["CQFRAME KK4ODA 2300"]
-    );
+    assert_eq!(rig.modem("CQFRAME n1call-10 2300"), Vec::<Out>::new());
+    // as Mercury waits before it answers a frame: the frame decodes before its sender unkeys
+    assert_eq!(rig.later(699), Vec::<Out>::new());
+    assert_eq!(asked(&rig.later(1)), ["CQFRAME KK4ODA 2300"]);
     identified(&mut rig);
     assert_eq!(rig.modem("CANCELPENDING"), Vec::<Out>::new());
 

@@ -16,8 +16,8 @@
 //! * `BUFFER` is what the other station has not confirmed, counted every tenth of a second, and
 //!   once on every write to the data port before the bytes written are taken in;
 //! * `CQFRAME` keys at once, whatever is on the air, between `PENDING` and `CANCELPENDING`, and
-//!   the other modem says `CQFRAME <callsign> <bandwidth>` when it has heard it; a CALL waits
-//!   while the other station is on the air.
+//!   the other modem says `CQFRAME <callsign> <bandwidth>` when it has heard it, a little before
+//!   the sender unkeys; a CALL waits while the other station is on the air.
 //!
 //! It logs two transmissions at once when either is a `CQFRAME`, and keeps the `CQFRAME`s heard
 //! ([`Air::idents`]).
@@ -44,6 +44,9 @@ const WATCHDOG_MS: u64 = 4000;
 const BUFFER_MS: u64 = 100;
 const ROUND_BYTES: usize = 4096;
 const CQ_MS: u64 = 120;
+/// How much sooner than its sender unkeys a frame is decoded: Mercury's comment on
+/// `ARQ_CHANNEL_GUARD_MS` says about 0.2 s of a 3.7 s frame, which two Mercury processes bore out.
+const DECODED_EARLY_MS: u64 = 40;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Phase {
@@ -100,10 +103,14 @@ enum Ev {
     CallKey {
         caller: usize,
     },
-    CqOut {
+    CqHeard {
         at: usize,
         callsign: String,
         bw: i64,
+    },
+    CqOut {
+        at: usize,
+        callsign: String,
     },
 }
 
@@ -281,11 +288,10 @@ impl Inner {
         }
     }
 
-    /// The CQ frame is out: the other modem has heard it.
-    fn cq_out(&mut self, at: usize, callsign: String, bw: i64) {
+    /// The CQ frame is out.
+    fn cq_out(&mut self, at: usize, callsign: String) {
         self.tnc[at].say("PTT OFF");
         self.tnc[at].say("CANCELPENDING");
-        self.tnc[1 - at].say(&format!("CQFRAME {callsign} {bw}"));
         self.idents.push((at, callsign));
     }
 
@@ -301,12 +307,14 @@ impl Inner {
         self.tnc[at].say("PENDING");
         self.key(at, CQ_MS);
         self.cq_air[at] = now + CQ_MS;
-        let ev = Ev::CqOut {
+        let callsign = callsign.to_ascii_uppercase();
+        let heard = Ev::CqHeard {
             at,
-            callsign: callsign.to_ascii_uppercase(),
+            callsign: callsign.clone(),
             bw,
         };
-        self.after(CQ_MS, at, ev);
+        self.after(CQ_MS - DECODED_EARLY_MS, at, heard);
+        self.after(CQ_MS, at, Ev::CqOut { at, callsign });
     }
 
     /// The host's `ABORT`, or a second `DISCONNECT`: `DISCONNECTED` at once, the frame after.
@@ -553,7 +561,11 @@ impl Inner {
                     self.call_key(caller);
                 }
             }
-            Ev::CqOut { at, callsign, bw } => self.cq_out(at, callsign, bw),
+            Ev::CqHeard { at, callsign, bw } => {
+                // decoded before its sender has unkeyed, as Mercury's frames are
+                self.tnc[1 - at].say(&format!("CQFRAME {callsign} {bw}"));
+            }
+            Ev::CqOut { at, callsign } => self.cq_out(at, callsign),
             Ev::Watchdog { at } => {
                 if matches!(self.tnc[at].phase, Phase::Up { .. }) {
                     self.tnc[at].ended();
@@ -581,6 +593,7 @@ impl Inner {
                 | Ev::GaveUp { caller }
                 | Ev::CallKey { caller } => *caller,
                 Ev::CqOut { at, .. }
+                | Ev::CqHeard { at, .. }
                 | Ev::TakeIn { at, .. }
                 | Ev::Confirm { at, .. }
                 | Ev::Unkey { at }
@@ -589,7 +602,9 @@ impl Inner {
                 Ev::Arrive { to, .. } => 1 - *to,
             };
             // PTT OFF and a CQ frame belong to the transmitter, not to a session
-            if serial == self.tnc[at].serial || matches!(ev, Ev::Unkey { .. } | Ev::CqOut { .. }) {
+            if serial == self.tnc[at].serial
+                || matches!(ev, Ev::Unkey { .. } | Ev::CqOut { .. } | Ev::CqHeard { .. })
+            {
                 self.fire(ev);
             }
         }

@@ -61,6 +61,11 @@ const EARLY_MAX: usize = 65536;
 /// How long the called station waits after a session's end before it identifies: the other
 /// station's last answer, a reply pattern of 0.64 s, comes 0.7 s after ours.
 const GUARD_MS: u64 = 2000;
+/// How long the caller waits after it has heard the called station identify: a frame decodes about
+/// 0.2 s before its sender unkeys, and a radio takes about 0.34 s to turn from sending to hearing.
+/// Mercury waits as long before it answers a frame (`ARQ_CHANNEL_GUARD_MS`). Found on two Mercury
+/// processes: without it, the caller keyed 0.13 s before the called station had unkeyed.
+const HEARD_MS: u64 = 700;
 /// How long the caller waits to hear the called station identify before it identifies anyway: a
 /// CQ frame, the size of a CALL, is 3.74 s on DATAC16 and 27 s on the 500 Hz floor of a station
 /// that sends only MFSK (Mercury's `docs/TNC.md`).
@@ -918,8 +923,7 @@ impl Bridge {
                 let heard = rest.split_whitespace().next().unwrap_or("");
                 if self.ident_peer.as_deref().is_some_and(|p| same(p, heard)) {
                     self.ident_peer = None;
-                    self.ident_after = self.now;
-                    self.identify(&mut out);
+                    self.ident_after = self.now + HEARD_MS;
                 }
             }
             "BUFFER" => {
