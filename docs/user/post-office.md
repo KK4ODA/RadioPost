@@ -240,7 +240,7 @@ answers `451 4.7.1`, and the sending server tries again. Addresses that are no R
 
 ```
 apt install -y unzip
-curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.7/radiopost-tools-linux-x64.zip
+curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.8/radiopost-tools-linux-x64.zip
 unzip radiopost-tools-linux-x64.zip
 install -m 0755 radiopost-tools-linux-x64/radiopost-po /usr/local/bin/
 useradd --system --home-dir /var/lib/radiopost --create-home --shell /usr/sbin/nologin radiopost
