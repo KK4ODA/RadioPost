@@ -2,7 +2,7 @@
 [package]
 name = "radiopost-app"
 description = "RadioPost, the desktop application: the client's panel in a window of its own."
-version = "0.1.0-beta.8"
+version = "0.1.0-beta.9"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
