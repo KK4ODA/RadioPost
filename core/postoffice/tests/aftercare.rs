@@ -155,6 +155,7 @@ fn an_approved_account_gets_its_mailbox_and_its_welcome() {
             api_key: Some("stalwart-key".into()),
             ..MailboxSettings::default()
         },
+        health: radiopost_postoffice::serve::HealthSettings::default(),
     };
     files
         .write(

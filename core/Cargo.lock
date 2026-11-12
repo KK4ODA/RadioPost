@@ -1454,6 +1454,7 @@ dependencies = [
  "radiopost-api",
  "radiopost-tester",
  "radiopost-update",
+ "ring",
  "serde",
  "serde_json",
  "sha2 0.11.0",

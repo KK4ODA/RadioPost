@@ -36,7 +36,7 @@ impl Running {
 
     /// Sends one email from the post office's contact address; `Ok(false)` when it has no
     /// submission port to send through.
-    fn email(&self, to: &str, subject: &str, text: &str) -> Result<bool, String> {
+    pub(crate) fn send_notice(&self, to: &str, subject: &str, text: &str) -> Result<bool, String> {
         let settings = self.settings();
         let Some(smtp) = settings.smtp.as_deref() else {
             return Ok(false);
@@ -54,7 +54,7 @@ impl Running {
         };
         let (subject, text) = notices::new_application(&a);
         let to = self.settings().info.contact;
-        match self.email(&to, &subject, &text) {
+        match self.send_notice(&to, &subject, &text) {
             Ok(true) => eprintln!("radiopost-po: told {to} of {}'s application", a.operator),
             Ok(false) => {}
             Err(e) => eprintln!(
@@ -104,7 +104,7 @@ impl Running {
         else {
             return;
         };
-        let told = match self.email(&a.contact, &subject, &text) {
+        let told = match self.send_notice(&a.contact, &subject, &text) {
             Ok(true) => {
                 eprintln!(
                     "radiopost-po: told {} of the decision on {}",

@@ -288,3 +288,24 @@ button.link { height: auto; padding: 0; border: 0; background: none; color: var(
 .applied[data-status="declined"], .applied[data-status="forgotten"] { border-color: var(--bad); }
 .applied[data-status="postcard"] { border-color: var(--busy); }
 .applied-what { margin: 0 0 4px; font-weight: 600; }
+
+/* the desk's Health and Server tabs */
+.tabs .count.bad { color: var(--bad); font-weight: 600; }
+.checks { list-style: none; margin: 0 0 14px; padding: 0; }
+.checks li { display: flex; gap: 10px; padding: 6px 2px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.checks .mark { width: 1.2em; flex: none; text-align: center; font-weight: 700; }
+.checks li.ok .mark { color: var(--ok); }
+.checks li.fail .mark { color: var(--bad); }
+.checks li.fail { background: color-mix(in srgb, var(--bad) 7%, transparent); }
+.checks li.note .mark { color: var(--muted); }
+.grow-text { flex: 1; align-self: center; }
+.job { border-top: 1px solid var(--line); padding: 10px 0; }
+.job:first-child { border-top: 0; }
+.job-head { display: flex; align-items: center; gap: 10px; }
+.job-what { flex: 1; }
+.job-what b { font-family: var(--mono); font-size: 13px; font-weight: 600; margin-right: 6px; }
+.job-last { font-size: 13px; color: var(--muted); margin: 4px 0 0; }
+.job pre { max-height: 22em; overflow: auto; background: var(--bg); border: 1px solid var(--line);
+           border-radius: 6px; padding: 8px; font-family: var(--mono); font-size: 12px; margin: 6px 0 0; }
+details.card summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; }
+details.card[open] summary { margin-bottom: 8px; }

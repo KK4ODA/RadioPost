@@ -48,6 +48,14 @@ usage: radiopost-po --dir DIR COMMAND
                      RADIOPOST_PASSWORD); --check asks without making one
   lookup CALL [--name NAME]
                      what the post office finds of a callsign: the FCC copy, QRZ, its history
+  health             check the post office now, as the service does each hour, and say how it went
+  jobs [--install]   run the jobs the desk asked for (the root-owned runner does, as root); with
+                     --install, put that runner in place once (run with sudo)
+  backup --to FILE [--passphrase-file F]
+                     the post office's key, settings and state in one file, sealed with the
+                     passphrase in F when given
+  restore FILE [--force] [--passphrase-file F]
+                     put a backup's files back (stop the service first)
   approve ID [--role] | decline ID --text TEXT | postcard ID
                      decide an application: its credential issued, refused with a reason, or a
                      code made to send by post to the address on the licence
@@ -135,6 +143,7 @@ fn init(files: &Files, a: &Args) -> Result<(), String> {
         operators: Vec::new(),
         lookups: radiopost_postoffice::lookups::LookupSettings::default(),
         mailboxes: radiopost_postoffice::mailboxes::MailboxSettings::default(),
+        health: radiopost_postoffice::serve::HealthSettings::default(),
     };
     let hex: String = radiopost::cbor::hex(&seed);
     files.write("key.hex", &(hex + "\n"))?;
@@ -213,6 +222,10 @@ fn check(files: &Files, a: &Args) -> Result<(), String> {
                 .collect()
         })
         .unwrap_or_default();
+    if !selectors.is_empty() {
+        // the hourly check asks the same from now on
+        let _ = admin(files, "PUT", "/settings", &json!({"dkim": selectors}));
+    }
     let mut lines = check::run(&settings, &public, &resolver, &selectors);
     lines.push(update_line());
     lines.push(match admin(files, "GET", "/status", &Json::Null) {
@@ -402,6 +415,77 @@ fn lookup(files: &Files, a: &Args) -> Result<(), String> {
         println!("  ! {}", flag.as_str().unwrap_or(""));
     }
     Ok(())
+}
+
+/// `health`, `jobs`, `backup`, `restore`: the server's own care.
+fn care(dir: &std::path::Path, files: &Files, a: &Args, command: &str) -> Result<(), String> {
+    match command {
+        "health" => {
+            let h = admin(files, "POST", "/health", &Json::Null)?;
+            for l in h["lines"].as_array().into_iter().flatten() {
+                let mark = match l["verdict"].as_str() {
+                    Some("ok") => "ok  ",
+                    Some("fail") => "FAIL",
+                    _ => "note",
+                };
+                println!("{mark}  {}", l["text"].as_str().unwrap_or(""));
+            }
+            Ok(())
+        }
+        "jobs" => {
+            let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+            if a.has("--install") {
+                println!("{}", radiopost_postoffice::jobs::install(dir, &exe)?);
+                return Ok(());
+            }
+            let table = radiopost_postoffice::jobs::table(dir, &exe);
+            for line in radiopost_postoffice::jobs::run_pending(dir, &table, serve::now) {
+                eprintln!("radiopost-po jobs: {line}");
+            }
+            Ok(())
+        }
+        "backup" => {
+            let zip = radiopost_postoffice::backups::archive(dir)?;
+            let data = match passphrase(a)? {
+                Some(p) => radiopost_postoffice::backups::seal(&zip, &p)?,
+                None => zip,
+            };
+            let to = a.need("--to")?;
+            std::fs::write(&to, data).map_err(|e| format!("{to}: {e}"))?;
+            println!("written {to}");
+            Ok(())
+        }
+        "restore" => {
+            let from = a
+                .words
+                .iter()
+                .skip_while(|w| w.as_str() != "restore")
+                .nth(1)
+                .filter(|w| !w.starts_with("--"))
+                .cloned()
+                .ok_or("which backup?")?;
+            let file = std::fs::read(&from).map_err(|e| format!("{from}: {e}"))?;
+            let zip = radiopost_postoffice::backups::open(&file, passphrase(a)?.as_deref())?;
+            let written = radiopost_postoffice::backups::restore(&zip, dir, a.has("--force"))?;
+            println!(
+                "restored {}: start the post office again",
+                written.join(", ")
+            );
+            Ok(())
+        }
+        _ => Err(format!("unknown command {command}")),
+    }
+}
+
+/// The passphrase in `--passphrase-file`, its first line, when given.
+fn passphrase(a: &Args) -> Result<Option<String>, String> {
+    a.one("--passphrase-file")
+        .map(|f| {
+            std::fs::read_to_string(&f)
+                .map(|t| t.lines().next().unwrap_or("").to_owned())
+                .map_err(|e| format!("{f}: {e}"))
+        })
+        .transpose()
 }
 
 /// `mailboxes`: how approved accounts' mailboxes are made, set and checked.
@@ -616,6 +700,7 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
         }
         "lookup" => lookup(&files, a),
         "mailboxes" => mailboxes(&files, a),
+        "health" | "jobs" | "backup" | "restore" => care(&dir, &files, a, command),
         "approve" | "decline" | "postcard" => decide(&files, a, command),
         "outgoing" | "status" => {
             let answer = admin(&files, "GET", &format!("/{command}"), &Json::Null)?;

@@ -466,6 +466,7 @@ impl Panel {
             }
             (Method::Post, p) if ONLINE.contains(&p) => self.online(path, body),
             (Method::Post, "/api/office") => self.office(body),
+            (Method::Post, "/api/office-backup") => self.office_backup(body),
             (Method::Post, "/api/update") => self.update(),
             (Method::Post, "/api/stop") => {
                 self.stop.store(true, Ordering::Relaxed);
@@ -563,6 +564,44 @@ impl Panel {
         let sent = body.get("body").filter(|b| !b.is_null());
         let (status, answer) = online::office(&store, &self.office_token, &method, path, sent)?;
         Ok(json!({"status": status, "body": answer}))
+    }
+
+    /// A backup of the post office sealed with the operator's passphrase, fetched over the desk
+    /// and kept on this computer, in `RadioPost backups` in the user's home folder.
+    fn office_backup(&self, body: &Value) -> Result<Value, Error> {
+        let store = Store::open(&self.home)?;
+        let sent = json!({"passphrase": body["passphrase"].as_str().unwrap_or("")});
+        let (status, answer) = online::office(
+            &store,
+            &self.office_token,
+            "POST",
+            "/office/backup",
+            Some(&sent),
+        )?;
+        if status != 200 {
+            return Err(answer["title"]
+                .as_str()
+                .unwrap_or("the post office refused")
+                .to_owned());
+        }
+        let data = answer["data"]
+            .as_str()
+            .and_then(radiopost::base64url::decode)
+            .ok_or("the post office's answer held no backup")?;
+        let name: String = answer["name"]
+            .as_str()
+            .unwrap_or("post-office.rpbackup")
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+            .collect();
+        let home = std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .map_or_else(|| self.home.clone(), PathBuf::from);
+        let folder = home.join("RadioPost backups");
+        std::fs::create_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
+        let path = folder.join(name);
+        std::fs::write(&path, &data).map_err(|e| format!("{}: {e}", path.display()))?;
+        Ok(json!({"path": path.display().to_string(), "bytes": data.len()}))
     }
 
     fn message(&self, prefix: &str) -> Result<Value, Error> {

@@ -73,7 +73,14 @@ impl Running {
                         | "/office/mailboxes/check"
                 )
                 | ("GET" | "PUT", "/office/settings")
-        ) || (method == "GET" && route.starts_with("/office/lookup/"));
+        ) || (method == "GET" && route.starts_with("/office/lookup/"))
+            || matches!(
+                (method, route),
+                ("GET" | "POST", "/office/health")
+                    | ("GET", "/office/jobs" | "/office/backups")
+                    | ("POST", "/office/backup")
+            )
+            || (method == "POST" && route.starts_with("/office/jobs/"));
         if !own {
             return None;
         }
@@ -84,6 +91,9 @@ impl Running {
         };
         let empty = json!({});
         let body = body.unwrap_or(&empty);
+        if let Some(answer) = self.desk_care(method, route, &who, body) {
+            return Some(answer);
+        }
         let text = |k: &str| body.get(k).and_then(Json::as_str).unwrap_or("").to_owned();
         Some(match (method, route) {
             ("GET", "/office/outgoing") => ok(&json!({"outgoing": self.office().state.outgoing})),
@@ -160,10 +170,60 @@ impl Running {
                     .to_string(),
             ),
             ("POST", "/mailboxes/check") => (200, self.check_mailboxes().to_string()),
+            ("POST", "/health") => (200, self.health_now().to_string()),
             ("POST", "/licences") => (
                 200,
                 json!({"started": self.fetch_fcc(), "fcc": self.fcc_status()}).to_string(),
             ),
+            _ => return None,
+        })
+    }
+
+    /// The desk's share of the server's care: health, jobs, backups.
+    fn desk_care(&self, method: &str, route: &str, who: &str, body: &Json) -> Option<Answer> {
+        let text = |k: &str| body.get(k).and_then(Json::as_str).unwrap_or("").to_owned();
+        Some(match (method, route) {
+            ("GET", "/office/health") => ok(&self.health().unwrap_or_else(|| self.health_now())),
+            ("POST", "/office/health") => ok(&self.health_now()),
+            ("GET", "/office/jobs") => ok(&self.jobs_status()),
+            ("POST", _) if route.starts_with("/office/jobs/") => {
+                let name = route.trim_start_matches("/office/jobs/");
+                match self.ask_job(name, who) {
+                    Ok(true) => ok(&self.jobs_status()),
+                    Ok(false) => refused(ErrorCode::UnknownMessage, 404),
+                    Err(e) => {
+                        eprintln!("radiopost-po: the job {name}: {e}");
+                        refused(ErrorCode::Internal, 500)
+                    }
+                }
+            }
+            ("GET", "/office/backups") => {
+                let list: Vec<Json> = crate::backups::list(self.files().dir())
+                    .into_iter()
+                    .map(|(name, bytes, at)| json!({"name": name, "bytes": bytes, "at": at}))
+                    .collect();
+                ok(&json!({"backups": list}))
+            }
+            ("POST", "/office/backup") => {
+                let made = crate::backups::archive(self.files().dir())
+                    .and_then(|zip| crate::backups::seal(&zip, &text("passphrase")));
+                match made {
+                    Ok(sealed) => {
+                        eprintln!("radiopost-po: {who} took a sealed backup");
+                        let domain = self.settings().domains.first().cloned().unwrap_or_default();
+                        let name = format!("{domain}-{}.rpbackup", crate::lookups::day(now()));
+                        ok(&json!({"name": name, "bytes": sealed.len(),
+                                   "data": radiopost::base64url::encode(&sealed)}))
+                    }
+                    Err(e) => (
+                        400,
+                        "application/problem+json",
+                        json!({"type": "about:blank", "title": e, "status": 400, "code": 2,
+                               "name": "malformed"})
+                        .to_string(),
+                    ),
+                }
+            }
             _ => return None,
         })
     }
@@ -185,6 +245,7 @@ impl Running {
             "qrz": {"username": settings.lookups.qrz_username,
                     "password": settings.lookups.qrz_password.is_some()},
             "mailboxes": settings.mailboxes.shown(),
+            "dkim": settings.health.dkim,
             "smtp": settings.smtp.is_some(),
         })
     }
@@ -235,6 +296,16 @@ impl Running {
             }
         };
         let (user, pass) = (string("qrz_username")?, string("qrz_password")?);
+        let dkim = match body.get("dkim") {
+            None => None,
+            Some(Json::Array(list)) => Some(
+                list.iter()
+                    .filter_map(Json::as_str)
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>(),
+            ),
+            Some(_) => return Err(400),
+        };
         let mailboxes = match body.get("mailboxes") {
             None => None,
             Some(m) if m.is_object() => {
@@ -267,6 +338,10 @@ impl Running {
             }
             if let Some(p) = pass {
                 s.lookups.qrz_password = (!p.is_empty()).then_some(p);
+            }
+            if let Some(d) = dkim {
+                said.push(format!("DKIM selectors {}", d.join(", ")));
+                s.health.dkim = d;
             }
             if let Some((kind, m)) = mailboxes {
                 let text = |k: &str| m[k].as_str().map(str::trim).map(str::to_owned);
@@ -334,6 +409,31 @@ impl Running {
         })
     }
 
+    /// The jobs table for this post office and program.
+    fn jobs_table(&self) -> Vec<crate::jobs::Job> {
+        let exe = std::env::current_exe().unwrap_or_else(|_| "/usr/local/bin/radiopost-po".into());
+        crate::jobs::table(self.files().dir(), &exe)
+    }
+
+    /// Where the jobs stand (`jobs`).
+    #[must_use]
+    pub fn jobs_status(&self) -> Json {
+        crate::jobs::status(self.files().dir(), &self.jobs_table())
+    }
+
+    /// Asks the runner for `name`, for `who`.
+    ///
+    /// # Errors
+    ///
+    /// The request could not be written.
+    pub fn ask_job(&self, name: &str, who: &str) -> Result<bool, String> {
+        let asked = crate::jobs::request(self.files().dir(), &self.jobs_table(), name, who, now())?;
+        if asked {
+            eprintln!("radiopost-po: {who} asked for the job {name}");
+        }
+        Ok(asked)
+    }
+
     /// The members `/office/status` gains from the service (RP-5 §7.2 allows them).
     pub(crate) fn status_extras(&self, status: &mut Json) {
         let settings = self.settings();
@@ -344,6 +444,13 @@ impl Running {
         status["applications_open"] = json!(settings.info.applications.as_deref() == Some("open"));
         status["operators"] = json!(settings.operators());
         status["domains"] = json!(settings.domains);
+        drop(office);
+        if let Some(h) = self.health() {
+            status["health"] = json!({"fails": h["fails"], "at": h["at"]});
+        }
+        if let Some((name, _, at)) = crate::backups::list(self.files().dir()).first() {
+            status["backup"] = json!({"name": name, "at": at});
+        }
     }
 }
 

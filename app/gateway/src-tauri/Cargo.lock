@@ -3088,6 +3088,7 @@ dependencies = [
  "radiopost",
  "radiopost-api",
  "radiopost-update",
+ "ring",
  "serde",
  "serde_json",
  "tiny_http",

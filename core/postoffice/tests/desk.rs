@@ -72,6 +72,7 @@ fn settings() -> Settings {
         operators: Vec::new(),
         lookups: radiopost_postoffice::lookups::LookupSettings::default(),
         mailboxes: radiopost_postoffice::mailboxes::MailboxSettings::default(),
+        health: radiopost_postoffice::serve::HealthSettings::default(),
     }
 }
 
@@ -326,6 +327,67 @@ fn the_operator_runs_applications_from_the_client() {
         )
         .0,
         403
+    );
+
+    // a job asked for waits for the runner, which says how it went
+    let (status, jobs) = http(&api, "POST", "/rp/v1/office/jobs/disk", Some(&op), None);
+    assert_eq!(status, 200, "{jobs}");
+    let disk = |j: &Json| {
+        j["jobs"]
+            .as_array()
+            .and_then(|l| l.iter().find(|x| x["name"] == "disk").cloned())
+            .expect("the disk job")
+    };
+    assert_eq!(disk(&jobs)["asked"], json!(true));
+    assert_eq!(
+        http(&api, "POST", "/rp/v1/office/jobs/rm", Some(&op), None).0,
+        404
+    );
+    assert_eq!(
+        http(
+            &api,
+            "POST",
+            "/rp/v1/office/jobs/disk",
+            Some(&jose_token),
+            None
+        )
+        .0,
+        403
+    );
+    let exe = std::path::Path::new("/usr/local/bin/radiopost-po");
+    let table = radiopost_postoffice::jobs::table(&dir, exe);
+    let said = radiopost_postoffice::jobs::run_pending(&dir, &table, serve::now);
+    assert_eq!(said, ["disk: done"]);
+    let (_, jobs) = http(&api, "GET", "/rp/v1/office/jobs", Some(&op), None);
+    assert_eq!(disk(&jobs)["last"]["by"], json!("KK4ODA"));
+
+    // a backup sealed with the operator's passphrase, which opens with it alone
+    let (status, _) = http(
+        &api,
+        "POST",
+        "/rp/v1/office/backup",
+        Some(&op),
+        Some(&json!({"passphrase": "short"})),
+    );
+    assert_eq!(status, 400);
+    let (status, sealed) = http(
+        &api,
+        "POST",
+        "/rp/v1/office/backup",
+        Some(&op),
+        Some(&json!({"passphrase": "a passphrase long enough"})),
+    );
+    assert_eq!(status, 200);
+    let data = base64url::decode(sealed["data"].as_str().expect("data")).expect("base64url");
+    assert!(radiopost_postoffice::backups::open(&data, Some("another passphrase")).is_err());
+    let zip = radiopost_postoffice::backups::open(&data, Some("a passphrase long enough"))
+        .expect("opened");
+    let to = dir.join("restored");
+    let written = radiopost_postoffice::backups::restore(&zip, &to, false).expect("restored");
+    assert!(written.contains(&"key.hex".to_owned()) && written.contains(&"state.json".to_owned()));
+    assert_eq!(
+        std::fs::read(to.join("key.hex")).expect("read"),
+        std::fs::read(dir.join("key.hex")).expect("read")
     );
 
     // the server's own commands see the same

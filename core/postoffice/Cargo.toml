@@ -32,6 +32,8 @@ mail-auth = { version = "0.13", default-features = false, features = ["rust-cryp
 tokio = { version = "1", features = ["rt-multi-thread"] }
 # the FCC's weekly file of amateur licences (`licences`), as the updater reads its archives
 zip = { version = "7", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# sealing the backups the operator downloads: PBKDF2 and ChaCha20-Poly1305
+ring = "0.17"
 
 [dev-dependencies]
 radiopost-tester = { path = "../tester" }

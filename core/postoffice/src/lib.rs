@@ -4,11 +4,14 @@
 
 pub mod aftercare;
 pub mod auth;
+pub mod backups;
 pub mod check;
 pub mod desk;
 pub mod documents;
 pub mod email;
 pub mod evidence;
+pub mod health;
+pub mod jobs;
 pub mod licences;
 pub mod lookups;
 pub mod mail;

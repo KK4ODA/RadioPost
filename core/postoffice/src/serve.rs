@@ -60,6 +60,25 @@ pub struct Settings {
     /// How it makes an approved account's mailbox in the mail server.
     #[serde(default, skip_serializing_if = "MailboxSettings::is_empty")]
     pub mailboxes: MailboxSettings,
+    /// What its hourly check asks besides the rest.
+    #[serde(default, skip_serializing_if = "HealthSettings::is_empty")]
+    pub health: HealthSettings,
+}
+
+/// What the hourly check asks besides the rest (`health`).
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct HealthSettings {
+    /// The DKIM selectors to check, as Stalwart's zone file names them.
+    pub dkim: Vec<String>,
+}
+
+impl HealthSettings {
+    /// Nothing set: `config.json` leaves the member out.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.dkim.is_empty()
+    }
 }
 
 impl Settings {
@@ -251,6 +270,7 @@ pub struct Running {
     checker: OnceLock<Result<Checker, String>>,
     updates: OnceLock<Arc<radiopost_update::Watch>>,
     lookups: Lookups,
+    pub(crate) care_state: crate::health::Care,
 }
 
 impl Running {
@@ -295,6 +315,7 @@ impl Running {
             checker: OnceLock::new(),
             updates: OnceLock::new(),
             lookups: Lookups::default(),
+            care_state: crate::health::Care::default(),
         })
     }
 
@@ -610,6 +631,7 @@ fn method_of(m: &Method) -> &'static str {
 /// An address could not be taken, or the admin address is not on the loopback interface.
 pub fn serve(running: Arc<Running>, listen: &str, admin: &str) -> Result<(String, String), String> {
     crate::lookups::start(&running);
+    crate::health::start(&running);
     let api = Server::http(listen).map_err(|e| format!("{listen}: {e}"))?;
     let ops = Server::http(admin).map_err(|e| format!("{admin}: {e}"))?;
     let api_at = api.server_addr().to_string();
@@ -625,25 +647,30 @@ pub fn serve(running: Arc<Running>, listen: &str, admin: &str) -> Result<(String
     }
     let r = running.clone();
     std::thread::spawn(move || {
+        // each request on a thread of its own, so a slow one (a lookup in QRZ, the health check
+        // asking this very API for its info document) holds up no other
         for mut request in api.incoming_requests() {
-            let mut body = Vec::new();
-            let _ = request.as_reader().take(32 << 20).read_to_end(&mut body);
-            let token = request
-                .headers()
-                .iter()
-                .find(|h| h.field.equiv("Authorization"))
-                .and_then(|h| h.value.as_str().strip_prefix("Bearer ").map(str::to_owned));
-            let (status, kind, text) = r.api(
-                method_of(request.method()),
-                request.url(),
-                token.as_deref(),
-                &body,
-            );
-            let mut answer = Http::from_string(text).with_status_code(status);
-            if status != 204 {
-                answer = answer.with_header(header("Content-Type", kind));
-            }
-            let _ = request.respond(answer);
+            let r = r.clone();
+            std::thread::spawn(move || {
+                let mut body = Vec::new();
+                let _ = request.as_reader().take(32 << 20).read_to_end(&mut body);
+                let token = request
+                    .headers()
+                    .iter()
+                    .find(|h| h.field.equiv("Authorization"))
+                    .and_then(|h| h.value.as_str().strip_prefix("Bearer ").map(str::to_owned));
+                let (status, kind, text) = r.api(
+                    method_of(request.method()),
+                    request.url(),
+                    token.as_deref(),
+                    &body,
+                );
+                let mut answer = Http::from_string(text).with_status_code(status);
+                if status != 204 {
+                    answer = answer.with_header(header("Content-Type", kind));
+                }
+                let _ = request.respond(answer);
+            });
         }
     });
     std::thread::spawn(move || {

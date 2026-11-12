@@ -185,6 +185,8 @@
           <button role="tab" data-otab="accounts" title="Every account, its name and the devices enrolled for it">Accounts</button>
           <button role="tab" data-otab="code" title="A one-time code for a new account, or a new device of one">New code</button>
           <button role="tab" data-otab="mail" title="Mail sent by radio, waiting to go on by email">Mail out <span class="count" id="o-n-mail"></span></button>
+          <button role="tab" data-otab="health" title="The post office checked from outside and inside, each hour: red means something to fix">Health <span class="count bad" id="o-n-health"></span></button>
+          <button role="tab" data-otab="server" title="Jobs on the server (update, restarts, logs) and the backups">Server</button>
           <button role="tab" data-otab="settings" title="Whether the post office takes applications, and who runs it">Settings</button>
         </div>
 
@@ -234,6 +236,42 @@
             <thead><tr><th title="The message's content ID">Message</th><th title="Where it goes">To</th><th title="When it was queued">Since</th></tr></thead>
             <tbody id="o-mail-rows"></tbody>
           </table>
+        </div>
+
+        <div class="o-pane" id="o-health" hidden>
+          <div class="row">
+            <p class="note grow-text" id="o-health-when"></p>
+            <button type="button" id="o-health-now" title="Check everything now: DNS, the certificate and the API from outside, the door, the mail server, the disk, the backups. A few seconds">Check now</button>
+          </div>
+          <ul class="checks" id="o-checks"></ul>
+          <details class="card">
+            <summary title="The DKIM keys to check in DNS, as Stalwart's zone file names them">DKIM selectors</summary>
+            <div class="row">
+              <input id="o-dkim" class="grow" placeholder="v1-rsa-20261110, v1-ed25519-20261110" spellcheck="false">
+              <button type="button" id="o-dkim-save" title="Check these from now on">Save</button>
+            </div>
+          </details>
+        </div>
+
+        <div class="o-pane" id="o-server" hidden>
+          <div class="card">
+            <h2>Jobs</h2>
+            <p class="note" id="o-runner"></p>
+            <div id="o-jobs"></div>
+          </div>
+          <div class="card">
+            <h2>Backups</h2>
+            <p class="note">Each night the server keeps a backup beside itself, the last seven. Keep one on this computer too, sealed with a passphrase, in case the server is lost: it holds the post office's key.</p>
+            <table class="list" aria-label="Backups on the server">
+              <thead><tr><th>Backup</th><th class="n">Size</th><th>Made</th></tr></thead>
+              <tbody id="o-backups"></tbody>
+            </table>
+            <div class="row">
+              <input id="o-pass1" class="grow" type="password" placeholder="A passphrase, 12 characters or more" autocomplete="new-password" title="It seals the backup: without it the file cannot be opened, by anyone, you included. Keep it somewhere safe">
+              <input id="o-pass2" class="grow" type="password" placeholder="The same again" autocomplete="new-password">
+              <button type="button" id="o-backup" title="Make a backup now, seal it, and keep it on this computer">Download a backup</button>
+            </div>
+          </div>
         </div>
 
         <div class="o-pane" id="o-settings" hidden>

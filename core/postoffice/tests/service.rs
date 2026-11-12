@@ -79,6 +79,7 @@ fn make(dir: &std::path::Path) -> (String, String, SigningKey) {
         operators: Vec::new(),
         lookups: radiopost_postoffice::lookups::LookupSettings::default(),
         mailboxes: radiopost_postoffice::mailboxes::MailboxSettings::default(),
+        health: radiopost_postoffice::serve::HealthSettings::default(),
     };
     files
         .write(

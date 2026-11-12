@@ -974,6 +974,8 @@ async function probeOffice() {
     $("n-office").textContent = n ? String(n) : "";
     $("o-n-applications").textContent = n ? String(n) : "";
     $("o-n-mail").textContent = office.status.outgoing ? String(office.status.outgoing) : "";
+    const fails = office.status.health ? office.status.health.fails : 0;
+    $("o-n-health").textContent = fails ? String(fails) : "";
   }
   return office.ok;
 }
@@ -1004,6 +1006,8 @@ async function openOffice(tab = office.tab) {
     if (tab === "accounts") await renderAccounts();
     if (tab === "mail") await renderMail();
     if (tab === "settings") await renderOfficeSettings();
+    if (tab === "health") await renderHealth();
+    if (tab === "server") await renderServer();
   } catch (e) {
     toast(e.message, true);
   }
@@ -1234,6 +1238,81 @@ async function renderMail() {
     el("td", {text: m.queued ? day(m.queued) : ""}))));
 }
 
+// ── the server's care: its checks, its jobs, its backups ─────────────────────────────────────
+
+async function renderHealth(fresh = false) {
+  if (fresh) $("o-health-when").textContent = "Checking\u2026";
+  const h = await desk(fresh ? "POST" : "GET", "/office/health", fresh ? {} : undefined);
+  const lines = h.lines || [];
+  const fails = lines.filter((l) => l.verdict === "fail").length;
+  $("o-health-when").textContent = `${fails ? `${fails} to fix` : "All pass"}. Checked ${h.at ? day(h.at) : "never"}; again every hour, and you are emailed when one turns red.`;
+  $("o-checks").replaceChildren(...lines.map((l) => el("li", {class: l.verdict},
+    el("span", {class: "mark", text: {ok: "\u2713", fail: "\u2717", note: "\u2022"}[l.verdict] || "\u2022"}),
+    el("span", {text: l.text}))));
+  $("o-n-health").textContent = fails ? String(fails) : "";
+  const s = await desk("GET", "/office/settings");
+  if (!$("o-dkim").matches(":focus") && s.dkim) $("o-dkim").value = s.dkim.join(", ");
+}
+
+let jobsTimer = null;
+
+function runButton(job) {
+  const b = el("button", {type: "button", text: "Run", title: `Ask the server for this: ${job.what}`});
+  b.disabled = Boolean(job.asked || job.running);
+  b.addEventListener("click", (e) => {
+    const go = async () => {
+      try { await desk("POST", `/office/jobs/${job.name}`, {}); await renderServer(); }
+      catch (err) { toast(err.message, true); }
+    };
+    if (["update", "restart", "restart-mail"].includes(job.name)) armed(e.currentTarget, "Click again to run it", go);
+    else go();
+  });
+  return b;
+}
+
+async function renderServer() {
+  const j = await desk("GET", "/office/jobs");
+  $("o-runner").textContent = j.runner
+    ? "The server runs these as its administrator, from a fixed list: nothing else can be asked for."
+    : "The jobs runner is not installed on the server, so these wait. Once, on the server: sudo radiopost-po --dir /var/lib/radiopost jobs --install";
+  $("o-jobs").replaceChildren(...(j.jobs || []).map((job) => {
+    const last = job.last;
+    const state = job.running ? "running now\u2026" : job.asked ? "asked for, waiting for the runner\u2026"
+      : last ? `${last.ok ? "done" : "failed"} ${day(last.finished)}${last.by ? `, asked by ${last.by}` : ""}` : "";
+    const out = last && last.output ? el("details", {}, el("summary", {text: "What it said"}), el("pre", {text: last.output})) : null;
+    return el("div", {class: "job"},
+      el("div", {class: "job-head"},
+        el("span", {class: "job-what"}, el("b", {text: job.name}), job.what),
+        runButton(job)),
+      state ? el("p", {class: "job-last", text: state}) : null, out);
+  }));
+  clearTimeout(jobsTimer);
+  if ((j.jobs || []).some((x) => x.asked || x.running) && office.tab === "server" && !$("office").hidden) {
+    jobsTimer = setTimeout(() => renderServer().catch(() => {}), 2000);
+  }
+  const b = await desk("GET", "/office/backups");
+  $("o-backups").replaceChildren(...(b.backups || []).map((x) => el("tr", {},
+    el("td", {class: "mono", text: x.name}), el("td", {class: "n", text: kb(x.bytes)}), el("td", {text: day(x.at)}))));
+  if (!(b.backups || []).length) $("o-backups").append(el("tr", {}, el("td", {class: "note", colspan: "3", text: "None yet: the first is made tonight."})));
+}
+
+async function downloadBackup() {
+  const p1 = $("o-pass1").value;
+  if (p1.length < 12) { toast("A passphrase of 12 characters or more.", true); return; }
+  if (p1 !== $("o-pass2").value) { toast("The two passphrases differ.", true); return; }
+  $("o-backup").disabled = true;
+  try {
+    const r = await api("office-backup", {passphrase: p1});
+    $("o-pass1").value = "";
+    $("o-pass2").value = "";
+    toast(`Kept on this computer: ${r.path}. Keep the passphrase somewhere safe.`);
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    $("o-backup").disabled = false;
+  }
+}
+
 function showMailboxKind() {
   const kind = $("o-mb-kind").value;
   $("o-mb-stalwart").hidden = kind !== "stalwart";
@@ -1400,6 +1479,14 @@ function wire() {
   });
   $("o-qrz-clear").addEventListener("click", () => settingsChange({qrz_username: "", qrz_password: ""}, "QRZ lookups off."));
   $("o-mb-kind").addEventListener("change", showMailboxKind);
+  $("o-health-now").addEventListener("click", async () => {
+    $("o-health-now").disabled = true;
+    try { await renderHealth(true); } catch (e) { toast(e.message, true); }
+    $("o-health-now").disabled = false;
+  });
+  $("o-dkim-save").addEventListener("click", () => settingsChange(
+    {dkim: $("o-dkim").value.split(/[\s,]+/).filter(Boolean)}, "The hourly check asks for these from now on."));
+  $("o-backup").addEventListener("click", downloadBackup);
   $("o-mb-save").addEventListener("click", () => {
     const m = {kind: $("o-mb-kind").value, url: $("o-mb-url").value.trim(), command: $("o-mb-cmd").value.trim()};
     if ($("o-mb-key").value) m.api_key = $("o-mb-key").value;

@@ -59,6 +59,7 @@ fn post_office(dir: &Path) -> (Arc<Running>, String, String) {
         operators: Vec::new(),
         lookups: radiopost_postoffice::lookups::LookupSettings::default(),
         mailboxes: radiopost_postoffice::mailboxes::MailboxSettings::default(),
+        health: radiopost_postoffice::serve::HealthSettings::default(),
     };
     files
         .write(
