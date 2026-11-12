@@ -11,6 +11,12 @@ queueing what they send, and later forward it to each other by radio.
 It is **federated**: many post offices and gateways, run by different people, work as one network
 because they follow the same published protocols, as email providers do.
 
+Its first modem is **[Aether HF](https://github.com/KK4ODA/aether-hf)**, an open-source HF data
+modem by the same author: a published air interface, error-free ARQ links over noisy, fading
+paths, and the licence's rules checked before every transmission. One Aether station serves
+RadioPost and Winlink programs side by side, on one radio. RadioPost does not depend on it: any
+modem with an adapter will do ([RP-4](spec/rp-0004-modem-interface.md)).
+
 ## What it is for
 
 **RadioPost is not meant to replace Winlink.** Winlink works: it has hundreds of gateways, carries
