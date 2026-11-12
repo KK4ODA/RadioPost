@@ -71,7 +71,10 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   a stand-in for two Mercury modems that logs misuse; `tests/mercury.rs` runs two real ones
   (`MERCURY=<mercury> … --ignored`, Mercury built with `make HAVE_HAMLIB=0`, which needs
   `libasound2-dev libpulse-dev`) and has not yet been run. Writing it found that Mercury does not
-  identify the station: the called station's callsign goes on the air only as a CRC.
+  identify the station: the called station's callsign goes on the air only as a CRC. So the
+  adapter sends `CQFRAME <callsign>` after each session (the author's decision, 2026-11-12): the
+  station called first, the caller once it hears it; a `connect` waits for it, so its `ok` comes
+  at once. The stand-in keeps the IDs it heard and logs two transmissions at once.
   `adapters/tcp` (`radiopost-tcp`) is RP-4 §9.5: links to other TCP adapters opened with one line
   each way (`RPTCP 1 <as> <called>`, `OK <callsign>` or `NO <code>`), TLS on the Internet with
   rustls and ring (a self-signed certificate made on first use, pinned by SHA-256 fingerprint, or

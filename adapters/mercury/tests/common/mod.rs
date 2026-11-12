@@ -14,7 +14,13 @@
 //!   closed; with no session it comes at once, as it does to every `ABORT`;
 //! * `ABORT`'s DISCONNECT frame goes out after its `DISCONNECTED`;
 //! * `BUFFER` is what the other station has not confirmed, counted every tenth of a second, and
-//!   once on every write to the data port before the bytes written are taken in.
+//!   once on every write to the data port before the bytes written are taken in;
+//! * `CQFRAME` keys at once, whatever is on the air, between `PENDING` and `CANCELPENDING`, and
+//!   the other modem says `CQFRAME <callsign> <bandwidth>` when it has heard it; a CALL waits
+//!   while the other station is on the air.
+//!
+//! It logs two transmissions at once when either is a `CQFRAME`, and keeps the `CQFRAME`s heard
+//! ([`Air::idents`]).
 //!
 //! What a host must not do to a real Mercury is kept in [`Air::faults`].
 
@@ -37,6 +43,7 @@ const FRAME_MS: u64 = 150;
 const WATCHDOG_MS: u64 = 4000;
 const BUFFER_MS: u64 = 100;
 const ROUND_BYTES: usize = 4096;
+const CQ_MS: u64 = 120;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Phase {
@@ -60,15 +67,44 @@ enum Phase {
 
 #[derive(Debug)]
 enum Ev {
-    Heard { caller: usize },
-    Accepted { caller: usize },
-    GaveUp { caller: usize },
-    TakeIn { at: usize, bytes: Vec<u8> },
-    Arrive { to: usize, bytes: Vec<u8> },
-    Confirm { at: usize, n: usize },
-    Unkey { at: usize },
-    FrameOut { at: usize },
-    Watchdog { at: usize },
+    Heard {
+        caller: usize,
+    },
+    Accepted {
+        caller: usize,
+    },
+    GaveUp {
+        caller: usize,
+    },
+    TakeIn {
+        at: usize,
+        bytes: Vec<u8>,
+    },
+    Arrive {
+        to: usize,
+        bytes: Vec<u8>,
+    },
+    Confirm {
+        at: usize,
+        n: usize,
+    },
+    Unkey {
+        at: usize,
+    },
+    FrameOut {
+        at: usize,
+    },
+    Watchdog {
+        at: usize,
+    },
+    CallKey {
+        caller: usize,
+    },
+    CqOut {
+        at: usize,
+        callsign: String,
+        bw: i64,
+    },
 }
 
 struct Tnc {
@@ -155,6 +191,10 @@ struct Inner {
     tnc: [Tnc; 2],
     timers: Vec<(u64, u64, Ev)>,
     faults: Vec<String>,
+    /// Until when each station is keyed, and keyed for a `CQFRAME`.
+    air: [u64; 2],
+    cq_air: [u64; 2],
+    idents: Vec<(usize, String)>,
 }
 
 impl Inner {
@@ -172,6 +212,16 @@ impl Inner {
         self.faults.push(format!("station {at}: {what}"));
     }
 
+    /// Keys station `at` for `ms`.
+    fn key(&mut self, at: usize, ms: u64) {
+        let now = self.now();
+        if self.cq_air[1 - at] > now {
+            self.fault(at, "keyed while the other station's CQFRAME was on the air");
+        }
+        self.air[at] = now + ms;
+        self.tnc[at].say("PTT ON");
+    }
+
     fn place(&mut self, at: usize, src: &str, remote: &str) {
         let t = &mut self.tnc[at];
         t.serial += 1;
@@ -179,10 +229,84 @@ impl Inner {
             remote: remote.to_owned(),
             src: src.to_owned(),
         };
-        t.say("PTT ON");
+        self.call_key(at);
+    }
+
+    /// The CALL, once the other station is off the air: Mercury holds a CALL while a frame is
+    /// arriving.
+    fn call_key(&mut self, at: usize) {
+        let now = self.now();
+        let busy = self.air[1 - at];
+        if busy > now {
+            self.after(busy - now + 5, at, Ev::CallKey { caller: at });
+            return;
+        }
+        self.key(at, CALL_MS);
         self.after(CALL_MS, at, Ev::Unkey { at });
         self.after(CALL_MS, at, Ev::Heard { caller: at });
         self.after(GIVE_UP_MS, at, Ev::GaveUp { caller: at });
+    }
+
+    /// The caller has heard the ACCEPT: the session is up at both ends.
+    #[allow(clippy::similar_names, reason = "a call's two ends")]
+    fn accepted(&mut self, caller: usize) {
+        let callee = 1 - caller;
+        let Phase::Calling { remote, src } = self.tnc[caller].phase.clone() else {
+            return;
+        };
+        if self.tnc[callee].phase != (Phase::Answering { caller }) {
+            return;
+        }
+        let (a, b) = (self.tnc[caller].bw, self.tnc[callee].bw);
+        let bw = if a == 500 || b == 500 { 500 } else { a.min(b) };
+        // the CALL carried the caller's first callsign, not CONNECT's
+        let on_air = self.tnc[caller].mycall.first().cloned().unwrap_or_default();
+        let dialed = self.tnc[callee]
+            .mycall
+            .iter()
+            .find(|m| m.eq_ignore_ascii_case(&remote))
+            .cloned()
+            .unwrap_or_default();
+        for (at, peer, line) in [
+            (caller, callee, format!("CONNECTED {src} {remote} {bw}")),
+            (callee, caller, format!("CONNECTED {on_air} {dialed} {bw}")),
+        ] {
+            let t = &mut self.tnc[at];
+            t.phase = Phase::Up {
+                peer,
+                draining: false,
+            };
+            t.session_bw = bw;
+            t.say(&line);
+        }
+    }
+
+    /// The CQ frame is out: the other modem has heard it.
+    fn cq_out(&mut self, at: usize, callsign: String, bw: i64) {
+        self.tnc[at].say("PTT OFF");
+        self.tnc[at].say("CANCELPENDING");
+        self.tnc[1 - at].say(&format!("CQFRAME {callsign} {bw}"));
+        self.idents.push((at, callsign));
+    }
+
+    /// `CQFRAME <callsign> <bandwidth>`: keyed at once.
+    fn cq(&mut self, at: usize, callsign: &str, bw: i64) {
+        if self.tnc[at].phase != Phase::Idle {
+            self.fault(at, "CQFRAME with a call or session under way");
+        }
+        let now = self.now();
+        if self.air[1 - at] > now {
+            self.fault(at, "CQFRAME while the other station was on the air");
+        }
+        self.tnc[at].say("PENDING");
+        self.key(at, CQ_MS);
+        self.cq_air[at] = now + CQ_MS;
+        let ev = Ev::CqOut {
+            at,
+            callsign: callsign.to_ascii_uppercase(),
+            bw,
+        };
+        self.after(CQ_MS, at, ev);
     }
 
     /// The host's `ABORT`, or a second `DISCONNECT`: `DISCONNECTED` at once, the frame after.
@@ -195,7 +319,7 @@ impl Inner {
                 t.flying = 0;
                 t.phase = Phase::Tail { peer };
                 t.say("DISCONNECTED");
-                t.say("PTT ON");
+                self.key(at, FRAME_MS);
                 self.after(FRAME_MS, at, Ev::FrameOut { at });
             }
             Phase::Calling { .. } => {
@@ -271,6 +395,13 @@ impl Inner {
                 self.tnc[at].say("OK");
             }
             ("BUSYDETECT", []) => self.tnc[at].say("BUSYDETECT OFF"),
+            ("CQFRAME", [callsign, bw]) => match bw.parse::<i64>() {
+                Ok(bw @ (500 | 2300 | 2750)) => {
+                    self.tnc[at].say("OK");
+                    self.cq(at, callsign, bw);
+                }
+                _ => self.tnc[at].say("WRONG"),
+            },
             ("CONNECT", [src, remote]) => {
                 self.tnc[at].say("OK");
                 match self.tnc[at].phase.clone() {
@@ -368,42 +499,12 @@ impl Inner {
                     c.serial += 1;
                     c.phase = Phase::Answering { caller };
                     c.say("PENDING");
-                    c.say("PTT ON");
+                    self.key(callee, ACCEPT_MS);
                     self.after(ACCEPT_MS, callee, Ev::Unkey { at: callee });
                     self.after(ACCEPT_MS, caller, Ev::Accepted { caller });
                 }
             }
-            Ev::Accepted { caller } => {
-                let callee = 1 - caller;
-                let Phase::Calling { remote, src } = self.tnc[caller].phase.clone() else {
-                    return;
-                };
-                if self.tnc[callee].phase != (Phase::Answering { caller }) {
-                    return;
-                }
-                let (a, b) = (self.tnc[caller].bw, self.tnc[callee].bw);
-                let bw = if a == 500 || b == 500 { 500 } else { a.min(b) };
-                // the CALL carried the caller's first callsign, not CONNECT's
-                let on_air = self.tnc[caller].mycall.first().cloned().unwrap_or_default();
-                let dialed = self.tnc[callee]
-                    .mycall
-                    .iter()
-                    .find(|m| m.eq_ignore_ascii_case(&remote))
-                    .cloned()
-                    .unwrap_or_default();
-                for (at, peer, line) in [
-                    (caller, callee, format!("CONNECTED {src} {remote} {bw}")),
-                    (callee, caller, format!("CONNECTED {on_air} {dialed} {bw}")),
-                ] {
-                    let t = &mut self.tnc[at];
-                    t.phase = Phase::Up {
-                        peer,
-                        draining: false,
-                    };
-                    t.session_bw = bw;
-                    t.say(&line);
-                }
-            }
+            Ev::Accepted { caller } => self.accepted(caller),
             Ev::GaveUp { caller } => {
                 if matches!(self.tnc[caller].phase, Phase::Calling { .. }) {
                     self.tnc[caller].ended();
@@ -447,6 +548,12 @@ impl Inner {
                     self.place(at, &src, &remote);
                 }
             }
+            Ev::CallKey { caller } => {
+                if matches!(self.tnc[caller].phase, Phase::Calling { .. }) {
+                    self.call_key(caller);
+                }
+            }
+            Ev::CqOut { at, callsign, bw } => self.cq_out(at, callsign, bw),
             Ev::Watchdog { at } => {
                 if matches!(self.tnc[at].phase, Phase::Up { .. }) {
                     self.tnc[at].ended();
@@ -469,16 +576,20 @@ impl Inner {
         due.sort_by_key(|(when, _, _)| *when);
         for (_, serial, ev) in due {
             let at = match &ev {
-                Ev::Heard { caller } | Ev::Accepted { caller } | Ev::GaveUp { caller } => *caller,
-                Ev::TakeIn { at, .. }
+                Ev::Heard { caller }
+                | Ev::Accepted { caller }
+                | Ev::GaveUp { caller }
+                | Ev::CallKey { caller } => *caller,
+                Ev::CqOut { at, .. }
+                | Ev::TakeIn { at, .. }
                 | Ev::Confirm { at, .. }
                 | Ev::Unkey { at }
                 | Ev::FrameOut { at }
                 | Ev::Watchdog { at } => *at,
                 Ev::Arrive { to, .. } => 1 - *to,
             };
-            // PTT OFF belongs to the transmitter, not to a session
-            if serial == self.tnc[at].serial || matches!(ev, Ev::Unkey { .. }) {
+            // PTT OFF and a CQ frame belong to the transmitter, not to a session
+            if serial == self.tnc[at].serial || matches!(ev, Ev::Unkey { .. } | Ev::CqOut { .. }) {
                 self.fire(ev);
             }
         }
@@ -497,7 +608,7 @@ impl Inner {
                 let bytes: Vec<u8> = t.tx.drain(..n).collect();
                 t.flying += n;
                 t.in_round = true;
-                t.say("PTT ON");
+                self.key(at, ROUND_MS);
                 self.after(ROUND_MS, at, Ev::Unkey { at });
                 self.after(ROUND_MS, at, Ev::Arrive { to: peer, bytes });
                 self.after(ROUND_MS + ACK_MS, at, Ev::Confirm { at, n });
@@ -508,7 +619,7 @@ impl Inner {
                     draining: false,
                 };
                 t.in_round = true;
-                t.say("PTT ON");
+                self.key(at, FRAME_MS);
                 self.after(FRAME_MS, at, Ev::FrameOut { at });
             }
         }
@@ -550,6 +661,9 @@ impl Air {
                 tnc: [Tnc::new(), Tnc::new()],
                 timers: Vec::new(),
                 faults: Vec::new(),
+                air: [0; 2],
+                cq_air: [0; 2],
+                idents: Vec::new(),
             })),
         };
         let mut at = Vec::new();
@@ -557,9 +671,7 @@ impl Air {
             let (control, data) = two_ports();
             at.push(control.local_addr().expect("bound"));
             let inner = Arc::clone(&air.inner);
-            thread::spawn(move || serve_control(&control, &inner, station));
-            let inner = Arc::clone(&air.inner);
-            thread::spawn(move || serve_data(&data, &inner, station));
+            thread::spawn(move || serve_ports(&control, &data, &inner, station));
         }
         let inner = Arc::clone(&air.inner);
         thread::spawn(move || {
@@ -574,6 +686,11 @@ impl Air {
     /// What a host did that a real Mercury would have answered badly.
     pub fn faults(&self) -> Vec<String> {
         lock(&self.inner).faults.clone()
+    }
+
+    /// The `CQFRAME`s sent on the channel: the station and the callsign.
+    pub fn idents(&self) -> Vec<(usize, String)> {
+        lock(&self.inner).idents.clone()
     }
 
     /// Whether a program holds the modem's control port.
@@ -603,81 +720,103 @@ impl Air {
     }
 }
 
-fn serve_control(listener: &TcpListener, inner: &Arc<Mutex<Inner>>, station: usize) {
-    for stream in listener.incoming().flatten() {
-        let Ok(writer) = stream.try_clone() else {
-            continue;
-        };
-        let no = {
-            let mut g = lock(inner);
-            if let Some(old) = g.tnc[station].control.take() {
-                // Mercury gives the port to the newest program. One that had already left, its
-                // leaving not yet seen here, was put out by nobody.
-                let _ = old.set_nonblocking(true);
-                if !matches!(old.peek(&mut [0u8; 1]), Ok(0)) {
-                    g.fault(station, "a second program took the control port");
-                }
-                let _ = old.shutdown(Shutdown::Both);
-                g.host_gone(station);
-            }
-            let t = &mut g.tnc[station];
-            t.control_no += 1;
-            t.control = Some(writer);
-            t.buffer_said = None;
-            if let Some(first) = t.mycall.first().cloned() {
-                t.say(&format!("REGISTERED {first}"));
-            }
-            t.control_no
-        };
-        let inner = Arc::clone(inner);
-        thread::spawn(move || {
-            let mut stream = stream;
-            let mut line = Vec::new();
-            let mut buf = [0u8; 256];
-            loop {
-                let n = match stream.read(&mut buf) {
-                    Ok(0) | Err(_) => break,
-                    Ok(n) => n,
-                };
-                for &b in &buf[..n] {
-                    if b == b'\r' {
-                        let text = String::from_utf8_lossy(&line).into_owned();
-                        line.clear();
-                        let mut g = lock(&inner);
-                        if g.tnc[station].control_no == no {
-                            g.command(station, &text);
-                        }
-                    } else {
-                        line.push(b);
-                    }
-                }
-            }
-            let mut g = lock(&inner);
-            if g.tnc[station].control_no == no && g.tnc[station].control.is_some() {
-                g.host_gone(station);
-            }
-        });
+/// The two ports, accepted in one loop as Mercury's are: a data connection waiting now came
+/// after any control connection waiting, since a program connects to the control port first, so
+/// the control port is taken first. Accepted apart, a new program's data connection could be
+/// closed as the last program's.
+fn serve_ports(
+    control: &TcpListener,
+    data: &TcpListener,
+    inner: &Arc<Mutex<Inner>>,
+    station: usize,
+) {
+    control.set_nonblocking(true).expect("a listener");
+    data.set_nonblocking(true).expect("a listener");
+    loop {
+        let new_data = data.accept().ok().map(|(s, _)| s);
+        if let Ok((s, _)) = control.accept() {
+            take_control(s, inner, station);
+        }
+        if let Some(s) = new_data {
+            take_data(s, inner, station);
+        }
+        thread::sleep(Duration::from_millis(2));
     }
 }
 
-fn serve_data(listener: &TcpListener, inner: &Arc<Mutex<Inner>>, station: usize) {
-    for stream in listener.incoming().flatten() {
-        let Ok(writer) = stream.try_clone() else {
-            continue;
-        };
-        if let Some(old) = lock(inner).tnc[station].data.replace(writer) {
-            let _ = old.shutdown(Shutdown::Both);
-        }
-        let inner = Arc::clone(inner);
-        thread::spawn(move || {
-            let mut stream = stream;
-            let mut buf = [0u8; 128];
-            while let Ok(n) = stream.read(&mut buf) {
-                if n == 0 {
-                    break;
-                }
-                lock(&inner).data(station, &buf[..n]);
+fn take_control(stream: TcpStream, inner: &Arc<Mutex<Inner>>, station: usize) {
+    let _ = stream.set_nonblocking(false);
+    let Ok(writer) = stream.try_clone() else {
+        return;
+    };
+    let no = {
+        let mut g = lock(inner);
+        if let Some(old) = g.tnc[station].control.take() {
+            // Mercury gives the port to the newest program. One that had already left, its
+            // leaving not yet seen here, was put out by nobody.
+            let _ = old.set_nonblocking(true);
+            if !matches!(old.peek(&mut [0u8; 1]), Ok(0)) {
+                g.fault(station, "a second program took the control port");
             }
-        });
+            let _ = old.shutdown(Shutdown::Both);
+            g.host_gone(station);
+        }
+        let t = &mut g.tnc[station];
+        t.control_no += 1;
+        t.control = Some(writer);
+        t.buffer_said = None;
+        if let Some(first) = t.mycall.first().cloned() {
+            t.say(&format!("REGISTERED {first}"));
+        }
+        t.control_no
+    };
+    let inner = Arc::clone(inner);
+    thread::spawn(move || {
+        let mut stream = stream;
+        let mut line = Vec::new();
+        let mut buf = [0u8; 256];
+        loop {
+            let n = match stream.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => n,
+            };
+            for &b in &buf[..n] {
+                if b == b'\r' {
+                    let text = String::from_utf8_lossy(&line).into_owned();
+                    line.clear();
+                    let mut g = lock(&inner);
+                    if g.tnc[station].control_no == no {
+                        g.command(station, &text);
+                    }
+                } else {
+                    line.push(b);
+                }
+            }
+        }
+        let mut g = lock(&inner);
+        if g.tnc[station].control_no == no && g.tnc[station].control.is_some() {
+            g.host_gone(station);
+        }
+    });
+}
+
+fn take_data(stream: TcpStream, inner: &Arc<Mutex<Inner>>, station: usize) {
+    let _ = stream.set_nonblocking(false);
+    let Ok(writer) = stream.try_clone() else {
+        return;
+    };
+    if let Some(old) = lock(inner).tnc[station].data.replace(writer) {
+        let _ = old.shutdown(Shutdown::Both);
     }
+    let inner = Arc::clone(inner);
+    thread::spawn(move || {
+        let mut stream = stream;
+        let mut buf = [0u8; 128];
+        while let Ok(n) = stream.read(&mut buf) {
+            if n == 0 {
+                break;
+            }
+            lock(&inner).data(station, &buf[..n]);
+        }
+    });
 }

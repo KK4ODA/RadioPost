@@ -59,8 +59,9 @@ In `radiopost-mercury`, `tests/bridge.rs` checks each row of RP-4 §9.6 with Mer
 by hand, and replays `rpmi-lines.json` through the bridge. `tests/conformance.rs` runs A-01 to
 A-04 through two adapters on `tests/common`, a stand-in for two Mercury modems on one channel that
 keeps to what Mercury's documentation and source say, and logs what a real Mercury would answer
-badly (`LISTEN OFF` with a session up, a second `DISCONNECT`, bytes with no session); the test
-requires that log empty. `tests/mercury.rs` runs A-01 to A-04 over two real Mercury processes,
+badly (`LISTEN OFF` with a session up, a second `DISCONNECT`, bytes with no session, a
+`CQFRAME` keyed over the other station); the test requires that log empty, and each station's
+`CQFRAME` after each session, the station called first. `tests/mercury.rs` runs A-01 to A-04 over two real Mercury processes,
 their audio joined by named pipes, and so only when `MERCURY` names one (1.9.23 or later, built
 with `make HAVE_HAMLIB=0`):
 

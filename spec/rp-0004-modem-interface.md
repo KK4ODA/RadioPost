@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.6.4 |
+| **Version** | 0.6.5 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -412,8 +412,8 @@ the session's bytes on a data port, the next one. The adapter talks to it over T
 | `hello` | `BUSYDETECT`, which only Mercury 1.9.23 and later answer with `BUSYDETECT ON` or `OFF`: anything else is not this modem, and the host gets `no-modem`. `caps.bandwidths` is 500, 2300 and 2750; `busy` is the answer's `ON`; `delivery` and `quality` are true; `broadcast`, `regulatory` and `shared` are false. `modem` is `Mercury`: its `VERSION` answers as VARA does. |
 | `callsigns` | `MYCALL <first> <more>…`. Mercury answers for five callsigns at most, of 1 to 15 characters, and its CALL carries only capitals, digits and `-`. The adapter refuses others (`refused`) rather than let Mercury drop or change them, so a callsign with `/` (RP-0 §6.1) cannot be used. An empty list keeps Mercury from answering, as `listen` off does. |
 | `listen` | `LISTEN ON` / `LISTEN OFF`, but see *Answering* below. |
-| `connect` | `CONNECT <as> <remote>`, after `MYCALL` with `as` first when it is not, and after `BW<bandwidth>` when the call names a bandwidth Mercury is not on. `ok` comes with Mercury's `OK`; `CONNECTED <caller> <called> <bandwidth>` gives `connected` with the bandwidth the two stations agreed on. A caller's callsign is at most 14 characters. |
-| `failed` | `DISCONNECTED` before `CONNECTED`: `timeout`, or `aborted` after the host's `abort`. A call that Mercury answered first, from another station, ends the host's own with `busy`. |
+| `connect` | `CONNECT <as> <remote>`, after `MYCALL` with `as` first when it is not, and after `BW<bandwidth>` when the call names a bandwidth Mercury is not on. `ok` comes at once: the call is under way, though `CONNECT` may wait for the station to identify (below) or for a quiet second. `CONNECTED <caller> <called> <bandwidth>` gives `connected` with the bandwidth the two stations agreed on. A caller's callsign is at most 14 characters. |
+| `failed` | `DISCONNECTED` before `CONNECTED`: `timeout`, or `aborted` after the host's `abort`; `refused` when Mercury answers `CONNECT` with `WRONG`. A call that Mercury answered first, from another station, ends the host's own with `busy`. |
 | `disconnected` | `DISCONNECTED` once the link is up: `local` when the host ended it, and `remote` otherwise, since Mercury says neither which session ended nor why. |
 | `send` | Bytes to the data port; see *Delivery*. |
 | `received` | Bytes from the data port, while the link is up. |
@@ -451,11 +451,31 @@ details of Mercury's count shape how:
 * Mercury's own queue holds 64 KiB and drops what does not fit. The adapter keeps no more than 32
   KiB with Mercury unconfirmed, and holds the rest until Mercury has confirmed more.
 
+**Identification.** Mercury does not identify the station by itself: a CALL carries the caller's
+callsign, an ACCEPT only a CRC of the called station's, and the session's frames none. The adapter
+identifies with `CQFRAME <callsign> <bandwidth>`: one frame on Mercury's control mode, the size of
+a CALL (3.74 s; on the MFSK floor, 13.5 s or 27 s, from a station that sends only MFSK), which
+carries the callsign and which every Mercury decodes and reports as `CQFRAME <callsign> <bandwidth>`:
+
+* after each session, with the callsign the host had on it (`local`), at the session's bandwidth;
+* after a session Mercury answered and the adapter ended (*Answering*), with the callsign called;
+* after a call Mercury answered with ACCEPTs that never came to a session, with the host's first
+  callsign. A call the host placed is not followed by one: its CALLs carried its callsign.
+
+Mercury keys a CQ frame at once, whatever is on the air, so the adapter chooses the moment. It sends
+one only when no call, link or `ABORT`'s DISCONNECT frame of the station's is under way and Mercury
+is not answering a call. The station called identifies first, two seconds after the session's end,
+clear of the other station's last answer. The caller waits until it hears that `CQFRAME`, or 35
+seconds, and then identifies, so the two do not key at once. A `connect` waits until the station has
+identified. Mercury reports the CQ frame's transmission with `PENDING` and `CANCELPENDING`, which
+the adapter does not take for a call. A station still identifies after its host has gone.
+
+Whether a CQ frame, Mercury's published coding of a callsign in a published modulation, is the
+identification a station's rules ask for is its operator's reading of them. Within a session longer
+than ten minutes the adapter sends none: a CQ frame keyed then would land on the session's own.
+
 **What Mercury does not do.** It checks no band rules (§8): a gateway's operator, or the gateway,
-must. It does not identify the station: a CALL carries the caller's callsign, an ACCEPT only a CRC
-of the called station's, and the session's frames none, so a station that must identify at the end
-of a contact, and every ten minutes, has to do so by other means. Mercury's broadcasts, KISS frames
-on a port of their own, are not carried by the adapter yet.
+must. Mercury's broadcasts, KISS frames on a port of their own, are not carried by the adapter yet.
 
 ---
 
@@ -476,3 +496,4 @@ on a port of their own, are not carried by the adapter yet.
 | 0.6.2 | 2026-11-12 | §9.1: from Aether 0.2.0-beta.149 (its ADR-0108) a claim speaks for the station. Aether's own callsigns are not answered while one stands, and its Setup shows the program's callsign; nothing asks the operator to copy a host's callsign into Aether. |
 | 0.6.3 | 2026-11-12 | §9.1: the adapter offers the program's log to Aether (`share.include`, Aether 0.2.0-beta.150), which puts it in the files a station shares; the log names no correspondent and no subject. |
 | 0.6.4 | 2026-11-12 | §9.6, Mercury, found by writing its adapter from Mercury's `docs/TNC.md` and its source: the mapping; one program at a time; `LISTEN OFF` held until nothing of the host's is up, since Mercury's ends a session unsaid; no `CONNECT` for a second after a command that Mercury may answer with a `DISCONNECTED` of no session; `BUFFER` as delivery, and when its 0 is believed; the callsigns Mercury can carry; and that Mercury neither checks band rules nor identifies the station. |
+| 0.6.5 | 2026-11-12 | §9.6: the Mercury adapter identifies the station with `CQFRAME` after each session, and after answers that came to none; the station called first, the caller once it has heard it; a `connect` waits for it, and so its `ok` comes at once and Mercury's refusal is `failed` `refused`. |

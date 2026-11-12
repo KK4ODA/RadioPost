@@ -18,7 +18,7 @@ adapter from them.
 | [RP-1](rp-0001-identity.md) | Identity | Draft | 0.5.1 | Keys, credentials, session statements, published keys, revocation |
 | [RP-2](rp-0002-messages.md) | Messages | Draft | 0.2.0 | The message, its air form, its content ID |
 | [RP-3](rp-0003-session.md) | Session protocol | Draft | 0.11.0 | Client ↔ gateway over the radio |
-| [RP-4](rp-0004-modem-interface.md) | Modem interface | Draft | 0.6.4 | Client or gateway ↔ modem adapter |
+| [RP-4](rp-0004-modem-interface.md) | Modem interface | Draft | 0.6.5 | Client or gateway ↔ modem adapter |
 | [RP-5](rp-0005-post-office-api.md) | Post office API | Draft | 0.14.0 | Gateway or client ↔ post office over HTTPS |
 | [RP-6](rp-0006-email.md) | Email interoperation | Draft | 0.6.0 | Post office ↔ ordinary email |
 | [RP-7](rp-0007-forwarding.md) | Forwarding | Draft | 0.8.0 | Gateway ↔ gateway by radio |

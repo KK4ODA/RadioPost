@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.1 |
+| **Version** | 0.3.2 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -889,7 +889,7 @@ HF modem, as a client or a gateway.
 | Recommendation | **Modify**: one adapter for both, built and tested against Mercury first. Mercury is open source and runs on Linux, so the adapter and the tester's A-01 to A-04 can run against a real modem in CI; VARA is proprietary and is never run by the project, so it follows from its published commands. Whether Mercury joins Phase 5's adapters, ahead of ARDOP, is the author's call. |
 | Status | In progress: Mercury built, its run against the real modem to come; VARA not started. |
 | Author decision | VARA is a black box (CLAUDE.md): only its published command list is used. |
-| Notes | Mercury's air interface is published (FreeDV and codec2 OFDM modes, documented in its repository), so an open monitor (W42) can read sessions over it, which it cannot over VARA. Mercury is GPL-3.0; the adapter talks to it over TCP, as the post office talks to Stalwart, so RadioPost's licences are unaffected. Writing the adapter found that Mercury does not identify the station: its CALL carries the caller's callsign, its ACCEPT only a CRC of the called station's, and a session's frames none (RP-4 §9.6). A gateway answering by Mercury never puts its callsign on the air in a form anyone can read. How a station on Mercury identifies is open: the operator, Mercury's `CQFRAME` (which carries a callsign any Mercury decodes) sent by the adapter after each session, or a change to Mercury. |
+| Notes | Mercury's air interface is published (FreeDV and codec2 OFDM modes, documented in its repository), so an open monitor (W42) can read sessions over it, which it cannot over VARA. Mercury is GPL-3.0; the adapter talks to it over TCP, as the post office talks to Stalwart, so RadioPost's licences are unaffected. Writing the adapter found that Mercury does not identify the station: its CALL carries the caller's callsign, its ACCEPT only a CRC of the called station's, and a session's frames none (RP-4 §9.6). A gateway answering by Mercury never put its callsign on the air in a form anyone could read. The author's decision (2026-11-12): the adapter sends `CQFRAME` after each session, which carries a callsign any Mercury decodes; the station called first, the caller once it has heard it (RP-4 §9.6). Not covered: a session longer than ten minutes is not identified within it. |
 
 ### W21. An ARDOP adapter
 
@@ -1083,3 +1083,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.2.6 | 2026-11-12 | The author's wishes, built: W47, deleting messages and a trash; W48, what a session has carried and what is left. W2 in progress: the address list is built, groups and import are not. |
 | 0.3.0 | 2026-11-12 | The author's wish, built: W49, the post office run from the client (applications, evidence, accounts, checks, jobs, backups) and set up by `radiopost-po install` (RP-5 0.14.0, D35). W38's backups built. W10: the sysop's check posts its code. |
 | 0.3.1 | 2026-11-12 | W20 in progress: the Mercury adapter is built and RP-4 §9.6 written from it; it found that Mercury does not identify the station. |
+| 0.3.2 | 2026-11-12 | W20: the author's decision, built: the Mercury adapter identifies the station with `CQFRAME` after each session. |

@@ -118,7 +118,8 @@ impl Rig {
         let mut rig = Rig::with(&["KK4ODA"]);
         let outs = rig.host(&json!({"op": "connect", "id": 10, "remote": "N1CALL-10"}));
         assert_eq!(asked(&outs), ["CONNECT KK4ODA N1CALL-10"]);
-        assert_eq!(told(&rig.modem("OK")), [json!({"op": "ok", "id": 10})]);
+        assert_eq!(told(&outs), [json!({"op": "ok", "id": 10})]);
+        assert!(told(&rig.modem("OK")).is_empty());
         let outs = rig.modem("CONNECTED KK4ODA N1CALL-10 2300");
         assert_eq!(
             told(&outs),
@@ -321,14 +322,16 @@ fn a_call_goes_out_under_the_callsign_it_names_at_the_bandwidth_it_names() {
     );
     // Mercury's CALL carries MYCALL's first callsign, whatever CONNECT names
     assert_eq!(asked(&outs), ["MYCALL KK4ODA-7 KK4ODA"]);
+    assert_eq!(
+        told(&outs),
+        [json!({"op": "ok", "id": 1})],
+        "the call is under way"
+    );
     assert_eq!(asked(&rig.modem("OK")), ["BW500"]);
     let outs = rig.modem("OK");
     assert_eq!(asked(&outs), ["CONNECT KK4ODA-7 N1CALL-10"]);
-    assert!(
-        told(&outs).is_empty(),
-        "`ok` when Mercury has taken the call"
-    );
-    assert_eq!(told(&rig.modem("OK")), [json!({"op": "ok", "id": 1})]);
+    assert!(told(&outs).is_empty());
+    assert!(told(&rig.modem("OK")).is_empty());
     let outs = rig.modem("CONNECTED KK4ODA-7 N1CALL-10 500");
     assert_eq!(
         told(&outs),
@@ -343,7 +346,17 @@ fn a_call_goes_out_under_the_callsign_it_names_at_the_bandwidth_it_names() {
     let outs =
         rig.host(&json!({"op": "connect", "id": 2, "remote": "N1CALL-10", "bandwidth": 500}));
     assert_eq!(asked(&outs), ["MYCALL KK4ODA KK4ODA-7"]);
-    assert_eq!(asked(&rig.modem("OK")), ["CONNECT KK4ODA N1CALL-10"]);
+    assert!(
+        asked(&rig.modem("OK")).is_empty(),
+        "the station identifies first"
+    );
+    rig.modem("CQFRAME N1CALL-10 500");
+    rig.modem("OK");
+    rig.modem("PENDING");
+    assert_eq!(
+        asked(&rig.modem("CANCELPENDING")),
+        ["CONNECT KK4ODA N1CALL-10"]
+    );
 }
 
 #[test]
@@ -533,6 +546,7 @@ fn abort_ends_the_link_now_and_listen_off_waits_for_its_disconnect_frame() {
     assert!(rig.modem("PTT OFF").is_empty());
     assert!(rig.modem("PTT ON").is_empty());
     assert_eq!(asked(&rig.modem("PTT OFF")), ["LISTEN OFF"]);
+    assert_eq!(asked(&rig.later(2000)), ["CQFRAME N1CALL-10 2300"]);
 
     // with no transmission to see, a minute is waited
     let mut rig = Rig::answered();
@@ -541,7 +555,10 @@ fn abort_ends_the_link_now_and_listen_off_waits_for_its_disconnect_frame() {
     rig.modem("DISCONNECTED");
     rig.host(&json!({"op": "listen", "id": 2, "on": false}));
     assert!(rig.later(59_000).is_empty());
-    assert_eq!(asked(&rig.later(1000)), ["LISTEN OFF"]);
+    assert_eq!(
+        asked(&rig.later(1000)),
+        ["LISTEN OFF", "CQFRAME N1CALL-10 2300"]
+    );
 
     // a call that comes meanwhile is not answered for a host that no longer listens
     let mut rig = Rig::answered();
@@ -594,25 +611,28 @@ fn a_call_ends_failed_with_no_answer_or_at_the_hosts_abort() {
         [json!({"op": "failed", "id": 5, "code": "aborted"})]
     );
 
-    // Mercury's refusal of the call is the connect's error
+    // Mercury's refusal of the call, after its `ok`, is `failed`
     rig.later(2000);
     rig.host(&json!({"op": "connect", "id": 7, "remote": "N1CALL-10"}));
     let outs = rig.modem("WRONG");
     assert_eq!(
         told(&outs),
-        [json!({"op": "error", "id": 7, "code": "refused"})]
+        [json!({"op": "failed", "id": 7, "code": "refused"})]
     );
 }
 
 #[test]
 fn no_connect_follows_an_abort_within_a_second_so_a_late_disconnected_is_not_the_calls() {
-    let mut rig = Rig::connected();
-    rig.host(&json!({"op": "abort", "id": 1, "link": "m1"}));
+    let mut rig = Rig::with(&["KK4ODA"]);
+    rig.host(&json!({"op": "connect", "id": 1, "remote": "N1CALL-10"}));
+    rig.modem("OK");
+    rig.host(&json!({"op": "abort", "id": 2}));
     rig.modem("OK");
     rig.modem("DISCONNECTED");
-    let outs = rig.host(&json!({"op": "connect", "id": 2, "remote": "N1CALL-10"}));
+    let outs = rig.host(&json!({"op": "connect", "id": 3, "remote": "N1CALL-10"}));
+    assert_eq!(told(&outs), [json!({"op": "ok", "id": 3})]);
     assert!(
-        outs.is_empty(),
+        asked(&outs).is_empty(),
         "held: a DISCONNECTED may still be on its way"
     );
     // Mercury's answer to a command that found no session: it is nobody's
@@ -620,25 +640,29 @@ fn no_connect_follows_an_abort_within_a_second_so_a_late_disconnected_is_not_the
     assert!(rig.later(900).is_empty());
     let outs = rig.later(100);
     assert_eq!(asked(&outs), ["CONNECT KK4ODA N1CALL-10"]);
-    assert_eq!(told(&rig.modem("OK")), [json!({"op": "ok", "id": 2})]);
+    assert!(told(&rig.modem("OK")).is_empty());
 
     // a call the host gives up before it has gone to Mercury ends at once, with no ABORT
     let mut rig = Rig::connected();
     rig.host(&json!({"op": "abort", "id": 1, "link": "m1"}));
     rig.modem("OK");
     rig.modem("DISCONNECTED");
-    rig.host(&json!({"op": "connect", "id": 2, "remote": "N1CALL-10"}));
+    let outs = rig.host(&json!({"op": "connect", "id": 2, "remote": "N1CALL-10"}));
+    assert_eq!(told(&outs), [json!({"op": "ok", "id": 2})]);
     let outs = rig.host(&json!({"op": "abort", "id": 3}));
     assert!(asked(&outs).is_empty());
     assert_eq!(
         told(&outs),
         [
-            json!({"op": "ok", "id": 2}),
             json!({"op": "ok", "id": 3}),
             json!({"op": "failed", "id": 2, "code": "aborted"})
         ]
     );
-    assert!(rig.later(5000).is_empty(), "no CONNECT for a call given up");
+    let later = asked(&rig.later(5000));
+    assert!(
+        !later.iter().any(|c| c.starts_with("CONNECT")),
+        "no CONNECT for a call given up: {later:?}"
+    );
 }
 
 #[test]
@@ -746,6 +770,16 @@ fn a_host_that_leaves_has_its_link_aborted_and_mercury_stops_answering() {
     assert!(!rig.bridge.settled(), "LISTEN OFF is unanswered");
     rig.modem("OK");
     assert!(
+        !rig.bridge.settled(),
+        "the station identifies, though its host has gone"
+    );
+    assert_eq!(asked(&rig.later(2000)), ["CQFRAME N1CALL-10 2300"]);
+    for line in ["OK", "PENDING", "PTT ON", "PTT OFF"] {
+        rig.modem(line);
+        assert!(!rig.bridge.settled());
+    }
+    rig.modem("CANCELPENDING");
+    assert!(
         rig.bridge.settled(),
         "the connections to Mercury may be closed"
     );
@@ -802,6 +836,134 @@ fn what_mercury_does_not_carry_is_unsupported() {
         told(&outs),
         [json!({"op": "error", "id": 1, "code": "unsupported"})]
     );
+}
+
+/// Mercury's answer to the station's `CQFRAME`, and the frame keyed: `PENDING` is its own, not a
+/// call. `CANCELPENDING`, when it is sent, follows.
+fn identified(rig: &mut Rig) {
+    for answer in ["OK", "PENDING", "PTT ON", "PTT OFF"] {
+        let outs = rig.modem(answer);
+        assert!(told(&outs).is_empty(), "{answer} told the host {outs:?}");
+        assert!(asked(&outs).is_empty(), "{answer} asked {outs:?}");
+    }
+}
+
+#[test]
+fn the_called_station_identifies_after_the_session_with_the_callsign_called() {
+    let mut rig = Rig::listening(&["N1CALL-10", "N1CALL-11"]);
+    rig.modem("PENDING");
+    rig.modem("CONNECTED KK4ODA N1CALL-11 500");
+    let outs = rig.modem("DISCONNECTED");
+    assert!(
+        asked(&outs).is_empty(),
+        "the other station's answer may still come"
+    );
+    assert!(rig.later(1900).is_empty());
+    assert_eq!(asked(&rig.later(100)), ["CQFRAME N1CALL-11 500"]);
+    identified(&mut rig);
+    let outs = rig.modem("CANCELPENDING");
+    assert!(outs.is_empty(), "{outs:?}");
+    assert!(rig.later(60_000).is_empty(), "once");
+    // Mercury answers the next call as before: its PENDING is a call again
+    rig.modem("PENDING");
+    let outs = rig.host(&json!({"op": "connect", "id": 9, "remote": "W1AW"}));
+    assert_eq!(
+        told(&outs),
+        [json!({"op": "error", "id": 9, "code": "busy"})]
+    );
+}
+
+#[test]
+fn the_caller_identifies_after_the_station_it_called() {
+    let mut rig = Rig::connected();
+    rig.host(&json!({"op": "disconnect", "id": 1, "link": "m1"}));
+    rig.modem("OK");
+    rig.modem("DISCONNECTED");
+    assert!(rig.later(10_000).is_empty(), "N1CALL-10 identifies first");
+    // another station's CQ is not the one waited for
+    assert!(rig.modem("CQFRAME W1AW 2300").is_empty());
+    assert_eq!(
+        asked(&rig.modem("CQFRAME n1call-10 2300")),
+        ["CQFRAME KK4ODA 2300"]
+    );
+    identified(&mut rig);
+    assert!(rig.modem("CANCELPENDING").is_empty());
+
+    // a called station that never identifies is waited for 35 s
+    let mut rig = Rig::connected();
+    rig.modem("DISCONNECTED");
+    assert!(rig.later(34_900).is_empty());
+    assert_eq!(asked(&rig.later(100)), ["CQFRAME KK4ODA 2300"]);
+}
+
+#[test]
+fn a_call_waits_for_the_stations_identification() {
+    let mut rig = Rig::answered();
+    rig.modem("DISCONNECTED");
+    let outs = rig.host(&json!({"op": "connect", "id": 4, "remote": "W1AW"}));
+    assert_eq!(told(&outs), [json!({"op": "ok", "id": 4})]);
+    assert!(asked(&outs).is_empty(), "the station identifies first");
+    let outs = rig.later(2000);
+    assert_eq!(asked(&outs), ["CQFRAME N1CALL-10 2300"]);
+    identified(&mut rig);
+    assert_eq!(
+        asked(&rig.modem("CANCELPENDING")),
+        ["CONNECT N1CALL-10 W1AW"]
+    );
+}
+
+#[test]
+fn an_answer_mercury_sent_for_a_call_that_never_came_up_is_identified() {
+    let mut rig = Rig::listening(&["N1CALL-10"]);
+    rig.modem("PENDING");
+    rig.modem("PTT ON");
+    rig.modem("PTT OFF");
+    assert!(rig.modem("CANCELPENDING").is_empty());
+    assert_eq!(asked(&rig.later(2000)), ["CQFRAME N1CALL-10 2300"]);
+
+    // a call given up before Mercury keyed owes nothing
+    let mut rig = Rig::listening(&["N1CALL-10"]);
+    rig.modem("PENDING");
+    rig.modem("CANCELPENDING");
+    assert!(rig.later(60_000).is_empty());
+}
+
+#[test]
+fn a_session_answered_for_nobody_is_identified_with_the_stations_callsign() {
+    let mut rig = Rig::with(&["KK4ODA"]);
+    rig.modem("PENDING");
+    rig.modem("CONNECTED W1AW KK4ODA 500");
+    rig.modem("OK");
+    rig.modem("DISCONNECTED");
+    rig.modem("PTT ON");
+    rig.modem("PTT OFF");
+    assert_eq!(asked(&rig.later(2000)), ["CQFRAME KK4ODA 500"]);
+}
+
+#[test]
+fn identifications_go_one_at_a_time_and_a_refused_or_silent_one_is_given_up() {
+    let mut rig = Rig::listening(&["N1CALL-10"]);
+    rig.modem("PENDING");
+    rig.modem("CONNECTED KK4ODA N1CALL-10 2300");
+    rig.modem("DISCONNECTED");
+    rig.host(&json!({"op": "callsigns", "id": 5, "callsigns": ["N1CALL-11"]}));
+    rig.modem("OK");
+    rig.modem("PENDING");
+    rig.modem("CONNECTED KK4ODA N1CALL-11 2300");
+    rig.modem("DISCONNECTED");
+    assert_eq!(asked(&rig.later(2000)), ["CQFRAME N1CALL-10 2300"]);
+    assert!(
+        asked(&rig.later(2000)).is_empty(),
+        "the second waits for the first"
+    );
+    // Mercury could not build the frame: it says nothing, and a minute is waited
+    rig.modem("OK");
+    assert!(rig.later(57_000).is_empty());
+    assert_eq!(asked(&rig.later(1000)), ["CQFRAME N1CALL-11 2300"]);
+    // refused: nothing comes of it
+    let outs = rig.modem("WRONG");
+    assert!(outs.is_empty(), "{outs:?}");
+    assert!(rig.later(60_000).is_empty());
 }
 
 /// `vectors/rpmi-lines.json`: each line, after `hello` and the callsign KK4ODA, answered as the

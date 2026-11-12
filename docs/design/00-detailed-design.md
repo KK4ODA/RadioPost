@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.29 |
+| **Version** | 0.1.30 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -199,7 +199,7 @@ server with those interfaces could replace Stalwart (concept §8.1).
 |---|---|---|
 | Aether | Control API, WebSocket | Delivery receipts, quality, busy, rules checked by the modem. Could become native RPMI. Shareable from 0.2.0-beta.146: each program claims its callsigns (its ADR-0106, RP-4 §9.1). |
 | VARA HF, VARA FM | Published TNC commands, two TCP ports | No delivery receipts. |
-| Mercury | VARA-style TNC commands, two TCP ports (RP-4 §9.6) | Built, `adapters/mercury`. Delivery from its `BUFFER`, which counts what the other station has not confirmed. One program at a time; checks no band rules and does not identify the station. |
+| Mercury | VARA-style TNC commands, two TCP ports (RP-4 §9.6) | Built, `adapters/mercury`. Delivery from its `BUFFER`, which counts what the other station has not confirmed. One program at a time; checks no band rules. Mercury does not identify the station, so the adapter sends `CQFRAME` with the station's callsign after each session. |
 | ARDOP | Host command and data ports | To be checked against ARDOP's specification. |
 | AX.25 | AGWPE (Direwolf, TNCs) | VHF and UHF packet. |
 | TCP | Another TCP adapter (RP-4 §9.5) | The Internet over TLS; an amateur mesh such as AREDN in plain TCP, since it is on the air; tests. |
@@ -356,3 +356,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.27 | 2026-11-12 | The purpose, stated (written 2026-11-10 on a branch, merged now): not a replacement for Winlink, but a common protocol to experiment with and build on. D19's reason reworded to match: a station runs both systems, not a move from one to the other. |
 | 0.1.28 | 2026-11-12 | D35: applications from the client, decided by the operators over the API with their own credentials (RP-5 0.14.0). |
 | 0.1.29 | 2026-11-12 | §5.4: the Mercury adapter (RP-4 §9.6). |
+| 0.1.30 | 2026-11-12 | §5.4: the Mercury adapter identifies the station after each session (RP-4 0.6.5). |

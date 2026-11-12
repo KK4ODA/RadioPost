@@ -18,6 +18,10 @@
 //! * `BUFFER` counts the bytes the other station has not confirmed, among those Mercury has taken
 //!   in: `delivered` and `queued` follow from it, and a `BUFFER 0` that may have been counted
 //!   before Mercury took the last bytes in is not believed until they have had time to show.
+//! * Mercury does not identify the station: the called station's callsign goes on the air only as
+//!   a CRC. After each session, and after any answer Mercury sent that came to no session, the
+//!   bridge sends `CQFRAME` with the callsign the station used, which every Mercury decodes. The
+//!   called station goes first; the caller waits to hear it, so the two do not key at once.
 
 use std::collections::VecDeque;
 
@@ -54,6 +58,18 @@ const EARLY_MS: u64 = 1000;
 /// The most such bytes kept.
 const EARLY_MAX: usize = 65536;
 
+/// How long the called station waits after a session's end before it identifies: the other
+/// station's last answer, a reply pattern of 0.64 s, comes 0.7 s after ours.
+const GUARD_MS: u64 = 2000;
+/// How long the caller waits to hear the called station identify before it identifies anyway: a
+/// CQ frame, the size of a CALL, is 3.74 s on DATAC16 and 27 s on the 500 Hz floor of a station
+/// that sends only MFSK (Mercury's `docs/TNC.md`).
+const PEER_ID_MS: u64 = 35_000;
+/// How long a `CQFRAME` is given to be sent: Mercury says nothing of one it could not build.
+const IDENT_MS: u64 = 60_000;
+/// The bandwidth a `CQFRAME` names when the session's is not known.
+const IDENT_BW: i64 = 2300;
+
 /// What a host is told when the modem there does not answer as Mercury does.
 const NOT_MERCURY: &str =
     "the modem there is not Mercury 1.9.23 or later: it does not know BUSYDETECT";
@@ -87,6 +103,7 @@ enum Waiting {
     Connect {
         call: u64,
     },
+    Ident,
     Plain(&'static str),
 }
 
@@ -131,7 +148,9 @@ struct Call {
 struct Link {
     id: String,
     remote: String,
+    local: String,
     direction: &'static str,
+    bandwidth: Option<i64>,
     /// Bytes the host has sent on the link.
     given: u64,
     /// Of those, the bytes written to Mercury's data port.
@@ -161,6 +180,13 @@ struct Tail {
     keyed: bool,
 }
 
+/// A `CQFRAME` sent: Mercury brackets its transmission with `PENDING` and `CANCELPENDING`.
+#[derive(Debug)]
+struct Ident {
+    until: u64,
+    keyed: bool,
+}
+
 /// One host's side of the adapter. It outlives its host by the end of what the host left on the
 /// air ([`Bridge::settled`]), and may be given the next host meanwhile.
 #[derive(Debug)]
@@ -178,8 +204,8 @@ pub struct Bridge {
     detector: Option<bool>,
     callsigns: Vec<String>,
     listening: bool,
-    /// The first callsign of the last `MYCALL`.
-    primary: Option<String>,
+    /// The callsigns of the last `MYCALL`, the first first.
+    mycall: Vec<String>,
     /// What Mercury was last told of listening. Unknown at first, so taken as on.
     modem_listening: bool,
     bandwidth: Option<i64>,
@@ -188,8 +214,8 @@ pub struct Bridge {
     tail: Option<Tail>,
     /// Mercury is answering a call.
     pending: bool,
-    /// A session Mercury brought up that is not the host's, being ended.
-    ghost: bool,
+    /// A session Mercury brought up that is not the host's, being ended: the callsign it was for.
+    ghost: Option<String>,
     call: Option<Call>,
     calls_made: u64,
     link: Option<Link>,
@@ -199,6 +225,16 @@ pub struct Bridge {
     rate_bps: Option<u64>,
     channel_busy: bool,
     busy_told: bool,
+    /// The callsigns the station has transmitted under and not yet identified with.
+    owed: Vec<String>,
+    owed_bw: i64,
+    /// No `CQFRAME` before this.
+    ident_after: u64,
+    /// The other station, whose `CQFRAME` heard ends the wait.
+    ident_peer: Option<String>,
+    ident: Option<Ident>,
+    /// Mercury keyed while answering a call that has not come up.
+    answer_keyed: bool,
 }
 
 impl Default for Bridge {
@@ -249,14 +285,14 @@ impl Bridge {
             detector: None,
             callsigns: Vec::new(),
             listening: false,
-            primary: None,
+            mycall: Vec::new(),
             modem_listening: true,
             bandwidth: None,
             waiting: VecDeque::new(),
             quiet_until: 0,
             tail: None,
             pending: false,
-            ghost: false,
+            ghost: None,
             call: None,
             calls_made: 0,
             link: None,
@@ -266,6 +302,12 @@ impl Bridge {
             rate_bps: None,
             channel_busy: false,
             busy_told: false,
+            owed: Vec::new(),
+            owed_bw: IDENT_BW,
+            ident_after: 0,
+            ident_peer: None,
+            ident: None,
+            answer_keyed: false,
         }
     }
 
@@ -312,7 +354,7 @@ impl Bridge {
     /// Whether nothing of the host's is on the air, so that `LISTEN OFF` ends nothing.
     fn may_release(&self) -> bool {
         self.link.is_none()
-            && !self.ghost
+            && self.ghost.is_none()
             && self.tail.is_none()
             && !self.call.as_ref().is_some_and(|c| c.placed)
     }
@@ -445,7 +487,7 @@ impl Bridge {
             self.settle_listen(out);
             return;
         }
-        self.primary = wanted.first().cloned();
+        self.mycall.clone_from(&wanted);
         let line = format!("MYCALL {}", wanted.join(" "));
         self.command(&line, Waiting::Callsigns { rid, wanted }, out);
     }
@@ -505,7 +547,7 @@ impl Bridge {
             out.push(refuse("busy", "a link or a call is up"));
             return;
         }
-        if self.pending || self.ghost {
+        if self.pending || self.ghost.is_some() {
             out.push(refuse("busy", "Mercury is answering a call"));
             return;
         }
@@ -519,7 +561,7 @@ impl Bridge {
             return;
         }
         let mut steps = VecDeque::new();
-        if self.primary.as_deref() != Some(local.as_str()) {
+        if self.mycall.first() != Some(&local) {
             // the CALL carries MYCALL's first callsign, whatever CONNECT names
             let mut order = vec![local.clone()];
             order.extend(self.callsigns.iter().filter(|c| **c != local).cloned());
@@ -531,6 +573,9 @@ impl Bridge {
             steps.push_back(Step::Bandwidth(bw));
         }
         steps.push_back(Step::Connect);
+        // the call is under way: what it waits for (the station's identification, a quiet second)
+        // may take longer than a host waits for an answer
+        Self::ok(rid.as_ref(), out);
         self.calls_made += 1;
         self.call = Some(Call {
             serial: self.calls_made,
@@ -540,7 +585,7 @@ impl Bridge {
             steps,
             in_flight: false,
             placed: false,
-            told: false,
+            told: true,
             aborted: false,
         });
         self.advance_call(out);
@@ -555,14 +600,17 @@ impl Bridge {
         if call.in_flight || call.placed {
             return;
         }
-        if matches!(call.steps.front(), Some(Step::Connect)) && self.now < self.quiet_until {
+        let identifying = !self.owed.is_empty() || self.ident.is_some();
+        if matches!(call.steps.front(), Some(Step::Connect))
+            && (self.now < self.quiet_until || identifying)
+        {
             return;
         }
         let serial = call.serial;
         match call.steps.pop_front() {
             Some(Step::Mycall(order)) => {
                 call.in_flight = true;
-                self.primary = order.first().cloned();
+                self.mycall.clone_from(&order);
                 let line = format!("MYCALL {}", order.join(" "));
                 self.command(&line, Waiting::Step { call: serial }, out);
             }
@@ -769,10 +817,59 @@ impl Bridge {
         {
             self.early.pop_front();
         }
+        if self.ident.as_ref().is_some_and(|i| now >= i.until) {
+            self.ident = None;
+        }
+        self.identify(&mut out);
         self.advance_call(&mut out);
         self.settle();
         self.progress(&mut out);
         out
+    }
+
+    /// The station has transmitted under `callsign`: it identifies once the air is its own, after
+    /// the other station, `peer`, has identified if this station called it.
+    fn owe(&mut self, callsign: &str, peer: Option<&str>, bandwidth: Option<i64>) {
+        if !self.owed.iter().any(|c| same(c, callsign)) {
+            self.owed.push(callsign.to_owned());
+        }
+        self.owed_bw = bandwidth.unwrap_or(IDENT_BW);
+        let wait = if let Some(p) = peer {
+            self.ident_peer = Some(p.to_owned());
+            PEER_ID_MS
+        } else {
+            GUARD_MS
+        };
+        self.ident_after = self.ident_after.max(self.now + wait);
+    }
+
+    /// Sends the next `CQFRAME` owed, when nothing is on the air for the station and its turn has
+    /// come.
+    fn identify(&mut self, out: &mut Vec<Out>) {
+        let clear = self.link.is_none()
+            && self.ghost.is_none()
+            && self.tail.is_none()
+            && !self.pending
+            && !self.call.as_ref().is_some_and(|c| c.placed);
+        if self.owed.is_empty()
+            || self.ident.is_some()
+            || !clear
+            || self.modem_lost
+            || self.detector.is_none()
+            || self.now < self.ident_after
+        {
+            return;
+        }
+        let callsign = self.owed.remove(0);
+        if self.owed.is_empty() {
+            self.ident_peer = None;
+        }
+        self.ident = Some(Ident {
+            until: self.now + IDENT_MS,
+            keyed: false,
+        });
+        let line = format!("CQFRAME {callsign} {}", self.owed_bw);
+        self.command(&line, Waiting::Ident, out);
     }
 
     /// A line Mercury wrote on its control port, without its CR.
@@ -788,14 +885,42 @@ impl Bridge {
             "CONNECTED" => self.on_connected(rest, &mut out),
             "DISCONNECTED" => self.on_disconnected(&mut out),
             "PENDING" => {
+                if let Some(i) = self.ident.as_mut().filter(|i| !i.keyed) {
+                    // the CQ frame is on the air
+                    i.keyed = true;
+                    return out;
+                }
                 // Mercury is back to answering: the last session's teardown is over
                 self.pending = true;
+                self.answer_keyed = false;
                 self.tail = None;
                 self.settle_listen(&mut out);
             }
             "CANCELPENDING" => {
-                self.pending = false;
-                self.settle_listen(&mut out);
+                if self.ident.as_ref().is_some_and(|i| i.keyed) {
+                    self.ident = None;
+                } else {
+                    self.pending = false;
+                    if std::mem::take(&mut self.answer_keyed) {
+                        // Mercury's ACCEPTs went out, and carried no callsign
+                        let answered = self.callsigns.first().or(self.mycall.first()).cloned();
+                        if let Some(c) = answered {
+                            self.owe(&c, None, self.bandwidth);
+                        }
+                    }
+                    self.settle_listen(&mut out);
+                }
+                self.identify(&mut out);
+                self.advance_call(&mut out);
+            }
+            "CQFRAME" => {
+                // a station identifying, or calling CQ: the one this station waits for, perhaps
+                let heard = rest.split_whitespace().next().unwrap_or("");
+                if self.ident_peer.as_deref().is_some_and(|p| same(p, heard)) {
+                    self.ident_peer = None;
+                    self.ident_after = self.now;
+                    self.identify(&mut out);
+                }
             }
             "BUFFER" => {
                 if let Ok(n) = rest.parse::<u64>() {
@@ -847,6 +972,9 @@ impl Bridge {
     }
 
     fn on_ptt(&mut self, on: bool, out: &mut Vec<Out>) {
+        if on && self.pending && self.link.is_none() && self.ident.is_none() {
+            self.answer_keyed = true;
+        }
         let Some(tail) = self.tail.as_mut() else {
             return;
         };
@@ -856,6 +984,7 @@ impl Bridge {
             // the transmission keyed after the ABORT is over: its DISCONNECT frame is out
             self.tail = None;
             self.settle_listen(out);
+            self.identify(out);
         }
     }
 
@@ -877,7 +1006,7 @@ impl Bridge {
             }
             Waiting::Callsigns { rid, wanted } => {
                 if !ok {
-                    self.primary = None;
+                    self.mycall.clear();
                 }
                 if !mine {
                     return;
@@ -900,7 +1029,7 @@ impl Bridge {
                     }
                     self.advance_call(out);
                 } else {
-                    self.primary = None;
+                    self.mycall.clear();
                     self.bandwidth = None;
                     self.end_call("refused", "Mercury refused what the call needs", out);
                 }
@@ -910,11 +1039,21 @@ impl Bridge {
                     return;
                 };
                 if ok {
-                    c.told = true;
-                    out.push(Out::Host(answer("ok", Some(&c.id))));
+                    if !c.told {
+                        c.told = true;
+                        out.push(Out::Host(answer("ok", Some(&c.id))));
+                    }
                 } else {
                     self.end_call("refused", "Mercury refused the call", out);
                     self.settle_listen(out);
+                }
+            }
+            Waiting::Ident => {
+                if !ok {
+                    // a callsign or bandwidth Mercury will not send: nothing comes of it
+                    self.ident = None;
+                    self.identify(out);
+                    self.advance_call(out);
                 }
             }
             Waiting::Plain(what) => {
@@ -934,6 +1073,7 @@ impl Bridge {
         };
         let bandwidth = parts.next().and_then(|b| b.parse::<i64>().ok());
         self.pending = false;
+        self.answer_keyed = false;
         if self.link.is_some() {
             return;
         }
@@ -972,8 +1112,14 @@ impl Bridge {
                 self.link_up(caller, &local, "in", None, bandwidth, out);
             }
             _ => {
-                // answered for nobody: the host does not listen, or it is not its callsign
-                self.ghost = true;
+                // answered for nobody: the host does not listen, or it is not its callsign; or a
+                // call the host gave up as it left. The station's callsign is the one it holds.
+                let ours = [dialed, caller]
+                    .into_iter()
+                    .find(|c| self.mycall.iter().any(|m| same(m, c)))
+                    .unwrap_or(dialed);
+                self.ghost = Some(ours.to_owned());
+                self.owed_bw = bandwidth.unwrap_or(IDENT_BW);
                 self.abort(out);
             }
         }
@@ -1010,7 +1156,9 @@ impl Bridge {
         self.link = Some(Link {
             id: link.clone(),
             remote: remote.to_owned(),
+            local: local.to_owned(),
             direction,
+            bandwidth,
             given: 0,
             fed: 0,
             acked: 0,
@@ -1046,6 +1194,7 @@ impl Bridge {
         self.pending = false;
         self.early.clear();
         if let Some(l) = self.link.take() {
+            self.owe_for(&l);
             let (reason, text) = if l.ending {
                 ("local", "the host ended the link")
             } else {
@@ -1062,8 +1211,9 @@ impl Bridge {
                 ],
             )));
             self.update_busy(out);
-        } else if self.ghost {
-            self.ghost = false;
+        } else if let Some(ours) = self.ghost.take() {
+            let bw = self.owed_bw;
+            self.owe(&ours, None, Some(bw));
         } else if self.call.as_ref().is_some_and(|c| c.placed) {
             if self.call.as_ref().is_some_and(|c| c.aborted) {
                 self.end_call("aborted", "the host aborted", out);
@@ -1073,6 +1223,14 @@ impl Bridge {
         }
         // else: Mercury's answer to a DISCONNECT, an ABORT or a LISTEN OFF that found no session
         self.settle_listen(out);
+        self.identify(out);
+    }
+
+    /// A link has ended: the station identifies with the callsign it had on it, the caller after
+    /// the station it called.
+    fn owe_for(&mut self, l: &Link) {
+        let peer = (l.direction == "out").then_some(l.remote.as_str());
+        self.owe(&l.local, peer, l.bandwidth);
     }
 
     /// Bytes read from Mercury's data port.
@@ -1092,7 +1250,7 @@ impl Bridge {
         }
         // the two ports are read apart: these may be a link's first bytes, ahead of its CONNECTED
         let kept: usize = self.early.iter().map(|(_, b)| b.len()).sum();
-        if self.hello && !self.ghost && kept + bytes.len() <= EARLY_MAX {
+        if self.hello && self.ghost.is_none() && kept + bytes.len() <= EARLY_MAX {
             self.early.push_back((self.now, bytes.to_vec()));
         }
         Vec::new()
@@ -1113,6 +1271,9 @@ impl Bridge {
         if self.modem_lost {
             return out;
         }
+        if let Some(l) = &link {
+            self.owe_for(l);
+        }
         let aborting = link.as_ref().is_some_and(|l| l.asked && !l.closing);
         if (link.is_some() && !aborting) || call.is_some_and(|c| c.placed && !c.aborted) {
             self.abort(&mut out);
@@ -1126,7 +1287,8 @@ impl Bridge {
     #[must_use]
     pub fn settled(&self) -> bool {
         let quiet = self.detector.is_none() || !self.modem_listening;
-        self.modem_lost || (quiet && self.tail.is_none() && self.waiting.is_empty())
+        let identified = self.owed.is_empty() && self.ident.is_none();
+        self.modem_lost || (quiet && identified && self.tail.is_none() && self.waiting.is_empty())
     }
 
     /// Mercury's connection closed, for the reason `why` (RP-4 §2.1): the host is told its link
@@ -1136,6 +1298,8 @@ impl Bridge {
         let mut out = Vec::new();
         self.modem_lost = true;
         self.lost_why.clone_from(&text);
+        self.owed.clear();
+        self.ident = None;
         if let Some(l) = self.link.take() {
             out.push(Out::Host(answer_with(
                 "disconnected",
