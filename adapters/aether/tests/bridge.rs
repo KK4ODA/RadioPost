@@ -553,9 +553,18 @@ fn aether_going_away_ends_the_link() {
         "state",
         &mine("connected", "N1CALL-10 (master)"),
     );
+    let lost = b.modem_lost("a read failed: Connection reset without closing handshake");
     assert_eq!(
-        lines(&b.modem_lost()),
+        lines(&lost),
         [json!({"op": "disconnected", "link": "a1", "reason": "failure"})]
+    );
+    // the host is told why, in words
+    let Out::Host(told) = &lost[0] else {
+        panic!("{lost:?}")
+    };
+    assert_eq!(
+        told["text"],
+        "Aether went away: a read failed: Connection reset without closing handshake"
     );
     let said = line(&mut b, &mut a, r#"{"op":"status","id":4}"#);
     assert_eq!(

@@ -836,9 +836,10 @@ impl Bridge {
         !self.waiting.is_empty()
     }
 
-    /// Aether's connection closed: the host's link or call goes with it, and every request from
-    /// now on is answered `no-modem`.
-    pub fn modem_lost(&mut self) -> Vec<Out> {
+    /// Aether's connection closed, for the reason `why`: the host's link or call goes with it,
+    /// told why, and every request from now on is answered `no-modem`.
+    pub fn modem_lost(&mut self, why: &str) -> Vec<Out> {
+        let text = format!("Aether went away: {why}");
         let mut out = Vec::new();
         self.modem_lost = true;
         if let Some(l) = self.link.take() {
@@ -848,7 +849,7 @@ impl Bridge {
                 &[
                     ("link", l.id.into()),
                     ("reason", "failure".into()),
-                    ("text", "Aether went away".into()),
+                    ("text", text.clone().into()),
                 ],
             )));
         }
@@ -856,10 +857,7 @@ impl Bridge {
             out.push(Out::Host(answer_with(
                 "failed",
                 call.id.as_ref(),
-                &[
-                    ("code", "refused".into()),
-                    ("text", "Aether went away".into()),
-                ],
+                &[("code", "refused".into()), ("text", text.clone().into())],
             )));
         }
         for (_, waiting) in self.waiting.drain() {

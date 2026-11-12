@@ -6,6 +6,12 @@
 //! office; [`station`] answers calls on an RPMI modem and keeps what outlives a session;
 //! [`operator`] registers the gateway with its operator's post office; [`monitor`] keeps what it
 //! is doing for its operator, [`runner`] runs it on a thread of its own, and [`panel`] shows it.
+//! What it says goes to [`LOG_FILE`] in its folder too ([`logfile`]), when the program names it.
+
+/// The gateway's log file, in its folder: what it says, dated, and any panic.
+pub const LOG_FILE: &str = "gateway.log";
+
+pub use radiopost::logfile;
 
 pub mod monitor;
 pub mod operator;

@@ -136,8 +136,10 @@ impl Monitor {
         self.inner.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// A line for the operator.
+    /// A line for the operator, in the panel and in the gateway's log file when the program
+    /// named one (`radiopost::logfile`).
     pub fn log(&self, line: &str) {
+        radiopost::logfile::line(line);
         let mut i = self.lock();
         i.log.push_back((now(), line.to_owned()));
         i.logged += 1;

@@ -157,6 +157,7 @@ another; Setup shows where):
 | `credential.hex` | The gateway's credential, from its registration. |
 | `held.json` | Callers' credentials seen, and pieces of uploads a broken link left (RP-3 §7). |
 | `sessions.json` | The last 200 sessions carried, as the Sessions list shows them. |
+| `gateway.log` | Everything the log at the bottom of the window says, with the date and time (UTC), from 0.1.0-beta.8 on; also why the connection to Aether ended, and any program fault. Past 2 MB it is kept as `gateway.log.old` and a new one begun. |
 
 ## 7. When something is wrong
 
@@ -173,4 +174,4 @@ another; Setup shows where):
 | A session ended *nothing heard for 300 seconds* | The path faded or the caller left: the caller's mail is resumed on its next call (RP-3 §7). |
 
 To report a problem, open an issue on [RadioPost's repository](https://github.com/KK4ODA/RadioPost/issues)
-with the log lines and, for a session that failed, Aether's recording of it.
+with `gateway.log` (§6) and, for a session that failed, Aether's recording of it.

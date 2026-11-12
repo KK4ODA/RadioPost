@@ -102,7 +102,9 @@ with:
 * the date and time (UTC), the band, frequency and bandwidth, and your grid square;
 * what happened: which messages went and came, how long each session took, and anything that went
   wrong;
-* your RadioPost log (the lines at the bottom of the window);
+* your RadioPost log: the file `radiopost.log` in RadioPost's folder (`.radiopost` in your home
+  folder: on Windows, `C:\Users\<you>\.radiopost`). It keeps what the bottom of the window says,
+  with the time, after the window is closed; RadioPost 0.1.0-beta.8 and later;
 * for a session that failed or was slow, Aether's recording of it: switch on Aether's **Record**
   before the test, and send the files from Aether's Log tab (*Send files…*).
 

@@ -142,7 +142,9 @@ with:
 * the date and time (UTC), the band and frequency, Aether's bandwidth, and the two stations'
   locations (grid squares);
 * the result: which messages arrived, how long the session took, and anything that went wrong;
-* each station's RadioPost log: copy the lines at the bottom of the window;
+* each station's RadioPost log: the file `radiopost.log` in RadioPost's folder (`.radiopost` in
+  your home folder), which keeps what the bottom of the window says, with the time (0.1.0-beta.8
+  and later; before that, copy the lines from the window);
 * for a session that failed or was slow, Aether's recording of it: switch on Aether's **Record**
   before the test, and send the files from Aether's Log tab (*Send files…*).
 

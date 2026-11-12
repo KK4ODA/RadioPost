@@ -107,6 +107,14 @@ fn installer(app: AppHandle, runner: Arc<Runner>) -> Install {
 
 fn main() {
     let dir = station::default_dir();
+    // what the gateway says, and any panic, in its folder's log file: the window's log is gone
+    // once it closes (2026-11-12)
+    radiopost_gateway::logfile::keep_in(&dir.join(radiopost_gateway::LOG_FILE));
+    radiopost_gateway::logfile::record_panics();
+    radiopost_gateway::logfile::line(&format!(
+        "RadioPost Gateway {} starts",
+        env!("CARGO_PKG_VERSION")
+    ));
     let (at, runner, updates) = match start(&dir) {
         Ok(started) => started,
         Err(e) => {

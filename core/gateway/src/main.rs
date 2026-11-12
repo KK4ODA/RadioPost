@@ -223,7 +223,11 @@ fn main() -> ExitCode {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     };
-    match run(&PathBuf::from(dir), &a, &command) {
+    let dir = PathBuf::from(dir);
+    // what the gateway says, and any panic, in its own folder's log file
+    radiopost::logfile::keep_in(&dir.join(radiopost_gateway::LOG_FILE));
+    radiopost::logfile::record_panics();
+    match run(&dir, &a, &command) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("radiopost-gateway: {e}");

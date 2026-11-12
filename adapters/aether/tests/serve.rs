@@ -7,7 +7,7 @@
 //! calls for an hour and a half that Aether, its claim gone, answered for nobody.
 
 use std::net::{TcpListener, TcpStream};
-use std::sync::mpsc;
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -104,10 +104,22 @@ fn ask(conn: &mut Connection, line: &str) -> Value {
     }
 }
 
+/// A [`radiopost_aether::serve::Note`] that keeps what it is told.
+fn notes() -> (radiopost_aether::serve::Note, Arc<Mutex<Vec<String>>>) {
+    let kept = Arc::new(Mutex::new(Vec::new()));
+    let into = Arc::clone(&kept);
+    let note: radiopost_aether::serve::Note = Arc::new(move |line: &str| {
+        into.lock().expect("notes").push(line.to_owned());
+    });
+    (note, kept)
+}
+
 #[test]
 fn aether_going_away_closes_the_hosts_connection() {
     let (aether, asked) = aether_that_restarts();
-    let at = radiopost_aether::serve::listen("127.0.0.1:0", &aether).expect("an adapter");
+    let (note, said) = notes();
+    let at =
+        radiopost_aether::serve::listen_noting("127.0.0.1:0", &aether, note).expect("an adapter");
     let mut host = Connection::open(at).expect("the adapter");
     let hello = ask(
         &mut host,
@@ -127,6 +139,37 @@ fn aether_going_away_closes_the_hosts_connection() {
     assert!(
         closed_within(&mut host, Duration::from_secs(5)),
         "the adapter kept the host's connection open with Aether gone"
+    );
+    // and it says why, for the program's log
+    let said = said.lock().expect("notes").clone();
+    assert!(
+        said.iter().any(|l| l.starts_with(&format!(
+            "the connection to Aether at {aether} ended: a read failed: "
+        ))),
+        "{said:?}"
+    );
+}
+
+#[test]
+fn an_aether_that_cannot_be_reached_is_said_so() {
+    // a port nobody listens on
+    let free = TcpListener::bind("127.0.0.1:0").expect("a port");
+    let aether = format!("ws://{}/v1", free.local_addr().expect("bound"));
+    drop(free);
+    let (note, said) = notes();
+    let at =
+        radiopost_aether::serve::listen_noting("127.0.0.1:0", &aether, note).expect("an adapter");
+    let mut host = Connection::open(at).expect("the adapter");
+    let hello = ask(
+        &mut host,
+        r#"{"op":"hello","id":1,"version":[1,1],"app":"radiopost-gateway test"}"#,
+    );
+    assert_eq!(hello["code"], "no-modem", "{hello}");
+    let said = said.lock().expect("notes").clone();
+    assert!(
+        said.iter()
+            .any(|l| l.starts_with(&format!("Aether at {aether} could not be reached: "))),
+        "{said:?}"
     );
 }
 
@@ -194,5 +237,10 @@ fn a_link_up_when_aether_goes_away_is_said_ended_before_the_close() {
         .find(|m| m.get("op") == Some(&json!("disconnected")))
         .unwrap_or_else(|| panic!("no disconnected before the close: {said:?}"));
     assert_eq!(ended["reason"], "failure");
+    let text = ended["text"].as_str().unwrap_or("");
+    assert!(
+        text.starts_with("Aether went away: a read failed: "),
+        "{text}"
+    );
     assert_eq!(ended["link"], up["link"]);
 }

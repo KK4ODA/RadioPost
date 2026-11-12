@@ -327,6 +327,10 @@ fn run(words: &[String]) -> Result<(), Error> {
         return Ok(());
     }
     let mut store = Store::open(&radiopost_client::store::home(home_flag.as_deref()))?;
+    // what the program says, and any panic, in a file of the home's: a window's log is gone
+    // once it closes (2026-11-12)
+    radiopost::logfile::keep_in(&store.home().join(radiopost_client::LOG_FILE));
+    radiopost::logfile::record_panics();
     match command.as_str() {
         "help" | "--help" | "-h" => print!("{HELP}"),
         "key" => {
@@ -551,6 +555,7 @@ fn run(words: &[String]) -> Result<(), Error> {
                 Kind::Gateway
             };
             let report = session::call(&mut store, &remote, kind, &options(&args)?, &mut |s| {
+                radiopost::logfile::line(s);
                 println!("{s}");
             })?;
             if let Some(why) = report.failed {
@@ -637,7 +642,10 @@ fn run(words: &[String]) -> Result<(), Error> {
             }
         }
         "listen" => {
-            let report = session::answer(&mut store, &options(&args)?, &mut |s| println!("{s}"))?;
+            let report = session::answer(&mut store, &options(&args)?, &mut |s| {
+                radiopost::logfile::line(s);
+                println!("{s}");
+            })?;
             if let Some(why) = report.failed {
                 return Err(why);
             }

@@ -227,6 +227,7 @@ impl Panel {
         thread::sleep(self.renewal.first);
         loop {
             if let Some(line) = self.renew_now(&mut said) {
+                radiopost::logfile::line(&line);
                 lock(&self.activity).log.push(line);
             }
             thread::sleep(self.renewal.every);
@@ -741,6 +742,7 @@ impl Panel {
                 if let Some(who) = line.strip_suffix(" called") {
                     a.remote = Some(who.to_owned());
                 }
+                radiopost::logfile::line(line);
                 a.log.push(line.to_owned());
             };
             let result = Store::open(&home).and_then(|mut store| match &remote {
@@ -754,6 +756,7 @@ impl Panel {
             };
             if let Some(why) = &a.failed {
                 let line = format!("ended: {why}");
+                radiopost::logfile::line(&line);
                 a.log.push(line);
             }
             a.state = "idle";

@@ -85,6 +85,11 @@ fn installer(app: AppHandle) -> Install {
 
 fn main() {
     let home = store::home(None);
+    // what the panel says, and any panic, in the home's log file: the window's log is gone
+    // once it closes (2026-11-12)
+    radiopost_client::logfile::keep_in(&home.join(radiopost_client::LOG_FILE));
+    radiopost_client::logfile::record_panics();
+    radiopost_client::logfile::line(&format!("RadioPost {} starts", env!("CARGO_PKG_VERSION")));
     let (at, panel) = match start_panel(&home) {
         Ok(started) => started,
         Err(e) => {

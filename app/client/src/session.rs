@@ -228,7 +228,10 @@ fn adapter_for(modem: &str) -> Result<String, Error> {
     if let Some(at) = running.get(modem) {
         return Ok(at.to_string());
     }
-    let at = radiopost_aether::serve::listen("127.0.0.1:0", modem)
+    let note: radiopost_aether::serve::Note = std::sync::Arc::new(|line: &str| {
+        radiopost::logfile::line(&format!("Aether adapter: {line}"));
+    });
+    let at = radiopost_aether::serve::listen_noting("127.0.0.1:0", modem, note)
         .map_err(|e| format!("cannot start the Aether adapter: {e}"))?;
     running.insert(modem.to_owned(), at);
     Ok(at.to_string())
