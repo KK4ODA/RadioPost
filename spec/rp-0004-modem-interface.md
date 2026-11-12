@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.6.0 |
+| **Version** | 0.6.1 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -274,7 +274,12 @@ Aether's control API (JSON over WebSocket, `ws://127.0.0.1:8515/v1`) carries RPM
 The adapter opens **one WebSocket connection to Aether for each RPMI host**, and closes it when the
 host's connection closes; Aether then lets that host's claim go. Aether restarts when its settings
 are saved, which closes every WebSocket and ends every claim: the adapter then closes the host's
-connection (§2.1), and the host claims again on the next. A one-shot `POST /v1/<method>`
+connection (§2.1), and the host claims again on the next. From 0.2.0-beta.147 (its
+[ADR-0107](https://github.com/KK4ODA/aether-hf/blob/master/docs/adr/0107-under-automatic-control-only-a-program-answers-and-its-session-goes-with-it.md))
+Aether ends a host's call or session itself when the host's WebSocket closes (a call stops, a
+session closes as `disconnect` does), whether or not the adapter's `abort` reached it, and under
+automatic control it answers a call only for a claim that is listening: a gateway whose program
+is down answers nobody, though probes are still answered. A one-shot `POST /v1/<method>`
 holds no claim. Aether says it has claims by `status.claims`; for an Aether without them, see the
 end of this section.
 
@@ -394,3 +399,4 @@ left, not when the other host holds them.
 | 0.4.1 | 2026-11-09 | §9.1, found by writing the Aether adapter and running it against Aether 0.2.0-beta.146: `modem`'s name; the adapter's own references for `send`; `busy` while the host's own link is up; broadcasts as unformatted datagrams; a named bandwidth kept with `keep_bandwidth`, and `connected` carrying the one in use. |
 | 0.5.0 | 2026-11-09 | A host that leaves ends its call and its links (§1.1): the Aether adapter had let its callsigns go and left the session up, found by running the conformance tester's A-02 over two Aether daemons. §9.5, found by writing the TCP adapter: the link on an amateur mesh is plain TCP, since a mesh is on the air (RP-0 §5), and TLS only on the Internet; the opening lines two TCP adapters agree a link with (normative), the port, what `remote` may be, and what the caller's host hears. |
 | 0.6.0 | 2026-11-12 | An adapter that loses its modem tells the host what that ended and closes its connection (§2.1, §9.1): two Setup saves restarted a gateway's Aether on the air, the Aether adapter kept RadioPost Gateway's connection open, and the gateway listened for an hour and a half while Aether, its claim gone, answered the gateway's callsign for nobody. |
+| 0.6.1 | 2026-11-12 | §9.1: what Aether 0.2.0-beta.147 does itself when a host's WebSocket closes (ends its call or session), and that under automatic control it answers calls only for a listening claim (its ADR-0107). |
