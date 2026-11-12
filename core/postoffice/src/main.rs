@@ -42,6 +42,10 @@ usage: radiopost-po --dir DIR COMMAND
                      week), fetch it now, or build it from a downloaded l_amat.zip
   qrz --username U --password P
                      look callsigns up in QRZ.com's callbook too, with your account (empty clears)
+  mailboxes [--stalwart URL --key KEY | --command PROGRAM | --off] [--check]
+                     make each approved account's mailbox in the mail server: by Stalwart's API,
+                     or by your program (given the address and name; the password in
+                     RADIOPOST_PASSWORD); --check asks without making one
   lookup CALL [--name NAME]
                      what the post office finds of a callsign: the FCC copy, QRZ, its history
   approve ID [--role] | decline ID --text TEXT | postcard ID
@@ -130,6 +134,7 @@ fn init(files: &Files, a: &Args) -> Result<(), String> {
         smtp: a.one("--smtp"),
         operators: Vec::new(),
         lookups: radiopost_postoffice::lookups::LookupSettings::default(),
+        mailboxes: radiopost_postoffice::mailboxes::MailboxSettings::default(),
     };
     let hex: String = radiopost::cbor::hex(&seed);
     files.write("key.hex", &(hex + "\n"))?;
@@ -399,6 +404,33 @@ fn lookup(files: &Files, a: &Args) -> Result<(), String> {
     Ok(())
 }
 
+/// `mailboxes`: how approved accounts' mailboxes are made, set and checked.
+fn mailboxes(files: &Files, a: &Args) -> Result<(), String> {
+    let set = if let Some(url) = a.one("--stalwart") {
+        Some(json!({"kind": "stalwart", "url": url, "api_key": a.one("--key").unwrap_or_default()}))
+    } else if let Some(cmd) = a.one("--command") {
+        Some(json!({"kind": "command", "command": cmd}))
+    } else if a.has("--off") {
+        Some(json!({"kind": ""}))
+    } else {
+        None
+    };
+    if let Some(m) = set {
+        admin(files, "PUT", "/settings", &json!({"mailboxes": m}))?;
+    }
+    let s = admin(files, "GET", "/settings", &Json::Null)?;
+    let kind = s["mailboxes"]["kind"].as_str().unwrap_or("");
+    println!(
+        "mailboxes: {}",
+        if kind.is_empty() { "by hand" } else { kind }
+    );
+    if a.has("--check") {
+        let c = admin(files, "POST", "/mailboxes/check", &Json::Null)?;
+        println!("{}", c["said"].as_str().unwrap_or(""));
+    }
+    Ok(())
+}
+
 /// `licences`: the FCC copy's state; turned on or off, fetched, or built from a file.
 fn licences(dir: &std::path::Path, files: &Files, a: &Args) -> Result<(), String> {
     if let Some(zip) = a.one("--from") {
@@ -583,6 +615,7 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
             Ok(())
         }
         "lookup" => lookup(&files, a),
+        "mailboxes" => mailboxes(&files, a),
         "approve" | "decline" | "postcard" => decide(&files, a, command),
         "outgoing" | "status" => {
             let answer = admin(&files, "GET", &format!("/{command}"), &Json::Null)?;

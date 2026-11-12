@@ -21,6 +21,7 @@ use tiny_http::{Header, Method, Response as Http, Server};
 use crate::auth::Checker;
 use crate::documents::Info;
 use crate::lookups::{LookupSettings, Lookups};
+use crate::mailboxes::MailboxSettings;
 use crate::office::{Config, Draw, PostOffice, Request, State};
 
 /// A post office's settings, as `config.json` holds them.
@@ -56,6 +57,9 @@ pub struct Settings {
     /// What the service looks callsigns up in for its operators: the FCC copy, QRZ.com.
     #[serde(default, skip_serializing_if = "LookupSettings::is_empty")]
     pub lookups: LookupSettings,
+    /// How it makes an approved account's mailbox in the mail server.
+    #[serde(default, skip_serializing_if = "MailboxSettings::is_empty")]
+    pub mailboxes: MailboxSettings,
 }
 
 impl Settings {
@@ -400,7 +404,14 @@ impl Running {
             && answer.status == 202
             && let Some(id) = answer.body.as_ref().and_then(|b| b["application"].as_str())
         {
-            self.queue_lookup(id);
+            self.queue_lookup(id, true);
+        }
+        if method == "POST"
+            && path.starts_with("/office/applications/")
+            && answer.status == 200
+            && let Some(id) = answer.body.as_ref().and_then(|b| b["application"].as_str())
+        {
+            self.after_decision(id);
         }
         let mut body = answer.body;
         if path == "/office/status"
@@ -459,6 +470,7 @@ impl Running {
         if let Some(answer) = self.admin_desk(method, path, &body) {
             return answer;
         }
+        let mut decided = Vec::new();
         let mut office = self.office();
         office.at(now());
         let answer = match (method, path) {
@@ -521,7 +533,7 @@ impl Running {
             }
             ("GET", "/outgoing") => Ok(json!({"outgoing": office.state.outgoing})),
             ("GET", "/applications") | ("POST", "/decide") => {
-                admin_applications(&mut office, path, &body)
+                admin_applications(&mut office, path, &body, &mut decided)
             }
             ("GET", "/status") => Ok(json!({
                 "version": env!("CARGO_PKG_VERSION"),
@@ -536,6 +548,10 @@ impl Running {
             _ => Err(format!("no command {method} {path}")),
         };
         self.save(&office);
+        drop(office);
+        for id in decided {
+            self.after_decision(&id);
+        }
         match answer {
             Ok(j) => (200, j.to_string()),
             Err(e) => (400, json!({"error": e}).to_string()),
@@ -545,7 +561,12 @@ impl Running {
 
 /// The operator's port's view of applications (RP-5 §7.3), for `radiopost-po applications`,
 /// `approve`, `decline` and `postcard`.
-fn admin_applications(office: &mut PostOffice, path: &str, body: &Json) -> Result<Json, String> {
+fn admin_applications(
+    office: &mut PostOffice,
+    path: &str,
+    body: &Json,
+    decided: &mut Vec<String>,
+) -> Result<Json, String> {
     if path == "/applications" {
         let r = office.office("GET", &["applications"], &Json::Null);
         return Ok(r.body.unwrap_or_default());
@@ -554,6 +575,7 @@ fn admin_applications(office: &mut PostOffice, path: &str, body: &Json) -> Resul
     let r = office.office("POST", &["applications", id], body);
     let b = r.body.unwrap_or_default();
     if r.status == 200 {
+        decided.push(id.to_owned());
         Ok(b)
     } else {
         Err(b["name"].as_str().unwrap_or("refused").to_owned())

@@ -66,6 +66,12 @@ pub struct Application {
     /// callbook): its own members of the entry (RP-5 §7.3), never part of a decision.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evidence: Option<Json>,
+    /// The mailbox made for an approved application: `{"made"}` or `{"error"}`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mailbox: Option<Json>,
+    /// The email about the decision: `{"to", "at"}`, with `error` when it did not go.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub told: Option<Json>,
 }
 
 impl Application {

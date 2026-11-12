@@ -47,11 +47,18 @@ impl LookupSettings {
 /// being fetched.
 #[derive(Default)]
 pub struct Lookups {
-    queue: Mutex<Option<Sender<String>>>,
+    queue: Mutex<Option<Sender<(String, bool)>>>,
     qrz: Mutex<Option<(String, Arc<Qrz>)>>,
     fetching: AtomicBool,
     fetched: Mutex<Option<String>>,
     me: OnceLock<Weak<Running>>,
+}
+
+impl Lookups {
+    /// The service, for a thread of its own; none before [`start`].
+    pub(crate) fn me(&self) -> Option<Arc<Running>> {
+        self.me.get().and_then(Weak::upgrade)
+    }
 }
 
 impl Running {
@@ -150,7 +157,8 @@ impl Running {
     }
 
     /// Hands a new application to the worker, or looks it up now when none runs.
-    pub(crate) fn queue_lookup(&self, id: &str) {
+    /// With `announce`, the operators are told of it once it is looked up.
+    pub(crate) fn queue_lookup(&self, id: &str, announce: bool) {
         let queue = self
             .lookups()
             .queue
@@ -158,11 +166,14 @@ impl Running {
             .unwrap_or_else(PoisonError::into_inner)
             .clone();
         if let Some(q) = queue
-            && q.send(id.to_owned()).is_ok()
+            && q.send((id.to_owned(), announce)).is_ok()
         {
             return;
         }
         let _ = self.look_up(id);
+        if announce {
+            self.announce(id);
+        }
     }
 
     /// Whether there is no copy, or one older than a week.
@@ -231,7 +242,7 @@ pub fn day(secs: u64) -> String {
 /// Starts the worker that looks new applications up, and the weekly fetch of the FCC copy.
 pub fn start(running: &Arc<Running>) {
     let _ = running.lookups().me.set(Arc::downgrade(running));
-    let (tx, rx) = channel::<String>();
+    let (tx, rx) = channel::<(String, bool)>();
     *running
         .lookups()
         .queue
@@ -239,8 +250,11 @@ pub fn start(running: &Arc<Running>) {
         .unwrap_or_else(PoisonError::into_inner) = Some(tx);
     let worker = Arc::clone(running);
     std::thread::spawn(move || {
-        for id in rx {
+        for (id, announce) in rx {
             let _ = worker.look_up(&id);
+            if announce {
+                worker.announce(&id);
+            }
         }
     });
     let weekly = Arc::clone(running);

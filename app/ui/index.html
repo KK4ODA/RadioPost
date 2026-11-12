@@ -194,7 +194,7 @@
           <details class="decided" id="o-decided-box" hidden>
             <summary title="Applications decided in the last week">Decided</summary>
             <table class="list" aria-label="Applications decided">
-              <thead><tr><th>Name</th><th>Callsign</th><th>Address</th><th>Decision</th><th>When</th></tr></thead>
+              <thead><tr><th>Name</th><th>Callsign</th><th>Address</th><th>Decision</th><th title="The mailbox made for an approved account, and the email that told the applicant">After</th><th>When</th></tr></thead>
               <tbody id="o-decided"></tbody>
             </table>
           </details>
@@ -257,6 +257,29 @@
               <button type="button" id="o-qrz-save" title="Look callsigns up in QRZ.com too">Save</button>
               <button type="button" class="quiet" id="o-qrz-clear" title="Stop looking callsigns up in QRZ.com, and forget the account">Clear</button>
             </div>
+          </div>
+          <div class="card">
+            <h2>Mailboxes</h2>
+            <p class="note">The mail server refuses email for an account with no mailbox, so each approved account needs one. The post office can make it when you approve, and email its first password to the new user.</p>
+            <label title="How the post office makes an approved account's mailbox">Make each mailbox
+              <select id="o-mb-kind" class="narrow">
+                <option value="">By hand, in the mail server</option>
+                <option value="stalwart">In Stalwart, by its API</option>
+                <option value="command">By a program on the server</option>
+              </select>
+            </label>
+            <div id="o-mb-stalwart" hidden>
+              <label title="Stalwart's web listener, as the post office reaches it on the server">Stalwart's address <input id="o-mb-url" placeholder="http://127.0.0.1:8080" spellcheck="false"></label>
+              <label title="An API key made in Stalwart's administration, with the right to create accounts: kept in config.json, never shown again">API key <input id="o-mb-key" type="password" autocomplete="new-password" spellcheck="false"></label>
+            </div>
+            <div id="o-mb-command" hidden>
+              <label title="The program and its first arguments; it is given the address and the name, and the password in RADIOPOST_PASSWORD">Program <input id="o-mb-cmd" placeholder="/usr/local/sbin/make-mailbox" spellcheck="false"></label>
+            </div>
+            <div class="row">
+              <button type="button" id="o-mb-save" title="Keep this way of making mailboxes">Save</button>
+              <button type="button" class="quiet" id="o-mb-check" title="Ask the mail server, without making a mailbox">Check</button>
+            </div>
+            <p class="note" id="o-mb-note"></p>
           </div>
           <div class="card">
             <h2>This post office</h2>

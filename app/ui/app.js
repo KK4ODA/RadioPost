@@ -1095,10 +1095,21 @@ async function renderApplications() {
           a.code ? el("button", {class: "link", type: "button", text: "Print the card",
             title: "A card to post to the address on the licence", onclick: () => printCard(a)}) : null)
       : el("span", {class: `pill ${a.status}`, text: a.status, title: a.text || ""});
+    const after = [];
+    if (a.mailbox) {
+      after.push(a.mailbox.error
+        ? el("span", {class: "pill declined", text: "no mailbox", title: a.mailbox.error})
+        : el("span", {class: "pill approved", text: "mailbox", title: a.mailbox.made}));
+    }
+    if (a.told) {
+      after.push(a.told.error
+        ? el("span", {class: "pill declined", text: "not emailed", title: a.told.error})
+        : el("span", {class: "pill approved", text: "emailed", title: `Told at ${a.told.to}`}));
+    }
     return el("tr", {},
       el("td", {text: a.name}), el("td", {class: "mono", text: a.operator}),
       el("td", {class: "mono", text: a.address}), el("td", {}, decision),
-      el("td", {text: day(a.decided)}));
+      el("td", {}, ...after), el("td", {text: day(a.decided)}));
   }));
 }
 
@@ -1223,6 +1234,12 @@ async function renderMail() {
     el("td", {text: m.queued ? day(m.queued) : ""}))));
 }
 
+function showMailboxKind() {
+  const kind = $("o-mb-kind").value;
+  $("o-mb-stalwart").hidden = kind !== "stalwart";
+  $("o-mb-command").hidden = kind !== "command";
+}
+
 async function renderOfficeSettings() {
   const s = await desk("GET", "/office/settings");
   const f = s.fcc || {};
@@ -1233,6 +1250,15 @@ async function renderOfficeSettings() {
       ? `${Number(f.count).toLocaleString()} callsigns, copied ${new Date(f.made * 1000).toLocaleDateString()}. A new copy comes each week.${f.last ? ` Last fetch: ${f.last}.` : ""}`
       : f.on ? "No copy yet." : "";
   $("o-fcc-fetch").disabled = Boolean(f.fetching) || !f.on;
+  const m = s.mailboxes || {};
+  if (!$("o-mb-kind").matches(":focus")) $("o-mb-kind").value = m.kind || "";
+  if (!$("o-mb-url").matches(":focus")) $("o-mb-url").value = m.url || "";
+  if (!$("o-mb-cmd").matches(":focus")) $("o-mb-cmd").value = (m.command || []).join(" ");
+  $("o-mb-key").placeholder = m.key ? "Key kept: type to change it" : "";
+  showMailboxKind();
+  $("o-mb-note").textContent = s.smtp
+    ? "The welcome goes out through the mail server's submission port."
+    : "No submission port (smtp) in config.json: no email can go out, the welcome included.";
   if (!$("o-qrz-user").matches(":focus")) $("o-qrz-user").value = (s.qrz && s.qrz.username) || "";
   $("o-qrz-pass").placeholder = s.qrz && s.qrz.password ? "Password kept: type to change it" : "Password";
   $("o-take").checked = s.applications === "open";
@@ -1373,6 +1399,21 @@ function wire() {
     await settingsChange(body, "QRZ lookups saved.");
   });
   $("o-qrz-clear").addEventListener("click", () => settingsChange({qrz_username: "", qrz_password: ""}, "QRZ lookups off."));
+  $("o-mb-kind").addEventListener("change", showMailboxKind);
+  $("o-mb-save").addEventListener("click", () => {
+    const m = {kind: $("o-mb-kind").value, url: $("o-mb-url").value.trim(), command: $("o-mb-cmd").value.trim()};
+    if ($("o-mb-key").value) m.api_key = $("o-mb-key").value;
+    $("o-mb-key").value = "";
+    settingsChange({mailboxes: m}, m.kind ? "Mailboxes are made at each approval." : "Mailboxes are made by hand.");
+  });
+  $("o-mb-check").addEventListener("click", async () => {
+    try {
+      const r = await desk("POST", "/office/mailboxes/check", {});
+      toast(r.said, !r.ok);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  });
   $("o-code-check").addEventListener("click", async () => {
     const form = $("o-code");
     const call = form.operator.value.trim().toUpperCase();

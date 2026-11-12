@@ -67,7 +67,10 @@ impl Running {
             ("GET", "/office/outgoing")
                 | (
                     "POST",
-                    "/office/name" | "/office/lookup" | "/office/licences"
+                    "/office/name"
+                        | "/office/lookup"
+                        | "/office/licences"
+                        | "/office/mailboxes/check"
                 )
                 | ("GET" | "PUT", "/office/settings")
         ) || (method == "GET" && route.starts_with("/office/lookup/"));
@@ -114,6 +117,7 @@ impl Running {
                 ok(&json!({"started": started, "fcc": self.fcc_status()}))
             }
             ("GET", "/office/settings") => ok(&self.desk_settings()),
+            ("POST", "/office/mailboxes/check") => ok(&self.check_mailboxes()),
             _ => match self.put_settings(body) {
                 Ok(said) => {
                     eprintln!("radiopost-po: {who} changed the settings: {said}");
@@ -155,6 +159,7 @@ impl Running {
                 self.evidence_for(&param("call").to_uppercase(), &param("name"), None)
                     .to_string(),
             ),
+            ("POST", "/mailboxes/check") => (200, self.check_mailboxes().to_string()),
             ("POST", "/licences") => (
                 200,
                 json!({"started": self.fetch_fcc(), "fcc": self.fcc_status()}).to_string(),
@@ -179,7 +184,32 @@ impl Running {
             "fcc": self.fcc_status(),
             "qrz": {"username": settings.lookups.qrz_username,
                     "password": settings.lookups.qrz_password.is_some()},
+            "mailboxes": settings.mailboxes.shown(),
+            "smtp": settings.smtp.is_some(),
         })
+    }
+
+    /// Whether the way to make mailboxes works, without making one: Stalwart asked for the
+    /// post office's domain, or the command found.
+    pub(crate) fn check_mailboxes(&self) -> Json {
+        let settings = self.settings();
+        let m = &settings.mailboxes;
+        let domain = settings.domains.first().cloned().unwrap_or_default();
+        match m.kind.as_str() {
+            "stalwart" => match crate::mailboxes::stalwart_domain(m, &domain) {
+                Ok(id) => json!({"ok": true,
+                                 "said": format!("Stalwart answers, and has {domain} (domain {id})")}),
+                Err(e) => json!({"ok": false, "said": e}),
+            },
+            "command" => match m.command.first() {
+                Some(p) if std::path::Path::new(p).is_file() || which(p) => {
+                    json!({"ok": true, "said": format!("{p} is there; it runs at each approval")})
+                }
+                Some(p) => json!({"ok": false, "said": format!("{p} is not found")}),
+                None => json!({"ok": false, "said": "no command set"}),
+            },
+            _ => json!({"ok": false, "said": "no way to make mailboxes is set"}),
+        }
     }
 
     /// `PUT /office/settings`: any of `applications` (`open`, `closed`), `fcc` (true, false),
@@ -205,6 +235,17 @@ impl Running {
             }
         };
         let (user, pass) = (string("qrz_username")?, string("qrz_password")?);
+        let mailboxes = match body.get("mailboxes") {
+            None => None,
+            Some(m) if m.is_object() => {
+                let kind = m["kind"].as_str().unwrap_or("").to_owned();
+                if !matches!(kind.as_str(), "" | "stalwart" | "command") {
+                    return Err(400);
+                }
+                Some((kind, m.clone()))
+            }
+            Some(_) => return Err(400),
+        };
         let mut fetch = false;
         self.change_settings(|s| {
             if let Some(open) = applications {
@@ -226,6 +267,31 @@ impl Running {
             }
             if let Some(p) = pass {
                 s.lookups.qrz_password = (!p.is_empty()).then_some(p);
+            }
+            if let Some((kind, m)) = mailboxes {
+                let text = |k: &str| m[k].as_str().map(str::trim).map(str::to_owned);
+                s.mailboxes.kind = kind;
+                if let Some(url) = text("url") {
+                    s.mailboxes.url = url;
+                }
+                if let Some(key) = text("api_key") {
+                    s.mailboxes.api_key = (!key.is_empty()).then_some(key);
+                }
+                if let Some(login) = text("login") {
+                    s.mailboxes.login = (!login.is_empty()).then_some(login);
+                }
+                if let Some(cmd) = text("command") {
+                    s.mailboxes.command = cmd.split_whitespace().map(str::to_owned).collect();
+                }
+                if let Some(q) = m.get("quota_mb") {
+                    s.mailboxes.quota_mb = q.as_u64();
+                }
+                let how = if s.mailboxes.kind.is_empty() {
+                    "hand"
+                } else {
+                    s.mailboxes.kind.as_str()
+                };
+                said.push(format!("mailboxes by {how}"));
             }
         })
         .map_err(|e| -> u16 {
@@ -304,4 +370,10 @@ fn unescape(v: &str) -> String {
         i += 1;
     }
     String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Whether `program` is on the PATH.
+fn which(program: &str) -> bool {
+    std::env::var_os("PATH")
+        .is_some_and(|paths| std::env::split_paths(&paths).any(|d| d.join(program).is_file()))
 }
