@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.6.3 |
+| **Version** | 0.6.4 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -400,6 +400,63 @@ is refused. After the lines the link carries the hosts' bytes as they are, both 
 closing it is the other's `disconnected` `remote`. `delivery` is false: TCP says when bytes have
 left, not when the other host holds them.
 
+### 9.6 Mercury
+
+Mercury, Rhizomatica's open HF modem (GPL-3.0), offers a VARA-style TNC interface (its
+`docs/TNC.md`): commands and events as lines ended by CR on a control port (**8300** by default),
+the session's bytes on a data port, the next one. The adapter talks to it over TCP only. Mercury
+1.9.20 and later connect to each other on the air, and not to earlier ones.
+
+| RPMI | Mercury |
+|---|---|
+| `hello` | `BUSYDETECT`, which only Mercury 1.9.23 and later answer with `BUSYDETECT ON` or `OFF`: anything else is not this modem, and the host gets `no-modem`. `caps.bandwidths` is 500, 2300 and 2750; `busy` is the answer's `ON`; `delivery` and `quality` are true; `broadcast`, `regulatory` and `shared` are false. `modem` is `Mercury`: its `VERSION` answers as VARA does. |
+| `callsigns` | `MYCALL <first> <more>…`. Mercury answers for five callsigns at most, of 1 to 15 characters, and its CALL carries only capitals, digits and `-`. The adapter refuses others (`refused`) rather than let Mercury drop or change them, so a callsign with `/` (RP-0 §6.1) cannot be used. An empty list keeps Mercury from answering, as `listen` off does. |
+| `listen` | `LISTEN ON` / `LISTEN OFF`, but see *Answering* below. |
+| `connect` | `CONNECT <as> <remote>`, after `MYCALL` with `as` first when it is not, and after `BW<bandwidth>` when the call names a bandwidth Mercury is not on. `ok` comes with Mercury's `OK`; `CONNECTED <caller> <called> <bandwidth>` gives `connected` with the bandwidth the two stations agreed on. A caller's callsign is at most 14 characters. |
+| `failed` | `DISCONNECTED` before `CONNECTED`: `timeout`, or `aborted` after the host's `abort`. A call that Mercury answered first, from another station, ends the host's own with `busy`. |
+| `disconnected` | `DISCONNECTED` once the link is up: `local` when the host ended it, and `remote` otherwise, since Mercury says neither which session ended nor why. |
+| `send` | Bytes to the data port; see *Delivery*. |
+| `received` | Bytes from the data port, while the link is up. |
+| `disconnect` | `DISCONNECT`, once the bytes the adapter holds have gone to Mercury. Mercury delivers what it holds before its DISCONNECT frame, and says `DISCONNECTED` when the session has closed. |
+| `abort` | `ABORT`. Mercury says `DISCONNECTED` at once, and its DISCONNECT frame goes out after. |
+| `quality` | `SN <dB>` and `BITRATE (<mode>) <bps> BPS`. |
+| `busy` | `BUSY ON` / `BUSY OFF`, from Mercury's busy detector, which is off unless its operator turns it on. Not reported while the host's own link is up. |
+| `incoming` | `CONNECTED` for a call Mercury answered, to the callsign it names. `PENDING` and `CANCELPENDING` say a call is being answered; no `connect` is placed meanwhile (`busy`). |
+
+**One program at a time.** Mercury serves one program, and gives its control port to the newest
+that connects, ending the session of the one before. The adapter connects to Mercury when a host
+says `hello`, has the modem to itself (`shared` false), and closes its connections once the host
+has left and what it left on the air has ended (§1.1), so that another program, a Winlink client
+or BPQ32, may have Mercury between RadioPost's sessions.
+
+**Answering.** Mercury's `LISTEN OFF` ends a call or a session under way without a word to the
+other station, as VARA's does for scanning programs; RPMI's `listen` off only stops answering. The
+adapter sends `LISTEN OFF` only when nothing of the host's is up: after the link has ended, and
+after an `ABORT` once its DISCONNECT frame is out (the transmission keyed after it has ended, or a
+minute). A call Mercury answers meanwhile, for a host that does not listen, or to a callsign that
+is not the host's, is ended with `ABORT` and never told.
+
+**After an end.** `DISCONNECTED` carries no session, and Mercury also says it to a `DISCONNECT`, an
+`ABORT` or a `LISTEN OFF` that finds no session up, within a pass of its loop. The adapter sends no
+`CONNECT` for a second after any of these, so that such a line is not read as the call's end.
+
+**Delivery.** Mercury's `BUFFER <n>` counts the bytes it has taken in that the other station has
+not confirmed, Mercury's carousel being acknowledged by the receiver. So `BUFFER 0` means
+delivered, unlike VARA's (§9.2), and the adapter reports `delivered` and `queued` from it. Two
+details of Mercury's count shape how:
+
+* Mercury counts once on every write to the data port, before the bytes written are in the count,
+  and then every second. A `BUFFER 0` is believed only 2.5 seconds after the last bytes went to
+  Mercury, or after a count above 0 has come for them.
+* Mercury's own queue holds 64 KiB and drops what does not fit. The adapter keeps no more than 32
+  KiB with Mercury unconfirmed, and holds the rest until Mercury has confirmed more.
+
+**What Mercury does not do.** It checks no band rules (§8): a gateway's operator, or the gateway,
+must. It does not identify the station: a CALL carries the caller's callsign, an ACCEPT only a CRC
+of the called station's, and the session's frames none, so a station that must identify at the end
+of a contact, and every ten minutes, has to do so by other means. Mercury's broadcasts, KISS frames
+on a port of their own, are not carried by the adapter yet.
+
 ---
 
 ## Change log
@@ -418,3 +475,4 @@ left, not when the other host holds them.
 | 0.6.1 | 2026-11-12 | §9.1: what Aether 0.2.0-beta.147 does itself when a host's WebSocket closes (ends its call or session), and that under automatic control it answers calls only for a listening claim (its ADR-0107). |
 | 0.6.2 | 2026-11-12 | §9.1: from Aether 0.2.0-beta.149 (its ADR-0108) a claim speaks for the station. Aether's own callsigns are not answered while one stands, and its Setup shows the program's callsign; nothing asks the operator to copy a host's callsign into Aether. |
 | 0.6.3 | 2026-11-12 | §9.1: the adapter offers the program's log to Aether (`share.include`, Aether 0.2.0-beta.150), which puts it in the files a station shares; the log names no correspondent and no subject. |
+| 0.6.4 | 2026-11-12 | §9.6, Mercury, found by writing its adapter from Mercury's `docs/TNC.md` and its source: the mapping; one program at a time; `LISTEN OFF` held until nothing of the host's is up, since Mercury's ends a session unsaid; no `CONNECT` for a second after a command that Mercury may answer with a `DISCONNECTED` of no session; `BUFFER` as delivery, and when its 0 is believed; the callsigns Mercury can carry; and that Mercury neither checks band rules nor identifies the station. |

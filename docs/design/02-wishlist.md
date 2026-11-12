@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.0 |
+| **Version** | 0.3.1 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -123,7 +123,7 @@ rules:
 | W17 | Gateways ranked by propagation | Radio | Low | Fits today; optional addition for measurements | Planned |
 | W18 | Mail coming down compressed | Radio | High | Fits today | Proposed |
 | W19 | Shorter short messages: a dictionary | Radio | Low | Optional addition; breaking if made required | Planned |
-| W20 | An adapter for VARA-style modems: VARA and Mercury | Adapters | Medium | Fits today; G11 to name Mercury | Planned |
+| W20 | An adapter for VARA-style modems: VARA and Mercury | Adapters | Medium | Fits today; G11 to name Mercury | In progress |
 | W21 | An ARDOP adapter | Adapters | Low | Needs specification review | Planned |
 | W22 | An AX.25 packet adapter | Adapters | Low | Fits today | Planned |
 | W23 | A phone version | Radio | Low | Fits today; optional addition for RPMI across devices | Planned |
@@ -882,14 +882,14 @@ HF modem, as a client or a gateway.
 | Requested by | The plan: concept §7, design §5.4, Phase 5 (VARA). The author (KK4ODA), 2026-11-11 (Mercury). Requesters: 1. |
 | Component | Adapter. |
 | Compatibility | **Fits today.** Mercury offers a VARA-compatible TNC interface (its `docs/TNC.md`: commands on port 8300, data on 8301), so RP-4 §9.2's mapping serves both; a note in RP-4 §9 on where Mercury differs is informative, a PATCH. Neither can be shared: a host holds the single `MYCALL` list. Neither checks band rules (RP-4 §8). Mercury's `BUFFER 0` means the other station has acknowledged everything, so its adapter can report `delivered`; VARA's means only sent. Naming Mercury in a gateway's record needs G11. |
-| Existing coverage | Planned for VARA, Phase 5. Mercury is new to the plan. |
+| Existing coverage | Mercury built (2026-11-12), `adapters/mercury` (`radiopost-mercury`), from Mercury's `docs/TNC.md` and its source, and RP-4 §9.6 written from it. It passes the tester's A-01 to A-04 through two adapters on a stand-in for two Mercury modems on one channel; a test against two real Mercury processes, their audio joined by named pipes, is written and has not yet been run. VARA: planned for Phase 5. |
 | Dependencies | W40 for an unattended gateway; G11 to list Mercury channels. |
 | Effort | Medium: one adapter, with each modem's differences. |
 | Priority | **Medium.** The author asks for Mercury, and the two modems reach many users. |
 | Recommendation | **Modify**: one adapter for both, built and tested against Mercury first. Mercury is open source and runs on Linux, so the adapter and the tester's A-01 to A-04 can run against a real modem in CI; VARA is proprietary and is never run by the project, so it follows from its published commands. Whether Mercury joins Phase 5's adapters, ahead of ARDOP, is the author's call. |
-| Status | Planned. |
+| Status | In progress: Mercury built, its run against the real modem to come; VARA not started. |
 | Author decision | VARA is a black box (CLAUDE.md): only its published command list is used. |
-| Notes | Mercury's air interface is published (FreeDV and codec2 OFDM modes, documented in its repository), so an open monitor (W42) can read sessions over it, which it cannot over VARA. Mercury is GPL-3.0; the adapter talks to it over TCP, as the post office talks to Stalwart, so RadioPost's licences are unaffected. |
+| Notes | Mercury's air interface is published (FreeDV and codec2 OFDM modes, documented in its repository), so an open monitor (W42) can read sessions over it, which it cannot over VARA. Mercury is GPL-3.0; the adapter talks to it over TCP, as the post office talks to Stalwart, so RadioPost's licences are unaffected. Writing the adapter found that Mercury does not identify the station: its CALL carries the caller's callsign, its ACCEPT only a CRC of the called station's, and a session's frames none (RP-4 §9.6). A gateway answering by Mercury never puts its callsign on the air in a form anyone can read. How a station on Mercury identifies is open: the operator, Mercury's `CQFRAME` (which carries a callsign any Mercury decodes) sent by the adapter after each session, or a change to Mercury. |
 
 ### W21. An ARDOP adapter
 
@@ -1082,3 +1082,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.2.5 | 2026-11-11 | The author's wishes: W45, station to station under an SSID (gap G12, with G10), and W46, several callsigns in one client, chosen from a list (one design with W7); thread T9. |
 | 0.2.6 | 2026-11-12 | The author's wishes, built: W47, deleting messages and a trash; W48, what a session has carried and what is left. W2 in progress: the address list is built, groups and import are not. |
 | 0.3.0 | 2026-11-12 | The author's wish, built: W49, the post office run from the client (applications, evidence, accounts, checks, jobs, backups) and set up by `radiopost-po install` (RP-5 0.14.0, D35). W38's backups built. W10: the sysop's check posts its code. |
+| 0.3.1 | 2026-11-12 | W20 in progress: the Mercury adapter is built and RP-4 §9.6 written from it; it found that Mercury does not identify the station. |
