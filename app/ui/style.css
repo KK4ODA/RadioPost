@@ -3,6 +3,7 @@
   --bg: #f6f7f8; --panel: #ffffff; --line: #d9dde1; --text: #1b1f23; --muted: #5d6670;
   --key: #1b1f23; --key-text: #ffffff; --accent: #1d5fa8;
   --ok: #1f7a3d; --busy: #9a6400; --bad: #b3261e; --session: #1d5fa8;
+  --tx: #e0662f; --rx: #13896f;
   --mono: ui-monospace, "SF Mono", Consolas, "Liberation Mono", monospace;
   --face: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --control-h: 32px;
@@ -12,6 +13,7 @@
     --bg: #16181b; --panel: #1e2125; --line: #33383e; --text: #e3e6e9; --muted: #9aa3ad;
     --key: #dde0e3; --key-text: #16181b; --accent: #7fb2ec;
     --ok: #5cc17f; --busy: #e0a83a; --bad: #ef6f66; --session: #7fb2ec;
+    --tx: #ff9b66; --rx: #4fd1a8;
   }
 }
 * { box-sizing: border-box; }
@@ -90,11 +92,12 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 .log pre { margin: 0; padding: 8px 16px; height: 7.5em; overflow: auto; font-family: var(--mono);
            font-size: 12px; color: var(--muted); }
 .log pre:empty::before { content: "No session yet. What a session says shows here."; }
-.toast { position: fixed; right: 16px; bottom: 140px; background: var(--key); color: var(--key-text);
+.toast { position: fixed; right: 20px; bottom: 124px; background: var(--key); color: var(--key-text);
          padding: 8px 14px; border-radius: 6px; max-width: 420px; }
 .toast.bad { background: var(--bad); color: #fff; }
 
 @media (max-width: 720px) {
+  .transfer { left: 16px; right: 16px; width: auto; }
   body { height: auto; overflow: visible; }
   .frame { grid-template-columns: 1fr; overflow: visible; }
   .side { border-right: 0; border-bottom: 1px solid var(--line); }
@@ -175,3 +178,62 @@ button.link { height: auto; padding: 0; border: 0; background: none; color: var(
 .s-del:hover { color: var(--bad); border-color: var(--bad); }
 .s-del .icon { width: 14px; height: 14px; }
 @media (hover: none) { .s-del { opacity: 1; } }
+
+/* what a session is carrying: two rings round an envelope, out and in */
+.transfer { position: fixed; right: 20px; bottom: 124px; z-index: 5; display: flex; gap: 14px;
+            align-items: center; width: 330px; padding: 12px 16px 12px 12px;
+            border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
+            box-shadow: 0 10px 30px rgb(0 0 0 / .12); animation: rise .35s ease-out; }
+.transfer:not([hidden]) ~ .toast { bottom: 236px; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.transfer-rings .rings { width: 64px; height: 64px; display: block; }
+.rings { overflow: visible; }
+.rings .track { fill: none; stroke: var(--line); stroke-width: 5.5; }
+.rings .arc { fill: none; stroke-width: 5.5; stroke-linecap: round;
+              transition: stroke-dashoffset .9s cubic-bezier(.2, .8, .2, 1); }
+.rings .arc.out { stroke: var(--tx); }
+.rings .arc.in { stroke: var(--rx); }
+.rings .spin { transform-origin: 32px 32px; }
+.rings .envelope, .rings .check, .rings .waves path { transform-box: fill-box; transform-origin: center; }
+.rings .envelope rect { fill: var(--panel); stroke: var(--text); stroke-width: 1.7; }
+.rings .envelope path { fill: none; stroke: var(--text); stroke-width: 1.7; stroke-linecap: round;
+                        stroke-linejoin: round; }
+.rings .waves path { fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round;
+                     opacity: 0; }
+.rings .check { fill: none; stroke: var(--ok); stroke-width: 3.2; stroke-linecap: round;
+                stroke-linejoin: round; opacity: 0; }
+.transfer .envelope { transition: opacity .3s, transform .3s; }
+[data-mode="carrying"] .envelope { animation: bob 2.4s ease-in-out infinite; }
+[data-dir="up"] .envelope { animation-name: bob-up; }
+[data-dir="down"] .envelope { animation-name: bob-down; }
+[data-mode="carrying"] .waves path, [data-mode="waiting"] .waves path {
+  animation: ping 1.8s ease-out infinite; }
+.waves path:nth-child(2) { animation-delay: .35s !important; }
+[data-mode="waiting"] .spin { animation: spin 1.3s linear infinite; }
+.transfer[data-mode="done"].all .envelope { opacity: 0; transform: scale(.5); }
+.transfer[data-mode="done"].all .check { opacity: 1; animation: pop .55s cubic-bezier(.3, 1.7, .5, 1); }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+@keyframes bob-up { 0%, 100% { transform: translateY(1px); } 50% { transform: translateY(-2.5px); } }
+@keyframes bob-down { 0%, 100% { transform: translateY(-1.5px); } 50% { transform: translateY(2px); } }
+@keyframes ping { 0% { opacity: 0; transform: translateY(1px); } 30% { opacity: .9; }
+                  100% { opacity: 0; transform: translateY(-1.5px); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pop { 0% { transform: scale(.2); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+.transfer-text { min-width: 0; }
+.transfer-text p { margin: 0; font-size: 13px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.t-head { font-weight: 600; }
+.t-line { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t-line::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+                  margin-right: 6px; vertical-align: 0; }
+.t-line.out::before { background: var(--tx); }
+.t-line.in::before { background: var(--rx); }
+.t-left { color: var(--muted); font-size: 12px !important; }
+.mini { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted);
+        font-variant-numeric: tabular-nums; }
+.mini .rings { width: 24px; height: 24px; display: block; }
+.mini .track, .mini .arc { stroke-width: 8; }
+@media (prefers-reduced-motion: reduce) {
+  .rings *, .transfer * { animation: none !important; }
+  .rings .arc { transition: none; }
+  [data-mode="carrying"] .waves path { opacity: .7; }
+}

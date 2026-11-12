@@ -229,6 +229,19 @@ fn a_message_written_and_carried_from_the_panel() {
     let state = c.get("/api/state");
     assert_eq!(state["activity"]["failed"], Value::Null, "{state}");
     assert_eq!(c.get("/api/folder?name=sent")[0]["id"], id.as_str());
+    // what the session carried, as the progress rings show it: the one message, whole
+    let sending = &state["progress"]["sending"];
+    assert_eq!(
+        (&sending["messages"], &sending["whole"]),
+        (&json!(1), &json!(1)),
+        "{state}"
+    );
+    assert!(
+        sending["bytes"].as_u64().is_some_and(|b| b > 100),
+        "{state}"
+    );
+    assert_eq!(sending["crossed"], sending["bytes"], "{state}");
+    assert_eq!(state["progress"]["receiving"]["messages"], 0, "{state}");
     let log = c.get("/api/log?since=0");
     assert!(
         log["lines"]

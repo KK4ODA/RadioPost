@@ -62,11 +62,16 @@ says why once if it could not. **Renew credential** in Setup does it at once.
    mailbox elsewhere is best), give it a subject and a few lines, and click **Put in outbox**.
    Writing to an address puts it on your accept list, so its answer will be let in. To and Cc
    take several addresses, separated by commas, as `maria@example.com` or
-   `Maria <maria@example.com>`; RadioPost checks each, and says which one is wrong.
+   `Maria <maria@example.com>`; RadioPost checks each, and says which one is wrong. Everyone you
+   write to goes on your address list (**Addresses**), and To offers it as you type.
 2. Set **Fetch** to **Everything waiting**, and click **Call**.
 
 The log at the bottom says what happens: the call, each message delivered, what waits for you, and
-the end. A session of a few short messages takes a minute or two at 2300 Hz on a fair path, longer
+the end. While the session runs, a card at the bottom right shows how far the mail has got: the
+outer ring is what you send, the inner one what comes in, with the messages, the kilobytes and
+the time left, and the header shows the percentage. Your messages count as sent once Aether has
+them on the air, not when RadioPost hands them over. A message put in the outbox by mistake can be
+deleted before you call: the trash can on its row moves it to the **Trash**. A session of a few short messages takes a minute or two at 2300 Hz on a fair path, longer
 on a weak one. Within a minute of the session, the email arrives at the address you wrote to, from
 your radiopost.org address, with a `Radio-Path:` header naming the gateway and the session.
 

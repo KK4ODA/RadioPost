@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.5 |
-| **Updated** | 2026-11-11 |
+| **Version** | 0.2.6 |
+| **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §9 and §10 |
@@ -105,7 +105,7 @@ rules:
 | ID | Wish | Group | Priority | Compatibility | Status |
 |---|---|---|---|---|---|
 | W1 | Reply and forward | Mail | High | Fits today | Planned |
-| W2 | An address book and groups | Mail | Medium | Fits today | Planned |
+| W2 | An address book and groups | Mail | Medium | Fits today | In progress |
 | W3 | Photos made small, and the time on the air shown | Mail | Medium | Fits today | Planned |
 | W4 | The full text of a trimmed message | Mail | Low | Fits today as modified; optional addition as asked | Proposed |
 | W5 | Mail kept as `.eml` files | Mail | Low | Fits today | Planned |
@@ -150,6 +150,8 @@ rules:
 | W44 | One install, several radios | Setup | Medium | Fits today; needs specification review for a portable callsign | Proposed |
 | W45 | Station to station under an SSID | Radio | Low | Breaking protocol change, small, failing safe (G12) | Proposed |
 | W46 | Several callsigns in one client, chosen from a list | Setup | Medium | Fits today, a call each | Proposed |
+| W47 | Deleting messages, and a trash | Mail | High | Fits today | Implemented |
+| W48 | What a session has carried, and what is left | Radio | Medium | Fits today | Implemented |
 
 Groups: *Mail* (§4), *Setup* (§5), *Radio* (§6), *Operation* (§7), *Offline* (§8),
 *Applications* (§9), *Adapters* (§10), *Rules* (§11). Consolidated and deferred wishes are in §14.
@@ -185,13 +187,13 @@ Pick recipients by name. Write to a group (a net, a shelter team) in one step.
 | Requested by | The plan: concept §10, first version. Requesters: 0. |
 | Component | Client. |
 | Compatibility | **Fits today.** The client's own; a group becomes addresses in `to` or `cc` (RP-2 §2). |
-| Existing coverage | Planned; not built. |
+| Existing coverage | The address list is built (2026-11-12, after the author asked for a way to delete addresses): everyone a message is written to is kept with the name typed before the address, counted and dated, in `addresses.json`, a file of its own beside `state.json`; To and Cc offer it as they are typed, and the browser's own memory of those fields, which nobody could see or clear, is off. The panel's Addresses view finds, adds, renames, writes to and removes them; the reader adds a sender; `radiopost addresses` does the same on the command line. Groups and importing contact files are not built. |
 | Dependencies | None. |
-| Effort | Medium: a store, its page in the panel, and import of the usual contact files. |
+| Effort | Medium: a store, its page in the panel, and import of the usual contact files. What is left: groups, and the import. |
 | Priority | **Medium.** Everyone will want it; nothing waits on it. |
 | Recommendation | Accept, as a client feature. |
-| Status | Planned. |
-| Author decision | None yet. |
+| Status | In progress: the list is built; groups and import are not. |
+| Author decision | The address list, with deleting (2026-11-12). |
 | Notes | Every address goes on the air and onto the accept list (RP-5 §6.5). If groups grow large, a list address at the post office (one address on the air) is the cheaper way, and an application-layer wish of its own. |
 
 ### W3. Photos made small, and the time on the air shown
@@ -263,6 +265,24 @@ delivered to the recipient's mail server.
 | Recommendation | **Modify**: show what the radio already reports; leave *delivered* until users ask, since a failure already arrives as a message. |
 | Status | Planned. |
 | Author decision | None yet. |
+
+### W47. Deleting messages, and a trash
+
+Delete a message from any folder, change your mind, and empty the trash when you are sure.
+
+| | |
+|---|---|
+| Requested by | The author (KK4ODA), 2026-11-12. Requesters: 1. |
+| Component | Client. |
+| Compatibility | **Fits today.** The client's own: nothing goes on the air or to the post office. |
+| Existing coverage | Built (2026-11-12). Each row of the Inbox, Outbox and Sent has a trash can, the reader a Delete button (or the Delete key), and the toast after it Undo. The Trash says which folder each message came from, puts it back where it was (an outbox message keeps its serial and its place in the order messages are offered), deletes it for good after a second click, and empties. A message deleted for good leaves the home once no folder holds it, with any request for its held attachments. `radiopost trash`, `delete [--forever]`, `restore` and `empty-trash` do the same. Before: nothing could be deleted. |
+| Dependencies | None. |
+| Effort | Small. |
+| Priority | **High.** An outbox message written by mistake went on the air at the next call. |
+| Recommendation | Accept. Deleting is this computer's own: the post office, gateways and other stations keep what they hold, and the panel says so. |
+| Status | Implemented. |
+| Author decision | Build it (2026-11-12). |
+| Notes | While a session runs the panel changes nothing in the home, so deleting waits for it to end. Deleting a message at the post office as well (from another device's view of the mailbox) is another wish, with W6. |
 
 ---
 
@@ -543,6 +563,25 @@ operator's several stations each keep an SSID of their own, so a listener can te
 | Status | Proposed. |
 | Author decision | None yet. |
 | Notes | The caller's own SSID needs nothing: its `HELLO` names its credential's `operator`, which the called station's statement echoes (RP-1 §6.5), whatever callsign the modem calls as. |
+
+### W48. What a session has carried, and what is left
+
+See, while a session runs, how much of the mail has crossed each way and how long the rest will
+take.
+
+| | |
+|---|---|
+| Requested by | The author (KK4ODA), 2026-11-12: "something cute and visually appealing". Requesters: 1. |
+| Component | Client; the session engines in the core library. |
+| Compatibility | **Fits today.** The engines count what they already do; the modem's `queued` and `quality` (RP-4 §5) say what it still holds and its rate. Nothing on the air changes. |
+| Existing coverage | Built (2026-11-12). `radiopost::session::Progress` counts each message both ways in bytes of its air form: sent when handed to the link, then whole at the `RECEIPT`; received as its pieces arrive; a resumed message only the rest; what was not taken, failed, or offered for another account and not sent, left out. The client takes off what the modem still holds of what it was handed, so sent mail counts as it goes on the air, not when Aether takes it. The panel shows two rings round an envelope, the outer for what goes out and the inner for what comes in, with the counts, the kilobytes and the time left (from what crossed in the last minute and a half, else the modem's rate); the envelope bobs the way the mail goes, and a tick pops in when all of it has crossed. A small pair of rings and the percentage sit in the header. |
+| Dependencies | None. W3 (the time on the air shown before calling) is its counterpart before the call. |
+| Effort | Medium. |
+| Priority | **Medium.** A session of several minutes said nothing of how far it had got. |
+| Recommendation | Accept. |
+| Status | Implemented. |
+| Author decision | Build it (2026-11-12). |
+| Notes | The gateway's panel could show its sessions the same way; its engine does not count yet. |
 
 ---
 
@@ -1020,3 +1059,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.2.3 | 2026-11-11 | The author's wish for Aether HF and Mercury on one gateway, merged: W26 becomes *one gateway, several modems* (on separate radios or sharing one), W20 *an adapter for VARA-style modems*, Mercury included, built against Mercury first; both Medium. W40 may read the dial from rigctld or FLRig; thread T8, modem names; gap G11. W38: radiopost.org's mail is live, still with no backups. W36 cites the post office guide's §11. |
 | 0.2.4 | 2026-11-11 | W8 implemented: credentials renew themselves in their last month, the client's by Internet or radio and the gateway's own. |
 | 0.2.5 | 2026-11-11 | The author's wishes: W45, station to station under an SSID (gap G12, with G10), and W46, several callsigns in one client, chosen from a list (one design with W7); thread T9. |
+| 0.2.6 | 2026-11-12 | The author's wishes, built: W47, deleting messages and a trash; W48, what a session has carried and what is left. W2 in progress: the address list is built, groups and import are not. |

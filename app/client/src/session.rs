@@ -6,7 +6,7 @@
 //! in the store before the requests it led to are written, so a message received is on disk before
 //! the `RECEIPT` that takes it is sent (RP-3 §5.4).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,7 +17,9 @@ use radiopost::ContentId;
 use radiopost::message::{Compression, Message};
 use radiopost::session::called::{Called, CalledConfig};
 use radiopost::session::client::{Chooser, Client, ClientConfig};
-use radiopost::session::{Caps, Event as SessionEvent, Outgoing, Proof, Proofs, WaitingEntry};
+use radiopost::session::{
+    Caps, Event as SessionEvent, Outgoing, Progress, Proof, Proofs, WaitingEntry,
+};
 use rpmi::base64;
 use rpmi::host::{Carrier, Direction, Engine, Event, Host};
 use rpmi::tcp::Connection;
@@ -81,6 +83,82 @@ pub struct Options {
     /// How long before the credential runs out a gateway call asks for a renewed one
     /// ([`crate::renewal::WITHIN`]).
     pub renew_within: u64,
+    /// Kept up to date while the session runs: how far its messages have crossed, for a window
+    /// to show.
+    pub live: Option<Arc<Mutex<Live>>>,
+}
+
+/// A session as it runs: how far its messages have crossed both ways, and what the modem says.
+#[derive(Clone, Debug, Default)]
+pub struct Live {
+    /// What the engine has carried, in bytes of the messages' air forms (RP-2 §4).
+    pub progress: Progress,
+    /// The bytes handed to the modem that it has not yet passed on: what it last reported
+    /// (RP-4 `queued`), with what was sent since, and less what it said the other station holds
+    /// (`delivered`). Sent messages count as crossed only past this.
+    pub queued: u64,
+    /// The data rate the modem says it uses (RP-4 `quality`).
+    pub rate_bps: Option<f64>,
+    /// Whether the modem says it is receiving now.
+    pub receiving: Option<bool>,
+    /// Each send not yet acknowledged, by its `ref`, with its size.
+    sends: VecDeque<(Value, u64)>,
+}
+
+impl Live {
+    /// A send of `bytes` handed to the modem under `reference`.
+    fn sent(&mut self, reference: Option<&Value>, bytes: u64) {
+        self.queued += bytes;
+        if let Some(r) = reference {
+            self.sends.push_back((r.clone(), bytes));
+        }
+    }
+
+    /// What the modem said of the link.
+    fn heard(&mut self, event: &Event) {
+        match event {
+            Event::Queued { bytes, .. } => self.queued = *bytes,
+            Event::Delivered { reference, .. } => {
+                if let Some(at) = self.sends.iter().position(|(r, _)| r == reference) {
+                    self.sends.drain(..=at);
+                    self.queued = self.queued.min(self.sends.iter().map(|(_, n)| n).sum());
+                }
+            }
+            Event::Quality {
+                rate_bps,
+                receiving,
+                ..
+            } => {
+                if rate_bps.is_some() {
+                    self.rate_bps = *rate_bps;
+                }
+                if receiving.is_some() {
+                    self.receiving = *receiving;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// What a window shows: each way the messages (not counting those refused), how many are
+    /// whole, their bytes and how many of them have crossed; the modem's rate; whether it is
+    /// receiving.
+    #[must_use]
+    pub fn summary(&self) -> Value {
+        let way = |list: &[radiopost::session::Crossing], (bytes, crossed): (u64, u64)| {
+            let going: Vec<_> = list.iter().filter(|c| !c.refused).collect();
+            json!({
+                "messages": going.len(), "whole": going.iter().filter(|c| c.whole).count(),
+                "bytes": bytes, "crossed": crossed,
+            })
+        };
+        json!({
+            "sending": way(&self.progress.sending, self.progress.sent_bytes(self.queued)),
+            "receiving": way(&self.progress.receiving, self.progress.received_bytes()),
+            "rate_bps": self.rate_bps,
+            "receiving_now": self.receiving,
+        })
+    }
 }
 
 impl Options {
@@ -101,6 +179,7 @@ impl Options {
             quiet: QUIET,
             stop: None,
             renew_within: crate::renewal::WITHIN,
+            live: None,
         }
     }
 
@@ -188,6 +267,23 @@ impl Engine for Calling {
     }
     fn link_lost(&mut self) -> Vec<SessionEvent> {
         self.0.link_broken()
+    }
+}
+
+/// An engine's count of what has crossed.
+trait Counted {
+    fn progress(&self) -> &Progress;
+}
+
+impl Counted for Calling {
+    fn progress(&self) -> &Progress {
+        self.0.progress()
+    }
+}
+
+impl Counted for Answering {
+    fn progress(&self) -> &Progress {
+        self.0.progress()
     }
 }
 
@@ -348,13 +444,18 @@ impl Modem {
 
 /// Carries a session on a link that has come up, until it ends, putting what happens in the
 /// store and telling the user.
-fn carry<E: Engine<Event = SessionEvent>>(
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the session's parts, each its own"
+)]
+fn carry<E: Engine<Event = SessionEvent> + Counted>(
     modem: &mut Modem,
     carrier: &mut Carrier<E>,
     connected: &Event,
     store: &mut Store,
     report: &mut Report,
     stats: &mut SessionStats,
+    live: Option<&Mutex<Live>>,
     say: &mut dyn FnMut(&str),
 ) -> Result<(), Error> {
     let mut event = connected.clone();
@@ -363,6 +464,7 @@ fn carry<E: Engine<Event = SessionEvent>>(
         for e in said {
             apply(e, store, report, stats, say)?;
         }
+        let mut handed = Vec::new();
         for r in &requests {
             if r.get("op").and_then(Value::as_str) == Some("send")
                 && let Some(bytes) = r
@@ -370,9 +472,18 @@ fn carry<E: Engine<Event = SessionEvent>>(
                     .and_then(Value::as_str)
                     .and_then(base64::decode)
             {
+                handed.push((r.get("ref").cloned(), bytes.len() as u64));
                 report.transmissions.push(bytes);
             }
             modem.send(r)?;
+        }
+        if let Some(live) = live {
+            let mut l = live.lock().unwrap_or_else(PoisonError::into_inner);
+            l.heard(&event);
+            for (reference, n) in handed {
+                l.sent(reference.as_ref(), n);
+            }
+            l.progress = carrier.engine().progress().clone();
         }
         if carrier.is_ended() {
             return Ok(());
@@ -706,6 +817,7 @@ pub fn call(
         store,
         &mut report,
         &mut stats,
+        opts.live.as_deref(),
         say,
     );
     if carrier.engine().0.files_answered() {
@@ -768,37 +880,20 @@ fn ask_for_files(client: &mut Client, store: &Store, say: &mut dyn FnMut(&str)) 
     }
 }
 
-/// Listens for a station's call and carries its session (RP-3 §10), then returns.
-///
-/// # Errors
-///
-/// No identity yet, the adapter cannot be reached or refuses, or the session breaks.
-pub fn answer(
-    store: &mut Store,
-    opts: &Options,
-    say: &mut dyn FnMut(&str),
-) -> Result<Report, Error> {
-    let (mut modem, me) = Modem::open(store, opts)?;
-    let listen = modem.host.listen(true);
-    modem.ask(&listen)?;
-    tell(say, &format!("listening as {me}"));
-    let waiting = Duration::from_millis(250);
+/// Waits for a station to call: its link's `connected` and its callsign, or `None` when the
+/// program said stop first.
+fn wait_for_call(modem: &mut Modem, opts: &Options) -> Result<Option<(Event, String)>, Error> {
     modem
         .conn
-        .set_timeout(Some(waiting))
+        .set_timeout(Some(Duration::from_millis(250)))
         .map_err(|e| e.to_string())?;
-    let (connected, remote) = loop {
+    let called = loop {
         if opts
             .stop
             .as_ref()
             .is_some_and(|s| s.load(Ordering::Relaxed))
         {
-            tell(say, "stopped listening");
-            modem.conn.close();
-            return Ok(Report {
-                failed: Some("stopped before a call came".into()),
-                ..Report::default()
-            });
+            return Ok(None);
         }
         let Some(e) = modem.poll()? else {
             continue;
@@ -817,6 +912,31 @@ pub fn answer(
         .conn
         .set_timeout(Some(opts.quiet))
         .map_err(|e| e.to_string())?;
+    Ok(Some(called))
+}
+
+/// Listens for a station's call and carries its session (RP-3 §10), then returns.
+///
+/// # Errors
+///
+/// No identity yet, the adapter cannot be reached or refuses, or the session breaks.
+pub fn answer(
+    store: &mut Store,
+    opts: &Options,
+    say: &mut dyn FnMut(&str),
+) -> Result<Report, Error> {
+    let (mut modem, me) = Modem::open(store, opts)?;
+    let listen = modem.host.listen(true);
+    modem.ask(&listen)?;
+    tell(say, &format!("listening as {me}"));
+    let Some((connected, remote)) = wait_for_call(&mut modem, opts)? else {
+        tell(say, "stopped listening");
+        modem.conn.close();
+        return Ok(Report {
+            failed: Some("stopped before a call came".into()),
+            ..Report::default()
+        });
+    };
     tell(say, &format!("{remote} called"));
     let now = opts.now();
     let mut mail = Vec::new();
@@ -861,6 +981,7 @@ pub fn answer(
         store,
         &mut report,
         &mut stats,
+        opts.live.as_deref(),
         say,
     );
     if let Some((address, nonce)) = carrier.engine().0.seen() {
@@ -878,4 +999,50 @@ pub fn answer(
     tell(say, &format!("the session with {remote} is over"));
     modem.conn.close();
     Ok(report)
+}
+
+#[cfg(test)]
+mod tests {
+    use rpmi::host::Event;
+    use serde_json::json;
+
+    use super::Live;
+
+    /// What the modem still holds: the sends handed to it, then what it reports, then what it
+    /// says the other station holds.
+    #[test]
+    fn what_the_modem_still_holds() {
+        let mut l = Live::default();
+        l.sent(Some(&json!("t1")), 1000);
+        l.sent(Some(&json!("t2")), 500);
+        assert_eq!(l.queued, 1500, "handed and not yet reported");
+        l.heard(&Event::Queued {
+            link: "a1".into(),
+            bytes: 800,
+        });
+        assert_eq!(l.queued, 800, "as the modem says");
+        l.heard(&Event::Delivered {
+            link: "a1".into(),
+            reference: json!("t1"),
+        });
+        assert_eq!(l.queued, 500, "only the second send is left");
+        l.sent(Some(&json!("t3")), 200);
+        l.heard(&Event::Delivered {
+            link: "a1".into(),
+            reference: json!("t3"),
+        });
+        assert_eq!(l.queued, 0, "everything up to t3 is held");
+        l.heard(&Event::Quality {
+            link: None,
+            snr_db: Some(3.0),
+            rate_bps: Some(310.0),
+            receiving: Some(true),
+        });
+        let s = l.summary();
+        assert_eq!(
+            (&s["rate_bps"], &s["receiving_now"]),
+            (&json!(310.0), &json!(true))
+        );
+        assert_eq!(s["sending"]["messages"], 0);
+    }
 }

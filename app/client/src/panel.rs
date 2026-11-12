@@ -83,6 +83,8 @@ pub struct Panel {
     addr: SocketAddr,
     updates: Arc<Watch>,
     renewal: Renewal,
+    /// The running session's progress, or the last one's.
+    live: Arc<Mutex<session::Live>>,
 }
 
 /// When the panel renews the credential: first after `first`, then every `every`, once it has
@@ -164,6 +166,7 @@ impl Panel {
                 every: crate::renewal::EVERY,
                 within: crate::renewal::WITHIN,
             },
+            live: Arc::default(),
         }
     }
 
@@ -626,6 +629,7 @@ impl Panel {
                        "reports": store.reports.len(),
                        "files": store.files.len(), "waiting": store.waiting_entries().len()},
             "activity": {"state": a.state, "remote": a.remote, "failed": a.failed},
+            "progress": self.live.lock().unwrap_or_else(PoisonError::into_inner).summary(),
             "update": self.updates.status(),
             "log": a.log.len(),
         }))
@@ -805,6 +809,8 @@ impl Panel {
         });
         opts.stop = Some(Arc::clone(&self.stop));
         opts.fetch = fetch;
+        *self.live.lock().unwrap_or_else(PoisonError::into_inner) = session::Live::default();
+        opts.live = Some(Arc::clone(&self.live));
         let home = self.home.clone();
         let activity = Arc::clone(&self.activity);
         thread::spawn(move || {

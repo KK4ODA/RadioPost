@@ -252,6 +252,20 @@ fn session_01_the_client_side() {
             (Some(420), ids(&["eoc-420"])[0])
         ]
     );
+    // what crossed: both of his, whole; the two that came, and not the photo left waiting
+    let size = |n: &str| w.out(n).air.len() as u64;
+    let sent = size("facundo-reply") + size("facundo-to-ana");
+    let came = size("maria-419") + size("eoc-420");
+    let p = client.progress();
+    assert_eq!(p.sent_bytes(0), (sent, sent));
+    assert_eq!(
+        p.sent_bytes(u64::MAX),
+        (sent, sent),
+        "delivered: the modem's count is past"
+    );
+    assert_eq!(p.received_bytes(), (came, came));
+    assert_eq!(p.receiving.len(), 2, "{:?}", p.receiving);
+    assert!(p.sending.iter().chain(&p.receiving).all(|c| c.whole));
 }
 
 /// The client of `session-01` with held attachments to ask for.
@@ -387,6 +401,11 @@ fn session_02_broken_and_resumed() {
         (held[0].id, held[0].held.len(), held[0].serial),
         (photo, 4800, Some(421))
     );
+    // the report crossed from the 1 920 bytes the gateway held; the photo stopped at 4 800
+    let rest = w.out("facundo-report").air.len() as u64 - 1920;
+    assert_eq!(b.progress().sent_bytes(0), (rest, rest));
+    let photo_size = held[0].total;
+    assert_eq!(b.progress().received_bytes(), (photo_size, 4800));
 
     // c: through another gateway, a first visit: the rest of the photo, from the bytes held.
     let mut cfg = base(&sessions[2], "N2CALL-5");
@@ -394,9 +413,17 @@ fn session_02_broken_and_resumed() {
     cfg.partials = held;
     cfg.credential_cached = false;
     let mut c = Client::new(cfg, Box::new(|_| vec![])).expect("a client");
+    assert_eq!(
+        c.progress().received_bytes(),
+        (0, 0),
+        "nothing known before WELCOME"
+    );
     let events = replay_client(&mut c, &sessions[2], "client");
     assert!(c.is_over());
     assert_eq!(received(&events), vec![(Some(421), photo)]);
+    // only the rest crossed
+    let rest = photo_size - 4800;
+    assert_eq!(c.progress().received_bytes(), (rest, rest));
 }
 
 fn station_caller(w: &World, file: &Json) -> Client {
@@ -474,7 +501,11 @@ fn session_03_the_station_called() {
     let file = vectors("session-03.json");
     let mut station = ana(&w, &file);
     let mut events = Vec::new();
+    let mut seen_received = 0;
     for (i, turn) in turns(&file).iter().enumerate() {
+        let (_, now) = station.progress().received_bytes();
+        assert!(now >= seen_received, "what has arrived only grows");
+        seen_received = now;
         if turn.from == "called" {
             let written = station.transmit().expect("a transmission due");
             assert_eq!(
@@ -521,6 +552,12 @@ fn session_03_the_station_called() {
         delivered(&events),
         vec![w.messages["ana-to-facundo"].content_id()]
     );
+    // what crossed each way, whole; what the caller offered for another account is not counted
+    let size = |n: &str| w.out(n).air.len() as u64;
+    let p = station.progress();
+    let (direct, note) = (size("facundo-direct"), size("ana-to-facundo"));
+    assert_eq!(p.received_bytes(), (direct, direct), "{:?}", p.receiving);
+    assert_eq!(p.sent_bytes(0), (note, note));
 }
 
 fn unbase64url(text: &str) -> Vec<u8> {

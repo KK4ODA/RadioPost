@@ -4,8 +4,8 @@
 use ed25519_dalek::SigningKey;
 
 use super::{
-    Caps, Event, Inbound, Outgoing, Proof, Proofs, Receipts, VERSION, WaitingEntry, done,
-    error_pdu, listed_ids, listed_pairs, msg_pdus, piece_for, transmission,
+    Caps, Event, Inbound, Outgoing, Progress, Proof, Proofs, Receipts, VERSION, WaitingEntry, done,
+    error_pdu, listed_ids, listed_pairs, msg_pdus, piece_for, take_counted, transmission,
 };
 use crate::cbor::Value;
 use crate::credential::{self, Body, Credential, Trust, flags};
@@ -66,6 +66,7 @@ pub struct Called {
     receipts: Receipts,
     events: Vec<Event>,
     queued: Vec<Vec<u8>>,
+    progress: Progress,
 }
 
 impl Called {
@@ -95,7 +96,14 @@ impl Called {
             receipts: Receipts::default(),
             events: Vec::new(),
             queued: Vec::new(),
+            progress: Progress::default(),
         })
+    }
+
+    /// How far the session has carried the messages in it, both ways.
+    #[must_use]
+    pub fn progress(&self) -> &Progress {
+        &self.progress
     }
 
     /// Bytes the link delivered. Returns what happened.
@@ -166,7 +174,11 @@ impl Called {
             (State::Exchange, Some(kind::MSG)) => self.msg(pdu),
             (State::Exchange, Some(kind::RECEIPT)) => {
                 for id in listed_ids(pdu.get(1)) {
+                    self.progress.answered(id, true);
                     self.events.push(Event::Delivered(id));
+                }
+                for (id, _) in listed_pairs(pdu.get(3)) {
+                    self.progress.answered(id, false);
                 }
             }
             (State::Exchange, Some(kind::REQUEST)) => {
@@ -375,11 +387,22 @@ impl Called {
             credential: self.cfg.credential.clone(),
         });
         // It cannot tell from an offer whom a message is for, so it takes what it has room for.
-        let accept = hello
-            .get(8)
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
+        let offers = hello.get(8).and_then(Value::as_array).into_iter().flatten();
+        for offer in offers.clone() {
+            let id = offer
+                .as_array()
+                .and_then(|o| o.first())
+                .and_then(Value::as_bytes)
+                .and_then(ContentId::from_slice);
+            let size = offer
+                .as_array()
+                .and_then(|o| o.get(1))
+                .and_then(Value::as_u64);
+            if let (Some(id), Some(size)) = (id, size) {
+                self.progress.will_receive(id, size, 0);
+            }
+        }
+        let accept = offers
             .filter_map(|o| o.as_array()?.first().cloned())
             .map(|id| Value::Array(vec![id, Value::Uint(0)]))
             .collect();
@@ -414,6 +437,9 @@ impl Called {
                 .map(|(_, o)| *o);
             if out.air.len() as u64 <= auto || resume.is_some() {
                 pdus.extend(msg_pdus(out, resume.unwrap_or(0), piece, Some(*serial)));
+                self.progress
+                    .will_send(out.id(), out.air.len() as u64, resume.unwrap_or(0));
+                self.progress.handed(out.id());
                 self.sent.push(*serial);
             }
         }
@@ -423,10 +449,12 @@ impl Called {
     }
 
     fn msg(&mut self, pdu: &Value) {
-        match self.inbound.take(pdu) {
+        match take_counted(&mut self.inbound, &mut self.progress, pdu) {
             Some(Ok((_, message, air))) => {
                 let id = message.content_id();
-                if message.recipients().contains(&self.me.address.as_str()) {
+                let ours = message.recipients().contains(&self.me.address.as_str());
+                self.progress.received(id, ours);
+                if ours {
                     self.receipts.complete.push(id);
                     self.events.push(Event::Received {
                         serial: None,
@@ -443,6 +471,7 @@ impl Called {
                 }
             }
             Some(Err((id, code))) => {
+                self.progress.received(id, false);
                 self.receipts.failed.push((id, code));
                 self.events.push(Event::Failed { id, code });
             }
@@ -452,12 +481,16 @@ impl Called {
 
     /// The caller's turn ended with `DONE` or `REQUEST`: receipts, then what it asked for.
     fn answer(&mut self, asked: &[u64]) {
+        // what it offered and did not send was for another account (RP-3 §10)
+        self.progress.turn_ended();
         let mut pdus: Vec<Value> = self.receipts.take_pdu().into_iter().collect();
         if !asked.is_empty() {
             let piece = piece_for(self.caller_caps.max_pdu, self.cfg.piece);
             for (serial, out) in &self.waiting {
                 if asked.contains(serial) && !self.sent.contains(serial) {
                     pdus.extend(msg_pdus(out, 0, piece, Some(*serial)));
+                    self.progress.will_send(out.id(), out.air.len() as u64, 0);
+                    self.progress.handed(out.id());
                     self.sent.push(*serial);
                 }
             }

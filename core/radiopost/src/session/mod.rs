@@ -13,6 +13,9 @@
 pub mod called;
 pub mod client;
 pub mod gateway;
+mod progress;
+
+pub use progress::{Crossing, Progress};
 
 use std::collections::HashMap;
 
@@ -295,6 +298,21 @@ pub struct Partial {
 
 /// What a `MSG` completed: the message and its serial, or the message that failed and why.
 type Taken = Result<(Option<u64>, Message, Vec<u8>), (ContentId, ErrorCode)>;
+
+/// Takes a `MSG` into `inbound`, counting its piece in `progress` first.
+fn take_counted(inbound: &mut Inbound, progress: &mut Progress, pdu: &Value) -> Option<Taken> {
+    if let (Some(id), Some(offset), Some(total), Some(data)) = (
+        pdu.get(1)
+            .and_then(Value::as_bytes)
+            .and_then(ContentId::from_slice),
+        pdu.get(2).and_then(Value::as_u64),
+        pdu.get(3).and_then(Value::as_u64),
+        pdu.get(4).and_then(Value::as_bytes),
+    ) {
+        progress.arrived(id, offset, data.len() as u64, total);
+    }
+    inbound.take(pdu)
+}
 
 /// Messages arriving in pieces, joined (RP-3 §5.4, §7).
 #[derive(Clone, Debug, Default)]

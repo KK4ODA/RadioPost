@@ -6,8 +6,9 @@ use std::collections::BTreeSet;
 use ed25519_dalek::SigningKey;
 
 use super::{
-    Caps, Event, Inbound, Outgoing, Partial, Proof, Proofs, Receipts, VERSION, WaitingEntry, done,
-    error_pdu, listed_ids, listed_pairs, msg_pdus, piece_for, transmission,
+    Caps, Event, Inbound, Outgoing, Partial, Progress, Proof, Proofs, Receipts, VERSION,
+    WaitingEntry, done, error_pdu, listed_ids, listed_pairs, msg_pdus, piece_for, take_counted,
+    transmission,
 };
 use crate::cbor::Value;
 use crate::credential::{self, Body, Credential, Trust, flags};
@@ -94,6 +95,7 @@ pub struct Client {
     receipts: Receipts,
     events: Vec<Event>,
     queued: Vec<Vec<u8>>,
+    progress: Progress,
 }
 
 impl Client {
@@ -127,6 +129,7 @@ impl Client {
             receipts: Receipts::default(),
             events: Vec::new(),
             queued: Vec::new(),
+            progress: Progress::default(),
         })
     }
 
@@ -229,6 +232,12 @@ impl Client {
         self.files = files;
     }
 
+    /// How far the session has carried the messages in it, both ways.
+    #[must_use]
+    pub fn progress(&self) -> &Progress {
+        &self.progress
+    }
+
     /// Whether the held attachments were asked for and the gateway answered: its `DONE` came after
     /// the `REQUEST` carrying them, and its `NOTICE` before that said how the post office took
     /// them. Until then a broken link leaves them to ask for on the next call.
@@ -269,8 +278,9 @@ impl Client {
     fn handle(&mut self, pdu: &Value) {
         match pdu.get(0).and_then(Value::as_u64) {
             Some(kind::WELCOME) if self.state == State::Welcome => self.welcome(pdu),
-            Some(kind::MSG) if self.state == State::Exchange => match self.inbound.take(pdu) {
+            Some(kind::MSG) if self.state == State::Exchange => match self.take_msg(pdu) {
                 Some(Ok((serial, message, air))) => {
+                    self.progress.received(message.content_id(), true);
                     self.receipts.complete.push(message.content_id());
                     self.events.push(Event::Received {
                         serial,
@@ -279,6 +289,7 @@ impl Client {
                     });
                 }
                 Some(Err((id, code))) => {
+                    self.progress.received(id, false);
                     self.receipts.failed.push((id, code));
                     self.events.push(Event::Failed { id, code });
                 }
@@ -287,6 +298,7 @@ impl Client {
             Some(kind::RECEIPT) => {
                 for id in listed_ids(pdu.get(1)) {
                     self.awaiting_receipt.remove(&id);
+                    self.progress.answered(id, true);
                     self.events.push(Event::Delivered(id));
                 }
                 for (id, _) in listed_pairs(pdu.get(2)) {
@@ -294,12 +306,17 @@ impl Client {
                 }
                 for (id, code) in listed_pairs(pdu.get(3)) {
                     self.awaiting_receipt.remove(&id);
+                    self.progress.answered(id, false);
                     let code = ErrorCode::from_code(code).unwrap_or(ErrorCode::Internal);
                     self.events.push(Event::NotTaken { id, code });
                 }
             }
             Some(kind::DONE) => {
                 self.awaiting_done = false;
+                // the gateway's answer to the request: what it did not send will not come now
+                if self.to_send.is_none() {
+                    self.progress.turn_ended();
+                }
                 if self.files_asked == FilesAsked::Sent {
                     self.files_asked = FilesAsked::Answered;
                 }
@@ -390,7 +407,7 @@ impl Client {
         // Of the offers taken, what to send and from where; station to station, only the
         // messages for the account reached (RP-3 §10).
         let accepted = listed_pairs(pdu.get(5));
-        let to_send = self
+        let to_send: Vec<(usize, u64)> = self
             .cfg
             .outbox
             .iter()
@@ -403,6 +420,11 @@ impl Client {
                 for_peer.then_some((i, *offset))
             })
             .collect();
+        for &(i, offset) in &to_send {
+            let out = &self.cfg.outbox[i];
+            self.progress
+                .will_send(out.id(), out.air.len() as u64, offset);
+        }
         self.to_send = Some(to_send);
         let held: Vec<ContentId> = self.cfg.partials.iter().map(|p| p.id).collect();
         let asked: Vec<WaitingEntry> = waiting
@@ -416,6 +438,19 @@ impl Client {
             .map(|w| w.serial)
             .filter(|s| chosen.contains(s))
             .collect();
+        // what will come: unasked what fits `auto` and the rest of what is held in part (RP-3
+        // §5.2), and what is asked for
+        for w in &waiting {
+            if (w.size <= self.cfg.auto && !held.contains(&w.id))
+                || self.requests.contains(&w.serial)
+            {
+                self.progress.will_receive(w.id, w.size, 0);
+            }
+        }
+        for p in &self.cfg.partials {
+            self.progress
+                .will_receive(p.id, p.total, p.held.len() as u64);
+        }
         self.events.push(Event::Listed(waiting));
         self.awaiting_done = true;
         self.state = State::Exchange;
@@ -473,6 +508,11 @@ impl Client {
         Ok((body, (time, proof)))
     }
 
+    /// Takes a `MSG`, counting what of it arrived first.
+    fn take_msg(&mut self, pdu: &Value) -> Option<super::Taken> {
+        take_counted(&mut self.inbound, &mut self.progress, pdu)
+    }
+
     /// Answer once the other station has said all it owes this turn: its `DONE` (after `WELCOME`
     /// or a `REQUEST`) and receipts for everything sent.
     fn reply_when_due(&mut self) {
@@ -486,6 +526,7 @@ impl Client {
                 let out = &self.cfg.outbox[i];
                 pdus.extend(msg_pdus(out, offset, piece, None));
                 self.awaiting_receipt.insert(out.id());
+                self.progress.handed(out.id());
             }
             pdus.extend(self.receipts.take_pdu());
             let files = if self.cfg.station.is_none() && self.files_asked == FilesAsked::Not {

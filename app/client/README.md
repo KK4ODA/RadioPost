@@ -81,7 +81,13 @@ message is written to is added with the name typed before the address, and To an
 you type (arrows and Enter or Tab to take one, the × to take an address off the list, with
 Undo); the browser's own memory of those fields is off, since nobody could see or clear it. The
 view finds, adds, renames, writes to and removes addresses, and the reader's *Add to addresses*
-adds a sender. A session runs on a thread of its own; while it
+adds a sender. While a session runs, a card at the bottom right shows what it has carried: two
+rings round an envelope, the outer for what goes out and the inner for what comes in, with the
+messages whole, the kilobytes and the time left, and a small pair of rings with the percentage in
+the header. The counts come from the session engines (`radiopost::session::Progress`, in bytes of
+the messages' air forms), less what the modem still holds of what it was handed (RP-4 `queued`),
+so sent mail counts as it goes on the air; the time left comes from what crossed in the last
+minute and a half, else the modem's rate (`quality`). A session runs on a thread of its own; while it
 runs, the panel changes nothing in the home, so deleting waits for it to end; the address list is
 a file of its own and changes at any time. `--ui DIR` serves the page from a directory, for working on it.
 
@@ -164,7 +170,7 @@ both stations' proofs, waits in `state.json` until `report` (or the panel's Send
 ## Tests
 
 `tests/panel.rs`: the panel's guards, a message written with an attachment and carried by a call
-made from the panel, a held attachment asked for, listening stopped, and the trash (deleted,
+made from the panel (with what it carried, as the progress card shows it), a held attachment asked for, listening stopped, and the trash (deleted,
 restored to its place, deleted for good, emptied, and refused while a session runs), and the
 address list (learned from a message with the names typed, added to and renamed, taken off and
 put back as it was, during a session too). `tests/two_clients.rs`: two clients replay session-03

@@ -13,6 +13,7 @@
   <header class="top">
     <div class="brand" title="RadioPost: email by amateur radio">RadioPost</div>
     <div class="who" id="who" title="The account and callsign this client speaks for"></div>
+    <div class="mini" id="mini" role="status" hidden><span class="mini-rings" id="mini-rings"></span><span id="mini-pct"></span></div>
     <div class="state" id="state" data-state="idle" title="What the station is doing">Idle</div>
     <div class="update" id="update" role="status" hidden>
       <span id="update-text"></span>
@@ -235,6 +236,15 @@
   <footer class="log" aria-label="Session log">
     <pre id="log" title="What the sessions said"></pre>
   </footer>
+  <div class="transfer" id="transfer" role="status" aria-live="polite" hidden>
+    <span class="transfer-rings" id="transfer-rings"></span>
+    <div class="transfer-text">
+      <p class="t-head" id="t-head"></p>
+      <p class="t-line out" id="t-out" title="Your messages going out: how many the other station holds whole, and the bytes on their way"></p>
+      <p class="t-line in" id="t-in" title="Messages coming in: how many are here whole, and the bytes arrived"></p>
+      <p class="t-left" id="t-left"></p>
+    </div>
+  </div>
   <div class="toast" id="toast" role="status" hidden><span id="toast-text"></span><button id="toast-act" hidden></button></div>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>

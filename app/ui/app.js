@@ -184,6 +184,7 @@ async function refresh() {
   $("device").textContent = s.device || "No key yet.";
   $("make-key").hidden = Boolean(s.device);
   showEnrollment(s.me);
+  showTransfer(a, s.progress);
   $("cred-state").textContent = s.me
     ? `${s.me.address} (${s.me.operator}), valid until ${new Date(s.me.expires * 1000).toLocaleDateString()}`
     : "No credential yet.";
@@ -194,6 +195,134 @@ async function refresh() {
   if (lastState !== "idle" && lastState !== "renewing" && a.state === "idle") await openFolder(folder);
   lastState = a.state;
   return s;
+}
+
+// ── what a session is carrying ──────────────────────────────────────────────────────────────
+// Two rings around an envelope: the outer one is what goes out, the inner one what comes in.
+// The envelope bobs up while sending and down while receiving, the little waves above it pulse
+// while the session runs, and a tick pops in when everything has crossed. Sent bytes count once
+// the modem has passed them on, not when they are handed to it (app/client/src/session.rs).
+
+const RINGS = {out: 27, in: 19};
+
+function ringsSvg(withMail) {
+  const ring = (which) => {
+    const r = RINGS[which];
+    return `<circle class="track" cx="32" cy="32" r="${r}"/>`
+      + `<circle class="arc ${which}" cx="32" cy="32" r="${r}" transform="rotate(-90 32 32)"`
+      + ` stroke-dasharray="${(2 * Math.PI * r).toFixed(2)}" stroke-dashoffset="${(2 * Math.PI * r).toFixed(2)}"/>`;
+  };
+  const mail = withMail
+    ? `<g class="mail">
+         <g class="waves"><path d="M28.6 23.6q3.4-2.6 6.8 0"/><path d="M26.4 20.6q5.6-4.4 11.2 0"/></g>
+         <g class="envelope"><rect x="23.5" y="26.5" width="17" height="12" rx="2.4"/><path d="M24.4 27.8 32 33.4l7.6-5.6"/></g>
+         <path class="check" d="M25.2 32.6l4.4 4.4 9.2-9.6"/>
+       </g>`
+    : "";
+  return `<svg class="rings" viewBox="0 0 64 64" aria-hidden="true"><g class="spin">${ring("out")}${ring("in")}</g>${mail}</svg>`;
+}
+
+function setRing(box, which, frac) {
+  const arc = box.querySelector(`.arc.${which}`);
+  const len = 2 * Math.PI * RINGS[which];
+  arc.setAttribute("stroke-dashoffset", (len * (1 - Math.max(0, Math.min(1, frac)))).toFixed(2));
+}
+
+function kb(n) {
+  return n < 1000 ? `${n} B` : `${(n / 1000).toFixed(n < 10000 ? 1 : 0)} kB`;
+}
+
+function crossedLine(way, verb) {
+  if (!way || !way.messages) return "";
+  const of = way.bytes < 1000 ? `${way.crossed}/${way.bytes} B`
+    : `${(way.crossed / 1000).toFixed(way.bytes < 10000 ? 1 : 0)}/${kb(way.bytes)}`;
+  return `${verb} ${way.whole} of ${way.messages} · ${of}`;
+}
+
+function timeLeft(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  if (seconds < 45) return "Under a minute left";
+  if (seconds < 90) return "About a minute left";
+  if (seconds < 3600) return `About ${Math.round(seconds / 60)} minutes left`;
+  return `About ${(seconds / 3600).toFixed(1)} hours left`;
+}
+
+const transfer = {samples: [], shownUntil: 0, last: null, wasSession: false};
+
+function showTransfer(a, p) {
+  const box = $("transfer");
+  const mini = $("mini");
+  if (!box.firstElementChild.firstElementChild) {
+    $("transfer-rings").innerHTML = ringsSvg(true);
+    $("mini-rings").innerHTML = ringsSvg(false);
+  }
+  const now = Date.now();
+  const inSession = a.state === "session";
+  if (inSession && !transfer.wasSession) transfer.samples = [];
+  if (!inSession && transfer.wasSession) transfer.shownUntil = now + 8000;
+  transfer.wasSession = inSession;
+  if (inSession) transfer.last = p;
+  const ending = !inSession && now < transfer.shownUntil && transfer.last;
+  const visible = a.state === "calling" || inSession || ending;
+  box.hidden = mini.hidden = !visible;
+  if (!visible) return;
+  const q = inSession || ending ? (inSession ? p : transfer.last) : null;
+  const out = q ? q.sending : null;
+  const inc = q ? q.receiving : null;
+  const total = q ? out.bytes + inc.bytes : 0;
+  const crossed = q ? out.crossed + inc.crossed : 0;
+  let mode = "carrying";
+  let head = "";
+  if (a.state === "calling") {
+    mode = "waiting";
+    head = "Calling…";
+  } else if (ending) {
+    mode = "done";
+    const all = total > 0 && out.whole === out.messages && inc.whole === inc.messages && !a.failed;
+    box.classList.toggle("all", all || (total === 0 && !a.failed));
+    head = a.failed ? `Stopped at ${total ? Math.floor(100 * crossed / total) : 0}%`
+      : total === 0 ? "Nothing to carry" : all ? "All carried" : "Carried what it could";
+  } else if (total === 0) {
+    mode = "waiting";
+    head = "Checking the mail…";
+  } else {
+    head = `${Math.floor(100 * crossed / total)}% carried`;
+  }
+  if (mode !== "done") box.classList.remove("all");
+  box.dataset.mode = mode;
+  box.dataset.dir = !q || mode !== "carrying" ? ""
+    : q.receiving_now ? "down" : out.crossed < out.bytes ? "up" : inc.crossed < inc.bytes ? "down" : "";
+  for (const target of [box, mini]) {
+    target.dataset.mode = mode;
+    if (mode === "waiting") {
+      setRing(target, "out", 0.22);
+      setRing(target, "in", 0);
+    } else {
+      setRing(target, "out", out.bytes ? out.crossed / out.bytes : out.messages ? 0 : 1);
+      setRing(target, "in", inc.bytes ? inc.crossed / inc.bytes : inc.messages ? 0 : 1);
+    }
+  }
+  $("t-head").textContent = head;
+  $("t-out").textContent = crossedLine(out, "Sending");
+  $("t-in").textContent = crossedLine(inc, "Receiving");
+  $("t-out").hidden = !$("t-out").textContent;
+  $("t-in").hidden = !$("t-in").textContent;
+  // the time left: from what crossed in the last minute and a half, else from the modem's rate
+  let left = "";
+  if (mode === "carrying") {
+    transfer.samples.push({t: now, done: crossed});
+    transfer.samples = transfer.samples.filter((s) => now - s.t <= 90000);
+    const first = transfer.samples[0];
+    const span = (now - first.t) / 1000;
+    const rate = span >= 10 && crossed > first.done ? (crossed - first.done) / span
+      : q.rate_bps ? q.rate_bps / 8 / 1.3 : 0;
+    left = rate ? timeLeft((total - crossed) / rate) : "";
+  }
+  $("t-left").textContent = left;
+  $("t-left").hidden = !left;
+  $("mini-pct").textContent = mode === "carrying" || (mode === "done" && total)
+    ? `${Math.floor(100 * crossed / Math.max(total, 1))}%` : "";
+  mini.title = [head, $("t-out").textContent, $("t-in").textContent, left].filter(Boolean).join("\n");
 }
 
 async function readLog() {
