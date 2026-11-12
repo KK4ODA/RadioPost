@@ -2,7 +2,7 @@
 [package]
 name = "radiopost-gateway-app"
 description = "RadioPost Gateway, the desktop application: the gateway and its panel in a window of its own."
-version = "0.1.0-beta.11"
+version = "0.1.0-beta.12"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
