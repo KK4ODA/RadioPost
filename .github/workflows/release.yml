@@ -127,8 +127,8 @@ jobs:
         working-directory: core
         run: >
           cargo build --release --locked -p radiopost-client -p radiopost-aether -p rpmi
-          -p radiopost-issue -p radiopost-tcp -p radiopost-tester -p radiopost-gateway
-          -p radiopost-postoffice
+          -p radiopost-issue -p radiopost-tcp -p radiopost-mercury -p radiopost-tester
+          -p radiopost-gateway -p radiopost-postoffice
 
       - name: Collect
         shell: bash
@@ -138,8 +138,8 @@ jobs:
           [ "$RUNNER_OS" = "Windows" ] && exe=".exe"
           tools="radiopost-tools-${{ matrix.name }}"
           mkdir -p "out/$tools"
-          for b in radiopost radiopost-aether radiopost-tcp rpmi-loopback radiopost-issue \
-              radiopost-tester radiopost-gateway radiopost-po; do
+          for b in radiopost radiopost-aether radiopost-tcp radiopost-mercury rpmi-loopback \
+              radiopost-issue radiopost-tester radiopost-gateway radiopost-po; do
             cp "core/target/release/$b$exe" "out/$tools/"
           done
           cp LICENSE-MIT LICENSE-APACHE app/client/README.md "out/$tools/"
@@ -229,8 +229,8 @@ jobs:
           later say when a newer release is out and update themselves. The installers are not
           code-signed yet: Windows' SmartScreen asks once (More info, Run anyway), and on macOS open
           the app with Control-click, Open. The tools archive holds radiopost, radiopost-aether,
-          radiopost-tcp, rpmi-loopback, radiopost-issue, radiopost-tester, radiopost-gateway and
-          radiopost-po. SHA256SUMS lists every file's checksum."
+          radiopost-tcp, radiopost-mercury, rpmi-loopback, radiopost-issue, radiopost-tester,
+          radiopost-gateway and radiopost-po. SHA256SUMS lists every file's checksum."
           # $KIND holds two words for a draft
           # shellcheck disable=SC2086
           gh release create "$TAG" dist/* $KIND --target "$GITHUB_SHA" \

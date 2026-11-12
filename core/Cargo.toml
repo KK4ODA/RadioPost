@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 [workspace]
 resolver = "3"
-members = ["radiopost", "api", "rpmi", "issuer", "tester", "postoffice", "gateway", "update", "../adapters/aether", "../adapters/tcp", "../app/client"]
+members = ["radiopost", "api", "rpmi", "issuer", "tester", "postoffice", "gateway", "update", "../adapters/aether", "../adapters/tcp", "../adapters/mercury", "../app/client"]
 
 [workspace.package]
 version = "0.1.0-beta.11"

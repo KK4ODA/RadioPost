@@ -63,6 +63,15 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   leaving mid-session left the Aether session up, the station busy for everyone until Aether's link
   timeout: RP-4 0.5.0 §1.1 now has a leaving host's call and links ended as `abort` would
   (`Bridge::host_left`), and A-02 checks it.
+  `adapters/mercury` (`radiopost-mercury`) is RP-4 §9.6, written from Mercury's `docs/TNC.md`
+  and its source (Rhizomatica's, GPL-3.0; the adapter talks to it over TCP only): one host at a
+  time, since Mercury gives its control port to the newest program; `LISTEN OFF` held until
+  nothing of the host's is up, since Mercury's ends a session unsaid; no `CONNECT` for a second
+  after a command a stray `DISCONNECTED` may answer; `delivered` from `BUFFER`. `tests/common` is
+  a stand-in for two Mercury modems that logs misuse; `tests/mercury.rs` runs two real ones
+  (`MERCURY=<mercury> … --ignored`, Mercury built with `make HAVE_HAMLIB=0`, which needs
+  `libasound2-dev libpulse-dev`) and has not yet been run. Writing it found that Mercury does not
+  identify the station: the called station's callsign goes on the air only as a CRC.
   `adapters/tcp` (`radiopost-tcp`) is RP-4 §9.5: links to other TCP adapters opened with one line
   each way (`RPTCP 1 <as> <called>`, `OK <callsign>` or `NO <code>`), TLS on the Internet with
   rustls and ring (a self-signed certificate made on first use, pinned by SHA-256 fingerprint, or
