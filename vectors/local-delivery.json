@@ -211,6 +211,7 @@
         "status": 200,
         "body": {
           "cursor": "c_4",
+          "placing": true,
           "items": [
             {
               "kind": "forward",

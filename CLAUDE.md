@@ -110,8 +110,16 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   fetches the home's list and each known post office's, keeps the last checked list of each in
   `gateway_list.lists`, and tags each record with its `post_office`; `tests/gateway_lists.rs`
   runs five post offices. Copies placed ahead across post offices (RP-5 0.16.0 §5.8, RP-7 0.9.0,
-  D37) are written and not built: the post office will reuse `gateway_list` for its users' usual
-  gateways.
+  D37), the post office's side: `PostOffice::record_of` finds a usual gateway's record in its own
+  registry or in `State::listed` (each known post office's checked list, fetched by
+  `known::refresh_list` with the keys held for it, fetched or typed) through `gateway_list::merge`;
+  `/copies` answers `placing`, serves a gateway's items only to a credential from the post office
+  that listed it (a stray poll gets `c_0`, uncounted), and takes acknowledgements (`acked`); a
+  poll answered `placing` false is not counted for RP-7 §4.1. Replayed against `api-exchanges`'s
+  case of copies at N1CALL-10 (its `setup`); `forwarding.json` now takes N1CALL-10's record from
+  hampost.org's list, as its hampost.org credential requires, and has a `placing` story;
+  `tests/copies.rs` runs two post offices. The gateway's side (which post offices it polls) waits
+  for Phase 3's copies (W27): gateways do not poll yet.
   RP-6 is `postoffice/src/mail.rs` (the port of `rpref/mail.py`, MIME by Stalwart's `mail-parser`
   0.11: the newest needs Rust 1.98, over the workspace's 1.85) and `email.rs` (the door as an MTA
   hook, read in Stalwart's shape and the MTA Hooks draft's, `ietf.org/archive/id/draft-degennaro-mta-hooks-01.txt`;

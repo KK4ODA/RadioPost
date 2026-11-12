@@ -361,6 +361,23 @@ pub struct State {
     pub post_offices: BTreeMap<String, crate::known::Fetched>,
     /// The post offices it met and does not know, for its operators (RP-1 §7.5).
     pub seen: BTreeMap<String, crate::known::Seen>,
+    /// The gateway lists of the post offices it knows, as fetched and checked, by domain
+    /// (RP-5 §4.4): for its users' usual gateways registered there (§5.8).
+    pub listed: BTreeMap<String, Listed>,
+    /// How many of each gateway's items it has acknowledged (RP-5 §5.8).
+    pub acked: BTreeMap<String, usize>,
+}
+
+/// A known post office's gateway list, as fetched and checked (RP-5 §4.4).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Listed {
+    /// Its API, which one post office's several domains share.
+    pub api: String,
+    /// Its gateways' records.
+    pub gateways: Vec<Json>,
+    /// When it was fetched.
+    pub fetched: u64,
 }
 
 /// A post office: what it is, what it keeps, and where its random values come from.
@@ -540,7 +557,8 @@ impl PostOffice {
             })
             .unwrap_or_default();
         for callsign in usual {
-            let Some(record) = self.state.gateways.get(&callsign) else {
+            // RP-5 §5.8: registered here or with a post office it knows, and not ambiguous
+            let Some((record, _)) = self.record_of(&callsign) else {
                 continue;
             };
             let Some(copies) = record
@@ -835,7 +853,7 @@ impl PostOffice {
             ("POST", "/sessions") => return self.open_session(&user, body),
             ("POST", "/reports") => return self.reports(&user, body),
             ("GET", "/copies") => return self.poll(&user, query),
-            ("POST", "/copies/ack") => return Response::empty(),
+            ("POST", "/copies/ack") => return self.ack(&user, body),
             ("PUT", "/settings") => {
                 self.state
                     .settings
@@ -1570,11 +1588,76 @@ impl PostOffice {
         Response::ok(200, json!({"sessions": out}))
     }
 
-    /// RP-5 §5.8: the items for this gateway after the cursor. Cursors here are `c_<count>`.
+    /// RP-5 §4.4, §5.8: a gateway's record, from this post office's registry or the lists of the
+    /// post offices it knows, and the domains of the post office that listed it. `None` for a
+    /// callsign no list names, or an ambiguous one.
+    #[must_use]
+    pub fn record_of(&self, callsign: &str) -> Option<(Json, Vec<String>)> {
+        let mut by_api: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+        for (domain, listed) in &self.state.listed {
+            if self.config.trust.keys.contains_key(domain) && !self.config.domains.contains(domain)
+            {
+                by_api.entry(&listed.api).or_default().push(domain.clone());
+            }
+        }
+        let others: Vec<(String, Vec<Json>)> = by_api
+            .values()
+            .map(|ds| (ds[0].clone(), self.state.listed[&ds[0]].gateways.clone()))
+            .collect();
+        let home = self.config.domains.first().cloned().unwrap_or_default();
+        let ours: Vec<Json> = self.state.gateways.values().cloned().collect();
+        let merged = radiopost::gateway_list::merge(&home, &ours, &others);
+        if merged.ambiguous.iter().any(|c| c == callsign) {
+            return None;
+        }
+        let mut record = merged
+            .gateways
+            .into_iter()
+            .find(|r| r["callsign"].as_str() == Some(callsign))?;
+        let by = record["post_office"].as_str().unwrap_or("").to_owned();
+        if let Some(o) = record.as_object_mut() {
+            o.remove("post_office");
+        }
+        let domains = if by == home {
+            self.config.domains.clone()
+        } else {
+            let api = &self.state.listed[&by].api;
+            by_api.get(api.as_str()).cloned().unwrap_or_default()
+        };
+        Some((record, domains))
+    }
+
+    /// RP-5 §5.8: a gateway's items go only to a credential with its callsign as `operator`,
+    /// issued by the post office whose list gave its record.
+    fn theirs(&self, gateway: &Holder) -> bool {
+        self.record_of(&gateway.operator)
+            .is_some_and(|(_, domains)| domains.contains(&domain_of(&gateway.address).to_owned()))
+    }
+
+    /// RP-5 §5.8: whether this post office places items at the gateway, or may.
+    fn placing(&self, callsign: &str) -> bool {
+        if let Some((record, _)) = self.record_of(callsign) {
+            let usual = self.state.settings.values().any(|s| {
+                s["usual_gateways"]
+                    .as_array()
+                    .is_some_and(|a| a.iter().any(|g| g.as_str() == Some(callsign)))
+            });
+            let copies = record["copies"].as_object().is_some_and(|o| !o.is_empty());
+            if usual && copies {
+                return true;
+            }
+        }
+        let held = self.state.copies.get(callsign).map_or(0, Vec::len);
+        held > self.state.acked.get(callsign).copied().unwrap_or(0)
+    }
+
+    /// RP-5 §5.8: the items for this gateway after the cursor. Cursors here are `c_<count>`. A
+    /// poll answered `placing` false is not counted (RP-7 §4.1), and a credential from a post
+    /// office that did not list the gateway gets nothing, uncounted.
     fn poll(&mut self, gateway: &Holder, query: &str) -> Response {
-        self.state
-            .last_poll
-            .insert(gateway.operator.clone(), self.now);
+        if !self.theirs(gateway) {
+            return Response::ok(200, json!({"cursor": "c_0", "placing": false, "items": []}));
+        }
         let after = query
             .split('&')
             .filter_map(|p| p.split_once('='))
@@ -1590,11 +1673,38 @@ impl PostOffice {
             .get(&gateway.operator)
             .cloned()
             .unwrap_or_default();
+        let placing = self.placing(&gateway.operator);
+        if placing {
+            self.state
+                .last_poll
+                .insert(gateway.operator.clone(), self.now);
+        } else {
+            self.state.last_poll.remove(&gateway.operator);
+        }
         let rest: Vec<Json> = items.iter().skip(start).cloned().collect();
         Response::ok(
             200,
-            json!({"cursor": format!("c_{}", items.len()), "items": rest}),
+            json!({"cursor": format!("c_{}", items.len()), "placing": placing, "items": rest}),
         )
+    }
+
+    /// RP-5 §5.8: the gateway holds everything up to the cursor; another's ack counts not.
+    fn ack(&mut self, gateway: &Holder, body: &Json) -> Response {
+        let held = text(body, "cursor")
+            .strip_prefix("c_")
+            .and_then(|n| n.parse::<usize>().ok());
+        if let Some(n) = held
+            && self.theirs(gateway)
+        {
+            let all = self.state.copies.get(&gateway.operator).map_or(0, Vec::len);
+            let acked = self
+                .state
+                .acked
+                .entry(gateway.operator.clone())
+                .or_default();
+            *acked = (*acked).max(n.min(all));
+        }
+        Response::empty()
     }
 
     /// RP-5 §6.1: a one-time code, and a signature that proves the new device holds its key.

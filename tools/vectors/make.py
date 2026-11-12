@@ -2795,6 +2795,45 @@ def case_office() -> tuple[po.PostOffice, Exchanges, dict[str, str]]:
     return office, Exchanges(office), tokens
 
 
+ACROSS = (
+    "copies at N1CALL-10, a gateway registered with hampost.org: for its credential from "
+    "hampost.org, not another's; then `placing` false; then the callsign ambiguous"
+)
+ACROSS_USUAL = {"usual_gateways": ["N1CALL-10"]}
+QRP_MAIL_KEY = ed25519.public_key(seed("po:qrp-mail.example"))
+N1CALL_RECORD = {
+    "callsign": "N1CALL-10",
+    "operator": "N1CALL",
+    "grid": "EM10",
+    "place": "Austin, TX",
+    "channels": [{"dial_hz": 7101000, "mode": "USB", "modem": "aether", "bandwidth_hz": 2300}],
+    "hours": "always",
+    "internet": True,
+    "copies": {"users": 20, "days": 7, "max_air_bytes": 16384},
+    "updated": T_ISSUED,
+}
+ACROSS_SETUP = {
+    "note": (
+        "What radiopost.org holds besides, in the case of copies at N1CALL-10 (RP-5 §4.4): "
+        "hampost.org's gateway list from the start; qrp-mail.example's key (not after "
+        "`not_after`) and gateway list from the note that names it. Each of `deliveries` "
+        "arrives for facundo@radiopost.org at `at`, with the note that names its serial."
+    ),
+    "gateway_lists": {"hampost.org": {"api": PO_HAMPOST, "gateways": [N1CALL_RECORD]}},
+    "deliveries": [
+        {"serial": 422, "message": "ana-to-facundo", "at": T_SESSION + 100},
+        {"serial": 423, "message": "maria-house", "at": T_SESSION + 170},
+    ],
+    "later": {
+        "keys": {"qrp-mail.example": {"public_hex": QRP_MAIL_KEY.hex(), "not_after": T_KEYS_UNTIL}},
+        "gateway_lists": {
+            "qrp-mail.example": {
+                "api": "https://po.qrp-mail.example/rp/v1",
+                "gateways": [{**N1CALL_RECORD, "place": "Austin, as qrp-mail.example lists it"}],
+            }
+        },
+    },
+}
 HANDED_IN = (
     "messages handed in: accepted; the same again, a duplicate; an air form that is not its "
     "message; a message from someone else; a message not in the statement. Then a pickup and a "
@@ -2971,6 +3010,7 @@ def api_cases() -> list[dict[str, Any]]:
         }
     )
     cases.append(held_case(good))
+    cases.append(across_case())
     return cases
 
 
@@ -2979,6 +3019,92 @@ HELD_CASE = (
     "mailbox, a ref its message does not hold, one too large for the air; then the two photos, "
     "one asked twice; a later session lists them"
 )
+
+
+def across_delivery(office: po.PostOffice, serial: int) -> None:
+    """One of ACROSS_SETUP's deliveries."""
+    d = next(d for d in ACROSS_SETUP["deliveries"] if d["serial"] == serial)
+    fields = MESSAGES[d["message"]]
+    office.now = d["at"]
+    office.deliver(
+        "facundo@radiopost.org",
+        serial,
+        air0(d["message"]),
+        sender=fields["from"],
+        subject=fields["subject"],
+        priority=0,
+        third_party=third_party(d["message"]),
+    )
+
+
+def across_case() -> dict[str, Any]:
+    """RP-5 §4.4, §5.8: copies at N1CALL-10, a gateway registered with hampost.org."""
+    office, ex, tokens = case_office()
+    office.listed.update(ACROSS_SETUP["gateway_lists"])
+    gw, facundo = "N1CALL-10", tokens["facundo"]
+    ex.note(
+        "radiopost.org holds hampost.org's gateway list, checked with hampost.org's keys "
+        "(RP-5 §4.4). Facundo names N1CALL-10, registered there, as a usual gateway."
+    )
+    ex.call(T_SESSION + 10, "Facundo's laptop", "PUT", "/settings", ACROSS_USUAL, facundo)
+    ex.note("Mail arrives for facundo@radiopost.org: #422, a copy placed at N1CALL-10.")
+    across_delivery(office, 422)
+    ex.note("N1CALL-10 polls with its credential from hampost.org: the post office that listed it.")
+    first = ex.call(T_SESSION + 110, gw, "GET", "/copies?after=&wait=0", None, tokens[gw])
+    ex.note("Facundo names N1CALL-10 no more. The copy of #422 is not yet acknowledged.")
+    ex.call(T_SESSION + 115, "Facundo's laptop", "PUT", "/settings", {}, facundo)
+    ex.note(
+        "A credential for N1CALL-10 that radiopost.org issued, though hampost.org listed the "
+        "gateway, gets nothing, and its acknowledgement counts for nothing: `placing` stays true "
+        "for N1CALL-10 until its own acknowledges the copy (RP-5 §5.8)."
+    )
+    body = {
+        1: 1,
+        2: 1099,
+        3: "n1call@radiopost.org",
+        4: "N1CALL-10",
+        5: PUBLIC["device:gateway-n1call-10"],
+        6: T_ISSUED,
+        7: T_ISSUED + 90 * DAY,
+        9: rp.FLAGS["send"] | rp.FLAGS["gateway"],
+    }
+    other = rp.make_credential(body, SECRET["po:radiopost.org"])[3]
+    stray = ex.login_with(T_SESSION + 120, gw, other, "device:gateway-n1call-10")
+    ex.call(T_SESSION + 121, gw, "GET", "/copies?after=&wait=0", None, stray)
+    ex.call(T_SESSION + 122, gw, "POST", "/copies/ack", {"cursor": first["cursor"]}, stray)
+    ex.call(T_SESSION + 123, gw, "GET", "/copies?after=&wait=0", None, tokens[gw])
+    ex.note("N1CALL-10 acknowledges it: `placing` false, and the gateway may stop polling.")
+    ex.call(T_SESSION + 130, gw, "POST", "/copies/ack", {"cursor": first["cursor"]}, tokens[gw])
+    after = f"/copies?after={first['cursor']}&wait=0"
+    ex.call(T_SESSION + 150, gw, "GET", after, None, tokens[gw])
+    ex.note(
+        "qrp-mail.example, a post office radiopost.org knows, lists N1CALL-10 too: the callsign "
+        "is ambiguous, and Facundo naming it again places no copy there (RP-5 §4.4)."
+    )
+    office.known["qrp-mail.example"] = [
+        {"public": QRP_MAIL_KEY, "not_before": 0, "not_after": T_KEYS_UNTIL}
+    ]
+    office.listed.update(ACROSS_SETUP["later"]["gateway_lists"])
+    ex.call(T_SESSION + 160, "Facundo's laptop", "PUT", "/settings", ACROSS_USUAL, facundo)
+    ex.note("Mail arrives for facundo@radiopost.org: #423.")
+    across_delivery(office, 423)
+    ex.call(T_SESSION + 180, gw, "GET", after, None, tokens[gw])
+    return {"what": ACROSS, "setup": ACROSS_SETUP, "exchanges": ex.log}
+
+
+def copies_said(c: dict[str, Any]) -> list[str]:
+    """A case's answers, each `/copies` poll with `placing` and its items' kinds and serials."""
+    out = []
+    for e in c["exchanges"]:
+        if "request" not in e:
+            continue
+        said = answer_of(e)
+        body = e["response"].get("body") or {}
+        if "placing" in body:
+            items = ", ".join(f"{i['kind']} {i['serial']}" for i in body["items"])
+            said += f"; placing {str(body['placing']).lower()}; [{items}]"
+        out.append(said)
+    return out
 
 
 def held_case(good: dict[str, Any]) -> dict[str, Any]:
@@ -3111,7 +3237,8 @@ def make_api_exchanges() -> dict[str, Any]:
         "or client sends the requests shown. JSON compares as values, not text; a problem's "
         "`title` and a result's `text` are for people and need not match. Tokens, session IDs, "
         "nonces and cursors are this post office's random or opaque choices: use the ones the "
-        "answers give. Air forms are those of the session vectors (compression 0)."
+        "answers give. Air forms are those of the session vectors (compression 0). A case's "
+        "`setup` says what the post office holds besides the context."
     )
     out["context"] = {
         "post_office": "radiopost.org",
@@ -3169,8 +3296,42 @@ def make_api_exchanges() -> dict[str, Any]:
                 "204",
                 "201",
             ],
+            ACROSS: [
+                "204",
+                "200",
+                "204",
+                "200",
+                "200",
+                "200",
+                "204",
+                "200",
+                "204",
+                "200",
+                "204",
+                "200",
+            ],
         },
         answers,
+    )
+    confirm(  # RP-5 §4.4, §5.8: whose items, `placing`, an ambiguous callsign
+        [c for c in cases if c["what"] == ACROSS],
+        {
+            ACROSS: [
+                "204",
+                "200; placing true; [copy 422]",
+                "204",
+                "200",
+                "200",
+                "200; placing false; []",
+                "204",
+                "200; placing true; [copy 422]",
+                "204",
+                "200; placing false; []",
+                "204",
+                "200; placing false; []",
+            ]
+        },
+        copies_said,
     )
     failed = [
         (e["who"], e["request"]["path"], answer_of(e))
@@ -3266,10 +3427,11 @@ def cut_off_office() -> tuple[po.PostOffice, Exchanges]:
         "operator": "N2CALL",
         "copies": {"users": 50, "days": 7, "max_air_bytes": 16384},
     }
-    office.gateways["N1CALL-10"] = {
-        "callsign": "N1CALL-10",
-        "operator": "N1CALL",
-        "forwarding": [WINDOW],
+    # N1CALL-10 is hampost.org's gateway: its record comes from hampost.org's list, and its
+    # credential from hampost.org (RP-5 §4.4, §5.8, RP-7 §6.1)
+    office.listed["hampost.org"] = {
+        "api": PO_HAMPOST,
+        "gateways": [{"callsign": "N1CALL-10", "operator": "N1CALL", "forwarding": [WINDOW]}],
     }
     office.routes = [ROUTE]
     office.settings["facundo@radiopost.org"] = {"usual_gateways": ["KK4ODA-1", "N2CALL-5"]}
@@ -3351,6 +3513,35 @@ def forwarding_office() -> tuple[Exchanges, dict[str, str], dict[str, Any]]:
     wrong = sessions[1] | {"path": ["N2CALL-5", "KK4ODA-1"]}
     ex.call(FWD_PARTNER_CLOCK + 310, "N1CALL-10", "POST", "/reports", {"sessions": [wrong]}, n1)
     return ex, {"N2CALL-5": copies["cursor"], "N1CALL-10": polled["cursor"]}, item
+
+
+def placing_story() -> list[dict[str, Any]]:
+    """RP-7 §4.1: a gateway last answered `placing` false is not counted cut off when it falls
+    silent; one that polled while the post office placed items at it is."""
+    office, ex = cut_off_office()
+    for address in office.settings:
+        office.settings[address] = {"usual_gateways": []}
+    t0 = T_CUT - 3 * 3600
+    n2 = ex.login(t0, "N2CALL-5", "gateway-n2call-5")
+    ex.note("Nobody names N2CALL-5 as usual, and no route goes through it: `placing` false.")
+    ex.call(t0 + 10, "N2CALL-5", "GET", "/copies?after=&wait=0", None, n2)
+    ex.note(
+        "Shelter 3 names N2CALL-5 as usual, and twenty minutes on, mail arrives for Shelter 3. "
+        "N2CALL-5 has not polled since `placing` false: it is not counted cut off, and nothing "
+        "goes to N1CALL-10."
+    )
+    office.settings["shelter3@radiopost.org"] = {"usual_gateways": ["N2CALL-5"]}
+    deliver(office, ex, "shelter3@radiopost.org", 501, "ana-to-shelter3", t0 + 1210)
+    n1 = ex.login(t0 + 1300, "N1CALL-10", "gateway-n1call-10")
+    ex.call(t0 + 1310, "N1CALL-10", "GET", "/copies?after=&wait=0", None, n1)
+    ex.note(
+        "N2CALL-5 polls, `placing` true, and takes the copy of #501. Then it falls silent: 15 "
+        "minutes on it is cut off, and the next mail for Shelter 3 goes to N1CALL-10 as well."
+    )
+    ex.call(t0 + 1400, "N2CALL-5", "GET", "/copies?after=&wait=0", None, n2)
+    deliver(office, ex, "shelter3@radiopost.org", 502, "emergency-held", t0 + 1400 + 900 + 60)
+    ex.call(t0 + 2400, "N1CALL-10", "GET", "/copies?after=&wait=0", None, n1)
+    return ex.log
 
 
 def forwarding_story() -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -3765,7 +3956,9 @@ def make_forwarding() -> dict[str, Any]:
         "`occupied_hz` when `expect` is true (RP-7 §5, §5.1). "
         "A cut-off gateway in `calling`'s window at `now`, knowing `partners`, sends it its "
         "records when `expect` is true (RP-7 §5, §6.2). The post office's exchanges read as in "
-        "api-exchanges.json."
+        "api-exchanges.json: `post_office` is the day Atlanta is cut off, and `placing` a gateway "
+        "counted cut off only once it has polled while the post office places items at it "
+        "(RP-7 §4.1), both with every user's `usual_gateways` emptied first in `placing`."
     )
     out["context"] = {
         "cut_off_at": T_CUT,
@@ -3774,7 +3967,9 @@ def make_forwarding() -> dict[str, Any]:
         "window": WINDOW,
         "gateways": {
             "N2CALL-5": "eoc@radiopost.org's gateway, holds copies, cut off",
-            "N1CALL-10": "online, takes calls from partners in its window",
+            "N1CALL-10": "hampost.org's gateway, online, takes calls from partners in its "
+            "window: its record in hampost.org's gateway list, which radiopost.org holds "
+            "(RP-5 §4.4)",
         },
         "usual_gateways": {
             "facundo@radiopost.org": ["KK4ODA-1", "N2CALL-5"],
@@ -3800,6 +3995,24 @@ def make_forwarding() -> dict[str, Any]:
     }
     out["partner_cases"] = partner_cases
     out["post_office"] = story
+    placing = {"what": "placing", "exchanges": placing_story()}
+    confirm(  # RP-7 §4.1, RP-5 §5.8: counted only after a poll answered `placing` true
+        [placing],
+        {
+            "placing": [
+                "200",
+                "200",
+                "200; placing false; []",
+                "200",
+                "200",
+                "200; placing true; []",
+                "200; placing true; [copy 501]",
+                "200; placing true; [forward 502]",
+            ]
+        },
+        copies_said,
+    )
+    out["placing"] = placing["exchanges"]
     return out
 
 

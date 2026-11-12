@@ -12,6 +12,7 @@ use radiopost::base64url;
 use radiopost::credential::{PostOfficeKey, Trust};
 use radiopost::crypto;
 use radiopost::message::{Compression, Message, key};
+use radiopost_postoffice::office::Listed;
 use radiopost_postoffice::{Config, PostOffice, Request, State};
 use serde_json::Value as Json;
 use sha2::{Digest as _, Sha256};
@@ -141,9 +142,19 @@ fn third_party(from: &str) -> bool {
 
 /// One message arrives for `address`, at its date.
 fn deliver(office: &mut PostOffice, w: &World, address: &str, serial: u64, name: &str) {
+    let date = w.messages[name]
+        .map()
+        .get(key::DATE)
+        .and_then(radiopost::cbor::Value::as_u64)
+        .expect("a date");
+    deliver_at(office, w, address, serial, name, date);
+}
+
+/// Mail arrives for `address` at `at`, rather than at its own date.
+fn deliver_at(office: &mut PostOffice, w: &World, address: &str, serial: u64, name: &str, at: u64) {
     let m = &w.messages[name];
     let field = |k| m.map().get(k).cloned();
-    office.at(field(key::DATE).and_then(|d| d.as_u64()).expect("a date"));
+    office.at(at);
     let from = m.from().expect("a sender").to_owned();
     office.deliver(
         address,
@@ -370,13 +381,62 @@ fn each_api_case_is_answered_as_rp5_says() {
                 .collect();
             office.keep_held(Box::new(move |r| data.get(r).cloned()), 65_536);
         }
+        // RP-5 §4.4, §5.8: the gateway lists, keys and deliveries the case's setup gives
+        let setup = &case["setup"];
+        let lists = |office: &mut PostOffice, lists: &Json| {
+            for (domain, l) in lists.as_object().into_iter().flatten() {
+                office.state.listed.insert(
+                    domain.clone(),
+                    Listed {
+                        api: l["api"].as_str().expect("api").to_owned(),
+                        gateways: l["gateways"].as_array().expect("gateways").clone(),
+                        fetched: 0,
+                    },
+                );
+            }
+        };
+        lists(&mut office, &setup["gateway_lists"]);
         replay(
             &mut office,
             case["exchanges"].as_array().expect("exchanges"),
             what,
             |office, note| {
-                if note.starts_with("Mail arrives for facundo@radiopost.org: #422,") {
+                let arrives = note
+                    .strip_prefix("Mail arrives for facundo@radiopost.org: #")
+                    .and_then(|n| n.get(..3))
+                    .and_then(|n| n.parse::<u64>().ok());
+                if let Some(d) = setup["deliveries"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .find(|d| d["serial"].as_u64() == arrives)
+                {
+                    let at = d["at"].as_u64().expect("at");
+                    let name = d["message"].as_str().expect("message");
+                    deliver_at(
+                        office,
+                        &w,
+                        "facundo@radiopost.org",
+                        arrives.unwrap_or(0),
+                        name,
+                        at,
+                    );
+                } else if arrives == Some(422) {
                     deliver(office, &w, "facundo@radiopost.org", 422, "maria-house");
+                }
+                if note.starts_with("qrp-mail.example, a post office radiopost.org knows") {
+                    for (domain, k) in setup["later"]["keys"].as_object().into_iter().flatten() {
+                        let public = unhex(k["public_hex"].as_str().expect("hex"));
+                        office.config.trust.keys.insert(
+                            domain.clone(),
+                            vec![PostOfficeKey {
+                                public: public.try_into().expect("32 bytes"),
+                                not_before: 0,
+                                not_after: k["not_after"].as_u64().expect("not_after"),
+                            }],
+                        );
+                    }
+                    lists(office, &setup["later"]["gateway_lists"]);
                 }
             },
         );

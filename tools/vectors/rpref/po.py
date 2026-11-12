@@ -105,7 +105,6 @@ def gateway_list(
     result: dict[str, Any] = {"fetched": [], "gateways": out, "ambiguous": [], "left_out": {}}
     if home_listed:
         return result  # the home lets no other gateway in (§2)
-    home_calls = {g["callsign"] for g in home_gateways}
     others: list[tuple[str, list[dict[str, Any]]]] = []
     for entry in entries:
         api = entry["api"]
@@ -128,14 +127,25 @@ def gateway_list(
             result["left_out"][entry["domain"]] = verdict
             continue
         others.append((entry["domain"], payload["gateways"]))
+    result["gateways"], result["ambiguous"] = merge_lists(home, home_gateways, others)
+    return result
+
+
+def merge_lists(
+    home: str, home_gateways: list[dict[str, Any]], others: list[tuple[str, list[dict[str, Any]]]]
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """RP-5 §4.4: the home's records, then each other list's, each with the `post_office` that
+    listed it; a callsign the home lists comes only from the home, and one in two other lists is
+    ambiguous."""
+    out = [dict(g, post_office=home) for g in home_gateways]
+    home_calls = {g["callsign"] for g in home_gateways}
     counted: dict[str, int] = {}
     for domain, records in others:
         for g in records:
             if g["callsign"] not in home_calls:  # the home's record wins
                 counted[g["callsign"]] = counted.get(g["callsign"], 0) + 1
                 out.append(dict(g, post_office=domain))
-    result["ambiguous"] = sorted(c for c, n in counted.items() if n > 1)
-    return result
+    return out, sorted(c for c, n in counted.items() if n > 1)
 
 
 @dataclass
@@ -197,6 +207,10 @@ class PostOffice:
     forwarded: dict[str, list[tuple[str, str, int]]] = field(default_factory=dict)  # RP-7 §4.1
     picked_locally: dict[str, set[bytes]] = field(default_factory=dict)  # RP-7 §4.4, not yet here
     gateways: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # RP-5 §4.4: the gateway lists of the post offices it knows, as fetched and checked, by
+    # domain: `api` and `gateways`
+    listed: dict[str, dict[str, Any]] = field(default_factory=dict)
+    acked: dict[str, int] = field(default_factory=dict)  # each gateway's acknowledged items
     copies: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     codes: dict[str, dict[str, Any]] = field(default_factory=dict)
     challenges: dict[bytes, int] = field(default_factory=dict)
@@ -236,7 +250,8 @@ class PostOffice:
         waiting = Waiting(serial, air, sender, subject, priority, third_party=third_party)
         self.mailboxes.setdefault(address, []).append(waiting)
         for callsign in self.settings.get(address, {}).get("usual_gateways", []):
-            record = self.gateways.get(callsign)
+            found = self._record_of(callsign)
+            record = found[0] if found is not None else None
             if record is None or not record.get("copies"):
                 continue
             item = self._copy_item(address, waiting, record)
@@ -262,8 +277,8 @@ class PostOffice:
     ) -> None:
         """RP-7 §4.1, §4.2: a forward item, with its signed placement, at each route's `via`."""
         for route in self.routes:
-            if cut not in route["users_at"]:
-                continue
+            if cut not in route["users_at"] or self._record_of(route["via"]) is None:
+                continue  # RP-7 §6.1: a `via` no list names, or an ambiguous one, places nothing
             body = {
                 1: 1,
                 2: address,
@@ -359,7 +374,7 @@ class PostOffice:
         if (method, route) == ("GET", "/copies"):
             return self.poll(user, query)
         if (method, route) == ("POST", "/copies/ack"):
-            return 204, None
+            return self._ack(user, body or {})
         if route == "/settings":
             if method == "PUT":
                 self.settings[user[3]] = dict(body or {})
@@ -828,21 +843,73 @@ class PostOffice:
             out.append({"results": results})
         return 200, {"sessions": out}
 
+    def _record_of(self, callsign: str) -> tuple[dict[str, Any], list[str]] | None:
+        """RP-5 §4.4, §5.8: a gateway's record, from this post office's registry or the lists of
+        the post offices it knows, and the domains of the post office that listed it. None for a
+        callsign no list names, or an ambiguous one."""
+        by_api: dict[str, list[str]] = {}
+        for domain in sorted(self.listed):
+            if domain in self.known and domain not in self.domains:
+                by_api.setdefault(self.listed[domain]["api"], []).append(domain)
+        others = [(ds[0], self.listed[ds[0]]["gateways"]) for ds in by_api.values()]
+        records, ambiguous = merge_lists(self.domains[0], list(self.gateways.values()), others)
+        if callsign in ambiguous:
+            return None
+        for r in records:
+            if r["callsign"] == callsign:
+                by = r["post_office"]
+                domains = self.domains if by == self.domains[0] else by_api[self.listed[by]["api"]]
+                return {k: v for k, v in r.items() if k != "post_office"}, domains
+        return None
+
+    def _theirs(self, gateway: dict[int, Any]) -> bool:
+        """RP-5 §5.8: a gateway's items go only to a credential with its callsign as `operator`,
+        issued by the post office whose list gave its record."""
+        found = self._record_of(gateway[4])
+        return found is not None and gateway[3].rpartition("@")[2].lower() in found[1]
+
+    def _placing(self, callsign: str) -> bool:
+        """RP-5 §5.8: whether this post office places items at the gateway, or may."""
+        found = self._record_of(callsign)
+        if found is not None:
+            usual = any(callsign in s.get("usual_gateways", []) for s in self.settings.values())
+            if usual and found[0].get("copies"):
+                return True
+            if any(r["via"] == callsign for r in self.routes):
+                return True
+        return len(self.copies.get(callsign, [])) > self.acked.get(callsign, 0)
+
     def poll(self, gateway: dict[int, Any], query: str) -> Response:
         """RP-5 §5.8: the items for this gateway after the cursor. Cursors here are `c_<count>`.
 
-        A poll from a gateway that was cut off ends its forwarding (RP-7 §4.1).
+        A poll from a gateway that was cut off ends its forwarding (RP-7 §4.1). A poll answered
+        `placing` false is not counted: a gateway that polls no more after it is not cut off. A
+        credential from a post office that did not list the gateway gets nothing, uncounted.
         """
         callsign = gateway[4]
+        if not self._theirs(gateway):
+            return 200, {"cursor": "c_0", "placing": False, "items": []}
         for via, address, serial in self.forwarded.pop(callsign, []):
             drop = {"kind": "drop", "address": address, "serial": serial}
             self.copies.setdefault(via, []).append(drop)
-        self.last_poll[callsign] = self.now
         args = dict(p.partition("=")[::2] for p in query.split("&") if p)
         after = args.get("after", "")
         start = int(after[2:]) if after.startswith("c_") else 0
-        items = self.copies.get(gateway[4], [])
-        return 200, {"cursor": f"c_{len(items)}", "items": items[start:]}
+        items = self.copies.get(callsign, [])
+        placing = self._placing(callsign)
+        if placing:
+            self.last_poll[callsign] = self.now
+        else:
+            self.last_poll.pop(callsign, None)  # RP-7 §4.1: not counted until it polls again
+        return 200, {"cursor": f"c_{len(items)}", "placing": placing, "items": items[start:]}
+
+    def _ack(self, gateway: dict[int, Any], body: dict[str, Any]) -> Response:
+        """RP-5 §5.8: the gateway holds everything up to the cursor; another's ack counts not."""
+        cursor = str(body.get("cursor", ""))
+        if self._theirs(gateway) and cursor.startswith("c_") and cursor[2:].isdigit():
+            held = min(int(cursor[2:]), len(self.copies.get(gateway[4], [])))
+            self.acked[gateway[4]] = max(self.acked.get(gateway[4], 0), held)
+        return 204, None
 
     def enroll(self, body: dict[str, Any]) -> Response:
         """RP-5 §6.1: a one-time code, and a signature that proves the new device holds its key."""

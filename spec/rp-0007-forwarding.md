@@ -433,6 +433,11 @@ both records' `PROOF`s for N1CALL-10's next window, each credential by its hash 
 `local_pickups`, the forward item placed for the message and dropped in the same poll, and the
 message not offered to Facundo again.
 
+In `forwarding.json`, N1CALL-10 is hampost.org's gateway: radiopost.org takes its record from
+hampost.org's gateway list (§6.1, RP-5 §4.4), and serves its forward items to its credential from
+hampost.org. `placing` is §4.1's count: N2CALL-5, answered `placing` false and silent after, is
+not cut off; once it has polled while radiopost.org places items at it, it is.
+
 `vectors/queued.json` has the sender's side (§3.6): when a client offers a queued message again,
 how a cut-off gateway answers, and what the client shows, and Shelter 3's session with N1CALL-10,
 online, which declines the message `already-have` because the post office already holds it.
@@ -454,4 +459,4 @@ online, which declines the message `already-have` because the post office alread
 | 0.7.0 | 2026-11-09 | Bands: a window states `occupied_hz`, and each station checks it against its own country's table (§5); the segments open to unattended forwarding, with the United States' table (§5.1); test vectors (§10). |
 | 0.7.1 | 2026-11-09 | The local delivery vectors follow session-04: the sessions at 14:35 and 14:55, the records in the 15:15 window by their credentials' hashes (§9, §10). |
 | 0.8.0 | 2026-11-09 | A placement is an untagged COSE_Sign1 (RP-0 §5): its key's ID moves from the body (key 7, removed) to the protected header (§4.2, §4.3); sizes (§9). |
-| 0.9.0 | 2026-11-12 | Gateways across post offices (RP-5 0.16.0). §4.1: a gateway is cut off only after it has polled, as the reference already read it, and not since a `placing` false; it polls every post office that places items at it. §6.1: a route may name gateways registered with another post office this one knows, and `via` polls it. |
+| 0.9.0 | 2026-11-12 | Gateways across post offices (RP-5 0.16.0). §4.1: a gateway is cut off only after it has polled, as the reference already read it, and not since a `placing` false; it polls every post office that places items at it. §6.1: a route may name gateways registered with another post office this one knows, and `via` polls it. Test vectors (`forwarding.json`: N1CALL-10's record from hampost.org's list; `placing`). |

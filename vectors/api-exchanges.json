@@ -7,7 +7,7 @@
     "RP-3": "§12"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "Each exchange is one HTTPS request to the post office at its clock `at`, with its path under the base URL, its bearer token and its JSON body, and the answer: status and body. A post office given the same requests in order answers the same, and a gateway or client sends the requests shown. JSON compares as values, not text; a problem's `title` and a result's `text` are for people and need not match. Tokens, session IDs, nonces and cursors are this post office's random or opaque choices: use the ones the answers give. Air forms are those of the session vectors (compression 0).",
+  "rule": "Each exchange is one HTTPS request to the post office at its clock `at`, with its path under the base URL, its bearer token and its JSON body, and the answer: status and body. A post office given the same requests in order answers the same, and a gateway or client sends the requests shown. JSON compares as values, not text; a problem's `title` and a result's `text` are for people and need not match. Tokens, session IDs, nonces and cursors are this post office's random or opaque choices: use the ones the answers give. Air forms are those of the session vectors (compression 0). A case's `setup` says what the post office holds besides the context.",
   "context": {
     "post_office": "radiopost.org",
     "base_url": "https://po.radiopost.org/rp/v1",
@@ -221,6 +221,7 @@
         "status": 200,
         "body": {
           "cursor": "c_3",
+          "placing": true,
           "items": [
             {
               "kind": "copy",
@@ -583,6 +584,7 @@
         "status": 200,
         "body": {
           "cursor": "c_5",
+          "placing": true,
           "items": [
             {
               "kind": "drop",
@@ -1875,6 +1877,344 @@
               "more": 0,
               "accept": [],
               "decline": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "copies at N1CALL-10, a gateway registered with hampost.org: for its credential from hampost.org, not another's; then `placing` false; then the callsign ambiguous",
+      "setup": {
+        "note": "What radiopost.org holds besides, in the case of copies at N1CALL-10 (RP-5 §4.4): hampost.org's gateway list from the start; qrp-mail.example's key (not after `not_after`) and gateway list from the note that names it. Each of `deliveries` arrives for facundo@radiopost.org at `at`, with the note that names its serial.",
+        "gateway_lists": {
+          "hampost.org": {
+            "api": "https://po.hampost.org/rp/v1",
+            "gateways": [
+              {
+                "callsign": "N1CALL-10",
+                "operator": "N1CALL",
+                "grid": "EM10",
+                "place": "Austin, TX",
+                "channels": [
+                  {
+                    "dial_hz": 7101000,
+                    "mode": "USB",
+                    "modem": "aether",
+                    "bandwidth_hz": 2300
+                  }
+                ],
+                "hours": "always",
+                "internet": true,
+                "copies": {
+                  "users": 20,
+                  "days": 7,
+                  "max_air_bytes": 16384
+                },
+                "updated": 1793491200
+              }
+            ]
+          }
+        },
+        "deliveries": [
+          {
+            "serial": 422,
+            "message": "ana-to-facundo",
+            "at": 1794235300
+          },
+          {
+            "serial": 423,
+            "message": "maria-house",
+            "at": 1794235370
+          }
+        ],
+        "later": {
+          "keys": {
+            "qrp-mail.example": {
+              "public_hex": "c8f4799f7ba4259588545e657881cd5cfff8e1f7f4759f03713fcf7a1fc779f2",
+              "not_after": 1830297600
+            }
+          },
+          "gateway_lists": {
+            "qrp-mail.example": {
+              "api": "https://po.qrp-mail.example/rp/v1",
+              "gateways": [
+                {
+                  "callsign": "N1CALL-10",
+                  "operator": "N1CALL",
+                  "grid": "EM10",
+                  "place": "Austin, as qrp-mail.example lists it",
+                  "channels": [
+                    {
+                      "dial_hz": 7101000,
+                      "mode": "USB",
+                      "modem": "aether",
+                      "bandwidth_hz": 2300
+                    }
+                  ],
+                  "hours": "always",
+                  "internet": true,
+                  "copies": {
+                    "users": 20,
+                    "days": 7,
+                    "max_air_bytes": 16384
+                  },
+                  "updated": 1793491200
+                }
+              ]
+            }
+          }
+        }
+      },
+      "exchanges": [
+        {
+          "note": "radiopost.org holds hampost.org's gateway list, checked with hampost.org's keys (RP-5 §4.4). Facundo names N1CALL-10, registered there, as a usual gateway."
+        },
+        {
+          "at": 1794235210,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "PUT",
+            "path": "/settings",
+            "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi",
+            "body": {
+              "usual_gateways": [
+                "N1CALL-10"
+              ]
+            }
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "note": "Mail arrives for facundo@radiopost.org: #422, a copy placed at N1CALL-10."
+        },
+        {
+          "note": "N1CALL-10 polls with its credential from hampost.org: the post office that listed it."
+        },
+        {
+          "at": 1794235310,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "GET",
+            "path": "/copies?after=&wait=0",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "cursor": "c_1",
+              "placing": true,
+              "items": [
+                {
+                  "kind": "copy",
+                  "address": "facundo@radiopost.org",
+                  "serial": 422,
+                  "id": "bnidnck4opwdqyelsa4a",
+                  "from": "ana@hampost.org",
+                  "subject": "Net tonight",
+                  "size": 199,
+                  "priority": 0,
+                  "third_party": false,
+                  "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg",
+                  "expires": 1794840100
+                }
+              ]
+            }
+          }
+        },
+        {
+          "note": "Facundo names N1CALL-10 no more. The copy of #422 is not yet acknowledged."
+        },
+        {
+          "at": 1794235315,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "PUT",
+            "path": "/settings",
+            "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi",
+            "body": {}
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "note": "A credential for N1CALL-10 that radiopost.org issued, though hampost.org listed the gateway, gets nothing, and its acknowledgement counts for nothing: `placing` stays true for N1CALL-10 until its own acknowledges the copy (RP-5 §5.8)."
+        },
+        {
+          "at": 1794235320,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "YnIMfdL74LxF8F0CuKW2UTsDNl77F_AW6aiohypUgGs",
+              "expires": 1794235620
+            }
+          }
+        },
+        {
+          "at": 1794235320,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFmoAQECGQRLA3RuMWNhbGxAcmFkaW9wb3N0Lm9yZwRpTjFDQUxMLTEwBVggFEvl-5adla-bYI0JMGRYuyU1Zciw46cYbrMTidckTFMGGmrmgQAHGmtdKAAJCVhAJdapWKyCis5MoZH8-sR_78TDI2AJWJxqgrmRfXrnCcr0KFwE7xSLrXIVwZ2s56WEBEu6f2y5muQsRTJEU438BQ",
+              "nonce": "YnIMfdL74LxF8F0CuKW2UTsDNl77F_AW6aiohypUgGs",
+              "signature": "nAXw_HHLlqtjyXUTRmm2TE5YLRXpRr294DSuT624ic5fioIsw4l4MHxWsiUIhJEeJnvTTWN48QpBHPFSfu76Dw"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_7FDsReE3n0Nfd47g83S1DcTo",
+              "expires": 1794238920,
+              "address": "n1call@radiopost.org",
+              "operator": "N1CALL-10",
+              "flags": 9
+            }
+          }
+        },
+        {
+          "at": 1794235321,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "GET",
+            "path": "/copies?after=&wait=0",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "cursor": "c_0",
+              "placing": false,
+              "items": []
+            }
+          }
+        },
+        {
+          "at": 1794235322,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/copies/ack",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+            "body": {
+              "cursor": "c_1"
+            }
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "at": 1794235323,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "GET",
+            "path": "/copies?after=&wait=0",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "cursor": "c_1",
+              "placing": true,
+              "items": [
+                {
+                  "kind": "copy",
+                  "address": "facundo@radiopost.org",
+                  "serial": 422,
+                  "id": "bnidnck4opwdqyelsa4a",
+                  "from": "ana@hampost.org",
+                  "subject": "Net tonight",
+                  "size": 199,
+                  "priority": 0,
+                  "third_party": false,
+                  "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg",
+                  "expires": 1794840100
+                }
+              ]
+            }
+          }
+        },
+        {
+          "note": "N1CALL-10 acknowledges it: `placing` false, and the gateway may stop polling."
+        },
+        {
+          "at": 1794235330,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "POST",
+            "path": "/copies/ack",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "cursor": "c_1"
+            }
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "at": 1794235350,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "GET",
+            "path": "/copies?after=c_1&wait=0",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "cursor": "c_1",
+              "placing": false,
+              "items": []
+            }
+          }
+        },
+        {
+          "note": "qrp-mail.example, a post office radiopost.org knows, lists N1CALL-10 too: the callsign is ambiguous, and Facundo naming it again places no copy there (RP-5 §4.4)."
+        },
+        {
+          "at": 1794235360,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "PUT",
+            "path": "/settings",
+            "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi",
+            "body": {
+              "usual_gateways": [
+                "N1CALL-10"
+              ]
+            }
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "note": "Mail arrives for facundo@radiopost.org: #423."
+        },
+        {
+          "at": 1794235380,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "GET",
+            "path": "/copies?after=c_1&wait=0",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "cursor": "c_0",
+              "placing": false,
+              "items": []
             }
           }
         }

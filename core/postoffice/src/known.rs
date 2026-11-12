@@ -15,10 +15,12 @@ use std::time::Duration;
 
 use radiopost::credential::{PostOfficeKey, Revocations};
 use radiopost::dns::{self, Meets};
+use radiopost::gateway_list;
 use radiopost::{base64url, crypto, jws};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
 
+use crate::office::Listed;
 use crate::serve::{Running, Settings, now};
 
 /// How often a known post office is fetched again (RP-1 §7.5).
@@ -535,6 +537,52 @@ impl Running {
             Lookup::NoRecord => self.not_learned(domain, "no API record in DNS (RP-1 §7.1)"),
             Lookup::Failed(e) => self.not_learned(domain, &format!("DNS did not answer: {e}")),
         }
+        self.refresh_list(domain);
+    }
+
+    /// RP-5 §4.4, §5.8: a known post office's gateway list, fetched at its API and checked with
+    /// the keys held for it (fetched, or typed) and those its info document adds, for its users'
+    /// usual gateways registered there. One that does not come keeps the last checked; one that
+    /// does not verify is dropped.
+    pub fn refresh_list(&self, domain: &str) {
+        let settings = self.settings();
+        let published = json!({"post_offices": self.published_post_offices(&settings)});
+        let Some(entry) = gateway_list::entries(&published)
+            .into_iter()
+            .find(|e| e.domain == domain)
+        else {
+            return;
+        };
+        let http = radiopost_api::Http::anonymous(&entry.api);
+        let get = |path: &str| match http.send_text("GET", path, None, None) {
+            Ok((200, text)) => Some(text.trim().to_owned()),
+            _ => None,
+        };
+        let Some(list) = get("/gateways") else {
+            return; // the last checked list is kept
+        };
+        let checked = gateway_list::verify_list(&entry, get("/info").as_deref(), &list);
+        let mut office = self.office();
+        match checked {
+            Ok(gateways) => {
+                office.state.listed.insert(
+                    domain.to_owned(),
+                    Listed {
+                        api: entry.api.clone(),
+                        gateways,
+                        fetched: now(),
+                    },
+                );
+            }
+            Err(code) => {
+                eprintln!(
+                    "radiopost-po: {domain}'s gateway list is not signed by its keys ({}): left out",
+                    code.name()
+                );
+                office.state.listed.remove(domain);
+            }
+        }
+        self.save(&office);
     }
 
     /// Keeps a known post office's whole fetch: its keys and revocations are checked against from
@@ -643,6 +691,7 @@ impl Running {
                     k["domain"].as_str() == Some(d)
                         && k["keys"].as_array().is_some_and(|a| !a.is_empty())
                 }));
+                entry["gateways"] = json!(office.state.listed.get(d).map(|l| l.gateways.len()));
                 entry
             })
             .collect();
@@ -740,9 +789,11 @@ impl Running {
             "block" => {
                 office.state.seen.remove(&domain);
                 office.state.post_offices.remove(&domain);
+                office.state.listed.remove(&domain);
             }
             "forget" => {
                 office.state.post_offices.remove(&domain);
+                office.state.listed.remove(&domain);
             }
             _ => {}
         }

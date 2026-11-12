@@ -495,7 +495,10 @@ office it **knows** (RP-1 §7.5) is one whose word it takes that its users are l
   goes on the air without the third-party flag;
 * its gateways log in here, and its users' station-to-station reports are checked;
 * it is listed in this post office's `/post-offices`, for gateways and clients: your users'
-  clients list the gateways registered with it beside yours (RP-5 §4.4).
+  clients list the gateways registered with it beside yours (RP-5 §4.4);
+* the service fetches its gateway list with its documents, so that a user of yours who names one
+  of its gateways as usual has copies placed there. They are served only to that gateway's
+  credential from the post office that listed it (RP-5 §5.8).
 
 Know only post offices whose operators you trust to check callsigns. At first none is known.
 

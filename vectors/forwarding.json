@@ -6,7 +6,7 @@
     "RP-5": "§5.6, §5.8"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "A placement made from `placement_body` with radiopost.org's key is exactly `placement_hex`; a gateway checking a placement case with `me` and `now`, and the post office keys of keys.json, returns `expect` (RP-7 §4.3). A record's ID is SHA-256 of its statement, cut to 12 bytes (RP-7 §3.1). A partner (`me`) holding the credentials `held_hex` and checking a PROOF case from `caller` returns `expect` (RP-7 §3.2, §3.3). A station of `country` may publish or call in a window whose signal occupies `occupied_hz` when `expect` is true (RP-7 §5, §5.1). A cut-off gateway in `calling`'s window at `now`, knowing `partners`, sends it its records when `expect` is true (RP-7 §5, §6.2). The post office's exchanges read as in api-exchanges.json.",
+  "rule": "A placement made from `placement_body` with radiopost.org's key is exactly `placement_hex`; a gateway checking a placement case with `me` and `now`, and the post office keys of keys.json, returns `expect` (RP-7 §4.3). A record's ID is SHA-256 of its statement, cut to 12 bytes (RP-7 §3.1). A partner (`me`) holding the credentials `held_hex` and checking a PROOF case from `caller` returns `expect` (RP-7 §3.2, §3.3). A station of `country` may publish or call in a window whose signal occupies `occupied_hz` when `expect` is true (RP-7 §5, §5.1). A cut-off gateway in `calling`'s window at `now`, knowing `partners`, sends it its records when `expect` is true (RP-7 §5, §6.2). The post office's exchanges read as in api-exchanges.json: `post_office` is the day Atlanta is cut off, and `placing` a gateway counted cut off only once it has polled while the post office places items at it (RP-7 §4.1), both with every user's `usual_gateways` emptied first in `placing`.",
   "context": {
     "cut_off_at": 1794471300,
     "cut_off_after_s": 900,
@@ -34,7 +34,7 @@
     },
     "gateways": {
       "N2CALL-5": "eoc@radiopost.org's gateway, holds copies, cut off",
-      "N1CALL-10": "online, takes calls from partners in its window"
+      "N1CALL-10": "hampost.org's gateway, online, takes calls from partners in its window: its record in hampost.org's gateway list, which radiopost.org holds (RP-5 §4.4)"
     },
     "usual_gateways": {
       "facundo@radiopost.org": [
@@ -684,6 +684,7 @@
         "status": 200,
         "body": {
           "cursor": "c_1",
+          "placing": true,
           "items": [
             {
               "kind": "copy",
@@ -776,6 +777,7 @@
         "status": 200,
         "body": {
           "cursor": "c_1",
+          "placing": true,
           "items": [
             {
               "kind": "forward",
@@ -1011,6 +1013,7 @@
         "status": 200,
         "body": {
           "cursor": "c_3",
+          "placing": true,
           "items": [
             {
               "kind": "copy",
@@ -1084,11 +1087,203 @@
         "status": 200,
         "body": {
           "cursor": "c_2",
+          "placing": true,
           "items": [
             {
               "kind": "drop",
               "address": "shelter3@radiopost.org",
               "serial": 501
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "placing": [
+    {
+      "at": 1794460500,
+      "who": "N2CALL-5",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+          "expires": 1794460800
+        }
+      }
+    },
+    {
+      "at": 1794460500,
+      "who": "N2CALL-5",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "hEmiATIERPu9X1ygWFWoAQECGQQlA3Flb2NAcmFkaW9wb3N0Lm9yZwRoTjJDQUxMLTUFWCC6b20Y7IK9dQfcRw-q8DUBO_VzdkPs0msbSxvpoXYrCAYaauaBAAcaa10oAAkJWEDwcLQKnDhGXl0DhvtdbKue2jMwjwXgcQ266Ol9AXLng2Oaf6EMnp8hRK94tXnSnHmgA7Gq0bKmfR4FwSZzY8YL",
+          "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+          "signature": "_skM6EvtmwiH1JvRVsmsyz5VdfWRQHDrwMxBgIPPNWzXKNFEhxRo8zRzyqiHyX9gehHHNlQ4fgl5IabLRYorCg"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+          "expires": 1794464100,
+          "address": "eoc@radiopost.org",
+          "operator": "N2CALL-5",
+          "flags": 9
+        }
+      }
+    },
+    {
+      "note": "Nobody names N2CALL-5 as usual, and no route goes through it: `placing` false."
+    },
+    {
+      "at": 1794460510,
+      "who": "N2CALL-5",
+      "request": {
+        "method": "GET",
+        "path": "/copies?after=&wait=0",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "cursor": "c_0",
+          "placing": false,
+          "items": []
+        }
+      }
+    },
+    {
+      "note": "Shelter 3 names N2CALL-5 as usual, and twenty minutes on, mail arrives for Shelter 3. N2CALL-5 has not polled since `placing` false: it is not counted cut off, and nothing goes to N1CALL-10."
+    },
+    {
+      "note": "Mail arrives for shelter3@radiopost.org: #501, 'Water truck'."
+    },
+    {
+      "at": 1794461800,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/auth/challenge"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "nonce": "qDHrLf-NrMWfaCOoClbU8mMP7XQDR4U4H9sfHd1VrCw",
+          "expires": 1794462100
+        }
+      }
+    },
+    {
+      "at": 1794461800,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "POST",
+        "path": "/auth/token",
+        "body": {
+          "credential": "hEmiATIERIQhnQCgWFeoAQECGQfhA3JuMWNhbGxAaGFtcG9zdC5vcmcEaU4xQ0FMTC0xMAVYIBRL5fuWnZWvm2CNCTBkWLslNWXIsOOnGG6zE4nXJExTBhpq5oEABxprXSgACQlYQGrx-DXa2glN9XZcZPcfcGAGmzrpntz_mCnk6mLq9Mtp1zAER7pCVgi5hOnUV541NO4zuOog4AjMAp7qbJIfOAc",
+          "nonce": "qDHrLf-NrMWfaCOoClbU8mMP7XQDR4U4H9sfHd1VrCw",
+          "signature": "VpNC9NoH_tDM9essnD8yu6RnAdaOxDz6m_fJbZlD-V8uLyPbTm0I0c8jLOY7RtxnNJ_lRo3StrIv0vAtKiEDDg"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "tok_nrAE4HmjRoMr3kBoGs0KWXrc",
+          "expires": 1794465400,
+          "address": "n1call@hampost.org",
+          "operator": "N1CALL-10",
+          "flags": 9
+        }
+      }
+    },
+    {
+      "at": 1794461810,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "GET",
+        "path": "/copies?after=&wait=0",
+        "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "cursor": "c_0",
+          "placing": true,
+          "items": []
+        }
+      }
+    },
+    {
+      "note": "N2CALL-5 polls, `placing` true, and takes the copy of #501. Then it falls silent: 15 minutes on it is cut off, and the next mail for Shelter 3 goes to N1CALL-10 as well."
+    },
+    {
+      "at": 1794461900,
+      "who": "N2CALL-5",
+      "request": {
+        "method": "GET",
+        "path": "/copies?after=&wait=0",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "cursor": "c_1",
+          "placing": true,
+          "items": [
+            {
+              "kind": "copy",
+              "address": "shelter3@radiopost.org",
+              "serial": 501,
+              "id": "toqspq3c62h3je2simkq",
+              "from": "ana@hampost.org",
+              "subject": "Water truck",
+              "size": 168,
+              "priority": 0,
+              "third_party": false,
+              "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F2c2hlbHRlcjNAcmFkaW9wb3N0Lm9yZwUaavWeiAZrV2F0ZXIgdHJ1Y2sHeGRTaGVsdGVyIDMsIG91ciBjbHViIGNhbiBicmluZyBhIDIgMDAwIGxpdHJlIHdhdGVyIHRydWNrIG9uIFRodXJzZGF5LiBUZWxsIHVzIHdoZXJlIHRvIHBhcmsuIDczLCBBbmEK",
+              "expires": 1795066510
+            }
+          ]
+        }
+      }
+    },
+    {
+      "note": "Mail arrives for shelter3@radiopost.org: #502, 'Evacuation map'."
+    },
+    {
+      "at": 1794462900,
+      "who": "N1CALL-10",
+      "request": {
+        "method": "GET",
+        "path": "/copies?after=&wait=0",
+        "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "cursor": "c_1",
+          "placing": true,
+          "items": [
+            {
+              "kind": "forward",
+              "address": "shelter3@radiopost.org",
+              "serial": 502,
+              "id": "oslbximmtyaj4cxucriq",
+              "from": "eoc@radiopost.org",
+              "subject": "Evacuation map",
+              "size": 184,
+              "priority": 2,
+              "third_party": false,
+              "air": "AKoBAQJxZW9jQHJhZGlvcG9zdC5vcmcDgXZzaGVsdGVyM0ByYWRpb3Bvc3Qub3JnBIF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8de8Bm5FdmFjdWF0aW9uIG1hcAd4JlJvdXRlIDMgY2xvc2VkLiBVc2UgdGhlIGF0dGFjaGVkIG1hcC4KCQILAgyBpAFnbWFwLnBkZgJvYXBwbGljYXRpb24vcGRmAxoAJJ8ABEjsqG_K3TDLWA",
+              "expires": 1795067660,
+              "gateway": "N2CALL-5",
+              "placement": "hEmiATIERPu9X1ygWD2mAQECdnNoZWx0ZXIzQHJhZGlvcG9zdC5vcmcDGQH2BEx0lhuhjJ4Angr0FFEFaE4yQ0FMTC01Bhpq_o8MWEAAZ2nRMYt9CPDCWFDlkbnHVryP448bBEtgKkoS85kXZrIFvTqo6RrFk13qDfnotci3jCJbUgZZ8SGTLH-6G88P"
             }
           ]
         }

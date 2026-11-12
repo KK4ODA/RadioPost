@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.6 |
+| **Version** | 0.3.7 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -715,7 +715,7 @@ Internet or the post office is down. The user names those gateways in the client
 | Requested by | The plan: concept §6.1 and §10, D12, Phase 3. Requesters: 0. Includes W9. |
 | Component | Post office, gateway; the client names the gateways. |
 | Compatibility | **Fits today**: RP-5 §5.8 and §6.3, the flag `copy` (RP-3 §5.2), serials (RP-3 §6.2). |
-| Existing coverage | Specified, not built. The setting `usual_gateways` can be changed only from the command line. A usual gateway registered with another post office gets no copies (gap G14). |
+| Existing coverage | Specified, not built. The setting `usual_gateways` can be changed only from the command line. A usual gateway registered with another post office has copies placed by its user's post office (gap G14, the post office's side built 2026-11-12); gateways do not poll yet. |
 | Dependencies | Phase 2. |
 | Effort | Large: the long poll, the gateway's store, drops and expiry, the client's setting. |
 | Priority | **High**: first of Phase 3. |
@@ -1042,7 +1042,7 @@ document.
 | G11 | RP-5 §4.4 | Its `modem` values (`aether`, `vara-hf`, `vara-fm`, `ardop`, `ax25`, `tcp`) are a list with no registry, no way to add one, and no rule for a value a client does not know. | A gateway offering Mercury has no agreed name for it, and clients may treat an unknown name differently. | A registry of modem names in RP-0 §9, `mercury` its first new entry, and a client ignoring a channel whose modem it does not know. | W20, W26, W44 |
 | G12 | RP-1 §6.3 | Step 3 compares the callsign a client was called at with its credential's exactly, so a client cannot answer under an SSID of its own callsign (RP-0 §6.1). | An operator's several stations must all answer at the bare callsign, and listeners cannot tell them apart. | For a client answering (RP-3 §10), compare base callsigns, as G10 proposes for step 2; gateways stay exact. | W45 |
 | G13 | RP-5 §4.4 | A client's gateway list is one post office's registrations; nothing says how to read the others'. | A user never sees the gateways registered with other post offices, though any gateway serves them. | Read from every post office the home lists, the home's record winning: RP-5 0.16.0 §4.4, D36. **Built** (2026-11-12). | W17 |
-| G14 | RP-5 §5.8, RP-7 §4.1 | Copies at a gateway registered with another post office: where its record is found, how the gateway learns to poll there, and whose credential may collect them. A route through such a gateway has the same gaps. | Users' usual gateways must be registered with their own post office; the program skips the others without a word. | The record from the known post offices' lists, `placing` in the poll's answer, items only to the listing post office's credential: drafted in RP-5 0.16.0 and RP-7 0.9.0, D37. | W27, W30 |
+| G14 | RP-5 §5.8, RP-7 §4.1 | Copies at a gateway registered with another post office: where its record is found, how the gateway learns to poll there, and whose credential may collect them. A route through such a gateway has the same gaps. | Users' usual gateways must be registered with their own post office; the program skips the others without a word. | The record from the known post offices' lists, `placing` in the poll's answer, items only to the listing post office's credential: RP-5 0.16.0 and RP-7 0.9.0, D37. **Post office's side built** (2026-11-12); the gateway's polling comes with W27. | W27, W30 |
 | G15 | RP-1 §7.3 | Which post offices a post office knows: §7.3 covers gateways only, and the door, RP-5 §2 and RP-6 §4 rest on it. | Each operator types the others' keys, which are never refreshed: a rotated key, or a revocation, is missed, and a new post office is found by nobody. | Known by the operators' choice, found as mail crosses, followed in DNS: RP-1 0.6.0 §7.5, D38. **Built** (2026-11-12). | W49 |
 
 ---
@@ -1091,3 +1091,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.4 | 2026-11-12 | Gaps G13 to G15, found when asked how post offices work together: gateway lists, copies placed ahead and routes across post offices, and which post offices a post office knows; noted under W17, W27, W30 and W49, with the drafts that would close them (D36 to D38). |
 | 0.3.5 | 2026-11-12 | The author decided D36 to D38; G15 built: the post office knows others by its operators' choice, follows them in DNS, and shows those it met on the desk (W49). |
 | 0.3.6 | 2026-11-12 | G13 built: the client's gateway list holds the gateways of every post office its own knows, each with the post office that lists it (W17). |
+| 0.3.7 | 2026-11-12 | G14, the post office's side built: copies placed at usual gateways registered with other post offices, served only to their own credentials; the gateway's side comes with W27. |
