@@ -60,7 +60,9 @@ says why once if it could not. **Renew credential** in Setup does it at once.
 
 1. Click **Write**. Address the message to an ordinary email address you can read (your own
    mailbox elsewhere is best), give it a subject and a few lines, and click **Put in outbox**.
-   Writing to an address puts it on your accept list, so its answer will be let in.
+   Writing to an address puts it on your accept list, so its answer will be let in. To and Cc
+   take several addresses, separated by commas, as `maria@example.com` or
+   `Maria <maria@example.com>`; RadioPost checks each, and says which one is wrong.
 2. Set **Fetch** to **Everything waiting**, and click **Call**.
 
 The log at the bottom says what happens: the call, each message delivered, what waits for you, and

@@ -118,6 +118,38 @@ fn the_panel_keeps_other_pages_out() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// What a user types in To and Cc: a name with its address in angle brackets, a quoted name with
+/// a comma in it, and semicolons between them; the message holds the addresses alone.
+#[test]
+fn addresses_typed_with_names_are_read_as_addresses() {
+    let dir = scratch("panel-addresses");
+    store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    let c = Client {
+        at: Panel::new(&dir.join("facundo"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let named = c
+        .post(
+            "/api/compose",
+            &json!({"to": r#"Maria Perez <maria@Example.com>; "Lopez, Ana" <ana@hampost.org>"#,
+                    "cc": "eoc@radiopost.org", "subject": "x", "body": "y"}),
+        )
+        .expect("composed")["id"]
+        .as_str()
+        .expect("an id")
+        .to_owned();
+    let m = c.get(&format!("/api/message?id={named}"));
+    assert_eq!(
+        m["to"],
+        json!(["maria@example.com", "ana@hampost.org"]),
+        "{m}"
+    );
+    assert_eq!(m["cc"], json!(["eoc@radiopost.org"]), "{m}");
+    assert_eq!(c.get("/api/state")["counts"]["outbox"], 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_message_written_and_carried_from_the_panel() {
     let dir = scratch("panel-call");
@@ -137,6 +169,15 @@ fn a_message_written_and_carried_from_the_panel() {
             .is_err(),
         "no recipient"
     );
+    // a mistyped address is refused where it can still be put right, and nothing is queued
+    let refused = c
+        .post(
+            "/api/compose",
+            &json!({"to": "ana@hampost.org, maria@example", "subject": "x", "body": "y"}),
+        )
+        .expect_err("refused");
+    assert!(refused.contains("maria@example"), "{refused}");
+    assert_eq!(c.get("/api/state")["counts"]["outbox"], 0);
     let id = c
         .post(
             "/api/compose",

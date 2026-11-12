@@ -59,6 +59,125 @@ pub fn address(text: &str) -> String {
     }
 }
 
+/// The characters a local part may hold besides letters and digits: RFC 5322's `atext`.
+const ATEXT: &str = "!#$%&'*+-/=?^_`{|}~";
+
+/// RP-0 §6.2: an Internet mail address (RFC 5322's `addr-spec`, in its dot-atom form), checked as
+/// a user typed it, and returned with its domain in lowercase. Checked here, where the user can
+/// still correct it: a mistyped address would otherwise go on the air and fail at the post office.
+///
+/// # Errors
+///
+/// It is not an address, with the reason in the user's words.
+pub fn checked_address(text: &str) -> Result<String, String> {
+    let text = text.trim();
+    let wrong = |why: &str| {
+        Err(format!(
+            "\u{201c}{text}\u{201d} is not an email address: {why}"
+        ))
+    };
+    let Some((local, domain)) = text.rsplit_once('@') else {
+        return wrong("it has no @");
+    };
+    if local.is_empty() {
+        return wrong("nothing comes before the @");
+    }
+    if domain.is_empty() {
+        return wrong("nothing comes after the @");
+    }
+    if text.len() > 254 || local.len() > 64 {
+        return wrong("it is too long");
+    }
+    if !local
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '.' || ATEXT.contains(ch))
+    {
+        return wrong("the part before the @ holds a character an address cannot");
+    }
+    if local.starts_with('.') || local.ends_with('.') || local.contains("..") {
+        return wrong("a dot at the start or end of the name, or two in a row");
+    }
+    if domain.starts_with('[') {
+        return wrong("write the domain's name, not its numbers");
+    }
+    let labels: Vec<&str> = domain.split('.').collect();
+    if labels.len() < 2 {
+        return wrong("the domain needs a dot, as in example.org");
+    }
+    for label in &labels {
+        let fine = !label.is_empty()
+            && label.len() <= 63
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+            && label
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || ch == '-');
+        if !fine {
+            return wrong(
+                "the domain holds an empty part, a character a domain cannot, or a - at a part's start or end",
+            );
+        }
+    }
+    if labels
+        .last()
+        .is_some_and(|tld| tld.chars().all(|ch| ch.is_ascii_digit()))
+    {
+        return wrong("the domain ends in numbers");
+    }
+    Ok(address(text))
+}
+
+/// The addresses in what a user typed in To or Cc: separated by commas, semicolons, new lines or
+/// spaces, each a plain address or a name with the address in angle brackets
+/// (`Maria <maria@example.com>`, `"Pérez, Ana" <ana@example.org>`), whose name is left out.
+/// Each is checked ([`checked_address`]); one given twice is kept once.
+///
+/// # Errors
+///
+/// The first entry that is not an address.
+pub fn parse_addresses(text: &str) -> Result<Vec<String>, String> {
+    let mut entries = Vec::new();
+    let (mut quoted, mut angled, mut entry) = (false, false, String::new());
+    for ch in text.chars() {
+        match ch {
+            '"' if !angled => quoted = !quoted,
+            '<' if !quoted => angled = true,
+            '>' if !quoted => angled = false,
+            ',' | ';' | '\n' | '\r' if !quoted && !angled => {
+                entries.push(std::mem::take(&mut entry));
+                continue;
+            }
+            _ => {}
+        }
+        entry.push(ch);
+    }
+    entries.push(entry);
+    let mut found: Vec<String> = Vec::new();
+    for entry in entries.iter().map(|e| e.trim()).filter(|e| !e.is_empty()) {
+        let addresses = match (entry.find('<'), entry.rfind('>')) {
+            (Some(open), Some(close)) if open < close && entry[close + 1..].trim().is_empty() => {
+                vec![checked_address(&entry[open + 1..close])?]
+            }
+            (None, None) => entry
+                .split_whitespace()
+                .map(checked_address)
+                .collect::<Result<_, _>>()?,
+            _ => {
+                return Err(format!(
+                    "\u{201c}{entry}\u{201d} is not an email address: write it as \
+                     name@example.org, or Name <name@example.org>"
+                ));
+            }
+        };
+        for a in addresses {
+            if !found.contains(&a) {
+                found.push(a);
+            }
+        }
+    }
+    Ok(found)
+}
+
 /// A media type for a file's name, for the common kinds; anything else is octets.
 #[must_use]
 pub fn media_type(name: &str) -> &'static str {
@@ -84,10 +203,14 @@ impl Draft {
     ///
     /// # Errors
     ///
-    /// What RP-2 refuses: no recipient, or a priority above 2.
+    /// What RP-2 refuses: no recipient, a recipient that is not an address (RP-0 §6.2), or a
+    /// priority above 2.
     pub fn message(&self) -> Result<Message, String> {
         if self.to.is_empty() && self.cc.is_empty() {
             return Err("a message needs a recipient (RP-2 §2)".into());
+        }
+        for recipient in self.to.iter().chain(&self.cc) {
+            checked_address(recipient)?;
         }
         if self.priority > 2 {
             return Err("the priority is 0, 1 or 2 (RP-2 §2)".into());
@@ -136,7 +259,101 @@ impl Draft {
 
 #[cfg(test)]
 mod tests {
-    use super::{Draft, File, normalise};
+    use super::{Draft, File, checked_address, normalise, parse_addresses};
+
+    #[test]
+    fn an_address_is_checked_and_its_domain_lowercased() {
+        for (typed, kept) in [
+            ("maria@example.com", "maria@example.com"),
+            (
+                "  Maria.Perez+radio@Example.COM ",
+                "Maria.Perez+radio@example.com",
+            ),
+            ("kk4oda@radio-post.org", "kk4oda@radio-post.org"),
+            ("a_b-c@mail.example.co.uk", "a_b-c@mail.example.co.uk"),
+            ("o'brien@example.ie", "o'brien@example.ie"),
+        ] {
+            assert_eq!(checked_address(typed).as_deref(), Ok(kept), "{typed}");
+        }
+        for (typed, why) in [
+            ("maria", "it has no @"),
+            ("@example.com", "nothing comes before the @"),
+            ("maria@", "nothing comes after the @"),
+            ("maria@example", "the domain needs a dot"),
+            ("maria perez@example.com", "a character an address cannot"),
+            ("Maria <maria@example.com>", "a character an address cannot"),
+            ("maria..p@example.com", "two in a row"),
+            (".maria@example.com", "start or end"),
+            ("maria@-example.com", "a - at a part's start or end"),
+            ("maria@example..com", "an empty part"),
+            ("maria@exa_mple.com", "a character a domain cannot"),
+            ("maria@[192.0.2.1]", "not its numbers"),
+            ("maria@192.0.2.1", "ends in numbers"),
+            ("maría@example.com", "a character an address cannot"),
+        ] {
+            let refused = checked_address(typed).expect_err(typed);
+            assert!(refused.contains(why), "{typed}: {refused}");
+            assert!(refused.contains(typed.trim()), "{typed}: {refused}");
+        }
+        let long = format!("{}@example.com", "a".repeat(65));
+        assert!(
+            checked_address(&long)
+                .expect_err("long")
+                .contains("too long")
+        );
+    }
+
+    #[test]
+    fn what_a_user_types_in_to_is_read_as_addresses() {
+        let read = |typed: &str| parse_addresses(typed);
+        assert_eq!(
+            read("ana@hampost.org, maria@example.com"),
+            Ok(vec!["ana@hampost.org".into(), "maria@example.com".into()])
+        );
+        assert_eq!(
+            read("ana@hampost.org; maria@example.com\nbob@example.net  eve@example.org"),
+            Ok(vec![
+                "ana@hampost.org".into(),
+                "maria@example.com".into(),
+                "bob@example.net".into(),
+                "eve@example.org".into()
+            ])
+        );
+        assert_eq!(
+            read(r#"Maria Perez <maria@Example.com>, "Lopez, Ana" <ana@hampost.org>"#),
+            Ok(vec!["maria@example.com".into(), "ana@hampost.org".into()])
+        );
+        assert_eq!(
+            read("ana@hampost.org, Ana <ana@hampost.org>,,"),
+            Ok(vec!["ana@hampost.org".into()]),
+            "once, and empty entries ignored"
+        );
+        assert_eq!(read("  "), Ok(Vec::new()));
+        for typed in [
+            "Maria <maria@example.com",
+            "maria@example.com>",
+            "<maria@example.com> Maria",
+            "ana@hampost.org, maria@example",
+        ] {
+            let refused = read(typed).expect_err(typed);
+            assert!(
+                refused.contains("is not an email address"),
+                "{typed}: {refused}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_draft_with_a_recipient_that_is_not_an_address_is_refused() {
+        let draft = Draft {
+            from: "kk4oda@radiopost.org".into(),
+            to: vec!["ana@hampost.org".into()],
+            cc: vec!["maria@example".into()],
+            ..Draft::default()
+        };
+        let refused = draft.message().expect_err("refused");
+        assert!(refused.contains("maria@example"), "{refused}");
+    }
 
     #[test]
     fn text_is_nfc_with_lf() {

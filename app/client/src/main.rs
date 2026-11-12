@@ -182,6 +182,20 @@ fn options(args: &Args) -> Result<Options, Error> {
     Ok(o)
 }
 
+/// The addresses in each `--to` or `--cc` given, as the panel reads its fields: commas,
+/// semicolons or spaces between them, and `Name <address>` as well as a bare address.
+fn typed_addresses(given: &[String]) -> Result<Vec<String>, Error> {
+    let mut found = Vec::new();
+    for text in given {
+        for a in radiopost_client::compose::parse_addresses(text)? {
+            if !found.contains(&a) {
+                found.push(a);
+            }
+        }
+    }
+    Ok(found)
+}
+
 fn now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -430,8 +444,8 @@ fn run(words: &[String]) -> Result<(), Error> {
             }
             let draft = Draft {
                 from: me.address,
-                to: args.all("--to"),
-                cc: args.all("--cc"),
+                to: typed_addresses(&args.all("--to"))?,
+                cc: typed_addresses(&args.all("--cc"))?,
                 date: now(),
                 subject: args.one("--subject").unwrap_or_default(),
                 body,

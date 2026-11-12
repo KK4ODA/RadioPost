@@ -122,20 +122,15 @@ fn summary(m: &Message) -> Value {
     })
 }
 
-fn addresses(v: &Value) -> Vec<String> {
+fn addresses(v: &Value) -> Result<Vec<String>, Error> {
     match v {
-        Value::String(s) => s
-            .split([',', ';', ' '])
-            .map(str::trim)
-            .filter(|a| !a.is_empty())
-            .map(str::to_owned)
-            .collect(),
+        Value::String(s) => crate::compose::parse_addresses(s),
         Value::Array(a) => a
             .iter()
             .filter_map(Value::as_str)
-            .map(str::to_owned)
+            .map(crate::compose::checked_address)
             .collect(),
-        _ => Vec::new(),
+        _ => Ok(Vec::new()),
     }
 }
 
@@ -582,8 +577,8 @@ impl Panel {
             .collect::<Result<Vec<_>, Error>>()?;
         let draft = Draft {
             from: me.address,
-            to: addresses(&body["to"]),
-            cc: addresses(&body["cc"]),
+            to: addresses(&body["to"])?,
+            cc: addresses(&body["cc"])?,
             date: now(),
             subject: text("subject"),
             body: body["body"].as_str().unwrap_or("").to_owned(),
