@@ -626,8 +626,13 @@ fn adapter_for(modem: &str) -> Result<SocketAddr, String> {
         let note: radiopost_aether::serve::Note = std::sync::Arc::new(|line: &str| {
             radiopost::logfile::line(&format!("Aether adapter: {line}"));
         });
-        let at = radiopost_aether::serve::listen_noting("127.0.0.1:0", modem, note)
-            .map_err(|e| format!("cannot start the Aether adapter: {e}"))?;
+        let at = radiopost_aether::serve::listen_noting(
+            "127.0.0.1:0",
+            modem,
+            note,
+            radiopost::logfile::path(),
+        )
+        .map_err(|e| format!("cannot start the Aether adapter: {e}"))?;
         started.insert(modem.to_owned(), at);
         Ok(at)
     } else {

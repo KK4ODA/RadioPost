@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.6.2 |
+| **Version** | 0.6.3 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -310,6 +310,15 @@ end of this section.
 Aether checks the band rules before every transmission, and ends each session with the Morse
 identifier itself. A future Aether may speak RPMI natively.
 
+**The program's log.** When a program built around the adapter keeps a log file, the adapter
+offers it to Aether once the host's `hello` is answered: `share.include {path, app}`, `app` the
+`hello`'s. From 0.2.0-beta.150 Aether remembers the file and puts it in the files a station shares
+(its *Send files*, and debug mode's uploads), after the program has gone too: a fault between a
+program and its modem shows on both sides, and the operator sends both at once. Aether takes only
+a file named `*.log`; an earlier Aether refuses the method, and the adapter does not wait for the
+answer. The log is shared with others, so it says what happened and never what was said: no
+correspondent's address and no subject.
+
 **Beside a program on Aether's VARA-compatible port.** RMS Trimode, Winlink Express or VarAC on
 Aether's VARA-compatible host port holds the callsigns its `MYCALL` names. While such a program is
 attached, Aether answers none of its own callsigns that the program does not hold (from
@@ -408,3 +417,4 @@ left, not when the other host holds them.
 | 0.6.0 | 2026-11-12 | An adapter that loses its modem tells the host what that ended and closes its connection (§2.1, §9.1): two Setup saves restarted a gateway's Aether on the air, the Aether adapter kept RadioPost Gateway's connection open, and the gateway listened for an hour and a half while Aether, its claim gone, answered the gateway's callsign for nobody. |
 | 0.6.1 | 2026-11-12 | §9.1: what Aether 0.2.0-beta.147 does itself when a host's WebSocket closes (ends its call or session), and that under automatic control it answers calls only for a listening claim (its ADR-0107). |
 | 0.6.2 | 2026-11-12 | §9.1: from Aether 0.2.0-beta.149 (its ADR-0108) a claim speaks for the station. Aether's own callsigns are not answered while one stands, and its Setup shows the program's callsign; nothing asks the operator to copy a host's callsign into Aether. |
+| 0.6.3 | 2026-11-12 | §9.1: the adapter offers the program's log to Aether (`share.include`, Aether 0.2.0-beta.150), which puts it in the files a station shares; the log names no correspondent and no subject. |

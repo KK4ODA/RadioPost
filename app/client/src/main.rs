@@ -555,7 +555,6 @@ fn run(words: &[String]) -> Result<(), Error> {
                 Kind::Gateway
             };
             let report = session::call(&mut store, &remote, kind, &options(&args)?, &mut |s| {
-                radiopost::logfile::line(s);
                 println!("{s}");
             })?;
             if let Some(why) = report.failed {
@@ -643,7 +642,6 @@ fn run(words: &[String]) -> Result<(), Error> {
         }
         "listen" => {
             let report = session::answer(&mut store, &options(&args)?, &mut |s| {
-                radiopost::logfile::line(s);
                 println!("{s}");
             })?;
             if let Some(why) = report.failed {

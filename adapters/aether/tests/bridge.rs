@@ -75,6 +75,7 @@ impl Aether {
             "disconnect" => ok(json!({"orderly": true})),
             "abort" => ok(json!({"orderly": false})),
             "datagram.send" => ok(json!({"accepted": 1, "queued": 1, "limit": 16})),
+            "share.include" => ok(json!({"app": params["app"], "path": params["path"], "logs": 1})),
             other => panic!("the adapter asked Aether for {other}"),
         }
     }
@@ -182,6 +183,54 @@ fn hello_is_status_and_capabilities() {
         r#"{"op":"hello","id":1,"version":[1,1],"app":"x"}"#,
     );
     assert_eq!(lines(&said)[0]["caps"]["shared"], false);
+}
+
+/// The mobile's client lost its connection to Aether twice on 2026-11-12, and why was in its
+/// own log, which the files Aether shares did not carry. The program names its log; the adapter
+/// offers it once the host has said hello, and the host hears nothing of it.
+#[test]
+fn the_programs_log_is_offered_after_hello() {
+    let mut b = Bridge::new().offering_log(Some("C:\\Users\\op\\.radiopost\\radiopost.log".into()));
+    let mut a = Aether::new(true);
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"hello","id":1,"version":[1,1],"app":"RadioPost client 0.1.0"}"#,
+    );
+    assert_eq!(
+        lines(&said).len(),
+        1,
+        "the hello answer alone: {:?}",
+        lines(&said)
+    );
+    let offered: Vec<&Value> = a
+        .asked
+        .iter()
+        .filter(|r| r["method"] == "share.include")
+        .collect();
+    assert_eq!(offered.len(), 1);
+    assert_eq!(
+        offered[0]["params"],
+        json!({"path": "C:\\Users\\op\\.radiopost\\radiopost.log",
+               "app": "RadioPost client 0.1.0"})
+    );
+    // an Aether from before share.include refuses it; nothing waits on the answer
+    assert!(!b.awaiting());
+    // no log named, or an Aether without claims (older still): nothing offered
+    for (log, claims) in [(None, true), (Some("radiopost.log".to_owned()), false)] {
+        let mut b = Bridge::new().offering_log(log);
+        let mut a = Aether::new(claims);
+        line(
+            &mut b,
+            &mut a,
+            r#"{"op":"hello","id":1,"version":[1,1],"app":"x"}"#,
+        );
+        assert!(
+            a.asked.iter().all(|r| r["method"] != "share.include"),
+            "{:?}",
+            a.asked
+        );
+    }
 }
 
 #[test]

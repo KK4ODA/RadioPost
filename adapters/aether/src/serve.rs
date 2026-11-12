@@ -7,6 +7,7 @@
 
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
@@ -50,15 +51,22 @@ pub fn quiet() -> Note {
 ///
 /// The address could not be taken.
 pub fn listen(addr: impl ToSocketAddrs, aether: &str) -> io::Result<SocketAddr> {
-    listen_noting(addr, aether, quiet())
+    listen_noting(addr, aether, quiet(), None)
 }
 
-/// [`listen`], saying what it saw of Aether on `note`.
+/// [`listen`], saying what it saw of Aether on `note`, and offering Aether `log`, the program's
+/// own log file, for the files the station shares ([`Bridge::offering_log`]): a program built
+/// around the adapter names it; the adapter on its own has none.
 ///
 /// # Errors
 ///
 /// The address could not be taken.
-pub fn listen_noting(addr: impl ToSocketAddrs, aether: &str, note: Note) -> io::Result<SocketAddr> {
+pub fn listen_noting(
+    addr: impl ToSocketAddrs,
+    aether: &str,
+    note: Note,
+    log: Option<PathBuf>,
+) -> io::Result<SocketAddr> {
     let listener = TcpListener::bind(addr)?;
     let local = listener.local_addr()?;
     let aether = aether.to_owned();
@@ -66,7 +74,8 @@ pub fn listen_noting(addr: impl ToSocketAddrs, aether: &str, note: Note) -> io::
         for stream in listener.incoming().flatten() {
             let aether = aether.clone();
             let note = Arc::clone(&note);
-            thread::spawn(move || serve_noting(&stream, &aether, &note));
+            let log = log.clone();
+            thread::spawn(move || serve_noting(&stream, &aether, &note, log.as_deref()));
         }
     });
     Ok(local)
@@ -111,12 +120,13 @@ fn read_host(stream: TcpStream, to: &mpsc::Sender<FromHost>) {
 /// host's claim (ADR-0106). Aether going away is told to the host and closes its connection
 /// (RP-4 §2.1).
 pub fn serve(host: &TcpStream, aether: &str) {
-    serve_noting(host, aether, &quiet());
+    serve_noting(host, aether, &quiet(), None);
 }
 
 /// [`serve`], saying on `note` why Aether could not be reached, or why the connection to it
-/// ended, and when a host left with a link or call up.
-pub fn serve_noting(host: &TcpStream, aether: &str, note: &Note) {
+/// ended, and when a host left with a link or call up; and offering Aether `log`, the
+/// program's own log file, once the host has said hello.
+pub fn serve_noting(host: &TcpStream, aether: &str, note: &Note, log: Option<&Path>) {
     let _ = host.set_nodelay(true);
     let Ok(reader) = host.try_clone() else {
         return;
@@ -131,7 +141,7 @@ pub fn serve_noting(host: &TcpStream, aether: &str, note: &Note) {
         }
     };
     let mut bridge = if ws.is_some() {
-        Bridge::new()
+        Bridge::new().offering_log(log.map(|p| p.display().to_string()))
     } else {
         Bridge::without_modem()
     };

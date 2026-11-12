@@ -9,6 +9,11 @@
 //!
 //! Why: on 2026-11-12 a client's connection to its modem ended twice in mid-session, and the
 //! client's log, kept only in its window, was gone by the time anyone asked what it said.
+//!
+//! The file goes with the files a station shares when something went wrong (the Aether adapter
+//! offers it to Aether, RP-4 §9.1), so it says what happened and never what was said: no
+//! correspondent's address and no subject. Where the window names them, the program writes the
+//! file a line without them.
 
 use std::fs::{self, OpenOptions};
 use std::io::Write as _;

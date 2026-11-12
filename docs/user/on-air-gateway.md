@@ -106,9 +106,11 @@ with:
   wrong;
 * your RadioPost log: the file `radiopost.log` in RadioPost's folder (`.radiopost` in your home
   folder: on Windows, `C:\Users\<you>\.radiopost`). It keeps what the bottom of the window says,
-  with the time, after the window is closed; RadioPost 0.1.0-beta.8 and later;
+  with the time, after the window is closed: RadioPost 0.1.0-beta.8 and later, and from
+  0.1.0-beta.9 without the addresses or subjects of your mail;
 * for a session that failed or was slow, Aether's recording of it: switch on Aether's **Record**
-  before the test, and send the files from Aether's Log tab (*Send files…*).
+  before the test, and send the files from Aether's Log tab (*Send files…*). From Aether
+  0.2.0-beta.150 and RadioPost 0.1.0-beta.9, *Send files…* carries the RadioPost log too.
 
 The gateway's operator sees each session too, in RadioPost Gateway's Sessions list.
 

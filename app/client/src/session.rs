@@ -231,8 +231,13 @@ fn adapter_for(modem: &str) -> Result<String, Error> {
     let note: radiopost_aether::serve::Note = std::sync::Arc::new(|line: &str| {
         radiopost::logfile::line(&format!("Aether adapter: {line}"));
     });
-    let at = radiopost_aether::serve::listen_noting("127.0.0.1:0", modem, note)
-        .map_err(|e| format!("cannot start the Aether adapter: {e}"))?;
+    let at = radiopost_aether::serve::listen_noting(
+        "127.0.0.1:0",
+        modem,
+        note,
+        radiopost::logfile::path(),
+    )
+    .map_err(|e| format!("cannot start the Aether adapter: {e}"))?;
     running.insert(modem.to_owned(), at);
     Ok(at.to_string())
 }
@@ -453,19 +458,8 @@ fn apply(
         SessionEvent::Listed(entries) => {
             stats.welcomed = true;
             stats.listed.clone_from(&entries);
-            for WaitingEntry {
-                serial,
-                id,
-                from,
-                subject,
-                size,
-                ..
-            } in entries
-            {
-                say(&format!(
-                    "waiting: #{serial} {} from {from}, {size} bytes: {subject}",
-                    &id.text()[..6]
-                ));
+            for entry in &entries {
+                say_waiting(entry, say);
             }
         }
         SessionEvent::Received {
@@ -481,18 +475,17 @@ fn apply(
                 stats.top_serial = Some(stats.top_serial.map_or(s, |t| t.max(s)));
                 stats.came.push(s);
             }
-            say(&format!(
-                "received {} from {}",
-                &id.text()[..6],
-                message.from().unwrap_or("?")
-            ));
+            say_received(&message, say);
             report.received.push(id);
         }
         SessionEvent::Failed { id, code } => {
-            say(&format!(
-                "{} arrived damaged and was dropped: {code}",
-                &id.text()[..6]
-            ));
+            tell(
+                say,
+                &format!(
+                    "{} arrived damaged and was dropped: {code}",
+                    &id.text()[..6]
+                ),
+            );
         }
         SessionEvent::Delivered(id) => {
             store.delivered(&id);
@@ -500,51 +493,107 @@ fn apply(
                 stats.sent.push((id, air.clone()));
             }
             store.save()?;
-            say(&format!("delivered {}", &id.text()[..6]));
+            tell(say, &format!("delivered {}", &id.text()[..6]));
             report.delivered.push(id);
         }
         SessionEvent::NotTaken { id, code } => {
-            say(&format!(
-                "{} not taken: {code}; it stays in the outbox",
-                &id.text()[..6]
-            ));
+            tell(
+                say,
+                &format!(
+                    "{} not taken: {code}; it stays in the outbox",
+                    &id.text()[..6]
+                ),
+            );
         }
         SessionEvent::Held(partial) => {
-            say(&format!(
-                "{} held in part ({} of {} bytes), to finish next time",
-                &partial.id.text()[..6],
-                partial.held.len(),
-                partial.total
-            ));
+            tell(
+                say,
+                &format!(
+                    "{} held in part ({} of {} bytes), to finish next time",
+                    &partial.id.text()[..6],
+                    partial.held.len(),
+                    partial.total
+                ),
+            );
             store.hold(&partial)?;
         }
         SessionEvent::StationProved(body) => {
-            say(&format!(
-                "the other station is {} ({}), its credential and statement checked",
-                body.operator, body.address
-            ));
+            let checked = "its credential and statement checked";
+            tell_apart(
+                say,
+                &format!(
+                    "the other station is {} ({}), {checked}",
+                    body.operator, body.address
+                ),
+                &format!("the other station is {}, {checked}", body.operator),
+            );
         }
-        SessionEvent::Notice(text) => say(&format!("notice: {text}")),
+        SessionEvent::Notice(text) => tell(say, &format!("notice: {text}")),
         SessionEvent::Error { code, text } => {
             let why = format!(
                 "the other station sent ERROR {code}{}",
                 text.map(|t| format!(": {t}")).unwrap_or_default()
             );
-            say(&why);
+            tell(say, &why);
             report.failed = Some(why);
         }
         SessionEvent::Refused(code) => {
             let why = format!("refused the other station: {code}");
-            say(&why);
+            tell(say, &why);
             report.failed = Some(why);
         }
         SessionEvent::NewCredential(bytes) => {
             store.set_credential(&bytes)?;
-            say("a renewed credential, kept for the next session");
+            tell(say, "a renewed credential, kept for the next session");
         }
         SessionEvent::End => {}
     }
     Ok(())
+}
+
+/// A message received: its sender in the window, its ID alone in the log file.
+fn say_received(message: &Message, say: &mut dyn FnMut(&str)) {
+    let id = &message.content_id().text()[..6];
+    let from = message.from().unwrap_or("?");
+    tell_apart(
+        say,
+        &format!("received {id} from {from}"),
+        &format!("received {id}"),
+    );
+}
+
+/// A message waiting at the post office: its sender and subject in the window, its serial, ID
+/// and size in the log file.
+fn say_waiting(entry: &WaitingEntry, say: &mut dyn FnMut(&str)) {
+    let WaitingEntry {
+        serial,
+        id,
+        from,
+        subject,
+        size,
+        ..
+    } = entry;
+    let id = &id.text()[..6];
+    tell_apart(
+        say,
+        &format!("waiting: #{serial} {id} from {from}, {size} bytes: {subject}"),
+        &format!("waiting: #{serial} {id}, {size} bytes"),
+    );
+}
+
+/// Says `line` on `say`, and writes it to the program's log file ([`radiopost::logfile`]).
+fn tell(say: &mut dyn FnMut(&str), line: &str) {
+    radiopost::logfile::line(line);
+    say(line);
+}
+
+/// Says `line` on `say`, and writes `filed` to the log file in its place. The window may name a
+/// correspondent or a subject; the file never does, because it goes with the files a station
+/// shares when something goes wrong (Aether's `share.include`), and a log says what happened,
+/// never what was said.
+fn tell_apart(say: &mut dyn FnMut(&str), line: &str, filed: &str) {
+    radiopost::logfile::line(filed);
+    say(line);
 }
 
 /// Whether this call asks for a renewed credential in `HELLO` (RP-3 §5.8): a gateway's, in the
@@ -560,10 +609,13 @@ fn asks_renewal(
     let expires = store.me()?.expires;
     let renew = kind == Kind::Gateway && crate::renewal::due(expires, now, opts.renew_within);
     if renew {
-        say(&format!(
-            "asking for a renewed credential: this one runs out in {} days",
-            crate::renewal::days_left(expires, now)
-        ));
+        tell(
+            say,
+            &format!(
+                "asking for a renewed credential: this one runs out in {} days",
+                crate::renewal::days_left(expires, now)
+            ),
+        );
     }
     Ok(renew)
 }
@@ -585,7 +637,7 @@ pub fn call(
     let connect = modem.host.connect(remote, None, opts.bandwidth);
     let id = connect.get("id").cloned();
     modem.ask(&connect)?;
-    say(&format!("calling {remote}"));
+    tell(say, &format!("calling {remote}"));
     let mut report = Report {
         remote: remote.to_owned(),
         ..Report::default()
@@ -602,13 +654,13 @@ pub fn call(
                         .unwrap_or_default()
                 );
                 report.failed = Some(why.clone());
-                say(&why);
+                tell(say, &why);
                 return Ok(report);
             }
             _ => {}
         }
     };
-    say(&format!("connected to {remote}"));
+    tell(say, &format!("connected to {remote}"));
     let now = opts.now();
     let (cursor, cached) = match kind {
         Kind::Gateway => store.gateway(remote),
@@ -663,7 +715,10 @@ pub fn call(
         && let Some(r) = report_of(carrier.engine().0.proofs(), "caller", &stats)
     {
         store.reports.push(r);
-        say("this session is kept, to report to the post office when there is Internet");
+        tell(
+            say,
+            "this session is kept, to report to the post office when there is Internet",
+        );
     }
     store.save()?;
     result?;
@@ -673,7 +728,7 @@ pub fn call(
         store.listed(remote, stats.now, &stats.listed, &stats.came);
     }
     store.save()?;
-    say(&format!("the session with {remote} is over"));
+    tell(say, &format!("the session with {remote} is over"));
     modem.conn.close();
     Ok(report)
 }
@@ -701,11 +756,14 @@ fn chooser(fetch: Fetch, marked: Vec<u64>) -> Chooser {
 fn ask_for_files(client: &mut Client, store: &Store, say: &mut dyn FnMut(&str)) {
     let files = store.files.clone();
     if !files.is_empty() {
-        say(&format!(
-            "asking for {} held attachment{}",
-            files.len(),
-            if files.len() == 1 { "" } else { "s" }
-        ));
+        tell(
+            say,
+            &format!(
+                "asking for {} held attachment{}",
+                files.len(),
+                if files.len() == 1 { "" } else { "s" }
+            ),
+        );
         client.ask_for_files(files);
     }
 }
@@ -723,7 +781,7 @@ pub fn answer(
     let (mut modem, me) = Modem::open(store, opts)?;
     let listen = modem.host.listen(true);
     modem.ask(&listen)?;
-    say(&format!("listening as {me}"));
+    tell(say, &format!("listening as {me}"));
     let waiting = Duration::from_millis(250);
     modem
         .conn
@@ -735,7 +793,7 @@ pub fn answer(
             .as_ref()
             .is_some_and(|s| s.load(Ordering::Relaxed))
         {
-            say("stopped listening");
+            tell(say, "stopped listening");
             modem.conn.close();
             return Ok(Report {
                 failed: Some("stopped before a call came".into()),
@@ -759,7 +817,7 @@ pub fn answer(
         .conn
         .set_timeout(Some(opts.quiet))
         .map_err(|e| e.to_string())?;
-    say(&format!("{remote} called"));
+    tell(say, &format!("{remote} called"));
     let now = opts.now();
     let mut mail = Vec::new();
     let mut stats = SessionStats {
@@ -810,11 +868,14 @@ pub fn answer(
     }
     if let Some(r) = report_of(carrier.engine().0.proofs(), "called", &stats) {
         store.reports.push(r);
-        say("this session is kept, to report to the post office when there is Internet");
+        tell(
+            say,
+            "this session is kept, to report to the post office when there is Internet",
+        );
     }
     store.save()?;
     result?;
-    say(&format!("the session with {remote} is over"));
+    tell(say, &format!("the session with {remote} is over"));
     modem.conn.close();
     Ok(report)
 }

@@ -118,8 +118,10 @@ fn notes() -> (radiopost_aether::serve::Note, Arc<Mutex<Vec<String>>>) {
 fn aether_going_away_closes_the_hosts_connection() {
     let (aether, asked) = aether_that_restarts();
     let (note, said) = notes();
-    let at =
-        radiopost_aether::serve::listen_noting("127.0.0.1:0", &aether, note).expect("an adapter");
+    // the gateway's own log, offered to Aether for the files the station shares
+    let log = std::env::temp_dir().join("gateway.log");
+    let at = radiopost_aether::serve::listen_noting("127.0.0.1:0", &aether, note, Some(log))
+        .expect("an adapter");
     let mut host = Connection::open(at).expect("the adapter");
     let hello = ask(
         &mut host,
@@ -134,7 +136,10 @@ fn aether_going_away_closes_the_hosts_connection() {
     let listening = ask(&mut host, r#"{"op":"listen","id":3,"on":true}"#);
     assert_eq!(listening["op"], "ok", "{listening}");
     let methods: Vec<String> = asked.try_iter().collect();
-    assert_eq!(methods, ["status", "capabilities", "claim", "listen"]);
+    assert_eq!(
+        methods,
+        ["status", "capabilities", "share.include", "claim", "listen"]
+    );
     // Aether stops after the listen: the host is let go, not left listening for nothing
     assert!(
         closed_within(&mut host, Duration::from_secs(5)),
@@ -157,8 +162,8 @@ fn an_aether_that_cannot_be_reached_is_said_so() {
     let aether = format!("ws://{}/v1", free.local_addr().expect("bound"));
     drop(free);
     let (note, said) = notes();
-    let at =
-        radiopost_aether::serve::listen_noting("127.0.0.1:0", &aether, note).expect("an adapter");
+    let at = radiopost_aether::serve::listen_noting("127.0.0.1:0", &aether, note, None)
+        .expect("an adapter");
     let mut host = Connection::open(at).expect("the adapter");
     let hello = ask(
         &mut host,

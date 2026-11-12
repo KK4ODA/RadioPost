@@ -113,6 +113,7 @@ pub struct Bridge {
     channel_busy: bool,
     session_on_air: bool,
     busy_told: bool,
+    log: Option<String>,
 }
 
 /// RP-4 §9.1: how a session that came up ends, in RPMI's words.
@@ -169,6 +170,16 @@ impl Bridge {
             modem_lost: true,
             ..Bridge::default()
         }
+    }
+
+    /// The program's own log file, offered to Aether once the host has said hello, for the files
+    /// a station shares when something went wrong (Aether's `share.include`, from 0.2.0-beta.150;
+    /// an earlier Aether says it has no such method, and the answer is not awaited). The log is
+    /// where a program says why its connection to the modem ended, which the modem cannot see.
+    #[must_use]
+    pub fn offering_log(mut self, log: Option<String>) -> Bridge {
+        self.log = log;
+        self
     }
 
     fn ask(&mut self, method: &str, params: Value, waiting: Waiting) -> Out {
@@ -508,6 +519,12 @@ impl Bridge {
                     ],
                 )));
                 self.update_busy(&mut out);
+                if self.shared
+                    && let Some(path) = self.log.clone()
+                {
+                    let params = json!({"path": path, "app": self.app});
+                    out.push(self.ask("share.include", params, Waiting::Nothing));
+                }
             }
             Waiting::Claim { rid, wanted } => {
                 if !ok {

@@ -145,9 +145,11 @@ with:
 * the result: which messages arrived, how long the session took, and anything that went wrong;
 * each station's RadioPost log: the file `radiopost.log` in RadioPost's folder (`.radiopost` in
   your home folder), which keeps what the bottom of the window says, with the time (0.1.0-beta.8
-  and later; before that, copy the lines from the window);
+  and later, and from 0.1.0-beta.9 without the addresses or subjects of your mail; before that,
+  copy the lines from the window);
 * for a session that failed or was slow, Aether's recording of it: switch on Aether's **Record**
-  before the test, and send the files from Aether's Log tab (*Send files…*).
+  before the test, and send the files from Aether's Log tab (*Send files…*). From Aether
+  0.2.0-beta.150 and RadioPost 0.1.0-beta.9, *Send files…* carries the RadioPost log too.
 
 ## 7. What these tests do not cover yet
 

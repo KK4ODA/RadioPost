@@ -27,7 +27,7 @@ fn main() -> ExitCode {
     }
     let note: radiopost_aether::serve::Note =
         std::sync::Arc::new(|line: &str| eprintln!("radiopost-aether: {line}"));
-    match radiopost_aether::serve::listen_noting(&listen, &aether, note) {
+    match radiopost_aether::serve::listen_noting(&listen, &aether, note, None) {
         Ok(at) => {
             eprintln!("radiopost-aether: RPMI on {at}, Aether at {aether}");
             loop {

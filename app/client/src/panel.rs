@@ -742,7 +742,6 @@ impl Panel {
                 if let Some(who) = line.strip_suffix(" called") {
                     a.remote = Some(who.to_owned());
                 }
-                radiopost::logfile::line(line);
                 a.log.push(line.to_owned());
             };
             let result = Store::open(&home).and_then(|mut store| match &remote {
