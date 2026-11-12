@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.15.0 |
+| **Version** | 0.16.0 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -77,7 +77,7 @@ A request with no token, or an unknown or expired one, is answered `401` `not-au
 without the `gateway` flag on a gateway endpoint, or one with it on a client endpoint other than
 `POST /credentials` (§6.2), `403` `not-authorized`.
 
-A post office accepts gateways credentialed by **any post office it knows** (RP-1 §7.3), unless its
+A post office accepts gateways credentialed by **any post office it knows** (RP-1 §7.5), unless its
 info document says `gateways: "listed"`, in which case only gateways in its own list (§4.4).
 
 ---
@@ -160,13 +160,19 @@ The revocation list of RP-1 §8.
 
 ### 4.3 `GET /post-offices`
 
-The post offices this one knows and trusts, for gateways to merge (RP-1 §7.3):
+The post offices this one knows (RP-1 §7.5), for gateways to merge (RP-1 §7.3) and for gateway
+lists (§4.4):
 
 ```json
 {"issued": 1794312000,
  "post_offices": [{"domain": "hampost.org", "api": "https://po.hampost.org/rp/v1",
-                   "keys": [{"kid": "71c2e0a4", "public": "…"}]}]}
+                   "keys": [{"kid": "71c2e0a4", "public": "…",
+                             "not_before": 1794268800, "not_after": 1857340800}]}]}
 ```
+
+Each entry has `domain`, `api` (the base URL its DNS record gives, RP-1 §7.1) and `keys`, as in
+the info document (§4.1). A post office that serves several domains has an entry for each, with
+the same `api`.
 
 ### 4.4 `GET /gateways`
 
@@ -185,6 +191,31 @@ The gateways registered with this post office (§6.4), for clients' gateway list
 
 `modem` names the modem in RPMI terms (`aether`, `vara-hf`, `vara-fm`, `ardop`, `ax25`, `tcp`). A
 gateway that takes calls from cut-off partners lists its windows in `forwarding` (RP-7 §5).
+
+The post office that registered a gateway (§6.4) is its **own post office**: the domain of its
+credential's `address` (RP-1 §3, §5).
+
+**Gateways of other post offices.** A gateway serves the users of every post office that lets it
+in (§2), not only those of its own post office. So a client's list of gateways, and the gateways a
+post office places copies at (§5.8), come from several post offices' lists. The reader, a client
+or a post office, takes:
+
+* its **home's** list: for a client, its own post office's, checked as RP-1 §7.2 says; for a post
+  office, the gateways registered with it;
+* the list of each post office its home names in `/post-offices` (§4.3), fetched once for each
+  `api` and checked with a key of that entry, or with one the post office's info document adds,
+  signed by one of the entry's (RP-1 §7.2). A list that does not verify is left out.
+
+When the home's info document says `gateways: "listed"`, only the home's list is taken: the home
+lets no other gateway in (§2).
+
+The reader keeps, with each record, the domain of the post office that listed it. A callsign in
+more than one list takes the home's record when the home lists it. Otherwise it is **ambiguous**:
+a client keeps each record; a post office places no copies at it (§5.8), since it could not tell
+whose credential to serve them to.
+
+The reader refreshes the lists at least every **6 hours** while online, keeps the last it verified
+of each list it cannot fetch, and uses what it holds while offline.
 
 ### 4.5 `GET /routes`
 
@@ -338,12 +369,16 @@ The session is over. `204`. Sessions also end on their own at `expires`.
 ### 5.8 Copies placed ahead
 
 A post office places copies of a user's waiting mail at each gateway the user named as usual
-(§6.3), when that gateway's record says it holds copies (§4.4).
+(§6.3), when that gateway's record says it holds copies. The record is the one §4.4's lists give:
+the gateway may be registered with this post office or with another it knows. A callsign no list
+names, or an ambiguous one (§4.4), gets no copies.
 
-**`GET /copies?after={cursor}&wait={seconds}`**: long poll, `wait` at most 60. Answer:
+**`GET /copies?after={cursor}&wait={seconds}`**: long poll, `wait` at most 60; `wait=0` answers at
+once. Answer:
 
 ```json
 {"cursor": "c_9…",
+ "placing": true,
  "items": [
    {"kind": "copy", "address": "facundo@radiopost.org", "serial": 421, "id": "4e…",
     "from": "maria@example.com", "subject": "Photo", "size": 310522, "priority": 0,
@@ -363,9 +398,32 @@ A post office places copies of a user's waiting mail at each gateway the user na
   §4.1): as a `copy`, with `gateway`, the cut-off gateway's callsign, and `placement`, the post
   office's signed placement (RP-7 §4.2). The gateway holds it for that gateway's next call, and a
   `drop` naming the same address and serial ends it.
+* `placing` is true while this post office places items at the gateway, or may: a user of it names
+  the gateway as usual and the gateway's record holds copies, a route of it names the gateway as
+  `via` (RP-7 §6.1), or items for it are not yet acknowledged. Otherwise false.
 
 **`POST /copies/ack`** `{"cursor": "c_9…"}`: the gateway holds everything up to the cursor. The
 post office sends nothing twice after an acknowledged cursor.
+
+**Whose items.** The items for a gateway are served only to a gateway token whose credential has
+that gateway's callsign as `operator` and was issued by the post office whose list gave its record
+(§4.4): the credential's `address` is at one of that post office's domains. To any other gateway
+token the post office answers as to a gateway it places nothing at: no items, `placing` false, and
+the poll does not count as the gateway's (RP-7 §4.1). Another post office it knows can issue a
+credential for any callsign (RP-1 §9); this is what keeps it from collecting a gateway's copies, or
+from hiding that the gateway is cut off.
+
+**Which post offices a gateway polls.** A gateway whose record holds copies, or lists `forwarding`
+windows (RP-7 §5), polls without stopping:
+
+* its own post office (§4.4), whatever `placing` says;
+* each other post office whose last answer said `placing` true.
+
+It asks each other post office it knows (RP-1 §7.3) and does not poll, with `wait=0`: at each
+refresh of that post office's documents, and after a session of one of that post office's users,
+when it has not asked in the last hour. When a post office it polls answers `placing` false, the gateway acknowledges the
+answer's cursor and stops polling it. A post office that refuses its login (§2, §3.2) places
+nothing at it.
 
 A gateway behind a home router uses only outgoing connections: the long poll is how copies reach it.
 
@@ -416,7 +474,7 @@ key.
 
 | Member | Meaning |
 |---|---|
-| `usual_gateways` | Where copies are placed ahead (§5.8). |
+| `usual_gateways` | Where copies are placed ahead (§5.8): callsigns of gateways registered with this post office or with another it knows (§4.4). |
 | `auto_bytes` | A default for the client's `auto` (RP-3 §5.1). |
 | `attach_bytes` | Mail from the Internet carries its attachments up to this air-form size; above it they are held (RP-6 §2.4). The post office's default when unset is its own, at most its `max_air_bytes`. |
 | `radio_skips_read` | Mail already read in an ordinary mail program is not offered by radio. |
@@ -694,6 +752,10 @@ serials. A device key that is not 32 bytes is `400` `malformed`.
   operator's callsign as real, so an application naming one is refused rather than left to an
   operator's attention, and a code naming one for someone else's address is made only when asked
   for in so many words (§7.1).
+* Copies placed ahead reach a gateway without a user's session, so they go only to the credential
+  of the post office that listed the gateway (§5.8). A post office that lists a callsign another
+  already lists makes it ambiguous wherever neither is the home, and copies stop there (§4.4): it
+  can deny a gateway copies but not collect them, and its own signed list shows what it did.
 
 ---
 
@@ -734,3 +796,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.13.0 | 2026-11-10 | §5.2: `held` in a waiting entry is set when the message lists held attachments (it had always been false). §5.3: `files`' entries, `ref` in base64url, and its refusals; what is sent is RP-6 §2.5. |
 | 0.14.0 | 2026-11-12 | Applications (§6.7): an account asked for from a new device, signed under `RadioPost-api-apply-v1`, and collected once an operator decides; `applications` in the info document (§4.1). Operator endpoints (§7): the post office's operators run it with their own credentials (status, applications, accounts, codes, revocation); `office` in the login's answer (§3.2). Security considerations and test vectors renumbered §8 and §9. Test vectors (`api-office.json`). |
 | 0.15.0 | 2026-11-12 | Who may become an operator (§7.1): an application naming an operator's callsign is refused (§6.7) and cannot be approved or sent a postcard (§7.3); a code naming one for anyone but the operator asking needs `operates` (§7.5); each refusal carries `operates`; security considerations (§8); test vectors. |
+| 0.16.0 | 2026-11-12 | Gateways across post offices. §4.3: each entry's `api` and keys, one entry per domain. §4.4: a gateway's own post office; a client's gateway list, and the gateways a post office places copies at, come from its home's list and those of the post offices its home knows, checked with their keys; the home's record wins, and a callsign otherwise listed twice is ambiguous; `listed` keeps to the home's. §5.8: copies at gateways registered elsewhere; `placing` in the answer; `wait=0`; items served only to the credential of the post office that listed the gateway; which post offices a gateway polls. §6.3: `usual_gateways` may name them. §2: known post offices are RP-1 §7.5's. A client could list only its own post office's gateways, and a post office placed copies only at the gateways registered with it. |

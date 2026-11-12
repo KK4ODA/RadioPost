@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.8.0 |
-| **Updated** | 2026-11-09 |
+| **Version** | 0.9.0 |
+| **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-3, RP-5 |
@@ -184,8 +184,11 @@ is confirmed or sent again by the offers a session already carries.
 
 ### 4.1 When a post office forwards
 
-A post office counts a gateway as **cut off** when it has not polled `GET /copies` (RP-5 §5.8) for
-**15 minutes**; a gateway that holds copies polls without stopping. From then on, for each of its
+A post office counts a gateway as **cut off** when the gateway has polled its `GET /copies` (RP-5
+§5.8) before, but not for **15 minutes**: a gateway polls without stopping each post office that
+places items at it, its own or another (RP-5 §5.8). A gateway that has never polled, or that has
+not polled since the post office last answered it `placing` false, is not counted: the post office
+cannot tell whether it is cut off or has not yet started. From then on, for each of its
 routes (§6) whose `users_at` names that gateway, it places **forward items** at the route's `via`
 gateway: one for each message that is waiting for a user who named the cut-off gateway as usual
 (RP-5 §6.3), and for each that arrives while the gateway stays cut off.
@@ -351,6 +354,11 @@ Read: "when the gateways in `users_at` are cut off, their users' mail goes to `v
 for them." The `via` gateway MUST publish windows (§5), and the gateways in `users_at` SHOULD have
 it among their partners: they call it, inside its windows, to collect the mail.
 
+The gateways a route names may be registered with this post office or with another it knows,
+their records as RP-5 §4.4 finds them; a route naming an ambiguous callsign (RP-5 §4.4) places
+nothing. `via` learns to poll this post office from `placing` (RP-5 §5.8), which a route that
+names it makes true.
+
 ### 6.2 Choosing a partner
 
 Mail goes only to the partners an operator named, and on from them hop by hop (§3.4). Gateways do
@@ -446,3 +454,4 @@ online, which declines the message `already-have` because the post office alread
 | 0.7.0 | 2026-11-09 | Bands: a window states `occupied_hz`, and each station checks it against its own country's table (§5); the segments open to unattended forwarding, with the United States' table (§5.1); test vectors (§10). |
 | 0.7.1 | 2026-11-09 | The local delivery vectors follow session-04: the sessions at 14:35 and 14:55, the records in the 15:15 window by their credentials' hashes (§9, §10). |
 | 0.8.0 | 2026-11-09 | A placement is an untagged COSE_Sign1 (RP-0 §5): its key's ID moves from the body (key 7, removed) to the protected header (§4.2, §4.3); sizes (§9). |
+| 0.9.0 | 2026-11-12 | Gateways across post offices (RP-5 0.16.0). §4.1: a gateway is cut off only after it has polled, as the reference already read it, and not since a `placing` false; it polls every post office that places items at it. §6.1: a route may name gateways registered with another post office this one knows, and `via` polls it. |

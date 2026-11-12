@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.5.1 |
-| **Updated** | 2026-11-10 |
+| **Version** | 0.6.0 |
+| **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -294,6 +294,37 @@ To rotate, a post office adds the new key (in DNS and its info document), signs 
 with it, and keeps the old key listed until every credential it signed has expired. A key that is
 compromised is revoked at once (§8).
 
+### 7.5 What post offices keep
+
+A post office **knows** another only when its operators have accepted it. For each it knows, it
+keeps what a gateway keeps (§7.3): the API record and keys (§7.1, §7.2), the info document and the
+revocation list, refreshed at least every **6 hours**. It takes them from the other post office's
+DNS records and documents, so that a key rotated there (§7.4) is followed here, and keeps using
+what it holds when a refresh fails.
+
+Knowing another post office means:
+
+* its credentials are checked here (§5): its gateways log in (RP-5 §2), and its users' proofs are
+  checked in station-to-station reports and in email between post offices (RP-5 §6.6, RP-6 §4);
+* mail from its users needs no accept-list entry, and mail that keeps its user's proof is not
+  third-party mail (RP-6 §2.1, §2.2, §5.1);
+* its gateways' records are read for gateway lists and copies placed ahead (RP-5 §4.4, §5.8);
+* it is named in this post office's `/post-offices` (RP-5 §4.3), so the gateways and clients that
+  trust this post office reach it one hop on (§7.3).
+
+**Finding others.** A post office SHOULD keep, as **seen**, each domain with a valid API record
+(§7.1) that it meets: one whose mail reaches its door, one its users write to, the domain of a
+credential it is shown, and those named in the lists of the post offices it knows (RP-5 §4.3). With
+each it keeps what it found: the records, whether DNSSEC signed them, the info document. Its
+operators accept a seen post office, or block it so that it is not offered again. A post office
+only seen is unknown (`unknown-post-office`), and its mail is ordinary email.
+
+**Why an operator decides here.** A gateway trusts a post office it finds in DNS (§7.3), because
+the user who called is on the air, under their own licence. Mail at the door comes from the
+Internet, where anyone can publish a record. Knowing a post office takes its word that its users
+are licensed, and lets their mail past the accept lists and onto the air unflagged (RP-6 §5.1). A
+post office trusted from DNS alone would give that to anyone who published a record.
+
 ---
 
 ## 8. Revocation
@@ -327,7 +358,7 @@ A serial MAY be dropped from the list once the credential it names has expired.
   because the content ID would no longer match the statement.
 * **What a post office can do.** It vouches for its users. A dishonest post office could issue
   credentials for callsigns its users do not hold; gateways and other post offices trust a post
-  office by choosing to keep its keys (§7.3).
+  office by choosing to keep its keys (§7.3, §7.5).
 * **Replay.** A statement in time form can be replayed only within its window and only before the
   gateway's replay cache has seen it (§6.3); a challenge-form statement only in its own session; a
   statement by the station called only in the session whose nonce it carries (§6.5).
@@ -345,3 +376,4 @@ A serial MAY be dropped from the list once the credential it names has expired.
 | 0.4.0 | 2026-11-09 | A credential is an untagged COSE_Sign1 (RP-0 §5): the key's ID moves from the body (key 8, now unused) to the protected header, which names Ed25519; 161 to 169 bytes (§4.1, §4.3, §5). |
 | 0.5.0 | 2026-11-09 | Which post offices a gateway trusts: by DNS, or one hop of post office lists; its operator may block or limit (§7.3). |
 | 0.5.1 | 2026-11-10 | §6.3: a post office opening a session takes a challenge-form statement's challenge as the gateway's, once (RP-5 0.12.0). |
+| 0.6.0 | 2026-11-12 | Which post offices a post office knows (§7.5): those its operators accept, their records and documents fetched and refreshed as a gateway's are; what knowing means; others found as mail crosses and kept as seen, for the operators; why it differs from a gateway's trust. §7.3 had covered gateways only, and the door, RP-5 §2 and RP-6 §4 rested on a list each operator typed, with no key rotation followed. |

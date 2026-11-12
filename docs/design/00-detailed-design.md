@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.31 |
+| **Version** | 0.1.32 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -108,6 +108,9 @@ reasoning; the specifications hold the result.
 | D33 | **radiopost.org enrolls on an LoTW certificate or the sysop's check** (RP-1 §1, RP-5 §6.1). | The applicant signs a challenge with the key of their ARRL Logbook of the World certificate, which names their callsign; one without LoTW is checked by the sysop against the licence database, with a code sent to the address the licence record holds. Either is enough. | LoTW only (excludes licensees without it); the sysop only (every new user waits); both (slowest, and still excludes those without LoTW). |
 | D34 | **Every program updates itself from a signed update channel.** Each release carries one version, its programs ask the channel (a rolling release, `channel-beta`) when they start and every six hours, and say when a newer one is out; the desktop applications install it with Tauri's updater, the command-line programs with `update`. A file is taken only when the project's update key signed it. | Users and operators should not have to watch the releases page, and a gateway or post office left running for months must still learn of fixes. A signature, not the download's address, is what a program trusts. | Notices only (every user downloads by hand); updates without signatures (whoever controls the download controls the station); a package repository per platform (several to run). |
 | D35 | **Applicants ask, operators decide, from the client** (RP-5 §6.7, §7). Anyone with a licence applies from a new device for an address; the post office keeps the application, and its operators, logged in with their own credentials, approve it (the credential goes straight to the waiting device), decline it with a reason, or send a code by post to the address on the licence. The same operator endpoints show the accounts, make codes and revoke devices. Since they go by callsign, an application naming an operator's callsign is refused, and a code naming one for anyone but the operator asking is made only when the operator confirms it (RP-5 0.15.0). | Running a post office had meant a shell on its server for every new user (check the licence by hand, `radiopost-po code`, a mailbox in the mail server, an email with both); the operators already hold a credential the post office issued, so it is their login, with no password to guess and no administration page left open on the Internet. A licence database shows a callsign exists and in whose name, which anyone can read, so the decision stays a person's (or a proof's, D33), with what the post office found shown beside it. | An administration web page with its own passwords (one more secret, open to guessing); a shell inside the client holding the server's login (the laptop becomes the server's key); approving on a licence lookup alone (the data is public, so anyone could pass as anyone); codes only (the applicant waits for a person to send one, and copies it). |
+| D36 | **A gateway list is read from every post office the home knows** (RP-5 §4.4): a client takes its own post office's list and those of the post offices that one names in `/post-offices`, each checked with that post office's keys; a post office does the same for its users' usual gateways. The home's record wins; a callsign listed by two others is ambiguous. | Any gateway serves any user, so a user's list must hold the gateways registered elsewhere. The home's signed list of post offices already gives each one's address and keys, one hop from what the user trusts, as for gateways (D32). Nothing new is published. | Each post office republishing the others' gateways (it would sign records it never checked, and they go stale); a gateway registering with every post office (an account at each); a list kept by the project (a centre); the latest `updated` winning a conflict (any known post office could take a callsign over). |
+| D37 | **Copies placed ahead cross post offices** (RP-5 §5.8, RP-7 §4.1): the user's post office places them at a gateway registered elsewhere, serves them only to a credential from the post office that listed it, and says `placing` in each answer; the gateway polls its own post office and those that say `placing`, and asks the others it knows at each refresh and after their users' sessions. | Users name the gateways they call, whoever registered them. The gateway sits behind a home router (D12), so only it can open the connection, and only the placing post office knows it places. Copies come without a user's session (D11's exception), so they go only to the station its own post office vouches for. | Polling every post office known (a long poll for each in the network); the user's post office handing copies to the gateway's post office to pass on (one more server that must be up, holding other post offices' mail); a flag in the session's answer only (a `via` gateway, or one named before its first session, never hears it); any known post office's credential for the callsign (any of them could collect a gateway's copies). |
+| D38 | **A post office knows another only by its operators' choice** (RP-1 §7.5): it finds others as mail crosses and keeps them as seen; its operators accept or block each; for those accepted it follows the DNS records and documents, as a gateway does. | Knowing a post office lets its users' mail past the accept lists and onto the air unflagged, on its word that they are licensed. A gateway can trust from DNS because the user calling it is on the air under their own licence (D32); at the door, anyone can publish a DNS record. Following DNS keeps rotated keys and revocations current, which a typed key does not. | Trust from DNS, as a gateway's (any domain's mail past the accept lists, unflagged onto the air); one hop of lists (trust two steps from an operator's choice); a list kept by the project (a centre); keys typed by the operator only (no rotation, no revocations). |
 
 ---
 
@@ -153,7 +156,7 @@ messages as queued at KK4ODA-1 until a gateway that is online confirms them (RP-
 | Message store | Mail as standard `.eml` files, plus each message's air form and content ID. | RP-2 |
 | Session engine | The client side of RP-3: `HELLO`, transfers, receipts, resume; mail queued at cut-off gateways, offered again until confirmed. | RP-3, RP-7 §3.6 |
 | Modem host | Talks RPMI to an adapter; or embeds one. | RP-4 |
-| Gateway list | From post offices' gateway documents; ranked by distance, band and hours. | RP-5 §4.4 |
+| Gateway list | From its post office's gateway document and those of the post offices it knows (D36); ranked by distance, band and hours. | RP-5 §4.4 |
 | Interface | Folders, compose, attachments, the waiting list, where each message is. | — |
 
 ### 5.2 The gateway
@@ -163,7 +166,7 @@ messages as queued at KK4ODA-1 until a gateway that is online confirms them (RP-
 | Session engine | The gateway side of RP-3. | RP-3 |
 | Verifier | Checks credentials and statements, online or not. | RP-1 §5, §6 |
 | Key cache | Post office keys, info documents, revocation lists, refreshed every 6 hours. | RP-1 §7, RP-5 §4 |
-| Post office client | Sessions, submissions, pickups, reports, copies. | RP-5 §5 |
+| Post office client | Sessions, submissions, pickups, reports; copies from its own post office and each other that says it places them (D37). | RP-5 §5 |
 | Store | The outgoing queue, copies placed ahead, partial uploads, the replay cache, credentials seen. | RP-3 §7 |
 | Modem host | Talks RPMI to one adapter per radio. | RP-4 |
 | Rules check | Bands and segments for automatic control, when the modem does not check them. | RP-4 §8 |
@@ -183,12 +186,12 @@ own licence is unaffected.
 
 | Part | Does | Spec |
 |---|---|---|
-| Identity | Accounts, enrollment codes once the callsign is shown (D33), credentials, the post office's keys, revocation, the DNS and JWS documents. | RP-1 |
+| Identity | Accounts, enrollment codes once the callsign is shown (D33), credentials, the post office's keys, revocation, the DNS and JWS documents; the post offices it knows, followed in DNS, and those seen (D38). | RP-1 |
 | API | The HTTPS interface for gateways and clients. | RP-5 |
 | Door | Answers the mail server's MTA hooks at `RCPT TO` and `DATA` (D29): the accept list, encryption, size. | RP-6 §2.1 |
 | Converter | Email to RadioPost message and back; serials; the content-ID-to-Message-ID map. | RP-6 §2.4, §3 |
-| Copies | Places and drops copies at users' usual gateways. | RP-5 §5.8 |
-| Registry | Gateway records and radio routes. | RP-5 §4.4, §6.4, RP-7 |
+| Copies | Places and drops copies at users' usual gateways, registered with it or with a post office it knows (D37). | RP-5 §5.8 |
+| Registry | Gateway records and radio routes; the gateway lists of the post offices it knows (D36). | RP-5 §4.4, §6.4, RP-7 |
 
 The service reaches the mailboxes through JMAP and sends through SMTP submission, so another mail
 server with those interfaces could replace Stalwart (concept §8.1).
@@ -288,7 +291,7 @@ the core against `vectors/` on every push, with the checks that run today.
 | Replay of a session's start | Time window and replay cache, or a challenge (RP-1 §6.3). |
 | Forged email from a RadioPost domain | DKIM, SPF and DMARC (RP-6 §1). |
 | Spam to radio users | Accept lists at the SMTP door (RP-6 §2). |
-| A dishonest post office | Gateways and other post offices choose which post offices' keys they keep (RP-1 §7.3). |
+| A dishonest post office | Gateways and other post offices choose which post offices' keys they keep (RP-1 §7.3, §7.5). Copies placed ahead go only to the credential of the post office that listed the gateway (RP-5 §5.8). |
 
 ---
 
@@ -358,3 +361,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.29 | 2026-11-12 | §5.4: the Mercury adapter (RP-4 §9.6). |
 | 0.1.30 | 2026-11-12 | §5.4: the Mercury adapter identifies the station after each session (RP-4 0.6.5). |
 | 0.1.31 | 2026-11-12 | D35: nobody becomes an operator by applying, and a code that makes one is confirmed (RP-5 0.15.0). |
+| 0.1.32 | 2026-11-12 | More than one post office, drafted for the author: D36, gateway lists from every post office the home knows; D37, copies placed ahead at gateways of other post offices; D38, a post office knows another by its operators' choice (RP-1 0.6.0, RP-5 0.16.0, RP-6 0.6.1, RP-7 0.9.0). The parts of §5 and §8 that change with them. |

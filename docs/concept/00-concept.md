@@ -1,6 +1,6 @@
 # RadioPost: a federated mail system for amateur radio
 
-*Concept document, 2026-11-10. A detailed design follows it. Licence:
+*Concept document, 2026-11-12. A detailed design follows it. Licence:
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).*
 
 **RadioPost** lets licensed amateurs send and receive ordinary email by radio, through gateways
@@ -589,8 +589,10 @@ These are typical prices; check current ones.
 A gateway learns a post office's key the first time one of its users calls while the gateway has
 the Internet. To check users of post offices it has never met while offline, a gateway also keeps
 a list of known post offices, with their keys, and refreshes it when online. Any post office can
-publish such a list, and a gateway merges the lists it trusts. How a new post office gets onto
-those lists is an open question (§13).
+publish such a list, and a gateway merges the lists it trusts. A post office finds others as mail
+passes between them, and its operator decides which it knows and so lists (RP-1 §7.5, D38). The
+same lists let clients see the gateways registered with other post offices, and let a post office
+place copies at them (D36, D37).
 
 ---
 

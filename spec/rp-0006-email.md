@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.6.0 |
-| **Updated** | 2026-11-10 |
+| **Version** | 0.6.1 |
+| **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-5 |
@@ -61,7 +61,7 @@ later.
 
 | When | Check | Refusal |
 |---|---|---|
-| `RCPT TO` | The envelope sender, or its domain, is on the recipient's accept list (§2.2), or the sender's domain is a RadioPost post office the receiver knows (RP-1 §7.3), or the sender is null (`MAIL FROM:<>`, as delivery reports are sent). | `550 5.7.1` (§2.3) |
+| `RCPT TO` | The envelope sender, or its domain, is on the recipient's accept list (§2.2), or the sender's domain is a RadioPost post office the receiver knows (RP-1 §7.5), or the sender is null (`MAIL FROM:<>`, as delivery reports are sent). | `550 5.7.1` (§2.3) |
 | `DATA` | The message passes DMARC for its `From:` domain, when that domain publishes DMARC. | `550 5.7.1` |
 | `DATA` | The `From:` address, or its domain, is on the accept list, or is a known RadioPost post office's domain passing DKIM. (The header sender can differ from the envelope sender.) With a null sender instead: the message is a delivery status report (RFC 3464) about a message this post office sent, named by its `Message-ID` (§3.1). | `550 5.7.1` |
 | `DATA` | Size within the post office's `max_email_bytes` (RP-5 §4.1). | `552 5.3.4` |
@@ -90,8 +90,8 @@ Each account has an accept list (RP-5 §6.5) of addresses and domains (`@domain`
 * Writing to an address adds it (RP-5 §6.5), unless the user's `accept_on_send` is false (RP-5
   §6.3). Test vectors: `vectors/api-account.json`, where an email refused at the door passes once
   the user has written to its sender.
-* Mail from other RadioPost post offices needs no entry: their users are licensed and their mail
-  is signed.
+* Mail from RadioPost post offices this one knows (RP-1 §7.5) needs no entry: their users are
+  licensed and their mail is signed.
 * A role mailbox's list is shared by its operators.
 
 ### 2.3 What a refusal says
@@ -241,7 +241,8 @@ and the reason, which is the `Diagnostic-Code` without its type (`552 5.2.2 Mail
 
 Mail between two RadioPost post offices is ordinary email (§3, then §2). To keep the original
 message, its content ID and its proof across the hop, the sending post office SHOULD add one MIME
-part when **every** recipient in that SMTP transaction is at a RadioPost post office it knows:
+part when **every** recipient in that SMTP transaction is at a RadioPost post office it knows
+(RP-1 §7.5):
 
 ```
 Content-Type: application/radiopost-message
@@ -381,3 +382,4 @@ and the session files.
 | 0.4.0 | 2026-11-10 | §2.1: one `DATA` reply for every recipient: when they differ, the first refusal refuses the message. Found by building the door. |
 | 0.5.0 | 2026-11-10 | §2.1: the door judges only the post office's accounts, so `postmaster@` and other mailboxes of the mail server reach it (the door had refused them). The DMARC and DKIM verdicts are the mail server's when it gives them, else the post office's own checks (Stalwart 1.1 gives its hooks none), and never the message's own `Authentication-Results`; a check that cannot be finished for now answers `451 4.7.1`. Found by setting up the pilot's server. |
 | 0.6.0 | 2026-11-10 | §2.5: held attachments asked for: the message they come in, split by `max_air_bytes`, one too large for the air refused. RP-5 §5.3 had said they come later as a new message and nothing more. |
+| 0.6.1 | 2026-11-12 | §2.1, §2.2, §4: the post offices a post office knows are RP-1 §7.5's (RP-1 0.6.0). |
