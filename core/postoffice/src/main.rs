@@ -741,6 +741,12 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
                 answer["address"].as_str().unwrap_or(""),
                 answer["operator"].as_str().unwrap_or("")
             );
+            if answer["operates"] == json!(true) {
+                println!(
+                    "{} operates this post office: whoever enrolls with this code can use the desk",
+                    answer["operator"].as_str().unwrap_or("")
+                );
+            }
             Ok(())
         }
         "name" => {

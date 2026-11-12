@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.14.0 |
+| **Version** | 0.15.0 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -532,9 +532,11 @@ The post office checks, in this order:
 1. Every member is there and of the form above. Otherwise `400` `malformed`.
 2. It takes applications, and `address` is at one of its domains. Otherwise `403`
    `refused-by-policy`.
-3. `address` is not an account already, nor asked for by an application still pending. Otherwise
+3. `operator` is not the callsign of one of its operators. Otherwise `403` `refused-by-policy` with
+   `operates` (§7.1).
+4. `address` is not an account already, nor asked for by an application still pending. Otherwise
    `409` `already-have`.
-4. The signature. Otherwise `422` `signature-invalid`.
+5. The signature. Otherwise `422` `signature-invalid`.
 
 It answers `202`:
 
@@ -577,6 +579,18 @@ A post office names the callsigns that operate it: at least its info document's 
 Any other token is answered `403` `not-authorized`; no token, `401`. A post office that does not
 offer them answers `404` `unknown-message`. The login says which tokens may (§3.2).
 
+**Who may become one.** Any credential the post office issues naming an operator's callsign gives
+its holder these endpoints, so it issues one only on purpose. It refuses an application that names
+one (§6.7), refuses to approve such an application or send it a postcard (§7.3), and makes a code
+that names one for anyone but the operator asking only when they say so with `operates` (§7.5). An
+operator adds their own devices with a code. Each of these refusals is `403` `refused-by-policy`
+with one more member, `operates`, the callsign:
+
+```json
+{"type": "about:blank", "title": "Refused by policy", "status": 403,
+ "code": 13, "name": "refused-by-policy", "operates": "KK4ODA"}
+```
+
 ### 7.2 `GET /office/status`
 
 ```json
@@ -616,7 +630,9 @@ ignores them.
 It answers `200` with the application's entry as `GET /office/applications` lists it. An unknown
 ID is `404` `unknown-message`; another decision, a flag that is not one of the three, or a body
 without `decision`, `400` `malformed`. An application already decided, or one whose address has
-become an account since, is `409` `already-have`, and nothing changes.
+become an account since, is `409` `already-have`, and nothing changes. An application whose
+callsign has become an operator's since it arrived can only be declined: `approve` and `postcard`
+are `403` `refused-by-policy` with `operates` (§7.1).
 
 ### 7.4 `GET /office/accounts`
 
@@ -642,7 +658,14 @@ and `name` are optional, as in §7.3. Answers `200`:
  "expires": 1794931200}
 ```
 
-An address that is not at one of its domains, or a member of the wrong form, is `400` `malformed`.
+A code that names one of the operators' callsigns gives the operator endpoints to whoever enrolls
+with it (§7.1), and its answer has `"operates": true`. Unless it is for the account and callsign of
+the token's own credential (a new device of the operator asking), the post office makes such a code
+only when the body has `"operates": true`; otherwise it answers `403` `refused-by-policy` with
+`operates` (§7.1), and an operator's client asks them before sending the request again.
+
+An address that is not at one of its domains, or a member of the wrong form (`operates` other than
+`true` or `false` included), is `400` `malformed`.
 
 ### 7.6 `POST /office/revoke`
 
@@ -666,6 +689,11 @@ serials. A device key that is not 32 bytes is `400` `malformed`.
   credential lets its holder's mail be taken as a licensee's (RP-6 §5.1).
 * The operator endpoints can make accounts and revoke devices. Only a credential the post office
   issued itself can use them, so another post office cannot issue one that does.
+* They go by callsign, not by account: whoever holds a credential naming an operator's callsign
+  holds them. Anyone may apply naming any callsign, and the licence database would show an
+  operator's callsign as real, so an application naming one is refused rather than left to an
+  operator's attention, and a code naming one for someone else's address is made only when asked
+  for in so many words (§7.1).
 
 ---
 
@@ -705,3 +733,4 @@ failures above), `vectors/jws.json` (§4) and `vectors/api.json` (the signatures
 | 0.12.1 | 2026-11-10 | §6.1: a refused enrollment leaves its code good; only one that succeeds uses it. Found by the conformance tester (P-03): the reference used a code at any attempt. Test vectors. |
 | 0.13.0 | 2026-11-10 | §5.2: `held` in a waiting entry is set when the message lists held attachments (it had always been false). §5.3: `files`' entries, `ref` in base64url, and its refusals; what is sent is RP-6 §2.5. |
 | 0.14.0 | 2026-11-12 | Applications (§6.7): an account asked for from a new device, signed under `RadioPost-api-apply-v1`, and collected once an operator decides; `applications` in the info document (§4.1). Operator endpoints (§7): the post office's operators run it with their own credentials (status, applications, accounts, codes, revocation); `office` in the login's answer (§3.2). Security considerations and test vectors renumbered §8 and §9. Test vectors (`api-office.json`). |
+| 0.15.0 | 2026-11-12 | Who may become an operator (§7.1): an application naming an operator's callsign is refused (§6.7) and cannot be approved or sent a postcard (§7.3); a code naming one for anyone but the operator asking needs `operates` (§7.5); each refusal carries `operates`; security considerations (§8); test vectors. |

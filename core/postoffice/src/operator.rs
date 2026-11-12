@@ -172,6 +172,15 @@ fn display_name(name: &str) -> bool {
 }
 
 /// RP-5 §7.3: `send`, `receive` and `role` by name; none given, `send` and `receive`.
+/// RP-5 §7.1: refused because it would make someone an operator; `operates` names the callsign.
+fn operates(callsign: &str) -> Response {
+    let mut r = problem(ErrorCode::RefusedByPolicy, None);
+    if let Some(body) = r.body.as_mut() {
+        body["operates"] = json!(callsign);
+    }
+    r
+}
+
 fn grantable(given: Option<&Json>) -> Option<u64> {
     let list = match given {
         None | Some(Json::Null) => return Some(flags::SEND | flags::RECEIVE),
@@ -250,6 +259,9 @@ impl PostOffice {
         if !self.config.applications_open || !ours {
             return problem(ErrorCode::RefusedByPolicy, None);
         }
+        if self.operates(operator) {
+            return operates(operator); // RP-5 §7.1: nobody becomes an operator by applying
+        }
         let now = self.now();
         let asked = self
             .state
@@ -302,8 +314,21 @@ impl PostOffice {
         Response::ok(200, answer)
     }
 
-    /// RP-5 §7: what an operator asks, after RP-5 §7.1's check (the operator's port skips it).
-    pub fn office(&mut self, method: &str, rest: &[&str], body: &Json) -> Response {
+    /// Whether a credential naming `callsign` gives the operator endpoints (RP-5 §7.1).
+    #[must_use]
+    pub fn operates(&self, callsign: &str) -> bool {
+        self.config.operators.iter().any(|o| o == callsign)
+    }
+
+    /// RP-5 §7: what an operator asks, after RP-5 §7.1's check. `asking` is the token's account
+    /// and callsign; the operator's port, which skips the check, asks as nobody.
+    pub fn office(
+        &mut self,
+        method: &str,
+        rest: &[&str],
+        body: &Json,
+        asking: Option<(&str, &str)>,
+    ) -> Response {
         let now = self.now();
         match (method, rest) {
             ("GET", ["status"]) => Response::ok(
@@ -336,7 +361,7 @@ impl PostOffice {
                     .collect();
                 Response::ok(200, json!({"accounts": list}))
             }
-            ("POST", ["codes"]) => self.make_code(body),
+            ("POST", ["codes"]) => self.make_code(body, asking),
             ("POST", ["revoke"]) => {
                 let device = body
                     .get("device")
@@ -381,6 +406,9 @@ impl PostOffice {
             || (decision != "decline" && self.state.accounts.contains(&app.address))
         {
             return problem(ErrorCode::AlreadyHave, None);
+        }
+        if decision != "decline" && self.operates(&app.operator) {
+            return operates(&app.operator); // RP-5 §7.3: its callsign became an operator's since
         }
         let mut app = app;
         app.decided = Some(now);
@@ -452,8 +480,9 @@ impl PostOffice {
         Json::Object(entry)
     }
 
-    /// RP-5 §7.5: a code for a new account, or a new device of one.
-    fn make_code(&mut self, body: &Json) -> Response {
+    /// RP-5 §7.5: a code for a new account, or a new device of one; one that makes an operator
+    /// only when asked for with `operates`, unless it is the asking operator's own.
+    fn make_code(&mut self, body: &Json, asking: Option<(&str, &str)>) -> Response {
         let address = body.get("address").and_then(Json::as_str);
         let operator = body.get("operator").and_then(Json::as_str);
         let name = match body.get("name") {
@@ -462,8 +491,13 @@ impl PostOffice {
             Some(_) => None,
         };
         let granted = grantable(body.get("flags"));
-        let (Some(address), Some(operator), Some(name), Some(f)) =
-            (address, operator, name, granted)
+        let confirmed = match body.get("operates") {
+            None => Some(false),
+            Some(Json::Bool(b)) => Some(*b),
+            Some(_) => None,
+        };
+        let (Some(address), Some(operator), Some(name), Some(f), Some(confirmed)) =
+            (address, operator, name, granted, confirmed)
         else {
             return problem(ErrorCode::Malformed, None);
         };
@@ -471,16 +505,21 @@ impl PostOffice {
         if !(is_entry(address) && !address.starts_with('@') && ours && callsign(operator)) {
             return problem(ErrorCode::Malformed, None);
         }
+        let gives = self.operates(operator); // RP-5 §7.1: whoever enrolls with it is an operator
+        if gives && !confirmed && asking != Some((address, operator)) {
+            return operates(operator);
+        }
         let code = self.new_code();
         self.add_code(&code, address, operator, f);
         if let Some(name) = name {
             self.state.names.insert(address.to_owned(), name);
         }
         let expires = self.now() + CODE_S;
-        Response::ok(
-            200,
-            json!({"code": code, "address": address, "operator": operator, "flags": f,
-                   "expires": expires}),
-        )
+        let mut answer = json!({"code": code, "address": address, "operator": operator, "flags": f,
+                                "expires": expires});
+        if gives {
+            answer["operates"] = json!(true);
+        }
+        Response::ok(200, answer)
     }
 }

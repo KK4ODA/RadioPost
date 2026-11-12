@@ -596,4 +596,46 @@ fn an_applicant_joins_and_the_operator_decides_from_the_panels() {
         panel_get(ruth, "/api/state")["application"],
         serde_json::Value::Null
     );
+
+    // nobody becomes an operator by applying, even with the operator's callsign (RP-5 §7.1)
+    let mallory = radiopost_client::panel::Panel::new(&dir.join("mallory"), None)
+        .start("127.0.0.1:0")
+        .expect("Mallory's panel");
+    let (status, said) = panel(
+        mallory,
+        "apply",
+        &json!({"address": "boss@test.example", "operator": "KK4ODA", "name": "Facundo",
+                "contact": "mallory@example.com", "url": base}),
+    );
+    assert_eq!(status, 400, "{said}");
+    assert!(
+        said.to_string()
+            .contains("KK4ODA operates this post office"),
+        "{said}"
+    );
+
+    // a code naming KK4ODA for someone else's address is made only when asked for in so many
+    // words; one for the operator's own account, a new device, needs no asking
+    let club = json!({"address": "club@test.example", "operator": "KK4ODA"});
+    let (_, refused) = desk("POST", "/office/codes", club.clone());
+    assert_eq!(refused["status"], 403, "{refused}");
+    assert_eq!(refused["body"]["operates"], "KK4ODA", "{refused}");
+    let mut confirmed = club;
+    confirmed["operates"] = json!(true);
+    let (_, made) = desk("POST", "/office/codes", confirmed);
+    assert_eq!(made["status"], 200, "{made}");
+    assert_eq!(made["body"]["operates"], true, "{made}");
+    let (_, own) = desk(
+        "POST",
+        "/office/codes",
+        json!({"address": "kk4oda@test.example", "operator": "KK4ODA"}),
+    );
+    assert_eq!(own["status"], 200, "{own}");
+    let (_, plain) = desk(
+        "POST",
+        "/office/codes",
+        json!({"address": "ana@test.example", "operator": "N2CALL"}),
+    );
+    assert_eq!(plain["status"], 200, "{plain}");
+    assert_eq!(plain["body"].get("operates"), None, "{plain}");
 }

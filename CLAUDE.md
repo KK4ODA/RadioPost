@@ -193,8 +193,10 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `aftercare.rs` send the emails. `health.rs` checks hourly and emails on change; `backups.rs`
   seals with ring's PBKDF2 and ChaCha20-Poly1305; `jobs.rs` is the fixed table a root-owned
   systemd path unit runs from `requests/new/`; `install.rs` plans a Debian set-up against a
-  `Probe` (tests plan a fresh and a set-up server). The API answers each request on a thread of
-  its own: the health check fetches the post office's own info document from it. The client's
+  `Probe` (tests plan a fresh and a set-up server). The desk goes by callsign, so nobody becomes an
+  operator by applying, and a code naming an operator's callsign for anyone but the asking operator
+  needs `operates` (RP-5 0.15.0 §7.1; the desk's red box). The API answers each request on a thread
+  of its own: the health check fetches the post office's own info document from it. The client's
   side: `online::apply`, `check_application`, `office` (a passthrough for `/office/` paths, its
   token kept by the panel), the panel's `/api/office`, `/api/office-backup` and `/api/terminal`
   (`terminal.rs`: the system's own terminal and ssh, the target checked to be user@host), and

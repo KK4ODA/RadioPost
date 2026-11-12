@@ -5075,6 +5075,9 @@ def office_story() -> list[dict[str, Any]]:
     return ex.log
 
 
+OPERATOR_SINCE = "N5CALL becomes one of the post office's operators (RP-5 §7.1)."
+
+
 def office_cases() -> list[dict[str, Any]]:
     """Each refusal of RP-5 §6.7 and §7, on an office of its own."""
     cases: list[dict[str, Any]] = []
@@ -5270,7 +5273,88 @@ def office_cases() -> list[dict[str, Any]]:
         ex.call(at + 10, "Facundo's laptop", "POST", "/office/revoke", {"device": "AAAA"}, tok)
 
     case("codes for another domain, a lowercase callsign, the gateway flag; a short key", bad_codes)
+    case(
+        "an application with an operator's callsign",
+        apply_with(application("jose", operator="KK4ODA")),
+    )
+
+    def became_operator(ex: Exchanges) -> None:
+        aid = ex.call(at, "José's laptop", "POST", "/applications", application("jose"))[
+            "application"
+        ]
+        tok = ex.login(at + 10, "Facundo's laptop", "facundo")
+        ex.note(OPERATOR_SINCE)
+        ex.po.operators.append("N5CALL")
+        path = f"/office/applications/{aid}"
+        ex.call(at + 11, "Facundo's laptop", "POST", path, {"decision": "approve"}, tok)
+        ex.call(at + 12, "Facundo's laptop", "POST", path, {"decision": "postcard"}, tok)
+        ex.call(
+            at + 13,
+            "Facundo's laptop",
+            "POST",
+            path,
+            {"decision": "decline", "text": "N5CALL operates this post office."},
+            tok,
+        )
+
+    case("an application whose callsign has become an operator's since", became_operator)
+
+    def operator_codes(ex: Exchanges) -> None:
+        tok = ex.login(at, "Facundo's laptop", "facundo")
+        club = {"address": "club@radiopost.org", "operator": "KK4ODA"}
+        for i, body in enumerate(
+            [
+                club,
+                {**club, "operates": True},
+                {**club, "operates": "yes"},
+                {"address": "facundo@radiopost.org", "operator": "KK4ODA"},
+            ]
+        ):
+            ex.call(at + 1 + i, "Facundo's laptop", "POST", "/office/codes", body, tok)
+
+    case(
+        "codes naming an operator's callsign: for another account, confirmed, `operates` not a "
+        "boolean; for the operator's own account",
+        operator_codes,
+    )
     return cases
+
+
+def check_operates(story: list[dict[str, Any]], cases: list[dict[str, Any]]) -> None:
+    """RP-5 §7.1, §7.5: which answers say `operates`, and what, read from the specification."""
+
+    def said(exchanges: list[dict[str, Any]]) -> list[Any]:
+        return [
+            (e["response"].get("body") or {}).get("operates") for e in exchanges if "request" in e
+        ]
+
+    by_case = {c["what"]: said(c["exchanges"]) for c in cases}
+    assert by_case["an application with an operator's callsign"] == ["KK4ODA"]
+    assert by_case["an application whose callsign has become an operator's since"] == [
+        None,
+        None,
+        None,
+        "N5CALL",
+        "N5CALL",
+        None,
+    ]
+    assert by_case[
+        "codes naming an operator's callsign: for another account, confirmed, `operates` not a "
+        "boolean; for the operator's own account"
+    ] == [None, None, "KK4ODA", True, None, True]
+    codes = [e for e in story if e.get("request", {}).get("path") == "/office/codes"]
+    assert [e["response"]["body"].get("operates") for e in codes] == [True, None]
+    refusals = [
+        e
+        for c in cases
+        for e in c["exchanges"]
+        if (e.get("response", {}).get("body") or {}).get("name") == "refused-by-policy"
+        and "operates" not in e["response"]["body"]
+    ]
+    assert [c["what"] for c in cases if any(e in c["exchanges"] for e in refusals)] == [
+        "a post office that takes no applications",
+        "an address at another post office's domain",
+    ]
 
 
 def make_api_office() -> dict[str, Any]:
@@ -5300,7 +5384,8 @@ def make_api_office() -> dict[str, Any]:
             }
         },
         "cases": "Each case starts from the same post office, except where it says: the "
-        "applications closed, or other operators.",
+        "applications closed, or other operators. A note that a callsign becomes an operator's "
+        "adds it to the operators from then on.",
     }
     story_answers = [answer_of(e) for e in story if "request" in e]
     assert story_answers == [  # RP-5 §6.1, §6.7, §7, read from the specification
@@ -5396,9 +5481,28 @@ def make_api_office() -> dict[str, Any]:
                 "400 malformed",
                 "400 malformed",
             ],
+            "an application with an operator's callsign": ["403 refused-by-policy"],
+            "an application whose callsign has become an operator's since": [
+                "202",
+                "200",
+                "200",
+                "403 refused-by-policy",
+                "403 refused-by-policy",
+                "200",
+            ],
+            "codes naming an operator's callsign: for another account, confirmed, `operates` not a "
+            "boolean; for the operator's own account": [
+                "200",
+                "200",
+                "403 refused-by-policy",
+                "200",
+                "400 malformed",
+                "200",
+            ],
         },
         answers,
     )
+    check_operates(story, cases)
     out["story"] = story
     out["cases"] = cases
     return out

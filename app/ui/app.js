@@ -953,8 +953,11 @@ async function desk(method, path, body) {
   const r = await api("office", {method, path, body});
   if (r.status >= 400) {
     const b = r.body || {};
-    const err = new Error(b.title ? `${b.title} (${b.name})` : `The post office answered ${r.status}`);
+    const err = new Error(b.operates
+      ? `${b.operates} operates this post office (RP-5 §7.1).`
+      : b.title ? `${b.title} (${b.name})` : `The post office answered ${r.status}`);
     err.status = r.status;
+    err.body = b;
     throw err;
   }
   return r.body;
@@ -1048,7 +1051,13 @@ const DECLINE_REASONS = [
   "Please ask for an address with your own name or callsign.",
 ];
 
+// whether a credential naming `call` would run this post office (RP-5 §7.1)
+function operatesHere(call) {
+  return ((office.status && office.status.operators) || []).includes(call);
+}
+
 function applicantCard(a) {
+  const theirs = operatesHere(a.operator);
   const role = el("input", {type: "checkbox"});
   const approve = el("button", {class: "primary", text: "Approve",
     title: "Make the account and issue its credential; the applicant's client takes it at once",
@@ -1065,6 +1074,11 @@ function applicantCard(a) {
   const postcard = el("button", {class: "quiet", text: "Send a postcard",
     title: "Make a code good for 30 days, to send by post to the address on the licence: proof that the applicant lives where the licence says",
     onclick: () => decide(a, {decision: "postcard"})});
+  const warning = theirs
+    ? el("div", {class: "operates"},
+        el("p", {}, el("strong", {text: `${a.operator} operates this post office.`})),
+        el("p", {text: "An application naming an operator's callsign can only be declined: approved, it would give its holder this desk. An operator adds a device of their own with New code."}))
+    : null;
   return el("article", {class: "applicant"},
     el("div", {class: "applicant-head"},
       el("span", {class: "applicant-name", text: a.name}),
@@ -1073,10 +1087,11 @@ function applicantCard(a) {
     el("dl", {class: "fields"},
       el("dt", {text: "Address"}), el("dd", {class: "mono", text: a.address}),
       el("dt", {text: "Email now"}), el("dd", {class: "mono", text: a.contact})),
+    warning,
     evidenceBlock(a) || el("p", {class: "note", text: "Looking the callsign up\u2026"}),
-    el("div", {class: "row"}, approve,
-      el("label", {class: "check", title: "A shared mailbox, used by several licensed operators"}, role, " Role mailbox"),
-      decline, postcard,
+    el("div", {class: "row"}, theirs ? null : approve,
+      theirs ? null : el("label", {class: "check", title: "A shared mailbox, used by several licensed operators"}, role, " Role mailbox"),
+      decline, theirs ? null : postcard,
       el("button", {class: "quiet", text: "Look up again", title: "Ask the FCC copy and QRZ again",
         onclick: async () => {
           try { await desk("POST", "/office/lookup", {application: a.application}); await renderApplications(); }
@@ -1220,15 +1235,43 @@ async function makeCode(event) {
                 operator: form.operator.value.trim().toUpperCase(),
                 flags: form.role.checked ? ["send", "receive", "role"] : ["send", "receive"]};
   if (form.name.value.trim()) body.name = form.name.value.trim();
+  await sendCode(body);
+}
+
+// RP-5 §7.5: a code that would make its holder an operator is made only when asked for in so
+// many words, so the post office refuses it first and the desk asks
+async function sendCode(body) {
+  const form = $("o-code");
+  $("o-operates").hidden = true;
   try {
     const r = await desk("POST", "/office/codes", body);
     $("o-made").hidden = false;
     $("o-made-code").textContent = r.code;
-    $("o-made-for").textContent = `For ${r.address} (${r.operator}), good until ${new Date(r.expires * 1000).toLocaleString()}.`;
+    $("o-made-for").textContent = `For ${r.address} (${r.operator}), good until ${new Date(r.expires * 1000).toLocaleString()}.`
+      + (r.operates ? ` ${r.operator} operates this post office: whoever enrolls with this code can use this desk.` : "");
     form.reset();
   } catch (e) {
+    if (e.body && e.body.operates && !body.operates) {
+      askOperates(body, e.body.operates);
+      return;
+    }
     toast(e.message, true);
   }
+}
+
+function askOperates(body, call) {
+  const box = $("o-operates");
+  box.replaceChildren(
+    el("p", {}, el("strong", {text: "This person will be able to run the post office."})),
+    el("p", {text: `A code for ${body.address} naming ${call} gives whoever enrolls with it this desk: applications, accounts, settings, backups and the server's jobs. ${call} is one of the post office's operators.`}),
+    el("div", {class: "row"},
+      el("button", {type: "button", class: "danger", text: "Make it anyway",
+        title: "Make the code: its holder becomes an operator",
+        onclick: () => sendCode({...body, operates: true})}),
+      el("button", {type: "button", class: "quiet", text: "Cancel", title: "Make nothing",
+        onclick: () => { box.hidden = true; }})));
+  box.hidden = false;
+  $("o-made").hidden = true;
 }
 
 async function renderMail() {
@@ -1484,6 +1527,7 @@ function wire() {
   }
   $("o-filter").addEventListener("input", drawAccounts);
   $("o-code").addEventListener("submit", makeCode);
+  $("o-code").addEventListener("input", () => { $("o-operates").hidden = true; });
   $("o-made-copy").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText($("o-made-code").textContent); toast("Copied."); }
     catch { toast("Select the code and copy it.", true); }

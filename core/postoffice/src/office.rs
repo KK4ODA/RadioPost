@@ -781,7 +781,8 @@ impl PostOffice {
             if !self.is_operator(&user.address, &user.operator, user.flags) {
                 return problem(ErrorCode::NotAuthorized, None);
             }
-            return self.office(method, &parts[1..], body);
+            let asking = (user.address.as_str(), user.operator.as_str());
+            return self.office(method, &parts[1..], body, Some(asking));
         }
         let gateway_route = matches!(parts[0], "sessions" | "reports" | "copies");
         if route != "/credentials" && gateway_route != user.gateway() {

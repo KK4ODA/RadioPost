@@ -384,6 +384,14 @@ radiopost-po --dir /var/lib/radiopost code --address facundo@radiopost.org \
     --operator KK4ODA --name Facundo
 ```
 
+**Who runs the post office.** The desk goes by callsign: whoever holds a credential naming an
+operator's callsign can use it, whatever their address. So nobody becomes an operator by applying.
+An application naming an operator's callsign is refused when it arrives, and one that came in
+before its callsign became an operator's can only be declined. A code naming an operator's
+callsign for anyone else's address shows a red box first (*This person will be able to run the
+post office*) and is made only with **Make it anyway**. A code for a new device of your own needs
+no box. On the server, `code` says when the code it made gives the desk (RP-5 §7.1).
+
 a one-time code, good for a week, for the user's client to enroll with (RP-5 §6.1). `--name` is the
 display name on the email the user sends (`name` changes it later). On the server, `applications`,
 `approve ID`, `decline ID --text TEXT` and `postcard ID` do what the desk does.
@@ -461,7 +469,7 @@ the service's own additions over HTTPS, as your credential.
 |---|---|
 | Applications | Those waiting, with the lookups' evidence: Approve, Decline, Send a postcard, Look up again. Those decided in the last week, with whether the mailbox was made and the applicant emailed, and each postcard's code with *Print the card*. |
 | Accounts | Every account, its name (*Rename*) and its devices, each with *Revoke* for a lost one; the computer you are using is marked. |
-| New code | A code for a new account or a new device, after *Check the licence*. |
+| New code | A code for a new account or a new device, after *Check the licence*. One that would give someone else the desk asks first, in red (§8). |
 | Mail out | What waits to go on by email. |
 | Health | Every check, as `check` does it from outside, and what only the server sees: free disk, email stuck going out, last night's backup, whether the jobs runner is installed, a newer release. The service checks every hour and emails the contact address when a check turns red, and when all pass again. Give the DKIM selectors here once. |
 | Server | **Jobs** the server's administrator does for you: update, restart the post office or the mail server, copy the certificate, the services, both logs, disk, firewall, ports, logins, Debian's updates, `check`. The service asks; a root-owned systemd unit (`radiopost-po-jobs.path`) runs the job from a fixed list, programs and arguments with no shell, and its output comes back here. The installer puts the unit in place (`radiopost-po --dir /var/lib/radiopost jobs --install`). **Backups**: one each night beside the service, the last seven; *Download a backup* seals one with a passphrase of yours (PBKDF2, then ChaCha20-Poly1305) and keeps it on your computer in `RadioPost backups`. **When you need more**: a terminal on the server through your computer's own SSH, and *Copy for Claude*, the server's state (versions, checks, settings, the jobs' last output; no mail, names or keys) to paste into a Claude session. |

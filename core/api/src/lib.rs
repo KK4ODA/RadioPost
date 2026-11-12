@@ -290,7 +290,13 @@ pub fn application(base: &str, id: &str) -> Result<Json, String> {
 /// A refusal in words: what RP-5 §6.7 means by each.
 fn refusal(status: u16, body: Option<&Json>, what: &str) -> String {
     let code = code_of(body);
+    let operates = body.and_then(|b| b.get("operates")).and_then(Json::as_str);
     let why = match (what, code) {
+        ("application", ErrorCode::RefusedByPolicy) if operates.is_some() => format!(
+            "{} operates this post office, so nobody may apply with it (RP-5 §7.1); its operator \
+             adds a device of their own with a code from the post office's desk",
+            operates.unwrap_or_default()
+        ),
         ("application", ErrorCode::RefusedByPolicy) => {
             "it takes no applications, or not for that domain".to_owned()
         }

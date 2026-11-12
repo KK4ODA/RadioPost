@@ -514,10 +514,12 @@ impl Running {
                 if !text("name").is_empty() {
                     office.state.names.insert(text("address"), text("name"));
                 }
-                Ok(
-                    json!({"code": code, "address": text("address"), "operator": text("operator"),
-                          "flags": f}),
-                )
+                let mut made = json!({"code": code, "address": text("address"),
+                                      "operator": text("operator"), "flags": f});
+                if office.operates(&text("operator")) {
+                    made["operates"] = json!(true); // RP-5 §7.5: whoever enrolls is an operator
+                }
+                Ok(made)
             }
             ("POST", "/deliver") => {
                 let air = base64url::decode(&text("air")).unwrap_or_default();
@@ -588,15 +590,19 @@ fn admin_applications(
     decided: &mut Vec<String>,
 ) -> Result<Json, String> {
     if path == "/applications" {
-        let r = office.office("GET", &["applications"], &Json::Null);
+        let r = office.office("GET", &["applications"], &Json::Null, None);
         return Ok(r.body.unwrap_or_default());
     }
     let id = body.get("application").and_then(Json::as_str).unwrap_or("");
-    let r = office.office("POST", &["applications", id], body);
+    let r = office.office("POST", &["applications", id], body, None);
     let b = r.body.unwrap_or_default();
     if r.status == 200 {
         decided.push(id.to_owned());
         Ok(b)
+    } else if let Some(call) = b["operates"].as_str() {
+        Err(format!(
+            "{call} operates this post office: an application naming it can only be declined"
+        ))
     } else {
         Err(b["name"].as_str().unwrap_or("refused").to_owned())
     }

@@ -74,6 +74,13 @@ def problem(name: str, status: int | None = None) -> Response:
     }
 
 
+def operates(callsign: str) -> Response:
+    """RP-5 §7.1: refused because it would make someone an operator; `operates` names the call."""
+    status, body = problem("refused-by-policy")
+    assert body is not None
+    return status, {**body, "operates": callsign}
+
+
 def refused(cid: str, name: str, text: str) -> dict[str, Any]:
     return {"id": cid, "status": "refused", "code": rp.ERRORS[name], "name": name, "text": text}
 
@@ -284,7 +291,7 @@ class PostOffice:
         if parts[0] == "office":
             if not self._is_operator(user):
                 return problem("not-authorized")
-            return self._office(method, parts[1:], body or {})
+            return self._office(method, parts[1:], body or {}, (user[3], user[4]))
         is_gateway = bool(user[9] & rp.FLAGS["gateway"])
         gateway_routes = {"sessions", "reports", "copies"}
         anyone = {"/credentials"}  # gateways renew their credentials too (§6.2)
@@ -859,6 +866,8 @@ class PostOffice:
             return problem("malformed")
         if not self.applications_open or address.rpartition("@")[2] not in self.domains:
             return problem("refused-by-policy")
+        if operator in self.operators:
+            return operates(operator)  # RP-5 §7.1: nobody becomes an operator by applying
         pending = any(
             a["address"] == address and a["status"] == "pending" and self._alive(a)
             for a in self.applications.values()
@@ -901,7 +910,10 @@ class PostOffice:
 
     # -- the operator endpoints (RP-5 §7) ---------------------------------------------------------
 
-    def _office(self, method: str, rest: list[str], body: dict[str, Any]) -> Response:
+    def _office(
+        self, method: str, rest: list[str], body: dict[str, Any], asking: tuple[str, str]
+    ) -> Response:
+        """RP-5 §7; `asking` is the token's account and callsign."""
         if (method, rest) == ("GET", ["status"]):
             return 200, {
                 "accounts": len(self.accounts),
@@ -921,7 +933,7 @@ class PostOffice:
         if (method, rest) == ("GET", ["accounts"]):
             return 200, {"accounts": [self._account(a) for a in sorted(self.accounts)]}
         if (method, rest) == ("POST", ["codes"]):
-            return self._make_code(body)
+            return self._make_code(body, asking)
         if (method, rest) == ("POST", ["revoke"]):
             device = (
                 jws.unb64u(body.get("device", "")) if isinstance(body.get("device"), str) else None
@@ -964,6 +976,8 @@ class PostOffice:
             decision != "decline" and app["address"] in self.accounts
         ):
             return problem("already-have")
+        if decision != "decline" and app["operator"] in self.operators:
+            return operates(app["operator"])  # RP-5 §7.3: its callsign became an operator's since
         app["decided"] = self.now
         if decision == "approve":
             device = jws.unb64u(app["device"])
@@ -1005,10 +1019,11 @@ class PostOffice:
             entry["name"] = self.names[address]
         return entry
 
-    def _make_code(self, body: dict[str, Any]) -> Response:
+    def _make_code(self, body: dict[str, Any], asking: tuple[str, str]) -> Response:
         """RP-5 §7.5: a code for a new account or a new device of one."""
         address, operator, name = body.get("address"), body.get("operator"), body.get("name")
         flags = self._flags(body.get("flags"))
+        confirmed = body.get("operates", False)
         if not (
             isinstance(address, str)
             and ENTRY.fullmatch(address)
@@ -1019,19 +1034,26 @@ class PostOffice:
             and CALLSIGN.fullmatch(operator)
             and flags is not None
             and (name is None or (isinstance(name, str) and 1 <= len(name) <= 64 and name.strip()))
+            and isinstance(confirmed, bool)
         ):
             return problem("malformed")
+        gives = operator in self.operators  # RP-5 §7.1: whoever enrolls with it is an operator
+        if gives and not confirmed and (address, operator) != asking:
+            return operates(operator)
         code = self._new_code()
         self._add_code(code, address, operator, flags)
         if name is not None:
             self.names[address] = name
-        return 200, {
+        answer: dict[str, Any] = {
             "code": code,
             "address": address,
             "operator": operator,
             "flags": flags,
             "expires": self.now + CODE_S,
         }
+        if gives:
+            answer["operates"] = True
+        return 200, answer
 
     def _revoke_device(self, device: bytes) -> list[int]:
         """RP-1 §8: every serial issued for the key, and the tokens they gave."""

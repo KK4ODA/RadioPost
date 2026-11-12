@@ -22,7 +22,7 @@
         "expires": 1794096000
       }
     },
-    "cases": "Each case starts from the same post office, except where it says: the applications closed, or other operators."
+    "cases": "Each case starts from the same post office, except where it says: the applications closed, or other operators. A note that a callsign becomes an operator's adds it to the operators from then on."
   },
   "story": [
     {
@@ -267,7 +267,8 @@
           "address": "facundo@radiopost.org",
           "operator": "KK4ODA",
           "flags": 2,
-          "expires": 1795103000
+          "expires": 1795103000,
+          "operates": true
         }
       }
     },
@@ -1924,6 +1925,324 @@
               "status": 400,
               "code": 2,
               "name": "malformed"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "an application with an operator's callsign",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "jose@radiopost.org",
+              "operator": "KK4ODA",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "-_MdXmq18V-EXQ7-IdiNi6WYgnJIdVm89HwcmQ2qpLQQAXd-gBC58AXKU7frx8r8qo3ObRBbQnLv8V7bS4jUAw"
+            }
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Refused by policy",
+              "status": 403,
+              "code": 13,
+              "name": "refused-by-policy",
+              "operates": "KK4ODA"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "an application whose callsign has become an operator's since",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "José's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/applications",
+            "body": {
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "signature": "pUYxxi9SURY7gnUISw_VWI8fcfUkMmHe72FAJv_0po7M3bcGLhawS6-KEBn0vDI1zBz6xTFyXmenDJ09xa1zDw"
+            }
+          },
+          "response": {
+            "status": 202,
+            "body": {
+              "application": "ap_uLlzQGd0WRe67exop0woBg",
+              "status": "pending",
+              "expires": 1797086400
+            }
+          }
+        },
+        {
+          "at": 1794494410,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "Tpl3O8xerTnWMiELlUa15pbuJqEiO1csDTeHFr11Dpk",
+              "expires": 1794494710
+            }
+          }
+        },
+        {
+          "at": 1794494410,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+              "nonce": "Tpl3O8xerTnWMiELlUa15pbuJqEiO1csDTeHFr11Dpk",
+              "signature": "rTwEpukm9wTJLh6R7QESlzaUMNm3FXnJYKOxjHJr-IFY0Mtf42O-hZ3tB7Cncs1zhDITc5hV1-T1Y7l4KINlCA"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_skMsW9nGmZM8RzzMKhc16yRv",
+              "expires": 1794498010,
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA",
+              "flags": 3,
+              "office": true
+            }
+          }
+        },
+        {
+          "note": "N5CALL becomes one of the post office's operators (RP-5 §7.1)."
+        },
+        {
+          "at": 1794494411,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/applications/ap_uLlzQGd0WRe67exop0woBg",
+            "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+            "body": {
+              "decision": "approve"
+            }
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Refused by policy",
+              "status": 403,
+              "code": 13,
+              "name": "refused-by-policy",
+              "operates": "N5CALL"
+            }
+          }
+        },
+        {
+          "at": 1794494412,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/applications/ap_uLlzQGd0WRe67exop0woBg",
+            "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+            "body": {
+              "decision": "postcard"
+            }
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Refused by policy",
+              "status": 403,
+              "code": 13,
+              "name": "refused-by-policy",
+              "operates": "N5CALL"
+            }
+          }
+        },
+        {
+          "at": 1794494413,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/applications/ap_uLlzQGd0WRe67exop0woBg",
+            "authorization": "Bearer tok_skMsW9nGmZM8RzzMKhc16yRv",
+            "body": {
+              "decision": "decline",
+              "text": "N5CALL operates this post office."
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "application": "ap_uLlzQGd0WRe67exop0woBg",
+              "status": "declined",
+              "address": "jose@radiopost.org",
+              "operator": "N5CALL",
+              "name": "José Pérez",
+              "contact": "jose.perez@example.net",
+              "device": "PgA8JVr_fhdNaq-KE9nlTRD-yYhpTQ8Cfe15v_946a0",
+              "received": 1794494400,
+              "decided": 1794494413,
+              "text": "N5CALL operates this post office."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "what": "codes naming an operator's callsign: for another account, confirmed, `operates` not a boolean; for the operator's own account",
+      "exchanges": [
+        {
+          "at": 1794494400,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "expires": 1794494700
+            }
+          }
+        },
+        {
+          "at": 1794494400,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "signature": "vvj6g6S7gFT7vifjFwtWwx2-YYalvH8gz_4rtIkx7ThOC1f8gixxmqZVBTsuyKZiY-etB4a_oFYpRFqJyIX6Cw"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+              "expires": 1794498000,
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA",
+              "flags": 3,
+              "office": true
+            }
+          }
+        },
+        {
+          "at": 1794494401,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/codes",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "address": "club@radiopost.org",
+              "operator": "KK4ODA"
+            }
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Refused by policy",
+              "status": 403,
+              "code": 13,
+              "name": "refused-by-policy",
+              "operates": "KK4ODA"
+            }
+          }
+        },
+        {
+          "at": 1794494402,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/codes",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "address": "club@radiopost.org",
+              "operator": "KK4ODA",
+              "operates": true
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "code": "9WED-52RZ",
+              "address": "club@radiopost.org",
+              "operator": "KK4ODA",
+              "flags": 3,
+              "expires": 1795099202,
+              "operates": true
+            }
+          }
+        },
+        {
+          "at": 1794494403,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/codes",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "address": "club@radiopost.org",
+              "operator": "KK4ODA",
+              "operates": "yes"
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        },
+        {
+          "at": 1794494404,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/office/codes",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "code": "MY54-N97E",
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA",
+              "flags": 3,
+              "expires": 1795099204,
+              "operates": true
             }
           }
         }

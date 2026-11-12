@@ -566,7 +566,7 @@ fn applications_and_the_operator_endpoints_as_rp5_says() {
         |_, _| {},
     );
     let cases = file["cases"].as_array().expect("cases");
-    assert_eq!(cases.len(), 19);
+    assert_eq!(cases.len(), 22);
     for case in cases {
         let what = case["what"].as_str().expect("what");
         let mut office = match what {
@@ -586,7 +586,12 @@ fn applications_and_the_operator_endpoints_as_rp5_says() {
             &mut office,
             case["exchanges"].as_array().expect("exchanges"),
             what,
-            |_, _| {},
+            |office, note| {
+                // make.py's OPERATOR_SINCE: a callsign joins the operators mid-case
+                if note == "N5CALL becomes one of the post office's operators (RP-5 §7.1)." {
+                    office.config.operators.push("N5CALL".into());
+                }
+            },
         );
     }
 }
