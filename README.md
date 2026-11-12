@@ -11,6 +11,26 @@ queueing what they send, and later forward it to each other by radio.
 It is **federated**: many post offices and gateways, run by different people, work as one network
 because they follow the same published protocols, as email providers do.
 
+## What it is for
+
+**RadioPost is not meant to replace Winlink.** Winlink works: it has hundreds of gateways, carries
+email both ways, and is used in emergencies. RadioPost does not speak Winlink's protocol and does
+not ask anyone to leave it. A station can run both, on one radio.
+
+RadioPost is a place for amateurs to **experiment and build**. Its protocols are published, with
+test vectors and a conformance tester, so that anyone can write a program that works with everyone
+else's:
+
+* Write a client, a gateway or a post office of your own, or change ours. The code is open.
+* Put a new modem under it with an adapter. Nothing above the modem interface changes.
+* Build an application on top of it: forms, telemetry, a bulletin service, a bridge to something
+  else. A message is addressed and delivered the same way whatever it carries.
+* Run a post office for your club, on your own domain, with your own rules. Nobody's permission is
+  needed.
+
+The common protocol is the point. The programs here are one implementation of it, with no special
+standing.
+
 ## Start here
 
 | | |
@@ -18,6 +38,8 @@ because they follow the same published protocols, as email providers do.
 | [The concept](docs/concept/00-concept.md) | What RadioPost is and how it works, in plain language, with schematics. |
 | [The detailed design](docs/design/00-detailed-design.md) | The programs, the connections between them, and the decisions behind them. |
 | [The specifications](spec/README.md) | The protocols: what every client, gateway, post office and modem adapter implements. |
+| [The test vectors](vectors/README.md) | Exact inputs and outputs for the protocols, to check an implementation against. |
+| [The conformance tester's outline](docs/design/01-conformance.md) | What the tester will check of each role, and what each phase adds to it. |
 
 ## Build your own
 
@@ -27,27 +49,56 @@ office or modem adapter from the specifications, and it will work with everyone 
 
 | You are building | Start with |
 |---|---|
-| A client | RP-1, RP-2, RP-3 |
-| A gateway | RP-1, RP-2, RP-3, RP-5 |
+| A client | RP-1, RP-2, RP-3; RP-4 to drive a modem |
+| A gateway | RP-1, RP-2, RP-3, RP-5; RP-4 to drive modems; RP-7 to forward when cut off |
 | A post office | RP-1, RP-2, RP-5, RP-6 |
 | An adapter for a modem | RP-4 |
 
+RP-0 holds the conventions they all share. [The index](spec/README.md) says which parts of each
+apply. The [test vectors](vectors/README.md) give the exact bytes and verdicts: keys, credentials,
+messages, every PDU, whole sessions byte for byte, the modem interface's conversations, the post
+office's exchanges, email in and out, and forwarding. Check an implementation against them before
+it goes on the air.
+
 ## Status
 
-Phases 1 and 2 are built: the core library in [`core/`](core/README.md) builds RadioPost's objects
-and runs RP-3's sessions, checked against the test vectors, and its modem interface (RP-4) carries
-them through [Aether HF](https://github.com/KK4ODA/aether-hf) or a simulated channel. The
-`radiopost` client carries mail to another station or through a gateway, on the command line, from
-its panel in a browser, or as a desktop application ([`app/client`](app/client/README.md)); the
-gateway answers users' calls and carries their sessions to their post offices, as a desktop
-application of its own, RadioPost Gateway ([`app/gateway`](app/gateway/README.md),
-[the operator's guide](docs/user/gateway.md)); and the post office service runs beside a mail
-server and exchanges ordinary email ([the operator's guide](docs/user/post-office.md)).
-On-air tests can begin: [between two stations](docs/user/on-air-tests.md), and
-[email through a gateway](docs/user/on-air-gateway.md) once `radiopost.org` is live. The specifications are **drafts**:
-anything may change, and nothing is ready to deploy. The project's own post office will be `radiopost.org`. The first modem is
-[Aether HF](https://github.com/KK4ODA/aether-hf), an open-source HF modem; VARA, ARDOP and AX.25
-packet follow through adapters.
+The specifications are **drafts**: anything may change, and nothing is ready to deploy. All eight
+(RP-0 to RP-7) are written, with test vectors for RP-1 to RP-7.
+
+The programs follow the [order of work](docs/design/00-detailed-design.md#9-order-of-work), in
+Rust, each checked against the test vectors:
+
+* **The core library and the modem interface** ([`core/`](core/README.md)): RadioPost's objects,
+  RP-3's sessions, and RP-4 carrying them between two stations.
+* **Two adapters** (`adapters/`): one for [Aether HF](https://github.com/KK4ODA/aether-hf), an
+  open-source HF modem, and one for TCP. VARA, ARDOP and AX.25 packet follow.
+* **The client** ([`app/client`](app/client/README.md)): mail to another station or through a
+  gateway, on the command line, from its panel in a browser, or as a desktop application.
+* **The gateway**: it answers users' calls and carries their sessions to their post offices, as a
+  desktop application of its own, RadioPost Gateway ([`app/gateway`](app/gateway/README.md),
+  [the operator's guide](docs/user/gateway.md)).
+* **The post office service**, beside a mail server, with ordinary email both ways
+  ([running a post office](docs/user/post-office.md)). The project's own post office,
+  `radiopost.org`, is live.
+* **The conformance tester** ([its outline](docs/design/01-conformance.md)), which checks a client,
+  a gateway, a post office or an adapter, whoever wrote it.
+
+The programs say when a newer release is out and update themselves. On-air tests can begin:
+[between two stations](docs/user/on-air-tests.md), and
+[email through a gateway](docs/user/on-air-gateway.md). Still to come: copies placed ahead and the
+offline queue, then forwarding by radio.
+
+## In this repository
+
+| | |
+|---|---|
+| [`spec/`](spec/README.md) | The specifications. Where a program and a specification disagree, the specification wins. |
+| [`docs/`](docs/) | The concept, the detailed design and the user guides, with their figures. |
+| [`vectors/`](vectors/README.md) | The test vectors, generated by `tools/vectors/make.py`, never edited by hand. |
+| [`core/`](core/README.md) | The Rust workspace: the core library, the modem interface, the gateway, the post office service, the conformance tester. |
+| `adapters/` | The modem adapters: Aether HF and TCP. |
+| [`app/`](app/client/README.md) | The client (the `radiopost` program, its panel and the desktop application) and RadioPost Gateway ([`app/gateway`](app/gateway/README.md)). |
+| [`tools/`](tools/) | The vectors' reference, the figures' generators and the documents' checker (Python, standard library only). |
 
 ## Taking part
 
@@ -59,7 +110,7 @@ pull requests, as [`CONTRIBUTING.md`](CONTRIBUTING.md) describes.
 | What | Licence |
 |---|---|
 | The specifications (`spec/`), the documents (`docs/`) and their figures | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (`LICENSE-CC-BY-4.0`) |
-| Code (`tools/`, and the programs to come) | MIT (`LICENSE-MIT`) or Apache 2.0 (`LICENSE-APACHE`), at your option |
+| Code (`core/`, `adapters/`, `app/`, `tools/`) | MIT (`LICENSE-MIT`) or Apache 2.0 (`LICENSE-APACHE`), at your option |
 
 Anyone may implement the protocols, in open or closed software, without asking; please credit the
 RadioPost project.
