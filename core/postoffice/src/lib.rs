@@ -11,6 +11,7 @@ pub mod documents;
 pub mod email;
 pub mod evidence;
 pub mod health;
+pub mod install;
 pub mod jobs;
 pub mod licences;
 pub mod lookups;

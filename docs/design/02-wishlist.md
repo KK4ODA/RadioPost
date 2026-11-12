@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.6 |
+| **Version** | 0.3.0 |
 | **Updated** | 2026-11-12 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -141,7 +141,7 @@ rules:
 | W35 | Services that answer by mail | Applications | Low | Application layer | Planned |
 | W36 | One mailbox, by radio and by mail program | Operation | High | Fits today | Planned |
 | W37 | The accept list on a web page | Operation | Low | Fits today | Planned |
-| W38 | Backups and a backup mail server | Operation | Critical | Fits today | Planned |
+| W38 | Backups and a backup mail server | Operation | Critical | Fits today | In progress |
 | W39 | A domain served by several post offices | — | — | Breaking (RP-1, RP-3) | Deferred |
 | W40 | The gateway checks the band rules itself | Rules | Medium | Fits today; optional addition to read the dial | Planned |
 | W41 | Rules tables for other countries | Rules | Low | Optional addition (RP-6, RP-7) | Planned |
@@ -152,6 +152,7 @@ rules:
 | W46 | Several callsigns in one client, chosen from a list | Setup | Medium | Fits today, a call each | Proposed |
 | W47 | Deleting messages, and a trash | Mail | High | Fits today | Implemented |
 | W48 | What a session has carried, and what is left | Radio | Medium | Fits today | Implemented |
+| W49 | The post office run from the client, and set up by its program | Operation | High | Optional addition (RP-5 §6.7, §7) | Implemented |
 
 Groups: *Mail* (§4), *Setup* (§5), *Radio* (§6), *Operation* (§7), *Offline* (§8),
 *Applications* (§9), *Adapters* (§10), *Rules* (§11). Consolidated and deferred wishes are in §14.
@@ -333,7 +334,7 @@ Join radiopost.org without waiting for the sysop: prove the callsign with an LoT
 | Requested by | The plan: D33. Requesters: 0. |
 | Component | Post office; the client or a web page signs the challenge. |
 | Compatibility | **Fits today**: a post office checks licences its own way (RP-1 §1), ending in the code RP-5 §6.1 takes. An **optional protocol addition** to RP-5 §6 only if every client should do it with every post office. |
-| Existing coverage | Partly built: the sysop's check and the code (`radiopost-po code`). |
+| Existing coverage | Partly built: the sysop's check and the code (`radiopost-po code`), and since W49 applications decided on the desk with the FCC copy's evidence. The FCC's public data has no email addresses, so the sysop's check sends its code by post to the licence's address (the desk's *Send a postcard*). |
 | Dependencies | None. |
 | Effort | Medium: reading an LoTW certificate and checking it against the ARRL's. |
 | Priority | **Medium.** The sysop becomes the bottleneck once the pilot passes a handful of testers. |
@@ -668,14 +669,34 @@ A post office that loses its server loses no mail, and is rebuilt in hours.
 | Requested by | The plan: concept §8.5; the pilot is to run with nightly off-site backups and a backup mail server (concept §12). Requesters: 0. |
 | Component | Post office. |
 | Compatibility | **Fits today**: one operator's servers; no protocol. |
-| Existing coverage | Planned. radiopost.org's mail has been live since 2026-11-11 (CLAUDE.md), and the post office guide sets up one server with no word on backups. |
+| Existing coverage | Backups built (2026-11-12, with W49): the key, settings, state and held attachments each night beside the service, the last seven; a backup sealed with the operator's passphrase from the desk, kept on their computer; `radiopost-po backup` and `restore`, a restore tried in the tests. The mail server's mailboxes are Stalwart's to back up. No backup mail server. |
 | Dependencies | None. |
 | Effort | Medium. |
 | Priority | **Critical** for the backups: the pilot's server now holds real mail, its users' accounts and the post office's key. The backup mail server is **Medium**. |
 | Recommendation | Accept: backups now, and a restore tried once; the backup mail server after. |
-| Status | Planned. |
+| Status | In progress: the backups are built, the backup mail server is not. |
 | Author decision | None yet. |
 | Notes | A backup mail server must refuse as the door does, or it sends bounces to forged senders later (D15, RP-6 §2.1), so it needs the accept lists (concept §13 left this open). Without one, senders retry for days (RFC 5321) and only time is lost. |
+
+### W49. The post office run from the client, and set up by its program
+
+Run a post office without a shell: decide who joins, see the accounts, make codes, read the
+checks, update and restart the server, keep backups, all from the RadioPost client; and set the
+server up with one program instead of a page of commands.
+
+| | |
+|---|---|
+| Requested by | The author (KK4ODA), 2026-11-12: running radiopost.org had meant pasting Debian commands; a dashboard, registration approved by FCC and QRZ lookups, a terminal holding the login. Requesters: 1. |
+| Component | Post office, client; RP-5. |
+| Compatibility | **Optional addition** (RP-5 0.14.0): applications (§6.7) and the operator endpoints (§7), which a post office may offer and a client may use; the rest is `radiopost-po`'s own members and endpoints under `/office/`, which RP-5 §7.2 and §7.3 allow and other clients ignore. |
+| Existing coverage | Built (2026-11-12), design D35. The desk in the client (for the post office's operators, logged in with their own credential): applications approved, declined or sent a postcard, with the FCC copy's and QRZ's evidence; accounts and their devices; codes; mail out; the hourly checks, with an email when one turns red; jobs the server's administrator runs from a fixed list through a root-owned systemd unit; nightly backups and sealed ones downloaded; a terminal by the system's own SSH; the server's state copied for a Claude session. Approving makes the mailbox in Stalwart (or by a program) and emails the welcome. `radiopost-po install` sets a Debian server up step by step. |
+| Dependencies | W10 (LoTW) would let an application be approved without a person. |
+| Effort | Large. |
+| Priority | **High.** Every new user needed a shell on the server. |
+| Recommendation | Accept. A terminal inside the client that kept the server's login was turned down: it makes the operator's computer the server's key, and does not make Debian easier, only moves where commands are pasted. |
+| Status | Implemented. Stalwart 1.1's account API is tried against a stand-in, not the pilot's Stalwart: `mailboxes --check` first. |
+| Author decision | Build it, all of it (2026-11-12). |
+| Notes | The FCC's public licence data carries no email addresses (none in 1.7 million records of 2026-11-08), so D33's "code sent to the address the licence record holds" can only be the postal address: the postcard. |
 
 ---
 
@@ -1060,3 +1081,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.2.4 | 2026-11-11 | W8 implemented: credentials renew themselves in their last month, the client's by Internet or radio and the gateway's own. |
 | 0.2.5 | 2026-11-11 | The author's wishes: W45, station to station under an SSID (gap G12, with G10), and W46, several callsigns in one client, chosen from a list (one design with W7); thread T9. |
 | 0.2.6 | 2026-11-12 | The author's wishes, built: W47, deleting messages and a trash; W48, what a session has carried and what is left. W2 in progress: the address list is built, groups and import are not. |
+| 0.3.0 | 2026-11-12 | The author's wish, built: W49, the post office run from the client (applications, evidence, accounts, checks, jobs, backups) and set up by `radiopost-po install` (RP-5 0.14.0, D35). W38's backups built. W10: the sysop's check posts its code. |

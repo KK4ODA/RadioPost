@@ -18,6 +18,11 @@ use serde_json::{Value as Json, json};
 const USAGE: &str = "\
 usage: radiopost-po --dir DIR COMMAND
        radiopost-po update
+       radiopost-po install --domain D --operator CALL --contact EMAIL [--dry-run] [--yes]
+                     set up a post office on a fresh Debian server, as root: the firewall, the
+                     server's name, SSH by key, Caddy, Stalwart, the post office and its jobs
+                     runner, then DNS and the check; each step skipped when it is done, so it
+                     can run again; --dry-run says what it would do
 
   init --domain D --base-url URL --operator CALL --contact EMAIL [--country US]
        [--listen 127.0.0.1:8770] [--admin 127.0.0.1:8771] [--jmap URL] [--imap HOST:PORT]
@@ -477,6 +482,77 @@ fn care(dir: &std::path::Path, files: &Files, a: &Args, command: &str) -> Result
     }
 }
 
+/// `install`: the guide's set-up done step by step (`radiopost_postoffice::install`).
+fn install(a: &Args) -> Result<(), String> {
+    use radiopost_postoffice::install::{self, Options, Secrets, System};
+    let options = Options {
+        domain: a.need("--domain")?,
+        operator: a.need("--operator")?.to_uppercase(),
+        contact: a.need("--contact")?,
+        dir: PathBuf::from(
+            a.one("--dir")
+                .unwrap_or_else(|| "/var/lib/radiopost".into()),
+        ),
+        exe: PathBuf::from("/usr/local/bin/radiopost-po"),
+        from: std::env::current_exe().map_err(|e| e.to_string())?,
+    }
+    .checked()?;
+    let dry_run = a.has("--dry-run");
+    // the secrets made once, and kept for a second run
+    let kept = std::path::Path::new("/root/radiopost-install.json");
+    let made: Json = std::fs::read_to_string(kept)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_else(|| {
+            let fresh = |n: usize| {
+                let mut b = vec![0u8; n];
+                getrandom::fill(&mut b).expect("the system's random numbers");
+                radiopost::cbor::hex(&b)
+            };
+            json!({"hook_token": fresh(24), "smtp_password": fresh(24)})
+        });
+    if !dry_run {
+        std::fs::write(kept, made.to_string())
+            .map_err(|e| format!("{}: {e} (run it as root)", kept.display()))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let _ = std::fs::set_permissions(kept, std::fs::Permissions::from_mode(0o600));
+        }
+    }
+    let secrets = Secrets {
+        hook_token: made["hook_token"].as_str().unwrap_or_default().to_owned(),
+        smtp_password: made["smtp_password"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned(),
+    };
+    let steps = install::plan(&options, &secrets, &System);
+    let yes = a.has("--yes");
+    let wait = || {
+        if yes {
+            return true;
+        }
+        print!("\n    Done? Type y and Enter to go on (anything else stops here): ");
+        let _ = std::io::stdout().flush();
+        let mut line = String::new();
+        std::io::stdin().read_line(&mut line).is_ok() && line.trim().eq_ignore_ascii_case("y")
+    };
+    install::execute(&steps, dry_run, &mut std::io::stdout(), wait)?;
+    if !dry_run {
+        println!(
+            "\nThe post office is set up. Its secrets are in {}. Enroll your own client with \
+             a code: {} --dir {} code --address you@{} --operator {}",
+            kept.display(),
+            options.exe.display(),
+            options.dir.display(),
+            options.domain,
+            options.operator
+        );
+    }
+    Ok(())
+}
+
 /// The passphrase in `--passphrase-file`, its first line, when given.
 fn passphrase(a: &Args) -> Result<Option<String>, String> {
     a.one("--passphrase-file")
@@ -629,6 +705,9 @@ fn serve_all(dir: &std::path::Path, files: &Files) -> Result<(), String> {
 fn run(a: &Args, command: &str) -> Result<(), String> {
     if command == "update" {
         return update();
+    }
+    if command == "install" {
+        return install(a);
     }
     let dir = PathBuf::from(a.need("--dir")?);
     let files = Files::new(&dir);

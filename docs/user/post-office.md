@@ -9,6 +9,28 @@ users write by radio out as email.
 The pilot runs on a Hostinger KVM 1 virtual server (one core, 4 GB) with Debian 13, Stalwart 1.1
 and Caddy 2.11. The steps below are the ones that set it up, in order.
 
+## The short way
+
+**Setting up.** On a fresh Debian server, as root, the installer does §3 to §7 itself, step by
+step, and says what you do by hand (the mail server's setup page, the DNS records, the reverse DNS)
+with the values to type:
+
+```
+curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.10/radiopost-tools-linux-x64.zip
+unzip radiopost-tools-linux-x64.zip
+./radiopost-tools-linux-x64/radiopost-po install --domain radiopost.org --operator KK4ODA --contact postmaster@radiopost.org
+```
+
+`--dry-run` says everything it would do and does nothing. Each step checks whether it is done
+already, so running it again is safe and finishes what an earlier run did not. The secrets it makes
+(the door's token, the mail server's `radiopost` password) are kept in `/root/radiopost-install.json`.
+
+**Every day.** The post office is run from the RadioPost client. Enroll your own client as the
+callsign the post office names as its operator (`--operator`), and a **Post office** button
+appears in its window: the desk (§12). Your credential is the login: there is no password and no
+administration page on the Internet. The commands below stay for setting up and for what goes
+wrong.
+
 ---
 
 ## 1. What runs where
@@ -322,15 +344,52 @@ settings.
 
 ## 8. Users
 
+**Applications.** Turn them on in the desk's Settings (*Take applications*). A licensee then
+chooses *Apply for an account* in their client's Setup: their address, their callsign, their name
+as on the licence and an email address to be reached at (RP-5 §6.7). You are emailed, and the
+application waits in the desk's Applications with what the post office found of the callsign
+(below). You decide:
+
+* **Approve**: the account is made and its credential issued; the applicant's client takes it the
+  next time it asks (every minute while it is open). Tick *Role mailbox* for a shared mailbox.
+* **Decline**, with a sentence the applicant reads.
+* **Send a postcard**: a code good for 30 days, and a card to print with the licence's mailing
+  address. Whoever holds the card can read the address on the licence: it shows the applicant
+  lives there. The FCC's public data has no email addresses, so the post is the address on the
+  licence that can be checked.
+
+**What the post office finds.** In Settings, *Licence lookups*: a copy of the FCC's licence
+database kept on the server (fetched each week, about 200 MB, 170 MB kept; lookups stay on the
+server), and QRZ.com with your own account. Each application shows green (an active licence in the
+applicant's name), amber (something to check: another name, a club callsign, an earlier
+application) or red (no licence, or one no longer valid). It is evidence, not proof: anyone can
+read who holds a callsign. On the server: `licences --on`, `licences --from l_amat.zip`,
+`qrz --username U --password P`, `lookup CALL --name NAME`.
+
+**Mailboxes.** The mail server refuses email for an account with no mailbox, so each approved
+account needs one in Stalwart. In Settings, *Mailboxes*: give Stalwart's address as the post
+office reaches it (`http://127.0.0.1:8080`) and an API key made in Stalwart's administration with
+the right to create accounts, then **Check** (it asks Stalwart for the domain, and makes nothing).
+Each approval then makes the mailbox, and the welcome email gives the new user its first password
+and where mail programs connect. For another mail server, or a Stalwart whose interface differs,
+name a program instead: it is given the address and the name, and the password in
+`RADIOPOST_PASSWORD`. On the server: `mailboxes --stalwart URL --key KEY --check`. A mailbox that
+could not be made is said in the Decided list; make it in Stalwart's administration as before.
+
+**Codes**, as before, for someone you know holds the callsign: the desk's *New code* (with *Check
+the licence*), or
+
 ```
 radiopost-po --dir /var/lib/radiopost code --address facundo@radiopost.org \
     --operator KK4ODA --name Facundo
 ```
 
-gives a one-time code, good for a week, for the user's client to enroll with (RP-5 §6.1), once the
-operator has seen the user's licence (D33). `--name` is the display name on the email the user
-sends (`name` changes it later). `status` and `outgoing` show what the post office holds. Give each
-user the Stalwart account of §5.7 too.
+a one-time code, good for a week, for the user's client to enroll with (RP-5 §6.1). `--name` is the
+display name on the email the user sends (`name` changes it later). On the server, `applications`,
+`approve ID`, `decline ID --text TEXT` and `postcard ID` do what the desk does.
+
+**The emails** (applications waiting, welcomes, declines, postcards, checks failing) go through
+the mail server's submission port (`smtp` in `config.json`) from the contact address.
 
 ## 9. Checks before going live
 
@@ -365,8 +424,9 @@ failed. Then:
 
 ## 10. Updating
 
-The post office says when a newer release is out: in its log when it starts and every six hours
-(`journalctl -u radiopost-po`), in `check`, and in `status`. To update:
+The post office says when a newer release is out: in the desk, in its log when it starts and
+every six hours (`journalctl -u radiopost-po`), in `check`, and in `status`. The desk's Server tab
+runs the job **update**, which does what follows. On the server:
 
 ```
 sudo radiopost-po update
@@ -380,6 +440,8 @@ directory, its key and its state are not touched.
 
 ## 11. What is not built yet
 
+* **Enrollment with a Logbook of the World certificate** (D33, wishlist W10): an application is
+  decided by a person, or by the postcard.
 * **The two mailboxes are separate.** Mail read in a mail program is still offered by radio
   (`radio_skips_read` is not built), mail sent by radio does not appear in the mail program's
   Sent folder, mail a user sends from a mail program to another user here stays in the mail
@@ -388,3 +450,29 @@ directory, its key and its state are not touched.
 * **DKIM keys are not rotated** while DNS is managed by hand.
 * **Copies placed ahead**, the offline queue and reports are Phase 3; forwarding by radio is
   Phase 4.
+
+## 12. The desk
+
+The **Post office** button of the RadioPost client, for the callsigns that operate the post office
+(the info document's `operator`, and any more in `config.json`'s `operators`). It speaks RP-5 §7 and
+the service's own additions over HTTPS, as your credential.
+
+| Tab | Has |
+|---|---|
+| Applications | Those waiting, with the lookups' evidence: Approve, Decline, Send a postcard, Look up again. Those decided in the last week, with whether the mailbox was made and the applicant emailed, and each postcard's code with *Print the card*. |
+| Accounts | Every account, its name (*Rename*) and its devices, each with *Revoke* for a lost one; the computer you are using is marked. |
+| New code | A code for a new account or a new device, after *Check the licence*. |
+| Mail out | What waits to go on by email. |
+| Health | Every check, as `check` does it from outside, and what only the server sees: free disk, email stuck going out, last night's backup, whether the jobs runner is installed, a newer release. The service checks every hour and emails the contact address when a check turns red, and when all pass again. Give the DKIM selectors here once. |
+| Server | **Jobs** the server's administrator does for you: update, restart the post office or the mail server, copy the certificate, the services, both logs, disk, firewall, ports, logins, Debian's updates, `check`. The service asks; a root-owned systemd unit (`radiopost-po-jobs.path`) runs the job from a fixed list, programs and arguments with no shell, and its output comes back here. The installer puts the unit in place (`radiopost-po --dir /var/lib/radiopost jobs --install`). **Backups**: one each night beside the service, the last seven; *Download a backup* seals one with a passphrase of yours (PBKDF2, then ChaCha20-Poly1305) and keeps it on your computer in `RadioPost backups`. **When you need more**: a terminal on the server through your computer's own SSH, and *Copy for Claude*, the server's state (versions, checks, settings, the jobs' last output; no mail, names or keys) to paste into a Claude session. |
+| Settings | Take applications; licence lookups (the FCC copy, QRZ); mailboxes; who operates it. |
+
+To restore a backup on a new server: install it (above), stop the service, then
+
+```
+radiopost-po --dir /var/lib/radiopost restore radiopost.org-2026-11-12.rpbackup --force --passphrase-file pass.txt
+systemctl start radiopost-po
+```
+
+The mail server keeps its own mailboxes: back up `/var/lib/stalwart` with Stalwart stopped, or
+with its own tools.

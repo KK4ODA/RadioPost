@@ -161,6 +161,29 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   minutes on a thread of its own) and takes a renewed credential up before its next session
   (`Station::reload_credential`). Tests give them a hundred days' notice; with every try at once,
   a credential just renewed is due again.
+  The operator's desk (D35, RP-5 0.14.0 §6.7 and §7, wishlist W49; 2026-11-12): applications
+  and the operator endpoints are `core/postoffice/src/operator.rs`, replayed against
+  `vectors/api-office.json` (the reference's `po.py` takes both; `office_post_office` sets the
+  operators, which the older stories leave empty so their logins carry no `office`). The service
+  adds its own under `/office/` in `desk.rs`, around `PostOffice::handle` so the replay stays exact:
+  status members, outgoing, names, settings (applications, lookups, mailboxes, DKIM selectors),
+  lookups, health, jobs, backups. `licences.rs` builds a sorted copy of the FCC's weekly
+  `l_amat.zip` (HD, EN, AM joined; the real file of 2026-11-08: 1,606,615 callsigns in 21 s,
+  170 MB, no email addresses in it) found by binary search on disk; `qrz.rs` is QRZ's XML
+  interface; `evidence.rs` judges good/warn/bad; `lookups.rs` looks each new application up on a
+  worker thread. `mailboxes.rs` makes the mailbox at approval (Stalwart's JMAP `x:Domain/get` and
+  `x:Account/set`, tried only against a stand-in; or a named program); `notices.rs` and
+  `aftercare.rs` send the emails. `health.rs` checks hourly and emails on change; `backups.rs`
+  seals with ring's PBKDF2 and ChaCha20-Poly1305; `jobs.rs` is the fixed table a root-owned
+  systemd path unit runs from `requests/new/`; `install.rs` plans a Debian set-up against a
+  `Probe` (tests plan a fresh and a set-up server). The API answers each request on a thread of
+  its own: the health check fetches the post office's own info document from it. The client's
+  side: `online::apply`, `check_application`, `office` (a passthrough for `/office/` paths, its
+  token kept by the panel), the panel's `/api/office`, `/api/office-backup` and `/api/terminal`
+  (`terminal.rs`: the system's own terminal and ssh, the target checked to be user@host), and
+  in `app/ui` the Post office view and Setup's *Apply for an account*. LoTW proof (W10) is not
+  built: it needs the author's TQSL `.p12`, ARRL's CA certificates and a decision on legacy
+  RSA-1024/SHA-1.
   `core/api` (`radiopost-api`) is RP-5 over HTTPS (login, calls, enrollment, DNS over HTTPS), shared
   by the gateway and the client; the client's `online` module uses it (enroll, renew, settings —
   `PUT` replaces them whole, so the client merges —, accept list, `report`). `app/src-tauri` has its
