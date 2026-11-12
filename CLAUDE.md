@@ -70,11 +70,16 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   after a command a stray `DISCONNECTED` may answer; `delivered` from `BUFFER`. `tests/common` is
   a stand-in for two Mercury modems that logs misuse; `tests/mercury.rs` runs two real ones
   (`MERCURY=<mercury> … --ignored`, Mercury built with `make HAVE_HAMLIB=0`, which needs
-  `libasound2-dev libpulse-dev`) and has not yet been run. Writing it found that Mercury does not
-  identify the station: the called station's callsign goes on the air only as a CRC. So the
-  adapter sends `CQFRAME <callsign>` after each session (the author's decision, 2026-11-12): the
-  station called first, the caller once it hears it; a `connect` waits for it, so its `ok` comes
-  at once. The stand-in keeps the IDs it heard and logs two transmissions at once.
+  `libasound2-dev libpulse-dev`): A-01 to A-04 pass on Mercury 1.9.23 in about five and a half
+  minutes. Its pipes carry audio at the air's pace, a 20 ms block at a time, silence when nobody
+  sends, and drop what the receiver does not take, as Mercury's own channel bridge does: passed
+  on at once, a CALL is answered while the caller is still keyed, and no call connects. Writing
+  the adapter found that Mercury does not identify the station: the called station's callsign
+  goes on the air only as a CRC. So the adapter sends `CQFRAME <callsign>` after each session
+  (the author's decision, 2026-11-12): the station called first, the caller 0.7 s after it hears
+  it (a frame decodes before its sender unkeys, found on the real modem; RP-4 0.6.6); a `connect`
+  waits for it, so its `ok` comes at once. The stand-in keeps the IDs it heard, decodes a CQ frame
+  before its sender unkeys, and logs two transmissions at once.
   `adapters/tcp` (`radiopost-tcp`) is RP-4 §9.5: links to other TCP adapters opened with one line
   each way (`RPTCP 1 <as> <called>`, `OK <callsign>` or `NO <code>`), TLS on the Internet with
   rustls and ring (a self-signed certificate made on first use, pinned by SHA-256 fingerprint, or

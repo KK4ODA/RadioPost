@@ -61,9 +61,10 @@ A-04 through two adapters on `tests/common`, a stand-in for two Mercury modems o
 keeps to what Mercury's documentation and source say, and logs what a real Mercury would answer
 badly (`LISTEN OFF` with a session up, a second `DISCONNECT`, bytes with no session, a
 `CQFRAME` keyed over the other station); the test requires that log empty, and each station's
-`CQFRAME` after each session, the station called first. `tests/mercury.rs` runs A-01 to A-04 over two real Mercury processes,
-their audio joined by named pipes, and so only when `MERCURY` names one (1.9.23 or later, built
-with `make HAVE_HAMLIB=0`):
+`CQFRAME` after each session, the station called first. `tests/mercury.rs` runs A-01 to A-04 over
+two real Mercury processes, their audio joined by named pipes at the air's pace (a 20 ms block at
+a time, as Mercury's own channel bridge does), and so only when `MERCURY` names one (1.9.23 or
+later, built with `make HAVE_HAMLIB=0`). They pass in about five and a half minutes:
 
 ```
 MERCURY=/path/to/mercury cargo test -p radiopost-mercury --test mercury -- --ignored
