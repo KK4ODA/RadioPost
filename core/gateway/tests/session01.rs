@@ -128,6 +128,8 @@ fn post_office_with(
         base_url: PO.into(),
         key: SigningKey::from_bytes(&w.seeds["po:radiopost.org"]),
         trust: w.trust.clone(),
+        operators: Vec::new(),
+        applications_open: false,
     };
     let mut office = PostOffice::new(
         config,

@@ -4,10 +4,12 @@
 
 pub mod auth;
 pub mod check;
+pub mod desk;
 pub mod documents;
 pub mod email;
 pub mod mail;
 pub mod office;
+pub mod operator;
 pub mod serve;
 
 pub use office::{Config, Draw, PostOffice, Request, Response, State};

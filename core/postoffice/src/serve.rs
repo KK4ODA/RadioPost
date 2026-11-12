@@ -49,6 +49,24 @@ pub struct Settings {
     /// (`smtp://user:password@127.0.0.1:587?tls=required`); none, mail waits in `outgoing`.
     #[serde(default)]
     pub smtp: Option<String>,
+    /// More callsigns that operate it, besides the info document's `operator` (RP-5 §7.1).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub operators: Vec<String>,
+}
+
+impl Settings {
+    /// Every callsign that operates the post office: the info document's first (RP-5 §7.1).
+    #[must_use]
+    pub fn operators(&self) -> Vec<String> {
+        let mut all = vec![self.info.operator.to_uppercase()];
+        for o in &self.operators {
+            let o = o.to_uppercase();
+            if !all.contains(&o) {
+                all.push(o);
+            }
+        }
+        all
+    }
 }
 
 /// The files in a post office's directory.
@@ -158,6 +176,7 @@ pub fn now() -> u64 {
 /// # Panics
 ///
 /// When the system has no random numbers to give.
+#[must_use]
 pub fn system_draw() -> Draw {
     Box::new(|_, n| {
         let mut b = vec![0u8; n];
@@ -239,6 +258,8 @@ impl Running {
             base_url: settings.base_url.clone(),
             trust: trust_of(&settings, &key),
             key,
+            operators: settings.operators(),
+            applications_open: settings.info.applications.as_deref() == Some("open"),
         };
         let mut office = PostOffice::new(config, files.state()?, draw);
         // RP-6 §2.5: the door keeps held attachments as `held/<ref in hex>`
@@ -338,6 +359,11 @@ impl Running {
                 p.body.unwrap_or_default().to_string(),
             );
         };
+        if path.starts_with("/office/")
+            && let Some(answer) = self.desk(method, path, token, body.as_ref())
+        {
+            return answer;
+        }
         let request = Request {
             method: method.to_owned(),
             path: path.to_owned(),
@@ -347,16 +373,39 @@ impl Running {
         let mut office = self.office();
         let answer = office.handle(at, &request);
         self.save(&office);
+        drop(office);
         let kind = if answer.status >= 400 {
             "application/problem+json"
         } else {
             "application/json"
         };
+        let mut body = answer.body;
+        if path == "/office/status"
+            && answer.status == 200
+            && let Some(b) = body.as_mut()
+        {
+            self.status_extras(b);
+        }
         (
             answer.status,
             kind,
-            answer.body.map(|b| b.to_string()).unwrap_or_default(),
+            body.map(|b| b.to_string()).unwrap_or_default(),
         )
+    }
+
+    /// Replaces the settings the service runs with (the caller has written `config.json`).
+    pub(crate) fn set_settings(&self, settings: Settings) {
+        *self
+            .settings
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = settings;
+    }
+
+    /// What the update channel says, for the operator's status.
+    pub(crate) fn update_status(&self) -> Option<Json> {
+        self.updates
+            .get()
+            .and_then(|w| serde_json::to_value(w.status()).ok())
     }
 
     fn base_path(&self) -> String {
@@ -377,6 +426,13 @@ impl Running {
     pub fn admin(&self, method: &str, path: &str, body: &[u8]) -> (u16, String) {
         let body: Json = serde_json::from_slice(body).unwrap_or(Json::Null);
         let text = |k: &str| body.get(k).and_then(Json::as_str).unwrap_or("").to_owned();
+        if (method, path) == ("POST", "/applications") {
+            let take = text("applications") == "open";
+            return match self.take_applications(take) {
+                Ok(()) => (200, self.desk_settings().to_string()),
+                Err(e) => (400, json!({"error": e}).to_string()),
+            };
+        }
         let mut office = self.office();
         office.at(now());
         let answer = match (method, path) {
@@ -395,7 +451,7 @@ impl Running {
                         _ => 0,
                     };
                 }
-                let code = new_code();
+                let code = office.new_code();
                 office.add_code(&code, &text("address"), &text("operator"), f);
                 if !text("name").is_empty() {
                     office.state.names.insert(text("address"), text("name"));
@@ -438,6 +494,9 @@ impl Running {
                 Ok(json!({"address": text("address"), "name": text("name")}))
             }
             ("GET", "/outgoing") => Ok(json!({"outgoing": office.state.outgoing})),
+            ("GET", "/applications") | ("POST", "/decide") => {
+                admin_applications(&mut office, path, &body)
+            }
             ("GET", "/status") => Ok(json!({
                 "version": env!("CARGO_PKG_VERSION"),
                 "update": self.updates.get().map(|w| w.status()),
@@ -458,22 +517,27 @@ impl Running {
     }
 }
 
+/// The operator's port's view of applications (RP-5 §7.3), for `radiopost-po applications`,
+/// `approve`, `decline` and `postcard`.
+fn admin_applications(office: &mut PostOffice, path: &str, body: &Json) -> Result<Json, String> {
+    if path == "/applications" {
+        let r = office.office("GET", &["applications"], &Json::Null);
+        return Ok(r.body.unwrap_or_default());
+    }
+    let id = body.get("application").and_then(Json::as_str).unwrap_or("");
+    let r = office.office("POST", &["applications", id], body);
+    let b = r.body.unwrap_or_default();
+    if r.status == 200 {
+        Ok(b)
+    } else {
+        Err(b["name"].as_str().unwrap_or("refused").to_owned())
+    }
+}
+
 fn problem_text(status: u16) -> String {
     json!({"type": "about:blank", "title": "Not found", "status": status,
            "code": 15, "name": "unknown-message"})
     .to_string()
-}
-
-/// An enrollment code: eight characters an operator can read out, with no 0, O, 1 or I.
-fn new_code() -> String {
-    const ALPHABET: &[u8] = b"23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-    let mut raw = [0u8; 8];
-    getrandom::fill(&mut raw).expect("the system's random numbers");
-    let chars: String = raw
-        .iter()
-        .map(|b| char::from(ALPHABET[usize::from(*b) % ALPHABET.len()]))
-        .collect();
-    format!("{}-{}", &chars[..4], &chars[4..])
 }
 
 fn header(name: &str, value: &str) -> Header {

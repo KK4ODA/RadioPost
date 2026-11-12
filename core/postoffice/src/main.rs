@@ -35,6 +35,11 @@ usage: radiopost-po --dir DIR COMMAND
   deliver --to ADDR --from ADDR --subject TEXT --air FILE [--licensed]
                      put a message's air form in a mailbox by hand
   revoke --device KEY revoke every credential of a device key (base64url or hex)
+  applications [--open | --close]
+                     the applications for accounts (RP-5 §6.7); open or close them
+  approve ID [--role] | decline ID --text TEXT | postcard ID
+                     decide an application: its credential issued, refused with a reason, or a
+                     code made to send by post to the address on the licence
   outgoing           the mail waiting to go on by email
   status             accounts, gateways, codes, sessions
   check [--dkim SELECTOR,…] [--resolver URL]
@@ -110,11 +115,13 @@ fn init(files: &Files, a: &Args) -> Result<(), String> {
             not_before: at - 86_400,
             not_after: at + 5 * 365 * 86_400,
             post_offices: Vec::new(),
+            applications: None,
         },
         known: Vec::new(),
         hooks: Some(a.one("--hooks").unwrap_or_else(|| "127.0.0.1:8772".into())),
         hook_token: a.one("--hook-token"),
         smtp: a.one("--smtp"),
+        operators: Vec::new(),
     };
     let hex: String = radiopost::cbor::hex(&seed);
     files.write("key.hex", &(hex + "\n"))?;
@@ -320,6 +327,79 @@ fn know(files: &Files, a: &Args) -> Result<(), String> {
     Ok(())
 }
 
+/// `applications`: list them, or open or close them.
+fn applications(files: &Files, a: &Args) -> Result<(), String> {
+    if a.has("--open") || a.has("--close") {
+        let take = if a.has("--open") { "open" } else { "closed" };
+        admin(
+            files,
+            "POST",
+            "/applications",
+            &json!({"applications": take}),
+        )?;
+        println!("applications {take}");
+        return Ok(());
+    }
+    let list = admin(files, "GET", "/applications", &Json::Null)?;
+    let entries = list["applications"].as_array().cloned().unwrap_or_default();
+    if entries.is_empty() {
+        println!("no applications");
+    }
+    for e in entries {
+        let s = |k: &str| e[k].as_str().unwrap_or("").to_owned();
+        println!(
+            "{}  {:<9} {} {} ({}), {}",
+            s("application"),
+            s("status"),
+            s("address"),
+            s("operator"),
+            s("name"),
+            s("contact")
+        );
+        if let Some(code) = e["code"].as_str() {
+            println!("    postcard code {code}");
+        }
+    }
+    Ok(())
+}
+
+/// `approve`, `decline`, `postcard`: an application decided (RP-5 §7.3).
+fn decide(files: &Files, a: &Args, command: &str) -> Result<(), String> {
+    let id = a
+        .words
+        .iter()
+        .skip_while(|w| w.as_str() != command)
+        .nth(1)
+        .filter(|w| !w.starts_with("--"))
+        .cloned()
+        .ok_or("which application? Its ID, `ap_…`")?;
+    let mut body = json!({"application": id, "decision": command});
+    if command == "approve" {
+        body["decision"] = json!("approve");
+        if a.has("--role") {
+            body["flags"] = json!(["send", "receive", "role"]);
+        }
+    }
+    if command == "decline" {
+        body["text"] = json!(a.need("--text")?);
+    }
+    let entry = admin(files, "POST", "/decide", &body)?;
+    match command {
+        "postcard" => println!(
+            "postcard code {} for {} ({}): good for 30 days",
+            entry["code"].as_str().unwrap_or(""),
+            entry["address"].as_str().unwrap_or(""),
+            entry["operator"].as_str().unwrap_or("")
+        ),
+        _ => println!(
+            "{} {}",
+            entry["address"].as_str().unwrap_or(""),
+            entry["status"].as_str().unwrap_or("")
+        ),
+    }
+    Ok(())
+}
+
 /// `serve`: the API, the operator's port, the door and email out, until the process ends.
 fn serve_all(dir: &std::path::Path, files: &Files) -> Result<(), String> {
     let settings = files.settings()?;
@@ -415,6 +495,8 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
             println!("revoked serials {}", answer["revoked"]);
             Ok(())
         }
+        "applications" => applications(&files, a),
+        "approve" | "decline" | "postcard" => decide(&files, a, command),
         "outgoing" | "status" => {
             let answer = admin(&files, "GET", &format!("/{command}"), &Json::Null)?;
             println!(

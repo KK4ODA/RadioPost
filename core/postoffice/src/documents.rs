@@ -38,6 +38,23 @@ pub struct Info {
     /// The post offices it knows and trusts, as `/post-offices` lists them (RP-5 §4.3).
     #[serde(default)]
     pub post_offices: Vec<Json>,
+    /// `open` when it takes applications for accounts (RP-5 §4.1, §6.7).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub applications: Option<String>,
+}
+
+/// The info document's `applications` member, when the post office takes them (RP-5 §4.1).
+trait WithApplications {
+    fn with_applications(self, info: &Info) -> Self;
+}
+
+impl WithApplications for Json {
+    fn with_applications(mut self, info: &Info) -> Json {
+        if let Some(a) = &info.applications {
+            self["applications"] = json!(a);
+        }
+        self
+    }
 }
 
 fn kid_hex(public: &[u8; 32]) -> String {
@@ -63,7 +80,8 @@ impl PostOffice {
                 "gateways": info.gateways,
                 "mail": info.mail,
                 "updated": info.updated,
-            }),
+            })
+            .with_applications(info),
             "/revocations" => json!({
                 "issued": now,
                 "next": now + REVOCATIONS_EVERY_S,

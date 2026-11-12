@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! The post office against the vectors: every exchange of `api-exchanges.json`, `api-account.json`
-//! and `direct.json`, replayed in order from the state each one starts from, with the vectors'
+//! The post office against the vectors: every exchange of `api-exchanges.json`, `api-account.json`,
+//! `api-office.json` and `direct.json`, replayed in order from the state each one starts from, with the vectors'
 //! published randomness, and each answer compared as a JSON value (a problem's `title` and a
 //! result's `text` aside). A mismatch is a bug here, never a reason to change a vector.
 
@@ -118,6 +118,8 @@ fn post_office(w: &World, next_serial: u64) -> PostOffice {
         base_url: PO_RADIOPOST.into(),
         key: SigningKey::from_bytes(&w.seeds["po:radiopost.org"]),
         trust: w.trust.clone(),
+        operators: Vec::new(),
+        applications_open: false,
     };
     let state = State {
         next_serial,
@@ -504,6 +506,8 @@ fn station_to_station_sessions_are_reported_as_rp5_6_6_says() {
         base_url: "https://po.hampost.org/rp/v1".into(),
         key: SigningKey::from_bytes(&w.seeds["po:hampost.org"]),
         trust: w.trust.clone(),
+        operators: Vec::new(),
+        applications_open: false,
     };
     let state = State {
         next_serial: 1,
@@ -538,6 +542,51 @@ fn station_to_station_sessions_are_reported_as_rp5_6_6_says() {
             got["sessions"][0],
             comparable(Some(&case["expect"])),
             "{what}"
+        );
+    }
+}
+
+/// make.py's `office_post_office`: radiopost.org taking applications, run by `operators`.
+fn office_post_office(w: &World, operators: &[&str], open: bool) -> PostOffice {
+    let mut office = post_office(w, 1050);
+    office.config.operators = operators.iter().map(|o| (*o).to_owned()).collect();
+    office.config.applications_open = open;
+    office
+}
+
+#[test]
+fn applications_and_the_operator_endpoints_as_rp5_says() {
+    let w = world();
+    let file = vectors("api-office.json");
+    let mut office = office_post_office(&w, &["KK4ODA"], true);
+    replay(
+        &mut office,
+        file["story"].as_array().expect("story"),
+        "office story",
+        |_, _| {},
+    );
+    let cases = file["cases"].as_array().expect("cases");
+    assert_eq!(cases.len(), 19);
+    for case in cases {
+        let what = case["what"].as_str().expect("what");
+        let mut office = match what {
+            "a post office that takes no applications" => {
+                office_post_office(&w, &["KK4ODA"], false)
+            }
+            "a credential from another post office, with an operator's callsign" => {
+                office_post_office(&w, &["KK4ODA", "N0CALL"], true)
+            }
+            "a gateway's credential, with an operator's callsign" => {
+                office_post_office(&w, &["KK4ODA", "KK4ODA-1"], true)
+            }
+            "a post office that offers no operator endpoints" => office_post_office(&w, &[], true),
+            _ => office_post_office(&w, &["KK4ODA"], true),
+        };
+        replay(
+            &mut office,
+            case["exchanges"].as_array().expect("exchanges"),
+            what,
+            |_, _| {},
         );
     }
 }

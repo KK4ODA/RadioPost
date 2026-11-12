@@ -115,6 +115,8 @@ impl TestOffice {
             base_url: base.clone(),
             key,
             trust: offices.trust(),
+            operators: Vec::new(),
+            applications_open: false,
         };
         let draw = Box::new(|_: &str, n: usize| {
             let mut b = vec![0u8; n];

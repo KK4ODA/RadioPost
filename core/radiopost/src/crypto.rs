@@ -18,6 +18,8 @@ pub mod context {
     pub const API_ENROLL: &str = "RadioPost-api-enroll-v1";
     /// A gateway's registration (RP-5 §6.4).
     pub const API_GATEWAY: &str = "RadioPost-api-gateway-v1";
+    /// An application for an account, from a new device (RP-5 §6.7).
+    pub const API_APPLY: &str = "RadioPost-api-apply-v1";
     /// A post office's placement, as COSE external data (RP-7 §4.2).
     pub const PLACEMENT: &str = "RadioPost-placement-v1";
 }

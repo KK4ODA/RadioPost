@@ -28,7 +28,7 @@ pub const TOKEN_S: u64 = 3600;
 pub const NONCE_S: u64 = 300;
 /// How long a credential lasts (RP-1 §4.2).
 pub const CREDENTIAL_S: u64 = 90 * 86_400;
-/// How long an enrollment code is good for (RP-5 §7: within days).
+/// How long an enrollment code is good for (RP-5 §8: within days).
 pub const CODE_S: u64 = 7 * 86_400;
 
 /// Where a post office's random values come from: `(what, n)` gives `n` bytes for the named use.
@@ -49,6 +49,10 @@ pub struct Config {
     pub key: SigningKey,
     /// The post offices it knows, itself included: their keys and revocations (RP-1 §5, §7.3).
     pub trust: Trust,
+    /// The callsigns that operate it (RP-5 §7.1); none, it offers no operator endpoints.
+    pub operators: Vec<String>,
+    /// Whether it takes applications for accounts (RP-5 §6.7).
+    pub applications_open: bool,
 }
 
 /// A request: method, path under the base URL with its query, bearer token and JSON body.
@@ -74,14 +78,14 @@ pub struct Response {
 }
 
 impl Response {
-    fn ok(status: u16, body: Json) -> Response {
+    pub(crate) fn ok(status: u16, body: Json) -> Response {
         Response {
             status,
             body: Some(body),
         }
     }
 
-    fn empty() -> Response {
+    pub(crate) fn empty() -> Response {
         Response {
             status: 204,
             body: None,
@@ -348,6 +352,10 @@ pub struct State {
     pub sent_ids: BTreeMap<String, String>,
     /// The `Message-ID` of each email it made a message of, by content ID, hex (RP-6 §2.4 step 8).
     pub email_ids: BTreeMap<String, String>,
+    /// Applications for accounts, in the order received (RP-5 §6.7).
+    pub applications: Vec<crate::operator::Application>,
+    /// What it issued under each serial, for its operators' list of accounts (RP-5 §7.4).
+    pub credentials: BTreeMap<u64, crate::operator::Issued>,
 }
 
 /// A post office: what it is, what it keeps, and where its random values come from.
@@ -362,15 +370,15 @@ pub struct PostOffice {
     now: u64,
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     cbor::hex(bytes)
 }
 
-fn text<'a>(body: &'a Json, k: &str) -> &'a str {
+pub(crate) fn text<'a>(body: &'a Json, k: &str) -> &'a str {
     body.get(k).and_then(Json::as_str).unwrap_or("")
 }
 
-fn unb64(body: &Json, k: &str) -> Option<Vec<u8>> {
+pub(crate) fn unb64(body: &Json, k: &str) -> Option<Vec<u8>> {
     base64url::decode(body.get(k)?.as_str()?)
 }
 
@@ -391,7 +399,7 @@ pub fn on_list(address: &str, entries: &[String]) -> bool {
 }
 
 /// RP-5 §6.5: an accept list entry, in lowercase: an address, or `@domain`.
-fn is_entry(e: &str) -> bool {
+pub(crate) fn is_entry(e: &str) -> bool {
     let Some((local, domain)) = e.split_once('@') else {
         return false;
     };
@@ -425,7 +433,7 @@ impl PostOffice {
         self.max_air_bytes = max_air_bytes;
     }
 
-    fn fresh(&mut self, what: &str, n: usize) -> Vec<u8> {
+    pub(crate) fn fresh(&mut self, what: &str, n: usize) -> Vec<u8> {
         self.state.issued += 1;
         let label = format!("post office {what} {}", self.state.issued);
         (self.draw)(&label, n)
@@ -543,6 +551,19 @@ impl PostOffice {
 
     /// A new enrollment code for an account (RP-5 §6.1), good for a week.
     pub fn add_code(&mut self, code: &str, address: &str, operator: &str, flags: u64) {
+        self.add_code_for(code, address, operator, flags, CODE_S);
+    }
+
+    /// A new enrollment code good for `life` seconds: a week, or a month by post (RP-5 §7.3).
+    /// The account exists from now, so that its mail can arrive.
+    pub fn add_code_for(
+        &mut self,
+        code: &str,
+        address: &str,
+        operator: &str,
+        flags: u64,
+        life: u64,
+    ) {
         self.state.accounts.insert(address.to_lowercase());
         self.state.codes.insert(
             code.to_owned(),
@@ -550,9 +571,15 @@ impl PostOffice {
                 address: address.to_owned(),
                 operator: operator.to_owned(),
                 flags,
-                expires: self.now.saturating_add(CODE_S),
+                expires: self.now.saturating_add(life),
             },
         );
+    }
+
+    /// The post office's clock, as last set.
+    #[must_use]
+    pub fn now(&self) -> u64 {
+        self.now
     }
 
     // -- email (RP-6) -------------------------------------------------------------------------
@@ -701,6 +728,16 @@ impl PostOffice {
             .entry(hex(&device))
             .or_default()
             .push(serial);
+        self.state.credentials.insert(
+            serial,
+            crate::operator::Issued {
+                address: address.to_owned(),
+                operator: operator.to_owned(),
+                device: hex(&device),
+                flags,
+                expires: self.now + CREDENTIAL_S,
+            },
+        );
         let body = Body {
             v: 1,
             serial,
@@ -728,11 +765,24 @@ impl PostOffice {
             ("POST", "/auth/challenge") => return self.challenge(),
             ("POST", "/auth/token") => return self.login(body),
             ("POST", "/enroll") => return self.enroll(body),
+            ("POST", "/applications") => return self.apply(body),
+            ("GET", _) if parts.len() == 2 && parts[0] == "applications" => {
+                return self.application(parts[1]);
+            }
             _ => {}
+        }
+        if parts[0] == "office" && self.config.operators.is_empty() {
+            return problem(ErrorCode::UnknownMessage, Some(404)); // RP-5 §7.1: not offered
         }
         let Some(user) = self.authorise(request.token.as_deref()) else {
             return problem(ErrorCode::NotAuthorized, Some(401));
         };
+        if parts[0] == "office" {
+            if !self.is_operator(&user.address, &user.operator, user.flags) {
+                return problem(ErrorCode::NotAuthorized, None);
+            }
+            return self.office(method, &parts[1..], body);
+        }
         let gateway_route = matches!(parts[0], "sessions" | "reports" | "copies");
         if route != "/credentials" && gateway_route != user.gateway() {
             return problem(ErrorCode::NotAuthorized, None);
@@ -816,11 +866,14 @@ impl PostOffice {
                 expires,
             },
         );
-        Response::ok(
-            200,
-            json!({"token": token, "expires": expires, "address": cbody.address,
-                   "operator": cbody.operator, "flags": cbody.flags}),
-        )
+        let mut answer = json!({"token": token, "expires": expires, "address": cbody.address,
+                                "operator": cbody.operator, "flags": cbody.flags});
+        if !self.config.operators.is_empty()
+            && self.is_operator(&cbody.address, &cbody.operator, cbody.flags)
+        {
+            answer["office"] = json!(true); // RP-5 §3.2
+        }
+        Response::ok(200, answer)
     }
 
     /// RP-5 §5.2, §5.6: the credential at `clock` and the statement (RP-1 §5, §6.3), with

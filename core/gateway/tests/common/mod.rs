@@ -64,11 +64,13 @@ pub fn post_office(dir: &Path) -> (Arc<Running>, String, SigningKey) {
             not_before: 0,
             not_after: u64::MAX,
             post_offices: Vec::new(),
+            applications: None,
         },
         known: Vec::new(),
         hooks: None,
         hook_token: None,
         smtp: None,
+        operators: Vec::new(),
     };
     files
         .write(
