@@ -244,6 +244,71 @@ pub fn enroll(
     }
 }
 
+/// RP-5 §6.7: asks for an account from the device key `key`. Returns the post office's answer:
+/// the application's ID, `pending`, and when it is forgotten.
+///
+/// # Errors
+///
+/// No answer, or the post office refused: the reason, in words.
+pub fn apply(
+    base: &str,
+    address: &str,
+    operator: &str,
+    name: &str,
+    contact: &str,
+    key: &SigningKey,
+) -> Result<Json, String> {
+    let http = Http::anonymous(base);
+    let signed = format!("{address}\n{operator}\n{}", http.base());
+    let signature = crypto::sign(context::API_APPLY, signed.as_bytes(), key);
+    let body = json!({"address": address, "operator": operator, "name": name,
+                      "contact": contact,
+                      "device": base64url::encode(key.verifying_key().as_bytes()),
+                      "signature": base64url::encode(&signature)});
+    match http.send("POST", "/applications", None, Some(&body)) {
+        Ok((202, Some(answer))) => Ok(answer),
+        Ok((status, body)) => Err(refusal(status, body.as_ref(), "application")),
+        Err(_) => Err(format!("cannot reach {}", http.base())),
+    }
+}
+
+/// RP-5 §6.7: where an application stands: `pending`, `approved` with its `credential`,
+/// `declined` with its `text`, or `postcard`.
+///
+/// # Errors
+///
+/// No answer, or the post office does not know the application (forgotten, or never made).
+pub fn application(base: &str, id: &str) -> Result<Json, String> {
+    let http = Http::anonymous(base);
+    match http.send("GET", &format!("/applications/{id}"), None, None) {
+        Ok((200, Some(answer))) => Ok(answer),
+        Ok((status, body)) => Err(refusal(status, body.as_ref(), "application")),
+        Err(_) => Err(format!("cannot reach {}", http.base())),
+    }
+}
+
+/// A refusal in words: what RP-5 §6.7 means by each.
+fn refusal(status: u16, body: Option<&Json>, what: &str) -> String {
+    let code = code_of(body);
+    let why = match (what, code) {
+        ("application", ErrorCode::RefusedByPolicy) => {
+            "it takes no applications, or not for that domain".to_owned()
+        }
+        ("application", ErrorCode::AlreadyHave) => {
+            "that address is taken, or already asked for".to_owned()
+        }
+        ("application", ErrorCode::Malformed) => "a field is not as it should be: the address \
+            in lowercase, the callsign as licensed, with no SSID, your name and an email address"
+            .to_owned(),
+        ("application", ErrorCode::UnknownMessage) => {
+            "it does not know the application: it was forgotten after 30 days, or never made"
+                .to_owned()
+        }
+        _ => code.name().to_owned(),
+    };
+    format!("the post office refused ({status} {}): {why}", code.name())
+}
+
 /// The record types `query` asks for, by name and RFC 1035 number.
 const TYPES: [(&str, u64); 6] = [
     ("A", 1),

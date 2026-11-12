@@ -210,6 +210,9 @@ pub struct Store {
     pub waiting: Option<Value>,
     /// Serials to ask for on the next call to a gateway, whatever the fetch rule says.
     pub fetch_next: Vec<u64>,
+    /// An application for an account waiting for the post office's operators (RP-5 §6.7):
+    /// `{"id", "base", "address", "operator", "name", "contact", "status", "text"?}`.
+    pub application: Option<Value>,
 }
 
 /// A trash entry as the state file writes it: `id`, `was` (the folder), `deleted`, and the
@@ -289,6 +292,7 @@ impl Store {
             grid: None,
             waiting: None,
             fetch_next: Vec::new(),
+            application: None,
         };
         let path = home.join("state.json");
         if !path.exists() {
@@ -357,6 +361,7 @@ impl Store {
         store.gateway_list = Some(state["gateway_list"].clone()).filter(Value::is_object);
         store.grid = state["grid"].as_str().map(str::to_owned);
         store.waiting = Some(state["waiting"].clone()).filter(Value::is_object);
+        store.application = Some(state["application"].clone()).filter(Value::is_object);
         store.fetch_next = state["fetch_next"]
             .as_array()
             .map(|a| a.iter().filter_map(Value::as_u64).collect())
@@ -399,6 +404,7 @@ impl Store {
             "grid": self.grid,
             "waiting": self.waiting,
             "fetch_next": self.fetch_next,
+            "application": self.application,
         });
         let text = serde_json::to_string_pretty(&state).map_err(|e| e.to_string())?;
         write(&self.home.join("state.json"), text.as_bytes())

@@ -85,18 +85,18 @@ pub fn enroll(
         Some(u) => u.trim_end_matches('/').to_owned(),
         None => post_office(store, &domain)?,
     };
-    let key = if let Ok(k) = store.device() {
-        k
-    } else {
-        let mut seed = [0u8; 32];
-        getrandom::fill(&mut seed).map_err(|e| e.to_string())?;
-        let k = SigningKey::from_bytes(&seed);
-        store.set_device(&k)?;
-        k
-    };
+    let key = device_key(store)?;
     let credential = radiopost_api::enroll(&base, address, &operator.to_uppercase(), code, &key)?;
     let body = store.set_credential(&credential)?;
     store.post_office = Some(base.clone());
+    // a code by post answers the application for the same account: it is done
+    if store
+        .application
+        .as_ref()
+        .is_some_and(|a| a["address"].as_str() == Some(body.address.as_str()))
+    {
+        store.application = None;
+    }
     store.save()?;
     let added = trust_from_dns(store, &domain);
     let trusted = store
@@ -115,6 +115,156 @@ pub fn enroll(
         );
     }
     Ok(said)
+}
+
+/// This device's key, made now if there is none: it never leaves the computer.
+fn device_key(store: &Store) -> Result<SigningKey, Error> {
+    if let Ok(k) = store.device() {
+        return Ok(k);
+    }
+    let mut seed = [0u8; 32];
+    getrandom::fill(&mut seed).map_err(|e| e.to_string())?;
+    let k = SigningKey::from_bytes(&seed);
+    store.set_device(&k)?;
+    Ok(k)
+}
+
+/// RP-5 §6.7: asks the post office of `address`'s domain for an account, from this device (its
+/// key made now if there is none), and keeps the application to ask after. Returns what to tell
+/// the user.
+///
+/// # Errors
+///
+/// No post office found, or it refused the application.
+pub fn apply(
+    store: &mut Store,
+    url: Option<&str>,
+    address: &str,
+    operator: &str,
+    name: &str,
+    contact: &str,
+) -> Result<String, Error> {
+    let address = address.trim().to_lowercase();
+    let operator = operator.trim().to_uppercase();
+    let domain = domain_of(&address);
+    let base = match url {
+        Some(u) => u.trim_end_matches('/').to_owned(),
+        None => post_office(store, &domain)?,
+    };
+    let key = device_key(store)?;
+    let answer = radiopost_api::apply(
+        &base,
+        &address,
+        &operator,
+        name.trim(),
+        contact.trim(),
+        &key,
+    )?;
+    let id = answer["application"].as_str().unwrap_or("").to_owned();
+    store.application = Some(json!({
+        "id": id, "base": base, "address": address, "operator": operator,
+        "name": name.trim(), "contact": contact.trim(), "status": "pending",
+        "expires": answer["expires"],
+    }));
+    store.save()?;
+    Ok(format!(
+        "Applied for {address} ({operator}) at {base}. The post office's operators decide; \
+         this client asks how it stands and takes the credential once it is approved."
+    ))
+}
+
+/// RP-5 §6.7: asks where the application stands. Approved, the credential is kept, the post
+/// office remembered and its key trusted from DNS, and the application set aside; declined or
+/// sent by postcard, the application keeps what the post office said. Returns the application,
+/// with `said`, what to tell the user.
+///
+/// # Errors
+///
+/// No application waiting, or no answer.
+pub fn check_application(store: &mut Store) -> Result<Value, Error> {
+    let mut app = store.application.clone().ok_or("no application waiting")?;
+    let base = app["base"].as_str().unwrap_or("").to_owned();
+    let id = app["id"].as_str().unwrap_or("").to_owned();
+    let answer = match radiopost_api::application(&base, &id) {
+        Ok(a) => a,
+        Err(e) if e.contains("404") => json!({"status": "forgotten"}),
+        Err(e) => return Err(e),
+    };
+    let status = answer["status"].as_str().unwrap_or("pending").to_owned();
+    app["status"] = json!(status);
+    let said = match status.as_str() {
+        "approved" => {
+            let bytes = answer["credential"]
+                .as_str()
+                .and_then(radiopost::base64url::decode)
+                .ok_or("the post office's answer held no credential")?;
+            let body = store.set_credential(&bytes)?;
+            store.post_office = Some(base.clone());
+            store.application = None;
+            store.save()?;
+            trust_from_dns(store, &domain_of(&body.address));
+            format!(
+                "Approved: {} ({}), credential {}. Welcome to RadioPost.",
+                body.address, body.operator, body.serial
+            )
+        }
+        "declined" => {
+            app["text"] = answer["text"].clone();
+            format!(
+                "Declined: {}",
+                answer["text"]
+                    .as_str()
+                    .unwrap_or("the post office gave no reason")
+            )
+        }
+        "postcard" => "The post office is sending a code by post to the address on your licence. \
+                       When the card comes, enroll with its code."
+            .to_owned(),
+        "forgotten" => "The post office no longer knows this application: apply again.".to_owned(),
+        _ => "Still waiting for the post office's operators.".to_owned(),
+    };
+    if status != "approved" {
+        store.application = Some(app.clone());
+        store.save()?;
+    }
+    app["said"] = json!(said);
+    Ok(app)
+}
+
+/// RP-5 §7, and what the post office adds to it: one request under `/office/` as this device's
+/// credential, sharing `token` between requests. Returns the status and the body, so that the
+/// caller shows a refusal as the post office gave it.
+///
+/// # Errors
+///
+/// No credential, a path outside `/office/`, or no answer.
+pub fn office(
+    store: &Store,
+    token: &Arc<Mutex<Option<String>>>,
+    method: &str,
+    path: &str,
+    body: Option<&Value>,
+) -> Result<(u16, Value), Error> {
+    if !path.starts_with("/office/") || path.contains("..") {
+        return Err(format!("{path} is not an operator's request"));
+    }
+    if !matches!(method, "GET" | "POST" | "PUT" | "DELETE") {
+        return Err(format!("no {method}"));
+    }
+    let me = store.me()?;
+    let base = post_office(store, &domain_of(&me.address))?;
+    let mut api = Http::new(
+        &base,
+        Arc::new(Account {
+            credential: store.credential()?,
+            key: store.device()?,
+        }),
+        Arc::clone(token),
+    );
+    match api.call(method, path, body) {
+        Ok((status, answer)) => Ok((status, answer.unwrap_or(Value::Null))),
+        Err(code) => Err(format!("the post office: {}", code.name())),
+    }
 }
 
 /// The API as this user, logged in with the home's credential.

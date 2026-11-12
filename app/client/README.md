@@ -23,6 +23,8 @@ radiopost [--home DIR] COMMAND
 | `init --credential FILE [--device-key FILE]` | Keeps the credential a post office issued for this device's key (raw or hex). |
 | `trust DOMAIN PUBLIC_HEX [NOT_BEFORE NOT_AFTER]` | Trusts a post office key (RP-1 §7.3: the operator decides). |
 | `whoami` | The account and callsign the credential is for. |
+| `apply --address ADDR --operator CALL --name NAME --contact EMAIL [--post-office URL]` | Asks the post office for an account from this device (RP-5 §6.7), making its key if there is none, and keeps the application. The post office's operators decide. |
+| `application` | Asks how the application stands. Approved, the credential is kept as from an enrollment; sent by postcard, enroll with the card's code. |
 | `enroll --address ADDR --operator CALL --code CODE [--post-office URL]` | Enrolls this device with the operator's one-time code (RP-5 §6.1), making its key if there is none, keeps the credential, and remembers the post office. Without `--post-office`, the domain's DNS records name it (RP-1 §7.1); its key is trusted from them too when none is trusted yet. |
 | `post-office URL` | The post office's API, when DNS does not name it. |
 | `renew` | A new credential for this device (RP-5 §6.2). |
@@ -71,9 +73,15 @@ light or dark as the system is) and a JSON API under `/api/`, on the loopback in
 the Aether app serves its own. It shows the folders, reads and writes messages with attachments,
 asks for held attachments (the reader's *Ask on the next call*), calls a gateway (with a Fetch
 setting, the post office's gateway list in *Choose a gateway*, and the *Waiting* folder to mark
-what to fetch next) or a station, listens for one, sends the reports, and holds the setup: enrollment with a code,
+what to fetch next) or a station, listens for one, sends the reports, and holds the setup: enrollment with a code
+or an application the operators decide (asked after every minute while it waits),
 the post office and renewal, the accept list, the device key, a credential imported by hand and
-the post offices trusted. Each message row has a trash can, and the reader a **Delete** button (or
+the post offices trusted. When the credential is one of its post office's operators', a
+**Post office** button opens the operator's desk (RP-5 §7): the applications waiting, with
+**Approve** (a role mailbox if ticked), **Decline** with a reason the applicant reads, and **Send a
+postcard** (a code good for 30 days, and a card to print and post to the address on the licence);
+the accounts with their devices (each revocable, the computer in use marked); **New code**; the
+mail waiting to go out by email; and whether the post office takes applications. Each message row has a trash can, and the reader a **Delete** button (or
 the Delete key); the toast that follows has **Undo**. The **Trash** folder says which folder each
 message came from, puts it back (**Restore**) or deletes it for good (**Delete forever**, a second
 click to confirm), and **Empty trash** empties it. **Addresses** is the address list: everyone a
@@ -180,5 +188,6 @@ with the vector's clocks and draws, and end with the folders the session says an
 refuses a credential for another device's key. `tests/online.rs`: against a post office service
 over HTTP, two users enroll with the program (a wrong code and a used code refused), change a
 setting and the accept list and renew, carry a station-to-station session, and report it: the
-other station's copy filed as picked up, the email copy waiting to go out; and a device enrolls
-from the panel.
+other station's copy filed as picked up, the email copy waiting to go out; a device enrolls
+from the panel; and two applicants join from their panels, one approved from the operator's desk,
+one sent a code by post.

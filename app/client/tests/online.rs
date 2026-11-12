@@ -470,3 +470,127 @@ fn the_open_window_renews_the_credential_in_its_last_month() {
     assert_eq!(me().serial, after.serial, "nothing kept");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Joining from the panels (RP-5 §6.7, §7): the operator's panel shows the desk, an applicant's
+/// panel applies, the operator approves from the desk, and the applicant's panel takes the
+/// credential; another applicant is sent a code by post and enrolls with it.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn an_applicant_joins_and_the_operator_decides_from_the_panels() {
+    let dir = scratch("panel-join");
+    let (running, base, _) = post_office(&dir.join("po"));
+    running.take_applications(true).expect("opened");
+    // the operator, KK4ODA, enrolled with a code made on the server
+    let (_, answer) = running.admin(
+        "POST",
+        "/code",
+        json!({"address": "kk4oda@test.example", "operator": "KK4ODA"})
+            .to_string()
+            .as_bytes(),
+    );
+    let code = serde_json::from_str::<serde_json::Value>(&answer).expect("JSON")["code"]
+        .as_str()
+        .expect("a code")
+        .to_owned();
+    let op = radiopost_client::panel::Panel::new(&dir.join("operator"), None)
+        .start("127.0.0.1:0")
+        .expect("the operator's panel");
+    let (status, said) = panel(
+        op,
+        "enroll",
+        &json!({"address": "kk4oda@test.example", "operator": "KK4ODA", "code": code,
+                "url": base}),
+    );
+    assert_eq!(status, 200, "{said}");
+    let desk = |method: &str, path: &str, body: serde_json::Value| {
+        panel(
+            op,
+            "office",
+            &json!({"method": method, "path": path, "body": body}),
+        )
+    };
+
+    // José applies from his panel; he waits
+    let jose = radiopost_client::panel::Panel::new(&dir.join("jose"), None)
+        .start("127.0.0.1:0")
+        .expect("José's panel");
+    let (status, said) = panel(
+        jose,
+        "apply",
+        &json!({"address": "Jose@test.example", "operator": "n5call", "name": "José Pérez",
+                "contact": "jose@example.net", "url": base}),
+    );
+    assert_eq!(status, 200, "{said}");
+    let (_, state) = panel(jose, "application", &json!({}));
+    assert_eq!(state["status"], "pending", "{state}");
+    assert_eq!(state["address"], "jose@test.example");
+
+    // the operator's desk lists him, and approves
+    let (status, answer) = desk("GET", "/office/status", json!(null));
+    assert_eq!(status, 200);
+    assert_eq!(answer["status"], 200, "{answer}");
+    assert_eq!(answer["body"]["applications"], 1);
+    let (_, list) = desk("GET", "/office/applications", json!(null));
+    let id = list["body"]["applications"][0]["application"]
+        .as_str()
+        .expect("an ID")
+        .to_owned();
+    let (_, decided) = desk(
+        "POST",
+        &format!("/office/applications/{id}"),
+        json!({"decision": "approve"}),
+    );
+    assert_eq!(decided["body"]["status"], "approved", "{decided}");
+
+    // José's panel takes the credential, and its desk is closed to him
+    let (_, state) = panel(jose, "application", &json!({}));
+    assert_eq!(state["status"], "approved", "{state}");
+    let me = panel_get(jose, "/api/state");
+    assert_eq!(me["me"]["address"], "jose@test.example");
+    assert_eq!(me["me"]["operator"], "N5CALL");
+    assert_eq!(me["application"], serde_json::Value::Null);
+    let (_, refused) = panel(
+        jose,
+        "office",
+        &json!({"method": "GET", "path": "/office/status"}),
+    );
+    assert_eq!(refused["status"], 403, "{refused}");
+    let (status, _) = panel(jose, "office", &json!({"method": "GET", "path": "/info"}));
+    assert_eq!(status, 400, "only /office/ paths pass");
+
+    // Ruth is sent a postcard, and enrolls with its code
+    let ruth = radiopost_client::panel::Panel::new(&dir.join("ruth"), None)
+        .start("127.0.0.1:0")
+        .expect("Ruth's panel");
+    let (status, _) = panel(
+        ruth,
+        "apply",
+        &json!({"address": "ruth@test.example", "operator": "N7CALL", "name": "Ruth Bell",
+                "contact": "ruth@example.com", "url": base}),
+    );
+    assert_eq!(status, 200);
+    let (_, list) = desk("GET", "/office/applications", json!(null));
+    let id = list["body"]["applications"][1]["application"]
+        .as_str()
+        .expect("an ID")
+        .to_owned();
+    let (_, card) = desk(
+        "POST",
+        &format!("/office/applications/{id}"),
+        json!({"decision": "postcard"}),
+    );
+    let card_code = card["body"]["code"].as_str().expect("a code").to_owned();
+    let (_, state) = panel(ruth, "application", &json!({}));
+    assert_eq!(state["status"], "postcard", "{state}");
+    let (status, said) = panel(
+        ruth,
+        "enroll",
+        &json!({"address": "ruth@test.example", "operator": "N7CALL", "code": card_code,
+                "url": base}),
+    );
+    assert_eq!(status, 200, "{said}");
+    assert_eq!(
+        panel_get(ruth, "/api/state")["application"],
+        serde_json::Value::Null
+    );
+}

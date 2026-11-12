@@ -25,6 +25,9 @@ usage: radiopost [--home DIR] COMMAND ...
   whoami                   the account and callsign the credential is for
   enroll --address ADDR --operator CALL --code CODE [--post-office URL]
                            enroll this device with the code the post office's operator gave
+  apply --address ADDR --operator CALL --name NAME --contact EMAIL [--post-office URL]
+                           ask the post office for an account from this device (RP-5 §6.7)
+  application              how the application stands; once approved, keep the credential
                            (RP-5 §6.1), making its key if there is none, and keep the credential
   post-office URL          the post office's API, when DNS does not say (RP-1 §7.1)
   renew                    a new credential for this device, over the Internet (RP-5 §6.2)
@@ -595,6 +598,25 @@ fn run(words: &[String]) -> Result<(), Error> {
                 &args.one("--code").ok_or("enroll needs --code")?,
             )?;
             println!("{said}");
+        }
+        "apply" => {
+            let said = online::apply(
+                &mut store,
+                args.one("--post-office").as_deref(),
+                &args.one("--address").ok_or("apply needs --address")?,
+                &args.one("--operator").ok_or("apply needs --operator")?,
+                &args
+                    .one("--name")
+                    .ok_or("apply needs --name, as on your licence")?,
+                &args
+                    .one("--contact")
+                    .ok_or("apply needs --contact, an email address")?,
+            )?;
+            println!("{said}");
+        }
+        "application" => {
+            let app = online::check_application(&mut store)?;
+            println!("{}", app["said"].as_str().unwrap_or(""));
         }
         "post-office" => {
             let url = args.rest.first().ok_or("post-office URL")?;

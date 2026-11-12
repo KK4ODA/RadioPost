@@ -62,7 +62,9 @@ h2 { font-size: 13px; text-transform: none; color: var(--muted); margin: 0 0 8px
 .count { color: var(--muted); font-variant-numeric: tabular-nums; }
 .station { border-top: 1px solid var(--line); padding-top: 12px; }
 .note { color: var(--muted); font-size: 13px; margin: 0; }
-#setup-open { margin-top: auto; }
+#setup-open, #office-open { margin-top: auto; }
+#office-open:not([hidden]) + #setup-open { margin-top: 0; }
+#office-open, #setup-open { display: flex; justify-content: space-between; align-items: center; }
 
 main { padding: 20px 24px; overflow: auto; min-width: 0; }
 .list { width: 100%; border-collapse: collapse; }
@@ -85,6 +87,7 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 .body { white-space: pre-wrap; font: inherit; background: var(--panel); border: 1px solid var(--line);
         border-radius: 6px; padding: 14px; margin: 0; }
 #composer, #setup { max-width: 720px; }
+#office { max-width: 980px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px;
         margin-bottom: 14px; }
 
@@ -237,3 +240,50 @@ button.link { height: auto; padding: 0; border: 0; background: none; color: var(
   .rings .arc { transition: none; }
   [data-mode="carrying"] .waves path { opacity: .7; }
 }
+
+/* the post office's desk, for its operators (RP-5 §7) */
+.o-domain { color: var(--muted); font-weight: 400; font-size: 15px; margin-left: 6px; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 10px 0 16px; flex-wrap: wrap; }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent;
+               color: var(--muted); padding: 0 12px; }
+.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); font-weight: 600; }
+.tabs .count:empty { display: none; }
+.tabs .count { margin-left: 4px; }
+.applicant { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+             margin-bottom: 12px; }
+.applicant-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.applicant-name { font-weight: 650; font-size: 16px; }
+.applicant-call { font-family: var(--mono); font-size: 14px; padding: 1px 8px; border-radius: 6px;
+                  background: var(--bg); border: 1px solid var(--line); }
+.applicant-when { margin-left: auto; color: var(--muted); font-size: 13px; }
+.applicant .fields { margin-bottom: 10px; font-size: 14px; }
+.applicant .row { margin-bottom: 0; align-items: center; }
+.applicant .row label.check { margin: 0 6px 0 0; color: var(--text); font-size: 14px; }
+.applicant .decline-why { display: flex; gap: 8px; flex: 1 1 100%; }
+.applicant .decline-why input { flex: 1; }
+.evidence { border-left: 3px solid var(--line); padding: 4px 10px; margin: 0 0 10px; font-size: 13px; }
+.evidence.good { border-left-color: var(--ok); }
+.evidence.warn { border-left-color: var(--busy); }
+.evidence.bad { border-left-color: var(--bad); }
+.evidence p { margin: 2px 0; }
+.evidence .flag { color: var(--bad); }
+.decided summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 6px 0; }
+.decided td, #o-accounts td, #o-mail td { cursor: default; }
+.dev { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.dev .mono { font-size: 12px; }
+.dev.revoked { color: var(--muted); text-decoration: line-through; }
+.dev button { height: 24px; padding: 0 8px; font-size: 12px; }
+.made { margin-top: 14px; padding: 12px; border: 1px dashed var(--line); border-radius: 8px; }
+.made .code { font-family: var(--mono); font-size: 26px; letter-spacing: .08em; margin: 0 0 4px; }
+.pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.pill.approved { color: var(--ok); border-color: var(--ok); }
+.pill.declined { color: var(--bad); border-color: var(--bad); }
+.pill.postcard { color: var(--busy); border-color: var(--busy); }
+#o-accounts .filter { margin-bottom: 10px; }
+/* joining: a code, or an application waiting for the operators */
+.join { display: flex; gap: 16px; margin: 0 0 10px; }
+.join label.check { margin: 0; color: var(--text); font-size: 14px; }
+.applied { border: 1px solid var(--session); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+.applied[data-status="declined"], .applied[data-status="forgotten"] { border-color: var(--bad); }
+.applied[data-status="postcard"] { border-color: var(--busy); }
+.applied-what { margin: 0 0 4px; font-weight: 600; }

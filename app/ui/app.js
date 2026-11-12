@@ -7,6 +7,7 @@ let folder = "inbox";
 let logNext = 0;
 let meAddress = "";
 let lastState = "idle";
+let myDevice = "";  // this device's public key, base64url, as the post office writes keys
 
 async function api(path, body) {
   const options = body === undefined
@@ -107,7 +108,7 @@ function when(seconds) {
 
 function show(view) {
   for (const id of ["list-view", "waiting-view", "gateways-view", "addresses-view", "reader",
-                    "composer", "setup"]) {
+                    "composer", "setup", "office"]) {
     $(id).hidden = id !== view;
   }
 }
@@ -182,8 +183,10 @@ async function refresh() {
   $("stop").hidden = a.state !== "listening";
   $("write").disabled = busy || !s.me;
   $("device").textContent = s.device || "No key yet.";
+  myDevice = s.device ? hexToB64u(s.device) : "";
   $("make-key").hidden = Boolean(s.device);
   showEnrollment(s.me);
+  showApplication(s.application);
   showTransfer(a, s.progress);
   $("cred-state").textContent = s.me
     ? `${s.me.address} (${s.me.operator}), valid until ${new Date(s.me.expires * 1000).toLocaleDateString()}`
@@ -816,11 +819,12 @@ function showEnrollment(me) {
       ? "Enroll again with a new code from your post office's operator."
       : `Credential good until ${day(me.expires)}. RadioPost renews it by itself in its last month, over the Internet or on a gateway call.`;
   }
-  const open = !me || expired || enrollOpen;
+  const pending = application.status === "pending";
+  const open = (!me || expired || enrollOpen) && !pending;
   $("enroll-title").textContent = me && !expired ? "Enrolled with your post office" : "Enroll with your post office";
   $("enroll-fields").hidden = !open;
   $("enroll-again").hidden = open;
-  $("enroll-go").textContent = me ? "Enroll again" : "Enroll";
+  showJoin();
   const form = $("enroll");
   if (me && open && !form.contains(document.activeElement)) {
     if (!form.address.value) form.address.value = me.address;
@@ -831,11 +835,17 @@ function showEnrollment(me) {
 async function enroll(event) {
   event.preventDefault();
   const form = $("enroll");
+  const applying = joinBy() === "apply";
   try {
-    const r = await api("enroll", {
-      address: form.address.value, operator: form.operator.value, code: form.code.value,
-      url: form.url.value,
-    });
+    const r = applying
+      ? await api("apply", {
+        address: form.address.value, operator: form.operator.value, name: form.name.value,
+        contact: form.contact.value, url: form.url.value,
+      })
+      : await api("enroll", {
+        address: form.address.value, operator: form.operator.value, code: form.code.value,
+        url: form.url.value,
+      });
     form.reset();
     enrollOpen = false;
     toast(r.said);
@@ -843,6 +853,376 @@ async function enroll(event) {
   } catch (e) {
     toast(e.message, true);
   }
+}
+
+// ── joining: a code from the operator, or an application they decide (RP-5 §6.1, §6.7) ──────
+
+function hexToB64u(hex) {
+  const bytes = hex.match(/../g).map((h) => parseInt(h, 16));
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function joinBy() {
+  const checked = document.querySelector("input[name=join]:checked");
+  return checked ? checked.value : "code";
+}
+
+function showJoin() {
+  const applying = joinBy() === "apply";
+  const form = $("enroll");
+  for (const l of form.querySelectorAll(".by-code")) l.hidden = applying;
+  for (const l of form.querySelectorAll(".by-apply")) l.hidden = !applying;
+  form.code.required = !applying;
+  form.name.required = applying;
+  form.contact.required = applying;
+  $("join-note").textContent = applying
+    ? "Ask your post office for an account. Its operators check your licence and decide; this client takes the credential when they approve. Over the Internet."
+    : "Your post office's operator gives you a one-time code once they have seen your licence. Over the Internet.";
+  $("enroll-go").textContent = applying ? "Apply" : ($("enrolled").hidden ? "Enroll" : "Enroll again");
+  $("enroll-go").title = applying
+    ? "Make this device's key if needed and send the application, signed with it"
+    : "Make this device's key if needed, enroll it, and keep the credential";
+}
+
+const application = {status: "", checked: 0};
+
+function showApplication(app) {
+  const box = $("applied");
+  box.hidden = !app;
+  if (!app) { application.status = ""; return; }
+  box.dataset.status = app.status;
+  const who = `${app.address} (${app.operator})`;
+  const what = {
+    pending: `Applied for ${who}.`,
+    declined: `The application for ${who} was declined.`,
+    postcard: `A code for ${who} is coming by post.`,
+    forgotten: `The post office no longer knows the application for ${who}.`,
+  }[app.status] || `Applied for ${who}.`;
+  $("applied-what").textContent = what;
+  $("applied-note").textContent = {
+    pending: "Waiting for the post office's operators. This client asks every minute while it is open, and takes the credential once they approve.",
+    declined: app.text ? `They said: ${app.text}` : "They gave no reason.",
+    postcard: "It goes to the address on your licence. When it comes, choose “I have a code” and enroll with it.",
+    forgotten: "Applications are kept 30 days. Apply again.",
+  }[app.status] || "";
+  $("applied-check").hidden = app.status !== "pending" && app.status !== "postcard";
+  const form = $("enroll");
+  $("enroll-fields").hidden = app.status === "pending";
+  if (app.status !== "pending" && !$("enroll-fields").contains(document.activeElement)) {
+    // a postcard's code goes in the code form; a declined or forgotten one may apply again
+    const by = app.status === "postcard" ? "code" : "apply";
+    if (joinBy() !== by && application.status !== app.status) {
+      document.querySelector(`input[name=join][value=${by}]`).checked = true;
+      showJoin();
+    }
+    form.address.value = form.address.value || app.address;
+    form.operator.value = form.operator.value || app.operator;
+    form.url.value = form.url.value || app.base || "";
+    if (by === "apply") {
+      form.name.value = form.name.value || app.name || "";
+      form.contact.value = form.contact.value || app.contact || "";
+    }
+  }
+  if (application.status && application.status !== app.status && app.status !== "pending") {
+    toast(what);
+  }
+  application.status = app.status;
+  if (app.status === "pending" && Date.now() - application.checked > 60000) {
+    application.checked = Date.now();
+    checkApplication(false);
+  }
+}
+
+async function checkApplication(loud = true) {
+  try {
+    const r = await api("application", {});
+    if (loud || r.status === "approved") toast(r.said);
+    await refresh();
+    if (r.status === "approved") await probeOffice();
+  } catch (e) {
+    if (loud) toast(e.message, true);
+  }
+}
+
+// ── the post office's desk, for its operators (RP-5 §7) ───────────────────────────────────────
+
+const office = {ok: false, tab: "applications", status: null, applications: [], accounts: []};
+
+// one request to the post office as this device: its body, or the refusal it gave
+async function desk(method, path, body) {
+  const r = await api("office", {method, path, body});
+  if (r.status >= 400) {
+    const b = r.body || {};
+    const err = new Error(b.title ? `${b.title} (${b.name})` : `The post office answered ${r.status}`);
+    err.status = r.status;
+    throw err;
+  }
+  return r.body;
+}
+
+// whether this client's credential runs its post office: the tab shows only then
+async function probeOffice() {
+  try {
+    office.status = await desk("GET", "/office/status");
+    office.ok = true;
+  } catch {
+    office.ok = false;
+  }
+  $("office-open").hidden = !office.ok;
+  if (office.ok) {
+    const n = office.status.applications || 0;
+    $("n-office").textContent = n ? String(n) : "";
+    $("o-n-applications").textContent = n ? String(n) : "";
+    $("o-n-mail").textContent = office.status.outgoing ? String(office.status.outgoing) : "";
+  }
+  return office.ok;
+}
+
+function officeSummary() {
+  const s = office.status || {};
+  $("o-domain").textContent = (s.domains || []).join(", ");
+  if (s.domains && s.domains[0]) $("o-code").address.placeholder = `ana@${s.domains[0]}`;
+  const parts = [`${s.accounts ?? 0} accounts`, `${s.applications ?? 0} waiting`,
+                 `${s.codes ?? 0} codes out`, `${s.sessions ?? 0} sessions open`];
+  if (s.outgoing) parts.push(`${s.outgoing} going out by email`);
+  if (s.version) parts.push(`radiopost-po ${s.version}`);
+  if (s.update && s.update.offer) parts.push(`${s.update.offer.version} is out`);
+  $("o-summary").textContent = parts.join("  ·  ");
+}
+
+async function openOffice(tab = office.tab) {
+  office.tab = tab;
+  show("office");
+  for (const b of document.querySelectorAll("[data-otab]")) {
+    b.setAttribute("aria-selected", String(b.dataset.otab === tab));
+  }
+  for (const pane of document.querySelectorAll(".o-pane")) pane.hidden = pane.id !== `o-${tab}`;
+  try {
+    await probeOffice();
+    officeSummary();
+    if (tab === "applications") await renderApplications();
+    if (tab === "accounts") await renderAccounts();
+    if (tab === "mail") await renderMail();
+    if (tab === "settings") await renderOfficeSettings();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") node.className = v;
+    else if (k === "text") node.textContent = v;
+    else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+    else node.setAttribute(k, v);
+  }
+  node.append(...children.filter((c) => c !== null && c !== undefined));
+  return node;
+}
+
+function day(t) {
+  return new Date(t * 1000).toLocaleString(undefined,
+    {year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"});
+}
+
+// what the post office found of the callsign, when it says (radiopost-po's own members)
+function evidenceBlock(a) {
+  const e = a.evidence;
+  if (!e) return null;
+  const box = el("div", {class: `evidence ${e.verdict || ""}`, title: "What the post office found of this callsign. A licence database shows a callsign exists and in whose name, which anyone can read: it is evidence, not proof."});
+  for (const line of e.lines || []) box.append(el("p", {text: line}));
+  for (const flag of e.flags || []) box.append(el("p", {class: "flag", text: flag}));
+  return box;
+}
+
+const DECLINE_REASONS = [
+  "No licence in the licence database matches this callsign.",
+  "The name does not match the licence for this callsign.",
+  "The licence for this callsign has expired.",
+  "Please ask for an address with your own name or callsign.",
+];
+
+function applicantCard(a) {
+  const role = el("input", {type: "checkbox"});
+  const approve = el("button", {class: "primary", text: "Approve",
+    title: "Make the account and issue its credential; the applicant's client takes it at once",
+    onclick: () => decide(a, {decision: "approve", flags: role.checked ? ["send", "receive", "role"] : undefined})});
+  const why = el("input", {placeholder: "Why, in a sentence the applicant reads", list: "decline-reasons"});
+  const send = el("button", {text: "Send", title: "Decline with this reason",
+    onclick: () => {
+      if (!why.value.trim()) { toast("Say why, for the applicant.", true); why.focus(); return; }
+      decide(a, {decision: "decline", text: why.value.trim()});
+    }});
+  const whyRow = el("div", {class: "decline-why", hidden: ""}, why, send);
+  const decline = el("button", {class: "quiet danger", text: "Decline…", title: "Refuse it, saying why",
+    onclick: () => { whyRow.hidden = !whyRow.hidden; if (!whyRow.hidden) why.focus(); }});
+  const postcard = el("button", {class: "quiet", text: "Send a postcard",
+    title: "Make a code good for 30 days, to send by post to the address on the licence: proof that the applicant lives where the licence says",
+    onclick: () => decide(a, {decision: "postcard"})});
+  return el("article", {class: "applicant"},
+    el("div", {class: "applicant-head"},
+      el("span", {class: "applicant-name", text: a.name}),
+      el("span", {class: "applicant-call", text: a.operator, title: "The callsign, as licensed"}),
+      el("span", {class: "applicant-when", text: `asked ${day(a.received)}`})),
+    el("dl", {class: "fields"},
+      el("dt", {text: "Address"}), el("dd", {class: "mono", text: a.address}),
+      el("dt", {text: "Email now"}), el("dd", {class: "mono", text: a.contact})),
+    evidenceBlock(a),
+    el("div", {class: "row"}, approve,
+      el("label", {class: "check", title: "A shared mailbox, used by several licensed operators"}, role, " Role mailbox"),
+      decline, postcard, whyRow));
+}
+
+async function renderApplications() {
+  const list = (await desk("GET", "/office/applications")).applications || [];
+  office.applications = list;
+  const pending = list.filter((a) => a.status === "pending");
+  const decided = list.filter((a) => a.status !== "pending");
+  $("o-none").hidden = pending.length > 0;
+  $("o-pending").replaceChildren(...pending.map(applicantCard));
+  $("o-decided-box").hidden = decided.length === 0;
+  $("o-decided").replaceChildren(...decided.reverse().map((a) => {
+    const decision = a.status === "postcard"
+      ? el("span", {}, el("span", {class: "pill postcard", text: "postcard"}), " ",
+          el("span", {class: "mono", text: a.code || ""}),
+          a.code ? el("button", {class: "link", type: "button", text: "Print the card",
+            title: "A card to post to the address on the licence", onclick: () => printCard(a)}) : null)
+      : el("span", {class: `pill ${a.status}`, text: a.status, title: a.text || ""});
+    return el("tr", {},
+      el("td", {text: a.name}), el("td", {class: "mono", text: a.operator}),
+      el("td", {class: "mono", text: a.address}), el("td", {}, decision),
+      el("td", {text: day(a.decided)}));
+  }));
+}
+
+async function decide(a, body) {
+  try {
+    const entry = await desk("POST", `/office/applications/${a.application}`, body);
+    const said = {
+      approved: `${a.address} approved: ${a.name}'s client takes the credential at its next check.`,
+      declined: `${a.address} declined.`,
+      postcard: `Postcard code ${entry.code} for ${a.address}: print the card and post it.`,
+    }[entry.status];
+    toast(said || entry.status);
+    if (entry.status === "postcard") printCard(entry);
+    await openOffice("applications");
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// a card to print and post to the address on the licence: the code, and what to do with it
+function printCard(a) {
+  const w = window.open("", "_blank", "width=640,height=480");
+  if (!w) { toast("The browser would not open the card: allow pop-ups for the panel.", true); return; }
+  const until = a.code_expires ? new Date(a.code_expires * 1000).toLocaleDateString() : "";
+  const esc = (s) => String(s || "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  w.document.write(`<!doctype html><meta charset="utf-8"><title>RadioPost postcard for ${esc(a.operator)}</title>
+<style>body{font:15px system-ui,sans-serif;margin:24px}.card{border:1px dashed #888;border-radius:10px;padding:24px;max-width:520px}
+.code{font:600 34px ui-monospace,monospace;letter-spacing:.1em;margin:12px 0}h1{font-size:20px;margin:0 0 8px}p{margin:6px 0}
+@media print{button{display:none}}</style>
+<div class="card"><h1>RadioPost: your enrollment code</h1>
+<p>${esc(a.name)}, ${esc(a.operator)}</p>
+<p>For the account <b>${esc(a.address)}</b>.</p>
+<p class="code">${esc(a.code)}</p>
+<p>In the RadioPost client: Setup, “I have a code”, then your address, your callsign and this code.</p>
+<p>Good until ${esc(until)}. It works once.</p></div>
+<p><button onclick="print()">Print</button></p>`);
+  w.document.close();
+}
+
+async function renderAccounts() {
+  office.accounts = (await desk("GET", "/office/accounts")).accounts || [];
+  drawAccounts();
+}
+
+function drawAccounts() {
+  const find = $("o-filter").value.trim().toLowerCase();
+  const shown = office.accounts.filter((a) => !find || a.address.includes(find)
+    || (a.name || "").toLowerCase().includes(find)
+    || a.credentials.some((c) => c.operator.toLowerCase().includes(find)));
+  $("o-account-rows").replaceChildren(...shown.map((a) => {
+    const name = el("td", {}, el("span", {text: a.name || ""}),
+      el("button", {class: "link", type: "button", text: a.name ? "Rename" : "Name it",
+        title: "The name on the email this account sends", onclick: () => rename(a, name)}));
+    const devices = el("td", {}, ...a.credentials.map((c) => {
+      const mine = c.device === myDevice;
+      return el("div", {class: `dev${c.revoked ? " revoked" : ""}`},
+        el("span", {class: "mono", text: c.operator}),
+        el("span", {text: `until ${new Date(c.expires * 1000).toLocaleDateString()}`,
+          title: `Credential ${c.serial}, device key ${c.device}`}),
+        mine ? el("span", {class: "pill", text: "this computer", title: "The device you are using now"}) : null,
+        c.revoked ? el("span", {text: "revoked"}) : el("button", {class: "quiet danger", type: "button", text: "Revoke",
+          title: mine
+            ? "This is the computer you are using: revoked, it can no longer run the post office from here"
+            : "Revoke every credential of this device, as when it is lost: it can no longer log in or call",
+          onclick: (e) => armed(e.currentTarget, mine ? "Click again: your own computer" : "Click again to revoke",
+            () => revoke(c))}));
+    }));
+    if (!a.credentials.length) devices.append(el("span", {class: "note", text: "No device yet"}));
+    return el("tr", {}, el("td", {class: "mono", text: a.address}), name, devices,
+      el("td", {class: "n", text: String(a.waiting || 0)}));
+  }));
+}
+
+function rename(a, cell) {
+  const input = el("input", {value: a.name || "", placeholder: "Ana Lopez"});
+  const save = el("button", {type: "button", text: "Save", onclick: async () => {
+    try {
+      await desk("POST", "/office/name", {address: a.address, name: input.value.trim()});
+      await renderAccounts();
+    } catch (e) { toast(e.message, true); }
+  }});
+  cell.replaceChildren(el("div", {class: "row"}, input, save));
+  input.focus();
+}
+
+async function revoke(c) {
+  try {
+    const r = await desk("POST", "/office/revoke", {device: c.device});
+    toast(`Revoked credential${r.revoked.length === 1 ? "" : "s"} ${r.revoked.join(", ")}.`);
+    await renderAccounts();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function makeCode(event) {
+  event.preventDefault();
+  const form = $("o-code");
+  const body = {address: form.address.value.trim().toLowerCase(),
+                operator: form.operator.value.trim().toUpperCase(),
+                flags: form.role.checked ? ["send", "receive", "role"] : ["send", "receive"]};
+  if (form.name.value.trim()) body.name = form.name.value.trim();
+  try {
+    const r = await desk("POST", "/office/codes", body);
+    $("o-made").hidden = false;
+    $("o-made-code").textContent = r.code;
+    $("o-made-for").textContent = `For ${r.address} (${r.operator}), good until ${new Date(r.expires * 1000).toLocaleString()}.`;
+    form.reset();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function renderMail() {
+  const list = (await desk("GET", "/office/outgoing")).outgoing || [];
+  $("o-mail-none").hidden = list.length > 0;
+  $("o-mail-rows").replaceChildren(...list.map((m) => el("tr", {},
+    el("td", {class: "mono", text: m.id}), el("td", {class: "mono", text: (m.to || []).join(", ")}),
+    el("td", {text: m.queued ? day(m.queued) : ""}))));
+}
+
+async function renderOfficeSettings() {
+  const s = await desk("GET", "/office/settings");
+  $("o-take").checked = s.applications === "open";
+  $("o-take-note").textContent = s.applications === "open"
+    ? "Licensees can apply from the RadioPost client. Each application waits here for you."
+    : "Closed: only the codes you make let anyone in.";
+  const facts = [["Domains", (s.domains || []).join(", ")], ["Operators", (s.operators || []).join(", ")],
+                 ["Contact", s.contact], ["API", s.base_url]];
+  $("o-facts").replaceChildren(...facts.flatMap(([k, v]) => [el("dt", {text: k}), el("dd", {class: "mono", text: v || ""})]));
 }
 
 function wire() {
@@ -934,6 +1314,36 @@ function wire() {
     $("cred-hex").value = "";
   });
   $("enroll").addEventListener("submit", enroll);
+  for (const radio of document.querySelectorAll("input[name=join]")) {
+    radio.addEventListener("change", showJoin);
+  }
+  showJoin();
+  $("applied-check").addEventListener("click", () => checkApplication(true));
+  $("applied-forget").addEventListener("click", (e) => armed(e.currentTarget, "Click again to forget it",
+    () => act("application-forget", {})));
+  $("office-open").addEventListener("click", () => openOffice());
+  $("o-refresh").addEventListener("click", () => openOffice());
+  for (const b of document.querySelectorAll("[data-otab]")) {
+    b.addEventListener("click", () => openOffice(b.dataset.otab));
+  }
+  $("o-filter").addEventListener("input", drawAccounts);
+  $("o-code").addEventListener("submit", makeCode);
+  $("o-made-copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText($("o-made-code").textContent); toast("Copied."); }
+    catch { toast("Select the code and copy it.", true); }
+  });
+  $("o-take").addEventListener("change", async () => {
+    try {
+      await desk("PUT", "/office/settings", {applications: $("o-take").checked ? "open" : "closed"});
+      await renderOfficeSettings();
+    } catch (e) {
+      toast(e.message, true);
+    }
+  });
+  const reasons = document.createElement("datalist");
+  reasons.id = "decline-reasons";
+  reasons.append(...DECLINE_REASONS.map((r) => el("option", {value: r})));
+  document.body.append(reasons);
   $("enroll-again").addEventListener("click", () => {
     enrollOpen = true;
     refresh().then(() => $("enroll").code.focus()).catch(() => {});
@@ -971,6 +1381,9 @@ async function start() {
   if (!s.device || !s.me) show("setup");
   else await openFolder("inbox");
   setInterval(() => refresh().catch(() => {}), 1000);
+  if (s.me) probeOffice();
+  // a new application shows on the button within a minute
+  setInterval(() => { if (meAddress) probeOffice(); }, 60000);
 }
 
 start().catch((e) => toast(e.message, true));

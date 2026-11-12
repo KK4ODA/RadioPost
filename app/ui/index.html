@@ -67,6 +67,7 @@
         <button class="quiet" id="report" title="Send the sessions kept to your post office over the Internet, so your mailbox and sent mail agree with what crossed the air (RP-5 §6.6)" hidden>Send reports</button>
       </section>
 
+      <button class="quiet" id="office-open" title="Run your post office: applications for accounts, the accounts and their devices, codes, mail going out" hidden>Post office <span class="count" id="n-office"></span></button>
       <button class="quiet" id="setup-open" title="This device's key, its credential and the post offices it trusts">Setup</button>
     </nav>
 
@@ -172,6 +173,80 @@
         </div>
       </form>
 
+
+      <section id="office" hidden>
+        <div class="head">
+          <h1>Post office <span class="o-domain" id="o-domain"></span></h1>
+          <button class="quiet" id="o-refresh" title="Ask the post office again">Refresh</button>
+        </div>
+        <p class="note" id="o-summary"></p>
+        <div class="tabs" role="tablist" aria-label="Post office">
+          <button role="tab" data-otab="applications" title="People asking for an account: approve, decline, or send a code by post">Applications <span class="count" id="o-n-applications"></span></button>
+          <button role="tab" data-otab="accounts" title="Every account, its name and the devices enrolled for it">Accounts</button>
+          <button role="tab" data-otab="code" title="A one-time code for a new account, or a new device of one">New code</button>
+          <button role="tab" data-otab="mail" title="Mail sent by radio, waiting to go on by email">Mail out <span class="count" id="o-n-mail"></span></button>
+          <button role="tab" data-otab="settings" title="Whether the post office takes applications, and who runs it">Settings</button>
+        </div>
+
+        <div class="o-pane" id="o-applications">
+          <p class="empty" id="o-none" hidden>No one is waiting. New applications show here.</p>
+          <div id="o-pending"></div>
+          <details class="decided" id="o-decided-box" hidden>
+            <summary title="Applications decided in the last week">Decided</summary>
+            <table class="list" aria-label="Applications decided">
+              <thead><tr><th>Name</th><th>Callsign</th><th>Address</th><th>Decision</th><th>When</th></tr></thead>
+              <tbody id="o-decided"></tbody>
+            </table>
+          </details>
+        </div>
+
+        <div class="o-pane" id="o-accounts" hidden>
+          <input id="o-filter" class="filter" type="search" placeholder="Find" spellcheck="false" autocomplete="off" title="Show the accounts whose address, name or callsign has this in it">
+          <table class="list" aria-label="Accounts">
+            <thead><tr>
+              <th title="The account">Address</th><th title="The name on the email it sends">Name</th>
+              <th title="Each device enrolled for it: the callsign, and until when its credential runs">Devices</th>
+              <th class="n" title="Messages waiting for a gateway call">Waiting</th>
+            </tr></thead>
+            <tbody id="o-account-rows"></tbody>
+          </table>
+        </div>
+
+        <form class="o-pane card" id="o-code" hidden>
+          <p class="note">For someone you know holds the callsign: a new account, or a new device for one. Give them the code; it works once, for a week.</p>
+          <label title="The account, at your post office's domain">Address <input name="address" required spellcheck="false" placeholder="ana@radiopost.org"></label>
+          <label title="Their callsign, as on the air">Callsign <input name="operator" required spellcheck="false" autocomplete="off" placeholder="N0CALL"></label>
+          <label title="The name on the email the account sends; leave it empty to keep the one it has">Name <input name="name" placeholder="Ana Lopez"></label>
+          <label class="check" title="A shared mailbox, such as a shelter's or an EOC's, used by several licensed operators"><input type="checkbox" name="role"> A role mailbox</label>
+          <button class="primary" type="submit" title="Make the code">Make code</button>
+          <div class="made" id="o-made" hidden>
+            <p class="code" id="o-made-code"></p>
+            <p class="note" id="o-made-for"></p>
+            <button class="quiet" type="button" id="o-made-copy" title="Copy the code">Copy</button>
+          </div>
+        </form>
+
+        <div class="o-pane" id="o-mail" hidden>
+          <p class="empty" id="o-mail-none">Nothing waiting to go out by email.</p>
+          <table class="list" aria-label="Mail waiting to go out">
+            <thead><tr><th title="The message's content ID">Message</th><th title="Where it goes">To</th><th title="When it was queued">Since</th></tr></thead>
+            <tbody id="o-mail-rows"></tbody>
+          </table>
+        </div>
+
+        <div class="o-pane" id="o-settings" hidden>
+          <div class="card">
+            <h2>Applications</h2>
+            <label class="check" title="Licensees may ask for an account from the RadioPost client; you decide each one"><input type="checkbox" id="o-take"> Take applications for accounts</label>
+            <p class="note" id="o-take-note"></p>
+          </div>
+          <div class="card">
+            <h2>This post office</h2>
+            <dl class="fields" id="o-facts"></dl>
+          </div>
+        </div>
+      </section>
+
       <section id="setup" hidden>
         <h1>Setup</h1>
         <form class="card" id="enroll">
@@ -181,11 +256,25 @@
             <p class="note" id="enrolled-until"></p>
             <button class="quiet" type="button" id="enroll-again" title="Enroll this computer again with a new code from your post office's operator: for another account, or when the credential has run out or was revoked">Enroll again with a new code</button>
           </div>
+          <div class="applied" id="applied" role="status" hidden>
+            <p class="applied-what" id="applied-what"></p>
+            <p class="note" id="applied-note"></p>
+            <div class="row">
+              <button type="button" id="applied-check" title="Ask the post office how the application stands now">Check now</button>
+              <button type="button" class="quiet" id="applied-forget" title="Forget this application on this computer; the post office forgets a pending one after 30 days">Forget it</button>
+            </div>
+          </div>
           <div id="enroll-fields">
-          <p class="note">Your post office's operator gives you a one-time code once they have seen your licence. Over the Internet.</p>
-          <label title="Your RadioPost address">Address <input name="address" placeholder="facundo@radiopost.org" required spellcheck="false" autocomplete="email"></label>
+          <div class="join" role="radiogroup" aria-label="How to join">
+            <label class="check" title="Your post office's operator gave you a one-time code"><input type="radio" name="join" value="code" checked> I have a code</label>
+            <label class="check" title="Ask the post office for an account; its operators check your licence and decide"><input type="radio" name="join" value="apply"> Apply for an account</label>
+          </div>
+          <p class="note" id="join-note">Your post office's operator gives you a one-time code once they have seen your licence. Over the Internet.</p>
+          <label title="Your RadioPost address: the one you have, or the one you ask for">Address <input name="address" placeholder="facundo@radiopost.org" required spellcheck="false" autocomplete="email"></label>
           <label title="Your callsign, as on your licence">Callsign <input name="operator" placeholder="KK4ODA" required spellcheck="false" autocomplete="off"></label>
-          <label title="The one-time code the operator gave you">Code <input name="code" placeholder="7Q4F-AZ9K" required spellcheck="false" autocomplete="off"></label>
+          <label class="by-code" title="The one-time code the operator gave you">Code <input name="code" placeholder="7Q4F-AZ9K" spellcheck="false" autocomplete="off"></label>
+          <label class="by-apply" title="Your name as it is on your licence: the operators check it" hidden>Name on your licence <input name="name" autocomplete="name"></label>
+          <label class="by-apply" title="An email address the post office can write to about your application" hidden>Your email now <input name="contact" type="email" spellcheck="false" autocomplete="email"></label>
           <label title="The post office's API, when its domain's DNS does not name it">Post office (if not in DNS) <input name="url" placeholder="https://po.radiopost.org/rp/v1" spellcheck="false"></label>
           <button class="primary" type="submit" id="enroll-go" title="Make this device's key if needed, enroll it, and keep the credential">Enroll</button>
           </div>

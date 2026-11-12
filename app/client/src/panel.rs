@@ -61,6 +61,18 @@ const FILES: &[(&str, &str, &str)] = &[
     ),
 ];
 
+/// The panel's requests that reach the post office over the Internet (RP-5 §6).
+const ONLINE: [&str; 8] = [
+    "/api/enroll",
+    "/api/post-office",
+    "/api/renew",
+    "/api/report",
+    "/api/accept",
+    "/api/apply",
+    "/api/application",
+    "/api/application-forget",
+];
+
 /// What the station is doing, for the panel.
 #[derive(Debug, Default)]
 struct Activity {
@@ -85,6 +97,8 @@ pub struct Panel {
     renewal: Renewal,
     /// The running session's progress, or the last one's.
     live: Arc<Mutex<session::Live>>,
+    /// The post office's token for the operator's requests (RP-5 §7), kept between them.
+    office_token: Arc<Mutex<Option<String>>>,
 }
 
 /// When the panel renews the credential: first after `first`, then every `every`, once it has
@@ -167,6 +181,7 @@ impl Panel {
                 within: crate::renewal::WITHIN,
             },
             live: Arc::default(),
+            office_token: Arc::default(),
         }
     }
 
@@ -449,10 +464,8 @@ impl Panel {
             (_, "/api/gateways" | "/api/grid" | "/api/waiting" | "/api/fetch") => {
                 self.gateway_side(method, path, body)
             }
-            (
-                Method::Post,
-                "/api/enroll" | "/api/post-office" | "/api/renew" | "/api/report" | "/api/accept",
-            ) => self.online(path, body),
+            (Method::Post, p) if ONLINE.contains(&p) => self.online(path, body),
+            (Method::Post, "/api/office") => self.office(body),
             (Method::Post, "/api/update") => self.update(),
             (Method::Post, "/api/stop") => {
                 self.stop.store(true, Ordering::Relaxed);
@@ -498,6 +511,32 @@ impl Panel {
                 let mut store = Store::open(&self.home)?;
                 Ok(json!({"lines": online::send_reports(&mut store)?}))
             }
+            "/api/apply" => {
+                self.busy()?;
+                let mut store = Store::open(&self.home)?;
+                let url = text("url");
+                let said = online::apply(
+                    &mut store,
+                    (!url.is_empty()).then_some(url.as_str()),
+                    &text("address"),
+                    &text("operator"),
+                    &text("name"),
+                    &text("contact"),
+                )?;
+                Ok(json!({"said": said}))
+            }
+            "/api/application" => {
+                self.busy()?;
+                let mut store = Store::open(&self.home)?;
+                online::check_application(&mut store)
+            }
+            "/api/application-forget" => {
+                self.busy()?;
+                let mut store = Store::open(&self.home)?;
+                store.application = None;
+                store.save()?;
+                Ok(json!({}))
+            }
             "/api/accept" => {
                 let store = Store::open(&self.home)?;
                 let list = |k: &str| -> Vec<String> {
@@ -512,6 +551,18 @@ impl Panel {
             }
             _ => Err(format!("no POST {path}")),
         }
+    }
+
+    /// The operator's desk (RP-5 §7): one request to the post office under `/office/`, as this
+    /// device's credential, answered with the post office's status and body. The post office
+    /// decides who may: an operator's credential, issued by it, not a gateway's.
+    fn office(&self, body: &Value) -> Result<Value, Error> {
+        let store = Store::open(&self.home)?;
+        let method = body["method"].as_str().unwrap_or("GET").to_uppercase();
+        let path = body["path"].as_str().unwrap_or("");
+        let sent = body.get("body").filter(|b| !b.is_null());
+        let (status, answer) = online::office(&store, &self.office_token, &method, path, sent)?;
+        Ok(json!({"status": status, "body": answer}))
     }
 
     fn message(&self, prefix: &str) -> Result<Value, Error> {
@@ -624,6 +675,7 @@ impl Panel {
         let a = lock(&self.activity);
         Ok(json!({
             "me": me, "device": device, "trusted": trusted, "post_office": store.post_office,
+            "application": store.application,
             "counts": {"outbox": store.outbox.len(), "inbox": store.inbox.len(),
                        "sent": store.sent.len(), "trash": store.trash.len(),
                        "reports": store.reports.len(),
