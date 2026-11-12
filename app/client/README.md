@@ -31,7 +31,10 @@ radiopost [--home DIR] COMMAND
 | `report` | Sends the station-to-station sessions waiting to the post office (RP-5 §6.6); each one answered leaves the home. |
 | `compose --to ADDR … [--cc ADDR] [--subject TEXT] [--priority 0\|1\|2] [--attach FILE]… [--body FILE]` | Writes a message into the outbox; the text from standard input without `--body`. Each `--to` or `--cc` may hold several addresses, separated by commas, semicolons or spaces, and `Name <address>` as well as a bare address; each is checked first (RP-0 §6.2), and a malformed one is refused with the reason. |
 | `import FILE` | Puts a message in its canonical encoding (RP-2) in the outbox. |
-| `outbox`, `inbox`, `sent` | Lists a folder. |
+| `outbox`, `inbox`, `sent`, `trash` | Lists a folder. |
+| `delete ID [--forever]` | Moves a message to the trash from whichever folder holds it; with `--forever`, deletes it for good. Deleting is this computer's own: the post office, gateways and other stations keep what they hold. |
+| `restore ID` | Puts a message in the trash back in the folder it was deleted from, where it was: an outbox message keeps its serial and its place. |
+| `empty-trash` | Deletes every message in the trash for good. |
 | `show ID` | Shows a message; `ID` is the start of its content ID. Attachments too large for the radio say *Held at the post office*. |
 | `attachments [ID [NAME]…]` | Asks, on the next call to a gateway, for a received message's held attachments, all or those named (RP-3 §5.6); without `ID`, what will be asked for. They come on the call after, in a new message from the post office (RP-6 §2.5). |
 | `reports` | The station-to-station sessions waiting to be reported to the post office (RP-5 §6.6). |
@@ -69,8 +72,11 @@ asks for held attachments (the reader's *Ask on the next call*), calls a gateway
 setting, the post office's gateway list in *Choose a gateway*, and the *Waiting* folder to mark
 what to fetch next) or a station, listens for one, sends the reports, and holds the setup: enrollment with a code,
 the post office and renewal, the accept list, the device key, a credential imported by hand and
-the post offices trusted. A session runs on a thread of its own; while it runs, the panel changes
-nothing in the home. `--ui DIR` serves the page from a directory, for working on it.
+the post offices trusted. Each message row has a trash can, and the reader a **Delete** button (or
+the Delete key); the toast that follows has **Undo**. The **Trash** folder says which folder each
+message came from, puts it back (**Restore**) or deletes it for good (**Delete forever**, a second
+click to confirm), and **Empty trash** empties it. A session runs on a thread of its own; while it
+runs, the panel changes nothing in the home, so deleting waits for it to end. `--ui DIR` serves the page from a directory, for working on it.
 
 Only this computer's own pages reach it: a request must name the panel's own host, so a page that
 rebinds its name to 127.0.0.1 is refused, and a change must carry `X-RadioPost: 1`, which another
@@ -135,13 +141,14 @@ credential the same way, while it answers ([the gateway's guide](../../docs/user
 
 The home (`--home`, else `$RADIOPOST_HOME`, else `.radiopost` in the user's home directory) holds
 the device seed, the credential, the trusted keys, each message's canonical encoding named by its
-content ID, partial messages to resume (RP-3 §7) and `state.json`: the folders, the next serial,
+content ID, partial messages to resume (RP-3 §7) and `state.json`: the folders and the trash, the next serial,
 the station called's replay cache (RP-1 §6.3), what each gateway holds, the reports, each received
 message's serial at the post office, the held attachments to ask for, the post office's gateway
 list and your grid square, what waited at the last call to a gateway, and what to fetch next. A request leaves the home
 once a gateway has answered it; a link broken before that keeps it for the next call. Files are
 written whole or not at all, and a message received is on disk before its `RECEIPT` goes out (RP-3
-§5.4).
+§5.4). A message deleted for good leaves the home once no folder holds it, and what was asked for
+its held attachments is no longer asked.
 
 A message a station takes moves to `sent`. Its other recipients get it when the session is
 reported to the post office (D30, RP-5 §6.6), not over the air again; each session's report, with
@@ -150,7 +157,8 @@ both stations' proofs, waits in `state.json` until `report` (or the panel's Send
 ## Tests
 
 `tests/panel.rs`: the panel's guards, a message written with an attachment and carried by a call
-made from the panel, a held attachment asked for, and listening stopped. `tests/two_clients.rs`: two clients replay session-03
+made from the panel, a held attachment asked for, listening stopped, and the trash (deleted,
+restored to its place, deleted for good, emptied, and refused while a session runs). `tests/two_clients.rs`: two clients replay session-03
 byte for byte through the loopback adapter
 with the vector's clocks and draws, and end with the folders the session says and the reports
 `vectors/direct.json` has; the program itself sets up two homes, composes, listens and calls; and it

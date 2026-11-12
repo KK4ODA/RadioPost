@@ -6,9 +6,10 @@
 //! <home>/device.key      the device's Ed25519 seed, hex
 //! <home>/credential      the credential, as the post office issued it (COSE_Sign1)
 //! <home>/trust.json      post office keys by domain
-//! <home>/state.json      the folders, the next serial, the replay cache, what each gateway holds,
-//!                        the station-to-station sessions still to report (RP-5 §6.6), the
-//!                        gateways the post office lists, and what waited at the last call
+//! <home>/state.json      the folders and the trash, the next serial, the replay cache, what each
+//!                        gateway holds, the station-to-station sessions still to report (RP-5
+//!                        §6.6), the gateways the post office lists, and what waited at the last
+//!                        call
 //! <home>/messages/<id>   each message's canonical encoding, named by its content ID
 //! <home>/partials/<id>   the start of a message whose link broke, offered next time (RP-3 §7)
 //! ```
@@ -93,6 +94,85 @@ pub struct Arrived {
     pub serial: Option<u64>,
 }
 
+/// A folder a message can be deleted from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Folder {
+    /// Messages received.
+    Inbox,
+    /// Messages to send.
+    Outbox,
+    /// Messages sent.
+    Sent,
+}
+
+impl Folder {
+    /// Its name, as the panel and the state file write it.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Folder::Inbox => "inbox",
+            Folder::Outbox => "outbox",
+            Folder::Sent => "sent",
+        }
+    }
+
+    /// The folder of that name.
+    ///
+    /// # Errors
+    ///
+    /// No folder messages are deleted from has that name.
+    pub fn named(name: &str) -> Result<Folder, Error> {
+        match name {
+            "inbox" => Ok(Folder::Inbox),
+            "outbox" => Ok(Folder::Outbox),
+            "sent" => Ok(Folder::Sent),
+            _ => Err(format!("no folder {name} to delete from")),
+        }
+    }
+}
+
+/// Where a message in the trash was, with what it needs to go back there as it was.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Was {
+    /// The inbox, with its arrival.
+    Inbox(Arrived),
+    /// The outbox, with the serial it is offered under.
+    Outbox(Waiting),
+    /// Sent.
+    Sent(ContentId),
+}
+
+impl Was {
+    /// The folder it was in.
+    #[must_use]
+    pub fn folder(&self) -> Folder {
+        match self {
+            Was::Inbox(_) => Folder::Inbox,
+            Was::Outbox(_) => Folder::Outbox,
+            Was::Sent(_) => Folder::Sent,
+        }
+    }
+
+    /// The message.
+    #[must_use]
+    pub fn id(&self) -> ContentId {
+        match self {
+            Was::Inbox(a) => a.id,
+            Was::Outbox(w) => w.id,
+            Was::Sent(id) => *id,
+        }
+    }
+}
+
+/// A message in the trash: deleted here only, never at the post office or another station.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Trashed {
+    /// Where it was.
+    pub was: Was,
+    /// When it was deleted.
+    pub at: u64,
+}
+
 /// The client's home directory.
 #[derive(Debug)]
 pub struct Store {
@@ -103,6 +183,8 @@ pub struct Store {
     pub sent: Vec<ContentId>,
     /// Messages received, in order.
     pub inbox: Vec<Arrived>,
+    /// Messages deleted, in the order they were: they go back, or go for good from here.
+    pub trash: Vec<Trashed>,
     /// The serial the next message composed takes.
     pub next_serial: u64,
     /// The station called's replay cache: (address, nonce, when seen) (RP-1 §6.3).
@@ -128,6 +210,43 @@ pub struct Store {
     pub waiting: Option<Value>,
     /// Serials to ask for on the next call to a gateway, whatever the fetch rule says.
     pub fetch_next: Vec<u64>,
+}
+
+/// A trash entry as the state file writes it: `id`, `was` (the folder), `deleted`, and the
+/// inbox's `station`, `at` and `serial` or the outbox's `serial`.
+fn trashed_json(t: &Trashed) -> Value {
+    let mut v = json!({"id": t.was.id().text(), "was": t.was.folder().name(), "deleted": t.at});
+    match &t.was {
+        Was::Inbox(a) => {
+            v["station"] = a.station.clone().into();
+            v["at"] = a.at.into();
+            v["serial"] = a.serial.into();
+        }
+        Was::Outbox(w) => v["serial"] = w.serial.into(),
+        Was::Sent(_) => {}
+    }
+    v
+}
+
+fn trashed_from(v: &Value) -> Option<Trashed> {
+    let id = ContentId::from_text(v["id"].as_str()?)?;
+    let was = match Folder::named(v["was"].as_str()?).ok()? {
+        Folder::Inbox => Was::Inbox(Arrived {
+            id,
+            station: v["station"].as_str()?.to_owned(),
+            at: v["at"].as_u64()?,
+            serial: v["serial"].as_u64(),
+        }),
+        Folder::Outbox => Was::Outbox(Waiting {
+            id,
+            serial: v["serial"].as_u64()?,
+        }),
+        Folder::Sent => Was::Sent(id),
+    };
+    Some(Trashed {
+        was,
+        at: v["deleted"].as_u64()?,
+    })
 }
 
 fn id_list(v: &Value) -> Vec<ContentId> {
@@ -159,6 +278,7 @@ impl Store {
             outbox: Vec::new(),
             sent: Vec::new(),
             inbox: Vec::new(),
+            trash: Vec::new(),
             next_serial: 1,
             seen: Vec::new(),
             gateways: serde_json::Map::new(),
@@ -206,6 +326,10 @@ impl Store {
                     })
                     .collect()
             })
+            .unwrap_or_default();
+        store.trash = state["trash"]
+            .as_array()
+            .map(|a| a.iter().filter_map(trashed_from).collect())
             .unwrap_or_default();
         store.next_serial = state["next_serial"].as_u64().unwrap_or(1);
         store.seen = state["seen"]
@@ -260,6 +384,7 @@ impl Store {
             "inbox": self.inbox.iter().map(|a| json!({
                 "id": a.id.text(), "station": a.station, "at": a.at, "serial": a.serial,
             })).collect::<Vec<_>>(),
+            "trash": self.trash.iter().map(trashed_json).collect::<Vec<_>>(),
             "next_serial": self.next_serial,
             "seen": self.seen.iter().map(|(address, nonce, at)| json!({
                 "address": address, "nonce": hex(nonce), "at": at,
@@ -507,6 +632,132 @@ impl Store {
             });
         }
         self.save()
+    }
+
+    // -- the trash --------------------------------------------------------------------------------
+
+    /// Moves a message from a folder to the trash, at `now`. It is deleted here only: the post
+    /// office, a gateway and the other stations keep what they hold.
+    ///
+    /// # Errors
+    ///
+    /// It is not in that folder, or the state cannot be written.
+    pub fn delete(&mut self, folder: Folder, id: &ContentId, now: u64) -> Result<(), Error> {
+        let missing = || format!("that message is not in the {}", folder.name());
+        let was = match folder {
+            Folder::Inbox => {
+                let at = self
+                    .inbox
+                    .iter()
+                    .position(|a| a.id == *id)
+                    .ok_or_else(missing)?;
+                Was::Inbox(self.inbox.remove(at))
+            }
+            Folder::Outbox => {
+                let at = self
+                    .outbox
+                    .iter()
+                    .position(|w| w.id == *id)
+                    .ok_or_else(missing)?;
+                Was::Outbox(self.outbox.remove(at))
+            }
+            Folder::Sent => {
+                let at = self.sent.iter().position(|s| s == id).ok_or_else(missing)?;
+                Was::Sent(self.sent.remove(at))
+            }
+        };
+        self.trash.push(Trashed { was, at: now });
+        self.save()
+    }
+
+    fn trashed_at(&self, id: &ContentId, folder: Folder) -> Result<usize, Error> {
+        self.trash
+            .iter()
+            .position(|t| t.was.id() == *id && t.was.folder() == folder)
+            .ok_or_else(|| {
+                format!(
+                    "that message from the {} is not in the trash",
+                    folder.name()
+                )
+            })
+    }
+
+    /// Puts a message in the trash back in the folder it was deleted from, where it was in it: an
+    /// outbox message keeps its serial and its place in the order messages are offered.
+    ///
+    /// # Errors
+    ///
+    /// It is not in the trash from that folder, or the state cannot be written.
+    pub fn restore(&mut self, id: &ContentId, folder: Folder) -> Result<(), Error> {
+        let at = self.trashed_at(id, folder)?;
+        match self.trash.remove(at).was {
+            Was::Inbox(a) => {
+                if !self.inbox.iter().any(|x| x.id == a.id) {
+                    let place = self.inbox.partition_point(|x| x.at <= a.at);
+                    self.inbox.insert(place, a);
+                }
+            }
+            Was::Outbox(w) => {
+                if !self.outbox.iter().any(|x| x.id == w.id) {
+                    let place = self.outbox.partition_point(|x| x.serial < w.serial);
+                    self.outbox.insert(place, w);
+                }
+            }
+            Was::Sent(id) => {
+                if !self.sent.contains(&id) {
+                    self.sent.push(id);
+                }
+            }
+        }
+        self.save()
+    }
+
+    /// Deletes a message in the trash for good: its file goes once no folder holds it, and what
+    /// was asked for its held attachments is no longer asked.
+    ///
+    /// # Errors
+    ///
+    /// It is not in the trash from that folder, or the state cannot be written.
+    pub fn purge(&mut self, id: &ContentId, folder: Folder) -> Result<(), Error> {
+        let at = self.trashed_at(id, folder)?;
+        let gone = self.trash.remove(at);
+        self.forget(&gone);
+        self.save()
+    }
+
+    /// Empties the trash: how many messages it held.
+    ///
+    /// # Errors
+    ///
+    /// The state cannot be written.
+    pub fn empty_trash(&mut self) -> Result<usize, Error> {
+        let gone = std::mem::take(&mut self.trash);
+        for t in &gone {
+            self.forget(t);
+        }
+        self.save()?;
+        Ok(gone.len())
+    }
+
+    /// What a message deleted for good leaves behind: its file, when nothing else holds it, and
+    /// any request for its held attachments.
+    fn forget(&mut self, gone: &Trashed) {
+        let id = gone.was.id();
+        if let Was::Inbox(Arrived {
+            serial: Some(serial),
+            ..
+        }) = gone.was
+            && !self.inbox.iter().any(|a| a.serial == Some(serial))
+        {
+            self.files.retain(|(s, _)| *s != serial);
+        }
+        let held = self.inbox.iter().any(|a| a.id == id)
+            || self.outbox.iter().any(|w| w.id == id)
+            || self.sent.contains(&id)
+            || self.trash.iter().any(|t| t.was.id() == id);
+        if !held {
+            let _ = fs::remove_file(self.home.join("messages").join(id.text()));
+        }
     }
 
     /// The attachments a received message lists as held at the post office (RP-2 key 12): each
@@ -879,6 +1130,88 @@ mod tests {
         assert_eq!(again.grid.as_deref(), Some("EM73tt"), "kept");
         store.set_grid(None).expect("cleared");
         assert_eq!(store.grid, None);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    fn message(subject: &str, date: u64) -> radiopost::message::Message {
+        crate::compose::Draft {
+            from: "ana@hampost.org".into(),
+            to: vec!["facundo@radiopost.org".into()],
+            cc: Vec::new(),
+            date,
+            subject: subject.into(),
+            body: "73".into(),
+            files: Vec::new(),
+            priority: 0,
+            reply_to: None,
+        }
+        .message()
+        .expect("a message")
+    }
+
+    /// A message deleted from any folder goes to the trash and back to its place; deleted for
+    /// good, its file goes only when no folder holds it, with the request for its held
+    /// attachments; and the trash outlives the program.
+    #[test]
+    fn the_trash() {
+        use super::Folder;
+        let home = std::env::temp_dir().join(format!("radiopost-trash-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let mut store = Store::open(&home).expect("a home");
+        let (a, b, c) = (message("a", 1), message("b", 2), message("c", 3));
+        let ids: Vec<_> = [&a, &b, &c]
+            .iter()
+            .map(|m| store.queue(m).expect("queued"))
+            .collect();
+        store
+            .received(&a, "KK4ODA-1", 10, Some(7))
+            .expect("received");
+        store
+            .received(&b, "KK4ODA-1", 20, Some(8))
+            .expect("received");
+        store.files.push((7, vec![1]));
+        store.delivered(&ids[2]);
+        let file = |id: &radiopost::ContentId| home.join("messages").join(id.text());
+
+        // the outbox's first message goes and comes back in its place, first, with its serial
+        store.delete(Folder::Outbox, &ids[0], 100).expect("deleted");
+        assert_eq!(store.outbox.len(), 1);
+        assert!(
+            store.delete(Folder::Outbox, &ids[0], 100).is_err(),
+            "gone from there"
+        );
+        store.restore(&ids[0], Folder::Outbox).expect("restored");
+        let serials: Vec<u64> = store.outbox.iter().map(|w| w.serial).collect();
+        assert_eq!(serials, [1, 2], "back in its place");
+
+        // the inbox's first, the same message as the outbox's first: its file stays while the
+        // outbox holds it, and the attachments asked for its serial are no longer asked
+        store.delete(Folder::Inbox, &ids[0], 101).expect("deleted");
+        store.delete(Folder::Sent, &ids[2], 102).expect("deleted");
+        let again = Store::open(&home).expect("the home");
+        assert_eq!(again.trash, store.trash, "kept in the state file");
+        assert_eq!(again.trash[0].at, 101);
+        store.purge(&ids[0], Folder::Inbox).expect("purged");
+        assert!(file(&ids[0]).exists(), "the outbox still holds it");
+        assert!(
+            store.files.is_empty(),
+            "nothing asked for a message deleted for good"
+        );
+        assert!(
+            store.restore(&ids[0], Folder::Inbox).is_err(),
+            "gone for good"
+        );
+
+        // restored to the inbox, a message goes back by when it came
+        store.delete(Folder::Inbox, &ids[1], 103).expect("deleted");
+        store.restore(&ids[1], Folder::Inbox).expect("restored");
+        assert_eq!(store.inbox.iter().map(|x| x.at).collect::<Vec<_>>(), [20]);
+
+        // emptied: the sent message held nowhere else, its file goes
+        assert_eq!(store.empty_trash().expect("emptied"), 1);
+        assert_eq!(store.trash.len(), 0, "{:?}", store.trash);
+        assert!(!file(&ids[2]).exists(), "held by no folder");
+        assert!(file(&ids[1]).exists());
         let _ = std::fs::remove_dir_all(&home);
     }
 }

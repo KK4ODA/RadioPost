@@ -34,7 +34,7 @@ use radiopost_update::{Product, Watch};
 use crate::compose::{Draft, File, media_type};
 use crate::online;
 use crate::session::{self, Fetch, Kind, Options};
-use crate::store::{Error, Store, unhex};
+use crate::store::{Error, Folder, Store, unhex};
 
 /// The panel's files, built into the program; `--ui DIR` serves them from disk instead.
 const FILES: &[(&str, &str, &str)] = &[
@@ -372,6 +372,9 @@ impl Panel {
             }
             (Method::Post, "/api/compose") => self.compose(body),
             (Method::Post, "/api/held") => self.ask_for_held(body),
+            (Method::Post, "/api/delete" | "/api/restore" | "/api/purge" | "/api/empty-trash") => {
+                self.trash(path, body)
+            }
             (Method::Post, "/api/key") => {
                 self.busy()?;
                 let store = Store::open(&self.home)?;
@@ -606,7 +609,8 @@ impl Panel {
         Ok(json!({
             "me": me, "device": device, "trusted": trusted, "post_office": store.post_office,
             "counts": {"outbox": store.outbox.len(), "inbox": store.inbox.len(),
-                       "sent": store.sent.len(), "reports": store.reports.len(),
+                       "sent": store.sent.len(), "trash": store.trash.len(),
+                       "reports": store.reports.len(),
                        "files": store.files.len(), "waiting": store.waiting_entries().len()},
             "activity": {"state": a.state, "remote": a.remote, "failed": a.failed},
             "update": self.updates.status(),
@@ -616,6 +620,16 @@ impl Panel {
 
     fn folder(&self, name: &str) -> Result<Value, Error> {
         let store = Store::open(&self.home)?;
+        if name == "trash" {
+            let mut out = Vec::new();
+            for t in store.trash.iter().rev() {
+                let mut v = summary(&store.message(&t.was.id())?);
+                v["was"] = t.was.folder().name().into();
+                v["deleted"] = t.at.into();
+                out.push(v);
+            }
+            return Ok(Value::Array(out));
+        }
         let entries: Vec<(ContentId, Option<&str>)> = match name {
             "outbox" => store.outbox.iter().map(|w| (w.id, None)).collect(),
             "sent" => store.sent.iter().rev().map(|id| (*id, None)).collect(),
@@ -636,6 +650,29 @@ impl Panel {
             out.push(v);
         }
         Ok(Value::Array(out))
+    }
+
+    /// The trash: a message moved there from a folder (`delete`, `folder` and `id`), put back
+    /// (`restore`) or deleted for good (`purge`, `id` and `was`, the folder it came from), and
+    /// the trash emptied. Not while a session runs: it keeps the folders until it ends.
+    fn trash(&self, path: &str, body: &Value) -> Result<Value, Error> {
+        self.busy()?;
+        let mut store = Store::open(&self.home)?;
+        let id = || {
+            let text = body["id"].as_str().unwrap_or("");
+            ContentId::from_text(text).ok_or_else(|| format!("{text:?} is not a content ID"))
+        };
+        let folder = |name: &str| Folder::named(body[name].as_str().unwrap_or(""));
+        match path {
+            "/api/delete" => store.delete(folder("folder")?, &id()?, now())?,
+            "/api/restore" => store.restore(&id()?, folder("was")?)?,
+            "/api/purge" => store.purge(&id()?, folder("was")?)?,
+            _ => {
+                let n = store.empty_trash()?;
+                return Ok(json!({"deleted": n}));
+            }
+        }
+        Ok(json!({}))
     }
 
     /// Starts a call (`remote`) or listening (`None`) on a thread of its own.

@@ -18,13 +18,81 @@ async function api(path, body) {
   return value;
 }
 
-function toast(text, bad = false) {
+// a line at the bottom right, and with `action` ({label, run}) a button in it: Undo
+function toast(text, bad = false, action = null) {
   const t = $("toast");
-  t.textContent = text;
+  $("toast-text").textContent = text;
+  const b = $("toast-act");
+  b.hidden = !action;
+  b.onclick = null;
+  if (action) {
+    b.textContent = action.label;
+    b.onclick = async () => {
+      t.hidden = true;
+      try { await action.run(); } catch (e) { toast(e.message, true); }
+    };
+  }
   t.classList.toggle("bad", bad);
   t.hidden = false;
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => { t.hidden = true; }, bad ? 7000 : 3000);
+  toast.timer = setTimeout(() => { t.hidden = true; }, bad ? 7000 : action ? 8000 : 3000);
+}
+
+// a button that asks for a second click before it does what cannot be undone
+function armed(button, sure, run) {
+  if (button.dataset.armed) {
+    delete button.dataset.armed;
+    button.textContent = button.dataset.label;
+    run();
+    return;
+  }
+  button.dataset.label = button.textContent;
+  button.dataset.armed = "1";
+  button.textContent = sure;
+  setTimeout(() => {
+    if (!button.dataset.armed) return;
+    delete button.dataset.armed;
+    button.textContent = button.dataset.label;
+  }, 4000);
+}
+
+function icon(name) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "icon");
+  svg.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("href", `#i-${name}`);
+  svg.append(use);
+  return svg;
+}
+
+const FOLDER_NAMES = {inbox: "Inbox", outbox: "Outbox", sent: "Sent", trash: "Trash"};
+
+// The trash (deleting is this computer's own: the post office and other stations keep theirs)
+async function toTrash(id, from) {
+  try {
+    await api("delete", {folder: from, id});
+    toast(`Moved to the trash from the ${from}.`, false,
+          {label: "Undo", run: async () => { await api("restore", {id, was: from}); await afterTrash(); }});
+    await afterTrash();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function fromTrash(path, id, was, said) {
+  try {
+    await api(path, {id, was});
+    toast(said);
+    await afterTrash();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function afterTrash() {
+  await refresh();
+  await openFolder(folder);
 }
 
 function when(seconds) {
@@ -85,7 +153,7 @@ async function refresh() {
   const s = await api("state");
   showUpdate(s.update, "RadioPost");
   $("who").textContent = s.me ? `${s.me.address}  ·  ${s.me.operator}` : "No credential yet";
-  for (const name of ["inbox", "outbox", "sent", "waiting"]) {
+  for (const name of ["inbox", "outbox", "sent", "waiting", "trash"]) {
     $(`n-${name}`).textContent = s.counts[name] || "";
   }
   $("reports").textContent = s.counts.reports
@@ -105,6 +173,7 @@ async function refresh() {
   state.textContent = a.state === "idle" && a.failed ? "Last session failed" : label;
   state.title = a.failed || "What the station is doing";
   const busy = a.state !== "idle";
+  document.body.dataset.busy = String(busy);
   $("call").disabled = busy || !s.me;
   $("listen").disabled = busy || !s.me;
   $("stop").hidden = a.state !== "listening";
@@ -220,34 +289,91 @@ async function openGateways(refreshing = false) {
   }
 }
 
+// a row's buttons: the trash can, or in the trash put back and delete for good
+function rowActions(m, name) {
+  const td = document.createElement("td");
+  td.className = "acts";
+  const button = (glyph, title, run, extra = "") => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `act needs-idle ${extra}`;
+    b.title = title;
+    b.setAttribute("aria-label", title);
+    b.append(icon(glyph));
+    b.addEventListener("click", (event) => { event.stopPropagation(); run(b); });
+    td.append(b);
+  };
+  if (name === "trash") {
+    button("restore", `Put it back in the ${m.was}`,
+           () => fromTrash("restore", m.id, m.was, `Back in the ${m.was}.`));
+    button("gone", "Delete it for good (click twice)", (b) => {
+      if (b.dataset.armed) {
+        delete b.dataset.armed;
+        b.classList.remove("armed");
+        fromTrash("purge", m.id, m.was, "Deleted for good.");
+        return;
+      }
+      b.dataset.armed = "1";
+      b.classList.add("armed");
+      b.title = "Click again to delete it for good";
+      setTimeout(() => { delete b.dataset.armed; b.classList.remove("armed"); }, 4000);
+    }, "danger");
+  } else {
+    button("trash", "Move it to the trash", () => toTrash(m.id, name));
+  }
+  return td;
+}
+
 async function openFolder(name) {
   if (name === "waiting") return openWaiting();
   folder = name;
   markFolder(name);
-  $("folder-title").textContent = name[0].toUpperCase() + name.slice(1);
-  $("who-col").textContent = name === "inbox" ? "From" : "To";
-  $("who-col").title = name === "inbox" ? "Who wrote it" : "Whom it is for";
+  const trash = name === "trash";
+  $("folder-title").textContent = FOLDER_NAMES[name] || name;
+  $("who-col").textContent = trash ? "From or to" : name === "inbox" ? "From" : "To";
+  $("who-col").title = trash ? "Who wrote it, or whom it was for" : name === "inbox" ? "Who wrote it" : "Whom it is for";
   const rows = await api(`folder?name=${name}`);
   const body = $("rows");
   body.replaceChildren(...rows.map((m) => {
     const tr = document.createElement("tr");
     tr.className = ["", "priority", "emergency"][m.priority] || "";
-    const who = name === "inbox" ? m.from : m.to.concat(m.cc).join(", ");
+    const received = trash ? m.was === "inbox" : name === "inbox";
+    const who = received ? m.from : m.to.concat(m.cc).join(", ");
     for (const text of [who, m.subject || "(no subject)", when(m.date)]) {
       const td = document.createElement("td");
       td.textContent = text;
       tr.append(td);
     }
+    tr.children[2].className = "date";
+    if (trash) {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = FOLDER_NAMES[m.was];
+      tag.title = `Deleted from the ${m.was} ${new Date(m.deleted * 1000).toLocaleString()}`;
+      tr.children[1].prepend(tag);
+    }
+    tr.append(rowActions(m, name));
     tr.title = `${m.short}${m.station ? ` · via ${m.station}` : ""}`;
-    tr.addEventListener("click", () => openMessage(m.id));
+    tr.addEventListener("click", () => openMessage(m.id, {folder: name, was: m.was}));
     return tr;
   }));
+  $("empty").textContent = trash ? "The trash is empty." : "Nothing here.";
   $("empty").hidden = rows.length > 0;
+  $("empty-trash").hidden = !trash || rows.length === 0;
   show("list-view");
 }
 
-async function openMessage(id) {
+// what the reader's buttons act on: the folder the message was opened from
+let reading = null;
+
+async function openMessage(id, from = {folder}) {
   const m = await api(`message?id=${id}`);
+  reading = {id, folder: from.folder, was: from.was};
+  const trash = from.folder === "trash";
+  $("r-delete").hidden = trash || !FOLDER_NAMES[from.folder];
+  $("r-restore").hidden = !trash;
+  $("r-purge").hidden = !trash;
+  $("r-restore").title = trash ? `Put it back in the ${from.was}` : "";
   $("r-subject").textContent = m.subject || "(no subject)";
   $("r-from").textContent = m.from;
   $("r-to").textContent = m.to.join(", ");
@@ -412,6 +538,27 @@ function wire() {
   $("cancel").addEventListener("click", () => { $("composer").reset(); openFolder(folder); });
   $("composer").addEventListener("submit", send);
   $("back").addEventListener("click", () => openFolder(folder));
+  $("r-delete").addEventListener("click", () => toTrash(reading.id, reading.folder));
+  $("r-restore").addEventListener("click",
+    () => fromTrash("restore", reading.id, reading.was, `Back in the ${reading.was}.`));
+  $("r-purge").addEventListener("click", (e) => armed(e.currentTarget, "Click again to delete for good",
+    () => fromTrash("purge", reading.id, reading.was, "Deleted for good.")));
+  $("empty-trash").addEventListener("click", (e) => armed(e.currentTarget, "Click again to empty it",
+    async () => {
+      try {
+        const r = await api("empty-trash", {});
+        toast(`${r.deleted} message${r.deleted === 1 ? "" : "s"} deleted for good.`);
+        await afterTrash();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }));
+  document.addEventListener("keydown", (e) => {
+    const typing = e.target.closest("input, textarea, select");
+    if (e.key === "Delete" && !typing && !$("reader").hidden && !$("r-delete").hidden) {
+      $("r-delete").click();
+    }
+  });
   $("setup-open").addEventListener("click", () => show("setup"));
   for (const radio of document.querySelectorAll("input[name=kind]")) {
     radio.checked = radio.value === kept("kind", "gateway");

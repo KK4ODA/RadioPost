@@ -67,7 +67,8 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 .list th { text-align: left; font-size: 13px; color: var(--muted); font-weight: 600; padding: 6px 8px;
            border-bottom: 1px solid var(--line); }
 .list td { padding: 8px; border-bottom: 1px solid var(--line); cursor: pointer; }
-.list td:last-child { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+.list td:last-child, .list td.date { white-space: nowrap; color: var(--muted);
+                                     font-variant-numeric: tabular-nums; }
 .list tr:hover td { background: var(--panel); }
 .list tr.emergency td:first-child { border-left: 3px solid var(--bad); }
 .list tr.priority td:first-child { border-left: 3px solid var(--busy); }
@@ -125,3 +126,26 @@ label.inline input { width: 7em; margin: 0; }
 .update { flex-basis: 100%; display: flex; align-items: center; gap: 12px; padding: 6px 12px;
           border: 1px solid var(--session); border-radius: 6px; color: var(--text); }
 .update span { flex: 1; }
+
+/* the trash: a row's buttons show on hover, the reader's in its top row */
+.head { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        margin: 0 0 14px; min-height: var(--control-h); }
+.head h1 { margin: 0; }
+.list th.acts, .list td.acts { width: 1%; white-space: nowrap; text-align: right; padding: 4px 6px; }
+.act { height: 28px; width: 30px; padding: 0; border-color: transparent; background: transparent;
+       color: var(--muted); display: inline-grid; place-items: center; opacity: 0; }
+.list tr:hover .act, .act:focus-visible, .act.armed { opacity: 1; }
+.act:hover { color: var(--text); border-color: var(--line); }
+.act.danger:hover, .act.armed { color: var(--bad); border-color: var(--bad); }
+.icon { width: 17px; height: 17px; }
+button.danger { color: var(--bad); }
+button[data-armed] { border-color: var(--bad); color: var(--bad); }
+.tag { display: inline-block; font-size: 11px; line-height: 1; padding: 3px 6px; margin-right: 8px;
+       border-radius: 999px; border: 1px solid var(--line); color: var(--muted); vertical-align: 1px; }
+.reader-acts { margin: 0 0 14px; }
+.reader-acts #back { margin: 0; }
+body[data-busy="true"] .needs-idle { opacity: .4; pointer-events: none; }
+.toast { display: flex; align-items: center; gap: 12px; }
+.toast button { height: 26px; padding: 0 10px; background: transparent; color: inherit;
+                border-color: currentColor; }
+@media (hover: none) { .act { opacity: 1; } }

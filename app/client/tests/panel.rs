@@ -269,6 +269,100 @@ fn listening_from_the_panel_can_be_stopped() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The trash: a message deleted from the outbox is listed there with the folder it came from,
+/// goes back, and goes for good; the trash is emptied; and nothing changes while a session runs,
+/// which keeps the folders until it ends.
+#[test]
+fn messages_go_to_the_trash_and_back() {
+    let dir = scratch("panel-trash");
+    store_for(&dir.join("ana"), "device:ana", "ana");
+    let c = Client {
+        at: Panel::new(&dir.join("ana"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let write = |subject: &str| -> String {
+        c.post(
+            "/api/compose",
+            &json!({"to": "maria@example.com", "subject": subject, "body": "73"}),
+        )
+        .expect("composed")["id"]
+            .as_str()
+            .expect("an id")
+            .to_owned()
+    };
+    let (one, two) = (write("one"), write("two"));
+    let count = |name: &str| {
+        c.get("/api/state")["counts"][name]
+            .as_u64()
+            .expect("a count")
+    };
+    c.post("/api/delete", &json!({"folder": "outbox", "id": one}))
+        .expect("deleted");
+    assert_eq!((count("outbox"), count("trash")), (1, 1));
+    let trash = c.get("/api/folder?name=trash");
+    assert_eq!(trash[0]["id"], one.as_str(), "{trash}");
+    assert_eq!(trash[0]["was"], "outbox");
+    assert!(trash[0]["deleted"].as_u64().is_some_and(|t| t > 0));
+    assert!(
+        c.post("/api/delete", &json!({"folder": "inbox", "id": two}))
+            .is_err(),
+        "not in the inbox"
+    );
+    assert!(
+        c.post("/api/purge", &json!({"id": two, "was": "outbox"}))
+            .is_err(),
+        "not in the trash"
+    );
+    c.post("/api/restore", &json!({"id": one, "was": "outbox"}))
+        .expect("restored");
+    let outbox: Vec<Value> = c
+        .get("/api/folder?name=outbox")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(outbox.len(), 2);
+    assert_eq!(outbox[0]["id"], one.as_str(), "back first, where it was");
+    c.post("/api/delete", &json!({"folder": "outbox", "id": one}))
+        .expect("deleted");
+    c.post("/api/purge", &json!({"id": one, "was": "outbox"}))
+        .expect("deleted for good");
+    let (status, said) = http(
+        c.at,
+        "GET",
+        &format!("/api/message?id={one}"),
+        &c.host(),
+        false,
+        &Value::Null,
+    );
+    assert_eq!(status, 400, "its file is gone with it: {said}");
+    assert_eq!(count("trash"), 0);
+    c.post("/api/delete", &json!({"folder": "outbox", "id": two}))
+        .expect("deleted");
+    assert_eq!(
+        c.post("/api/empty-trash", &json!({})).expect("emptied")["deleted"],
+        1
+    );
+    assert_eq!((count("outbox"), count("trash")), (0, 0));
+
+    // a session keeps the folders until it ends
+    let three = write("three");
+    let (_server, _, at_a) = loopback();
+    c.post("/api/listen", &json!({"adapter": at_a.to_string()}))
+        .expect("listening");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while c.get("/api/state")["activity"]["state"] != "listening" {
+        assert!(Instant::now() < deadline, "never listened");
+        thread::sleep(Duration::from_millis(20));
+    }
+    let refused = c
+        .post("/api/delete", &json!({"folder": "outbox", "id": three}))
+        .expect_err("refused while listening");
+    assert!(refused.contains("session"), "{refused}");
+    c.post("/api/stop", &json!({})).expect("stopped");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// RP-3 §5.6: a received message's held attachments are shown, and one is asked for on the next
 /// call to a gateway.
 #[test]

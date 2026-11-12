@@ -28,6 +28,7 @@
         <li><button data-folder="outbox" title="Messages waiting to be sent">Outbox <span class="count" id="n-outbox"></span></button></li>
         <li><button data-folder="sent" title="Messages another station has taken">Sent <span class="count" id="n-sent"></span></button></li>
         <li><button data-folder="waiting" title="What waited at your post office at the last call to a gateway: mark what to fetch on the next call">Waiting <span class="count" id="n-waiting"></span></button></li>
+        <li><button data-folder="trash" title="Messages you deleted: put them back, or delete them for good. Deleting is on this computer only: your post office and other stations keep what they hold">Trash <span class="count" id="n-trash"></span></button></li>
       </ul>
 
       <section class="station" aria-label="Station">
@@ -69,9 +70,12 @@
 
     <main>
       <section id="list-view">
-        <h1 id="folder-title">Inbox</h1>
+        <div class="head">
+          <h1 id="folder-title">Inbox</h1>
+          <button class="quiet danger needs-idle" id="empty-trash" title="Delete every message in the trash for good" hidden>Empty trash</button>
+        </div>
         <table class="list" aria-label="Messages">
-          <thead><tr><th id="who-col" title="Who wrote it">From</th><th title="What it is about">Subject</th><th title="When it was written">Date</th></tr></thead>
+          <thead><tr><th id="who-col" title="Who wrote it">From</th><th title="What it is about">Subject</th><th title="When it was written">Date</th><th class="acts"></th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
         <p class="empty" id="empty" hidden>Nothing here.</p>
@@ -112,7 +116,12 @@
       </section>
 
       <article id="reader" hidden aria-live="polite">
-        <button class="quiet" id="back" title="Back to the folder">Back</button>
+        <div class="row reader-acts">
+          <button class="quiet" id="back" title="Back to the folder">Back</button>
+          <button class="quiet needs-idle" id="r-delete" title="Move it to the trash (Delete key)">Delete</button>
+          <button class="quiet needs-idle" id="r-restore" title="Put it back in the folder it was deleted from">Restore</button>
+          <button class="quiet danger needs-idle" id="r-purge" title="Delete it for good">Delete forever</button>
+        </div>
         <h1 id="r-subject"></h1>
         <dl class="fields">
           <dt>From</dt><dd id="r-from"></dd>
@@ -208,6 +217,11 @@
   <footer class="log" aria-label="Session log">
     <pre id="log" title="What the sessions said"></pre>
   </footer>
-  <div class="toast" id="toast" role="status" hidden></div>
+  <div class="toast" id="toast" role="status" hidden><span id="toast-text"></span><button id="toast-act" hidden></button></div>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-restore" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-gone" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  </svg>
 </body>
 </html>

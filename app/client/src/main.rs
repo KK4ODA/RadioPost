@@ -37,8 +37,14 @@ usage: radiopost [--home DIR] COMMAND ...
           [--attach FILE]... [--body FILE]
                            write a message into the outbox; the text from stdin without --body
   import FILE              put a message, in its canonical encoding (RP-2), in the outbox
-  outbox | inbox | sent    list a folder
+  outbox | inbox | sent | trash
+                           list a folder
   show ID                  show a message (ID: the start of its content ID)
+  delete ID [--forever]    move a message to the trash, from whichever folder holds it; with
+                           --forever, delete it for good. Here only: the post office, gateways
+                           and other stations keep what they hold
+  restore ID               put a message in the trash back in the folder it was deleted from
+  empty-trash              delete every message in the trash for good
   attachments [ID [NAME]...]
                            ask on the next call to a gateway for a received message's attachments
                            held at the post office, all or those named (RP-3 §5.6); without ID,
@@ -99,7 +105,14 @@ struct Args {
     rest: Vec<String>,
 }
 
-const SWITCHES: &[&str] = &["--station", "--plain", "--refresh", "--clear", "--not"];
+const SWITCHES: &[&str] = &[
+    "--station",
+    "--plain",
+    "--refresh",
+    "--clear",
+    "--not",
+    "--forever",
+];
 
 impl Args {
     fn parse(args: &[String]) -> Result<Args, Error> {
@@ -316,6 +329,62 @@ fn show(m: &Message) -> String {
     out
 }
 
+/// `delete` and `restore`: a message moved to the trash from every folder that holds it, deleted
+/// for good with `--forever`, or put back from the trash.
+fn trash_command(store: &mut Store, command: &str, args: &Args) -> Result<(), Error> {
+    use radiopost_client::store::Folder;
+    let prefix = args.rest.first().ok_or(format!("{command} ID"))?;
+    let id = store.find(prefix)?;
+    let in_trash = |store: &Store| -> Vec<Folder> {
+        store
+            .trash
+            .iter()
+            .filter(|t| t.was.id() == id)
+            .map(|t| t.was.folder())
+            .collect()
+    };
+    if command == "restore" {
+        let from = in_trash(store);
+        if from.is_empty() {
+            return Err("that message is not in the trash".into());
+        }
+        for folder in from {
+            store.restore(&id, folder)?;
+            println!("back in the {}", folder.name());
+        }
+        return Ok(());
+    }
+    let holding: Vec<Folder> = [Folder::Inbox, Folder::Outbox, Folder::Sent]
+        .into_iter()
+        .filter(|f| match f {
+            Folder::Inbox => store.inbox.iter().any(|a| a.id == id),
+            Folder::Outbox => store.outbox.iter().any(|w| w.id == id),
+            Folder::Sent => store.sent.contains(&id),
+        })
+        .collect();
+    let forever = args.has("--forever");
+    if holding.is_empty() && !forever {
+        return Err("that message is in no folder: `radiopost trash` lists the trash".into());
+    }
+    for folder in &holding {
+        store.delete(*folder, &id, now())?;
+        if !forever {
+            println!("moved from the {} to the trash", folder.name());
+        }
+    }
+    if forever {
+        let from = in_trash(store);
+        if from.is_empty() {
+            return Err("that message is in no folder and not in the trash".into());
+        }
+        for folder in from {
+            store.purge(&id, folder)?;
+        }
+        println!("deleted for good");
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_lines, reason = "one arm a command")]
 fn run(words: &[String]) -> Result<(), Error> {
     let (home_flag, words) = match words {
@@ -480,6 +549,23 @@ fn run(words: &[String]) -> Result<(), Error> {
             for a in &store.inbox {
                 println!("{}  via {}", line_of(&store, &a.id), a.station);
             }
+        }
+        "trash" => {
+            for t in &store.trash {
+                println!(
+                    "{}  from the {}",
+                    line_of(&store, &t.was.id()),
+                    t.was.folder().name()
+                );
+            }
+        }
+        "delete" | "restore" => trash_command(&mut store, command, &args)?,
+        "empty-trash" => {
+            let n = store.empty_trash()?;
+            println!(
+                "{n} message{} deleted for good",
+                if n == 1 { "" } else { "s" }
+            );
         }
         "conformance" => {
             if args.rest.first().map(String::as_str) == Some("off") {
