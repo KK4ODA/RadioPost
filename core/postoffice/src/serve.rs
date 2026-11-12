@@ -209,7 +209,6 @@ pub fn now() -> u64 {
 /// # Panics
 ///
 /// When the system has no random numbers to give.
-#[must_use]
 pub fn system_draw() -> Draw {
     Box::new(|_, n| {
         let mut b = vec![0u8; n];
