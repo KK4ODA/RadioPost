@@ -121,6 +121,9 @@ fn post_office(w: &World, next_serial: u64) -> PostOffice {
         trust: w.trust.clone(),
         operators: Vec::new(),
         applications_open: false,
+        // the vectors' air forms are uncompressed, so they replay byte for byte (RP-5 §5.3 asks
+        // only SHOULD)
+        compress: false,
     };
     let state = State {
         next_serial,
@@ -568,6 +571,9 @@ fn station_to_station_sessions_are_reported_as_rp5_6_6_says() {
         trust: w.trust.clone(),
         operators: Vec::new(),
         applications_open: false,
+        // the vectors' air forms are uncompressed, so they replay byte for byte (RP-5 §5.3 asks
+        // only SHOULD)
+        compress: false,
     };
     let state = State {
         next_serial: 1,

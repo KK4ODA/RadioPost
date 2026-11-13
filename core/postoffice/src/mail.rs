@@ -613,6 +613,9 @@ pub struct Arrival<'a> {
     pub sent: &'a dyn Fn(&str) -> Option<[u8; 12]>,
     /// The refs to give held attachments, in order (§2.4 step 5).
     pub held_refs: Vec<[u8; 8]>,
+    /// Whether the post office's air forms are compressed (RP-5 §5.3, [`crate::air_form`]): the
+    /// sizes that decide what is held are those of the air form it will serve.
+    pub compress: bool,
 }
 
 /// An email made into a message (§2.4).
@@ -693,9 +696,8 @@ pub fn to_message(raw: &[u8], ctx: &Arrival<'_>) -> Result<Converted, String> {
         .collect();
     let mut with_files = entries.clone();
     with_files.push((key::FILES, Value::Array(files.clone())));
-    let air_size = Value::int_map(with_files)
-        .encode()
-        .map_or(usize::MAX, |c| c.len() + 1);
+    let air_size = Message::from_map(&Value::int_map(with_files))
+        .map_or(usize::MAX, |m| crate::air_form(&m, ctx.compress).len());
     let carried = !found.is_empty() && air_size as u64 <= limit;
     let mut held = Vec::new();
     if carried {
@@ -938,15 +940,13 @@ pub fn radio_path(path: &Carried) -> String {
     )
 }
 
-/// §4: the `application/radiopost-message` part's CBOR map.
+/// §4: the `application/radiopost-message` part's CBOR map, its air form made as the post office
+/// makes every one (RP-5 §5.3, [`crate::air_form`]).
 #[must_use]
-pub fn part_bytes(message: &Message, path: &Carried) -> Option<Vec<u8>> {
+pub fn part_bytes(message: &Message, path: &Carried, compress: bool) -> Option<Vec<u8>> {
     let (credential, statement, signature) = path.proof.as_ref()?;
     Value::int_map(vec![
-        (
-            1,
-            Value::bytes(&message.air_form(radiopost::message::Compression::None)),
-        ),
+        (1, Value::bytes(&crate::air_form(message, compress))),
         (2, Value::bytes(credential)),
         (3, Value::bytes(statement)),
         (4, Value::bytes(signature)),
@@ -966,6 +966,8 @@ pub struct Leaving<'a> {
     pub message_id: &'a dyn Fn(&[u8]) -> Option<String>,
     /// Add §4's part: every recipient of this SMTP transaction is at a RadioPost post office.
     pub with_part: bool,
+    /// Whether the part's air form is compressed (RP-5 §5.3, [`crate::air_form`]).
+    pub compress: bool,
 }
 
 /// §3.1: the email a message handed in by radio becomes, before DKIM signing: its headers by name
@@ -1038,7 +1040,7 @@ pub fn from_message(message: &Message, ctx: &Leaving<'_>) -> (Vec<(String, Strin
         .collect();
     let part = ctx
         .with_part
-        .then(|| part_bytes(message, ctx.path))
+        .then(|| part_bytes(message, ctx.path, ctx.compress))
         .flatten();
     let head = |headers: &[(String, String)]| {
         headers.iter().fold(String::new(), |mut s, (k, v)| {

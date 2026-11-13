@@ -16,7 +16,7 @@ use radiopost::base64url;
 use radiopost::cbor;
 use radiopost::credential::{self, Body, Credential, Refused, Trust, flags};
 use radiopost::crypto::{self, ContentId, context};
-use radiopost::message::{Compression, Message, key};
+use radiopost::message::{Message, key};
 use radiopost::statement::{self, Freshness, REPLAY_S, Statement, TIME_WINDOW_S};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value as Json, json};
@@ -54,6 +54,9 @@ pub struct Config {
     pub operators: Vec<String>,
     /// Whether it takes applications for accounts (RP-5 §6.7).
     pub applications_open: bool,
+    /// Whether the air forms it makes are DEFLATE when that is fewer bytes (RP-5 §5.3,
+    /// [`crate::air_form`]); off, every one is uncompressed, as the test vectors' are.
+    pub compress: bool,
 }
 
 /// A request: method, path under the base URL with its query, bearer token and JSON body.
@@ -726,7 +729,7 @@ impl PostOffice {
         third_party: bool,
         message_id: Option<&str>,
     ) -> u64 {
-        let air = message.air_form(Compression::None);
+        let air = crate::air_form(message, self.config.compress);
         let field = |k| message.map().get(k);
         let subject = field(key::SUBJECT)
             .and_then(cbor::Value::as_text)
@@ -1309,7 +1312,8 @@ impl PostOffice {
             fields.push((key::PRIORITY, cbor::Value::Uint(p)));
         }
         let message = Message::from_map(&cbor::Value::int_map(fields)).ok()?;
-        let air = message.air_form(Compression::None);
+        // judged on the air form it will be served as (RP-5 §5.3)
+        let air = crate::air_form(&message, self.config.compress);
         (air.len() as u64 <= self.max_air_bytes).then_some(air)
     }
 
@@ -1366,7 +1370,7 @@ impl PostOffice {
 
     /// Mail between this post office's own accounts goes to their mailboxes at once.
     fn deliver_here(&mut self, message: &Message, has_it: &str) {
-        let air = message.air_form(Compression::None);
+        let air = crate::air_form(message, self.config.compress);
         let subject = message
             .map()
             .get(key::SUBJECT)
@@ -1407,7 +1411,7 @@ impl PostOffice {
         if !to.is_empty() {
             self.state.outgoing.push(Outgoing {
                 id: message.content_id().text(),
-                air: base64url::encode(&message.air_form(Compression::None)),
+                air: base64url::encode(&crate::air_form(message, self.config.compress)),
                 to,
                 route,
                 queued: self.now,
@@ -1933,7 +1937,7 @@ impl PostOffice {
             .or_default()
             .push(Waiting {
                 serial,
-                air: base64url::encode(&message.air_form(Compression::None)),
+                air: base64url::encode(&crate::air_form(&message, self.config.compress)),
                 id: id.to_owned(),
                 from: message.from().unwrap_or("").to_owned(),
                 subject,

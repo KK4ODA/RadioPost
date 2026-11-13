@@ -130,6 +130,8 @@ fn post_office_with(
         trust: w.trust.clone(),
         operators: Vec::new(),
         applications_open: false,
+        // session-01's and session-02's air forms are uncompressed, so they replay byte for byte
+        compress: false,
     };
     let mut office = PostOffice::new(
         config,

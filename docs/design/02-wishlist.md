@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.10 |
+| **Version** | 0.3.11 |
 | **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -121,7 +121,7 @@ rules:
 | W15 | Keep listening for stations | Radio | Medium | Fits today | Proposed |
 | W16 | Scheduled connections | Radio | Low | Fits today | Planned |
 | W17 | Gateways ranked by propagation | Radio | Low | Fits today; optional addition for measurements | Planned |
-| W18 | Mail coming down compressed | Radio | High | Fits today | Proposed |
+| W18 | Mail coming down compressed | Radio | High | Fits today | Implemented |
 | W19 | Shorter short messages: a dictionary | Radio | Low | Optional addition; breaking if made required | Planned |
 | W20 | An adapter for VARA-style modems: VARA and Mercury | Adapters | Medium | Fits today; G11 to name Mercury | In progress |
 | W21 | An ARDOP adapter | Adapters | Low | Needs specification review | Planned |
@@ -501,14 +501,14 @@ Mail from the Internet takes less air time on its way down.
 | Requested by | The editor, from reading the post office. Requesters: 0. |
 | Component | Post office. |
 | Compatibility | **Fits today**: every station must take DEFLATE (RP-2 §4, code 1), and gateways pass the post office's air form on as it is (RP-3 §7). |
-| Existing coverage | New. The post office makes every air form uncompressed (code 0), as the reference that makes the vectors does, to keep them byte for byte; the client already compresses what it sends. The concept counts on compression (concept §5.1). |
+| Existing coverage | Built (2026-11-13), after RP-5 0.18.0 §5.3 (G2): every air form the post office makes (mail from email, mail handed in for its own users, held attachments sent, station-to-station mail filed, the part between post offices) is the smaller of uncompressed and DEFLATE (`radiopost_postoffice::air_form`), made once when the message arrives and served the same every time and in every copy placed ahead; what is already stored is never recompressed. The sizes that decide what is held (`max_air_bytes`, `attach_bytes`, the splitting of held attachments) judge that air form. `compress` in `config.json`, on by default; the vector replays run with it off. Measured on `email-in.json`'s `maria-419`: 277 bytes on the air uncompressed, 209 as DEFLATE (−25 %); its photo (`maria-421`, 6 122 bytes) stays uncompressed. The client already compressed what it sends. |
 | Dependencies | None. |
 | Effort | Small. |
 | Priority | **High.** Air time on every message a pilot user picks up. |
 | Recommendation | Accept. |
-| Status | Proposed. |
-| Author decision | None yet. |
-| Notes | RP-5 §5.3 does not say which compression a post office may use, and it cannot see the caller's `caps`, so only codes 0 and 1 are safe (§13, G2). |
+| Status | Implemented. |
+| Author decision | **The author**, 2026-11-13: build it, with RP-5 §5.3 first (codes 0 or 1, 1 when smaller, never 2 or 3), the vectors left uncompressed. |
+| Notes | The post office never sees the caller's `caps`, so only codes 0 and 1 are safe (§13, G2, settled). Zstandard or a dictionary (W19) would need a post office to make an air form per caller, or a code every station takes. |
 
 ### W19. Shorter short messages: a dictionary
 
@@ -1013,7 +1013,7 @@ Where wishes share a need, building it once serves them all. None of these is a 
 | T1 | The modem's dial | W14, W40, W16, W26 | One optional RP-4 addition to read and set the dial, with its rule for a shared modem (G3, G8). Where the modems key through rigctld or FLRig, a gateway can read the dial there itself, with no addition. |
 | T8 | Modem names | W20, W26, W44 | One registry of modem names, and what a client does with one it does not know (G11): gateway lists, the filter by modem, a new adapter. |
 | T2 | Credentials that never lapse unattended | W8 | One renewal rule for clients and gateways, by any open path. |
-| T3 | The post office's air forms | W18, W19 | One rule for which compressions a post office uses (G2), settled before the dictionary. |
+| T3 | The post office's air forms | W18, W19 | One rule for which compressions a post office uses (G2), settled before the dictionary: RP-5 0.18.0 §5.3. |
 | T4 | Broadcasts | W33, W34 | One broadcast format, only if one of them shows a need mail cannot meet. |
 | T5 | Unattended operation | W15, W16, W27, W28, W30 | The rules check (W40) for every modem but Aether, and an honest note of what the rules allow (§1). |
 | T6 | One mailbox | W36 | Absorbs W12, and most of W37 once mail sent from a mail program fills the accept list. |
@@ -1030,7 +1030,7 @@ document.
 | # | Where | What is missing | What it costs | A possible approach | Wish |
 |---|---|---|---|---|---|
 | G1 | RP-2 §6 | A client SHOULD let the user ask for a trimmed message's full text; nothing carries the request (RP-3 §5.6, RP-5 §5.3). | A SHOULD no client can meet; implementers may invent private ways. | Say instead: show the message `reply_to` names when the client holds it. | W4 |
-| G2 | RP-5 §5.3 | Which compression the post office's air form may use. It never sees the caller's `caps` (RP-2 §4 has the sender choose one both ends take). | A post office using code 2 would serve mail some clients cannot read; ours serves everything uncompressed. | Code 0 or 1 only, 1 when smaller. | W18, W19 |
+| G2 | RP-5 §5.3 | Which compression the post office's air form may use. It never sees the caller's `caps` (RP-2 §4 has the sender choose one both ends take). | A post office using code 2 would serve mail some clients cannot read; ours served everything uncompressed. | Code 0 or 1 only, 1 when smaller. **Settled** (2026-11-13): RP-5 0.18.0 §5.3, built with W18. | W18, W19 |
 | G3 | RP-4 | Any frequency. RP-4 §8 has the host check the band rules when the modem does not, with no way to learn the dial. | Gateways on other modems trust a configured dial; the client cannot tune. | An optional dial capability (T1). | W14, W40 |
 | G4 | RP-4 §2 | A transport off the machine: loopback or a Unix socket only, and no authentication. | No common way for a phone to drive a modem in another box. | Leave it until a phone needs it. | W23 |
 | G5 | Concept §6.2 | *Delivered to the recipient's provider* is promised; nothing reports it (RP-5, RP-6). | Users are promised what no program can show. | Drop it from the concept, or an optional client endpoint in RP-5 §6. | W6 |
@@ -1095,3 +1095,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.8 | 2026-11-13 | G11 drafted (D39): RP-0 §9.4's registry of modem names, `mercury` and `aether-fm` added, a channel with an unknown name ignored, and what an FM channel states. |
 | 0.3.9 | 2026-11-13 | The author decided W46 and W7, built: several callsigns on separate accounts, each a home of its own, chosen from a list at the top of the window, one device key and one address list; answering any of them waits. |
 | 0.3.10 | 2026-11-13 | W1 implemented: reply, reply to all and forward, in the panel and the program; a reply keeps the email thread at the other end. |
+| 0.3.11 | 2026-11-13 | W18 implemented: the post office's air forms are DEFLATE when that is smaller; G2 settled by RP-5 0.18.0 §5.3. |

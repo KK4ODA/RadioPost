@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.17.0 |
+| **Version** | 0.18.0 |
 | **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -307,6 +307,12 @@ failure with its code (§1), and otherwise `201`:
 The post office makes a message's air form once and serves those same bytes every time it is
 asked, and in every copy placed ahead (§5.8). A user whose download broke resumes it through any
 gateway by its offset (RP-3 §7), which works only if every gateway sends the same bytes.
+
+**Compression.** That one air form goes to every gateway, and the post office never sees the
+caller's `caps` (RP-3 §5.1). So it uses compression 0 or 1, which every station takes (RP-2 §4),
+and SHOULD use 1 when that gives fewer bytes. It MUST NOT use 2 or 3. A post office that holds
+attachments back to keep a message within `max_air_bytes` (§4.1) or an account's `attach_bytes`
+(§6.3) judges the air form it will serve.
 
 ### 5.4 `POST /sessions/{s}/messages`: mail the user sent
 
@@ -809,3 +815,4 @@ read from the home's and every post office it knows) and `vectors/api.json` (the
 | 0.15.0 | 2026-11-12 | Who may become an operator (§7.1): an application naming an operator's callsign is refused (§6.7) and cannot be approved or sent a postcard (§7.3); a code naming one for anyone but the operator asking needs `operates` (§7.5); each refusal carries `operates`; security considerations (§8); test vectors. |
 | 0.16.0 | 2026-11-12 | Gateways across post offices. §4.3: each entry's `api` and keys, one entry per domain. §4.4: a gateway's own post office; a client's gateway list, and the gateways a post office places copies at, come from its home's list and those of the post offices its home knows, checked with their keys; the home's record wins, and a callsign otherwise listed twice is ambiguous; `listed` keeps to the home's. §5.8: copies at gateways registered elsewhere; `placing` in the answer; `wait=0`; items served only to the credential of the post office that listed the gateway; which post offices a gateway polls. §6.3: `usual_gateways` may name them. §2: known post offices are RP-1 §7.5's. A client could list only its own post office's gateways, and a post office placed copies only at the gateways registered with it. Test vectors (`gateway-lists.json`; `api-exchanges.json`'s copies at N1CALL-10; `placing` in every copies answer). |
 | 0.17.0 | 2026-11-13 | §4.4: a channel's `modem` comes from RP-0 §9.4's registry, and a reader ignores a channel whose modem it does not know (the list of six had no way to grow and no rule for a name a client did not know); `mode` `USB` or `FM`; on an `FM` channel `dial_hz` is the carrier and `bandwidth_hz` the channel's width. |
+| 0.18.0 | 2026-11-13 | §5.3: the post office's air form uses compression 0 or 1, 1 when it gives fewer bytes, never 2 or 3, and the sizes that decide what is held are judged on it. Nothing said which: the air form is made once for every gateway and never sees the caller's `caps`, so a post office using 2 would serve mail some clients cannot read. |

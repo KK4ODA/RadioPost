@@ -74,6 +74,7 @@ fn post_office(
         lookups: radiopost_postoffice::lookups::LookupSettings::default(),
         mailboxes: radiopost_postoffice::mailboxes::MailboxSettings::default(),
         health: radiopost_postoffice::serve::HealthSettings::default(),
+        compress: true,
     };
     files
         .write(

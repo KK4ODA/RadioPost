@@ -491,6 +491,7 @@ impl Running {
                     max_air_bytes: settings.info.max_air_bytes,
                     sent: &sent,
                     held_refs,
+                    compress: settings.compress,
                 },
             )?;
             for (r, name, kind, data) in &made.held {
@@ -586,6 +587,7 @@ impl Running {
         let mut left = Vec::new();
         let mut failed = Vec::new();
         let mut said = Vec::new();
+        let compress = self.settings().compress;
         for (group, with_part) in [(radiopost, true), (others, false)] {
             if group.is_empty() {
                 continue;
@@ -597,6 +599,7 @@ impl Running {
                     path: &carried,
                     message_id: &message_id,
                     with_part: with_part && carried.proof.is_some(),
+                    compress,
                 },
             );
             let mut tries = vec![group.clone()];

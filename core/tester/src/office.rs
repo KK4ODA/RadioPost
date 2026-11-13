@@ -117,6 +117,8 @@ impl TestOffice {
             trust: offices.trust(),
             operators: Vec::new(),
             applications_open: false,
+            // as a post office runs: compressed when smaller (RP-5 §5.3)
+            compress: true,
         };
         let draw = Box::new(|_: &str, n: usize| {
             let mut b = vec![0u8; n];

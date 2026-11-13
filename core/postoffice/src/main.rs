@@ -159,6 +159,7 @@ fn init(files: &Files, a: &Args) -> Result<(), String> {
         lookups: radiopost_postoffice::lookups::LookupSettings::default(),
         mailboxes: radiopost_postoffice::mailboxes::MailboxSettings::default(),
         health: radiopost_postoffice::serve::HealthSettings::default(),
+        compress: true,
     };
     let hex: String = radiopost::cbor::hex(&seed);
     files.write("key.hex", &(hex + "\n"))?;

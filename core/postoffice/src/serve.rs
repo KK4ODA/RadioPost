@@ -71,6 +71,23 @@ pub struct Settings {
     /// What its hourly check asks besides the rest.
     #[serde(default, skip_serializing_if = "HealthSettings::is_empty")]
     pub health: HealthSettings,
+    /// Whether the messages it makes for the radio are DEFLATE when that is fewer bytes (RP-5
+    /// §5.3, [`crate::air_form`]); `false` makes every one uncompressed. On unless the file says
+    /// `false`. A message already made keeps the air form it was made with.
+    #[serde(default = "on", skip_serializing_if = "is_on")]
+    pub compress: bool,
+}
+
+fn on() -> bool {
+    true
+}
+
+#[allow(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if takes &T"
+)]
+fn is_on(value: &bool) -> bool {
+    *value
 }
 
 /// What the hourly check asks besides the rest (`health`).
@@ -320,6 +337,7 @@ impl Running {
             key,
             operators: settings.operators(),
             applications_open: settings.info.applications.as_deref() == Some("open"),
+            compress: settings.compress,
         };
         let mut office = PostOffice::new(config, files.state()?, draw);
         // RP-6 §2.5: the door keeps held attachments as `held/<ref in hex>`

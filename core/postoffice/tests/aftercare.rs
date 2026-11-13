@@ -158,6 +158,7 @@ fn an_approved_account_gets_its_mailbox_and_its_welcome() {
             ..MailboxSettings::default()
         },
         health: radiopost_postoffice::serve::HealthSettings::default(),
+        compress: true,
     };
     files
         .write(

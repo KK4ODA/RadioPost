@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.4.1 |
-| **Updated** | 2026-11-10 |
+| **Version** | 0.4.2 |
+| **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §7 |
@@ -169,7 +169,7 @@ RP-0 §3: RP-1 as issuer, RP-2, RP-5 as server, RP-6.
 | P-01 | Its public documents: DNS records, the info document, revocations, lists of post offices, gateways and routes, as JWS (RP-1 §7, RP-5 §4). | `dns`, `jws` |
 | P-02 | Login and tokens; `401` against `403` (RP-5 §2, §3). | `api-exchanges` |
 | P-03 | Enrollment and renewal (RP-5 §6.1, §6.2). | `api-exchanges`, `api-account` |
-| P-04 | Sessions: the checks in order, messages taken and refused, pickups (RP-5 §5.2, §5.4, §5.5). | `api-exchanges` |
+| P-04 | Sessions: the checks in order, messages taken and refused, pickups (RP-5 §5.2, §5.4, §5.5); a waiting message served with compression 0 or 1, its listed size that air form's (RP-5 §5.3). | `api-exchanges` |
 | P-05 | Reports, with paths and local pickups (RP-5 §5.6). | `api-exchanges`, `forwarding`, `local-delivery` |
 | P-06 | Copies placed ahead, forward items, drops (RP-5 §5.8, RP-7 §4.1). | `forwarding` |
 | P-07 | Station-to-station reports (RP-5 §6.6). | `direct` |
@@ -249,3 +249,4 @@ RP-0 §3: RP-4, the adapter's side.
 | 0.3.0 | 2026-11-09 | Phase 1's adapter tests built: how an adapter is reached (§2.3); A-02 also checks a host that leaves (RP-4 0.5.0), and A-03 says what it covers. |
 | 0.4.0 | 2026-11-10 | Phase 2's tests built: a gateway's and a post office's conformance mode and driver files (§2.3), the test post office, G-01, G-02, G-04, G-07 to G-09, P-01 to P-04, P-07 to P-10 and C-12 (§6). Writing them found a gateway that replayed a caller's last transmission while the link was quiet, and a post office that used an enrollment code at a refused attempt (RP-5 0.12.1). |
 | 0.4.1 | 2026-11-10 | §2.3: the tester calls a post office's door in Stalwart's shape, the mail server's verdicts in `serverHeaders`, since a door no longer reads them from the message's own headers (RP-6 0.5.0). |
+| 0.4.2 | 2026-11-13 | P-04 checks the air form a waiting message is served as (compression 0 or 1, RP-5 0.18.0 §5.3) and that the size listed is its own, not the uncompressed form's, which it had assumed. |

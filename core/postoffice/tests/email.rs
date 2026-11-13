@@ -4,6 +4,7 @@
 //! emails (`email-out.json`). A mismatch is a bug here, never a reason to change a vector.
 
 use std::collections::{BTreeMap, HashMap};
+use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use ed25519_dalek::SigningKey;
@@ -197,6 +198,8 @@ fn emails_become_the_messages_rp6_2_4_says() {
             max_air_bytes: ctx["max_air_bytes"].as_u64().expect("max_air_bytes"),
             sent: &lookup,
             held_refs,
+            // the vectors' air forms are uncompressed (RP-5 §5.3 asks only SHOULD)
+            compress: false,
         };
         let made = mail::to_message(e["email"].as_str().expect("email").as_bytes(), &arrival)
             .unwrap_or_else(|why| panic!("{name}: {why}"));
@@ -256,6 +259,7 @@ fn emails_become_the_messages_rp6_2_4_says() {
                 max_air_bytes: ctx["max_air_bytes"].as_u64().expect("max_air_bytes"),
                 sent: &|_| None,
                 held_refs: Vec::new(),
+                compress: false,
             };
             mail::to_message(raw, &arrival).expect("converted").message
         });
@@ -266,6 +270,93 @@ fn emails_become_the_messages_rp6_2_4_says() {
             used.map().diagnostic()
         );
         assert_eq!(used.content_id().text(), case["content_id_text"], "{what}");
+    }
+}
+
+/// RP-5 §5.3: the air form a post office serves is the smaller of none and DEFLATE, and inflates
+/// to the same message; every email of the vectors, made with compression on.
+#[test]
+fn the_air_form_served_is_the_smaller_and_the_same_message() {
+    let file = vectors("email-in.json");
+    let ctx = &file["context"];
+    for e in file["emails"].as_array().expect("emails") {
+        let name = e["name"].as_str().expect("name");
+        let arrival = Arrival {
+            arrival: ctx["arrival"].as_u64().expect("arrival"),
+            attach_bytes: ctx["attach_bytes"].as_u64().expect("attach_bytes"),
+            max_air_bytes: ctx["max_air_bytes"].as_u64().expect("max_air_bytes"),
+            sent: &|_| None,
+            held_refs: vec![[7; 8]; 8],
+            compress: true,
+        };
+        let made = mail::to_message(e["email"].as_str().expect("email").as_bytes(), &arrival)
+            .unwrap_or_else(|why| panic!("{name}: {why}"))
+            .message;
+        let plain = made.air_form(radiopost::message::Compression::None);
+        let served = radiopost_postoffice::air_form(&made, true);
+        assert!(served.len() <= plain.len(), "{name}");
+        assert_eq!(served[0] == 1, served.len() < plain.len(), "{name}");
+        assert_eq!(Message::from_air(&served).as_ref(), Ok(&made), "{name}");
+        assert_eq!(
+            radiopost_postoffice::air_form(&made, false),
+            plain,
+            "{name}"
+        );
+    }
+}
+
+/// RP-5 §5.3, RP-6 §2.4 step 5: whether attachments are carried is judged on the air form the
+/// post office will serve. A log file too large for the air uncompressed, and well under it as
+/// DEFLATE, is carried when the post office compresses, and held when it does not.
+#[test]
+fn attachments_are_held_by_the_size_of_the_air_form_served() {
+    let mut log = String::new();
+    for n in 0..2_000 {
+        let _ = write!(
+            log,
+            "12:{:02}:{:02} net control: check-in {n}\r\n",
+            n / 60 % 60,
+            n % 60
+        );
+    }
+    assert!(log.len() > 65_536, "too large for the air as it is");
+    let b64 = {
+        let mut t = radiopost::base64url::encode(log.as_bytes())
+            .replace('-', "+")
+            .replace('_', "/");
+        while t.len() % 4 != 0 {
+            t.push('=');
+        }
+        t
+    };
+    let email = format!(
+        "From: eoc@example.org\r\nTo: facundo@radiopost.org\r\nSubject: Net log\r\n\
+         MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"b\"\r\n\r\n\
+         --b\r\nContent-Type: text/plain\r\n\r\nLast night's log.\r\n--b\r\n\
+         Content-Type: text/plain\r\nContent-Disposition: attachment; filename=\"net.log\"\r\n\
+         Content-Transfer-Encoding: base64\r\n\r\n{b64}\r\n--b--\r\n"
+    );
+    for (compress, carried) in [(true, true), (false, false)] {
+        let made = mail::to_message(
+            email.as_bytes(),
+            &Arrival {
+                arrival: 1_794_240_000,
+                attach_bytes: 65_536,
+                max_air_bytes: 65_536,
+                sent: &|_| None,
+                held_refs: vec![[7; 8]],
+                compress,
+            },
+        )
+        .expect("converted");
+        assert_eq!(made.held.is_empty(), carried, "compress {compress}");
+        let served = radiopost_postoffice::air_form(&made.message, compress);
+        assert!(
+            served.len() <= 65_536,
+            "compress {compress}: {}",
+            served.len()
+        );
+        assert_eq!(served[0], u8::from(compress));
     }
 }
 
@@ -359,6 +450,8 @@ fn messages_become_the_emails_rp6_3_says() {
                 path,
                 message_id: &ids,
                 with_part,
+                // the vectors' part holds an uncompressed air form
+                compress: false,
             },
         );
         let got: HashMap<&str, String> = headers

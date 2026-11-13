@@ -7,6 +7,7 @@
 mod common;
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::thread;
@@ -223,6 +224,20 @@ fn a_client_whose_clock_is_off_signs_the_challenge_and_gets_through() {
     );
 }
 
+/// Bytes that do not compress, as a photo's or a video's do not: the post office judges the air
+/// form it will serve, compressed when smaller (RP-5 §5.3).
+fn random_bytes(n: usize, seed: u64) -> Vec<u8> {
+    let mut x = 0x9E37_79B9_7F4A_7C15 ^ seed;
+    (0..n)
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x.to_le_bytes()[0]
+        })
+        .collect()
+}
+
 /// An email whose two attachments together are over the post office's `max_air_bytes`: both are
 /// held (RP-6 §2.4 step 5).
 fn email_with_large_attachments(photo: &[u8], video: &[u8]) -> Vec<u8> {
@@ -286,8 +301,8 @@ fn a_held_attachment_is_asked_for_by_radio_and_comes_on_the_next_call() {
         "club@test.example",
         "WD5EMA",
     );
-    let photo: Vec<u8> = (0..30_000u32).map(|i| (i * 7 % 251) as u8).collect();
-    let video: Vec<u8> = (0..50_000u32).map(|i| (i * 13 % 241) as u8).collect();
+    let photo = random_bytes(30_000, 7);
+    let video = random_bytes(50_000, 13);
     running
         .email_in(
             "maria@example.com",
@@ -474,6 +489,222 @@ fn a_reply_by_radio_keeps_the_email_thread() {
     ] {
         assert!(sent[0].contains(header), "{header}{}", sent[0]);
     }
+}
+
+/// The gateway's token at the post office: as its station logs in (RP-5 §3).
+fn gateway_token(running: &Running, base: &str, gw: &Path) -> String {
+    use radiopost::{base64url, crypto};
+    let api = |path: &str, body: &serde_json::Value| {
+        let bytes = if body.is_null() {
+            Vec::new()
+        } else {
+            body.to_string().into_bytes()
+        };
+        let (status, _, text) = running.api("POST", path, None, &bytes);
+        assert_eq!(status, 200, "{path}: {text}");
+        serde_json::from_str::<serde_json::Value>(&text).expect("JSON")
+    };
+    let nonce = api("/auth/challenge", &serde_json::Value::Null)["nonce"]
+        .as_str()
+        .expect("a nonce")
+        .to_owned();
+    let mut signed = base64url::decode(&nonce).expect("base64url");
+    signed.extend_from_slice(base.as_bytes());
+    let credential = std::fs::read_to_string(gw.join("credential.hex")).expect("the credential");
+    let credential = radiopost_client::store::unhex(credential.trim()).expect("hex");
+    let seed = std::fs::read_to_string(gw.join("key.hex")).expect("the gateway's key");
+    let seed: [u8; 32] = radiopost_client::store::unhex(seed.trim())
+        .and_then(|b| b.try_into().ok())
+        .expect("32 bytes");
+    let signature = crypto::sign(
+        crypto::context::API_LOGIN,
+        &signed,
+        &SigningKey::from_bytes(&seed),
+    );
+    api(
+        "/auth/token",
+        &json!({"credential": base64url::encode(&credential), "nonce": nonce,
+                "signature": base64url::encode(&signature)}),
+    )["token"]
+        .as_str()
+        .expect("a token")
+        .to_owned()
+}
+
+/// W18, RP-5 §5.3: mail from the Internet comes down compressed when that is smaller. A long
+/// text email's air form is DEFLATE and smaller than uncompressed; the post office serves those
+/// bytes every time, and in the copy placed ahead at the user's usual gateway; the client
+/// decodes it, carried by radio through the gateway. A photo that does not compress stays
+/// uncompressed.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn mail_comes_down_compressed_when_that_is_smaller() {
+    use radiopost::base64url;
+    use radiopost::message::{Message, key as field};
+    let dir = scratch("compressed");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (_server, at_user, at_gateway) = loopback();
+    let (gw, rx) = gateway(&dir, &running, &base, &po_key, at_gateway);
+    let mut user = client(
+        &dir.join("wd5ema"),
+        &running,
+        &po_key,
+        "club@test.example",
+        "WD5EMA",
+    );
+    {
+        // KK4ODA-1 takes copies placed ahead, and is the club's usual gateway (RP-5 §5.8)
+        let mut office = running.office();
+        let record = office
+            .state
+            .gateways
+            .get_mut("KK4ODA-1")
+            .expect("registered");
+        record["copies"] = json!({"users": 20, "days": 7, "max_air_bytes": 65_536});
+        office.state.settings.insert(
+            "club@test.example".into(),
+            json!({"usual_gateways": ["KK4ODA-1"]}),
+        );
+    }
+    let mut roster = String::new();
+    for n in 1..=40 {
+        let _ = write!(
+            roster,
+            "Bed {n:02}: occupied, adult, no medical needs, meals at 07:00 and 18:00.\r\n"
+        );
+    }
+    running
+        .email_in(
+            "eoc@example.org",
+            &["club@test.example".into()],
+            format!(
+                "From: EOC <eoc@example.org>\r\nTo: club@test.example\r\n\
+                 Subject: Shelter roster\r\nMessage-ID: <roster@example.org>\r\n\r\n{roster}"
+            )
+            .as_bytes(),
+        )
+        .expect("taken");
+    let photo = random_bytes(20_000, 3);
+    let b64 = {
+        let mut t = base64url::encode(&photo)
+            .replace('-', "+")
+            .replace('_', "/");
+        while t.len() % 4 != 0 {
+            t.push('=');
+        }
+        t
+    };
+    running
+        .email_in(
+            "maria@example.com",
+            &["club@test.example".into()],
+            format!(
+                "From: maria@example.com\r\nTo: club@test.example\r\nSubject: Roof\r\n\
+                 Message-ID: <roof@example.com>\r\nMIME-Version: 1.0\r\n\
+                 Content-Type: multipart/mixed; boundary=\"b\"\r\n\r\n--b\r\n\
+                 Content-Type: text/plain\r\n\r\nThe roof.\r\n--b\r\n\
+                 Content-Type: image/jpeg\r\n\
+                 Content-Disposition: attachment; filename=\"roof.jpg\"\r\n\
+                 Content-Transfer-Encoding: base64\r\n\r\n{b64}\r\n--b--\r\n"
+            )
+            .as_bytes(),
+        )
+        .expect("taken");
+
+    // as the post office keeps them: the roster DEFLATE and smaller, the photo uncompressed
+    let (roster_air, photo_air) = {
+        let office = running.office();
+        let mailbox = &office.state.mailboxes["club@test.example"];
+        let air = |subject: &str| {
+            base64url::decode(
+                &mailbox
+                    .iter()
+                    .find(|w| w.subject == subject)
+                    .expect("waiting")
+                    .air,
+            )
+            .expect("base64url")
+        };
+        (air("Shelter roster"), air("Roof"))
+    };
+    let roster_message = Message::from_air(&roster_air).expect("a message");
+    let plain = roster_message.air_form(Compression::None);
+    assert_eq!(roster_air[0], 1, "DEFLATE");
+    assert!(
+        roster_air.len() * 2 < plain.len(),
+        "{} bytes against {} uncompressed",
+        roster_air.len(),
+        plain.len()
+    );
+    assert_eq!(
+        photo_air[0], 0,
+        "a photo that does not compress goes as it is"
+    );
+    let photo_message = Message::from_air(&photo_air).expect("a message");
+    assert!(
+        photo_message.air_form(Compression::Deflate).len() >= photo_air.len(),
+        "DEFLATE would be no smaller"
+    );
+    assert_eq!(
+        photo_message
+            .map()
+            .get(field::FILES)
+            .and_then(radiopost::cbor::Value::as_array)
+            .map(<[radiopost::cbor::Value]>::len),
+        Some(1),
+        "the photo is carried, not held"
+    );
+
+    // the same bytes on each request, and in the copy placed ahead
+    let token = gateway_token(&running, &base, &gw);
+    for _ in 0..2 {
+        let (status, _, text) = running.api("GET", "/copies?after=&wait=0", Some(&token), &[]);
+        assert_eq!(status, 200, "{text}");
+        let polled: serde_json::Value = serde_json::from_str(&text).expect("JSON");
+        let copy = polled["items"]
+            .as_array()
+            .expect("items")
+            .iter()
+            .find(|i| i["subject"] == "Shelter roster")
+            .expect("the roster's copy");
+        assert_eq!(copy["air"], base64url::encode(&roster_air));
+    }
+
+    // the user calls: both come down by radio, and the client decodes them
+    let mut said = Vec::new();
+    let report = session::call(
+        &mut user,
+        "KK4ODA-1",
+        Kind::Gateway,
+        &Options::new(&at_user.to_string()),
+        &mut |s| said.push(s.to_owned()),
+    )
+    .expect("called");
+    assert_eq!(report.failed, None, "{said:?}");
+    let lines = session_lines(&rx);
+    assert!(
+        lines.iter().any(|l| l == "the session with WD5EMA is over"),
+        "{lines:?}"
+    );
+    assert_eq!(report.received.len(), 2, "{said:?}");
+    assert!(report.received.contains(&roster_message.content_id()));
+    let came = user.message(&roster_message.content_id()).expect("kept");
+    assert_eq!(came, roster_message);
+    assert!(
+        came.map()
+            .get(field::BODY)
+            .and_then(radiopost::cbor::Value::as_text)
+            .is_some_and(|b| b.starts_with("Bed 01: occupied") && b.contains("Bed 40: occupied")),
+        "the text, whole"
+    );
+    // the same bytes again, once picked up: the post office kept what it made
+    let office = running.office();
+    let kept = office.state.mailboxes["club@test.example"]
+        .iter()
+        .find(|w| w.subject == "Shelter roster")
+        .expect("kept");
+    assert!(kept.picked);
+    assert_eq!(kept.air, base64url::encode(&roster_air));
 }
 
 /// One HTTP exchange with a panel on loopback, as its page makes one: the status and the JSON.

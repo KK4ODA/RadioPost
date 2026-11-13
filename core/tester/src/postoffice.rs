@@ -908,11 +908,7 @@ impl Run<'_> {
             .iter()
             .find(|e| e["id"] == to_a.content_id().text().as_str())
             .ok_or("the message for the account is not in `waiting` (RP-5 §5.2)")?;
-        let air = to_a.air_form(Compression::None);
-        if entry["from"] != b.address.as_str()
-            || entry["size"].as_u64() != Some(air.len() as u64)
-            || entry["third_party"] != false
-        {
+        if entry["from"] != b.address.as_str() || entry["third_party"] != false {
             return Err(format!("the waiting entry is wrong: {entry} (RP-5 §5.2)"));
         }
         if !s["accept"].as_array().is_some_and(|a| {
@@ -928,15 +924,27 @@ impl Run<'_> {
             Some(&gw.token),
             None,
         )?;
+        let air = m["air"]
+            .as_str()
+            .and_then(base64url::decode)
+            .unwrap_or_default();
         if status != 200
-            || m["air"]
-                .as_str()
-                .and_then(base64url::decode)
-                .and_then(|a| Message::from_air(&a).ok())
-                .map(|m| m.content_id())
-                != Some(to_a.content_id())
+            || Message::from_air(&air).ok().map(|m| m.content_id()) != Some(to_a.content_id())
         {
             return Err("GET messages/{serial} does not give the message (RP-5 §5.3)".into());
+        }
+        // RP-5 §5.3: compression 0 or 1, which every station takes; the size listed is its own
+        if !matches!(air.first(), Some(0 | 1)) {
+            return Err(format!(
+                "the air form's compression is {:?}, not 0 or 1 (RP-5 §5.3)",
+                air.first()
+            ));
+        }
+        if entry["size"].as_u64() != Some(air.len() as u64) {
+            return Err(format!(
+                "the waiting entry's size is not its air form's, {} bytes: {entry} (RP-5 §5.2)",
+                air.len()
+            ));
         }
         problem(
             &po.call(

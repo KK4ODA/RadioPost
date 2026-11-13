@@ -273,7 +273,8 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   the spec. `python tools/vectors/make.py --check` must pass before a push. A vector that disagrees
   with a spec is a bug in the reference. DEFLATE air forms are marked `"exact": false` (zlib
   versions differ); `--check` inflates them. The session vectors send uncompressed so they stay
-  byte-exact. RPMI messages and API bodies compare as JSON values, not text. Writing a vector is
+  byte-exact; the post office compresses its air forms when smaller (`radiopost_postoffice::air_form`,
+  RP-5 §5.3, `compress` in `config.json`), so its vector replays run with `compress: false`. RPMI messages and API bodies compare as JSON values, not text. Writing a vector is
   how a spec gap is found: the first run found five, the resumed and station-to-station sessions
   three more, the modem interface's conversations seven unwritten rules, the post office's
   exchanges most of RP-5's error behaviour and JWS's missing context rule, the email vectors that

@@ -287,6 +287,7 @@ its settings (`config.json`) and an empty state, and prints:
 | `smtp` | none | Stalwart's submission port as a URL: `smtps://` (implicit TLS, port 465), or `smtp://…?tls=required` on 587. Without it, outgoing email waits in `outgoing`. |
 | `info.max_email_bytes` | 10 MB | The largest email the door takes (RP-6 §2.1). |
 | `info.max_air_bytes` | 64 kB | The largest message for the radio; larger attachments are held (RP-6 §2.4) in `held/`, each named by its `ref` in hex, until the user asks for them by radio (RP-6 §2.5). |
+| `compress` | `true` | Messages for the radio go compressed (DEFLATE) when that makes them smaller, as RP-5 §5.3 asks: a page of text takes a quarter to a half less air time, and a photo, which does not compress, goes as it is. Whether attachments fit (`max_air_bytes`, a user's `attach_bytes`) is judged on what goes on the air. `false` sends every message uncompressed. A message already waiting keeps the form it was made in. |
 
 `/etc/systemd/system/radiopost-po.service`:
 
