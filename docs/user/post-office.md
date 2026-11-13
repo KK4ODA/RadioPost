@@ -16,7 +16,7 @@ step, and says what you do by hand (the mail server's setup page, the DNS record
 with the values to type:
 
 ```
-curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.12/radiopost-tools-linux-x64.zip
+curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.13/radiopost-tools-linux-x64.zip
 unzip radiopost-tools-linux-x64.zip
 ./radiopost-tools-linux-x64/radiopost-po install --domain radiopost.org --operator KK4ODA --contact postmaster@radiopost.org
 ```
@@ -262,7 +262,7 @@ answers `451 4.7.1`, and the sending server tries again. Addresses that are no R
 
 ```
 apt install -y unzip
-curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.12/radiopost-tools-linux-x64.zip
+curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.13/radiopost-tools-linux-x64.zip
 unzip radiopost-tools-linux-x64.zip
 install -m 0755 radiopost-tools-linux-x64/radiopost-po /usr/local/bin/
 useradd --system --home-dir /var/lib/radiopost --create-home --shell /usr/sbin/nologin radiopost
