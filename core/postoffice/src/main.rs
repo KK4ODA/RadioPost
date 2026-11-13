@@ -244,10 +244,14 @@ fn check(files: &Files, a: &Args) -> Result<(), String> {
                 .collect()
         })
         .unwrap_or_default();
-    if !selectors.is_empty() {
+    let selectors = if selectors.is_empty() {
+        // the ones given before, here or on the desk
+        settings.health.dkim.clone()
+    } else {
         // the hourly check asks the same from now on
         let _ = admin(files, "PUT", "/settings", &json!({"dkim": selectors}));
-    }
+        selectors
+    };
     let mut lines = check::run(&settings, &public, &resolver, &selectors);
     lines.push(update_line());
     lines.push(match admin(files, "GET", "/status", &Json::Null) {

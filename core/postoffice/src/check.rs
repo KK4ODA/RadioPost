@@ -427,7 +427,8 @@ pub fn run(
         }
         if selectors.is_empty() {
             out.push(note(format!(
-                "{domain}: DKIM not checked; give the selectors in Stalwart's zone file with --dkim"
+                "{domain}: DKIM not checked; give the selectors from Stalwart's zone file under \
+                 the Health tab's DKIM selectors, or with check --dkim"
             )));
         } else if !kinds.iter().any(|k| k == "rsa") {
             out.push(fail(format!(

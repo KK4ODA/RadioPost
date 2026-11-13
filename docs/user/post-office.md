@@ -413,7 +413,8 @@ radiopost-po --dir /var/lib/radiopost check --dkim v1-rsa-20261110,v1-ed25519-20
 ```
 
 Each line says `ok`, `FAIL` (with what to change) or `note`; the last says `ready` when nothing
-failed. Then:
+failed. The selectors are kept: a later `check` and the hourly check use them, so give them once,
+here or in the desk's Health tab. Then:
 
 1. From an outside address, send an email to a user. It is refused at `RCPT TO` with the accept
    list's explanation (RP-6 §2.3).
@@ -477,7 +478,7 @@ the service's own additions over HTTPS, as your credential.
 | Accounts | Every account, its name (*Rename*) and its devices, each with *Revoke* for a lost one; the computer you are using is marked. |
 | New code | A code for a new account or a new device, after *Check the licence*. One that would give someone else the desk asks first, in red (§8). |
 | Mail out | What waits to go on by email. |
-| Health | Every check, as `check` does it from outside, and what only the server sees: free disk, email stuck going out, last night's backup, the mailboxes' last backup and its size, when a backup was last downloaded (amber after 7 days, red after 30; never, amber at once and red after 30), whether the jobs runner is installed, a newer release. The service checks every hour and emails the contact address when a check turns red, and when all pass again (amber sends nothing). Give the DKIM selectors here once. |
+| Health | Every check, as `check` does it from outside, and what only the server sees: free disk, email stuck going out, last night's backup, the mailboxes' last backup and its size, when a backup was last downloaded (amber after 7 days, red after 30; never, amber at once and red after 30), whether the jobs runner is installed, a newer release. The service checks every hour and emails the contact address when a check turns red, and when all pass again (amber sends nothing). Give the DKIM selectors here once: saving them runs the check. |
 | Server | **Jobs** the server's administrator does for you: update, restart the post office or the mail server, copy the certificate, the services, both logs, disk, firewall, ports, logins, Debian's updates, `check`. The service asks; a root-owned systemd unit (`radiopost-po-jobs.path`) runs the job from a fixed list, programs and arguments with no shell, and its output comes back here. The installer puts the unit in place (`radiopost-po --dir /var/lib/radiopost jobs --install`). **Backups**: one of the post office each night beside the service, the last seven, and one of the mail server's mailboxes (below), the last three; *Download a backup* seals one with a passphrase of yours (PBKDF2, then ChaCha20-Poly1305), with the newest backup of the mailboxes in it, and keeps it on your computer in `RadioPost backups`. Only a downloaded backup counts as off the server. **When you need more**: a terminal on the server through your computer's own SSH, and *Copy for Claude*, the server's state (versions, checks, settings, the jobs' last output; no mail, names or keys) to paste into a Claude session. |
 | Post offices | The other post offices you know, those seen and not known (*Know*, *Block*), and those blocked (§13). |
 | Settings | Take applications; licence lookups (the FCC copy, QRZ); mailboxes; who operates it. |

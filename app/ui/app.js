@@ -1871,8 +1871,17 @@ function wire() {
     try { await renderHealth(true); } catch (e) { toast(e.message, true); }
     $("o-health-now").disabled = false;
   });
-  $("o-dkim-save").addEventListener("click", () => settingsChange(
-    {dkim: $("o-dkim").value.split(/[\s,]+/).filter(Boolean)}, "The hourly check asks for these from now on."));
+  $("o-dkim-save").addEventListener("click", async () => {
+    $("o-dkim-save").disabled = true;
+    try {
+      await desk("PUT", "/office/settings", {dkim: $("o-dkim").value.split(/[\s,]+/).filter(Boolean)});
+      toast("Saved. The hourly check asks for these from now on; checking now.");
+      await renderHealth(true);
+    } catch (e) {
+      toast(e.message, true);
+    }
+    $("o-dkim-save").disabled = false;
+  });
   $("o-backup").addEventListener("click", downloadBackup);
   $("o-ssh").value = kept("ssh", "");
   $("o-term").addEventListener("click", async () => {
