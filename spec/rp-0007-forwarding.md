@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.9.0 |
-| **Updated** | 2026-11-12 |
+| **Version** | 0.10.0 |
+| **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-3, RP-5 |
@@ -293,6 +293,10 @@ A gateway that takes calls from partners publishes its **windows** in its record
 occupied bandwidth (US: §97.3(a)(8), 26 dB down). Here Aether's 2 300 Hz signal, which occupies 240
 to 2 760 Hz of audio by the wider reading of that rule, on a USB dial of 7.101 MHz.
 
+On an FM channel (RP-5 §4.4) the modem works on the radio's audio and cannot measure the
+deviation, so a window states the whole channel: `occupied_hz` is `dial_hz` less and plus half of
+`bandwidth_hz`. A 2 m window on 145.010 MHz in a 25 kHz channel states `[144997500, 145022500]`.
+
 A window opens `at_s` seconds after each multiple of `every_s` since the Unix epoch, and lasts
 `length_s` seconds: here at :15 past every hour, for ten minutes. During a window the gateway
 listens on its `channel`.
@@ -317,7 +321,8 @@ enters from that country's rules; with none, it publishes no window and calls no
 unattended. A new country or a correction comes with the rule cited.
 
 **United States**, ITU Region 2: 47 CFR §97.221(b), with §97.305(c) for where data is allowed;
-read from the e-CFR text current to 2026-09-23 (6 m to 2026-09-24). Hertz.
+read from the e-CFR text current to 2026-09-23 (6 m to 2026-09-24; 2 m, 1.25 m and 70 cm to
+2026-11-10). Hertz.
 
 | Band | From | To |
 |---|---|---|
@@ -331,11 +336,18 @@ read from the e-CFR text current to 2026-09-23 (6 m to 2026-09-24). Hertz.
 | 12 m | 24 925 000 | 24 930 000 |
 | 10 m | 28 120 000 | 28 189 000 |
 | 6 m | 50 100 000 | 54 000 000 |
+| 2 m | 144 100 000 | 148 000 000 |
+| 1.25 m | 222 000 000 | 225 000 000 |
+| 70 cm | 430 000 000 | 450 000 000 |
 
-§97.221(b) opens the 6 m and shorter bands whole; data starts at 50.1 MHz on 6 m (§97.305(c)), and
-the bands of shorter wavelength are not listed yet. §97.221(c), automatic control anywhere in the data segments
-for a signal of 500 Hz or less, needs a station under local or remote control asking: it does not
-cover two unattended gateways.
+§97.221(b) opens the 6 m and shorter bands whole, where §97.305(c) allows data: from 50.1 MHz on
+6 m, from 144.1 MHz on 2 m, 222 to 225 MHz on 1.25 m, and all of 70 cm. Two parts of those bands
+are left out, because a country's table cannot know where a gateway stands or what its operator has
+filed. 219 to 220 MHz is only for fixed point-to-point message forwarding stations whose licensees
+have given written notice of their location (§97.303(l)). 420 to 430 MHz may not be used north of
+Line A (§97.303(m)(1)). The bands above 70 cm are not listed yet. §97.221(c), automatic control
+anywhere in the data segments for a signal of 500 Hz or less, needs a station under local or remote
+control asking: it does not cover two unattended gateways.
 
 ---
 
@@ -419,8 +431,8 @@ All with framing, from `vectors/session-04.json`, `vectors/forwarding.json`,
 `vectors/session-04.json` is a forwarding session byte for byte: N2CALL-5, cut off, calls N1CALL-10
 in its window, sends two records and Shelter 3's message, and receives Ana's message with its
 placement. `vectors/forwarding.json` has the placement and eight checks of it, the records and
-eleven checks of a `PROOF` (four of them with the credential's hash), eleven windows checked against
-the United States' table (§5, §5.1), eight choices of whether to send records to a partner (§6.2),
+eleven checks of a `PROOF` (four of them with the credential's hash), nineteen windows checked
+against the United States' table (§5, §5.1), eight of them FM channels, eight choices of whether to send records to a partner (§6.2),
 and the post office's side: the forward item placed when N2CALL-5 fell
 silent, N1CALL-10's report with its path, and the drop when N2CALL-5 came back.
 
@@ -460,3 +472,4 @@ online, which declines the message `already-have` because the post office alread
 | 0.7.1 | 2026-11-09 | The local delivery vectors follow session-04: the sessions at 14:35 and 14:55, the records in the 15:15 window by their credentials' hashes (§9, §10). |
 | 0.8.0 | 2026-11-09 | A placement is an untagged COSE_Sign1 (RP-0 §5): its key's ID moves from the body (key 7, removed) to the protected header (§4.2, §4.3); sizes (§9). |
 | 0.9.0 | 2026-11-12 | Gateways across post offices (RP-5 0.16.0). §4.1: a gateway is cut off only after it has polled, as the reference already read it, and not since a `placing` false; it polls every post office that places items at it. §6.1: a route may name gateways registered with another post office this one knows, and `via` polls it. Test vectors (`forwarding.json`: N1CALL-10's record from hampost.org's list; `placing`). |
+| 0.10.0 | 2026-11-13 | FM channels (§5): a window on an FM channel states the channel as `occupied_hz`, carrier less and plus half its width (RP-5 0.17.0 §4.4), since a modem on an FM radio's audio cannot measure the deviation. §5.1: the United States' table gains 2 m (144.1 to 148.0 MHz), 1.25 m (222 to 225 MHz) and 70 cm (430 to 450 MHz), read from the e-CFR current to 2026-11-10; 219 to 220 MHz (§97.303(l)) and 420 to 430 MHz (§97.303(m)(1), Line A) left out, and why. Test vectors (`forwarding.json`: eight FM windows). |

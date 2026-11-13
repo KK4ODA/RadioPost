@@ -3819,6 +3819,10 @@ def make_forwarding() -> dict[str, Any]:
     def usb(dial: int, audio: tuple[int, int] = AETHER_2300_HZ) -> list[int]:
         return [dial + audio[0], dial + audio[1]]
 
+    def fm(carrier: int, width: int = 25_000) -> list[int]:
+        """RP-7 §5: an FM window states its whole channel, the carrier less and plus half."""
+        return [carrier - width // 2, carrier + width // 2]
+
     window_in = [
         ("N1CALL-10's window: 7.101 MHz, Aether 2 300 Hz", WINDOW["channel"]["occupied_hz"], "US"),
         ("7.103 MHz: the signal runs past 7.105", usb(7103000), "US"),
@@ -3831,6 +3835,14 @@ def make_forwarding() -> dict[str, Any]:
         ("exactly 7.100 to 7.105 MHz: the ends count", [7100000, 7105000], "US"),
         ("one hertz past 3.600 MHz", [3597600, 3600001], "US"),
         ("7.101 MHz from a country with no table here", WINDOW["channel"]["occupied_hz"], "CA"),
+        ("2 m, 145.010 MHz, a 25 kHz FM channel", fm(145_010_000), "US"),
+        ("2 m, 144.050 MHz: no data below 144.1", fm(144_050_000), "US"),
+        ("2 m, 147.995 MHz: the channel runs past 148.0", fm(147_995_000), "US"),
+        ("1.25 m, 223.500 MHz", fm(223_500_000), "US"),
+        ("1.25 m, 219.500 MHz: point-to-point forwarding stations only", fm(219_500_000), "US"),
+        ("70 cm, 441.000 MHz, a 12.5 kHz FM channel", fm(441_000_000, 12_500), "US"),
+        ("70 cm, 425.000 MHz: not north of Line A, so left out", fm(425_000_000), "US"),
+        ("70 cm, 430.000 MHz: the channel straddles 430", fm(430_000_000), "US"),
     ]
     window_cases = [
         {
@@ -3855,6 +3867,14 @@ def make_forwarding() -> dict[str, Any]:
             "exactly 7.100 to 7.105 MHz: the ends count": True,
             "one hertz past 3.600 MHz": False,
             "7.101 MHz from a country with no table here": False,
+            "2 m, 145.010 MHz, a 25 kHz FM channel": True,
+            "2 m, 144.050 MHz: no data below 144.1": False,
+            "2 m, 147.995 MHz: the channel runs past 148.0": False,
+            "1.25 m, 223.500 MHz": True,
+            "1.25 m, 219.500 MHz: point-to-point forwarding stations only": False,
+            "70 cm, 441.000 MHz, a 12.5 kHz FM channel": True,
+            "70 cm, 425.000 MHz: not north of Line A, so left out": False,
+            "70 cm, 430.000 MHz: the channel straddles 430": False,
         },
     )
     now = T_WINDOW + 1860  # 14:46, in N4CALL-2's window

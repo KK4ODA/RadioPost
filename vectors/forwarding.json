@@ -338,6 +338,78 @@
       ],
       "country": "CA",
       "expect": false
+    },
+    {
+      "what": "2 m, 145.010 MHz, a 25 kHz FM channel",
+      "occupied_hz": [
+        144997500,
+        145022500
+      ],
+      "country": "US",
+      "expect": true
+    },
+    {
+      "what": "2 m, 144.050 MHz: no data below 144.1",
+      "occupied_hz": [
+        144037500,
+        144062500
+      ],
+      "country": "US",
+      "expect": false
+    },
+    {
+      "what": "2 m, 147.995 MHz: the channel runs past 148.0",
+      "occupied_hz": [
+        147982500,
+        148007500
+      ],
+      "country": "US",
+      "expect": false
+    },
+    {
+      "what": "1.25 m, 223.500 MHz",
+      "occupied_hz": [
+        223487500,
+        223512500
+      ],
+      "country": "US",
+      "expect": true
+    },
+    {
+      "what": "1.25 m, 219.500 MHz: point-to-point forwarding stations only",
+      "occupied_hz": [
+        219487500,
+        219512500
+      ],
+      "country": "US",
+      "expect": false
+    },
+    {
+      "what": "70 cm, 441.000 MHz, a 12.5 kHz FM channel",
+      "occupied_hz": [
+        440993750,
+        441006250
+      ],
+      "country": "US",
+      "expect": true
+    },
+    {
+      "what": "70 cm, 425.000 MHz: not north of Line A, so left out",
+      "occupied_hz": [
+        424987500,
+        425012500
+      ],
+      "country": "US",
+      "expect": false
+    },
+    {
+      "what": "70 cm, 430.000 MHz: the channel straddles 430",
+      "occupied_hz": [
+        429987500,
+        430012500
+      ],
+      "country": "US",
+      "expect": false
     }
   ],
   "segments": {
@@ -381,6 +453,18 @@
       [
         50100000,
         54000000
+      ],
+      [
+        144100000,
+        148000000
+      ],
+      [
+        222000000,
+        225000000
+      ],
+      [
+        430000000,
+        450000000
       ]
     ],
     "rule": "47 CFR §97.221(b), §97.305(c); RP-7 §5.1"
