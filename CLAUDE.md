@@ -223,8 +223,10 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   interface; `evidence.rs` judges good/warn/bad; `lookups.rs` looks each new application up on a
   worker thread. `mailboxes.rs` makes the mailbox at approval (Stalwart's JMAP `x:Domain/get` and
   `x:Account/set`, tried only against a stand-in; or a named program); `notices.rs` and
-  `aftercare.rs` send the emails. `health.rs` checks hourly and emails on change; `backups.rs`
-  seals with ring's PBKDF2 and ChaCha20-Poly1305; `jobs.rs` is the fixed table a root-owned
+  `aftercare.rs` send the emails. `health.rs` checks hourly and emails on change (an amber
+  `Warn` sends nothing); `backups.rs` seals with ring's PBKDF2 and ChaCha20-Poly1305, and backs up
+  Stalwart's `/var/lib/stalwart` and `/etc/stalwart` with Stalwart stopped (`mail_backup`, the jobs
+  runner's nightly `mail-backup`; `restore_mail`; tests use a stand-in `MailServer`); `jobs.rs` is the fixed table a root-owned
   systemd path unit runs from `requests/new/`; `install.rs` plans a Debian set-up against a
   `Probe` (tests plan a fresh and a set-up server). The desk goes by callsign, so nobody becomes an
   operator by applying, and a code naming an operator's callsign for anyone but the asking operator

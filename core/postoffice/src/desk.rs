@@ -221,21 +221,40 @@ impl Running {
                 }
             }
             ("GET", "/office/backups") => {
-                let list: Vec<Json> = crate::backups::list(self.files().dir())
-                    .into_iter()
-                    .map(|(name, bytes, at)| json!({"name": name, "bytes": bytes, "at": at}))
-                    .collect();
-                ok(&json!({"backups": list}))
+                let dir = self.files().dir();
+                let listed = |l: Vec<(String, u64, u64)>| -> Vec<Json> {
+                    l.into_iter()
+                        .map(|(name, bytes, at)| json!({"name": name, "bytes": bytes, "at": at}))
+                        .collect()
+                };
+                ok(&json!({"backups": listed(crate::backups::list(dir)),
+                           "mail": listed(crate::backups::mail_list(dir)),
+                           "downloaded": crate::backups::offsite(dir, now())["last"]}))
             }
             ("POST", "/office/backup") => {
-                let made = crate::backups::archive(self.files().dir())
+                let dir = self.files().dir();
+                // the newest backup of the mailboxes goes too: this one leaves the server
+                let mail = crate::backups::mail_list(dir).into_iter().next();
+                let made = crate::backups::archive(dir, true)
                     .and_then(|zip| crate::backups::seal(&zip, &text("passphrase")));
                 match made {
                     Ok(sealed) => {
-                        eprintln!("radiopost-po: {who} took a sealed backup");
+                        let at = now();
+                        let mail = mail.map(|(name, _, _)| name);
+                        eprintln!(
+                            "radiopost-po: {who} took a sealed backup{}",
+                            mail.as_deref().map_or_else(String::new, |m| format!(
+                                ", with the mailboxes of {m}"
+                            ))
+                        );
+                        if let Err(e) =
+                            crate::backups::downloaded(dir, at, who, sealed.len(), mail.as_deref())
+                        {
+                            eprintln!("radiopost-po: the download was not written down: {e}");
+                        }
                         let domain = self.settings().domains.first().cloned().unwrap_or_default();
-                        let name = format!("{domain}-{}.rpbackup", crate::lookups::day(now()));
-                        ok(&json!({"name": name, "bytes": sealed.len(),
+                        let name = format!("{domain}-{}.rpbackup", crate::lookups::day(at));
+                        ok(&json!({"name": name, "bytes": sealed.len(), "mail": mail,
                                    "data": radiopost::base64url::encode(&sealed)}))
                     }
                     Err(e) => (

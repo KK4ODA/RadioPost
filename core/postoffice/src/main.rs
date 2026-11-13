@@ -65,10 +65,16 @@ usage: radiopost-po --dir DIR COMMAND
   jobs [--install]   run the jobs the desk asked for (the root-owned runner does, as root); with
                      --install, put that runner in place once (run with sudo)
   backup --to FILE [--passphrase-file F]
-                     the post office's key, settings and state in one file, sealed with the
-                     passphrase in F when given
-  restore FILE [--force] [--passphrase-file F]
-                     put a backup's files back (stop the service first)
+                     the post office's key, settings and state, and the newest backup of the
+                     mail server's mailboxes, in one file, sealed with the passphrase in F when
+                     given
+  restore FILE [--force] [--passphrase-file F] [--without-mail]
+                     put a backup's files back (stop the service first), and its mailboxes:
+                     Stalwart stopped, its data moved aside and replaced, Stalwart started again
+                     (as root); --without-mail leaves the mail server alone
+  mail-backup        back up the mail server's mailboxes now: Stalwart stopped, /var/lib/stalwart
+                     and /etc/stalwart archived, Stalwart started again; the last three kept
+                     (as root: the jobs runner does it each night)
   approve ID [--role] | decline ID --text TEXT | postcard ID
                      decide an application: its credential issued, refused with a reason, or a
                      code made to send by post to the address on the licence
@@ -261,6 +267,7 @@ fn check(files: &Files, a: &Args) -> Result<(), String> {
         let mark = match line.verdict {
             Verdict::Ok => "ok  ",
             Verdict::Fail => "FAIL",
+            Verdict::Warn => "warn",
             Verdict::Note => "note",
         };
         println!("{mark}  {}", line.text);
@@ -556,7 +563,7 @@ fn lookup(files: &Files, a: &Args) -> Result<(), String> {
     Ok(())
 }
 
-/// `health`, `jobs`, `backup`, `restore`: the server's own care.
+/// `health`, `jobs`, `backup`, `restore`, `mail-backup`: the server's own care.
 fn care(dir: &std::path::Path, files: &Files, a: &Args, command: &str) -> Result<(), String> {
     match command {
         "health" => {
@@ -565,6 +572,7 @@ fn care(dir: &std::path::Path, files: &Files, a: &Args, command: &str) -> Result
                 let mark = match l["verdict"].as_str() {
                     Some("ok") => "ok  ",
                     Some("fail") => "FAIL",
+                    Some("warn") => "warn",
                     _ => "note",
                 };
                 println!("{mark}  {}", l["text"].as_str().unwrap_or(""));
@@ -584,7 +592,7 @@ fn care(dir: &std::path::Path, files: &Files, a: &Args, command: &str) -> Result
             Ok(())
         }
         "backup" => {
-            let zip = radiopost_postoffice::backups::archive(dir)?;
+            let zip = radiopost_postoffice::backups::archive(dir, true)?;
             let data = match passphrase(a)? {
                 Some(p) => radiopost_postoffice::backups::seal(&zip, &p)?,
                 None => zip,
@@ -606,10 +614,35 @@ fn care(dir: &std::path::Path, files: &Files, a: &Args, command: &str) -> Result
             let file = std::fs::read(&from).map_err(|e| format!("{from}: {e}"))?;
             let zip = radiopost_postoffice::backups::open(&file, passphrase(a)?.as_deref())?;
             let written = radiopost_postoffice::backups::restore(&zip, dir, a.has("--force"))?;
-            println!(
-                "restored {}: start the post office again",
-                written.join(", ")
-            );
+            println!("restored {}", written.join(", "));
+            if !a.has("--without-mail") {
+                let server = radiopost_postoffice::backups::MailServer::stalwart();
+                let restored = radiopost_postoffice::backups::restore_mail(
+                    &zip,
+                    &server,
+                    serve::now(),
+                )
+                .map_err(|e| {
+                    format!(
+                        "{e}\nthe post office's files are back; for the mailboxes, run restore \
+                         again as root with --force, or give --without-mail"
+                    )
+                })?;
+                match restored {
+                    Some(said) => println!("{said}"),
+                    None => println!("the backup holds no mailboxes: the mail server is untouched"),
+                }
+            }
+            println!("start the post office again");
+            Ok(())
+        }
+        "mail-backup" => {
+            let (path, bytes) = radiopost_postoffice::backups::mail_backup(
+                dir,
+                &radiopost_postoffice::backups::MailServer::stalwart(),
+                &radiopost_postoffice::lookups::day(serve::now()),
+            )?;
+            println!("mailboxes backed up: {} ({bytes} bytes)", path.display());
             Ok(())
         }
         _ => Err(format!("unknown command {command}")),
@@ -920,7 +953,7 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
         }
         "lookup" => lookup(&files, a),
         "mailboxes" => mailboxes(&files, a),
-        "health" | "jobs" | "backup" | "restore" => care(&dir, &files, a, command),
+        "health" | "jobs" | "backup" | "restore" | "mail-backup" => care(&dir, &files, a, command),
         "approve" | "decline" | "postcard" => decide(&files, a, command),
         "outgoing" | "status" => {
             let answer = admin(&files, "GET", &format!("/{command}"), &Json::Null)?;

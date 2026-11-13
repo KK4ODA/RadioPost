@@ -1542,7 +1542,7 @@ async function renderHealth(fresh = false) {
   const fails = lines.filter((l) => l.verdict === "fail").length;
   $("o-health-when").textContent = `${fails ? `${fails} to fix` : "All pass"}. Checked ${h.at ? day(h.at) : "never"}; again every hour, and you are emailed when one turns red.`;
   $("o-checks").replaceChildren(...lines.map((l) => el("li", {class: l.verdict},
-    el("span", {class: "mark", text: {ok: "\u2713", fail: "\u2717", note: "\u2022"}[l.verdict] || "\u2022"}),
+    el("span", {class: "mark", text: {ok: "\u2713", fail: "\u2717", warn: "!", note: "\u2022"}[l.verdict] || "\u2022"}),
     el("span", {text: l.text}))));
   $("o-n-health").textContent = fails ? String(fails) : "";
   const s = await desk("GET", "/office/settings");
@@ -1586,9 +1586,16 @@ async function renderServer() {
     jobsTimer = setTimeout(() => renderServer().catch(() => {}), 2000);
   }
   const b = await desk("GET", "/office/backups");
-  $("o-backups").replaceChildren(...(b.backups || []).map((x) => el("tr", {},
-    el("td", {class: "mono", text: x.name}), el("td", {class: "n", text: kb(x.bytes)}), el("td", {text: day(x.at)}))));
-  if (!(b.backups || []).length) $("o-backups").append(el("tr", {}, el("td", {class: "note", colspan: "3", text: "None yet: the first is made tonight."})));
+  const row = (x, what) => el("tr", {title: what},
+    el("td", {class: "mono", text: x.name}), el("td", {class: "n", text: kb(x.bytes)}), el("td", {text: day(x.at)}));
+  $("o-backups").replaceChildren(
+    ...(b.backups || []).map((x) => row(x, "The post office: its key, settings, state and held attachments")),
+    ...(b.mail || []).map((x) => row(x, "The mail server's mailboxes, accounts, passwords and DKIM keys, copied with Stalwart stopped")));
+  if (!(b.backups || []).length && !(b.mail || []).length) $("o-backups").append(el("tr", {}, el("td", {class: "note", colspan: "3", text: "None yet: the first is made tonight."})));
+  const d = b.downloaded;
+  $("o-downloaded").textContent = d
+    ? `Last downloaded ${day(d.at)} by ${d.by}, ${d.mail ? "with the mailboxes" : "without the mailboxes"}.`
+    : "None downloaded yet: a backup that stays on the server is lost with it.";
 }
 
 // what a Claude session needs to help with the server: no mail, no names, no keys
@@ -1631,7 +1638,8 @@ async function downloadBackup() {
     const r = await api("office-backup", {passphrase: p1});
     $("o-pass1").value = "";
     $("o-pass2").value = "";
-    toast(`Kept on this computer: ${r.path}. Keep the passphrase somewhere safe.`);
+    toast(`Kept on this computer${r.mail ? ", with the mailboxes" : ""}: ${r.path}. Keep the passphrase somewhere safe.`);
+    renderServer().catch(() => {});
   } catch (e) {
     toast(e.message, true);
   } finally {

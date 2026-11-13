@@ -35,6 +35,7 @@ fn cmd(words: &[&str]) -> Vec<String> {
 
 /// The jobs, for the post office at `dir` and the program at `exe`.
 #[must_use]
+#[allow(clippy::too_many_lines, reason = "the fixed table, a job each")]
 pub fn table(dir: &Path, exe: &Path) -> Vec<Job> {
     let exe = exe.to_string_lossy().into_owned();
     let dir = dir.to_string_lossy().into_owned();
@@ -123,6 +124,16 @@ pub fn table(dir: &Path, exe: &Path) -> Vec<Job> {
             name: "system-updates",
             what: "Debian's security updates, now rather than tonight",
             commands: vec![cmd(&["unattended-upgrade", "-v"])],
+        },
+        Job {
+            name: "mail-backup",
+            what: "Back up the mail server's mailboxes now: Stalwart stopped for a moment, its data archived, started again; the last three kept (done each night)",
+            commands: vec![vec![
+                exe.clone(),
+                "--dir".into(),
+                dir.clone(),
+                "mail-backup".into(),
+            ]],
         },
         Job {
             name: "check",
@@ -375,6 +386,27 @@ mod tests {
         assert_eq!(s["jobs"][0]["asked"], json!(false));
         assert!(run_pending(&dir, &jobs, || 11).is_empty(), "each runs once");
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_mailboxes_are_backed_up_by_the_program_as_root() {
+        let table = table(
+            Path::new("/var/lib/radiopost"),
+            Path::new("/usr/local/bin/radiopost-po"),
+        );
+        let job = table
+            .iter()
+            .find(|j| j.name == "mail-backup")
+            .expect("the job");
+        assert_eq!(
+            job.commands,
+            [cmd(&[
+                "/usr/local/bin/radiopost-po",
+                "--dir",
+                "/var/lib/radiopost",
+                "mail-backup"
+            ])]
+        );
     }
 
     #[test]

@@ -28,6 +28,8 @@ pub enum Verdict {
     Ok,
     /// Wrong, or missing: the post office is not ready.
     Fail,
+    /// Not yet wrong, but soon: amber on the desk; no email is sent for it.
+    Warn,
     /// Worth knowing, or not checked.
     Note,
 }

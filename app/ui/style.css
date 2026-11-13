@@ -324,6 +324,8 @@ button.link { height: auto; padding: 0; border: 0; background: none; color: var(
 .checks li.fail .mark { color: var(--bad); }
 .checks li.fail { background: color-mix(in srgb, var(--bad) 7%, transparent); }
 .checks li.note .mark { color: var(--muted); }
+.checks li.warn .mark { color: var(--busy); }
+.checks li.warn { background: color-mix(in srgb, var(--busy) 7%, transparent); }
 .grow-text { flex: 1; align-self: center; }
 .job { border-top: 1px solid var(--line); padding: 10px 0; }
 .job:first-child { border-top: 0; }

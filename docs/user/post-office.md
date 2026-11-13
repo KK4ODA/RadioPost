@@ -459,6 +459,11 @@ directory, its key and its state are not touched.
 * **DKIM keys are not rotated** while DNS is managed by hand.
 * **Copies placed ahead**, the offline queue and reports are Phase 3; forwarding by radio is
   Phase 4.
+* **A backup mail server.** While the server is down, senders retry for days; a second mail
+  server that took mail meanwhile would need the accept lists, or it would bounce to forged
+  senders later (wishlist W38).
+* **Backups off the server are by hand**: *Download a backup* on the desk, at least once a week.
+  Nothing sends them elsewhere by itself.
 
 ## 12. The desk
 
@@ -472,20 +477,34 @@ the service's own additions over HTTPS, as your credential.
 | Accounts | Every account, its name (*Rename*) and its devices, each with *Revoke* for a lost one; the computer you are using is marked. |
 | New code | A code for a new account or a new device, after *Check the licence*. One that would give someone else the desk asks first, in red (§8). |
 | Mail out | What waits to go on by email. |
-| Health | Every check, as `check` does it from outside, and what only the server sees: free disk, email stuck going out, last night's backup, whether the jobs runner is installed, a newer release. The service checks every hour and emails the contact address when a check turns red, and when all pass again. Give the DKIM selectors here once. |
-| Server | **Jobs** the server's administrator does for you: update, restart the post office or the mail server, copy the certificate, the services, both logs, disk, firewall, ports, logins, Debian's updates, `check`. The service asks; a root-owned systemd unit (`radiopost-po-jobs.path`) runs the job from a fixed list, programs and arguments with no shell, and its output comes back here. The installer puts the unit in place (`radiopost-po --dir /var/lib/radiopost jobs --install`). **Backups**: one each night beside the service, the last seven; *Download a backup* seals one with a passphrase of yours (PBKDF2, then ChaCha20-Poly1305) and keeps it on your computer in `RadioPost backups`. **When you need more**: a terminal on the server through your computer's own SSH, and *Copy for Claude*, the server's state (versions, checks, settings, the jobs' last output; no mail, names or keys) to paste into a Claude session. |
+| Health | Every check, as `check` does it from outside, and what only the server sees: free disk, email stuck going out, last night's backup, the mailboxes' last backup and its size, when a backup was last downloaded (amber after 7 days, red after 30; never, amber at once and red after 30), whether the jobs runner is installed, a newer release. The service checks every hour and emails the contact address when a check turns red, and when all pass again (amber sends nothing). Give the DKIM selectors here once. |
+| Server | **Jobs** the server's administrator does for you: update, restart the post office or the mail server, copy the certificate, the services, both logs, disk, firewall, ports, logins, Debian's updates, `check`. The service asks; a root-owned systemd unit (`radiopost-po-jobs.path`) runs the job from a fixed list, programs and arguments with no shell, and its output comes back here. The installer puts the unit in place (`radiopost-po --dir /var/lib/radiopost jobs --install`). **Backups**: one of the post office each night beside the service, the last seven, and one of the mail server's mailboxes (below), the last three; *Download a backup* seals one with a passphrase of yours (PBKDF2, then ChaCha20-Poly1305), with the newest backup of the mailboxes in it, and keeps it on your computer in `RadioPost backups`. Only a downloaded backup counts as off the server. **When you need more**: a terminal on the server through your computer's own SSH, and *Copy for Claude*, the server's state (versions, checks, settings, the jobs' last output; no mail, names or keys) to paste into a Claude session. |
 | Post offices | The other post offices you know, those seen and not known (*Know*, *Block*), and those blocked (§13). |
 | Settings | Take applications; licence lookups (the FCC copy, QRZ); mailboxes; who operates it. |
 
-To restore a backup on a new server: install it (above), stop the service, then
+**The mailboxes.** Stalwart keeps the mail its users read in their mail programs, its accounts and
+their passwords, and the DKIM keys in its RocksDB store (`/var/lib/stalwart`), and its settings in
+`/etc/stalwart` (`config.json`, `stalwart.env`). A store copied while Stalwart runs is not a backup
+(Stalwart's own documentation, *Backup and restore*), so each night between 08:00 and 12:00 UTC the
+post office asks the jobs runner for the job **mail-backup**: Stalwart stopped, both directories
+archived (`backups/mail/stalwart-<day>.tar.gz`, root's, readable by the post office alone),
+Stalwart started again. Senders retry for days (RFC 5321), so the minute it is stopped loses no
+mail; a mail program open at the time connects again. The Server tab runs it now too. The archive
+holds every password and DKIM key: the download's passphrase is what protects it off the server.
+
+To restore a backup on a new server: install it (above, with Stalwart through its wizard), stop
+the service, then, as root:
 
 ```
 radiopost-po --dir /var/lib/radiopost restore radiopost.org-2026-11-12.rpbackup --force --passphrase-file pass.txt
 systemctl start radiopost-po
 ```
 
-The mail server keeps its own mailboxes: back up `/var/lib/stalwart` with Stalwart stopped, or
-with its own tools.
+`restore` puts the post office's files back, owned by the post office, and then the mailboxes:
+it stops Stalwart, moves `/var/lib/stalwart` and `/etc/stalwart` aside as
+`…before-restore-<time>` (delete them once all is well), unpacks the backup's, and starts
+Stalwart again. `--without-mail` leaves the mail server alone. Then sign in to a mailbox and check
+that its mail, folders and attachments are there.
 
 ## 13. Other post offices
 

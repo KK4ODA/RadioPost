@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.12 |
+| **Version** | 0.3.13 |
 | **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -177,7 +177,7 @@ Answer a message and keep its thread, at the other end too. Pass a message on to
 | Recommendation | Accept. |
 | Status | Implemented. |
 | Author decision | **The author**, 2026-11-13: build it; a reply never quotes, a forward carries the files and lists the held attachments, priority starts routine. |
-| Notes | Held attachments cannot be forwarded until fetched (RP-6 §2.5): their `ref` means something only to the recipient's own post office. Fetched, they come in a new message (`reply_to` the original), which can be forwarded. |
+| Notes | Held attachments cannot be forwarded until fetched (RP-6 §2.5): their `ref` means something only to the recipient's own post office. Fetched, they come in a new message (`reply_to` the original), which can be forwarded. A reply to a message the post office itself sent out as email keeps no thread at the email's end (§13, G17). |
 
 ### W2. An address book and groups
 
@@ -669,14 +669,14 @@ A post office that loses its server loses no mail, and is rebuilt in hours.
 | Requested by | The plan: concept §8.5; the pilot is to run with nightly off-site backups and a backup mail server (concept §12). Requesters: 0. |
 | Component | Post office. |
 | Compatibility | **Fits today**: one operator's servers; no protocol. |
-| Existing coverage | Backups built (2026-11-12, with W49): the key, settings, state and held attachments each night beside the service, the last seven; a backup sealed with the operator's passphrase from the desk, kept on their computer; `radiopost-po backup` and `restore`, a restore tried in the tests. The mail server's mailboxes are Stalwart's to back up. No backup mail server. |
+| Existing coverage | Backups built (2026-11-12, with W49): the key, settings, state and held attachments each night beside the service, the last seven; a backup sealed with the operator's passphrase from the desk, kept on their computer; `radiopost-po backup` and `restore`, a restore tried in the tests. **The mailboxes** (2026-11-13): each night between 08:00 and 12:00 UTC the service asks the root-owned jobs runner for the fixed job `mail-backup` (`radiopost-po mail-backup`): Stalwart stopped, `/var/lib/stalwart` (RocksDB: mail, accounts, passwords, DKIM keys) and `/etc/stalwart` (`config.json`, the environment) archived with `tar`, Stalwart started again whatever happened, never copied while it runs (Stalwart 1.x's *Backup and restore*: without a file system snapshot, stop, copy, start); the archive root's and the service's alone, the last three kept. Health shows the mailboxes' last backup and its size, and when a backup was last downloaded: amber after 7 days, red after 30 (never: amber, red after 30 days of watching); only a download counts (concept §8.5). *Download a backup* and `backup --to` carry the newest mailboxes; `restore` puts them back (Stalwart stopped, its directories moved aside, unpacked, started), refusing an archive that names anything outside them, tried in the tests against a stand-in directory. No backup mail server; nothing goes off the server by itself. |
 | Dependencies | None. |
 | Effort | Medium. |
 | Priority | **Critical** for the backups: the pilot's server now holds real mail, its users' accounts and the post office's key. The backup mail server is **Medium**. |
 | Recommendation | Accept: backups now, and a restore tried once; the backup mail server after. |
-| Status | In progress: the backups are built, the backup mail server is not. |
+| Status | In progress: the backups are built, the mailboxes included; the backup mail server is not. |
 | Author decision | None yet. |
-| Notes | A backup mail server must refuse as the door does, or it sends bounces to forged senders later (D15, RP-6 §2.1), so it needs the accept lists (concept §13 left this open). Without one, senders retry for days (RFC 5321) and only time is lost. |
+| Notes | A backup mail server must refuse as the door does, or it sends bounces to forged senders later (D15, RP-6 §2.1), so it needs the accept lists (concept §13 left this open). Without one, senders retry for days (RFC 5321) and only time is lost. Concept §8.5 has the nightly copy go to a third company; today it reaches the operator's computer only when they download one, which Health turns amber and red to prompt. A large mail store makes the download large: it travels whole in one HTTPS answer. |
 
 ### W49. The post office run from the client, and set up by its program
 
@@ -1045,6 +1045,7 @@ document.
 | G14 | RP-5 §5.8, RP-7 §4.1 | Copies at a gateway registered with another post office: where its record is found, how the gateway learns to poll there, and whose credential may collect them. A route through such a gateway has the same gaps. | Users' usual gateways must be registered with their own post office; the program skips the others without a word. | The record from the known post offices' lists, `placing` in the poll's answer, items only to the listing post office's credential: RP-5 0.16.0 and RP-7 0.9.0, D37. **Post office's side built** (2026-11-12); the gateway's polling comes with W27. | W27, W30 |
 | G15 | RP-1 §7.3 | Which post offices a post office knows: §7.3 covers gateways only, and the door, RP-5 §2 and RP-6 §4 rest on it. | Each operator types the others' keys, which are never refreshed: a rotated key, or a revocation, is missed, and a new post office is found by nobody. | Known by the operators' choice, found as mail crosses, followed in DNS: RP-1 0.6.0 §7.5, D38. **Built** (2026-11-12). | W49 |
 | G16 | RP-6 §5.1 | Every message made from an email is third-party mail unless it came with RP-6 §4's part, so mail a licensed account sends from its own mail program, signed in to its post office, would be flagged though its sender is shown licensed. Email-only members' mail rightly is. | Mail between a post office's own licensed users, once W36 carries it to the radio, is held back from stations abroad without an arrangement. | Count an account with a credential, signed in to submit, as shown licensed; until settled, flag it (the safe reading). | W36 |
+| G17 | RP-6 §3.1 | `In-Reply-To` and `References` are restored only when `reply_to` names a message whose `Message-ID` the post office keeps from an email that arrived (§2.4 step 8). A reply to a RadioPost message the post office itself sent out as email (a user's message copied to an email address, then answered by radio with *Reply all*) gets none, though §3.1's own rule gives that message's `Message-ID`, and the post office keeps it (`sent_ids`). | The email recipient's thread breaks on such a reply; found while building W1. | Restore the headers from the messages it sent as well: `<` the content ID in base32 `@` the sender's domain `>`, when this post office sent it. | W1 |
 
 ---
 
@@ -1098,3 +1099,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.10 | 2026-11-13 | W1 implemented: reply, reply to all and forward, in the panel and the program; a reply keeps the email thread at the other end. |
 | 0.3.11 | 2026-11-13 | W18 implemented: the post office's air forms are DEFLATE when that is smaller; G2 settled by RP-5 0.18.0 §5.3. |
 | 0.3.12 | 2026-11-13 | The author's decisions: W36 built next, its mail-losing part first; W27, W28 and W29 in one release after it. Gap G16: third-party mail and a licensed account's own mail program (RP-6 §5.1). |
+| 0.3.13 | 2026-11-13 | W38: the mail server's mailboxes backed up each night by the jobs runner with Stalwart stopped, carried by a downloaded backup and put back by `restore`; Health shows them and when a backup last left the server. Gap G17, found with W1: a reply to mail the post office sent as email keeps no thread. |

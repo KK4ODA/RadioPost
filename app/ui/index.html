@@ -319,7 +319,7 @@
           </div>
           <div class="card">
             <h2>Backups</h2>
-            <p class="note">Each night the server keeps a backup beside itself, the last seven. Keep one on this computer too, sealed with a passphrase, in case the server is lost: it holds the post office's key.</p>
+            <p class="note">Each night the server keeps a backup of the post office beside itself, the last seven, and one of the mail server's mailboxes, the last three. Keep one on this computer too, sealed with a passphrase, in case the server is lost: it holds the post office's key, and the newest mailboxes go with it.</p>
             <table class="list" aria-label="Backups on the server">
               <thead><tr><th>Backup</th><th class="n">Size</th><th>Made</th></tr></thead>
               <tbody id="o-backups"></tbody>
@@ -327,8 +327,9 @@
             <div class="row">
               <input id="o-pass1" class="grow" type="password" placeholder="A passphrase, 12 characters or more" autocomplete="new-password" title="It seals the backup: without it the file cannot be opened, by anyone, you included. Keep it somewhere safe">
               <input id="o-pass2" class="grow" type="password" placeholder="The same again" autocomplete="new-password">
-              <button type="button" id="o-backup" title="Make a backup now, seal it, and keep it on this computer">Download a backup</button>
+              <button type="button" id="o-backup" title="Make a backup now, with the newest backup of the mailboxes, seal it, and keep it on this computer">Download a backup</button>
             </div>
+            <p class="note" id="o-downloaded" title="Health turns amber 7 days after the last download, red after 30"></p>
           </div>
         </div>
 

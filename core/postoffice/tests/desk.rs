@@ -364,6 +364,16 @@ fn the_operator_runs_applications_from_the_client() {
     let (_, jobs) = http(&api, "GET", "/rp/v1/office/jobs", Some(&op), None);
     assert_eq!(disk(&jobs)["last"]["by"], json!("KK4ODA"));
 
+    // nothing has left the server yet
+    let (_, listed) = http(&api, "GET", "/rp/v1/office/backups", Some(&op), None);
+    assert_eq!(listed["downloaded"], Json::Null, "{listed}");
+    assert_eq!(listed["mail"], json!([]), "{listed}");
+
+    // the jobs runner backed the mailboxes up last night (a stand-in archive here)
+    let mail = dir.join("backups/mail");
+    std::fs::create_dir_all(&mail).expect("a directory");
+    std::fs::write(mail.join("stalwart-2026-11-13.tar.gz"), b"the mailboxes").expect("written");
+
     // a backup sealed with the operator's passphrase, which opens with it alone
     let (status, _) = http(
         &api,
@@ -391,6 +401,31 @@ fn the_operator_runs_applications_from_the_client() {
     assert_eq!(
         std::fs::read(to.join("key.hex")).expect("read"),
         std::fs::read(dir.join("key.hex")).expect("read")
+    );
+    // it carries the mailboxes, and the download is written down
+    assert_eq!(sealed["mail"], "stalwart-2026-11-13.tar.gz");
+    let mut opened = zip::ZipArchive::new(std::io::Cursor::new(zip)).expect("a zip");
+    let mut carried = Vec::new();
+    std::io::Read::read_to_end(
+        &mut opened
+            .by_name("mail/stalwart-2026-11-13.tar.gz")
+            .expect("the mailboxes"),
+        &mut carried,
+    )
+    .expect("read");
+    assert_eq!(carried, b"the mailboxes");
+    let (_, listed) = http(&api, "GET", "/rp/v1/office/backups", Some(&op), None);
+    assert_eq!(listed["mail"][0]["name"], "stalwart-2026-11-13.tar.gz");
+    assert_eq!(listed["downloaded"]["by"], "KK4ODA");
+    assert_eq!(listed["downloaded"]["mail"], "stalwart-2026-11-13.tar.gz");
+    // which Health reads: green until a week has passed (`health::offsite_line`)
+    let off = radiopost_postoffice::health::offsite_line(
+        &radiopost_postoffice::backups::offsite(&dir, serve::now()),
+        serve::now(),
+    );
+    assert_eq!(
+        off.text,
+        "backups off the server: last downloaded today, by KK4ODA, with the mailboxes"
     );
 
     // the server's own commands see the same
