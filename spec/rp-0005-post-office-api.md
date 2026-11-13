@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.18.0 |
+| **Version** | 0.19.0 |
 | **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -493,8 +493,16 @@ key.
 | `usual_gateways` | Where copies are placed ahead (§5.8): callsigns of gateways registered with this post office or with another it knows (§4.4). |
 | `auto_bytes` | A default for the client's `auto` (RP-3 §5.1). |
 | `attach_bytes` | Mail from the Internet carries its attachments up to this air-form size; above it they are held (RP-6 §2.4). The post office's default when unset is its own, at most its `max_air_bytes`. |
-| `radio_skips_read` | Mail already read in an ordinary mail program is not offered by radio. |
+| `radio_skips_read` | Mail already read in an ordinary mail program is not offered by radio. Default false. |
 | `accept_on_send` | Mail the user sends adds its recipients to the accept list (§6.5). Default true. |
+
+With `radio_skips_read`, the post office takes a message the user has read in a mail program as
+**picked up** (§5.5): it leaves the waiting list and its copies placed ahead are dropped (§5.8).
+Hiding it from the list would not be enough: a gateway holding a copy would still offer it while
+offline, and the user would pay its air time for mail already read. The post office matches the
+mail program's messages to the radio's by `Message-ID` (RP-6 §2.6). It learns what was read when
+it can, which may be some time after: it never delays a session (RP-3 §9) to find out, and mail
+read meanwhile may still be offered once.
 
 ### 6.4 Gateway registration
 
@@ -522,9 +530,11 @@ A licensed user registers a gateway they operate:
 * An entry that is neither an address nor `@domain` is answered `400` `malformed`, and nothing
   changes.
 * A role mailbox has one list, which every operator's token reads and changes.
-* When the post office accepts a message the user sent (§5.4, §5.6), it adds each `to` and `cc`
-  address the list does not already match (RP-6 §2.2), unless the user's `accept_on_send` is false
-  (§6.3).
+* When the post office accepts a message the user sent (§5.4, §5.6, §6.6), it adds each `to` and
+  `cc` address the list does not already match (RP-6 §2.2), unless the user's `accept_on_send` is
+  false (§6.3). The same for mail the user sends from a mail program, signed in to the post
+  office's mail server (RP-6 §2.6): each recipient of the submission, `Bcc` included, since the
+  user wrote to them all.
 
 How the accept list is used at the door is RP-6's.
 
@@ -816,3 +826,4 @@ read from the home's and every post office it knows) and `vectors/api.json` (the
 | 0.16.0 | 2026-11-12 | Gateways across post offices. §4.3: each entry's `api` and keys, one entry per domain. §4.4: a gateway's own post office; a client's gateway list, and the gateways a post office places copies at, come from its home's list and those of the post offices its home knows, checked with their keys; the home's record wins, and a callsign otherwise listed twice is ambiguous; `listed` keeps to the home's. §5.8: copies at gateways registered elsewhere; `placing` in the answer; `wait=0`; items served only to the credential of the post office that listed the gateway; which post offices a gateway polls. §6.3: `usual_gateways` may name them. §2: known post offices are RP-1 §7.5's. A client could list only its own post office's gateways, and a post office placed copies only at the gateways registered with it. Test vectors (`gateway-lists.json`; `api-exchanges.json`'s copies at N1CALL-10; `placing` in every copies answer). |
 | 0.17.0 | 2026-11-13 | §4.4: a channel's `modem` comes from RP-0 §9.4's registry, and a reader ignores a channel whose modem it does not know (the list of six had no way to grow and no rule for a name a client did not know); `mode` `USB` or `FM`; on an `FM` channel `dial_hz` is the carrier and `bandwidth_hz` the channel's width. |
 | 0.18.0 | 2026-11-13 | §5.3: the post office's air form uses compression 0 or 1, 1 when it gives fewer bytes, never 2 or 3, and the sizes that decide what is held are judged on it. Nothing said which: the air form is made once for every gateway and never sees the caller's `caps`, so a post office using 2 would serve mail some clients cannot read. |
+| 0.19.0 | 2026-11-13 | §6.3: `radio_skips_read` takes mail read in a mail program as picked up, so its copies placed ahead are dropped too, learned without delaying a session; default false. It had said only that such mail is not offered, which a post office could meet by hiding it while gateways kept offering its copies. §6.5: mail the user sends from a mail program fills the accept list too, every recipient of the submission (RP-6 §2.6): concept §5.1 promises that writing to someone adds them, and §6.5 named only mail sent by radio; it now names §6.6's station-to-station mail too, which already filled it. |

@@ -14,6 +14,14 @@
 //! made into its RadioPost message there (§2.4, §3.3, §4) and put in the recipient's mailbox;
 //! held attachments are written to `held/` in the post office's directory.
 //!
+//! **Mail a user submits** (RP-6 §2.6). The mail server calls the same hook for mail its users
+//! send from their own mail programs, signed in: Stalwart says who in `context.sasl.login`, the
+//! draft in `auth.login`. That mail is not judged (the user signed in, and the mail server's own
+//! rules govern what they may send): at `DATA` each recipient who is an account here gets its
+//! RadioPost message, made as from any email (§2.4), and the sender's accept list gains the
+//! recipients (RP-5 §6.5). What the service itself submits, signed in as its own account, is
+//! radio mail going out, already filed: the door lets it pass and files nothing.
+//!
 //! **The sender.** Mail a user sent to addresses this post office does not serve waits in
 //! `outgoing`. Each is made into an email (§3.1) and submitted, one SMTP transaction for the
 //! recipients at RadioPost post offices it knows (with the message part, §4) and one for the
@@ -76,6 +84,9 @@ pub struct Hook {
     pub client: Option<(IpAddr, String)>,
     /// The Internet-Draft's shape, not Stalwart's.
     pub draft: bool,
+    /// The account the client signed in as, when it did (Stalwart's `context.sasl.login`, the
+    /// draft's `auth.login`): mail a user submits from a mail program (RP-6 §2.6).
+    pub login: Option<String>,
 }
 
 /// DMARC and DKIM from `Authentication-Results` headers (RFC 8601).
@@ -114,6 +125,63 @@ fn client_of(ip: Option<&Json>, helo: Option<&Json>) -> Option<(IpAddr, String)>
     Some((ip, helo))
 }
 
+/// The account a client signed in as, when it did and said one.
+fn login_of(login: Option<&Json>) -> Option<String> {
+    login
+        .and_then(Json::as_str)
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(str::to_lowercase)
+}
+
+/// Whether `login` is the post office's own account on the mail server: the user of its
+/// submission URL (`smtp`), with or without one of its domains, as the mail server may name an
+/// account either way.
+#[must_use]
+pub fn is_service_login(login: &str, smtp: Option<&str>, domains: &[String]) -> bool {
+    let Some(user) = smtp.and_then(smtp_user) else {
+        return false;
+    };
+    let login = login.to_lowercase();
+    let local = |a: &str| -> Option<String> {
+        let (l, d) = a.rsplit_once('@')?;
+        domains
+            .iter()
+            .any(|x| x.eq_ignore_ascii_case(d))
+            .then(|| l.to_owned())
+    };
+    login == user
+        || local(&login).is_some_and(|l| l == user)
+        || local(&user).is_some_and(|l| l == login)
+}
+
+/// The user of an SMTP URL (`smtps://radiopost:secret@host:465`), decoded and in lowercase.
+fn smtp_user(url: &str) -> Option<String> {
+    let rest = url.split_once("://")?.1;
+    let (userinfo, _) = rest.split_once('@').filter(|(u, _)| !u.contains('/'))?;
+    let user = userinfo.split_once(':').map_or(userinfo, |(u, _)| u);
+    let mut out = Vec::new();
+    let bytes = user.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && let Some(b) = user
+                .get(i + 1..i + 3)
+                .and_then(|h| u8::from_str_radix(h, 16).ok())
+        {
+            out.push(b);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out)
+        .ok()
+        .map(|u| u.to_lowercase())
+        .filter(|u| !u.is_empty())
+}
+
 /// Reads a hook request in either shape. Verdicts are taken only from where the mail server
 /// writes them, never from the message's own headers, which its sender wrote.
 #[must_use]
@@ -147,6 +215,7 @@ pub fn read_hook(body: &Json) -> Hook {
             }
         }
         hook.client = client_of(body.pointer("/client/ip"), body.pointer("/client/ehlo"));
+        hook.login = login_of(body.pointer("/auth/login"));
     } else {
         hook.stage = body
             .pointer("/context/stage")
@@ -192,6 +261,7 @@ pub fn read_hook(body: &Json) -> Hook {
             body.pointer("/context/client/ip"),
             body.pointer("/context/client/helo"),
         );
+        hook.login = login_of(body.pointer("/context/sasl/login"));
     }
     if hook.given && hook.dmarc.is_empty() {
         hook.dmarc = "none".into();
@@ -274,6 +344,25 @@ fn refusal_text(reply: &str, recipient: &str, max_email_bytes: u64) -> String {
     }
 }
 
+/// The account here a mail-program user signed in as: the login itself when it is an address,
+/// or the login at one of the post office's domains (RP-6 §2.6). `None` when it is no account
+/// here, as an email-only member's is not (concept §3.1).
+#[must_use]
+pub fn signed_in_account(
+    login: &str,
+    domains: &[String],
+    accounts: &BTreeMap<String, Vec<String>>,
+) -> Option<String> {
+    let login = login.to_lowercase();
+    if login.contains('@') {
+        return accounts.contains_key(&login).then_some(login);
+    }
+    domains
+        .iter()
+        .map(|d| format!("{login}@{}", d.to_lowercase()))
+        .find(|a| accounts.contains_key(a))
+}
+
 impl Running {
     fn ours(&self, address: &str) -> bool {
         let domain = mail::domain_of(address);
@@ -290,6 +379,9 @@ impl Running {
             return (400, json!({"error": "not JSON"}).to_string());
         };
         let mut hook = read_hook(&json);
+        if let Some(login) = hook.login.clone() {
+            return self.submitted(&hook, &login);
+        }
         let settings = self.settings();
         let max = settings.info.max_email_bytes;
         let accounts = {
@@ -386,6 +478,68 @@ impl Running {
         hook_answer(hook.draft, ok, "")
     }
 
+    /// Mail a signed-in user submits from a mail program (RP-6 §2.6): never judged. At `DATA`
+    /// each recipient who is an account here gets its RadioPost message, and the sender's
+    /// accept list gains the recipients (RP-5 §6.5). The service's own submissions, radio mail
+    /// already filed, pass untouched.
+    fn submitted(&self, hook: &Hook, login: &str) -> (u16, String) {
+        let ok = if hook.stage == "data" {
+            mail::OK_DATA
+        } else {
+            mail::OK_RCPT
+        };
+        let settings = self.settings();
+        if hook.stage != "data"
+            || is_service_login(login, settings.smtp.as_deref(), &settings.domains)
+        {
+            return hook_answer(hook.draft, ok, "");
+        }
+        let Some(raw) = &hook.raw else {
+            return hook_answer(hook.draft, ok, "");
+        };
+        let (accounts, account) = {
+            let mut office = self.office();
+            office.at(now());
+            let accounts = office.door_accounts();
+            let account = signed_in_account(login, &settings.domains, &accounts);
+            (accounts, account)
+        };
+        let ours: Vec<String> = hook
+            .recipients
+            .iter()
+            .map(|r| r.to_lowercase())
+            .filter(|r| accounts.contains_key(r))
+            .collect();
+        for r in &hook.recipients {
+            if !self.ours(r) {
+                self.met(&mail::domain_of(r), "outgoing"); // RP-1 §7.5: a domain written to
+            }
+        }
+        if let Some(account) = &account {
+            let mut office = self.office();
+            office.at(now());
+            office.written_from_mail_program(account, &hook.recipients);
+            self.save(&office);
+        }
+        if !ours.is_empty() {
+            eprintln!(
+                "radiopost-po: {}",
+                door_log(
+                    "filed for the radio mail submitted by",
+                    login,
+                    &ours,
+                    "data",
+                    mail::OK_DATA,
+                    ""
+                )
+            );
+            if let Err(e) = self.email_submitted(&hook.sender, &ours, raw) {
+                eprintln!("radiopost-po: an email submitted but not made a message: {e}");
+            }
+        }
+        hook_answer(hook.draft, ok, "")
+    }
+
     /// At `DATA` for the post office's accounts, the sender checked (the door's own checks when
     /// the mail server gave no verdicts): the answer that holds the message back when that could
     /// not be done for now.
@@ -443,6 +597,36 @@ impl Running {
     ///
     /// When the system has no random numbers for a held attachment's ref.
     pub fn email_in(&self, sender: &str, recipients: &[String], raw: &[u8]) -> Result<(), String> {
+        self.file_email(sender, recipients, raw, false)
+    }
+
+    /// Mail a signed-in user submitted, made into the RadioPost message of each recipient here
+    /// as any email is (RP-6 §2.6, §2.4, §4). A null sender makes no bounce here: the user wrote
+    /// it.
+    ///
+    /// # Errors
+    ///
+    /// It could not be read as an email.
+    ///
+    /// # Panics
+    ///
+    /// When the system has no random numbers for a held attachment's ref.
+    pub fn email_submitted(
+        &self,
+        sender: &str,
+        recipients: &[String],
+        raw: &[u8],
+    ) -> Result<(), String> {
+        self.file_email(sender, recipients, raw, true)
+    }
+
+    fn file_email(
+        &self,
+        sender: &str,
+        recipients: &[String],
+        raw: &[u8],
+        submitted: bool,
+    ) -> Result<(), String> {
         let settings = self.settings();
         let mut office = self.office();
         let at = now();
@@ -453,7 +637,7 @@ impl Running {
         for recipient in recipients {
             let address = recipient.to_lowercase();
             let sent = |id: &str| office.sent_content_id(id);
-            if sender.is_empty() {
+            if sender.is_empty() && !submitted {
                 let domain = mail::domain_of(&address);
                 let m = mail::bounce(
                     raw,
@@ -579,11 +763,13 @@ impl Running {
                 },
             });
         let message_id = |cid: &[u8]| ids.get(&radiopost::cbor::hex(cid)).cloned();
+        // RP-6 §4's part for other RadioPost post offices; this post office's own users get the
+        // email alone in their mail-server mailboxes (§2.6), with no part for their mail programs
         let (radiopost, others): (Vec<String>, Vec<String>) = item
             .to
             .iter()
             .cloned()
-            .partition(|r| known.contains(&mail::domain_of(r)));
+            .partition(|r| known.contains(&mail::domain_of(r)) && !self.ours(r));
         let mut left = Vec::new();
         let mut failed = Vec::new();
         let mut said = Vec::new();
@@ -641,10 +827,38 @@ impl Running {
                 }
             }
         }
-        if !failed.is_empty() {
-            self.tell_not_delivered(&message, &from, &failed);
-        }
+        self.tell_failed(item, &message, &from, failed, &mut said);
         (left, said)
+    }
+
+    /// The recipients that failed for good: a user here, whose mail-server mailbox refused it,
+    /// still has it by radio, so the operator's log says so; the sender is told of the others
+    /// (RP-6 §3.3).
+    fn tell_failed(
+        &self,
+        item: &Outgoing,
+        message: &Message,
+        from: &str,
+        failed: Vec<String>,
+        said: &mut Vec<String>,
+    ) {
+        let failed: Vec<String> = failed
+            .into_iter()
+            .filter(|line| {
+                let r = line.split_once(": ").map_or(line.as_str(), |(r, _)| r);
+                let here = self.ours(r);
+                if here {
+                    said.push(format!(
+                        "{}: kept only in the radio mailbox of {r}",
+                        item.id
+                    ));
+                }
+                !here
+            })
+            .collect();
+        if !failed.is_empty() {
+            self.tell_not_delivered(message, from, &failed);
+        }
     }
 
     /// RP-6 §3.3: the sender is told, in their mailbox, which recipients failed and why.

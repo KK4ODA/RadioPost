@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.6.1 |
-| **Updated** | 2026-11-12 |
+| **Version** | 0.7.0 |
+| **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-5 |
@@ -174,6 +174,32 @@ twice in one request is sent once.
 
 Test vectors: `vectors/api-exchanges.json`, the case of held attachments asked for.
 
+### 2.6 One mailbox: mail programs and the radio
+
+A user's account has two views of one mailbox: the radio's (RP-5 §5) and the mail server's, which
+ordinary mail programs read (RP-5 §4.1 `mail`). Mail that reaches either reaches the other:
+
+* **Mail a user submits.** Mail a user sends from a mail program, signed in to the post office's
+  mail server, is not judged at the door (§2.1): the user signed in, and the mail server's own
+  rules govern what they may send. Each recipient who is an account of this post office gets its
+  RadioPost message, made as §2.4 makes one and with the account's next serial. It is third-party
+  mail by §5.1, as every message made from an email is. When the user who signed in is an account
+  here, the submission's recipients join their accept list (RP-5 §6.5). A mail server that names
+  the user to the door (Stalwart's MTA hooks give `context.sasl.login`) lets the post office tell
+  this mail from mail arriving from the Internet.
+* **Mail sent by radio.** A message handed in by radio (RP-5 §5.4, §5.6, §6.6) for an account of
+  this post office is put in its radio mailbox at once, and is also handed to the mail server as
+  the email §3.1 makes, without §4's part, so that a mail program shows it. A recipient at its
+  domains that is no account (an email-only member, `postmaster@`) gets only the email. When the
+  mail server refuses the email for good, the recipient still has the message by radio, and the
+  sender is not told of a failure.
+* **Mail read in a mail program** is not offered by radio when the user asks so (RP-5 §6.3
+  `radio_skips_read`). The post office matches the two views by `Message-ID`: the one the email
+  came with (§2.4 step 8), or the one §3.1 gives a RadioPost message.
+
+What the post office itself submits to its mail server (the email of mail sent by radio, its
+notices) is not made a RadioPost message again.
+
 ---
 
 ## 3. Mail leaving for the Internet
@@ -273,8 +299,8 @@ The restriction does not apply to a third party eligible to be a control operato
 licensed amateur. What decides is where the receiving station is, not where the sender is.
 
 * **Flagged at the post office.** Mail whose sender is not shown to be licensed is **third-party
-  mail**: every message made from an email (§2.4), unless it came with the RadioPost part of §4 and
-  that part was used. Mail a RadioPost user handed in (RP-5 §5.4, §5.6, §6.6) is not. The post office
+  mail**: every message made from an email (§2.4), mail a user submits from a mail program
+  included (§2.6), unless it came with the RadioPost part of §4 and that part was used. Mail a RadioPost user handed in (RP-5 §5.4, §5.6, §6.6) is not. The post office
   marks it in waiting entries and copies (RP-5 `third_party`), and gateways carry the mark on the air
   (RP-3 §5.2, the flag `third-party`).
 * **Checked at the gateway.** A gateway hands third-party mail to a station, a user or a cut-off
@@ -383,3 +409,4 @@ and the session files.
 | 0.5.0 | 2026-11-10 | §2.1: the door judges only the post office's accounts, so `postmaster@` and other mailboxes of the mail server reach it (the door had refused them). The DMARC and DKIM verdicts are the mail server's when it gives them, else the post office's own checks (Stalwart 1.1 gives its hooks none), and never the message's own `Authentication-Results`; a check that cannot be finished for now answers `451 4.7.1`. Found by setting up the pilot's server. |
 | 0.6.0 | 2026-11-10 | §2.5: held attachments asked for: the message they come in, split by `max_air_bytes`, one too large for the air refused. RP-5 §5.3 had said they come later as a new message and nothing more. |
 | 0.6.1 | 2026-11-12 | §2.1, §2.2, §4: the post offices a post office knows are RP-1 §7.5's (RP-1 0.6.0). |
+| 0.7.0 | 2026-11-13 | §2.6, one mailbox: mail a user submits from a mail program is not judged at the door, becomes the RadioPost message of each recipient here (third-party, §5.1) and fills the sender's accept list; mail sent by radio to accounts here also reaches the mail server as §3.1's email, and a recipient here with no account gets only the email; mail read in a mail program is matched by `Message-ID`. Nothing said what became of mail a user sent from a mail program to another user of the same post office, which never reached the radio. |

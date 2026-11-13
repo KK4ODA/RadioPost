@@ -212,9 +212,10 @@ pub fn stalwart_by_hand(o: &Options, s: &Secrets) -> String {
          7. AUTH Stage, Must Match Sender: false if authenticated_as == 'radiopost' ||\n\
             authenticated_as == 'radiopost@{d}', otherwise true.\n\
          8. MTA Hooks: URL http://127.0.0.1:8772/, stages rcpt and data, Bearer {token},\n\
-            timeout 30000 ms, temporary failure on error, enabled if local_port == 25.\n\
+            timeout 30000 ms, temporary failure on error, enabled for every session (true).\n\
          9. An API key (Directory, API keys) with the right to create accounts: give it to the\n\
-            desk's Settings, Mailboxes, so approving an application makes its mailbox.\n\
+            desk's Settings, Mailboxes, so approving an application makes its mailbox and\n\
+            the radio can skip what users read in their mail programs.\n\
          Then: systemctl restart stalwart",
         pw = s.smtp_password,
         token = s.hook_token

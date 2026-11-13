@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.13 |
+| **Version** | 0.3.14 |
 | **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -139,7 +139,7 @@ rules:
 | W33 | Position reports | Applications | Low | Application layer; optional addition as broadcasts | Planned |
 | W34 | Bulletins | Applications | Low | Application layer; optional addition as broadcasts | Planned |
 | W35 | Services that answer by mail | Applications | Low | Application layer | Planned |
-| W36 | One mailbox, by radio and by mail program | Operation | High | Fits today | Planned |
+| W36 | One mailbox, by radio and by mail program | Operation | High | Fits today | In progress |
 | W37 | The accept list on a web page | Operation | Low | Fits today | Planned |
 | W38 | Backups and a backup mail server | Operation | Critical | Fits today | In progress |
 | W39 | A domain served by several post offices | — | — | Breaking (RP-1, RP-3) | Deferred |
@@ -635,12 +635,12 @@ read, including from members with no licence who use only a mail program.
 | Requested by | The plan: concept §3.1 (email-only members), §5.4; RP-5 §6.3, `radio_skips_read`. Requesters: 0. Includes W12. |
 | Component | Post office. |
 | Compatibility | **Fits today.** Email-only members hold no credential (RP-1 §1), and their mail to radio users is third-party traffic (RP-6 §5.1). |
-| Existing coverage | Partly built: the radio's mailbox and the mail program's are separate ([the post office guide](../user/post-office.md), §11). Mail a mail-program user sends to another user here never reaches the radio. |
+| Existing coverage | **First part built** (2026-11-13; RP-6 0.7.0 §2.6, RP-5 0.19.0 §6.3 and §6.5). The door sees mail users submit from their mail programs, signed in (Stalwart's MTA hook on every session, `context.sasl.login`, tried on Stalwart 1.1.0): not judged, filed for the radio for each account here (third-party, G16), its recipients added to the sender's accept list; the service's own submissions pass untouched. Mail sent by radio to a user here goes to their Stalwart mailbox too, as RP-6 §3.1's email; an address here with no account (an email-only member, W12) gets only the email, and no longer a radio mailbox that turned it into a judged account. `radio_skips_read`: every minute the service reads `$seen` over JMAP with the mailboxes key (Stalwart's `impersonate`, the account's `accountId`), matches by `Message-ID`, and takes what was read as picked up, dropping its copies. Not built: mail sent by radio in the mail program's Sent folder, and radio pickups marked read there ([the post office guide](../user/post-office.md), §11). |
 | Dependencies | None. |
 | Effort | Large: JMAP both ways, and every path mail takes inside the post office. |
 | Priority | **High.** Mail that never reaches the radio is mail silently lost to a radio user, and pilot users with the Internet will meet it at once. |
 | Recommendation | Accept. Also fill the accept list from mail sent in a mail program, as from mail sent by radio (RP-5 §6.5 names only radio paths): concept §5.1 promises that writing to someone adds them, and that removes most of the need for W37. |
-| Status | Planned. |
+| Status | In progress: the first part is implemented; the Sent folder and pickups marked read are not. |
 | Author decision | **Decided** (2026-11-13): built next, in two parts. First what loses mail or wastes air: mail from a mail program to a user here reaches the radio, mail sent by radio to a user here reaches the mail program, `radio_skips_read` is honoured, and mail sent from a mail program fills the accept list. Later: mail sent by radio in the mail program's Sent folder, and radio pickups marked read there |
 
 ### W37. The accept list on a web page
@@ -1046,6 +1046,8 @@ document.
 | G15 | RP-1 §7.3 | Which post offices a post office knows: §7.3 covers gateways only, and the door, RP-5 §2 and RP-6 §4 rest on it. | Each operator types the others' keys, which are never refreshed: a rotated key, or a revocation, is missed, and a new post office is found by nobody. | Known by the operators' choice, found as mail crosses, followed in DNS: RP-1 0.6.0 §7.5, D38. **Built** (2026-11-12). | W49 |
 | G16 | RP-6 §5.1 | Every message made from an email is third-party mail unless it came with RP-6 §4's part, so mail a licensed account sends from its own mail program, signed in to its post office, would be flagged though its sender is shown licensed. Email-only members' mail rightly is. | Mail between a post office's own licensed users, once W36 carries it to the radio, is held back from stations abroad without an arrangement. | Count an account with a credential, signed in to submit, as shown licensed; until settled, flag it (the safe reading). | W36 |
 | G17 | RP-6 §3.1 | `In-Reply-To` and `References` are restored only when `reply_to` names a message whose `Message-ID` the post office keeps from an email that arrived (§2.4 step 8). A reply to a RadioPost message the post office itself sent out as email (a user's message copied to an email address, then answered by radio with *Reply all*) gets none, though §3.1's own rule gives that message's `Message-ID`, and the post office keeps it (`sent_ids`). | The email recipient's thread breaks on such a reply; found while building W1. | Restore the headers from the messages it sent as well: `<` the content ID in base32 `@` the sender's domain `>`, when this post office sent it. | W1 |
+| G18 | RP-6 §2 | What becomes of mail a user sends from a mail program, signed in, to another user of the same post office: whether the door judges it, whether it becomes a radio message and is third-party, and whether mail sent by radio to a user here reaches the mail server. | Such mail never reached the radio, and mail sent by radio never reached the mail program. | RP-6 0.7.0 §2.6, with RP-5 0.19.0 §6.5. **Settled and built** (2026-11-13). | W36 |
+| G19 | RP-5 §6.3 | `radio_skips_read` said mail read in a mail program is not offered by radio, not whether it is picked up (its copies dropped) or only hidden. | A post office hiding it leaves gateways offering copies of mail already read while offline. | Taken as picked up, learned without delaying a session: RP-5 0.19.0 §6.3. **Settled and built** (2026-11-13). | W36 |
 
 ---
 
@@ -1100,3 +1102,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.11 | 2026-11-13 | W18 implemented: the post office's air forms are DEFLATE when that is smaller; G2 settled by RP-5 0.18.0 §5.3. |
 | 0.3.12 | 2026-11-13 | The author's decisions: W36 built next, its mail-losing part first; W27, W28 and W29 in one release after it. Gap G16: third-party mail and a licensed account's own mail program (RP-6 §5.1). |
 | 0.3.13 | 2026-11-13 | W38: the mail server's mailboxes backed up each night by the jobs runner with Stalwart stopped, carried by a downloaded backup and put back by `restore`; Health shows them and when a backup last left the server. Gap G17, found with W1: a reply to mail the post office sent as email keeps no thread. |
+| 0.3.14 | 2026-11-13 | W36's first part built: mail users submit from their mail programs reaches the radio and fills their accept lists; mail sent by radio to users here reaches their mail programs, and an email-only member (W12) gets it by email alone; `radio_skips_read` takes mail read in a mail program as picked up. Gaps G18 and G19, settled by RP-6 0.7.0 and RP-5 0.19.0. |

@@ -648,12 +648,14 @@ class PostOffice:
         return results
 
     def _deliver_here(self, canonical: bytes, has_it: str = "") -> None:
-        """Mail between this post office's own accounts goes to their mailboxes at once."""
+        """Mail between this post office's own accounts goes to their radio mailboxes at once."""
         message = cbor.decode(canonical)
         air = rp.air_form(canonical, 0)
         for address in message.get(3, []) + message.get(4, []):
             if address.rpartition("@")[2] not in self.domains or address == has_it:
                 continue
+            if address not in self.accounts and address not in self.mailboxes:
+                continue  # postmaster@, an email-only member: no radio mailbox (RP-6 §2.6)
             serial = max((w.serial for w in self.mailboxes.get(address, [])), default=0) + 1
             fields = {"sender": message[2], "subject": message[6], "priority": message.get(9, 0)}
             self.deliver(address, serial, air, **fields, third_party=False)  # a user's: licensed

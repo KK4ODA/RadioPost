@@ -1368,7 +1368,23 @@ impl PostOffice {
         results
     }
 
-    /// Mail between this post office's own accounts goes to their mailboxes at once.
+    /// Whether an address is one of this post office's accounts: made, or named by a code.
+    /// Another address at its domains (`postmaster@`, an email-only member, concept §3.1) has
+    /// no radio mailbox.
+    #[must_use]
+    pub fn is_account(&self, address: &str) -> bool {
+        let address = address.to_lowercase();
+        self.state.accounts.contains(&address)
+            || self.state.mailboxes.contains_key(&address)
+            || self
+                .state
+                .codes
+                .values()
+                .any(|c| c.address.eq_ignore_ascii_case(&address))
+    }
+
+    /// Mail between this post office's own accounts goes to their radio mailboxes at once; its
+    /// mail-server copy goes with what [`PostOffice::send_on`] sends (RP-6 §2.6).
     fn deliver_here(&mut self, message: &Message, has_it: &str) {
         let air = crate::air_form(message, self.config.compress);
         let subject = message
@@ -1389,7 +1405,7 @@ impl PostOffice {
             .map(|r| (*r).to_owned())
             .collect();
         for address in recipients {
-            if !self.ours(&address) || address == has_it {
+            if !self.ours(&address) || address == has_it || !self.is_account(&address) {
                 continue;
             }
             let serial = self.next_mailbox_serial(&address);
@@ -1399,13 +1415,14 @@ impl PostOffice {
         }
     }
 
-    /// What goes on by email: every recipient this post office does not serve, but the one that
-    /// has it already (RP-6).
+    /// What goes on by email: every recipient but the one that has it already (RP-6). Those
+    /// at this post office's own domains get it in their mail-server mailboxes too, for their
+    /// mail programs (RP-6 §2.6): one mailbox, whichever way it is read.
     fn send_on(&mut self, message: &Message, has_it: &str, route: Option<Route>) {
         let to: Vec<String> = message
             .recipients()
             .iter()
-            .filter(|r| !self.ours(r) && **r != has_it)
+            .filter(|r| **r != has_it)
             .map(|r| (*r).to_owned())
             .collect();
         if !to.is_empty() {
@@ -1443,6 +1460,18 @@ impl PostOffice {
 
     /// RP-5 §6.5: the recipients of mail a user sent join the user's accept list.
     fn written_to(&mut self, address: &str, message: &Message) {
+        self.add_written(address, &message.recipients());
+    }
+
+    /// RP-5 §6.5, RP-6 §2.6: the recipients of mail the user sent from a mail program, signed in
+    /// to the mail server (the submission's envelope: `To`, `Cc` and `Bcc` alike), join the
+    /// user's accept list.
+    pub fn written_from_mail_program(&mut self, address: &str, recipients: &[String]) {
+        let recipients: Vec<&str> = recipients.iter().map(String::as_str).collect();
+        self.add_written(address, &recipients);
+    }
+
+    fn add_written(&mut self, address: &str, recipients: &[&str]) {
         let on = self
             .state
             .settings
@@ -1454,8 +1483,8 @@ impl PostOffice {
             return;
         }
         let entries = self.state.accept.entry(address.to_owned()).or_default();
-        for r in message.recipients() {
-            if !on_list(r, entries) {
+        for r in recipients {
+            if is_entry(&r.to_lowercase()) && !on_list(r, entries) {
                 entries.push(r.to_lowercase());
             }
         }
@@ -1490,6 +1519,21 @@ impl PostOffice {
         }
         let entries = self.state.accept.get(address).cloned().unwrap_or_default();
         Response::ok(200, json!({"entries": entries}))
+    }
+
+    /// RP-5 §6.3 `radio_skips_read`: messages the user read in a mail program are taken as
+    /// picked up, and their copies placed ahead dropped. Returns how many were not already.
+    pub fn read_in_mail_program(&mut self, address: &str, serials: &[u64]) -> usize {
+        let before = self.unpicked(address);
+        self.picked_up(address, serials);
+        before - self.unpicked(address)
+    }
+
+    fn unpicked(&self, address: &str) -> usize {
+        self.state
+            .mailboxes
+            .get(address)
+            .map_or(0, |b| b.iter().filter(|w| !w.picked).count())
     }
 
     /// RP-5 §5.5: mark them, and have every copy placed ahead dropped (§5.8).

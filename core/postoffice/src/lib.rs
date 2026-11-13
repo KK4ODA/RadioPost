@@ -22,6 +22,7 @@ pub mod notices;
 pub mod office;
 pub mod operator;
 pub mod qrz;
+pub mod seen;
 pub mod serve;
 
 pub use office::{Config, Draw, PostOffice, Request, Response, State};

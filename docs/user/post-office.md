@@ -244,12 +244,29 @@ The door makes RP-6 §2.1's full check for the RadioPost accounts itself (§5.7)
    `rcpt` and `data`; HTTP authentication Bearer with the hook token (`openssl rand -hex 24`, the
    same one given to `init --hook-token`); timeout 30000 ms (the door's own checks ask DNS); keep
    *temporary failure on error*, so that a stopped service delays mail rather than letting it all
-   through; Enable `true` if `local_port == 25`, otherwise `false` (as JSON,
-   `{"match": {"0": {"if": "local_port == 25", "then": "true"}}, "else": "false"}`), so the door
-   judges mail from the Internet, not what a user's own mail program sends.
+   through; Enable `true` for every session (Stalwart's default, `{"else": "true"}`). The door
+   needs to see both kinds of mail: what arrives from the Internet on port 25, which it judges,
+   and what a user's own mail program submits on 465 or 587, signed in, which it does not judge
+   but files for the radio when it is for another user here (RP-6 §2.6). It tells them apart by
+   the account Stalwart says signed in (`context.sasl.login`); the service's own submissions
+   (signed in as `radiopost`) pass untouched. While the service is stopped, users' mail programs
+   are told to try again later too, so no mail between users misses the radio.
 3. **An account for each user**, the same address as their RadioPost account. Stalwart refuses a
    recipient it has no mailbox for right after the door's `RCPT TO`, so without it no mail reaches
    the user at all. Users can read it in an ordinary mail program too (IMAP 993, SMTP 465).
+
+**One mailbox** (RP-6 §2.6). A user reads the same mail by radio and in a mail program:
+
+* mail a user sends from a mail program to another user here is filed for the radio too, marked
+  third-party until the question of a licensed user's own mail program is settled (wishlist G16),
+  and its recipients join the sender's accept list unless they turned that off;
+* mail sent by radio to a user here goes to their Stalwart mailbox as well, through the
+  submission port, as the email it would be for anyone else; an address here with no RadioPost
+  account (`postmaster@`, a member who reads only by mail program) gets only that email;
+* a user who turns on `radio_skips_read` (`radiopost settings --set '{"radio_skips_read": true}'`)
+  is not offered by radio what they read in a mail program. Every minute the service asks Stalwart which messages carry `$seen`,
+  with the mailboxes key of §8, and takes those as picked up: their copies at gateways are
+  dropped too. Without that key it says so in its log, and offers everything.
 
 What the door reads (RP-6 §2.1): Stalwart 1.1 calls its hooks with the message as the client sent
 it, `Authentication-Results` and all, and with no verdicts of its own. The door never believes a
@@ -371,6 +388,12 @@ read who holds a callsign. On the server: `licences --on`, `licences --from l_am
 account needs one in Stalwart. In Settings, *Mailboxes*: give Stalwart's address as the post
 office reaches it (`http://127.0.0.1:8080`) and an API key made in Stalwart's administration with
 the right to create accounts, then **Check** (it asks Stalwart for the domain, and makes nothing).
+The same key tells the service which messages users have read in their mail programs, for
+`radio_skips_read` (§5.7): it reads another account's mail by Stalwart's `impersonate`
+permission. A key in *Inherit* mode on an administrator's account has every permission it needs;
+a key that does only this, in *Replace* mode, needs `authenticate`, `impersonate`,
+`sysAccountGet`, `sysAccountQuery`, `jmapEmailQuery` and `jmapEmailGet` (tried on Stalwart
+1.1.0). The service never keeps a user's password.
 Each approval then makes the mailbox, and the welcome email gives the new user its first password
 and where mail programs connect. For another mail server, or a Stalwart whose interface differs,
 name a program instead: it is given the address and the name, and the password in
@@ -448,15 +471,21 @@ update key signed it, and replaces `radiopost-po` (and any other RadioPost progr
 `/usr/local/bin`). It changes nothing when the signature does not match. The post office's
 directory, its key and its state are not touched.
 
+**Updating to the release that brings one mailbox** (the first after 0.1.0-beta.13): a post office
+set up before it calls the door only on port 25. In Stalwart's administration, MTA Hooks, set the
+hook's Enable to `true` for every session (§5.7), save, and restart Stalwart (`systemctl restart
+stalwart`). Until then mail users send from their mail programs to each other does not reach the
+radio. For `radio_skips_read`, the mailboxes key of §8 must be set; one in *Inherit* mode on an
+administrator's account already reads what was seen.
+
 ## 11. What is not built yet
 
 * **Enrollment with a Logbook of the World certificate** (D33, wishlist W10): an application is
   decided by a person, or by the postcard.
-* **The two mailboxes are separate.** Mail read in a mail program is still offered by radio
-  (`radio_skips_read` is not built), mail sent by radio does not appear in the mail program's
-  Sent folder, mail a user sends from a mail program to another user here stays in the mail
-  programs, and mail between two users of the same post office sent by radio is delivered by radio
-  without passing through Stalwart.
+* **One mailbox, the rest of it** (wishlist W36). Mail sent by radio does not appear in the mail
+  program's Sent folder, and mail picked up by radio is not marked read in the mail program.
+* **A licensed user's own mail program** makes third-party mail, as mail from the Internet does
+  (RP-6 §5.1, wishlist G16): it is held back from stations abroad without an arrangement.
 * **DKIM keys are not rotated** while DNS is managed by hand.
 * **Copies placed ahead**, the offline queue and reports are Phase 3; forwarding by radio is
   Phase 4.

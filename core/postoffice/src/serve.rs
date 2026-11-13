@@ -496,7 +496,7 @@ impl Running {
     }
 
     /// Replaces the settings the service runs with (the caller has written `config.json`).
-    pub(crate) fn set_settings(&self, settings: Settings) {
+    pub fn set_settings(&self, settings: Settings) {
         *self
             .settings
             .lock()
@@ -686,6 +686,7 @@ pub fn serve(running: Arc<Running>, listen: &str, admin: &str) -> Result<(String
     crate::lookups::start(&running);
     crate::health::start(&running);
     crate::known::start(&running);
+    crate::seen::start(&running);
     let api = Server::http(listen).map_err(|e| format!("{listen}: {e}"))?;
     let ops = Server::http(admin).map_err(|e| format!("{admin}: {e}"))?;
     let api_at = api.server_addr().to_string();

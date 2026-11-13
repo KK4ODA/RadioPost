@@ -11,10 +11,15 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use ed25519_dalek::SigningKey;
 use radiopost::base64url;
 use radiopost::cbor::Value;
+use radiopost::credential::flags;
+use radiopost::crypto::{self, context};
 use radiopost::message::{Compression, Message, key};
+use radiopost::statement::{Form, Statement};
 use radiopost_postoffice::documents::Info;
+use radiopost_postoffice::email as serve_email;
 use radiopost_postoffice::office::{Outgoing, Route};
 use radiopost_postoffice::serve::{self, Files, Running, Settings};
 use serde_json::{Value as Json, json};
@@ -495,4 +500,550 @@ fn the_door_checks_senders_itself_and_leaves_other_addresses_to_the_mail_server(
             .mailboxes
             .contains_key("postmaster@test.example")
     );
+}
+
+// -- one mailbox, by radio and by mail program (wishlist W36) -------------------------------
+
+const BASE: &str = "https://po.test.example/rp/v1";
+
+/// An API call through the service: the status and the JSON answer.
+fn call(r: &Running, method: &str, path: &str, token: Option<&str>, body: &Json) -> (u16, Json) {
+    let bytes = if body.is_null() {
+        Vec::new()
+    } else {
+        body.to_string().into_bytes()
+    };
+    let (status, _, text) = r.api(method, &format!("/rp/v1{path}"), token, &bytes);
+    (status, serde_json::from_str(&text).unwrap_or(Json::Null))
+}
+
+/// A token for a credential and its device key (RP-5 §3).
+fn login(r: &Running, credential: &[u8], device: &SigningKey) -> String {
+    let (_, c) = call(r, "POST", "/auth/challenge", None, &Json::Null);
+    let nonce = c["nonce"].as_str().expect("a nonce").to_owned();
+    let mut signed = base64url::decode(&nonce).expect("base64url");
+    signed.extend_from_slice(BASE.as_bytes());
+    let body = json!({"credential": base64url::encode(credential), "nonce": nonce,
+        "signature": base64url::encode(&crypto::sign(context::API_LOGIN, &signed, device))});
+    let (status, answer) = call(r, "POST", "/auth/token", None, &body);
+    assert_eq!(status, 200, "{answer}");
+    answer["token"].as_str().expect("a token").to_owned()
+}
+
+/// A gateway here, KK4ODA-1, that holds copies: its token.
+fn gateway_here(r: &Running) -> String {
+    let key = SigningKey::from_bytes(&[0x61; 32]);
+    let credential = {
+        let mut office = r.office();
+        office.at(serve::now());
+        office.state.gateways.insert(
+            "KK4ODA-1".into(),
+            json!({"callsign": "KK4ODA-1", "operator": "KK4ODA", "grid": "EM73",
+                   "place": "Atlanta, GA", "hours": "always", "internet": true,
+                   "copies": {"users": 20, "days": 7, "max_air_bytes": 16384}, "updated": 1}),
+        );
+        office.issue(
+            "kk4oda@test.example",
+            "KK4ODA-1",
+            key.verifying_key().to_bytes(),
+            flags::SEND | flags::GATEWAY,
+        )
+    };
+    login(r, &credential, &key)
+}
+
+/// A session a user opens through KK4ODA-1 (RP-5 §5.2), offering `offers`: its ID and answer.
+fn open_session(
+    r: &Running,
+    gateway: &str,
+    address: &str,
+    seed: u8,
+    offers: &[&Message],
+) -> (String, Json) {
+    let device = SigningKey::from_bytes(&[seed; 32]);
+    let credential = {
+        let mut office = r.office();
+        office.at(serve::now());
+        office.issue(
+            address,
+            "KK4ODA",
+            device.verifying_key().to_bytes(),
+            flags::SEND | flags::RECEIVE,
+        )
+    };
+    let at = serve::now();
+    let stmt = Statement {
+        address: address.into(),
+        operator: "KK4ODA".into(),
+        gateway: "KK4ODA-1".into(),
+        messages: offers.iter().map(|m| m.content_id()).collect(),
+        form: Form::Time {
+            time: at,
+            nonce: [seed; 8],
+        },
+    };
+    let (status, answer) = call(
+        r,
+        "POST",
+        "/sessions",
+        Some(gateway),
+        &json!({"statement": base64url::encode(&stmt.encode()),
+                "signature": base64url::encode(&stmt.sign(&device)),
+                "credential": base64url::encode(&credential),
+                "started": at, "gateway_session": "ec7b31841ec47c47"}),
+    );
+    assert_eq!(status, 201, "{answer}");
+    (
+        answer["session"].as_str().expect("a session").to_owned(),
+        answer,
+    )
+}
+
+fn message(from: &str, to: &[&str], subject: &str, body: &str) -> Message {
+    Message::from_map(&Value::int_map(vec![
+        (key::V, Value::Uint(1)),
+        (key::FROM, Value::text(from)),
+        (
+            key::TO,
+            Value::Array(to.iter().map(|t| Value::text(t)).collect()),
+        ),
+        (key::DATE, Value::Uint(1_794_235_000)),
+        (key::SUBJECT, Value::text(subject)),
+        (key::BODY, Value::text(body)),
+    ]))
+    .expect("a message")
+}
+
+/// Stalwart's hook call for mail a signed-in user submits on port 465.
+fn submitted(stage: &str, login: &str, from: &str, to: &[&str], email: &str) -> Json {
+    let mut call = stalwart(stage, from, to[0], email);
+    call["context"]["sasl"] = json!({"login": login});
+    call["context"]["server"] = json!({"name": "Stalwart v1.1.0", "port": 465, "ip": "0.0.0.0"});
+    call["envelope"]["to"] = to.iter().map(|t| json!({"address": t})).collect();
+    call
+}
+
+fn with_users(running: &Running) {
+    let mut office = running.office();
+    office.at(serve::now());
+    office.add_code("FACU-0001", "facundo@test.example", "KK4ODA", 3);
+    office.add_code("JOSE-0001", "jose@test.example", "KK4ODB", 3);
+}
+
+const FROM_THUNDERBIRD: &str = "From: Facundo <facundo@test.example>\r\n\
+To: Jose <jose@test.example>, Maria <maria@example.com>\r\nSubject: From my laptop\r\n\
+Date: Fri, 13 Nov 2026 20:00:00 +0000\r\nMessage-ID: <tb.1@laptop.example>\r\n\
+MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nWritten in Thunderbird.\r\n";
+
+/// RP-6 §2.6, RP-5 §6.5: mail a signed-in user sends from a mail program is not judged; each
+/// recipient who is an account here gets its radio copy (third-party until G16 is settled), and
+/// the recipients join the sender's accept list. As the draft calls the hook, the same.
+#[test]
+fn mail_a_user_submits_reaches_the_radio_and_fills_the_accept_list() {
+    let dir = scratch("submitted");
+    let running = post_office(&dir);
+    with_users(&running);
+    let door = serve::serve_hooks(running.clone(), "127.0.0.1:0").expect("the door");
+    let to = ["jose@test.example", "maria@example.com", "bcc@example.org"];
+    for stage in ["rcpt", "data"] {
+        let (_, body) = post(
+            &door,
+            "door-secret",
+            &submitted(
+                stage,
+                "facundo@test.example",
+                "facundo@test.example",
+                &to,
+                FROM_THUNDERBIRD,
+            ),
+        );
+        assert_eq!(body, r#"{"action":"accept"}"#, "{stage}: not judged");
+    }
+    assert_eq!(
+        subjects(&running, "jose@test.example"),
+        [("From my laptop".to_owned(), true)],
+        "Jose's radio copy, flagged third-party"
+    );
+    {
+        let office = running.office();
+        assert!(
+            !office.state.mailboxes.contains_key("facundo@test.example"),
+            "nothing filed for the sender"
+        );
+        assert!(!office.state.mailboxes.contains_key("maria@example.com"));
+        assert_eq!(
+            office.state.accept["facundo@test.example"],
+            to.map(str::to_owned),
+            "every recipient of the submission, Bcc too"
+        );
+        // its Message-ID is kept, for `radio_skips_read` and for replies
+        let id = &office.state.mailboxes["jose@test.example"][0].id;
+        let cid = radiopost::crypto::ContentId::from_text(id).expect("an id");
+        assert_eq!(
+            office.email_message_id(&cid.0).as_deref(),
+            Some("<tb.1@laptop.example>")
+        );
+    }
+
+    // the draft's shape, `auth.login`; with `accept_on_send` false the list stays as it is
+    running.office().state.settings.insert(
+        "facundo@test.example".into(),
+        json!({"accept_on_send": false}),
+    );
+    let mut call = draft(
+        "data",
+        Some("facundo@test.example"),
+        "jose@test.example",
+        &FROM_THUNDERBIRD
+            .replace("tb.1@", "tb.2@")
+            .replace("maria@example.com", "ana@example.net"),
+    );
+    call["auth"] = json!({"login": "facundo@test.example", "method": "plain"});
+    call["envelope"]["to"] = json!([{"address": "jose@test.example"},
+                                    {"address": "ana@example.net"}]);
+    let (status, _) = post(&door, "door-secret", &call);
+    assert_eq!(status, 204, "taken");
+    assert_eq!(subjects(&running, "jose@test.example").len(), 2);
+    assert!(
+        !running.office().state.accept["facundo@test.example"]
+            .contains(&"ana@example.net".to_owned())
+    );
+
+    // mail from the Internet is judged as before: a stranger is refused
+    let stranger = FROM_THUNDERBIRD.replace("facundo@test.example", "stranger@example.net");
+    let (_, body) = post(
+        &door,
+        "door-secret",
+        &stalwart(
+            "data",
+            "stranger@example.net",
+            "jose@test.example",
+            &stranger,
+        ),
+    );
+    assert!(body.contains("reject"), "{body}");
+    assert_eq!(subjects(&running, "jose@test.example").len(), 2);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// What the service itself submits, signed in as its own account, is radio mail already filed:
+/// the door lets it pass and files nothing, in either form of the account's name.
+#[test]
+fn the_services_own_submissions_file_nothing() {
+    let dir = scratch("own");
+    let running = post_office(&dir);
+    with_users(&running);
+    {
+        let files = Files::new(&dir);
+        let mut settings = files.settings().expect("settings");
+        settings.smtp = Some("smtps://radiopost:secret@127.0.0.1:465".into());
+        files
+            .write(
+                "config.json",
+                &serde_json::to_string(&settings).expect("JSON"),
+            )
+            .expect("written");
+    }
+    let running = Arc::new(Running::load(&dir, serve::system_draw()).expect("loaded"));
+    let door = serve::serve_hooks(running.clone(), "127.0.0.1:0").expect("the door");
+    for login in [
+        "radiopost",
+        "radiopost@test.example",
+        "RadioPost@Test.Example",
+    ] {
+        let (_, body) = post(
+            &door,
+            "door-secret",
+            &submitted(
+                "data",
+                login,
+                "facundo@test.example",
+                &["jose@test.example", "maria@example.com"],
+                FROM_THUNDERBIRD,
+            ),
+        );
+        assert_eq!(body, r#"{"action":"accept"}"#, "{login}");
+    }
+    let office = running.office();
+    assert!(!office.state.mailboxes.contains_key("jose@test.example"));
+    assert!(!office.state.accept.contains_key("facundo@test.example"));
+    drop(office);
+    assert!(serve_email::is_service_login(
+        "radiopost@test.example",
+        Some("smtps://radiopost%40test.example:x@h:465"),
+        &["test.example".to_owned()]
+    ));
+    assert!(!serve_email::is_service_login(
+        "facundo@test.example",
+        Some("smtps://radiopost:x@h:465"),
+        &["test.example".to_owned()]
+    ));
+    assert!(!serve_email::is_service_login("radiopost", None, &[]));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// RP-6 §2.6: mail sent by radio to users here is filed in their radio mailboxes and handed to
+/// the mail server too, as RP-6 §3.1 makes its email, so a user who reads by mail program sees
+/// it; an address here with no account (an email-only member, concept §3.1) gets only the
+/// email. The mail server hands it back to the door signed in as the service: nothing more is
+/// filed.
+#[test]
+fn radio_mail_between_users_here_reaches_the_mail_server() {
+    let dir = scratch("between");
+    let running = post_office(&dir);
+    with_users(&running);
+    let gateway = gateway_here(&running);
+    let m = message(
+        "facundo@test.example",
+        &["jose@test.example", "ana@test.example", "maria@example.com"],
+        "Net tonight",
+        "The net is at 8.\n",
+    );
+    let (session, _) = open_session(&running, &gateway, "facundo@test.example", 0x41, &[&m]);
+    let (status, answer) = call(
+        &running,
+        "POST",
+        &format!("/sessions/{session}/messages"),
+        Some(&gateway),
+        &json!({"messages": [{"id": m.content_id().text(),
+                              "air": base64url::encode(&m.air_form(Compression::None))}]}),
+    );
+    assert_eq!(status, 200, "{answer}");
+    assert_eq!(answer["results"][0]["status"], "accepted");
+    assert_eq!(
+        subjects(&running, "jose@test.example"),
+        [("Net tonight".to_owned(), false)],
+        "a user's own mail: not third-party"
+    );
+    assert!(
+        !running
+            .office()
+            .state
+            .mailboxes
+            .contains_key("ana@test.example"),
+        "Ana has no account: no radio mailbox"
+    );
+
+    let took = Arc::new(Mutex::new(Vec::new()));
+    let smtp = smtp_server(took.clone());
+    serve::send_mail(running.clone(), &format!("smtp://{smtp}"), |_| {}).expect("sending");
+    let deadline = std::time::Instant::now() + Duration::from_secs(20);
+    while !running.office().state.outgoing.is_empty() && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let took = took.lock().expect("lock").clone();
+    assert_eq!(took.len(), 1, "one transaction: {took:?}");
+    let (from, to, email) = &took[0];
+    assert_eq!(from, "facundo@test.example");
+    assert_eq!(
+        to,
+        &["jose@test.example", "ana@test.example", "maria@example.com"].map(str::to_owned)
+    );
+    let message_id = format!("<{}@test.example>", m.content_id().text());
+    assert!(
+        email.contains(&format!("Message-ID: {message_id}")),
+        "{email}"
+    );
+    assert!(email.contains("Radio-Path: KK4ODA via KK4ODA-1"), "{email}");
+    assert!(
+        !email.contains("application/radiopost-message"),
+        "no RadioPost part for the users' own mail programs: {email}"
+    );
+
+    // Stalwart delivers it, calling the door as the service signed in: nothing more is filed
+    {
+        let files = Files::new(&dir);
+        let mut settings = files.settings().expect("settings");
+        settings.smtp = Some(format!("smtp://radiopost:secret@{smtp}"));
+        running.set_settings(settings);
+    }
+    let door = serve::serve_hooks(running.clone(), "127.0.0.1:0").expect("the door");
+    let (_, body) = post(
+        &door,
+        "door-secret",
+        &submitted(
+            "data",
+            "radiopost@test.example",
+            "facundo@test.example",
+            &["jose@test.example", "ana@test.example"],
+            email,
+        ),
+    );
+    assert_eq!(body, r#"{"action":"accept"}"#);
+    assert_eq!(subjects(&running, "jose@test.example").len(), 1);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A stand-in for Stalwart's JMAP: its accounts, and the `Message-ID`s each has read.
+fn jmap_server(read: Json) -> String {
+    let server = tiny_http::Server::http("127.0.0.1:0").expect("a port");
+    let at = format!("http://{}", server.server_addr());
+    std::thread::spawn(move || {
+        for mut request in server.incoming_requests() {
+            let mut body = String::new();
+            let _ = request.as_reader().read_to_string(&mut body);
+            let asked: Json = serde_json::from_str(&body).unwrap_or(Json::Null);
+            let authorised = request
+                .headers()
+                .iter()
+                .any(|h| h.field.equiv("Authorization") && h.value.as_str() == "Bearer API_reader");
+            if !authorised {
+                let _ = request.respond(tiny_http::Response::from_string("").with_status_code(401));
+                continue;
+            }
+            let mut answers = Vec::new();
+            for c in asked["methodCalls"].as_array().cloned().unwrap_or_default() {
+                let account = c[1]["accountId"].as_str().unwrap_or("").to_owned();
+                match c[0].as_str() {
+                    Some("x:Account/get") => answers.push(json!(["x:Account/get",
+                        {"list": [{"id": "b", "emailAddress": "facundo@test.example"},
+                                  {"id": "c", "emailAddress": "jose@test.example"}]}, c[2]])),
+                    Some("Email/query") => {
+                        assert_eq!(c[1]["filter"], json!({"hasKeyword": "$seen"}));
+                        let n = read[&account].as_array().map_or(0, Vec::len);
+                        let ids: Vec<String> = (0..n).map(|i| format!("e{i}")).collect();
+                        answers.push(json!(["Email/query", {"ids": ids}, c[2]]));
+                    }
+                    Some("Email/get") => {
+                        let list: Vec<Json> = read[&account]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .enumerate()
+                            .map(|(i, m)| json!({"id": format!("e{i}"), "messageId": [m]}))
+                            .collect();
+                        answers.push(json!(["Email/get", {"list": list}, c[2]]));
+                    }
+                    _ => answers.push(json!(["error", {"type": "unknownMethod"}, c[2]])),
+                }
+            }
+            let text = json!({"methodResponses": answers}).to_string();
+            let _ = request.respond(tiny_http::Response::from_string(text));
+        }
+    });
+    at
+}
+
+/// RP-5 §6.3: with `radio_skips_read` on, a message the user read in a mail program is taken as
+/// picked up: the next waiting list leaves it out and its copies placed ahead are dropped. One
+/// sent by radio from another user here is matched by the `Message-ID` RP-6 §3.1 gave its email.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn radio_skips_read_takes_what_was_read_as_picked_up() {
+    let dir = scratch("seen");
+    let running = post_office(&dir);
+    with_users(&running);
+    let gateway = gateway_here(&running);
+    running.office().state.settings.insert(
+        "jose@test.example".into(),
+        json!({"usual_gateways": ["KK4ODA-1"], "radio_skips_read": true}),
+    );
+    let maria = |n: u8| {
+        MARIA
+            .replace("facundo@test.example", "jose@test.example")
+            .replace("m.1@", &format!("m.{n}@"))
+            .replace("Are you safe?\r\nDate", &format!("Note {n}\r\nDate"))
+    };
+    for n in 1..=2 {
+        running
+            .email_in(
+                "maria@example.com",
+                &["jose@test.example".to_owned()],
+                maria(n).as_bytes(),
+            )
+            .expect("taken");
+    }
+    let by_radio = message(
+        "facundo@test.example",
+        &["jose@test.example"],
+        "By radio",
+        "Read it on the laptop.\n",
+    );
+    let (session, _) = open_session(
+        &running,
+        &gateway,
+        "facundo@test.example",
+        0x41,
+        &[&by_radio],
+    );
+    call(
+        &running,
+        "POST",
+        &format!("/sessions/{session}/messages"),
+        Some(&gateway),
+        &json!({"messages": [{"id": by_radio.content_id().text(),
+                              "air": base64url::encode(&by_radio.air_form(Compression::None))}]}),
+    );
+    assert_eq!(subjects(&running, "jose@test.example").len(), 3);
+
+    // no way to read the mail server yet: said, nothing changed
+    assert!(
+        running
+            .learn_read()
+            .expect_err("no mailboxes")
+            .contains("radio_skips_read")
+    );
+
+    let jmap = jmap_server(json!({"c": [
+        "m.1@mail.example.com",
+        format!("{}@test.example", by_radio.content_id().text()),
+        "unrelated@elsewhere.example"
+    ]}));
+    {
+        let files = Files::new(&dir);
+        let mut settings = files.settings().expect("settings");
+        settings.mailboxes.kind = "stalwart".into();
+        settings.mailboxes.url = jmap;
+        settings.mailboxes.api_key = Some("API_reader".into());
+        running.set_settings(settings);
+    }
+    assert_eq!(running.learn_read().expect("read"), 2);
+    assert_eq!(running.learn_read().expect("read"), 0, "nothing new");
+
+    let (_, answer) = open_session(&running, &gateway, "jose@test.example", 0x42, &[]);
+    let waiting: Vec<&str> = answer["waiting"]
+        .as_array()
+        .expect("waiting")
+        .iter()
+        .filter_map(|w| w["subject"].as_str())
+        .collect();
+    assert_eq!(
+        waiting,
+        ["Note 2"],
+        "only what was not read in the mail program"
+    );
+    let (_, polled) = call(
+        &running,
+        "GET",
+        "/copies?after=c_0&wait=0",
+        Some(&gateway),
+        &Json::Null,
+    );
+    let drops: Vec<u64> = polled["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .filter(|i| i["kind"] == "drop")
+        .filter_map(|i| i["serial"].as_u64())
+        .collect();
+    assert_eq!(
+        drops,
+        [1, 3],
+        "the copies of the two read are dropped: {polled}"
+    );
+
+    // with the setting off, nothing is taken
+    running.office().state.settings.insert(
+        "jose@test.example".into(),
+        json!({"usual_gateways": ["KK4ODA-1"]}),
+    );
+    running
+        .email_in(
+            "maria@example.com",
+            &["jose@test.example".to_owned()],
+            maria(1).replace("m.1@", "m.9@").as_bytes(),
+        )
+        .expect("taken");
+    assert_eq!(running.learn_read().expect("read"), 0);
+    let _ = std::fs::remove_dir_all(dir);
 }

@@ -14,6 +14,9 @@
 //!
 //! The password goes to the new user in the welcome email, for their mail programs. A mailbox
 //! that could not be made is said on the desk, and never undoes the approval.
+//!
+//! The same key reads which messages users have read in their mail programs, for
+//! `radio_skips_read` (`seen`).
 
 use std::time::Duration;
 
@@ -96,6 +99,23 @@ pub fn make(
 
 /// One JMAP request to Stalwart: its method responses.
 fn jmap(settings: &MailboxSettings, calls: &Json) -> Result<Vec<Json>, String> {
+    jmap_using(
+        settings,
+        &["urn:ietf:params:jmap:core", "urn:stalwart:jmap"],
+        calls,
+    )
+}
+
+/// One JMAP request to Stalwart with these capabilities: its method responses.
+///
+/// # Errors
+///
+/// Stalwart could not be reached, refused the key, or answered a method with an error.
+pub(crate) fn jmap_using(
+    settings: &MailboxSettings,
+    using: &[&str],
+    calls: &Json,
+) -> Result<Vec<Json>, String> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(30)))
         .http_status_as_error(false)
@@ -109,8 +129,7 @@ fn jmap(settings: &MailboxSettings, calls: &Json) -> Result<Vec<Json>, String> {
         let basic = crate::mail::base64_lines(login.as_bytes()).replace("\r\n", "");
         request = request.header("Authorization", &format!("Basic {basic}"));
     }
-    let body = json!({"using": ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"],
-                      "methodCalls": calls});
+    let body = json!({"using": using, "methodCalls": calls});
     let mut response = request
         .send(body.to_string())
         .map_err(|e| format!("Stalwart at {url}: {e}"))?;
@@ -119,7 +138,7 @@ fn jmap(settings: &MailboxSettings, calls: &Json) -> Result<Vec<Json>, String> {
     if status == 401 || status == 403 {
         return Err(format!(
             "Stalwart refused the post office's key or login ({status}): give it one with the \
-             right to create accounts"
+             right to create accounts, and to read mailboxes for `radio_skips_read`"
         ));
     }
     let answer: Json = serde_json::from_str(&text).map_err(|_| {
