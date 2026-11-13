@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.11 |
+| **Version** | 0.3.12 |
 | **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -641,7 +641,7 @@ read, including from members with no licence who use only a mail program.
 | Priority | **High.** Mail that never reaches the radio is mail silently lost to a radio user, and pilot users with the Internet will meet it at once. |
 | Recommendation | Accept. Also fill the accept list from mail sent in a mail program, as from mail sent by radio (RP-5 §6.5 names only radio paths): concept §5.1 promises that writing to someone adds them, and that removes most of the need for W37. |
 | Status | Planned. |
-| Author decision | None yet. |
+| Author decision | **Decided** (2026-11-13): built next, in two parts. First what loses mail or wastes air: mail from a mail program to a user here reaches the radio, mail sent by radio to a user here reaches the mail program, `radio_skips_read` is honoured, and mail sent from a mail program fills the accept list. Later: mail sent by radio in the mail program's Sent folder, and radio pickups marked read there |
 
 ### W37. The accept list on a web page
 
@@ -721,7 +721,7 @@ Internet or the post office is down. The user names those gateways in the client
 | Priority | **High**: first of Phase 3. |
 | Recommendation | Accept. |
 | Status | Planned. |
-| Author decision | **Decided** (CLAUDE.md): first of the Internet-down features. |
+| Author decision | **Decided** (CLAUDE.md): first of the Internet-down features. **Decided** (2026-11-13): W27, W28 and W29 go out in one release, after W36's first part |
 
 ### W28. The gateway's queue while offline, and its reports
 
@@ -739,7 +739,7 @@ and reports everything once it is back.
 | Priority | **High**: second of Phase 3. |
 | Recommendation | Accept, shipped with W29. |
 | Status | Planned. |
-| Author decision | **Decided** (CLAUDE.md): second, after copies placed ahead. |
+| Author decision | **Decided** (CLAUDE.md): second, after copies placed ahead. **Decided** (2026-11-13): in one release with W27 and W29 |
 
 ### W29. The sender's client follows queued mail
 
@@ -757,7 +757,7 @@ and says so if it may have been lost.
 | Priority | **High.** Without it, a message a cut-off gateway drops is lost with nobody told (D25). |
 | Recommendation | Accept, and ship with W28, never after it. |
 | Status | Planned. |
-| Author decision | None yet. |
+| Author decision | **Decided** (2026-11-13): in one release with W27 and W28 |
 
 ### W30. Forwarding by radio
 
@@ -1044,6 +1044,7 @@ document.
 | G13 | RP-5 §4.4 | A client's gateway list is one post office's registrations; nothing says how to read the others'. | A user never sees the gateways registered with other post offices, though any gateway serves them. | Read from every post office the home lists, the home's record winning: RP-5 0.16.0 §4.4, D36. **Built** (2026-11-12). | W17 |
 | G14 | RP-5 §5.8, RP-7 §4.1 | Copies at a gateway registered with another post office: where its record is found, how the gateway learns to poll there, and whose credential may collect them. A route through such a gateway has the same gaps. | Users' usual gateways must be registered with their own post office; the program skips the others without a word. | The record from the known post offices' lists, `placing` in the poll's answer, items only to the listing post office's credential: RP-5 0.16.0 and RP-7 0.9.0, D37. **Post office's side built** (2026-11-12); the gateway's polling comes with W27. | W27, W30 |
 | G15 | RP-1 §7.3 | Which post offices a post office knows: §7.3 covers gateways only, and the door, RP-5 §2 and RP-6 §4 rest on it. | Each operator types the others' keys, which are never refreshed: a rotated key, or a revocation, is missed, and a new post office is found by nobody. | Known by the operators' choice, found as mail crosses, followed in DNS: RP-1 0.6.0 §7.5, D38. **Built** (2026-11-12). | W49 |
+| G16 | RP-6 §5.1 | Every message made from an email is third-party mail unless it came with RP-6 §4's part, so mail a licensed account sends from its own mail program, signed in to its post office, would be flagged though its sender is shown licensed. Email-only members' mail rightly is. | Mail between a post office's own licensed users, once W36 carries it to the radio, is held back from stations abroad without an arrangement. | Count an account with a credential, signed in to submit, as shown licensed; until settled, flag it (the safe reading). | W36 |
 
 ---
 
@@ -1096,3 +1097,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.9 | 2026-11-13 | The author decided W46 and W7, built: several callsigns on separate accounts, each a home of its own, chosen from a list at the top of the window, one device key and one address list; answering any of them waits. |
 | 0.3.10 | 2026-11-13 | W1 implemented: reply, reply to all and forward, in the panel and the program; a reply keeps the email thread at the other end. |
 | 0.3.11 | 2026-11-13 | W18 implemented: the post office's air forms are DEFLATE when that is smaller; G2 settled by RP-5 0.18.0 §5.3. |
+| 0.3.12 | 2026-11-13 | The author's decisions: W36 built next, its mail-losing part first; W27, W28 and W29 in one release after it. Gap G16: third-party mail and a licensed account's own mail program (RP-6 §5.1). |
