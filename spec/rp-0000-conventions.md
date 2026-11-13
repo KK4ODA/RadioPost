@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.6.0 |
-| **Updated** | 2026-11-12 |
+| **Version** | 0.7.0 |
+| **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
@@ -268,8 +268,8 @@ the specification is right and the reference has a bug.
 
 ## 9. Registries
 
-Numbers that more than one specification uses are kept here. A new entry is added by a MINOR
-version change of this document.
+Numbers and names that more than one specification uses are kept here. A new entry is added by
+a MINOR version change of this document.
 
 ### 9.1 Specification numbers
 
@@ -314,6 +314,26 @@ means the same thing wherever it appears.
 | 18 | `timeout` | Nothing arrived in time. |
 | 19 | `internal` | Something failed inside the sender of the error. |
 
+### 9.4 Modem names
+
+A gateway's record names the modem of each channel it listens on (RP-5 §4.4), and a forwarding
+window the modem of its channel (RP-7 §5). The name says which signal a station must send to be
+heard there: one modem's air interface, whatever adapter drives it (RP-4 §9).
+
+| Name | Modem | Its adapter (informative) |
+|---|---|---|
+| `aether` | Aether HF | RP-4 §9.1 |
+| `aether-fm` | Aether FM: Aether's air interface for FM radios, in design | RP-4 §9.1 |
+| `ardop` | ARDOP | RP-4 §9.3 |
+| `ax25` | AX.25 packet | RP-4 §9.4 |
+| `mercury` | Mercury, Rhizomatica's HF modem | RP-4 §9.6 |
+| `tcp` | No radio: TCP adapters linked over a network | RP-4 §9.5 |
+| `vara-fm` | VARA FM | RP-4 §9.2 |
+| `vara-hf` | VARA HF | RP-4 §9.2 |
+
+A name is lower case: letters, digits and `-`. A program that meets a name it does not know
+ignores what carries it (RP-5 §4.4): a modem added after the program was written is not an error.
+
 ---
 
 ## Change log
@@ -331,3 +351,4 @@ means the same thing wherever it appears.
 | 0.5.0 | 2026-11-09 | Signed CBOR objects are untagged COSE_Sign1 with Ed25519 (-19), the context as external data (§5, §9.2). |
 | 0.5.1 | 2026-11-09 | §6.3: the example was not base32; each ID has one text, its unused bits zero; test vectors |
 | 0.6.0 | 2026-11-12 | The context `RadioPost-api-apply-v1` (§9.2), for RP-5's applications. |
+| 0.7.0 | 2026-11-13 | Modem names (§9.4): the six RP-5 §4.4 listed with no registry, and `mercury` and `aether-fm` added; a program ignores a name it does not know. |

@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.7 |
-| **Updated** | 2026-11-12 |
+| **Version** | 0.3.8 |
+| **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §9 and §10 |
@@ -1039,7 +1039,7 @@ document.
 | G8 | RP-4 §1.1 | What belongs to the whole station on a shared modem, such as the dial, or a whole Aether profile (RP-4 §9.1 leaves the bandwidth open in the same way). | One host can move every other host's station, even to another radio. | Refuse a station-wide change while another host's link or call is up. | W14, W44 |
 | G9 | RP-3 §8 | Whether a second session may follow on the same link. | A client with several accounts pays a call for each. | Leave it, or allow it when both sides say so. | W7 |
 | G10 | RP-1 §6.3 | Step 2 requires the statement's `operator` to equal the credential's, yet `operator` is the callsign "as on the air" (RP-1 §6.1, RP-3 §5.1), and RP-6 §5.1 and D31 read where a station is from a prefix or suffix on it (`VE3/KK4ODA`). | A user abroad who signs with the host country's prefix is refused unless enrolled again for it; one who keeps the plain callsign is taken for a station at home, and the third-party check judges the wrong country. | Compare the base callsign, and let the statement carry the prefix and suffix: a change every verifier must make, cheapest while the specifications are Drafts. | W44 |
-| G11 | RP-5 §4.4 | Its `modem` values (`aether`, `vara-hf`, `vara-fm`, `ardop`, `ax25`, `tcp`) are a list with no registry, no way to add one, and no rule for a value a client does not know. | A gateway offering Mercury has no agreed name for it, and clients may treat an unknown name differently. | A registry of modem names in RP-0 §9, `mercury` its first new entry, and a client ignoring a channel whose modem it does not know. | W20, W26, W44 |
+| G11 | RP-5 §4.4 | Its `modem` values (`aether`, `vara-hf`, `vara-fm`, `ardop`, `ax25`, `tcp`) are a list with no registry, no way to add one, and no rule for a value a client does not know. | A gateway offering Mercury has no agreed name for it, and clients may treat an unknown name differently. | A registry of modem names in RP-0 §9, `mercury` its first new entry, and a client ignoring a channel whose modem it does not know. Drafted: RP-0 0.7.0 §9.4 and RP-5 0.17.0 §4.4, with `aether-fm` beside `mercury` (D39). | W20, W26, W44 |
 | G12 | RP-1 §6.3 | Step 3 compares the callsign a client was called at with its credential's exactly, so a client cannot answer under an SSID of its own callsign (RP-0 §6.1). | An operator's several stations must all answer at the bare callsign, and listeners cannot tell them apart. | For a client answering (RP-3 §10), compare base callsigns, as G10 proposes for step 2; gateways stay exact. | W45 |
 | G13 | RP-5 §4.4 | A client's gateway list is one post office's registrations; nothing says how to read the others'. | A user never sees the gateways registered with other post offices, though any gateway serves them. | Read from every post office the home lists, the home's record winning: RP-5 0.16.0 §4.4, D36. **Built** (2026-11-12). | W17 |
 | G14 | RP-5 §5.8, RP-7 §4.1 | Copies at a gateway registered with another post office: where its record is found, how the gateway learns to poll there, and whose credential may collect them. A route through such a gateway has the same gaps. | Users' usual gateways must be registered with their own post office; the program skips the others without a word. | The record from the known post offices' lists, `placing` in the poll's answer, items only to the listing post office's credential: RP-5 0.16.0 and RP-7 0.9.0, D37. **Post office's side built** (2026-11-12); the gateway's polling comes with W27. | W27, W30 |
@@ -1092,3 +1092,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.5 | 2026-11-12 | The author decided D36 to D38; G15 built: the post office knows others by its operators' choice, follows them in DNS, and shows those it met on the desk (W49). |
 | 0.3.6 | 2026-11-12 | G13 built: the client's gateway list holds the gateways of every post office its own knows, each with the post office that lists it (W17). |
 | 0.3.7 | 2026-11-12 | G14, the post office's side built: copies placed at usual gateways registered with other post offices, served only to their own credentials; the gateway's side comes with W27. |
+| 0.3.8 | 2026-11-13 | G11 drafted (D39): RP-0 §9.4's registry of modem names, `mercury` and `aether-fm` added, a channel with an unknown name ignored, and what an FM channel states. |

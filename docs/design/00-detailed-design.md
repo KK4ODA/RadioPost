@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.35 |
-| **Updated** | 2026-11-12 |
+| **Version** | 0.1.36 |
+| **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The concept](../concept/00-concept.md) |
@@ -111,6 +111,7 @@ reasoning; the specifications hold the result.
 | D36 | **A gateway list is read from every post office the home knows** (RP-5 §4.4): a client takes its own post office's list and those of the post offices that one names in `/post-offices`, each checked with that post office's keys; a post office does the same for its users' usual gateways. The home's record wins; a callsign listed by two others is ambiguous. | Any gateway serves any user, so a user's list must hold the gateways registered elsewhere. The home's signed list of post offices already gives each one's address and keys, one hop from what the user trusts, as for gateways (D32). Nothing new is published. | Each post office republishing the others' gateways (it would sign records it never checked, and they go stale); a gateway registering with every post office (an account at each); a list kept by the project (a centre); the latest `updated` winning a conflict (any known post office could take a callsign over). |
 | D37 | **Copies placed ahead cross post offices** (RP-5 §5.8, RP-7 §4.1): the user's post office places them at a gateway registered elsewhere, serves them only to a credential from the post office that listed it, and says `placing` in each answer; the gateway polls its own post office and those that say `placing`, and asks the others it knows at each refresh and after their users' sessions. | Users name the gateways they call, whoever registered them. The gateway sits behind a home router (D12), so only it can open the connection, and only the placing post office knows it places. Copies come without a user's session (D11's exception), so they go only to the station its own post office vouches for. | Polling every post office known (a long poll for each in the network); the user's post office handing copies to the gateway's post office to pass on (one more server that must be up, holding other post offices' mail); a flag in the session's answer only (a `via` gateway, or one named before its first session, never hears it); any known post office's credential for the callsign (any of them could collect a gateway's copies). |
 | D38 | **A post office knows another only by its operators' choice** (RP-1 §7.5): it finds others as mail crosses and keeps them as seen; its operators accept or block each; for those accepted it follows the DNS records and documents, as a gateway does. | Knowing a post office lets its users' mail past the accept lists and onto the air unflagged, on its word that they are licensed. A gateway can trust from DNS because the user calling it is on the air under their own licence (D32); at the door, anyone can publish a DNS record. Following DNS keeps rotated keys and revocations current, which a typed key does not. | Trust from DNS, as a gateway's (any domain's mail past the accept lists, unflagged onto the air); one hop of lists (trust two steps from an operator's choice); a list kept by the project (a centre); keys typed by the operator only (no rotation, no revocations). |
+| D39 | **Modem names are a registry, and an unknown one is ignored** (RP-0 §9.4, RP-5 §4.4): the names in gateway records and forwarding windows are kept in RP-0's registries, each one modem's air interface; a reader skips a channel whose modem it does not know. An FM channel states its carrier and its width. | A new modem (Mercury, Aether FM) must be listable without a new version of every client, and a client must not offer a channel it cannot call. A modem behind an FM radio's audio cannot measure its deviation, so the channel is the one thing it can state. | The six names fixed in RP-5's text (no way to add one); any string, unregistered (two programs name one modem differently); a name per adapter (one air interface listed twice); the occupied band measured, as on HF (impossible through FM audio). |
 
 ---
 
@@ -201,6 +202,7 @@ server with those interfaces could replace Stalwart (concept §8.1).
 | Adapter | Modem's interface | Notes |
 |---|---|---|
 | Aether | Control API, WebSocket | Delivery receipts, quality, busy, rules checked by the modem. Could become native RPMI. Shareable from 0.2.0-beta.146: each program claims its callsigns (its ADR-0106, RP-4 §9.1). |
+| Aether FM | Control API, WebSocket, as Aether | In design: Aether's own air interface for FM radios, listed as `aether-fm` (RP-0 §9.4). The Aether adapter serves it once it reads the modem's name from Aether rather than assuming Aether HF. |
 | VARA HF, VARA FM | Published TNC commands, two TCP ports | No delivery receipts. |
 | Mercury | VARA-style TNC commands, two TCP ports (RP-4 §9.6) | Built, `adapters/mercury`. Delivery from its `BUFFER`, which counts what the other station has not confirmed. One program at a time; checks no band rules. Mercury does not identify the station, so the adapter sends `CQFRAME` with the station's callsign after each session. |
 | ARDOP | Host command and data ports | To be checked against ARDOP's specification. |
@@ -365,3 +367,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.33 | 2026-11-12 | D36 to D38 decided by the author. D38 built: the post office's known, seen and blocked post offices (RP-1 §7.5), followed in DNS. |
 | 0.1.34 | 2026-11-12 | D36 built: the client's gateway list read from every post office its own knows (RP-5 §4.4). |
 | 0.1.35 | 2026-11-12 | D37 built on the post office's side: copies at gateways of other post offices, `placing`, items only to the listing post office's credential; the gateway's polling comes with Phase 3. |
+| 0.1.36 | 2026-11-13 | D39, drafted for the author: modem names as a registry (RP-0 0.7.0 §9.4), an unknown one ignored, and what an FM channel states (RP-5 0.17.0 §4.4); `mercury` and `aether-fm` registered. Aether FM in §5.4's adapters. |

@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.16.0 |
-| **Updated** | 2026-11-12 |
+| **Version** | 0.17.0 |
+| **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-3 |
@@ -189,8 +189,13 @@ The gateways registered with this post office (§6.4), for clients' gateway list
    "updated": 1794300000}]}
 ```
 
-`modem` names the modem in RPMI terms (`aether`, `vara-hf`, `vara-fm`, `ardop`, `ax25`, `tcp`). A
-gateway that takes calls from cut-off partners lists its windows in `forwarding` (RP-7 §5).
+`modem` names the modem from the registry of RP-0 §9.4. A reader ignores a channel whose `modem`
+it does not know: the modem may have been added after the reader was written. `mode` is the
+radio's: `USB` for a modem on single sideband, `FM` for one on an FM radio. On an `FM` channel,
+`dial_hz` is the channel's carrier frequency and `bandwidth_hz` the channel's width, 12 500 or
+25 000: a modem working on an FM radio's audio cannot measure the deviation, so the channel is what
+can be stated. A gateway that takes calls from cut-off partners lists its windows in `forwarding`
+(RP-7 §5).
 
 The post office that registered a gateway (§6.4) is its **own post office**: the domain of its
 credential's `address` (RP-1 §3, §5).
@@ -803,3 +808,4 @@ read from the home's and every post office it knows) and `vectors/api.json` (the
 | 0.14.0 | 2026-11-12 | Applications (§6.7): an account asked for from a new device, signed under `RadioPost-api-apply-v1`, and collected once an operator decides; `applications` in the info document (§4.1). Operator endpoints (§7): the post office's operators run it with their own credentials (status, applications, accounts, codes, revocation); `office` in the login's answer (§3.2). Security considerations and test vectors renumbered §8 and §9. Test vectors (`api-office.json`). |
 | 0.15.0 | 2026-11-12 | Who may become an operator (§7.1): an application naming an operator's callsign is refused (§6.7) and cannot be approved or sent a postcard (§7.3); a code naming one for anyone but the operator asking needs `operates` (§7.5); each refusal carries `operates`; security considerations (§8); test vectors. |
 | 0.16.0 | 2026-11-12 | Gateways across post offices. §4.3: each entry's `api` and keys, one entry per domain. §4.4: a gateway's own post office; a client's gateway list, and the gateways a post office places copies at, come from its home's list and those of the post offices its home knows, checked with their keys; the home's record wins, and a callsign otherwise listed twice is ambiguous; `listed` keeps to the home's. §5.8: copies at gateways registered elsewhere; `placing` in the answer; `wait=0`; items served only to the credential of the post office that listed the gateway; which post offices a gateway polls. §6.3: `usual_gateways` may name them. §2: known post offices are RP-1 §7.5's. A client could list only its own post office's gateways, and a post office placed copies only at the gateways registered with it. Test vectors (`gateway-lists.json`; `api-exchanges.json`'s copies at N1CALL-10; `placing` in every copies answer). |
+| 0.17.0 | 2026-11-13 | §4.4: a channel's `modem` comes from RP-0 §9.4's registry, and a reader ignores a channel whose modem it does not know (the list of six had no way to grow and no rule for a name a client did not know); `mode` `USB` or `FM`; on an `FM` channel `dial_hz` is the carrier and `bandwidth_hz` the channel's width. |
