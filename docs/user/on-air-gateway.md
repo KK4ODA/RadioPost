@@ -89,6 +89,11 @@ your radiopost.org address, with a `Radio-Path:` header naming the gateway and t
 
 1. From that mailbox, answer the message. The answer waits at your post office.
 2. **Call** KK4ODA-1 again. The answer comes down, and is in the **Inbox**.
+3. Open it and click **Reply**, write a line, **Put in outbox**, and call again. Your reply
+   arrives in the same thread in the other mail program. RadioPost does not quote the message you
+   answer, since every byte goes on the air: it shows it under the text box, for you only.
+   **Reply all** copies everyone else it went to; **Forward** passes a message on, with its text
+   and files, to someone else.
 
 To choose what comes, set **Fetch** to **Only the list of what waits** and call: nothing comes
 but the list, which the **Waiting** folder shows. Tick what you want, and call again: what you

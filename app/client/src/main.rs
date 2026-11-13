@@ -8,7 +8,7 @@ use std::process::ExitCode;
 
 use radiopost::credential::PostOfficeKey;
 use radiopost::message::{Message, key};
-use radiopost_client::compose::{Draft, File, media_type};
+use radiopost_client::compose::{self, Answer, Draft, File, media_type, utc};
 use radiopost_client::session::{self, Fetch, Kind, Options, Packing};
 use radiopost_client::store::{Error, Store, unhex};
 use radiopost_client::{addresses, callsigns, online};
@@ -46,7 +46,12 @@ usage: radiopost [--home DIR] [--as CALLSIGN] COMMAND ...
                            the accept list: addresses, or @domain (RP-5 §6.5)
   compose --to ADDR [--to ADDR] [--cc ADDR] [--subject TEXT] [--priority 0|1|2]
           [--attach FILE]... [--body FILE]
-                           write a message into the outbox; the text from stdin without --body
+          [--reply ID | --reply-all ID | --forward ID]
+                           write a message into the outbox; the text from stdin without --body.
+                           --reply answers a message received, to its sender, in its thread, the
+                           original not quoted; --reply-all copies its other recipients too;
+                           --forward passes any message on with its text and files, your text
+                           above it. --to, --cc and --subject replace what these fill in
   import FILE              put a message, in its canonical encoding (RP-2), in the outbox
   outbox | inbox | sent | trash
                            list a folder
@@ -89,27 +94,6 @@ The home is --home, else $RADIOPOST_HOME, else .radiopost in the user's home dir
 command works on the callsign chosen (`callsigns choose`), or on the one --as names. The address
 list and the log are the computer's, for every callsign.
 ";
-
-/// A date as people read it, UTC (RP-0 §4.4).
-fn utc(secs: u64) -> String {
-    let days = i64::try_from(secs / 86_400).unwrap_or(0);
-    let rem = secs % 86_400;
-    // civil from days (H. Hinnant's algorithm)
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = yoe + era * 400 + i64::from(m <= 2);
-    format!(
-        "{y:04}-{m:02}-{d:02} {:02}:{:02}Z",
-        rem / 3600,
-        rem % 3600 / 60
-    )
-}
 
 /// The arguments after the command: flags with values, and the rest in order.
 struct Args {
@@ -399,6 +383,42 @@ fn trash_command(store: &mut Store, command: &str, args: &Args) -> Result<(), Er
     Ok(())
 }
 
+/// `--reply`, `--reply-all` or `--forward` ID: how a message is answered, what that starts with
+/// (W1), and the start of the original's content ID.
+fn answering(
+    store: &Store,
+    me: &str,
+    args: &Args,
+) -> Result<Option<(Answer, compose::Started, String)>, Error> {
+    let given: Vec<(Answer, String)> = [
+        ("--reply", Answer::Reply),
+        ("--reply-all", Answer::ReplyAll),
+        ("--forward", Answer::Forward),
+    ]
+    .into_iter()
+    .filter_map(|(flag, how)| args.one(flag).map(|id| (how, id)))
+    .collect();
+    let (how, prefix) = match given.as_slice() {
+        [] => return Ok(None),
+        [one] => one.clone(),
+        _ => return Err("one of --reply, --reply-all and --forward, not more".into()),
+    };
+    let id = store.find(&prefix)?;
+    if how != Answer::Forward && !store.was_received(&id) {
+        return Err(format!(
+            "{} was not received here: only a message received is replied to, and --forward \
+             passes any message on",
+            &id.text()[..6]
+        ));
+    }
+    let original = store.message(&id)?;
+    Ok(Some((
+        how,
+        compose::answer(&original, me, how),
+        id.text()[..6].to_owned(),
+    )))
+}
+
 #[allow(clippy::too_many_lines, reason = "one arm a command")]
 fn run(words: &[String]) -> Result<(), Error> {
     let mut words = words;
@@ -543,6 +563,7 @@ fn run(words: &[String]) -> Result<(), Error> {
         }
         "compose" => {
             let me = store.me()?;
+            let answering = answering(&store, &me.address, &args)?;
             let body = if let Some(path) = args.one("--body") {
                 std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))?
             } else {
@@ -566,26 +587,54 @@ fn run(words: &[String]) -> Result<(), Error> {
                     data,
                 });
             }
-            let to = typed_addresses(&args.all("--to"))?;
-            let cc = typed_addresses(&args.all("--cc"))?;
+            // what --to, --cc and --subject give replaces what a reply or forward fills in
+            let start = answering
+                .as_ref()
+                .map(|(_, s, _)| s.clone())
+                .unwrap_or_default();
+            let given = |flag: &str, started: Vec<String>| {
+                let typed = args.all(flag);
+                if typed.is_empty() {
+                    Ok(started.into_iter().map(|a| (None, a)).collect())
+                } else {
+                    typed_addresses(&typed)
+                }
+            };
+            let to = given("--to", start.to)?;
+            let cc = given("--cc", start.cc)?;
             let plain = |n: &[(Option<String>, String)]| -> Vec<String> {
                 n.iter().map(|(_, a)| a.clone()).collect()
             };
+            let forward = matches!(answering, Some((Answer::Forward, ..)));
             let draft = Draft {
                 from: me.address,
                 to: plain(&to),
                 cc: plain(&cc),
                 date: now(),
-                subject: args.one("--subject").unwrap_or_default(),
-                body,
-                files,
+                subject: args.one("--subject").unwrap_or(start.subject),
+                // a forward's text goes above the message forwarded
+                body: if forward {
+                    compose::with_note(&body, &start.body)
+                } else {
+                    body
+                },
+                files: [start.files, files].concat(),
                 priority: args
                     .one("--priority")
                     .map_or(Ok(0), |p| p.parse().map_err(|_| "--priority is 0, 1 or 2"))?,
-                reply_to: None,
+                reply_to: start.reply_to,
             };
             let id = store.queue(&draft.message()?)?;
             addresses::remember(&base, &[to, cc].concat(), now())?;
+            let original = answering.map(|(.., short)| short).unwrap_or_default();
+            for h in &start.held {
+                eprintln!(
+                    "not included: {} ({} bytes), held at the post office; `radiopost \
+                     attachments {original} {}` asks for it on the next call to a gateway, and \
+                     the message it comes in can be forwarded",
+                    h.name, h.size, h.name
+                );
+            }
             println!("{}", id.text());
         }
         "import" => {

@@ -139,3 +139,10 @@ pub fn store_for(home: &Path, device: &str, credential: &str) -> Store {
     }
     store
 }
+
+/// The message a home keeps under the content ID `id`.
+pub fn kept(home: &Path, id: &str) -> Message {
+    let store = Store::open(home).expect("a home");
+    let id = store.find(id).expect("kept");
+    store.message(&id).expect("a message")
+}

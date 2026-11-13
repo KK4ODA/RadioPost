@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.9 |
+| **Version** | 0.3.10 |
 | **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -104,7 +104,7 @@ rules:
 
 | ID | Wish | Group | Priority | Compatibility | Status |
 |---|---|---|---|---|---|
-| W1 | Reply and forward | Mail | High | Fits today | Planned |
+| W1 | Reply and forward | Mail | High | Fits today | Implemented |
 | W2 | An address book and groups | Mail | Medium | Fits today | In progress |
 | W3 | Photos made small, and the time on the air shown | Mail | Medium | Fits today | Planned |
 | W4 | The full text of a trimmed message | Mail | Low | Fits today as modified; optional addition as asked | Proposed |
@@ -170,14 +170,14 @@ Answer a message and keep its thread, at the other end too. Pass a message on to
 | Requested by | The plan: concept §10, first version. Requesters: 0. |
 | Component | Client. |
 | Compatibility | **Fits today.** A reply sets `reply_to` (RP-2 §2, key 10); the post office restores `In-Reply-To` and `References` from it (RP-6 §3.1), so the recipient's mail program threads the answer. A forward is a new message with the text and the `files`. |
-| Existing coverage | Planned for the first version; not built. The client never sets `reply_to`. |
+| Existing coverage | Built (2026-11-13): the reader's **Reply**, **Reply all** and **Forward**, and `radiopost compose --reply`, `--reply-all` and `--forward` ID. A reply goes to the sender of a message received, `Re: ` before its subject unless it starts with `Re:` in any case, `reply_to` its content ID; it quotes nothing, and the composer shows the original under the text box, not sent. A reply to all copies the original's To and Cc, less the account's own address and the sender. A forward answers nothing: `Fwd: ` and the subject, a short header (*Forwarded message*, From, Date, Subject) and the original's text, its files (each can be left out in the panel); its held attachments are listed as not included, with *Ask on the next call*. The priority starts routine. Tested in the panel, the program, and end to end: an email comes down, the reply goes up by radio, and the email out carries `In-Reply-To` and `References` with the original's `Message-ID`. |
 | Dependencies | None. |
 | Effort | Small: the reader and the composer. |
-| Priority | **High.** Pilot users answer email by radio, and today each answer starts a new thread at the other end. |
+| Priority | **High.** Pilot users answer email by radio, and each answer started a new thread at the other end. |
 | Recommendation | Accept. |
-| Status | Planned. |
-| Author decision | None yet. |
-| Notes | Held attachments cannot be forwarded until fetched (RP-6 §2.5): their `ref` means something only to the recipient's own post office. |
+| Status | Implemented. |
+| Author decision | **The author**, 2026-11-13: build it; a reply never quotes, a forward carries the files and lists the held attachments, priority starts routine. |
+| Notes | Held attachments cannot be forwarded until fetched (RP-6 §2.5): their `ref` means something only to the recipient's own post office. Fetched, they come in a new message (`reply_to` the original), which can be forwarded. |
 
 ### W2. An address book and groups
 
@@ -1094,3 +1094,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.7 | 2026-11-12 | G14, the post office's side built: copies placed at usual gateways registered with other post offices, served only to their own credentials; the gateway's side comes with W27. |
 | 0.3.8 | 2026-11-13 | G11 drafted (D39): RP-0 §9.4's registry of modem names, `mercury` and `aether-fm` added, a channel with an unknown name ignored, and what an FM channel states. |
 | 0.3.9 | 2026-11-13 | The author decided W46 and W7, built: several callsigns on separate accounts, each a home of its own, chosen from a list at the top of the window, one device key and one address list; answering any of them waits. |
+| 0.3.10 | 2026-11-13 | W1 implemented: reply, reply to all and forward, in the panel and the program; a reply keeps the email thread at the other end. |

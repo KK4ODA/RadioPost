@@ -502,6 +502,182 @@ fn a_held_attachment_is_asked_for_from_the_panel() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// W1: a reply to a message received, a reply to all, and a forward, from the reader's buttons as
+/// the page makes them: what each starts with, then the message the outbox gets.
+#[test]
+#[allow(clippy::too_many_lines, reason = "the three ways, told in order")]
+fn a_reply_a_reply_to_all_and_a_forward_from_the_panel() {
+    use radiopost::cbor::Value as Cbor;
+    use radiopost::message::{Message, key};
+    let dir = scratch("panel-answer");
+    let mut store = store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    // Maria's question to Facundo alone; the EOC's roster to Facundo, copied to shelter 3
+    let maria = common::message("maria-419");
+    let roster = common::message("eoc-420");
+    // a message with a file carried and a file held at the post office, to Facundo and Ana, with
+    // Facundo's own address written with capitals, as a sender may
+    let both = Message::from_map(&Cbor::int_map(vec![
+        (key::V, Cbor::Uint(1)),
+        (key::FROM, Cbor::text("maria@example.com")),
+        (
+            key::TO,
+            Cbor::Array(vec![
+                Cbor::text("Facundo@radiopost.org"),
+                Cbor::text("ana@hampost.org"),
+            ]),
+        ),
+        (key::DATE, Cbor::Uint(1_794_240_000)),
+        (key::SUBJECT, Cbor::text("RE: The house")),
+        (key::BODY, Cbor::text("The roof held.\n")),
+        (
+            key::FILES,
+            Cbor::Array(vec![Cbor::int_map(vec![
+                (1, Cbor::text("roof.txt")),
+                (2, Cbor::text("text/plain")),
+                (3, Cbor::bytes(b"Tiles: 3 missing")),
+            ])]),
+        ),
+        (key::PRIORITY, Cbor::Uint(2)),
+        (key::FLAGS, Cbor::Uint(2)),
+        (
+            key::HELD,
+            Cbor::Array(vec![Cbor::int_map(vec![
+                (1, Cbor::text("roof.mp4")),
+                (2, Cbor::text("video/mp4")),
+                (3, Cbor::Uint(900_000)),
+                (4, Cbor::bytes(&[7; 8])),
+            ])]),
+        ),
+    ]))
+    .expect("a message");
+    for (m, serial) in [(&maria, 419), (&roster, 420), (&both, 423)] {
+        store
+            .received(m, "N1CALL-10", 1_794_240_100, Some(serial))
+            .expect("kept");
+    }
+    let c = Client {
+        at: Panel::new(&dir.join("facundo"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let short = |m: &Message| m.content_id().text()[..6].to_owned();
+    let answer = |m: &Message, how: &str| c.get(&format!("/api/answer?id={}&how={how}", short(m)));
+    let composed = |body: Value| -> Message {
+        let id = c.post("/api/compose", &body).expect("composed")["id"]
+            .as_str()
+            .expect("an ID")
+            .to_owned();
+        common::kept(&dir.join("facundo"), &id)
+    };
+
+    // a reply: to the sender, Re:, in the thread, nothing quoted, routine
+    let a = answer(&maria, "reply");
+    assert_eq!(a["to"], json!(["maria@example.com"]));
+    assert_eq!(a["cc"], json!([]));
+    assert_eq!(a["subject"], "Re: Are you safe?");
+    assert_eq!(a["body"], "");
+    assert_eq!(a["reply_to"], maria.content_id().text().as_str());
+    assert_eq!(a["original"]["subject"], "Are you safe?");
+    let reply = composed(
+        json!({"to": a["to"], "cc": a["cc"], "subject": a["subject"],
+                                "body": "All safe here.\n", "reply_to": a["reply_to"]}),
+    );
+    let map = reply.map();
+    assert_eq!(
+        map.get(key::REPLY_TO).and_then(Cbor::as_bytes),
+        Some(maria.content_id().0.as_slice())
+    );
+    assert_eq!(reply.recipients(), ["maria@example.com"]);
+    assert_eq!(
+        map.get(key::SUBJECT).and_then(Cbor::as_text),
+        Some("Re: Are you safe?")
+    );
+    assert_eq!(map.get(key::PRIORITY), None, "routine");
+    // a subject that starts with Re: already, in any case, is kept as it is
+    assert_eq!(answer(&both, "reply")["subject"], "RE: The house");
+
+    // a reply to all: the others in Cc, less this account's own address and the sender
+    let a = answer(&roster, "reply-all");
+    assert_eq!(a["to"], json!(["eoc@radiopost.org"]));
+    assert_eq!(a["cc"], json!(["shelter3@radiopost.org"]));
+    assert_eq!(a["subject"], "Re: Shelter roster");
+    let a = answer(&both, "reply-all");
+    assert_eq!(a["to"], json!(["maria@example.com"]));
+    assert_eq!(a["cc"], json!(["ana@hampost.org"]), "not Facundo@");
+    let all = composed(
+        json!({"to": a["to"], "cc": a["cc"], "subject": a["subject"],
+                              "body": "", "reply_to": a["reply_to"]}),
+    );
+    assert_eq!(all.recipients(), ["maria@example.com", "ana@hampost.org"]);
+    assert_eq!(
+        all.map().get(key::REPLY_TO).and_then(Cbor::as_bytes),
+        Some(both.content_id().0.as_slice())
+    );
+
+    // a forward: Fwd:, the original's text under a short header, its file carried, the held one
+    // listed as not included, answering nothing, routine though the original was an emergency
+    let a = answer(&both, "forward");
+    assert_eq!(a["to"], json!([]));
+    assert_eq!(a["subject"], "Fwd: RE: The house");
+    assert_eq!(a["reply_to"], Value::Null);
+    assert_eq!(
+        a["body"],
+        "Forwarded message\nFrom: maria@example.com\nDate: 2026-11-09 16:00Z\n\
+         Subject: RE: The house\n\nThe roof held.\n"
+    );
+    assert_eq!(
+        a["files"],
+        json!([{"name": "roof.txt", "type": "text/plain", "size": 16}])
+    );
+    assert_eq!(
+        a["held"],
+        json!([{"name": "roof.mp4", "type": "video/mp4", "size": 900_000, "asked": false}])
+    );
+    assert_eq!(a["can_ask"], true);
+    let forward = composed(json!({"to": "jose@example.net", "subject": a["subject"],
+                                  "body": format!("For you.\n\n{}", a["body"].as_str().unwrap_or("")),
+                                  "forward": a["original"]["id"]}));
+    let map = forward.map();
+    assert_eq!(map.get(key::REPLY_TO), None, "a forward answers nothing");
+    assert_eq!(map.get(key::PRIORITY), None, "routine");
+    assert_eq!(map.get(key::HELD), None, "the held attachment is left out");
+    assert_eq!(map.get(key::FLAGS), None);
+    let files = map.get(key::FILES).and_then(Cbor::as_array).expect("files");
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].get(1).and_then(Cbor::as_text), Some("roof.txt"));
+    assert_eq!(
+        files[0].get(3).and_then(Cbor::as_bytes),
+        Some(b"Tiles: 3 missing".as_slice())
+    );
+    assert!(
+        map.get(key::BODY)
+            .and_then(Cbor::as_text)
+            .is_some_and(|b| b.starts_with("For you.\n\nForwarded message\n")),
+        "{map:?}"
+    );
+    // a file unticked stays behind
+    let lighter = composed(json!({"to": "jose@example.net", "subject": "Fwd: light",
+                                  "body": "", "forward": a["original"]["id"], "carry": []}));
+    assert_eq!(lighter.map().get(key::FILES), None);
+
+    // only a message received is replied to; a message sent is forwarded
+    let sent = reply.content_id().text();
+    let (status, body) = http(
+        c.at,
+        "GET",
+        &format!("/api/answer?id={}&how=reply", &sent[..6]),
+        &c.host(),
+        false,
+        &Value::Null,
+    );
+    assert_ne!(status, 200, "{body}");
+    assert_eq!(
+        answer(&reply, "forward")["subject"],
+        "Fwd: Re: Are you safe?"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// D34: the panel says when a newer release is out, and its update runs the application's own
 /// installer (here a stand-in that only says it ran).
 #[test]

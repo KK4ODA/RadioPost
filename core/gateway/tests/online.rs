@@ -381,6 +381,101 @@ fn a_held_attachment_is_asked_for_by_radio_and_comes_on_the_next_call() {
     );
 }
 
+/// W1, RP-2 §2 key 10, RP-6 §2.4 step 8 and §3.1: an email comes down by radio, the user replies
+/// by radio, and the email the post office sends answers it: `In-Reply-To` and `References` name
+/// the original's `Message-ID`, so the sender's mail program keeps the thread.
+#[test]
+fn a_reply_by_radio_keeps_the_email_thread() {
+    use radiopost_client::compose::{self, Answer, Draft};
+    let dir = scratch("reply");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (_server, at_user, at_gateway) = loopback();
+    let (_gw, rx) = gateway(&dir, &running, &base, &po_key, at_gateway);
+    let mut user = client(
+        &dir.join("wd5ema"),
+        &running,
+        &po_key,
+        "club@test.example",
+        "WD5EMA",
+    );
+    running
+        .email_in(
+            "maria@example.com",
+            &["club@test.example".into()],
+            b"From: Maria <maria@example.com>\r\n\
+              To: club@test.example\r\n\
+              Subject: Net tonight\r\n\
+              Message-ID: <net-41@example.com>\r\n\
+              \r\n\
+              Are you on the net tonight?\r\n",
+        )
+        .expect("taken");
+    let call = |user: &mut Store| {
+        let mut said = Vec::new();
+        let report = session::call(
+            user,
+            "KK4ODA-1",
+            Kind::Gateway,
+            &Options::new(&at_user.to_string()),
+            &mut |s| said.push(s.to_owned()),
+        )
+        .expect("called");
+        assert_eq!(report.failed, None, "{said:?}");
+        let lines = session_lines(&rx);
+        assert!(
+            lines.iter().any(|l| l == "the session with WD5EMA is over"),
+            "{lines:?}"
+        );
+        report
+    };
+
+    // the email comes down; the user answers it, as the panel's Reply does
+    let report = call(&mut user);
+    assert_eq!(report.received.len(), 1);
+    let original = user.message(&report.received[0]).expect("kept");
+    let started = compose::answer(&original, "club@test.example", Answer::Reply);
+    assert_eq!(started.to, ["maria@example.com"]);
+    assert_eq!(started.subject, "Re: Net tonight");
+    let reply = Draft {
+        from: "club@test.example".into(),
+        to: started.to,
+        cc: started.cc,
+        date: serve::now(),
+        subject: started.subject,
+        body: "Yes, from the shelter.\n".into(),
+        files: started.files,
+        priority: 0,
+        reply_to: started.reply_to,
+    }
+    .message()
+    .expect("a message");
+    let reply_id = user.queue(&reply).expect("queued");
+    let report = call(&mut user);
+    assert_eq!(report.delivered, [reply_id]);
+
+    // the email the post office sends is in the thread
+    let sent = std::sync::Mutex::new(Vec::new());
+    let said = running.send_waiting(&|_from, _to, email| {
+        sent.lock()
+            .expect("the emails")
+            .push(String::from_utf8_lossy(email).into_owned());
+        Ok(())
+    });
+    assert_eq!(
+        said,
+        [format!("{}: sent to maria@example.com", reply_id.text())]
+    );
+    let sent = sent.into_inner().expect("the emails");
+    assert_eq!(sent.len(), 1);
+    for header in [
+        "In-Reply-To: <net-41@example.com>\r\n",
+        "References: <net-41@example.com>\r\n",
+        "Subject: Re: Net tonight\r\n",
+    ] {
+        assert!(sent[0].contains(header), "{header}{}", sent[0]);
+    }
+}
+
 /// One HTTP exchange with a panel on loopback, as its page makes one: the status and the JSON.
 fn panel_http(
     at: SocketAddr,

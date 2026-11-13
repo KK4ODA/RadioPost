@@ -141,6 +141,9 @@
       <article id="reader" hidden aria-live="polite">
         <div class="row reader-acts">
           <button class="quiet" id="back" title="Back to the folder">Back</button>
+          <button class="quiet" id="r-reply" title="Answer the sender, in the message's thread at the other end too. The original is not quoted: every byte goes on the air">Reply</button>
+          <button class="quiet" id="r-reply-all" title="Answer the sender, and copy everyone else it went to but you">Reply all</button>
+          <button class="quiet" id="r-forward" title="Pass it on to someone else, with its text and files">Forward</button>
           <button class="quiet needs-idle" id="r-delete" title="Move it to the trash (Delete key)">Delete</button>
           <button class="quiet needs-idle" id="r-restore" title="Put it back in the folder it was deleted from">Restore</button>
           <button class="quiet danger needs-idle" id="r-purge" title="Delete it for good">Delete forever</button>
@@ -159,7 +162,7 @@
       </article>
 
       <form id="composer" hidden>
-        <h1>New message</h1>
+        <h1 id="c-title">New message</h1>
         <label title="Addresses, separated by commas: maria@example.com, or Maria &lt;maria@example.com&gt;. Each is checked before the message goes in the outbox. Your address list is offered as you type">To <span class="suggest"><input name="to" required spellcheck="false" autocomplete="off" placeholder="ana@hampost.org" aria-autocomplete="list"><ul class="suggestions" role="listbox" hidden></ul></span></label>
         <label title="Copies, separated by commas, written as in To">Cc <span class="suggest"><input name="cc" spellcheck="false" autocomplete="off" aria-autocomplete="list"><ul class="suggestions" role="listbox" hidden></ul></span></label>
         <label title="What it is about">Subject <input name="subject"></label>
@@ -169,11 +172,17 @@
           </select>
         </label>
         <label title="Plain text">Text <textarea name="body" rows="12"></textarea></label>
+        <ul class="files carried" id="c-files" title="The forwarded message's files: untick one to leave it out. Every byte goes on the air"></ul>
+        <ul class="files held" id="c-held" title="Held at the post office, so a forward cannot carry them: ask for them on your next call to a gateway, then forward the message they come in"></ul>
         <label title="Files carried in the message: keep them small, every byte goes on the air">Attach <input type="file" name="files" multiple></label>
         <div class="row">
           <button class="primary" type="submit" title="Put it in the outbox">Put in outbox</button>
           <button class="quiet" type="button" id="cancel" title="Discard it">Discard</button>
         </div>
+        <section class="original" id="c-original" title="The message you are answering, for reference: it is not sent. The other end's mail program shows the thread" hidden>
+          <p class="note" id="c-original-head"></p>
+          <pre class="body" id="c-original-body"></pre>
+        </section>
       </form>
 
 

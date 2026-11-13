@@ -45,6 +45,7 @@ chosen.
 | `accept [--add ENTRY]… [--remove ENTRY]…` | The accept list: who may email this account (RP-5 §6.5, RP-6 §2.2). |
 | `report` | Sends the station-to-station sessions waiting to the post office (RP-5 §6.6); each one answered leaves the home. |
 | `compose --to ADDR … [--cc ADDR] [--subject TEXT] [--priority 0\|1\|2] [--attach FILE]… [--body FILE]` | Writes a message into the outbox; the text from standard input without `--body`. Each `--to` or `--cc` may hold several addresses, separated by commas, semicolons or spaces, and `Name <address>` as well as a bare address; each is checked first (RP-0 §6.2), and a malformed one is refused with the reason. |
+| `compose --reply ID`, `--reply-all ID`, `--forward ID` | Answers a message, or passes one on; `ID` is the start of its content ID, as `show` takes it. `--reply` writes to the sender of a message received, with the subject `Re: ` and the original's (unless it starts with `Re:` already) and `reply_to` its content ID (RP-2 §2), from which the post office restores `In-Reply-To` and `References` (RP-6 §3.1), so the other end's mail program keeps the thread. The original is not quoted: every byte goes on the air. `--reply-all` copies the original's To and Cc too, less your own address and the sender. `--forward` passes any message on: the subject `Fwd: ` and the original's, the text a short header (*Forwarded message*, From, Date, Subject) and the original's text, with what you give above it, and the original's files; attachments held at the post office cannot go (their `ref` means something only to your own post office), so it says which were left out: ask for them with `attachments`, then forward the message they come in. The priority starts routine whatever the original's. `--to`, `--cc` and `--subject` replace what these fill in, and `--attach` adds files. |
 | `import FILE` | Puts a message in its canonical encoding (RP-2) in the outbox. |
 | `outbox`, `inbox`, `sent`, `trash` | Lists a folder. |
 | `delete ID [--forever]` | Moves a message to the trash from whichever folder holds it; with `--forever`, deletes it for good. Deleting is this computer's own: the post office, gateways and other stations keep what they hold. |
@@ -83,7 +84,12 @@ For a test on the air between two stations with Aether HF, see
 `radiopost panel` serves the page in `app/ui/` (plain HTML, CSS and JavaScript, no build step,
 light or dark as the system is) and a JSON API under `/api/`, on the loopback interface only, as
 the Aether app serves its own. It shows the folders, reads and writes messages with attachments,
-asks for held attachments (the reader's *Ask on the next call*), calls a gateway (with a Fetch
+asks for held attachments (the reader's *Ask on the next call*), answers and passes on messages
+(the reader's **Reply**, **Reply all** and **Forward**, as `compose --reply`, `--reply-all` and
+`--forward` do: a reply quotes nothing and shows the original under the composer, for reference
+only; a forward fills the text with the original, which you can cut, ticks each of its files to
+carry, and lists the attachments held at the post office as not included, with *Ask on the next
+call*), calls a gateway (with a Fetch
 setting, the post office's gateway list in *Choose a gateway*, and the *Waiting* folder to mark
 what to fetch next) or a station, listens for one, sends the reports, and holds the setup: enrollment with a code
 or an application the operators decide (asked after every minute while it waits),
@@ -194,7 +200,7 @@ both stations' proofs, waits in `state.json` until `report` (or the panel's Send
 ## Tests
 
 `tests/panel.rs`: the panel's guards, a message written with an attachment and carried by a call
-made from the panel (with what it carried, as the progress card shows it), a held attachment asked for, listening stopped, and the trash (deleted,
+made from the panel (with what it carried, as the progress card shows it), a held attachment asked for, a reply, a reply to all and a forward (W1), listening stopped, and the trash (deleted,
 restored to its place, deleted for good, emptied, and refused while a session runs), and the
 address list (learned from a message with the names typed, added to and renamed, taken off and
 put back as it was, during a session too). `tests/two_clients.rs`: two clients replay session-03

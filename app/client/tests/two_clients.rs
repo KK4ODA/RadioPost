@@ -297,7 +297,71 @@ fn two_clients_exchange_mail_with_the_program() {
         shown.contains("Subject: Hola Ana") && shown.ends_with("We are fine here.\nFacundo\n\n"),
         "{shown:?}"
     );
+
+    answers_with_the_program(&ana, &to_ana, &to_facundo);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// W1 with the program: Ana answers the message Facundo sent her (`to_ana`), passes it on, and
+/// cannot reply to her own (`to_facundo`).
+fn answers_with_the_program(ana: &Path, to_ana: &str, to_facundo: &str) {
+    let short = |id: &str| id.trim()[..6].to_owned();
+    // W1: Ana answers, and passes Facundo's message on
+    let reply = radiopost(ana, &["compose", "--reply", &short(to_ana)], "Good.\n");
+    let shown = radiopost(ana, &["show", &short(&reply)], "");
+    assert!(
+        shown.contains("To: facundo@radiopost.org\n")
+            && shown.contains("Subject: Re: Hola Ana\n")
+            && shown.ends_with("\n\nGood.\n\n"),
+        "{shown:?}"
+    );
+    let store = Store::open(ana).expect("the home");
+    let id = store.find(reply.trim()).expect("queued");
+    let original = radiopost::ContentId::from_text(to_ana.trim()).expect("an ID");
+    assert_eq!(
+        store
+            .message(&id)
+            .expect("kept")
+            .map()
+            .get(radiopost::message::key::REPLY_TO)
+            .and_then(radiopost::cbor::Value::as_bytes),
+        Some(original.0.as_slice()),
+        "in the thread"
+    );
+    let forward = radiopost(
+        ana,
+        &[
+            "compose",
+            "--forward",
+            &short(to_ana),
+            "--to",
+            "maria@example.com",
+        ],
+        "From Facundo.\n",
+    );
+    let shown = radiopost(ana, &["show", &short(&forward)], "");
+    assert!(
+        shown.contains("To: maria@example.com\n")
+            && shown.contains("Subject: Fwd: Hola Ana\n")
+            && shown
+                .contains("\n\nFrom Facundo.\n\nForwarded message\nFrom: facundo@radiopost.org\n")
+            && shown.ends_with("Subject: Hola Ana\n\nWe are fine here.\nFacundo\n\n"),
+        "{shown:?}"
+    );
+    // a message sent is forwarded, never replied to
+    let out = Command::new(env!("CARGO_BIN_EXE_radiopost"))
+        .arg("--home")
+        .arg(ana)
+        .args(["compose", "--reply", &short(to_facundo)])
+        .stdin(Stdio::null())
+        .output()
+        .expect("it runs");
+    assert!(!out.status.success());
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("only a message received is replied to"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 /// Aether HF named as the modem, and not running: said plainly.

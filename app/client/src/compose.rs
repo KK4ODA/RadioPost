@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Writing a message (RP-2): its fields from what the user gave, its text normalised as RP-2 §2
 //! requires (NFC, LF line endings), and the files attached.
+//!
+//! A reply, a reply to all or a forward starts from the message it answers ([`answer`], W1).
 
 use radiopost::cbor::Value;
 use radiopost::message::{Message, key};
@@ -192,6 +194,246 @@ pub fn parse_named(text: &str) -> Result<Vec<(Option<String>, String)>, String> 
     Ok(found)
 }
 
+/// A date as people read it, UTC (RP-0 §4.4): `2026-11-09 14:30Z`.
+#[must_use]
+pub fn utc(secs: u64) -> String {
+    let days = i64::try_from(secs / 86_400).unwrap_or(0);
+    let rem = secs % 86_400;
+    // civil from days (H. Hinnant's algorithm)
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!(
+        "{y:04}-{m:02}-{d:02} {:02}:{:02}Z",
+        rem / 3600,
+        rem % 3600 / 60
+    )
+}
+
+/// How a message is answered or passed on (W1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Answer {
+    /// To its sender, in its thread.
+    Reply,
+    /// To its sender, with its other recipients in Cc, in its thread.
+    ReplyAll,
+    /// To someone else: its text and files in a new message, which answers nothing.
+    Forward,
+}
+
+impl Answer {
+    /// The way of that name: `reply`, `reply-all` or `forward`.
+    ///
+    /// # Errors
+    ///
+    /// No way has that name.
+    pub fn named(name: &str) -> Result<Answer, String> {
+        match name {
+            "reply" => Ok(Answer::Reply),
+            "reply-all" => Ok(Answer::ReplyAll),
+            "forward" => Ok(Answer::Forward),
+            _ => Err(format!(
+                "{name}: a message is answered by reply, reply-all or forward"
+            )),
+        }
+    }
+
+    /// Its name, as [`Answer::named`] takes it.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Answer::Reply => "reply",
+            Answer::ReplyAll => "reply-all",
+            Answer::Forward => "forward",
+        }
+    }
+}
+
+/// A held attachment (RP-2 §2, key 12), as a forward lists it: not included.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Held {
+    /// Its name.
+    pub name: String,
+    /// Its media type.
+    pub media_type: String,
+    /// Its size in bytes.
+    pub size: u64,
+}
+
+/// What answering or forwarding a message starts with: the fields a composer fills in, which the
+/// user may change, and what a forward cannot carry.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Started {
+    /// Recipients.
+    pub to: Vec<String>,
+    /// Copy recipients.
+    pub cc: Vec<String>,
+    /// The subject.
+    pub subject: String,
+    /// The text: nothing for a reply, which never quotes; the message forwarded for a forward.
+    pub body: String,
+    /// The files a forward carries.
+    pub files: Vec<File>,
+    /// What a reply answers: the original's content ID.
+    pub reply_to: Option<[u8; 12]>,
+    /// The original's held attachments, which a forward cannot carry: their `ref` means
+    /// something only to the recipient's own post office (RP-6 §2.5).
+    pub held: Vec<Held>,
+}
+
+/// `subject` with `prefix` (`Re:` or `Fwd:`) and a space before it.
+fn prefixed(prefix: &str, subject: &str) -> String {
+    format!("{prefix} {subject}").trim_end().to_owned()
+}
+
+/// The subject of a reply: `Re: ` and the original's, unless it starts with `Re:` already, in any
+/// case.
+#[must_use]
+pub fn reply_subject(subject: &str) -> String {
+    let already = subject
+        .trim_start()
+        .get(..3)
+        .is_some_and(|p| p.eq_ignore_ascii_case("re:"));
+    if already {
+        subject.to_owned()
+    } else {
+        prefixed("Re:", subject)
+    }
+}
+
+/// The text a forward carries: a short header (`Forwarded message`, From, Date, Subject), a blank
+/// line, and the original's text. Short, because every byte goes on the air.
+#[must_use]
+pub fn forwarded(original: &Message) -> String {
+    let map = original.map();
+    let text = |k| map.get(k).and_then(Value::as_text).unwrap_or("");
+    let date = map.get(key::DATE).and_then(Value::as_u64).unwrap_or(0);
+    format!(
+        "Forwarded message\nFrom: {}\nDate: {}\nSubject: {}\n\n{}",
+        text(key::FROM),
+        utc(date),
+        text(key::SUBJECT),
+        text(key::BODY)
+    )
+}
+
+/// A forward's text with the sender's own note above the message forwarded, a blank line between.
+#[must_use]
+pub fn with_note(note: &str, forwarded: &str) -> String {
+    let note = note.trim_end();
+    if note.trim().is_empty() {
+        forwarded.to_owned()
+    } else {
+        format!("{note}\n\n{forwarded}")
+    }
+}
+
+/// The files a message carries (RP-2 §2, key 8).
+#[must_use]
+pub fn files_of(message: &Message) -> Vec<File> {
+    message
+        .map()
+        .get(key::FILES)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|f| {
+            Some(File {
+                name: f.get(1)?.as_text()?.to_owned(),
+                media_type: f
+                    .get(2)
+                    .and_then(Value::as_text)
+                    .unwrap_or("application/octet-stream")
+                    .to_owned(),
+                data: f.get(3)?.as_bytes()?.to_vec(),
+            })
+        })
+        .collect()
+}
+
+/// The attachments a message lists as held at the post office (RP-2 §2, key 12).
+#[must_use]
+pub fn held_of(message: &Message) -> Vec<Held> {
+    message
+        .map()
+        .get(key::HELD)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|f| {
+            Some(Held {
+                name: f.get(1)?.as_text()?.to_owned(),
+                media_type: f.get(2).and_then(Value::as_text).unwrap_or("").to_owned(),
+                size: f.get(3).and_then(Value::as_u64).unwrap_or(0),
+            })
+        })
+        .collect()
+}
+
+/// What answering `original` the way `how` starts with, for the account whose address is `me`.
+///
+/// * A reply is to the original's sender, its subject `Re: ` and the original's, its `reply_to`
+///   the original's content ID (RP-2 §2, key 10), from which the post office restores
+///   `In-Reply-To` and `References` (RP-6 §3.1). It never quotes the original: every byte goes on
+///   the air, and the recipient's mail program shows the thread.
+/// * A reply to all adds the original's To and Cc as Cc, less `me` and anything already in To.
+/// * A forward answers nothing: its subject is `Fwd: ` and the original's, its text
+///   [`forwarded`], and it carries the original's files; the held ones are listed, not carried.
+///
+/// The priority is the user's to choose, and starts routine whatever the original's.
+#[must_use]
+pub fn answer(original: &Message, me: &str, how: Answer) -> Started {
+    let map = original.map();
+    let list = |k| -> Vec<String> {
+        map.get(k)
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_text)
+            .map(address)
+            .collect()
+    };
+    let subject = map.get(key::SUBJECT).and_then(Value::as_text).unwrap_or("");
+    let from = address(original.from().unwrap_or(""));
+    let same = |a: &str, b: &str| a.eq_ignore_ascii_case(b);
+    match how {
+        Answer::Reply | Answer::ReplyAll => {
+            let to = vec![from];
+            let mut cc: Vec<String> = Vec::new();
+            if how == Answer::ReplyAll {
+                for a in list(key::TO).into_iter().chain(list(key::CC)) {
+                    let taken = same(&a, me)
+                        || to.iter().any(|t| same(t, &a))
+                        || cc.iter().any(|c| same(c, &a));
+                    if !taken {
+                        cc.push(a);
+                    }
+                }
+            }
+            Started {
+                to,
+                cc,
+                subject: reply_subject(subject),
+                reply_to: Some(original.content_id().0),
+                ..Started::default()
+            }
+        }
+        Answer::Forward => Started {
+            subject: prefixed("Fwd:", subject),
+            body: forwarded(original),
+            files: files_of(original),
+            held: held_of(original),
+            ..Started::default()
+        },
+    }
+}
+
 /// A media type for a file's name, for the common kinds; anything else is octets.
 #[must_use]
 pub fn media_type(name: &str) -> &'static str {
@@ -273,7 +515,38 @@ impl Draft {
 
 #[cfg(test)]
 mod tests {
-    use super::{Draft, File, checked_address, normalise, parse_addresses};
+    use super::{
+        Draft, File, checked_address, normalise, parse_addresses, reply_subject, utc, with_note,
+    };
+
+    #[test]
+    fn a_reply_says_re_once() {
+        for (original, reply) in [
+            ("Are you safe?", "Re: Are you safe?"),
+            ("Re: Are you safe?", "Re: Are you safe?"),
+            ("RE: roster", "RE: roster"),
+            ("re:roster", "re:roster"),
+            ("Fwd: roster", "Re: Fwd: roster"),
+            ("Regarding the net", "Re: Regarding the net"),
+            ("", "Re:"),
+            ("Ré", "Re: Ré"),
+        ] {
+            assert_eq!(reply_subject(original), reply, "{original}");
+        }
+    }
+
+    #[test]
+    fn a_forward_puts_the_note_above() {
+        let fwd = "Forwarded message\nFrom: a@b.org\n\ntext\n";
+        assert_eq!(with_note("", fwd), fwd);
+        assert_eq!(with_note(" \n\n", fwd), fwd);
+        assert_eq!(
+            with_note("See below.\n\n\n", fwd),
+            format!("See below.\n\n{fwd}")
+        );
+        assert_eq!(utc(1_794_224_400), "2026-11-09 11:40Z");
+        assert_eq!(utc(0), "1970-01-01 00:00Z");
+    }
 
     #[test]
     fn an_address_is_checked_and_its_domain_lowercased() {

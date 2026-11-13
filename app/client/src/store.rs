@@ -769,6 +769,17 @@ impl Store {
         }
     }
 
+    /// Whether the message `id` was received here: in the inbox, or in the trash from it. Only
+    /// such a message is replied to (W1).
+    #[must_use]
+    pub fn was_received(&self, id: &ContentId) -> bool {
+        self.inbox.iter().any(|a| a.id == *id)
+            || self
+                .trash
+                .iter()
+                .any(|t| matches!(&t.was, Was::Inbox(a) if a.id == *id))
+    }
+
     /// The attachments a received message lists as held at the post office (RP-2 key 12): each
     /// its name, type, size and `ref`.
     #[must_use]

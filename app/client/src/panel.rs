@@ -35,7 +35,7 @@ use radiopost_update::{Product, Watch};
 
 use crate::addresses;
 use crate::callsigns;
-use crate::compose::{Draft, File, media_type};
+use crate::compose::{self, Answer, Draft, File, media_type};
 use crate::online;
 use crate::session::{self, Fetch, Kind, Options};
 use crate::store::{Error, Folder, Store, unhex};
@@ -442,6 +442,7 @@ impl Panel {
             (Method::Get, "/api/state") => self.state(),
             (Method::Get, "/api/folder") => self.folder(&param("name")),
             (Method::Get, "/api/message") => self.message(&param("id")),
+            (Method::Get, "/api/answer") => self.answer(&param("id"), &param("how")),
             (Method::Get, "/api/log") => {
                 let since: usize = param("since").parse().unwrap_or(0);
                 let a = lock(&self.activity);
@@ -722,28 +723,89 @@ impl Panel {
         Ok(json!({"asked": asked}))
     }
 
+    /// W1: what replying to the message `prefix` names, replying to all, or forwarding it starts
+    /// with, for the composer to fill in; the original comes too, for the composer to show.
+    fn answer(&self, prefix: &str, how: &str) -> Result<Value, Error> {
+        let how = Answer::named(how)?;
+        let store = Store::open(&self.home())?;
+        let me = store.me()?;
+        let id = store.find(prefix)?;
+        if how != Answer::Forward && !store.was_received(&id) {
+            return Err(
+                "only a message received is replied to; forward passes any message on".into(),
+            );
+        }
+        let original = store.message(&id)?;
+        let started = compose::answer(&original, &me.address, how);
+        let serial = store
+            .inbox
+            .iter()
+            .find(|a| a.id == id)
+            .and_then(|a| a.serial);
+        let asked: Vec<String> = Store::held(&original)
+            .into_iter()
+            .filter(|(.., r)| serial.is_some_and(|s| store.files.contains(&(s, r.clone()))))
+            .map(|(name, ..)| name)
+            .collect();
+        let mut v = summary(&original);
+        v["body"] = original
+            .map()
+            .get(key::BODY)
+            .and_then(Cbor::as_text)
+            .unwrap_or("")
+            .into();
+        Ok(json!({
+            "how": how.name(), "to": started.to, "cc": started.cc, "subject": started.subject,
+            "body": started.body,
+            "reply_to": started.reply_to.map(|_| id.text()),
+            "files": started.files.iter()
+                .map(|f| json!({"name": f.name, "type": f.media_type, "size": f.data.len()}))
+                .collect::<Vec<_>>(),
+            "held": started.held.iter()
+                .map(|h| json!({"name": h.name, "type": h.media_type, "size": h.size,
+                                "asked": asked.contains(&h.name)}))
+                .collect::<Vec<_>>(),
+            // held attachments are asked for only of a message the post office brought
+            "can_ask": serial.is_some(),
+            "original": v,
+        }))
+    }
+
+    /// A message into the outbox. Besides what the user wrote, `reply_to` names the message it
+    /// answers (its content ID or the start of it), and `forward` the message it passes on, whose
+    /// files it carries: those whose places `carry` lists, or all of them (W1).
     fn compose(&self, body: &Value) -> Result<Value, Error> {
         let text = |name: &str| body[name].as_str().unwrap_or("").trim().to_owned();
         self.busy()?;
         let mut store = Store::open(&self.home())?;
         let me = store.me()?;
-        let files = body["files"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|f| {
-                let name = f["name"].as_str().unwrap_or("file").to_owned();
-                let data = f["data"]
-                    .as_str()
-                    .and_then(rpmi::base64::decode)
-                    .ok_or("an attachment's data is base64")?;
-                Ok(File {
-                    media_type: media_type(&name).into(),
-                    name,
-                    data,
-                })
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
+        let mut files = Vec::new();
+        if let Some(prefix) = body["forward"].as_str().filter(|p| !p.is_empty()) {
+            let carried = compose::files_of(&store.message(&store.find(prefix)?)?);
+            let carry: Option<Vec<u64>> = body["carry"]
+                .as_array()
+                .map(|a| a.iter().filter_map(Value::as_u64).collect());
+            files.extend(carried.into_iter().enumerate().filter_map(|(i, f)| {
+                let i = u64::try_from(i).ok()?;
+                carry.as_ref().is_none_or(|c| c.contains(&i)).then_some(f)
+            }));
+        }
+        for f in body["files"].as_array().into_iter().flatten() {
+            let name = f["name"].as_str().unwrap_or("file").to_owned();
+            let data = f["data"]
+                .as_str()
+                .and_then(rpmi::base64::decode)
+                .ok_or("an attachment's data is base64")?;
+            files.push(File {
+                media_type: media_type(&name).into(),
+                name,
+                data,
+            });
+        }
+        let reply_to = match body["reply_to"].as_str().filter(|p| !p.is_empty()) {
+            Some(prefix) => Some(store.find(prefix)?.0),
+            None => None,
+        };
         let (to, cc) = (named(&body["to"])?, named(&body["cc"])?);
         let draft = Draft {
             from: me.address,
@@ -754,7 +816,7 @@ impl Panel {
             body: body["body"].as_str().unwrap_or("").to_owned(),
             files,
             priority: body["priority"].as_u64().unwrap_or(0),
-            reply_to: None,
+            reply_to,
         };
         let id = store.queue(&draft.message()?)?;
         // the address list learns whom the message is for; a failure there loses no message

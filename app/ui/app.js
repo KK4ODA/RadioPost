@@ -618,8 +618,7 @@ async function forgetAddress(address, after) {
 }
 
 function writeTo(e) {
-  const form = $("composer");
-  form.reset();
+  const form = newComposer();
   form.to.value = `${writtenAs(e)}, `;
   show("composer");
   form.subject.focus();
@@ -756,10 +755,93 @@ function wireSuggestions(input) {
 // what the reader's buttons act on: the folder the message was opened from
 let reading = null;
 
+// W1: the message being answered or forwarded, while the composer is open on it
+let answering = null;
+
+const ANSWER_TITLES = {reply: "Reply", "reply-all": "Reply to all", forward: "Forward"};
+
+// the composer emptied, for a new message
+function newComposer() {
+  const form = $("composer");
+  form.reset();
+  answering = null;
+  $("c-title").textContent = "New message";
+  $("c-files").replaceChildren();
+  $("c-held").replaceChildren();
+  $("c-original").hidden = true;
+  return form;
+}
+
+// Reply, Reply all or Forward: the composer filled in from the message read. A reply quotes
+// nothing (every byte goes on the air); the original shows under the composer for reference.
+async function answer(how) {
+  let a;
+  try {
+    a = await api(`answer?id=${reading.id}&how=${how}`);
+  } catch (e) {
+    toast(e.message, true);
+    return;
+  }
+  const form = newComposer();
+  answering = {how, id: a.original.id, replyTo: a.reply_to};
+  $("c-title").textContent = ANSWER_TITLES[how];
+  form.to.value = a.to.length ? `${a.to.join(", ")}, ` : "";
+  form.cc.value = a.cc.length ? `${a.cc.join(", ")}, ` : "";
+  form.subject.value = a.subject;
+  form.body.value = how === "forward" ? `\n\n${a.body}` : "";
+  $("c-files").replaceChildren(...a.files.map((f, i) => {
+    const li = document.createElement("li");
+    const label = document.createElement("label");
+    label.className = "check";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = true;
+    box.dataset.carry = String(i);
+    label.append(box, `${f.name} (${f.type}, ${f.size} bytes)`);
+    li.append(label);
+    return li;
+  }));
+  $("c-held").replaceChildren(...a.held.map((f) => {
+    const li = document.createElement("li");
+    li.textContent = `Not included: ${f.name} (${f.type}, ${f.size} bytes), held at the post office`;
+    if (a.can_ask) {
+      const ask = document.createElement("button");
+      ask.type = "button";
+      ask.textContent = f.asked ? "Asked for" : "Ask on the next call";
+      ask.disabled = f.asked;
+      ask.title = "Ask for it on your next call to a gateway: it comes on the call after, in a new message you can forward";
+      ask.addEventListener("click", async () => {
+        try {
+          await api("held", {id: a.original.id, names: [f.name]});
+          ask.textContent = "Asked for";
+          ask.disabled = true;
+          toast(`${f.name} will be asked for on your next call to a gateway`);
+        } catch (e) {
+          toast(e.message, true);
+        }
+      });
+      li.append(" ", ask);
+    }
+    return li;
+  }));
+  const o = a.original;
+  $("c-original").hidden = how === "forward";
+  $("c-original-head").textContent =
+    `${o.from} wrote on ${new Date(o.date * 1000).toLocaleString()}: not sent, for reference`;
+  $("c-original-body").textContent = o.body;
+  show("composer");
+  const first = how === "forward" ? form.to : form.body;
+  first.focus();
+  if (first === form.body) form.body.setSelectionRange(0, 0);
+}
+
 async function openMessage(id, from = {folder}) {
   const m = await api(`message?id=${id}`);
   reading = {id, folder: from.folder, was: from.was};
   const trash = from.folder === "trash";
+  // a reply answers a message received; anything may be forwarded
+  const received = from.folder === "inbox" || (trash && from.was === "inbox");
+  $("r-reply").hidden = $("r-reply-all").hidden = !received;
   $("r-delete").hidden = trash || !FOLDER_NAMES[from.folder];
   $("r-restore").hidden = !trash;
   $("r-purge").hidden = !trash;
@@ -827,12 +909,21 @@ async function send(event) {
   const files = await Promise.all([...form.files.files].map(async (f) => ({
     name: f.name, data: await fileData(f),
   })));
+  const message = {
+    to: form.to.value, cc: form.cc.value, subject: form.subject.value,
+    priority: Number(form.priority.value), body: form.body.value, files,
+  };
+  if (answering?.replyTo) message.reply_to = answering.replyTo;
+  if (answering?.how === "forward") {
+    message.forward = answering.id;
+    message.carry = [...$("c-files").querySelectorAll("input[data-carry]")]
+      .filter((b) => b.checked).map((b) => Number(b.dataset.carry));
+    // the note written above the message forwarded, without the blank lines left before it
+    message.body = message.body.replace(/^\s*\n/, "");
+  }
   try {
-    await api("compose", {
-      to: form.to.value, cc: form.cc.value, subject: form.subject.value,
-      priority: Number(form.priority.value), body: form.body.value, files,
-    });
-    form.reset();
+    await api("compose", message);
+    newComposer();
     loadAddresses();
     toast("In the outbox: the next session carries it.");
     await refresh();
@@ -1592,7 +1683,11 @@ function wire() {
   for (const b of document.querySelectorAll("[data-folder]")) {
     b.addEventListener("click", () => openFolder(b.dataset.folder));
   }
-  $("write").addEventListener("click", () => show("composer"));
+  $("write").addEventListener("click", () => {
+    // a reply left half written stays; a new message starts empty
+    if (answering) newComposer();
+    show("composer");
+  });
   wireSuggestions($("composer").to);
   wireSuggestions($("composer").cc);
   $("address-filter").addEventListener("input", renderAddresses);
@@ -1609,9 +1704,12 @@ function wire() {
   };
   $("address-add").addEventListener("click", addAddress);
   $("address-new").addEventListener("keydown", (e) => { if (e.key === "Enter") addAddress(); });
-  $("cancel").addEventListener("click", () => { $("composer").reset(); openFolder(folder); });
+  $("cancel").addEventListener("click", () => { newComposer(); openFolder(folder); });
   $("composer").addEventListener("submit", send);
   $("back").addEventListener("click", () => openFolder(folder));
+  $("r-reply").addEventListener("click", () => answer("reply"));
+  $("r-reply-all").addEventListener("click", () => answer("reply-all"));
+  $("r-forward").addEventListener("click", () => answer("forward"));
   $("r-delete").addEventListener("click", () => toTrash(reading.id, reading.folder));
   $("r-restore").addEventListener("click",
     () => fromTrash("restore", reading.id, reading.was, `Back in the ${reading.was}.`));
