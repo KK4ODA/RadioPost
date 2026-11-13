@@ -14,8 +14,19 @@ for tests before a post office) is imported with `init`.
 ## Commands
 
 ```
-radiopost [--home DIR] COMMAND
+radiopost [--home DIR] [--as WHO] COMMAND
 ```
+
+**Several callsigns** (wishlist W46 and W7). Each callsign the client works is a credential of
+its own, with its own account's mail: a club callsign beside your own, or a role mailbox. Each has
+a home of its own. The first is the home itself, as before, and each one added is under it, in
+`callsigns/2`, `callsigns/3` and so on. `chosen` names the one in use. A command works on the
+callsign chosen, or on the one `--as` names. The address list and the log belong to the computer:
+they stay in the first home for every callsign. One device key serves them all: a callsign added
+takes a copy of the first's, so revoking this computer's key stops every callsign it held. One
+session carries one credential (RP-3 §5.1), so a call goes out as the callsign chosen, and
+`listen` answers that callsign only. An application waiting is asked after while its callsign is
+chosen.
 
 | Command | Does |
 |---|---|
@@ -23,6 +34,7 @@ radiopost [--home DIR] COMMAND
 | `init --credential FILE [--device-key FILE]` | Keeps the credential a post office issued for this device's key (raw or hex). |
 | `trust DOMAIN PUBLIC_HEX [NOT_BEFORE NOT_AFTER]` | Trusts a post office key (RP-1 §7.3: the operator decides). |
 | `whoami` | The account and callsign the credential is for. |
+| `callsigns [add \| choose WHO \| remove WHO]` | The callsigns this computer works, each with its own credential and mail, the one chosen marked `*`. `add` makes a home for another and chooses it, to `enroll` or `apply` there; `choose` picks the one commands and the panel use; `remove` takes one off this computer once it holds no mail. `WHO` is a callsign, an address or the number listed. |
 | `apply --address ADDR --operator CALL --name NAME --contact EMAIL [--post-office URL]` | Asks the post office for an account from this device (RP-5 §6.7), making its key if there is none, and keeps the application. The post office's operators decide. |
 | `application` | Asks how the application stands. Approved, the credential is kept as from an enrollment; sent by postcard, enroll with the card's code. |
 | `enroll --address ADDR --operator CALL --code CODE [--post-office URL]` | Enrolls this device with the operator's one-time code (RP-5 §6.1), making its key if there is none, keeps the credential, and remembers the post office. Without `--post-office`, the domain's DNS records name it (RP-1 §7.1); its key is trusted from them too when none is trusted yet. |
@@ -76,7 +88,11 @@ setting, the post office's gateway list in *Choose a gateway*, and the *Waiting*
 what to fetch next) or a station, listens for one, sends the reports, and holds the setup: enrollment with a code
 or an application the operators decide (asked after every minute while it waits),
 the post office and renewal, the accept list, the device key, a credential imported by hand and
-the post offices trusted. When the credential is one of its post office's operators', a
+the post offices trusted. Setup's **Add another callsign** makes a home for another callsign and
+opens its enrollment; with two or more, the top of the window is a list that chooses the one the
+panel works as, between sessions (refused while a call, a session or listening is under way), and
+**Remove this callsign** takes one off once it holds no mail. While it is open, the panel renews
+every callsign's credential, chosen or not. When the credential is one of its post office's operators', a
 **Post office** button opens the operator's desk (RP-5 §7): the applications waiting, with
 **Approve** (a role mailbox if ticked), **Decline** with a reason the applicant reads, and **Send a
 postcard** (a code good for 30 days, and a card to print and post to the address on the licence);

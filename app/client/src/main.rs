@@ -11,18 +11,23 @@ use radiopost::message::{Message, key};
 use radiopost_client::compose::{Draft, File, media_type};
 use radiopost_client::session::{self, Fetch, Kind, Options, Packing};
 use radiopost_client::store::{Error, Store, unhex};
-use radiopost_client::{addresses, online};
+use radiopost_client::{addresses, callsigns, online};
 
 const HELP: &str = "\
 radiopost: the RadioPost client
 
-usage: radiopost [--home DIR] COMMAND ...
+usage: radiopost [--home DIR] [--as CALLSIGN] COMMAND ...
 
   key                      make this device's key (once) and print its public key
   init --credential FILE   keep the credential a post office issued for this device's key
   trust DOMAIN PUBLIC_HEX [NOT_BEFORE NOT_AFTER]
                            trust a post office key (RP-1 §7.3)
   whoami                   the account and callsign the credential is for
+  callsigns [add | choose WHO | remove WHO]
+                           the callsigns this computer works, each with its own credential and
+                           mail; add one (chosen, to enroll or apply for), choose the one commands
+                           and the panel use, or remove one that holds no mail. WHO is a callsign,
+                           an address or the number listed
   enroll --address ADDR --operator CALL --code CODE [--post-office URL]
                            enroll this device with the code the post office's operator gave
   apply --address ADDR --operator CALL --name NAME --contact EMAIL [--post-office URL]
@@ -80,7 +85,9 @@ session options:
   --clock UNIX --nonce HEX --session-id HEX --challenge HEX
                            fix the clock and the random draws, to replay a session exactly
 
-The home is --home, else $RADIOPOST_HOME, else .radiopost in the user's home directory.
+The home is --home, else $RADIOPOST_HOME, else .radiopost in the user's home directory. A
+command works on the callsign chosen (`callsigns choose`), or on the one --as names. The address
+list and the log are the computer's, for every callsign.
 ";
 
 /// A date as people read it, UTC (RP-0 §4.4).
@@ -394,10 +401,21 @@ fn trash_command(store: &mut Store, command: &str, args: &Args) -> Result<(), Er
 
 #[allow(clippy::too_many_lines, reason = "one arm a command")]
 fn run(words: &[String]) -> Result<(), Error> {
-    let (home_flag, words) = match words {
-        [flag, dir, rest @ ..] if flag == "--home" => (Some(dir.clone()), rest),
-        _ => (None, words),
-    };
+    let mut words = words;
+    let (mut home_flag, mut as_flag) = (None, None);
+    loop {
+        match words {
+            [flag, dir, rest @ ..] if flag == "--home" => {
+                home_flag = Some(dir.clone());
+                words = rest;
+            }
+            [flag, who, rest @ ..] if flag == "--as" => {
+                as_flag = Some(who.clone());
+                words = rest;
+            }
+            _ => break,
+        }
+    }
     let Some((command, rest)) = words.split_first() else {
         print!("{HELP}");
         return Ok(());
@@ -416,10 +434,15 @@ fn run(words: &[String]) -> Result<(), Error> {
         println!("{said}");
         return Ok(());
     }
-    let mut store = Store::open(&radiopost_client::store::home(home_flag.as_deref()))?;
+    // the first callsign's home, which holds the others and what is the computer's
+    let base = radiopost_client::store::home(home_flag.as_deref());
     // what the program says, and any panic, in a file of the home's: a window's log is gone
     // once it closes (2026-11-12)
-    radiopost::logfile::keep_in(&store.home().join(radiopost_client::LOG_FILE));
+    radiopost::logfile::keep_in(&base.join(radiopost_client::LOG_FILE));
+    let mut store = Store::open(&match &as_flag {
+        Some(who) => callsigns::find(&base, who)?.home,
+        None => callsigns::chosen(&base),
+    })?;
     radiopost::logfile::record_panics();
     match command.as_str() {
         "help" | "--help" | "-h" => print!("{HELP}"),
@@ -483,6 +506,31 @@ fn run(words: &[String]) -> Result<(), Error> {
                 },
             )?;
         }
+        "callsigns" => {
+            match args
+                .rest
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .as_slice()
+            {
+                [] => {}
+                ["add"] => {
+                    callsigns::add(&base)?;
+                }
+                ["choose", who] => callsigns::choose(&base, callsigns::find(&base, who)?.id)?,
+                ["remove", who] => callsigns::remove(&base, callsigns::find(&base, who)?.id)?,
+                _ => return Err("callsigns [add | choose WHO | remove WHO]".into()),
+            }
+            for c in callsigns::list(&base) {
+                let until =
+                    c.me.as_ref()
+                        .map(|me| format!(", credential until {}", utc(me.expires)))
+                        .unwrap_or_default();
+                let mark = if c.chosen { "*" } else { " " };
+                println!("{mark} {}  {}{until}", c.id, c.label());
+            }
+        }
         "whoami" => {
             let me = store.me()?;
             println!(
@@ -537,7 +585,7 @@ fn run(words: &[String]) -> Result<(), Error> {
                 reply_to: None,
             };
             let id = store.queue(&draft.message()?)?;
-            addresses::remember(store.home(), &[to, cc].concat(), now())?;
+            addresses::remember(&base, &[to, cc].concat(), now())?;
             println!("{}", id.text());
         }
         "import" => {
@@ -645,12 +693,12 @@ fn run(words: &[String]) -> Result<(), Error> {
         }
         "addresses" => {
             for typed in args.all("--add") {
-                addresses::add(store.home(), &typed)?;
+                addresses::add(&base, &typed)?;
             }
             for address in args.all("--remove") {
-                addresses::remove(store.home(), &address)?;
+                addresses::remove(&base, &address)?;
             }
-            for e in addresses::list(store.home()) {
+            for e in addresses::list(&base) {
                 let used = if e.uses == 0 {
                     "added by hand".to_owned()
                 } else {
@@ -785,11 +833,13 @@ fn run(words: &[String]) -> Result<(), Error> {
             }
         }
         "panel" => {
+            // the panel shows the callsign chosen: --as chooses it
+            if let Some(who) = &as_flag {
+                callsigns::choose(&base, callsigns::find(&base, who)?.id)?;
+            }
             let port = args.one("--port").unwrap_or_else(|| "8620".into());
-            let panel = radiopost_client::panel::Panel::new(
-                store.home(),
-                args.one("--ui").map(PathBuf::from),
-            );
+            let panel =
+                radiopost_client::panel::Panel::new(&base, args.one("--ui").map(PathBuf::from));
             panel.updates().watch();
             let at = panel.start(&format!("127.0.0.1:{port}"))?;
             println!("the panel is at http://{at}/");

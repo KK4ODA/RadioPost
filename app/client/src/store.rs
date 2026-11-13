@@ -14,6 +14,9 @@
 //! <home>/partials/<id>   the start of a message whose link broke, offered next time (RP-3 §7)
 //! ```
 //!
+//! A home is one callsign's. The first home also holds the others' and what is the computer's
+//! ([`crate::callsigns`]).
+//!
 //! Every write goes to a temporary file first and is renamed into place, so a received message is
 //! on disk before the `RECEIPT` that acknowledges it is sent (RP-3 §5.4).
 

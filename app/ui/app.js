@@ -157,6 +157,7 @@ async function refresh() {
   showUpdate(s.update, "RadioPost");
   $("who").textContent = s.me ? `${s.me.address}  ·  ${s.me.operator}` : "No credential yet";
   meAddress = s.me ? s.me.address : "";
+  showCallsigns(s);
   for (const name of ["inbox", "outbox", "sent", "waiting", "trash"]) {
     $(`n-${name}`).textContent = s.counts[name] || "";
   }
@@ -197,6 +198,74 @@ async function refresh() {
   // a message being written
   if (lastState !== "idle" && lastState !== "renewing" && a.state === "idle") await openFolder(folder);
   lastState = a.state;
+  return s;
+}
+
+// ── the callsigns this computer works (wishlist W46, W7) ───────────────────────────────────────
+// Each is a credential of its own with its own account's mail. The list at the top chooses the one
+// the panel works as, between sessions; with one callsign it does not show. Setup adds and removes.
+
+let callsignsShown = "";
+let chosenCallsign = 1;
+let lastCallsigns = [];
+
+function callsignLabel(c) {
+  if (c.operator) return `${c.operator}  ·  ${c.address}`;
+  if (c.application) return `${c.application.operator}  ·  applied for`;
+  return "New callsign, not yet enrolled";
+}
+
+function showCallsigns(s) {
+  const list = s.callsigns || [];
+  lastCallsigns = list;
+  const chosen = list.find((c) => c.chosen) || {id: 1};
+  chosenCallsign = chosen.id;
+  const pick = $("who-pick");
+  const several = list.length > 1;
+  pick.hidden = !several;
+  $("who").hidden = several;
+  const shown = JSON.stringify(list.map((c) => [c.id, callsignLabel(c)]));
+  if (several && shown !== callsignsShown && document.activeElement !== pick) {
+    callsignsShown = shown;
+    pick.replaceChildren(...list.map((c) => el("option", {value: String(c.id)}, callsignLabel(c))));
+  }
+  if (document.activeElement !== pick) pick.value = String(chosen.id);
+  pick.disabled = s.activity.state !== "idle";
+  $("callsign-add").hidden = !s.me;
+  $("callsign-remove").hidden = chosen.id === 1;
+  $("callsign-tools").hidden = $("callsign-add").hidden && $("callsign-remove").hidden;
+}
+
+// what the page held of the callsign before: its application's state, the desk, a half-filled form
+function forgetCallsign() {
+  application.status = "";
+  application.checked = 0;
+  office.ok = false;
+  $("office-open").hidden = true;
+  enrollOpen = false;
+  $("enroll").reset();
+}
+
+async function changeCallsign(change) {
+  const writing = !$("composer").hidden;
+  try {
+    await api("callsigns", change);
+  } catch (e) {
+    toast(e.message, true);
+    await refresh();
+    return null;
+  }
+  forgetCallsign();
+  const s = await refresh();
+  if (s.me) probeOffice();
+  if (change.add || !s.me) {
+    show("setup");
+    $("enroll").address.focus();
+  } else if (writing) {
+    toast(`The message being written goes from ${s.me.address} now.`);
+  } else if ($("setup").hidden && $("addresses-view").hidden) {
+    await openFolder(folder);
+  }
   return s;
 }
 
@@ -1712,6 +1781,25 @@ function wire() {
   reasons.id = "decline-reasons";
   reasons.append(...DECLINE_REASONS.map((r) => el("option", {value: r})));
   document.body.append(reasons);
+  $("who-pick").addEventListener("change", async () => {
+    const id = Number($("who-pick").value);
+    $("who-pick").blur();
+    const s = await changeCallsign({choose: id});
+    if (s && s.me) toast(`Working as ${s.me.operator}, ${s.me.address}.`);
+  });
+  $("callsign-add").addEventListener("click", async () => {
+    const s = await changeCallsign({add: true});
+    if (s) toast("A new callsign: enroll it with its own code, or apply for it. Your others stay in the list at the top.");
+  });
+  $("callsign-remove").addEventListener("click", (event) => {
+    const c = lastCallsigns.find((x) => x.chosen) || {};
+    const name = c.operator ? `${c.operator} (${c.address})`
+      : c.application ? c.application.operator : "the new callsign";
+    armed(event.currentTarget, "Remove it from this computer", async () => {
+      const s = await changeCallsign({remove: chosenCallsign});
+      if (s) toast(`Removed ${name} from this computer.`);
+    });
+  });
   $("enroll-again").addEventListener("click", () => {
     enrollOpen = true;
     refresh().then(() => $("enroll").code.focus()).catch(() => {});

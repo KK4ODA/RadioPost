@@ -12,7 +12,10 @@
 <body>
   <header class="top">
     <div class="brand" title="RadioPost: email by amateur radio">RadioPost</div>
-    <div class="who" id="who" title="The account and callsign this client speaks for"></div>
+    <div class="who" title="The account and callsign this client speaks for">
+      <span id="who"></span>
+      <select id="who-pick" class="narrow" aria-label="Callsign" title="The callsign this client works as: the account whose mail it shows and writes, and the callsign it calls and listens as. Change it between sessions" hidden></select>
+    </div>
     <div class="mini" id="mini" role="status" hidden><span class="mini-rings" id="mini-rings"></span><span id="mini-pct"></span></div>
     <div class="state" id="state" data-state="idle" title="What the station is doing">Idle</div>
     <div class="update" id="update" role="status" hidden>
@@ -379,7 +382,7 @@
           <div class="enrolled" id="enrolled" role="status" title="This computer's enrollment: the account and callsign its credential names, and how long the credential lasts" hidden>
             <p class="enrolled-who" id="enrolled-who"></p>
             <p class="note" id="enrolled-until"></p>
-            <button class="quiet" type="button" id="enroll-again" title="Enroll this computer again with a new code from your post office's operator: for another account, or when the credential has run out or was revoked">Enroll again with a new code</button>
+            <button class="quiet" type="button" id="enroll-again" title="Enroll this callsign again with a new code from your post office's operator: when its credential has run out or was revoked">Enroll again with a new code</button>
           </div>
           <div class="applied" id="applied" role="status" hidden>
             <p class="applied-what" id="applied-what"></p>
@@ -402,6 +405,10 @@
           <label class="by-apply" title="An email address the post office can write to about your application" hidden>Your email now <input name="contact" type="email" spellcheck="false" autocomplete="email"></label>
           <label title="The post office's API, when its domain's DNS does not name it">Post office (if not in DNS) <input name="url" placeholder="https://po.radiopost.org/rp/v1" spellcheck="false"></label>
           <button class="primary" type="submit" id="enroll-go" title="Make this device's key if needed, enroll it, and keep the credential">Enroll</button>
+          </div>
+          <div class="row" id="callsign-tools">
+            <button class="quiet" type="button" id="callsign-add" title="Work another callsign from this computer, such as a club callsign: it has its own account, credential and mail, and you choose it from the list at the top. Enroll it with its own code, or apply for it">Add another callsign</button>
+            <button class="quiet danger" type="button" id="callsign-remove" title="Take this callsign off this computer: its home and its credential, which stays good at the post office until it runs out or is revoked. Only when it holds no mail: empty its folders and trash first" hidden>Remove this callsign</button>
           </div>
         </form>
         <div class="card">

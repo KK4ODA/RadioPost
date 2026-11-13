@@ -45,6 +45,13 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   the client: home directory store, composing (NFC, LF), and `session::call`/`answer` over any
   RPMI adapter; `rpmi-loopback` serves the simulated channel for running two clients by hand. A
   modem given as `ws://…` is Aether's control API: the client runs the Aether adapter in-process.
+  Several callsigns (W46, W7; the author's decisions 2026-11-13): each a home of its own, the first
+  the home as before and the others in `callsigns/<n>` under it, `chosen` naming the one in use
+  (`callsigns.rs`); the panel opens the chosen home at each request and changes it only while idle,
+  under the activity's lock; `--as` on the command line; one device key copied to each home added;
+  the address list and the log stay in the first home; the open window renews every credential.
+  Separate accounts only: one account under two callsigns would split its mail between homes.
+  *Listen* answers the chosen callsign alone; answering any of them waits.
   `core/issuer` (`radiopost-issue`) makes a post office key and issues credentials for on-air
   tests before Phase 2's post office; the vectors' keys never go on the air.
   `core/tester` (`radiopost-tester`) is the conformance tester's first half: it plays a gateway or

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.8 |
+| **Version** | 0.3.9 |
 | **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -110,7 +110,7 @@ rules:
 | W4 | The full text of a trimmed message | Mail | Low | Fits today as modified; optional addition as asked | Proposed |
 | W5 | Mail kept as `.eml` files | Mail | Low | Fits today | Planned |
 | W6 | Where each message is | Mail | Medium | Fits today; optional addition for *delivered* | Planned |
-| W7 | Several accounts in one client | Setup | Medium | Fits today, a call each | Planned |
+| W7 | Several accounts in one client | Setup | Medium | Fits today, a call each | Implemented |
 | W8 | Credentials renewed before they lapse | Setup | High | Fits today | Implemented |
 | W9 | Usual gateways set in the panel | — | — | — | Consolidated into W27 |
 | W10 | Enrollment with an LoTW certificate | Setup | Medium | Fits today | Planned |
@@ -149,7 +149,7 @@ rules:
 | W43 | A public test service | Adapters | Low | Fits today | Proposed |
 | W44 | One install, several radios | Setup | Medium | Fits today; needs specification review for a portable callsign | Proposed |
 | W45 | Station to station under an SSID | Radio | Low | Breaking protocol change, small, failing safe (G12) | Proposed |
-| W46 | Several callsigns in one client, chosen from a list | Setup | Medium | Fits today, a call each | Proposed |
+| W46 | Several callsigns in one client, chosen from a list | Setup | Medium | Fits today, a call each | In progress |
 | W47 | Deleting messages, and a trash | Mail | High | Fits today | Implemented |
 | W48 | What a session has carried, and what is left | Radio | Medium | Fits today | Implemented |
 | W49 | The post office run from the client, and set up by its program | Operation | High | Optional addition (RP-5 §6.7, §7) | Implemented |
@@ -298,13 +298,13 @@ Work a personal address and a role mailbox (`shelter3@`) from one client.
 | Requested by | The plan: concept §10, first version. Requesters: 0. |
 | Component | Client. |
 | Compatibility | **Fits today**, one call per account: each operator of a role mailbox holds their own credential (RP-1 §3), but `HELLO` carries one address and one statement (RP-3 §5.1, RP-1 §6.1). Several accounts in one session is a **breaking protocol change** to RP-1 and RP-3. |
-| Existing coverage | Planned; not built. A client home holds one credential. |
-| Dependencies | W46: several callsigns are several credentials too; build the two as one design. |
+| Existing coverage | Built with W46 (2026-11-13): each account is a callsign's home of its own, chosen from the list at the top of the window, a call each. |
+| Dependencies | W46: several callsigns are several credentials too; built as one design. |
 | Effort | Medium: the home, the panel, choosing the account for each call. |
 | Priority | **Medium.** Role mailboxes are central to emergency work; a call each will do at first. |
 | Recommendation | Accept, a call per account. Recommend against several accounts in one session (§14). |
-| Status | Planned. |
-| Author decision | None yet. |
+| Status | Implemented. |
+| Author decision | 2026-11-13, with W46: accepted, a call per account. |
 | Notes | Whether a second session may follow the first on the same link, saving the modem's call, is not said (RP-3 §8; §13, G9). |
 
 ### W8. Credentials renewed before they lapse
@@ -408,14 +408,14 @@ answered.
 | Requested by | The author (KK4ODA), 2026-11-11. Requesters: 1. |
 | Component | Client: the home, the panel, the claim at the modem (RP-4 §9.1). |
 | Compatibility | **Fits today**, a call each. A callsign on the air is a credential's `operator` (RP-1 §3), so each callsign the client works is a credential of its own: the same account under another callsign the operator holds (a club callsign, as its trustee, when the post office enrolls it), or another account, which is W7. One session carries one credential (RP-3 §5.1): the list chooses the credential for the next call. Answering, the client claims all its callsigns at the modem at once (RP-4 §9.1; Aether's ADR-0106 takes several) and proves itself with the credential whose callsign was called (RP-3 §10, RP-1 §6.5). An SSID of a callsign needs no credential of its own once W45 is in; a prefix or suffix (`KK4ODA/M`) waits on G10. |
-| Existing coverage | New. A client home holds one device key and one credential, shown at the top of the window. RP-5 §6.1 does not stop one device key enrolling for several accounts, and the post office takes it: revoking the device then revokes all its credentials there, which suits a lost computer. |
+| Existing coverage | Built in part (2026-11-13): each callsign is a home of its own, the first the home as before and the others under it (`callsigns/<n>`), with its credential, its account's mail and its state; one device key, copied to each home added; the address list and the log the computer's, in the first home; a list at the top of the window (shown with two or more) and `--as` on the command line choose the callsign; Setup adds one and removes one that holds no mail; the open window renews every credential. Not built: answering calls to any of them. RP-5 §6.1 does not stop one device key enrolling for several accounts, and the post office takes it: revoking the device then revokes all its credentials there, which suits a lost computer. |
 | Dependencies | W7 (the same design when the callsigns belong to different accounts); W8 (each credential renews itself); W45 and G10 for SSIDs and portable designators; W44 (a radio's profile may name the callsign it usually works). |
 | Effort | Medium: the home keeps several credentials, each enrolled with a code of its own; a list at the top of the window by callsign and address; the choice used for the next call; every callsign claimed when listening; the renewal and the gateway list per credential. |
 | Priority | **Medium.** Operators with a club or event callsign need it, and so does an operator with stations under several callsigns; one client per callsign is the workaround. |
 | Recommendation | **Accept, as one design with W7.** An identity is a credential, an address and a callsign; the list shows each by callsign and address, the account's mail stays with its account, and one device key serves them all. Simple by default (§2): with one credential the list does not show. |
-| Status | Proposed. |
-| Author decision | None yet. |
-| Notes | Which identity a session used is kept with its record, so a session report (RP-5 §6.6) goes to that account's post office. Listening under several callsigns answers one call at a time, as Aether runs one session at a time. |
+| Status | In progress: choosing from the list is built; answering calls to any of them is not. |
+| Author decision | 2026-11-13: the callsigns are on separate accounts (W7); the list at the top of the window, not a page at start; *Listen* answers the callsign chosen only, for now; one address list for the computer; one device key. |
+| Notes | Which identity a session used is kept with its record, so a session report (RP-5 §6.6) goes to that account's post office: each home keeps its own reports. Listening under several callsigns answers one call at a time, as Aether runs one session at a time. One account under two callsigns (a club callsign on one's own address) would split that account's mail between two homes, by which callsign picked it up: it needs one home holding several credentials, not built. |
 
 ---
 
@@ -1093,3 +1093,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.6 | 2026-11-12 | G13 built: the client's gateway list holds the gateways of every post office its own knows, each with the post office that lists it (W17). |
 | 0.3.7 | 2026-11-12 | G14, the post office's side built: copies placed at usual gateways registered with other post offices, served only to their own credentials; the gateway's side comes with W27. |
 | 0.3.8 | 2026-11-13 | G11 drafted (D39): RP-0 §9.4's registry of modem names, `mercury` and `aether-fm` added, a channel with an unknown name ignored, and what an FM channel states. |
+| 0.3.9 | 2026-11-13 | The author decided W46 and W7, built: several callsigns on separate accounts, each a home of its own, chosen from a list at the top of the window, one device key and one address list; answering any of them waits. |

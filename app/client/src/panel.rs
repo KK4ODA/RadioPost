@@ -3,18 +3,20 @@
 //! interface, as the Aether app serves its own. A browser can open it; the desktop application
 //! (Tauri) shows the same page in its window.
 //!
-//! Each request opens the home afresh, so the panel always shows what is on disk. A session runs
-//! on a thread of its own with a store of its own; while it runs, the panel changes nothing in the
-//! home, so the two never write over each other.
+//! Each request opens the home afresh, so the panel always shows what is on disk: the home of the
+//! callsign chosen ([`crate::callsigns`]), which the header's list changes between sessions. A
+//! session runs on a thread of its own with a store of its own; while it runs, the panel changes
+//! nothing in the home, and the callsign chosen stays, so the two never write over each other.
 //!
-//! While it is open, the panel renews the credential over the Internet in its last month
-//! ([`crate::renewal`]): when it starts and every hour, between sessions, as the activity
+//! While it is open, the panel renews every callsign's credential over the Internet in its last
+//! month ([`crate::renewal`]): when it starts and every hour, between sessions, as the activity
 //! `renewing`.
 //!
 //! Only this machine's own pages reach it: a request must name the panel's own host (so a page
 //! that rebinds a name to 127.0.0.1 is refused), and a change must carry `X-RadioPost: 1`, which
 //! another site's page cannot send without a preflight the panel never grants.
 
+use std::collections::HashMap;
 use std::io::Read;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -32,6 +34,7 @@ use tiny_http::{Header, Method, Request, Response, Server};
 use radiopost_update::{Product, Watch};
 
 use crate::addresses;
+use crate::callsigns;
 use crate::compose::{Draft, File, media_type};
 use crate::online;
 use crate::session::{self, Fetch, Kind, Options};
@@ -88,7 +91,8 @@ struct Activity {
 /// The panel's server.
 #[derive(Clone)]
 pub struct Panel {
-    home: PathBuf,
+    /// The first callsign's home, which holds the others' and what is the computer's.
+    base: PathBuf,
     ui: Option<PathBuf>,
     activity: Arc<Mutex<Activity>>,
     stop: Arc<AtomicBool>,
@@ -158,11 +162,12 @@ fn plain(named: &[(Option<String>, String)]) -> Vec<String> {
 }
 
 impl Panel {
-    /// A panel for the home at `home`, serving its page from `ui` when given.
+    /// A panel for the home at `home` and the callsigns it holds, serving its page from `ui` when
+    /// given.
     #[must_use]
     pub fn new(home: &Path, ui: Option<PathBuf>) -> Panel {
         Panel {
-            home: home.to_owned(),
+            base: home.to_owned(),
             ui,
             activity: Arc::new(Mutex::new(Activity {
                 state: "idle",
@@ -240,24 +245,33 @@ impl Panel {
         Ok(local)
     }
 
-    /// Renews the credential over the Internet whenever it is due, for as long as the panel runs.
-    /// A failure is said once until it changes: with no Internet, the hourly try is quiet.
+    /// The home of the callsign chosen.
+    fn home(&self) -> PathBuf {
+        callsigns::chosen(&self.base)
+    }
+
+    /// Renews each callsign's credential over the Internet whenever it is due, for as long as the
+    /// panel runs: a callsign not chosen for months still keeps its credential. A failure is said
+    /// once until it changes: with no Internet, the hourly try is quiet.
     fn keep_renewed(&self) {
-        let mut said: Option<String> = None;
+        let mut said: HashMap<u32, String> = HashMap::new();
         thread::sleep(self.renewal.first);
         loop {
-            if let Some(line) = self.renew_now(&mut said) {
-                radiopost::logfile::line(&line);
-                lock(&self.activity).log.push(line);
+            for c in callsigns::list(&self.base) {
+                if let Some(line) = self.renew_now(&c.home, said.entry(c.id).or_default()) {
+                    radiopost::logfile::line(&line);
+                    lock(&self.activity).log.push(line);
+                }
             }
             thread::sleep(self.renewal.every);
         }
     }
 
-    /// One try: what to say of it, if anything. Only between sessions, as the activity `renewing`,
-    /// so a session and a renewal never write the home together.
-    fn renew_now(&self, said: &mut Option<String>) -> Option<String> {
-        let Ok(me) = Store::open(&self.home).and_then(|s| s.me()) else {
+    /// One try for the credential at `home`: what to say of it, if anything (`said` is what was
+    /// said of its last failure). Only between sessions, as the activity `renewing`, so a session
+    /// and a renewal never write a home together.
+    fn renew_now(&self, home: &Path, said: &mut String) -> Option<String> {
+        let Ok(me) = Store::open(home).and_then(|s| s.me()) else {
             return None;
         };
         let now = now();
@@ -271,23 +285,25 @@ impl Panel {
             }
             a.state = "renewing";
         }
-        let result = Store::open(&self.home).and_then(|store| online::renew(&store));
+        let result = Store::open(home).and_then(|store| online::renew(&store));
         lock(&self.activity).state = "idle";
         match result {
             Ok(issued) => {
-                *said = None;
+                said.clear();
                 Some(format!(
                     "renewed the credential over the Internet: {issued}"
                 ))
             }
-            Err(why) if said.as_deref() == Some(why.as_str()) => None,
+            Err(why) if *said == why => None,
             Err(why) => {
                 let line = format!(
-                    "could not renew the credential, which runs out in {} days: {why}; \
-                     trying again every hour, and on the next gateway call",
-                    crate::renewal::days_left(me.expires, now)
+                    "could not renew the credential, which runs out in {} days, for {} ({}): \
+                     {why}; trying again every hour, and on the next gateway call",
+                    crate::renewal::days_left(me.expires, now),
+                    me.address,
+                    me.operator
                 );
-                *said = Some(why);
+                *said = why;
                 Some(line)
             }
         }
@@ -377,6 +393,42 @@ impl Panel {
         }
     }
 
+    /// The header's list of callsigns: `choose` one by its `id`, `add` a home for another (chosen,
+    /// to be enrolled from Setup), or `remove` one that holds no mail. Only while the station is
+    /// idle, decided under the activity's lock, so no call or listening starts on one callsign
+    /// while the choice moves to another. The post office's token for the operator's desk was the
+    /// last credential's: it goes.
+    fn callsigns(&self, body: &Value) -> Result<Value, Error> {
+        let id = |k: &str| {
+            body[k]
+                .as_u64()
+                .and_then(|n| u32::try_from(n).ok())
+                .ok_or_else(|| format!("{k}: which callsign, by its id"))
+        };
+        {
+            let a = lock(&self.activity);
+            match a.state {
+                "idle" => {}
+                "renewing" => return Err("renewing a credential: try again in a moment".into()),
+                _ => return Err("a session is under way: change callsign when it ends".into()),
+            }
+            if !body["choose"].is_null() {
+                callsigns::choose(&self.base, id("choose")?)?;
+            } else if body["add"] == true {
+                callsigns::add(&self.base)?;
+            } else if !body["remove"].is_null() {
+                callsigns::remove(&self.base, id("remove")?)?;
+            } else {
+                return Err("choose, add or remove a callsign".into());
+            }
+        }
+        *self
+            .office_token
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = None;
+        self.state()
+    }
+
     fn api(&self, method: &Method, path: &str, query: &str, body: &Value) -> Result<Value, Error> {
         let param = |name: &str| {
             query
@@ -395,49 +447,15 @@ impl Panel {
                 let a = lock(&self.activity);
                 Ok(json!({"lines": a.log.get(since..).unwrap_or(&[]), "next": a.log.len()}))
             }
+            (Method::Post, "/api/callsigns") => self.callsigns(body),
             (Method::Post, "/api/compose") => self.compose(body),
             (Method::Post, "/api/held") => self.ask_for_held(body),
             (_, "/api/addresses") => self.addresses(method, body),
             (Method::Post, "/api/delete" | "/api/restore" | "/api/purge" | "/api/empty-trash") => {
                 self.trash(path, body)
             }
-            (Method::Post, "/api/key") => {
-                self.busy()?;
-                let store = Store::open(&self.home)?;
-                if store.device().is_err() {
-                    let mut seed = [0u8; 32];
-                    getrandom::fill(&mut seed).map_err(|e| e.to_string())?;
-                    store.set_device(&ed25519_dalek::SigningKey::from_bytes(&seed))?;
-                }
-                self.state()
-            }
-            (Method::Post, "/api/credential") => {
-                self.busy()?;
-                let store = Store::open(&self.home)?;
-                let bytes = unhex(&text("hex")).ok_or("paste the credential in hex")?;
-                store.device()?;
-                store.set_credential(&bytes)?;
-                self.state()
-            }
-            (Method::Post, "/api/trust") => {
-                self.busy()?;
-                let store = Store::open(&self.home)?;
-                let public: [u8; 32] = unhex(&text("public"))
-                    .and_then(|b| b.try_into().ok())
-                    .ok_or("a post office key is 32 bytes in hex")?;
-                let domain = text("domain");
-                if domain.is_empty() {
-                    return Err("the post office's domain".into());
-                }
-                store.add_trust(
-                    &domain,
-                    &PostOfficeKey {
-                        public,
-                        not_before: body["not_before"].as_u64().unwrap_or(0),
-                        not_after: body["not_after"].as_u64().unwrap_or(u64::MAX),
-                    },
-                )?;
-                self.state()
+            (Method::Post, "/api/key" | "/api/credential" | "/api/trust") => {
+                self.identity(path, body)
             }
             (Method::Post, "/api/call") => {
                 let callsign = text("callsign").to_ascii_uppercase();
@@ -480,6 +498,49 @@ impl Panel {
         }
     }
 
+    /// Setup's device key (made once), a credential imported by hand, and a post office trusted:
+    /// the callsign chosen's.
+    fn identity(&self, path: &str, body: &Value) -> Result<Value, Error> {
+        let text = |name: &str| body[name].as_str().unwrap_or("").trim().to_owned();
+        self.busy()?;
+        let store = Store::open(&self.home())?;
+        match path {
+            "/api/key" => {
+                if store.device().is_err() {
+                    let mut seed = [0u8; 32];
+                    getrandom::fill(&mut seed).map_err(|e| e.to_string())?;
+                    store.set_device(&ed25519_dalek::SigningKey::from_bytes(&seed))?;
+                }
+                self.state()
+            }
+            "/api/credential" => {
+                let bytes = unhex(&text("hex")).ok_or("paste the credential in hex")?;
+                store.device()?;
+                store.set_credential(&bytes)?;
+                self.state()
+            }
+            "/api/trust" => {
+                let public: [u8; 32] = unhex(&text("public"))
+                    .and_then(|b| b.try_into().ok())
+                    .ok_or("a post office key is 32 bytes in hex")?;
+                let domain = text("domain");
+                if domain.is_empty() {
+                    return Err("the post office's domain".into());
+                }
+                store.add_trust(
+                    &domain,
+                    &PostOfficeKey {
+                        public,
+                        not_before: body["not_before"].as_u64().unwrap_or(0),
+                        not_after: body["not_after"].as_u64().unwrap_or(u64::MAX),
+                    },
+                )?;
+                self.state()
+            }
+            _ => Err(format!("no POST {path}")),
+        }
+    }
+
     /// The post office over the Internet (RP-5 §6): enrollment, the post office's address,
     /// renewal, reports and the accept list.
     fn online(&self, path: &str, body: &Value) -> Result<Value, Error> {
@@ -487,7 +548,7 @@ impl Panel {
         match path {
             "/api/enroll" => {
                 self.busy()?;
-                let mut store = Store::open(&self.home)?;
+                let mut store = Store::open(&self.home())?;
                 let url = text("url");
                 let said = online::enroll(
                     &mut store,
@@ -500,7 +561,7 @@ impl Panel {
             }
             "/api/post-office" => {
                 self.busy()?;
-                let mut store = Store::open(&self.home)?;
+                let mut store = Store::open(&self.home())?;
                 let url = text("url");
                 store.post_office = (!url.is_empty()).then(|| url.trim_end_matches('/').to_owned());
                 store.save()?;
@@ -508,17 +569,17 @@ impl Panel {
             }
             "/api/renew" => {
                 self.busy()?;
-                let store = Store::open(&self.home)?;
+                let store = Store::open(&self.home())?;
                 Ok(json!({"said": online::renew(&store)?}))
             }
             "/api/report" => {
                 self.busy()?;
-                let mut store = Store::open(&self.home)?;
+                let mut store = Store::open(&self.home())?;
                 Ok(json!({"lines": online::send_reports(&mut store)?}))
             }
             "/api/apply" => {
                 self.busy()?;
-                let mut store = Store::open(&self.home)?;
+                let mut store = Store::open(&self.home())?;
                 let url = text("url");
                 let said = online::apply(
                     &mut store,
@@ -532,18 +593,18 @@ impl Panel {
             }
             "/api/application" => {
                 self.busy()?;
-                let mut store = Store::open(&self.home)?;
+                let mut store = Store::open(&self.home())?;
                 online::check_application(&mut store)
             }
             "/api/application-forget" => {
                 self.busy()?;
-                let mut store = Store::open(&self.home)?;
+                let mut store = Store::open(&self.home())?;
                 store.application = None;
                 store.save()?;
                 Ok(json!({}))
             }
             "/api/accept" => {
-                let store = Store::open(&self.home)?;
+                let store = Store::open(&self.home())?;
                 let list = |k: &str| -> Vec<String> {
                     body[k]
                         .as_array()
@@ -562,7 +623,7 @@ impl Panel {
     /// device's credential, answered with the post office's status and body. The post office
     /// decides who may: an operator's credential, issued by it, not a gateway's.
     fn office(&self, body: &Value) -> Result<Value, Error> {
-        let store = Store::open(&self.home)?;
+        let store = Store::open(&self.home())?;
         let method = body["method"].as_str().unwrap_or("GET").to_uppercase();
         let path = body["path"].as_str().unwrap_or("");
         let sent = body.get("body").filter(|b| !b.is_null());
@@ -573,7 +634,7 @@ impl Panel {
     /// A backup of the post office sealed with the operator's passphrase, fetched over the desk
     /// and kept on this computer, in `RadioPost backups` in the user's home folder.
     fn office_backup(&self, body: &Value) -> Result<Value, Error> {
-        let store = Store::open(&self.home)?;
+        let store = Store::open(&self.home())?;
         let sent = json!({"passphrase": body["passphrase"].as_str().unwrap_or("")});
         let (status, answer) = online::office(
             &store,
@@ -600,7 +661,7 @@ impl Panel {
             .collect();
         let home = std::env::var_os("HOME")
             .or_else(|| std::env::var_os("USERPROFILE"))
-            .map_or_else(|| self.home.clone(), PathBuf::from);
+            .map_or_else(|| self.base.clone(), PathBuf::from);
         let folder = home.join("RadioPost backups");
         std::fs::create_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
         let path = folder.join(name);
@@ -609,7 +670,7 @@ impl Panel {
     }
 
     fn message(&self, prefix: &str) -> Result<Value, Error> {
-        let store = Store::open(&self.home)?;
+        let store = Store::open(&self.home())?;
         let id = store.find(prefix)?;
         let m = store.message(&id)?;
         let map = m.map();
@@ -649,7 +710,7 @@ impl Panel {
     /// those named or all of them.
     fn ask_for_held(&self, body: &Value) -> Result<Value, Error> {
         self.busy()?;
-        let mut store = Store::open(&self.home)?;
+        let mut store = Store::open(&self.home())?;
         let id = store.find(body["id"].as_str().unwrap_or(""))?;
         let names: Vec<String> = body["names"]
             .as_array()
@@ -664,7 +725,7 @@ impl Panel {
     fn compose(&self, body: &Value) -> Result<Value, Error> {
         let text = |name: &str| body[name].as_str().unwrap_or("").trim().to_owned();
         self.busy()?;
-        let mut store = Store::open(&self.home)?;
+        let mut store = Store::open(&self.home())?;
         let me = store.me()?;
         let files = body["files"]
             .as_array()
@@ -697,14 +758,14 @@ impl Panel {
         };
         let id = store.queue(&draft.message()?)?;
         // the address list learns whom the message is for; a failure there loses no message
-        if let Err(why) = addresses::remember(&self.home, &[to, cc].concat(), now()) {
+        if let Err(why) = addresses::remember(&self.base, &[to, cc].concat(), now()) {
             radiopost::logfile::line(&format!("the address list was not updated: {why}"));
         }
         Ok(json!({"id": id.text()}))
     }
 
     fn state(&self) -> Result<Value, Error> {
-        let store = Store::open(&self.home)?;
+        let store = Store::open(&self.home())?;
         let me = store
             .me()
             .ok()
@@ -719,6 +780,8 @@ impl Panel {
         Ok(json!({
             "me": me, "device": device, "trusted": trusted, "post_office": store.post_office,
             "application": store.application,
+            "callsigns": callsigns::list(&self.base).iter().map(callsigns::Entry::json)
+                .collect::<Vec<_>>(),
             "counts": {"outbox": store.outbox.len(), "inbox": store.inbox.len(),
                        "sent": store.sent.len(), "trash": store.trash.len(),
                        "reports": store.reports.len(),
@@ -731,7 +794,7 @@ impl Panel {
     }
 
     fn folder(&self, name: &str) -> Result<Value, Error> {
-        let store = Store::open(&self.home)?;
+        let store = Store::open(&self.home())?;
         if name == "trash" {
             let mut out = Vec::new();
             for t in store.trash.iter().rev() {
@@ -764,20 +827,21 @@ impl Panel {
         Ok(Value::Array(out))
     }
 
-    /// The address list (it is a file of its own, so it changes during a session too): `add`
+    /// The address list, the computer's for every callsign (it is a file of its own, so it
+    /// changes during a session too): `add`
     /// typed text, `remove` an address, or `put_back` an entry removed.
     fn addresses(&self, method: &Method, body: &Value) -> Result<Value, Error> {
         let entries = |list: Vec<addresses::Entry>| -> Value {
             list.iter().map(addresses::Entry::json).collect()
         };
         if *method == Method::Get {
-            return Ok(json!({"entries": entries(addresses::list(&self.home))}));
+            return Ok(json!({"entries": entries(addresses::list(&self.base))}));
         }
         if let Some(typed) = body["add"].as_str() {
-            return Ok(json!({"entries": entries(addresses::add(&self.home, typed)?)}));
+            return Ok(json!({"entries": entries(addresses::add(&self.base, typed)?)}));
         }
         if let Some(address) = body["remove"].as_str() {
-            let (gone, left) = addresses::remove(&self.home, address)?;
+            let (gone, left) = addresses::remove(&self.base, address)?;
             return Ok(json!({"entries": entries(left), "removed": gone.json()}));
         }
         let e = &body["put_back"];
@@ -790,7 +854,7 @@ impl Panel {
             used: e["used"].as_u64().unwrap_or(0),
             uses: e["uses"].as_u64().unwrap_or(0),
         };
-        Ok(json!({"entries": entries(addresses::put_back(&self.home, entry)?)}))
+        Ok(json!({"entries": entries(addresses::put_back(&self.base, entry)?)}))
     }
 
     /// The trash: a message moved there from a folder (`delete`, `folder` and `id`), put back
@@ -798,7 +862,7 @@ impl Panel {
     /// the trash emptied. Not while a session runs: it keeps the folders until it ends.
     fn trash(&self, path: &str, body: &Value) -> Result<Value, Error> {
         self.busy()?;
-        let mut store = Store::open(&self.home)?;
+        let mut store = Store::open(&self.home())?;
         let id = || {
             let text = body["id"].as_str().unwrap_or("");
             ContentId::from_text(text).ok_or_else(|| format!("{text:?} is not a content ID"))
@@ -825,24 +889,24 @@ impl Panel {
             (Method::Get, "/api/gateways") => self.gateways(),
             (Method::Post, "/api/gateways") => {
                 self.busy()?;
-                let mut store = Store::open(&self.home)?;
+                let mut store = Store::open(&self.home())?;
                 online::gateways(&mut store)?;
                 self.gateways()
             }
             (Method::Post, "/api/grid") => {
                 self.busy()?;
-                let mut store = Store::open(&self.home)?;
+                let mut store = Store::open(&self.home())?;
                 store.set_grid(Some(&text("grid")))?;
                 self.gateways()
             }
             (Method::Get, "/api/waiting") => {
-                let store = Store::open(&self.home)?;
+                let store = Store::open(&self.home())?;
                 let w = store.waiting.clone().unwrap_or(Value::Null);
                 Ok(json!({"via": w["via"], "at": w["at"], "entries": store.waiting_entries()}))
             }
             (Method::Post, "/api/fetch") => {
                 self.busy()?;
-                let mut store = Store::open(&self.home)?;
+                let mut store = Store::open(&self.home())?;
                 let serial = body["serial"].as_u64().ok_or("which message: its serial")?;
                 store.fetch_on_next_call(serial, body["on"].as_bool().unwrap_or(true))?;
                 Ok(json!({"entries": store.waiting_entries()}))
@@ -867,7 +931,7 @@ impl Panel {
     /// (RP-5 §4.4), nearest first, and the grid they are ranked from; which post offices' lists
     /// were taken, which could not be, and the callsigns listed twice.
     fn gateways(&self) -> Result<Value, Error> {
-        let store = Store::open(&self.home)?;
+        let store = Store::open(&self.home())?;
         let list = store.gateway_list.clone().unwrap_or(Value::Null);
         let others: Vec<&String> = list["lists"]
             .as_object()
@@ -912,7 +976,8 @@ impl Panel {
         opts.fetch = fetch;
         *self.live.lock().unwrap_or_else(PoisonError::into_inner) = session::Live::default();
         opts.live = Some(Arc::clone(&self.live));
-        let home = self.home.clone();
+        // read once the activity is set, so the callsign chosen cannot change before it is opened
+        let home = self.home();
         let activity = Arc::clone(&self.activity);
         thread::spawn(move || {
             let mut say = |line: &str| {

@@ -41,11 +41,13 @@ h1 { font-size: 20px; margin: 0 0 14px; }
 h2 { font-size: 13px; text-transform: none; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
 .mono { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
 .row { display: flex; gap: 8px; margin: 4px 0 12px; flex-wrap: wrap; }
+#callsign-tools { margin: 12px 0 0; }
 
 .top { display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: var(--panel);
        border-bottom: 1px solid var(--line); }
 .brand { font-weight: 700; letter-spacing: .01em; }
-.who { color: var(--muted); flex: 1; font-family: var(--mono); font-size: 13px; }
+.who { color: var(--muted); flex: 1; font-family: var(--mono); font-size: 13px; min-width: 0; }
+.who select { font-size: 13px; max-width: 100%; color: var(--text); }
 .state { font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); }
 .state[data-state="calling"], .state[data-state="listening"] { color: var(--busy); border-color: var(--busy); }
 .state[data-state="session"] { color: var(--session); border-color: var(--session); }

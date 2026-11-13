@@ -641,3 +641,130 @@ fn an_applicant_joins_and_the_operator_decides_from_the_panels() {
     assert_eq!(plain["status"], 200, "{plain}");
     assert_eq!(plain["body"].get("operates"), None, "{plain}");
 }
+
+/// Two callsigns on one computer (wishlist W46 and W7): Facundo's own account and the club's,
+/// each enrolled with its own code on this computer's one device key. The header's list chooses
+/// which one the panel works as; each keeps its own mail; the address list is the computer's;
+/// `--as` reaches the other from the command line; and the open window renews both credentials.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn two_callsigns_share_one_computer_and_keep_their_own_mail() {
+    use radiopost_client::panel::Panel;
+
+    let dir = scratch("two-callsigns");
+    let (running, base, public) = post_office(&dir.join("po"));
+    let home = dir.join("facundo");
+    enroll(&running, &base, &public, &home);
+    let at = Panel::new(&home, None)
+        .start("127.0.0.1:0")
+        .expect("a panel");
+    let state = panel_get(at, "/api/state");
+    assert_eq!(state["me"]["operator"], "KK4ODA");
+    let device = state["device"].clone();
+    assert_eq!(
+        state["callsigns"],
+        json!([{"id": 1, "chosen": true, "address": "facundo@test.example",
+                "operator": "KK4ODA", "expires": state["me"]["expires"]}])
+    );
+
+    // the club's callsign: a home of its own, chosen, with the computer's key and trust
+    let (status, state) = panel(at, "callsigns", &json!({"add": true}));
+    assert_eq!(status, 200, "{state}");
+    assert!(state["me"].is_null(), "{state}");
+    assert_eq!(state["device"], device, "one device key");
+    assert_eq!(state["trusted"], json!(["test.example"]));
+    assert_eq!(state["callsigns"][1]["chosen"], true);
+    let (_, answer) = running.admin(
+        "POST",
+        "/code",
+        json!({"address": "club@test.example", "operator": "WD5EMA", "flags": ["send", "receive"]})
+            .to_string()
+            .as_bytes(),
+    );
+    let code = serde_json::from_str::<serde_json::Value>(&answer).expect("JSON")["code"]
+        .as_str()
+        .expect("a code")
+        .to_owned();
+    let (status, said) = panel(
+        at,
+        "enroll",
+        &json!({"address": "club@test.example", "operator": "WD5EMA", "code": code,
+                "url": base}),
+    );
+    assert_eq!(status, 200, "{said}");
+    let state = panel_get(at, "/api/state");
+    assert_eq!(state["me"]["operator"], "WD5EMA");
+    assert_eq!(state["device"], device);
+
+    // a message written as the club goes out from the club's address, in the club's outbox
+    let (status, written) = panel(
+        at,
+        "compose",
+        &json!({"to": "Ana <ana@test.example>", "subject": "Net tonight", "body": "21:00"}),
+    );
+    assert_eq!(status, 200, "{written}");
+    let outbox = panel_get(at, "/api/folder?name=outbox");
+    assert_eq!(outbox[0]["from"], "club@test.example", "{outbox}");
+
+    // back to Facundo's own: his outbox is empty, and Ana is in the computer's address list
+    let (status, state) = panel(at, "callsigns", &json!({"choose": 1}));
+    assert_eq!(status, 200, "{state}");
+    assert_eq!(state["me"]["operator"], "KK4ODA");
+    assert_eq!(state["counts"]["outbox"], 0);
+    let list = panel_get(at, "/api/addresses");
+    assert_eq!(list["entries"][0]["address"], "ana@test.example", "{list}");
+    let (status, refused) = panel(at, "callsigns", &json!({"choose": 9}));
+    assert_eq!(status, 400, "{refused}");
+    let (status, refused) = panel(at, "callsigns", &json!({"remove": 2}));
+    assert_eq!(status, 400, "the club's home holds mail: {refused}");
+
+    // the command line reaches the club's mail with --as, and lists both, Facundo's chosen
+    let listed = radiopost(&home, &["--as", "wd5ema", "outbox"]).expect("the club's outbox");
+    assert!(listed.contains("Net tonight"), "{listed}");
+    let mine = radiopost(&home, &["outbox"]).expect("Facundo's outbox");
+    assert!(!mine.contains("Net tonight"), "{mine}");
+    let both = radiopost(&home, &["callsigns"]).expect("listed");
+    let lines: Vec<&str> = both.lines().collect();
+    assert_eq!(lines.len(), 2, "{both}");
+    assert!(
+        lines[0].starts_with("* 1  facundo@test.example · KK4ODA"),
+        "{both}"
+    );
+    assert!(
+        lines[1].starts_with("  2  club@test.example · WD5EMA"),
+        "{both}"
+    );
+    assert!(radiopost(&home, &["--as", "N0CALL", "outbox"]).is_err());
+
+    // a window renewing in the last 100 days renews both, the one not chosen too
+    let serial = |id: u32| {
+        Store::open(&radiopost_client::callsigns::home_of(&home, id))
+            .expect("home")
+            .me()
+            .expect("a credential")
+            .serial
+    };
+    let before = (serial(1), serial(2));
+    let renewing = Panel::new(&home, None)
+        .with_renewal(Duration::ZERO, Duration::from_secs(3600), 100 * 86_400)
+        .start("127.0.0.1:0")
+        .expect("a panel");
+    let until = std::time::Instant::now() + Duration::from_secs(20);
+    while serial(1) == before.0 || serial(2) == before.1 {
+        assert!(std::time::Instant::now() < until, "not both renewed");
+        thread::sleep(Duration::from_millis(50));
+    }
+    let lines = panel_log(renewing);
+    for who in [
+        "facundo@test.example (KK4ODA)",
+        "club@test.example (WD5EMA)",
+    ] {
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.starts_with("renewed the credential") && l.ends_with(who)),
+            "{who}: {lines:?}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

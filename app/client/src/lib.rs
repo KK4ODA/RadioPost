@@ -4,6 +4,7 @@
 //!
 //! * [`store`]: the client's home directory: identity, trusted post offices, messages, folders,
 //!   and what is kept between sessions.
+//! * [`callsigns`]: the callsigns this computer works, each a home of its own, and the one chosen.
 //! * [`compose`]: writing a message (RP-2).
 //! * [`addresses`]: the address list, offered as To and Cc are typed.
 //! * [`session`]: calling a gateway or a station, or answering a station, over RPMI.
@@ -16,12 +17,15 @@
 //! * [`terminal`]: a terminal on the post office's server, over SSH, for its operators.
 //!
 //! `radiopost` is its command-line program; the desktop application (Tauri, D27) is built on the
-//! same library. Both keep what they say in [`LOG_FILE`] in the home ([`logfile`]).
+//! same library. Both keep what they say in [`LOG_FILE`] in the home ([`logfile`]): the first
+//! callsign's, which is the computer's.
 
-/// The client's log file, in its home: what the program and its window say, dated, and any panic.
+/// The client's log file, in its home (the first callsign's, for them all): what the program and
+/// its window say, dated, and any panic.
 pub const LOG_FILE: &str = "radiopost.log";
 
 pub mod addresses;
+pub mod callsigns;
 pub mod compose;
 pub mod grid;
 pub use radiopost::logfile;
