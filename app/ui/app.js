@@ -8,6 +8,7 @@ let logNext = 0;
 let meAddress = "";
 let lastState = "idle";
 let myDevice = "";  // this device's public key, base64url, as the post office writes keys
+let myVersion = "";  // this client's version, from its update watch
 
 async function api(path, body) {
   const options = body === undefined
@@ -155,6 +156,7 @@ function showUpdate(u, name) {
 async function refresh() {
   const s = await api("state");
   showUpdate(s.update, "RadioPost");
+  myVersion = (s.update && s.update.current) || "";
   $("who").textContent = s.me ? `${s.me.address}  ·  ${s.me.operator}` : "No credential yet";
   meAddress = s.me ? s.me.address : "";
   showCallsigns(s);
@@ -1119,6 +1121,45 @@ async function checkApplication(loud = true) {
 
 const office = {ok: false, tab: "applications", status: null, applications: [], accounts: []};
 
+// whether version `a` comes before `b` (SemVer 2.0.0 §11: 0.1.0-beta.12 before 0.1.0-beta.13,
+// before 0.1.0); a version that does not parse comes before nothing
+function versionBefore(a, b) {
+  const parts = (v) => {
+    const s = String(v).replace(/^v/, "").split("+")[0];
+    const dash = s.indexOf("-");
+    return {core: (dash < 0 ? s : s.slice(0, dash)).split(".").map(Number),
+            pre: dash < 0 ? [] : s.slice(dash + 1).split(".")};
+  };
+  const x = parts(a), y = parts(b);
+  for (let i = 0; i < 3; i++) {
+    if (x.core[i] !== y.core[i]) return x.core[i] < y.core[i];
+  }
+  if (!x.pre.length || !y.pre.length) return x.pre.length > 0 && !y.pre.length;
+  for (let i = 0; i < Math.max(x.pre.length, y.pre.length); i++) {
+    const p = x.pre[i], q = y.pre[i];
+    if (p === undefined) return true;
+    if (q === undefined) return false;
+    if (p === q) continue;
+    const pn = /^\d+$/.test(p), qn = /^\d+$/.test(q);
+    if (pn && qn) return Number(p) < Number(q);
+    return pn !== qn ? pn : p < q;
+  }
+  return false;
+}
+
+// a desk request an older post office does not know is answered `unknown-message` (it answers
+// any route it lacks that way), which reads as if a message were missing: say what it is.
+// Not for a request naming an application, where the answer means no such application.
+function olderOffice(path, body, answer) {
+  const s = office.status || {};
+  if (answer.name !== "unknown-message" || !s.version || !myVersion) return "";
+  if (path.startsWith("/office/applications/") || (body && body.application)) return "";
+  if (!versionBefore(s.version, myVersion)) return "";
+  const domain = (s.domains || [])[0] || "The post office";
+  return `${domain} does not know this request: it runs radiopost-po ${s.version}, `
+    + `older than this client (${myVersion}). Update it with the Server tab's update job.`;
+}
+
 // one request to the post office as this device: its body, or the refusal it gave
 async function desk(method, path, body) {
   const r = await api("office", {method, path, body});
@@ -1126,7 +1167,8 @@ async function desk(method, path, body) {
     const b = r.body || {};
     const err = new Error(b.operates
       ? `${b.operates} operates this post office (RP-5 §7.1).`
-      : b.title ? `${b.title} (${b.name})` : `The post office answered ${r.status}`);
+      : olderOffice(path, body, b)
+        || (b.title ? `${b.title} (${b.name})` : `The post office answered ${r.status}`));
     err.status = r.status;
     err.body = b;
     throw err;
