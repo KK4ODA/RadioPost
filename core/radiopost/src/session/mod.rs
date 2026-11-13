@@ -211,6 +211,13 @@ pub fn subject40(subject: &str) -> String {
 /// What an engine tells the program driving it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
+    /// The station called is ready (`WELCOME` `status` `ready`), before anything else it said:
+    /// `online`, whether it is a gateway that reaches the caller's post office now. A message a
+    /// cut-off gateway takes is queued there, not sent (RP-3 §5.5, RP-7 §3.6).
+    Welcome {
+        /// `WELCOME` key 11.
+        online: bool,
+    },
     /// The waiting list, from `WELCOME`.
     Listed(Vec<WaitingEntry>),
     /// A whole message arrived and checked (RP-2 §3), with its serial when it had one. It is in

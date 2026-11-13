@@ -65,8 +65,9 @@ const FILES: &[(&str, &str, &str)] = &[
 ];
 
 /// The panel's requests that reach the post office over the Internet (RP-5 §6).
-const ONLINE: [&str; 8] = [
+const ONLINE: [&str; 9] = [
     "/api/enroll",
+    "/api/settings",
     "/api/post-office",
     "/api/renew",
     "/api/report",
@@ -440,6 +441,10 @@ impl Panel {
         let text = |name: &str| body[name].as_str().unwrap_or("").trim().to_owned();
         match (method, path) {
             (Method::Get, "/api/state") => self.state(),
+            (Method::Get, "/api/settings") => {
+                let store = Store::open(&self.home())?;
+                online::settings(&store, None)
+            }
             (Method::Get, "/api/folder") => self.folder(&param("name")),
             (Method::Get, "/api/message") => self.message(&param("id")),
             (Method::Get, "/api/answer") => self.answer(&param("id"), &param("how")),
@@ -603,6 +608,25 @@ impl Panel {
                 store.application = None;
                 store.save()?;
                 Ok(json!({}))
+            }
+            "/api/settings" => {
+                self.busy()?;
+                let store = Store::open(&self.home())?;
+                // RP-5 §6.3: only what Setup changes, merged into the rest
+                let mut change = serde_json::Map::new();
+                if let Some(list) = body["usual_gateways"].as_array() {
+                    let calls: Vec<Value> = list
+                        .iter()
+                        .filter_map(|c| c.as_str().map(|c| c.trim().to_uppercase()))
+                        .filter(|c| !c.is_empty())
+                        .map(Value::from)
+                        .collect();
+                    change.insert("usual_gateways".into(), Value::Array(calls));
+                }
+                if let Some(skip) = body["radio_skips_read"].as_bool() {
+                    change.insert("radio_skips_read".into(), skip.into());
+                }
+                online::settings(&store, Some(&Value::Object(change)))
             }
             "/api/accept" => {
                 let store = Store::open(&self.home())?;
@@ -879,10 +903,18 @@ impl Panel {
             _ => return Err(format!("no folder {name}")),
         };
         let mut out = Vec::new();
+        let at = now();
         for (id, station) in entries {
             let mut v = summary(&store.message(&id)?);
             if let Some(s) = station {
                 v["station"] = s.into();
+            }
+            if name != "inbox" {
+                // RP-7 §3.6: written, queued at a cut-off gateway, in doubt, or sent
+                v["state"] = store.state_of(&id, at).into();
+                if let Some(q) = store.queued_for(&id) {
+                    v["queued"] = json!({"gateway": q.gateway, "at": q.at});
+                }
             }
             out.push(v);
         }

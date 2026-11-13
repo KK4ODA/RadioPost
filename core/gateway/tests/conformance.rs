@@ -35,5 +35,10 @@ fn the_gateway_passes_the_conformance_tests() {
         .filter(|v| v.passed == Some(true))
         .map(|v| v.id)
         .collect();
-    assert_eq!(ran, ["G-01", "G-02", "G-04", "G-07", "G-08", "G-09"]);
+    assert_eq!(
+        ran,
+        [
+            "G-01", "G-02", "G-03", "G-04", "G-05", "G-07", "G-08", "G-09"
+        ]
+    );
 }

@@ -6,7 +6,7 @@ it does. The operator's guide is [`docs/user/gateway.md`](../../docs/user/gatewa
 
 | Where | What |
 |---|---|
-| `core/gateway` (`radiopost-gateway`) | The gateway itself. `station` answers calls and carries each session to the caller's post office; `monitor` keeps what it is doing (its state, the session under way, the sessions carried in `sessions.json`, its log, the post offices' answers); `runner` runs it on a thread of its own, started and stopped, with the post offices checked every ten minutes beside it; `panel` serves the page and its JSON API. |
+| `core/gateway` (`radiopost-gateway`) | The gateway itself. `station` answers calls and carries each session to the caller's post office, or answers it from what it holds when that cannot be reached (`offline`); `upkeep` polls for copies placed ahead, refreshes the post offices' keys (`keys`) and reports what was carried offline, beside it; `store` is what it holds (`store.json`); `monitor` keeps what it is doing (its state, the session under way, the sessions carried in `sessions.json`, its log, the post offices' answers); `runner` runs it on a thread of its own, started and stopped, with the post offices checked every ten minutes beside it; `panel` serves the page and its JSON API. |
 | `app/gateway/ui` | The page: no build step, built into the program, light or dark as the system is. |
 | `app/gateway/src-tauri` (`radiopost-gateway-app`) | The window: the panel's server and the gateway in this process, the window on the panel. Its own package and lockfile, outside the core workspace, as the client's is. |
 
@@ -20,7 +20,9 @@ same computer, and answers calls when the gateway is set to answer at start; `--
 page from a directory, for working on it. The app's window shows it on 8621, or another free port.
 
 Its API, under `/api/`: `GET state` (the settings, the gateway's key and credential, whether it
-runs, its status, the client home it registers through), `GET log?since=N`, `GET sessions`, and,
+runs, its status, the client home it registers through, and in `held` the copies and the queue in
+numbers), `GET log?since=N`, `GET sessions`, `GET held` (each copy held, never its text; each
+session waiting to be reported; the last reports; the post offices polled and the keys kept), and,
 with `X-RadioPost: 1`, `POST setup`, `post-office`, `register`, `credential`, `start`, `stop` and
 `check`. The settings change only while the gateway is stopped. As the client's panel does, it
 answers only on the loopback interface and only to its own host name.

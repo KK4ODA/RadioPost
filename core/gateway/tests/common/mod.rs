@@ -4,9 +4,10 @@
 
 #![allow(dead_code, reason = "each test file uses some of these")]
 
-use std::net::{SocketAddr, TcpListener};
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use ed25519_dalek::SigningKey;
@@ -40,7 +41,81 @@ pub fn post_office(dir: &Path) -> (Arc<Running>, String, SigningKey) {
         .and_then(|l| l.local_addr())
         .expect("a free port")
         .port();
-    let base = format!("http://127.0.0.1:{port}");
+    post_office_at(dir, port, &format!("http://127.0.0.1:{port}"))
+}
+
+/// A link to the Internet that can be cut: a TCP proxy to `target`, which refuses connections and
+/// breaks those open while it is cut.
+pub struct Internet {
+    /// Where it listens.
+    pub at: SocketAddr,
+    cut: Arc<AtomicBool>,
+    open: Arc<Mutex<Vec<TcpStream>>>,
+}
+
+impl Internet {
+    pub fn new(target: SocketAddr) -> Internet {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("a port");
+        let at = listener.local_addr().expect("an address");
+        let cut = Arc::new(AtomicBool::new(false));
+        let open: Arc<Mutex<Vec<TcpStream>>> = Arc::default();
+        let (c, o) = (cut.clone(), open.clone());
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                if c.load(Ordering::Relaxed) {
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue;
+                }
+                let Ok(far) = TcpStream::connect(target) else {
+                    continue;
+                };
+                let mut keep = o.lock().unwrap_or_else(PoisonError::into_inner);
+                for s in [&stream, &far] {
+                    if let Ok(clone) = s.try_clone() {
+                        keep.push(clone);
+                    }
+                }
+                drop(keep);
+                for (mut from, mut to) in [
+                    (
+                        stream.try_clone().expect("a stream"),
+                        far.try_clone().expect("a stream"),
+                    ),
+                    (far, stream),
+                ] {
+                    std::thread::spawn(move || {
+                        let _ = std::io::copy(&mut from, &mut to);
+                        let _ = to.shutdown(Shutdown::Write);
+                    });
+                }
+            }
+        });
+        Internet { at, cut, open }
+    }
+
+    /// The Internet is down: connections refused, and those open broken.
+    pub fn cut(&self) {
+        self.cut.store(true, Ordering::Relaxed);
+        for s in self
+            .open
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .drain(..)
+        {
+            let _ = s.shutdown(Shutdown::Both);
+        }
+    }
+
+    /// The Internet is back.
+    pub fn restore(&self) {
+        self.cut.store(false, Ordering::Relaxed);
+    }
+}
+
+/// The post office for `test.example`, listening on `port`, at the base URL `base` (a proxy in
+/// front of it, when the tests cut the Internet).
+pub fn post_office_at(dir: &Path, port: u16, base: &str) -> (Arc<Running>, String, SigningKey) {
+    let base = base.to_owned();
     std::fs::create_dir_all(dir).expect("a directory");
     let files = Files::new(dir);
     let key = key();

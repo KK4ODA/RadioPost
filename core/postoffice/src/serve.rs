@@ -455,8 +455,24 @@ impl Running {
             token: token.map(str::to_owned),
             body,
         };
+        let waits = long_poll(method, path);
         let mut office = self.office();
-        let answer = office.handle(at, &request);
+        let mut answer = office.handle(at, &request);
+        // RP-5 §5.8: a poll with nothing to give waits, up to `wait` seconds, for items to come
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(waits);
+        while answer.status == 200
+            && answer
+                .body
+                .as_ref()
+                .and_then(|b| b["items"].as_array())
+                .is_some_and(Vec::is_empty)
+            && std::time::Instant::now() < until
+        {
+            drop(office);
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            office = self.office();
+            answer = office.handle(now(), &request);
+        }
         self.save(&office);
         let met = office.take_met();
         drop(office);
@@ -654,6 +670,19 @@ fn admin_applications(
     } else {
         Err(b["name"].as_str().unwrap_or("refused").to_owned())
     }
+}
+
+/// How long a `GET /copies` may wait for items: its `wait`, at most 60 seconds (RP-5 §5.8).
+fn long_poll(method: &str, path: &str) -> u64 {
+    let Some(query) = path.strip_prefix("/copies?").filter(|_| method == "GET") else {
+        return 0;
+    };
+    query
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("wait="))
+        .and_then(|w| w.parse::<u64>().ok())
+        .unwrap_or(0)
+        .min(60)
 }
 
 fn problem_text(status: u16) -> String {

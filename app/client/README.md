@@ -40,21 +40,21 @@ chosen.
 | `enroll --address ADDR --operator CALL --code CODE [--post-office URL]` | Enrolls this device with the operator's one-time code (RP-5 §6.1), making its key if there is none, keeps the credential, and remembers the post office. Without `--post-office`, the domain's DNS records name it (RP-1 §7.1); its key is trusted from them too when none is trusted yet. |
 | `post-office URL` | The post office's API, when DNS does not name it. |
 | `renew` | A new credential for this device (RP-5 §6.2). |
-| `settings [--set JSON]` | The account's settings at the post office (RP-5 §6.3); `--set` changes the members it names (`null` removes one). |
+| `settings [--set JSON]` | The account's settings at the post office (RP-5 §6.3); `--set` changes the members it names (`null` removes one): `usual_gateways` (where your mail is copied ahead, `["KK4ODA-1"]`), `radio_skips_read` (mail read in a mail program is not offered by radio), `accept_on_send`, `auto_bytes`, `attach_bytes`. |
 | `addresses [--add 'NAME <ADDR>']… [--remove ADDR]…` | The address list: whom you have written to, each with the name written with it and how often, and any added by hand (an address already listed takes the new name). The panel offers it as you type in To and Cc. It is this computer's own; who may email you is the accept list. |
 | `accept [--add ENTRY]… [--remove ENTRY]…` | The accept list: who may email this account (RP-5 §6.5, RP-6 §2.2). |
 | `report` | Sends the station-to-station sessions waiting to the post office (RP-5 §6.6); each one answered leaves the home. |
 | `compose --to ADDR … [--cc ADDR] [--subject TEXT] [--priority 0\|1\|2] [--attach FILE]… [--body FILE]` | Writes a message into the outbox; the text from standard input without `--body`. Each `--to` or `--cc` may hold several addresses, separated by commas, semicolons or spaces, and `Name <address>` as well as a bare address; each is checked first (RP-0 §6.2), and a malformed one is refused with the reason. |
 | `compose --reply ID`, `--reply-all ID`, `--forward ID` | Answers a message, or passes one on; `ID` is the start of its content ID, as `show` takes it. `--reply` writes to the sender of a message received, with the subject `Re: ` and the original's (unless it starts with `Re:` already) and `reply_to` its content ID (RP-2 §2), from which the post office restores `In-Reply-To` and `References` (RP-6 §3.1), so the other end's mail program keeps the thread. The original is not quoted: every byte goes on the air. `--reply-all` copies the original's To and Cc too, less your own address and the sender. `--forward` passes any message on: the subject `Fwd: ` and the original's, the text a short header (*Forwarded message*, From, Date, Subject) and the original's text, with what you give above it, and the original's files; attachments held at the post office cannot go (their `ref` means something only to your own post office), so it says which were left out: ask for them with `attachments`, then forward the message they come in. The priority starts routine whatever the original's. `--to`, `--cc` and `--subject` replace what these fill in, and `--attach` adds files. |
 | `import FILE` | Puts a message in its canonical encoding (RP-2) in the outbox. |
-| `outbox`, `inbox`, `sent`, `trash` | Lists a folder. |
+| `outbox`, `inbox`, `sent`, `trash` | Lists a folder. The outbox says of a message a cut-off gateway took *queued at* that gateway *since* when, and after 30 days *may have been dropped* (RP-7 §3.6). |
 | `delete ID [--forever]` | Moves a message to the trash from whichever folder holds it; with `--forever`, deletes it for good. Deleting is this computer's own: the post office, gateways and other stations keep what they hold. |
 | `restore ID` | Puts a message in the trash back in the folder it was deleted from, where it was: an outbox message keeps its serial and its place. |
 | `empty-trash` | Deletes every message in the trash for good. |
 | `show ID` | Shows a message; `ID` is the start of its content ID. Attachments too large for the radio say *Held at the post office*. |
 | `attachments [ID [NAME]…]` | Asks, on the next call to a gateway, for a received message's held attachments, all or those named (RP-3 §5.6); without `ID`, what will be asked for. They come on the call after, in a new message from the post office (RP-6 §2.5). |
 | `reports` | The station-to-station sessions waiting to be reported to the post office (RP-5 §6.6). |
-| `call CALLSIGN [--station] [--fetch all\|none\|BYTES]` | Calls a gateway, or with `--station` another client's station. `--fetch` says what to fetch of what waits: everything (the default), what is no larger on the air than BYTES, or only the list; what `fetch` marked comes whatever it says, and messages up to 1 000 bytes come unasked. |
+| `call CALLSIGN [--station] [--fetch all\|none\|BYTES]` | Calls a gateway, or with `--station` another client's station. `--fetch` says what to fetch of what waits: everything (the default), what is no larger on the air than BYTES, or only the list; what `fetch` marked comes whatever it says, and messages up to 1 000 bytes come unasked. A gateway that cannot reach your post office (`WELCOME` `online` false) says so, serves the copies of your mail it holds, and *queues* what it takes: those messages stay in the outbox, marked *queued at* it, and are offered again on later calls, but not to that gateway while it was cut off at your last call to it, for 30 days; once a gateway that reaches the post office takes one, or answers that the post office already has it, it is sent (RP-7 §3.6). After 30 days queued the call says it may have been dropped unsent, and offers it all the same. |
 | `gateways [--refresh]` | The gateways your post office lists (RP-5 §4.4): where each is, its channels and hours, nearest first when your grid is set. `--refresh` fetches the list over the Internet, its signature checked with the post office's key; it is kept for when there is no Internet. |
 | `grid [SQUARE \| --clear]` | Your Maidenhead grid square (`EM73`, `EM73tt`), to rank gateways by distance. |
 | `waiting` | What waited at your post office at the last call to a gateway: every message not yet picked up (RP-3 §6.2). |
@@ -93,8 +93,12 @@ call*), calls a gateway (with a Fetch
 setting, the post office's gateway list in *Choose a gateway*, and the *Waiting* folder to mark
 what to fetch next) or a station, listens for one, sends the reports, and holds the setup: enrollment with a code
 or an application the operators decide (asked after every minute while it waits),
-the post office and renewal, the accept list, the device key, a credential imported by hand and
-the post offices trusted. Setup's **Add another callsign** makes a home for another callsign and
+the post office and renewal, the accept list, the **usual gateways** (ticked from the gateway list
+kept here, with whether each holds copies, and *Skip mail I have read in a mail program*; **Read**
+and **Save** reach the post office over the Internet, which merges them into the rest of the
+settings, RP-5 §6.3), the device key, a credential imported by hand and the post offices trusted.
+In the outbox, a message a cut-off gateway took carries *queued at* that gateway (its tooltip says
+since when), and in red *may have been dropped* after 30 days with no confirmation (RP-7 §3.6). Setup's **Add another callsign** makes a home for another callsign and
 opens its enrollment; with two or more, the top of the window is a list that chooses the one the
 panel works as, between sessions (refused while a call, a session or listening is under way), and
 **Remove this callsign** takes one off once it holds no mail. While it is open, the panel renews
@@ -187,7 +191,8 @@ the device seed, the credential, the trusted keys, each message's canonical enco
 content ID, partial messages to resume (RP-3 §7), the address list (`addresses.json`) and `state.json`: the folders and the trash, the next serial,
 the station called's replay cache (RP-1 §6.3), what each gateway holds, the reports, each received
 message's serial at the post office, the held attachments to ask for, the post office's gateway
-list and your grid square, what waited at the last call to a gateway, and what to fetch next. A request leaves the home
+list and your grid square, what waited at the last call to a gateway, what to fetch next, and the
+messages queued at a cut-off gateway, with the gateway and when (RP-7 §3.6). A request leaves the home
 once a gateway has answered it; a link broken before that keeps it for the next call. Files are
 written whole or not at all, and a message received is on disk before its `RECEIPT` goes out (RP-3
 §5.4). A message deleted for good leaves the home once no folder holds it, and what was asked for

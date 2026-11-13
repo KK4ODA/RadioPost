@@ -45,7 +45,30 @@
           <h2 title="The gateway's own credential, from its registration with its operator's post office (RP-5 §6.4)">Registration</h2>
           <p id="registration"></p>
         </section>
+        <section class="card" aria-label="For when the Internet is down">
+          <h2 title="What the gateway holds for when it cannot reach a post office: copies of users' mail placed ahead (RP-5 §5.8), and the sessions it carried while cut off, waiting to be reported (RP-5 §5.6)">Held</h2>
+          <p id="held-copies"></p>
+          <p id="held-queue"></p>
+          <button class="quiet" id="held-open" title="Each copy held and each session waiting to be reported">Show</button>
+        </section>
       </div>
+
+      <section class="card" id="held-view" hidden aria-label="What the gateway holds">
+        <h2>Copies placed ahead</h2>
+        <p class="note">Mail waiting for users who named this gateway as usual, copied here by their post offices so they can pick it up while the Internet is down. A copy goes when it is picked up anywhere, or when it expires.</p>
+        <div class="table-wrap"><table class="list" aria-label="Copies held">
+          <thead><tr><th>User</th><th class="n">Serial</th><th>From</th><th>Subject</th><th class="n">Bytes</th><th>Until</th></tr></thead>
+          <tbody id="copy-rows"></tbody>
+        </table></div>
+        <h2>Waiting to be reported</h2>
+        <p class="note">Sessions carried while the caller's post office could not be reached: the mail they sent and what they picked up, reported as soon as it can be.</p>
+        <div class="table-wrap"><table class="list" aria-label="Sessions waiting to be reported">
+          <thead><tr><th>When</th><th>Caller</th><th>Account</th><th class="n">Sent</th><th class="n">Picked up</th><th>Last try</th></tr></thead>
+          <tbody id="queue-rows"></tbody>
+        </table></div>
+        <h2>Last reports</h2>
+        <ul class="entries" id="reported"></ul>
+      </section>
 
       <section class="card session" id="session" hidden aria-label="Session under way">
         <h2>Session under way</h2>
@@ -98,6 +121,12 @@
         <label class="check" title="Answer calls as soon as the app opens, as an unattended gateway should">
           <input type="checkbox" name="answer_at_start" checked> Answer calls when the app opens
         </label>
+        <fieldset class="copies" title="Copies placed ahead (RP-5 §5.8): users who name this gateway as usual have their waiting mail copied here, to pick up while the Internet is down. Register again after a change, so the post office knows.">
+          <label class="check"><input type="checkbox" name="copies_on"> Hold copies of users' mail, for when the Internet is down</label>
+          <label title="How many users' copies it holds at most">Users <input type="number" name="copies_users" min="1" value="50"></label>
+          <label title="How many days a copy is kept, at most 60">Days <input type="number" name="copies_days" min="1" max="60" value="7"></label>
+          <label title="The largest message held with its text; a larger one is listed only, and comes from the post office once it can be reached">Largest message, kB <input type="number" name="copies_kb" min="1" value="16"></label>
+        </fieldset>
         <div class="row"><button class="primary" type="submit">Save</button></div>
         <p class="note" id="key-line" hidden>The gateway's key: <span class="mono" id="key"></span></p>
       </form>

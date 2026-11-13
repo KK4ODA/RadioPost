@@ -118,3 +118,6 @@ details summary { cursor: pointer; margin-bottom: 8px; }
 .update { flex-basis: 100%; display: flex; align-items: center; gap: 12px; padding: 6px 12px;
           border: 1px solid var(--session); border-radius: 6px; color: var(--text); }
 .update span { flex: 1; }
+fieldset.copies { border: 1px solid var(--line, #ccc); border-radius: 6px; padding: 8px 12px; margin: 8px 0; display: grid; gap: 6px; }
+fieldset.copies input[type=number] { width: 8em; }
+#held-view h2 + .note { margin-top: 0; }

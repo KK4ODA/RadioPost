@@ -646,8 +646,19 @@ fn run(words: &[String]) -> Result<(), Error> {
             println!("{}", store.queue(&m)?.text());
         }
         "outbox" => {
+            let at = now();
             for w in &store.outbox {
-                println!("{}", line_of(&store, &w.id));
+                // RP-7 §3.6: queued at a cut-off gateway, or in doubt after 30 days
+                match store.queued_for(&w.id) {
+                    Some(q) => println!(
+                        "{}  {} at {} since {}",
+                        line_of(&store, &w.id),
+                        store.state_of(&w.id, at),
+                        q.gateway,
+                        q.at
+                    ),
+                    None => println!("{}", line_of(&store, &w.id)),
+                }
             }
         }
         "sent" => {

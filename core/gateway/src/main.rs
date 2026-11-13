@@ -35,6 +35,10 @@ directory, as the RadioPost Gateway app has it.
   conformance --resolver URL
                      conformance mode (the conformance tester's §2.3): ask only this DNS
                      resolver, the tester's
+  copies --users N --days D --max-air-bytes B | copies --off
+                     hold copies placed ahead for at most N users, D days each, messages up
+                     to B bytes with their text (RP-5 §5.8); register again to publish it
+  held               what the gateway holds: copies placed ahead, the queue, the last reports
   block --domain D   carry no sessions to a domain's post office (RP-1 §7.3)
   key                the gateway's public key
   serve              answer calls and carry each session to the caller's post office
@@ -82,6 +86,7 @@ fn init(dir: &Path, a: &Args) -> Result<(), String> {
         only: None,
         operator_checks_rules: a.has("--operator-checks-rules"),
         answer_at_start: true,
+        copies: None,
     };
     station::make(dir, &settings)?;
     println!(
@@ -147,6 +152,56 @@ fn panel(dir: &Path, a: &Args) -> Result<(), String> {
     }
 }
 
+/// Whether the gateway holds copies placed ahead, and its limits (RP-5 §4.4, §5.8).
+fn copies(dir: &Path, a: &Args) -> Result<(), String> {
+    let mut s = Settings::load(dir)?;
+    if a.has("--off") {
+        s.copies = None;
+    } else {
+        let n = |flag: &str| -> Result<u64, String> {
+            a.need(flag)?
+                .parse()
+                .map_err(|_| format!("{flag} is a number"))
+        };
+        s.copies = Some(station::CopiesSettings {
+            users: n("--users")?,
+            days: n("--days")?,
+            max_air_bytes: n("--max-air-bytes")?,
+        });
+    }
+    s.save(dir)?;
+    println!("register the gateway again to say so in its record (RP-5 §4.4)");
+    Ok(())
+}
+
+/// What the gateway holds: copies placed ahead and the queue (W27, W28).
+fn held(dir: &Path) {
+    let s = radiopost_gateway::store::Store::load(dir);
+    println!(
+        "{} copies held for {} users; {} session records waiting to be reported, with {} \
+         messages; {} forward items",
+        s.copies.iter().filter(|c| !c.picked).count(),
+        s.users().len(),
+        s.records.len(),
+        s.queued_ids().len(),
+        s.forwards.len()
+    );
+    for r in &s.records {
+        println!(
+            "  {} ({}) at {}: {} messages, {} pickups{}",
+            r.operator,
+            r.address,
+            r.started,
+            r.messages.len(),
+            r.pickups.len(),
+            r.error
+                .as_ref()
+                .map(|e| format!("; last try: {e}"))
+                .unwrap_or_default()
+        );
+    }
+}
+
 fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
     match command {
         "init" => init(dir, a),
@@ -171,6 +226,11 @@ fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
             let mut s = Settings::load(dir)?;
             s.resolver = a.need("--resolver")?;
             s.save(dir)
+        }
+        "copies" => copies(dir, a),
+        "held" => {
+            held(dir);
+            Ok(())
         }
         "block" => {
             let mut s = Settings::load(dir)?;

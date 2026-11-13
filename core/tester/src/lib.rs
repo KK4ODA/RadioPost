@@ -4,10 +4,9 @@
 //! specifications require, and where it did not.
 //!
 //! It holds the client's tests C-01 to C-08, C-11 and C-12 ([`client`]), run through the
-//! tester's own RPMI adapter ([`harness::TestAdapter`]); the gateway's G-01, G-02, G-04, G-07,
-//! G-08 and G-09 ([`gateway`]), with the tester's own post office behind ([`office`]); the post
-//! office's P-01 to P-04 and P-07 to P-10 ([`postoffice`]); and the modem adapter's A-01 to A-04
-//! ([`adapter`]).
+//! tester's own RPMI adapter ([`harness::TestAdapter`]); the gateway's G-01 to G-05 and G-07 to
+//! G-09 ([`gateway`]), with the tester's own post office behind ([`office`]); the post office's
+//! P-01 to P-10 ([`postoffice`]); and the modem adapter's A-01 to A-04 ([`adapter`]).
 
 pub mod adapter;
 pub mod client;
@@ -113,6 +112,12 @@ pub const CLIENT_TESTS: &[ClientTest] = &[
         run: |r, t| r.c08(t),
     },
     ClientTest {
+        id: "C-09",
+        checks: "Mail a cut-off gateway took: kept as queued, offered again, sent once an online gateway confirms it (RP-7 §3.6)",
+        slow: false,
+        run: |r, t| r.c09(t),
+    },
+    ClientTest {
         id: "C-12",
         checks: "A station-to-station session reported to the post office with both proofs (RP-5 §6.6)",
         slow: false,
@@ -135,7 +140,7 @@ pub struct GatewayTest {
     run: fn(&mut gateway::Run<'_>, &mut Vec<String>, bool) -> harness::Outcome,
 }
 
-/// The gateway's tests, in order (Phase 2: a gateway online).
+/// The gateway's tests, in order (Phase 2: a gateway online; Phase 3: G-03 and G-05).
 pub const GATEWAY_TESTS: &[GatewayTest] = &[
     GatewayTest {
         id: "G-01",
@@ -148,9 +153,19 @@ pub const GATEWAY_TESTS: &[GatewayTest] = &[
         run: |r, t, _| r.g02(t),
     },
     GatewayTest {
+        id: "G-03",
+        checks: "Offline: callers checked with the keys and revocation lists it holds, copies served, the queue kept, the session reported when the Internet returns (RP-1 §7.3, RP-3 §9, RP-5 §5.6, §5.8, RP-7 §3.6)",
+        run: |r, t, _| r.g03(t),
+    },
+    GatewayTest {
         id: "G-04",
         checks: "A download resumed at another gateway, an upload at the same one (RP-3 §7)",
         run: |r, t, _| r.g04(t),
+    },
+    GatewayTest {
+        id: "G-05",
+        checks: "Third-party mail held back from a station abroad, with a NOTICE (RP-6 §5.1)",
+        run: |r, t, _| r.g05(t),
     },
     GatewayTest {
         id: "G-07",
@@ -219,7 +234,7 @@ pub struct PostOfficeTest {
     run: fn(&mut postoffice::Run<'_>, &mut Vec<String>) -> harness::Outcome,
 }
 
-/// The post office's tests, in order (Phase 2).
+/// The post office's tests, in order (Phase 2; P-05 and P-06, Phase 3).
 pub const POST_OFFICE_TESTS: &[PostOfficeTest] = &[
     PostOfficeTest {
         id: "P-01",
@@ -240,6 +255,16 @@ pub const POST_OFFICE_TESTS: &[PostOfficeTest] = &[
         id: "P-04",
         checks: "Sessions: the checks in order, messages taken and refused, pickups, a challenge taken once (RP-5 §5.2–§5.7)",
         run: |r, t| r.p04(t),
+    },
+    PostOfficeTest {
+        id: "P-05",
+        checks: "Reports of sessions carried offline, checked at their start, one answer each; pickups and messages taken (RP-5 §5.6)",
+        run: |r, t| r.p05(t),
+    },
+    PostOfficeTest {
+        id: "P-06",
+        checks: "Copies placed ahead at a usual gateway that holds them, served once, dropped when picked up (RP-5 §5.8)",
+        run: |r, t| r.p06(t),
     },
     PostOfficeTest {
         id: "P-07",

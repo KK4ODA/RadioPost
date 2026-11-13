@@ -357,6 +357,19 @@ impl Run<'_> {
         callsign: &str,
         block: &[&str],
     ) -> Result<Gateway, String> {
+        self.gateway_holding(test, office, adapter, callsign, block, false)
+    }
+
+    /// As [`Run::gateway`]; holding copies placed ahead when `copies` (RP-5 §5.8).
+    fn gateway_holding(
+        &self,
+        test: &str,
+        office: &TestOffice,
+        adapter: SocketAddr,
+        callsign: &str,
+        block: &[&str],
+        copies: bool,
+    ) -> Result<Gateway, String> {
         let home = self.scratch.join(test).join(callsign);
         let _ = std::fs::remove_dir_all(&home);
         std::fs::create_dir_all(home.parent().unwrap_or(&home)).map_err(|e| e.to_string())?;
@@ -398,6 +411,9 @@ impl Run<'_> {
             &[("home", &h), ("credential", &file.to_string_lossy())],
             "",
         )?;
+        if copies {
+            self.driver.run("copies", &[("home", &h)], "")?;
+        }
         let running = self.driver.start("serve", &[("home", &h)])?;
         Ok(Gateway { _running: running })
     }
@@ -851,6 +867,287 @@ impl Run<'_> {
         result
     }
 
+    /// G-03: offline. The gateway holds a copy placed ahead and the post office's keys and
+    /// revocation list; with the Internet cut it refuses a revoked credential and an unknown post
+    /// office, checks the caller itself, serves the copy flagged `copy`, says why in a `NOTICE`,
+    /// takes the caller's message into its queue and declines it `already-have` when offered
+    /// again; when the Internet is back it reports the session (RP-1 §5, §7.3, RP-3 §5.2, §9,
+    /// RP-5 §5.6, §5.8, RP-7 §3.6).
+    ///
+    /// # Errors
+    ///
+    /// The first deviation found.
+    #[allow(clippy::too_many_lines, reason = "one outage, in order")]
+    pub fn g03(&mut self, transcript: &mut Vec<String>) -> Outcome {
+        let office = TestOffice::start(&self.offices)?;
+        let adapter = TestAdapter::new(4096)?;
+        let user = office.user("club@radiopost.org", "WD5EMA");
+        let lost = office.user("lost@radiopost.org", "WD5EMB");
+        let foreign = User {
+            address: "ana@hampost.org".into(),
+            operator: "N0ANA".into(),
+            key: crate::harness::new_key(),
+            credential: Vec::new(),
+        };
+        let foreign = User {
+            credential: self.offices.issue(
+                &foreign.address,
+                &foreign.operator,
+                &foreign.key.verifying_key().to_bytes(),
+            ),
+            ..foreign
+        };
+        {
+            let mut o = office.office();
+            o.revoke_device(&lost.key.verifying_key().to_bytes());
+            o.state.gateways.insert(
+                GATEWAY.into(),
+                serde_json::json!({"callsign": GATEWAY, "operator": "N1CALL", "hours": "always",
+                    "internet": true, "copies": {"users": 10, "days": 7, "max_air_bytes": 16384},
+                    "updated": now()}),
+            );
+            o.state.settings.insert(
+                user.address.clone(),
+                serde_json::json!({"usual_gateways": [GATEWAY]}),
+            );
+        }
+        let _gw = self.gateway_holding("G-03", &office, adapter.program_at, GATEWAY, &[], true)?;
+        let waiting = mail("eoc@radiopost.org", &user.address, "Shelter roster", 80);
+        let air_waiting = waiting.air_form(Compression::None);
+        office.office().deliver(
+            &user.address,
+            7,
+            &air_waiting,
+            "eoc@radiopost.org",
+            "Shelter roster",
+            0,
+            false,
+        );
+        let held = wait_long(&office, Duration::from_secs(60), |e| {
+            e.path == "/copies/ack"
+                && e.body.as_ref().and_then(|b| b["cursor"].as_str()) == Some("c_1")
+        });
+        if !held {
+            return Err(
+                "the gateway, holding copies, did not poll for the copy placed ahead and \
+                        acknowledge it (RP-5 §5.8)"
+                    .into(),
+            );
+        }
+        if !wait_long(&office, Duration::from_secs(30), |e| {
+            e.method == "GET" && e.path == "/revocations"
+        }) {
+            return Err(
+                "the gateway did not fetch the post office's revocation list to keep \
+                        (RP-1 §7.3)"
+                    .into(),
+            );
+        }
+        office.cut();
+        let mut peer = adapter.peer(&["WD5EMA"], false)?;
+        let result = (|| -> Outcome {
+            // a revoked credential, checked with the revocation list it keeps (RP-1 §5 step 5)
+            let hello = Hello::new(&lost, GATEWAY);
+            let first = Self::first_answer(&mut peer, &hello.pdu())?;
+            check_error(&first, "credential-revoked")
+                .map_err(|e| format!("offline, a revoked credential: {e}"))?;
+            peer.hang_up();
+            // a post office it holds no keys of (RP-1 §5 step 2)
+            let hello = Hello::new(&foreign, GATEWAY);
+            let first = Self::first_answer(&mut peer, &hello.pdu())?;
+            check_error(&first, "unknown-post-office")
+                .map_err(|e| format!("offline, a post office whose keys it never held: {e}"))?;
+            peer.hang_up();
+            // the user: checked offline, the copy served, the message queued
+            let out = mail(&user.address, "maria@example.com", "Power is out", 60);
+            let mut hello = Hello::new(&user, GATEWAY);
+            hello.offers = vec![&out];
+            hello.auto = 1 << 20;
+            peer.call_within(GATEWAY, Duration::from_secs(15))?;
+            peer.send(&[hello.pdu()]);
+            let pdus = turn(&mut peer, "WELCOME, NOTICE, MSG and DONE")?;
+            let session = expect_welcome(&pdus[0], 0)?;
+            let w = &pdus[0];
+            if !matches!(w.get(11), Some(Value::Bool(false))) {
+                return Err(
+                    "WELCOME online is not false at a gateway that cannot reach the \
+                            post office (RP-3 §5.2)"
+                        .into(),
+                );
+            }
+            let entries = w.get(7).and_then(Value::as_array).unwrap_or(&[]);
+            let listed: Vec<(u64, Vec<u8>, u64)> = entries
+                .iter()
+                .filter_map(|e| {
+                    let e = e.as_array()?;
+                    Some((
+                        e.first()?.as_u64()?,
+                        e.get(1)?.as_bytes()?.to_vec(),
+                        e.get(6)?.as_u64()?,
+                    ))
+                })
+                .collect();
+            let [(serial, id, flags)] = &listed[..] else {
+                return Err(format!(
+                    "WELCOME waiting {listed:?}: the one copy it holds was due (RP-5 §5.8)"
+                ));
+            };
+            let (serial, flags) = (*serial, *flags);
+            if serial != 7 || id != waiting.content_id().as_bytes() || flags & 2 == 0 {
+                return Err(format!(
+                    "WELCOME waiting [{serial}, …, flags {flags}]: serial 7, the copy, with \
+                     the flag `copy` (2) was due (RP-3 §5.2, §6.2)"
+                ));
+            }
+            if !pdus.iter().any(|p| kind_of(p) == kind::NOTICE) {
+                return Err("offline, no NOTICE says why (RP-3 §5.10, §9)".into());
+            }
+            let (air, got) = assemble(&pdus, waiting.content_id(), 0)?;
+            if air != air_waiting || got != 7 {
+                return Err(
+                    "the copy's MSG pieces are not the post office's air form, serial \
+                            7 (RP-5 §5.3, §5.8)"
+                        .into(),
+                );
+            }
+            let mut mine = msg_pieces(&out, 0, 900);
+            mine.push(receipt(&[waiting.content_id()]));
+            mine.push(done());
+            peer.send(&mine);
+            let answer = answer(&mut peer, "a RECEIPT for the message queued")?;
+            let r = answer
+                .iter()
+                .find(|p| kind_of(p) == kind::RECEIPT)
+                .ok_or("no RECEIPT for the message handed in (RP-3 §5.5)")?;
+            let complete: Vec<&[u8]> = r
+                .get(1)
+                .and_then(Value::as_array)
+                .unwrap_or(&[])
+                .iter()
+                .filter_map(Value::as_bytes)
+                .collect();
+            if complete != [out.content_id().as_bytes()] {
+                return Err("the RECEIPT does not list the message queued as complete".into());
+            }
+            peer.hang_up();
+            // offered again while it is in the queue: `already-have` (RP-7 §3.6)
+            let mut again = Hello::new(&user, GATEWAY);
+            again.offers = vec![&out];
+            let first = Self::first_answer(&mut peer, &again.pdu())?;
+            expect_welcome(&first, 0)?;
+            let declined: Vec<(Vec<u8>, u64)> = first
+                .get(6)
+                .and_then(Value::as_array)
+                .unwrap_or(&[])
+                .iter()
+                .filter_map(|d| {
+                    let d = d.as_array()?;
+                    Some((d.first()?.as_bytes()?.to_vec(), d.get(1)?.as_u64()?))
+                })
+                .collect();
+            if declined != [(out.content_id().as_bytes().to_vec(), code("already-have"))] {
+                return Err(format!(
+                    "a message in its queue offered again: declined {declined:?}, where \
+                     `already-have` was due (RP-7 §3.6)"
+                ));
+            }
+            peer.hang_up();
+            if office.office().state.had.contains(&out.content_id().text()) {
+                return Err("the post office has the message, yet it was cut off".into());
+            }
+            // the Internet is back: the session is reported (RP-5 §5.6)
+            office.restore();
+            if !wait_long(&office, Duration::from_secs(90), |e| e.path == "/reports") {
+                return Err(
+                    "the gateway did not report the session once it could reach the \
+                            post office (RP-5 §5.6)"
+                        .into(),
+                );
+            }
+            let log = office.exchanges();
+            let report = log
+                .iter()
+                .find(|e| e.path == "/reports")
+                .and_then(|e| e.body.clone())
+                .unwrap_or_default();
+            check_report(&report, &hello, &session, &out, 7)?;
+            if !office.office().state.had.contains(&out.content_id().text()) {
+                return Err("the post office did not take the message reported".into());
+            }
+            Ok(())
+        })();
+        transcript.append(&mut peer.transcript);
+        result
+    }
+
+    /// G-05: third-party mail held back from a station abroad, with a `NOTICE`; the rest listed
+    /// (RP-6 §5.1).
+    ///
+    /// # Errors
+    ///
+    /// The first deviation found.
+    pub fn g05(&mut self, transcript: &mut Vec<String>) -> Outcome {
+        let (office, _adapter, _gw, mut peer) = self.world("G-05")?;
+        // a station in Germany, which has no third-party arrangement with the US (RP-6 §5.1)
+        let user = office.user("dl1abc@radiopost.org", "DL1ABC");
+        let third = mail("maria@example.com", &user.address, "From the Internet", 40);
+        let own = mail("eoc@radiopost.org", &user.address, "From a user", 40);
+        for (serial, m, from, third_party) in [
+            (1, &third, "maria@example.com", true),
+            (2, &own, "eoc@radiopost.org", false),
+        ] {
+            office.office().deliver(
+                &user.address,
+                serial,
+                &m.air_form(Compression::None),
+                from,
+                "mail",
+                0,
+                third_party,
+            );
+        }
+        let result = (|| -> Outcome {
+            let mut hello = Hello::new(&user, GATEWAY);
+            hello.auto = 1 << 20;
+            peer.call_within(GATEWAY, Duration::from_secs(15))?;
+            peer.send(&[hello.pdu()]);
+            let pdus = turn(&mut peer, "WELCOME, NOTICE, MSG and DONE")?;
+            expect_welcome(&pdus[0], 0)?;
+            let listed: Vec<Vec<u8>> = pdus[0]
+                .get(7)
+                .and_then(Value::as_array)
+                .unwrap_or(&[])
+                .iter()
+                .filter_map(|e| e.as_array()?.get(1)?.as_bytes().map(<[u8]>::to_vec))
+                .collect();
+            if listed != [own.content_id().as_bytes().to_vec()] {
+                return Err(format!(
+                    "WELCOME lists {} messages for a station in Germany: only the one from a \
+                     licensed user was due, the third-party one held back (RP-6 §5.1)",
+                    listed.len()
+                ));
+            }
+            if !assemble(&pdus, third.content_id(), 0)?.0.is_empty() {
+                return Err("third-party mail was sent to a station abroad (RP-6 §5.1)".into());
+            }
+            let notice = pdus
+                .iter()
+                .find(|p| kind_of(p) == kind::NOTICE)
+                .and_then(|p| p.get(1).and_then(Value::as_text).map(str::to_owned))
+                .ok_or("no NOTICE says third-party mail was held back (RP-6 §5.1)")?;
+            if !notice.contains('1') {
+                return Err(format!(
+                    "the NOTICE does not say how many were held back: {notice:?} (RP-6 §5.1)"
+                ));
+            }
+            peer.send(&[receipt(&[own.content_id()]), done()]);
+            peer.hang_up();
+            Ok(())
+        })();
+        transcript.append(&mut peer.transcript);
+        result
+    }
+
     /// G-08: a credential renewed by radio (RP-3 §5.8, RP-5 §6.2).
     ///
     /// # Errors
@@ -1069,8 +1366,69 @@ fn check_open(open: &Exchange, hello: &Hello<'_>, session: &[u8]) -> Outcome {
 }
 
 /// Waits up to five seconds for an exchange the gateway is due to make.
-fn wait_for(office: &TestOffice, mut found: impl FnMut(&Exchange) -> bool) -> bool {
-    let deadline = Instant::now() + Duration::from_secs(5);
+fn wait_for(office: &TestOffice, found: impl FnMut(&Exchange) -> bool) -> bool {
+    wait_long(office, Duration::from_secs(5), found)
+}
+
+/// RP-5 §5.6: the report of the session carried offline: its statement and credential, its
+/// `started` and the gateway's session ID, the message and the pickup.
+fn check_report(
+    report: &Json,
+    hello: &Hello<'_>,
+    session: &[u8],
+    out: &Message,
+    serial: u64,
+) -> Outcome {
+    let s = report["sessions"]
+        .as_array()
+        .and_then(|a| a.first())
+        .ok_or("the report has no session (RP-5 §5.6)")?;
+    let stmt = hello.statement(Form::Time {
+        time: hello.time,
+        nonce: hello.nonce,
+    });
+    if s["statement"].as_str() != Some(base64url::encode(&stmt.encode()).as_str()) {
+        return Err(
+            "the report's statement is not the caller's, as HELLO gave it (RP-5 §5.6)".into(),
+        );
+    }
+    if s["credential"].as_str() != Some(base64url::encode(&hello.user.credential).as_str()) {
+        return Err("the report's credential is not the caller's (RP-5 §5.6)".into());
+    }
+    if s["gateway_session"].as_str() != Some(radiopost::cbor::hex(session).as_str()) {
+        return Err("the report's gateway_session is not WELCOME's session ID (RP-5 §5.6)".into());
+    }
+    let started = s["started"].as_u64().unwrap_or(0);
+    if started.abs_diff(hello.time) > 600 {
+        return Err("the report's `started` is not when the session started (RP-5 §5.6)".into());
+    }
+    let ids: Vec<&str> = s["messages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|m| m["id"].as_str())
+        .collect();
+    if ids != [out.content_id().text()] {
+        return Err(format!(
+            "the report's messages {ids:?}: the one queued was due"
+        ));
+    }
+    if s["pickups"] != serde_json::json!([serial]) {
+        return Err(format!(
+            "the report's pickups {}: [{serial}], the copy picked up, was due",
+            s["pickups"]
+        ));
+    }
+    Ok(())
+}
+
+/// Whether an exchange `found` holds of comes within `limit`.
+fn wait_long(
+    office: &TestOffice,
+    limit: Duration,
+    mut found: impl FnMut(&Exchange) -> bool,
+) -> bool {
+    let deadline = Instant::now() + limit;
     while Instant::now() < deadline {
         if office.exchanges().iter().any(&mut found) {
             return true;

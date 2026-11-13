@@ -1,11 +1,12 @@
 {
   "program": "radiopost-gateway",
-  "note": "How the conformance tester drives radiopost-gateway. {bin} is the program, {home} a fresh directory for each gateway. `key` prints the gateway's public key (base64url or hex); `serve` runs until the tester ends it. In conformance mode it asks only the tester's DNS resolver, and reaches the test post office at the URL `post_office` gives it (the outline's §2.3).",
+  "note": "How the conformance tester drives radiopost-gateway. {bin} is the program, {home} a fresh directory for each gateway. `key` prints the gateway's public key (base64url or hex); `serve` runs until the tester ends it; `copies` makes it hold copies placed ahead (RP-5 §5.8), for the offline tests. In conformance mode it asks only the tester's DNS resolver, and reaches the test post office at the URL `post_office` gives it (the outline's §2.3).",
   "init": ["{bin}", "--dir", "{home}", "init", "--callsign", "{callsign}", "--modem", "{adapter}", "--operator-checks-rules"],
   "conformance": ["{bin}", "--dir", "{home}", "conformance", "--resolver", "{resolver}"],
   "post_office": ["{bin}", "--dir", "{home}", "post-office", "--domain", "{domain}", "--url", "{url}"],
   "block": ["{bin}", "--dir", "{home}", "block", "--domain", "{domain}"],
   "key": ["{bin}", "--dir", "{home}", "key"],
   "credential": ["{bin}", "--dir", "{home}", "credential", "--file", "{credential}"],
+  "copies": ["{bin}", "--dir", "{home}", "copies", "--users", "10", "--days", "7", "--max-air-bytes", "16384"],
   "serve": ["{bin}", "--dir", "{home}", "serve"]
 }

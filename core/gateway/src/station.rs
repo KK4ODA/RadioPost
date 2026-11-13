@@ -21,6 +21,8 @@ use rpmi::tcp::Connection;
 use serde::{Deserialize, Serialize};
 
 use crate::monitor::{Check, Monitor};
+use crate::offline::{Fallback, Offline};
+use crate::store::Shared;
 use crate::upstream::{self, Account};
 
 /// RP-3 §8: nothing heard for this long ends the session.
@@ -56,6 +58,30 @@ pub struct Settings {
     /// The gateway app answers calls as soon as it starts (the command line's `serve` always does).
     #[serde(default = "yes")]
     pub answer_at_start: bool,
+    /// Whether it holds copies placed ahead, and its limits (RP-5 §4.4 `copies`, §5.8); none, it
+    /// holds none and polls no post office.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copies: Option<CopiesSettings>,
+}
+
+/// What a gateway that holds copies placed ahead says in its record (RP-5 §4.4).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CopiesSettings {
+    /// How many users' copies it holds at most.
+    pub users: u64,
+    /// How many days a copy is kept.
+    pub days: u64,
+    /// The largest air form it holds; a larger message is listed with `held`.
+    pub max_air_bytes: u64,
+}
+
+impl CopiesSettings {
+    /// The record's `copies` member (RP-5 §4.4).
+    #[must_use]
+    pub fn record(&self) -> serde_json::Value {
+        serde_json::json!({"users": self.users, "days": self.days,
+                           "max_air_bytes": self.max_air_bytes})
+    }
 }
 
 impl Settings {
@@ -300,6 +326,7 @@ pub struct Station {
     account: Arc<Account>,
     tokens: HashMap<String, Arc<Mutex<Option<String>>>>,
     held: Held,
+    store: Shared,
 }
 
 fn read(path: &Path) -> Result<String, String> {
@@ -345,6 +372,20 @@ pub fn write(dir: &Path, name: &str, text: &str) -> Result<(), String> {
     std::fs::rename(&fresh, dir.join(name)).map_err(|e| format!("{name}: {e}"))
 }
 
+/// The gateway's settings, its credential and key, as they stand on disk, without what it holds:
+/// for the threads beside the answering loop, which read them often.
+///
+/// # Errors
+///
+/// A file is missing or unreadable.
+pub fn identity(dir: &Path) -> Result<(Settings, Arc<Account>), String> {
+    let settings = Settings::load(dir)?;
+    let key = key(dir)?;
+    let credential =
+        unhex(&read(&dir.join("credential.hex"))?).ok_or("credential.hex is not hexadecimal")?;
+    Ok((settings, Arc::new(Account { credential, key })))
+}
+
 impl Station {
     /// The gateway in `dir`: `gateway.json`, `key.hex`, `credential.hex`, and `held.json`.
     ///
@@ -369,7 +410,20 @@ impl Station {
             account: Arc::new(Account { credential, key }),
             tokens: HashMap::new(),
             held,
+            store: Shared::open(dir),
         })
+    }
+
+    /// The gateway's credential and key, to log in with.
+    #[must_use]
+    pub fn account(&self) -> Arc<Account> {
+        self.account.clone()
+    }
+
+    /// What it holds for when the Internet is down.
+    #[must_use]
+    pub fn store(&self) -> &Shared {
+        &self.store
     }
 
     fn save(&self) {
@@ -473,36 +527,44 @@ impl Station {
             .collect()
     }
 
-    fn upstreams(&mut self) -> Upstreams {
+    /// Each domain's post office for a session: reached over HTTPS when it can be, and
+    /// otherwise the gateway's own answer from what it holds (RP-3 §9), with the keys it keeps
+    /// (RP-1 §7.3). A post office it neither finds nor holds the keys of is unknown.
+    fn upstreams(&mut self, at: u64) -> Upstreams {
         let account = self.account.clone();
-        let station: Vec<(String, String)> =
-            self.settings.post_offices.clone().into_iter().collect();
-        let blocked = self.settings.blocked.clone();
-        let only = self.settings.only.clone();
-        let resolver = self.settings.resolver.clone();
+        let settings = self.settings.clone();
+        let store = self.store.clone();
         let tokens = Arc::new(Mutex::new(std::mem::take(&mut self.tokens)));
         Box::new(
             move |domain: &str| -> Result<Box<dyn Upstream + Send>, ErrorCode> {
-                if blocked.iter().any(|b| b == domain)
-                    || only
-                        .as_ref()
-                        .is_some_and(|o| !o.iter().any(|d| d == domain))
-                {
+                // the operator's choices (RP-1 §7.3): `api_of` finds no post office it blocked or
+                // left out, and the keys it holds are trusted only as they allow
+                let url = crate::upkeep::api_of(&settings, &store, domain);
+                let known = store
+                    .lock()
+                    .trust(&settings.blocked, settings.only.as_deref())
+                    .keys
+                    .contains_key(domain);
+                if url.is_none() && !known {
                     return Err(ErrorCode::UnknownPostOffice);
                 }
-                let url = station
-                    .iter()
-                    .find(|(d, _)| d == domain)
-                    .map(|(_, u)| u.clone())
-                    .or_else(|| lookup(&resolver, domain))
-                    .ok_or(ErrorCode::UnknownPostOffice)?;
-                let token = tokens
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .entry(domain.to_owned())
-                    .or_default()
-                    .clone();
-                Ok(upstream::http(&url, account.clone(), token))
+                let online = url.map(|url| {
+                    let token = tokens
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .entry(domain.to_owned())
+                        .or_default()
+                        .clone();
+                    upstream::http(&url, account.clone(), token)
+                });
+                let offline = Offline::new(
+                    store.clone(),
+                    &settings.callsign,
+                    settings.blocked.clone(),
+                    settings.only.clone(),
+                    at,
+                );
+                Ok(Box::new(Fallback::new(online, offline)))
             },
         )
     }
@@ -811,8 +873,14 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
     tell(&listening);
     monitor.set_state("listening", None);
     let mut renewal = Renewal::new(dir, RENEW_EVERY, radiopost::credential::RENEW_WITHIN);
+    // copies, the key cache and reports, beside the answering loop while it runs
+    let (said, upkeep_says) = std::sync::mpsc::channel();
+    let _upkeep = crate::upkeep::start(dir, station.store().clone(), said);
     loop {
         renewal.tick(&mut tell);
+        while let Ok(line) = upkeep_says.try_recv() {
+            tell(&line);
+        }
         if monitor.stopping() {
             let off = modem.host.listen(false);
             let _ = modem.conn.send(&off);
@@ -878,9 +946,11 @@ fn carry(
     monitor: &Monitor,
 ) -> Result<(), String> {
     let country = station.settings.country.clone();
+    let config = station.config();
+    let at = config.time;
     let engine = Gateway::new(
-        station.config(),
-        station.upstreams(),
+        config,
+        station.upstreams(at),
         Box::new(move |call| radiopost::thirdparty::may_hand(call, &country)),
     );
     let mut carrier = Carrier::new(Answering(engine));
@@ -937,5 +1007,19 @@ fn carry(
         }
     }
     station.keep(notes);
+    // the caller's post office: its documents kept, and asked whether it places copies here
+    if let Some(domain) = carrier
+        .engine()
+        .0
+        .account()
+        .and_then(|a| a.rsplit_once('@'))
+        .map(|(_, d)| d.to_lowercase())
+    {
+        let _ = station.store.change(|s| {
+            if !s.learn.contains(&domain) {
+                s.learn.push(domain);
+            }
+        });
+    }
     result
 }

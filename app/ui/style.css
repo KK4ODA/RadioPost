@@ -169,6 +169,9 @@ button.danger { color: var(--bad); }
 button[data-armed] { border-color: var(--bad); color: var(--bad); }
 .tag { display: inline-block; font-size: 11px; line-height: 1; padding: 3px 6px; margin-right: 8px;
        border-radius: 999px; border: 1px solid var(--line); color: var(--muted); vertical-align: 1px; }
+.tag.bad { color: var(--bad); border-color: var(--bad); }
+.entries.usual li { padding: 2px 0; }
+.entries.usual label.check { gap: 10px; }
 .reader-acts { margin: 0 0 14px; }
 .reader-acts #back { margin: 0; }
 body[data-busy="true"] .needs-idle { opacity: .4; pointer-events: none; }

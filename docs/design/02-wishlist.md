@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.14 |
+| **Version** | 0.3.15 |
 | **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -109,7 +109,7 @@ rules:
 | W3 | Photos made small, and the time on the air shown | Mail | Medium | Fits today | Planned |
 | W4 | The full text of a trimmed message | Mail | Low | Fits today as modified; optional addition as asked | Proposed |
 | W5 | Mail kept as `.eml` files | Mail | Low | Fits today | Planned |
-| W6 | Where each message is | Mail | Medium | Fits today; optional addition for *delivered* | Planned |
+| W6 | Where each message is | Mail | Medium | Fits today; optional addition for *delivered* | In progress |
 | W7 | Several accounts in one client | Setup | Medium | Fits today, a call each | Implemented |
 | W8 | Credentials renewed before they lapse | Setup | High | Fits today | Implemented |
 | W9 | Usual gateways set in the panel | — | — | — | Consolidated into W27 |
@@ -130,9 +130,9 @@ rules:
 | W24 | Block a caller by address or callsign | Operation | Medium | Fits today | Planned |
 | W25 | The gateway renews its own credential | — | — | — | Consolidated into W8 |
 | W26 | One gateway, several modems | Operation | Medium | Fits today; G11 to name Mercury | Planned |
-| W27 | Copies placed ahead | Offline | High | Fits today | Planned |
-| W28 | The gateway's queue while offline, and its reports | Offline | High | Fits today | Planned |
-| W29 | The sender's client follows queued mail | Offline | High | Fits today | Planned |
+| W27 | Copies placed ahead | Offline | High | Fits today | Implemented |
+| W28 | The gateway's queue while offline, and its reports | Offline | High | Fits today | Implemented |
+| W29 | The sender's client follows queued mail | Offline | High | Fits today | Implemented |
 | W30 | Forwarding by radio | Offline | Medium | Fits today | Planned |
 | W31 | Local delivery at a cut-off gateway | Offline | Medium | Fits today | Planned |
 | W32 | Forms | Applications | Medium | Application layer (recommended); optional addition (RP-2 key 13) | Planned |
@@ -259,12 +259,12 @@ delivered to the recipient's mail server.
 | Requested by | The plan: concept §6.2. Requesters: 0. |
 | Component | Client; the post office for *delivered*. |
 | Compatibility | **Fits today** up to *at the post office*: a `RECEIPT` from a gateway that said `online` means the post office holds it (RP-3 §5.5); from a cut-off gateway, that it is queued (RP-7 §3.6). *Delivered* is an **optional protocol addition**: nothing reports it, and only failures come back, as messages (RP-6 §3.3; §13, G5). |
-| Existing coverage | Partly built: the outbox and the sent folder. |
-| Dependencies | W29 for *queued at a gateway*. |
+| Existing coverage | Partly built: the outbox and the sent folder, and *queued at a gateway* with *may have been dropped* (W29, 2026-11-13). |
+| Dependencies | W29 for *queued at a gateway* (built). |
 | Effort | Small for the states the radio reports; medium with *delivered*. |
 | Priority | **Medium.** Users of a system built for outages need to know where their mail is. |
 | Recommendation | **Modify**: show what the radio already reports; leave *delivered* until users ask, since a failure already arrives as a message. |
-| Status | Planned. |
+| Status | In progress: the states the radio reports are shown; *delivered* is not. |
 | Author decision | None yet. |
 
 ### W47. Deleting messages, and a trash
@@ -715,12 +715,12 @@ Internet or the post office is down. The user names those gateways in the client
 | Requested by | The plan: concept §6.1 and §10, D12, Phase 3. Requesters: 0. Includes W9. |
 | Component | Post office, gateway; the client names the gateways. |
 | Compatibility | **Fits today**: RP-5 §5.8 and §6.3, the flag `copy` (RP-3 §5.2), serials (RP-3 §6.2). |
-| Existing coverage | Specified, not built. The setting `usual_gateways` can be changed only from the command line. A usual gateway registered with another post office has copies placed by its user's post office (gap G14, the post office's side built 2026-11-12); gateways do not poll yet. |
+| Existing coverage | **Built** (2026-11-13). The gateway's side: the operator says in RadioPost Gateway's Setup (or `copies`) whether it holds copies and its limits, and its registered record says so (RP-5 §4.4); it polls its own post office without stopping, and each other post office that answers `placing` true, asking those it knows with `wait=0` at most hourly; it keeps each item in `store.json` before acknowledging the cursor, applies drops and expiry, holds no more users than it said, and keeps `forward` items for Phase 4; its panel shows what it holds (never the text). The post office answers `GET /copies` as a long poll (`wait`, up to 60 s). The client's Setup ticks the usual gateways from the gateway list (every known post office's, D36), with *Skip mail I have read*, merged into the settings at the post office (W9). Tested end to end (`core/gateway/tests/offline.rs`) and by P-06 and G-03. |
 | Dependencies | Phase 2. |
 | Effort | Large: the long poll, the gateway's store, drops and expiry, the client's setting. |
 | Priority | **High**: first of Phase 3. |
 | Recommendation | Accept. |
-| Status | Planned. |
+| Status | Implemented, on `main`; released with W28 and W29. |
 | Author decision | **Decided** (CLAUDE.md): first of the Internet-down features. **Decided** (2026-11-13): W27, W28 and W29 go out in one release, after W36's first part |
 
 ### W28. The gateway's queue while offline, and its reports
@@ -733,12 +733,12 @@ and reports everything once it is back.
 | Requested by | The plan: concept §6.2, Phase 3. Requesters: 0. |
 | Component | Gateway, post office. |
 | Compatibility | **Fits today**: RP-3 §9 and `online` (RP-3 §5.2), keys and revocation lists kept (RP-1 §7.3), `POST /reports` (RP-5 §5.6). |
-| Existing coverage | Specified, not built: the gateway works only online. |
+| Existing coverage | **Built** (2026-11-13). Online or not is decided per session: when the caller's post office cannot be reached, the engine is given an `Upstream` answered from the gateway's store (`online` false, said in a `NOTICE`). It checks the credential and statement itself with the keys and revocation lists it keeps (RP-1 §5, §6.3, its own replay cache), fetched while online and refreshed every 6 hours: from DNS and one hop of lists (RP-1 §7.3), or, for a post office named in its settings with no DNS, from the key that signed its own credential (G20). It lists its copies (`copy`, `held` without an air form), applies RP-6 §5.1 with a `NOTICE` of what it held back (online too), takes the caller's messages into a session record written before its `RECEIPT`, declines `already-have` what is in its queue or passed on in 30 days, and records pickups. Reports go oldest first once a post office answers again, and each result is acted on; a record is kept 30 days. The panel shows the queue and the last reports. Tested by G-03, G-05, P-05 and end to end. |
 | Dependencies | W27. |
 | Effort | Large. |
 | Priority | **High**: second of Phase 3. |
 | Recommendation | Accept, shipped with W29. |
-| Status | Planned. |
+| Status | Implemented, on `main`; released with W27 and W29. |
 | Author decision | **Decided** (CLAUDE.md): second, after copies placed ahead. **Decided** (2026-11-13): in one release with W27 and W29 |
 
 ### W29. The sender's client follows queued mail
@@ -751,12 +751,12 @@ and says so if it may have been lost.
 | Requested by | The plan: D25. Requesters: 0. |
 | Component | Client. |
 | Compatibility | **Fits today**: RP-7 §3.6. |
-| Existing coverage | Specified, not built. |
+| Existing coverage | **Built** (2026-11-13). The engine says `WELCOME`'s `online` (`Event::Welcome`). A message a cut-off gateway takes stays in the outbox, kept as queued there with the time; it is offered again, but not to a gateway cut off at the last call for 30 days (`vectors/queued.json`'s offer cases); an online gateway's `complete` or `already-have` makes it sent (an `already-have` from an online gateway had left any message in the outbox for good); after 30 days the call says it may have been dropped, and goes on offering it. The outbox shows *queued at* a gateway, or *may have been dropped*, in the panel and on the command line. Tested by C-09, `queued.json`'s replays and end to end. |
 | Dependencies | W28. |
 | Effort | Medium. |
 | Priority | **High.** Without it, a message a cut-off gateway drops is lost with nobody told (D25). |
 | Recommendation | Accept, and ship with W28, never after it. |
-| Status | Planned. |
+| Status | Implemented, on `main`; released with W27 and W28. |
 | Author decision | **Decided** (2026-11-13): in one release with W27 and W28 |
 
 ### W30. Forwarding by radio
@@ -1042,12 +1042,13 @@ document.
 | G11 | RP-5 §4.4 | Its `modem` values (`aether`, `vara-hf`, `vara-fm`, `ardop`, `ax25`, `tcp`) are a list with no registry, no way to add one, and no rule for a value a client does not know. | A gateway offering Mercury has no agreed name for it, and clients may treat an unknown name differently. | A registry of modem names in RP-0 §9, `mercury` its first new entry, and a client ignoring a channel whose modem it does not know. Drafted: RP-0 0.7.0 §9.4 and RP-5 0.17.0 §4.4, with `aether-fm` beside `mercury` (D39). | W20, W26, W44 |
 | G12 | RP-1 §6.3 | Step 3 compares the callsign a client was called at with its credential's exactly, so a client cannot answer under an SSID of its own callsign (RP-0 §6.1). | An operator's several stations must all answer at the bare callsign, and listeners cannot tell them apart. | For a client answering (RP-3 §10), compare base callsigns, as G10 proposes for step 2; gateways stay exact. | W45 |
 | G13 | RP-5 §4.4 | A client's gateway list is one post office's registrations; nothing says how to read the others'. | A user never sees the gateways registered with other post offices, though any gateway serves them. | Read from every post office the home lists, the home's record winning: RP-5 0.16.0 §4.4, D36. **Built** (2026-11-12). | W17 |
-| G14 | RP-5 §5.8, RP-7 §4.1 | Copies at a gateway registered with another post office: where its record is found, how the gateway learns to poll there, and whose credential may collect them. A route through such a gateway has the same gaps. | Users' usual gateways must be registered with their own post office; the program skips the others without a word. | The record from the known post offices' lists, `placing` in the poll's answer, items only to the listing post office's credential: RP-5 0.16.0 and RP-7 0.9.0, D37. **Post office's side built** (2026-11-12); the gateway's polling comes with W27. | W27, W30 |
+| G14 | RP-5 §5.8, RP-7 §4.1 | Copies at a gateway registered with another post office: where its record is found, how the gateway learns to poll there, and whose credential may collect them. A route through such a gateway has the same gaps. | Users' usual gateways must be registered with their own post office; the program skips the others without a word. | The record from the known post offices' lists, `placing` in the poll's answer, items only to the listing post office's credential: RP-5 0.16.0 and RP-7 0.9.0, D37. **Post office's side built** (2026-11-12); **the gateway's polling built with W27** (2026-11-13). | W27, W30 |
 | G15 | RP-1 §7.3 | Which post offices a post office knows: §7.3 covers gateways only, and the door, RP-5 §2 and RP-6 §4 rest on it. | Each operator types the others' keys, which are never refreshed: a rotated key, or a revocation, is missed, and a new post office is found by nobody. | Known by the operators' choice, found as mail crosses, followed in DNS: RP-1 0.6.0 §7.5, D38. **Built** (2026-11-12). | W49 |
 | G16 | RP-6 §5.1 | Every message made from an email is third-party mail unless it came with RP-6 §4's part, so mail a licensed account sends from its own mail program, signed in to its post office, would be flagged though its sender is shown licensed. Email-only members' mail rightly is. | Mail between a post office's own licensed users, once W36 carries it to the radio, is held back from stations abroad without an arrangement. | Count an account with a credential, signed in to submit, as shown licensed; until settled, flag it (the safe reading). | W36 |
 | G17 | RP-6 §3.1 | `In-Reply-To` and `References` are restored only when `reply_to` names a message whose `Message-ID` the post office keeps from an email that arrived (§2.4 step 8). A reply to a RadioPost message the post office itself sent out as email (a user's message copied to an email address, then answered by radio with *Reply all*) gets none, though §3.1's own rule gives that message's `Message-ID`, and the post office keeps it (`sent_ids`). | The email recipient's thread breaks on such a reply; found while building W1. | Restore the headers from the messages it sent as well: `<` the content ID in base32 `@` the sender's domain `>`, when this post office sent it. | W1 |
 | G18 | RP-6 §2 | What becomes of mail a user sends from a mail program, signed in, to another user of the same post office: whether the door judges it, whether it becomes a radio message and is third-party, and whether mail sent by radio to a user here reaches the mail server. | Such mail never reached the radio, and mail sent by radio never reached the mail program. | RP-6 0.7.0 §2.6, with RP-5 0.19.0 §6.5. **Settled and built** (2026-11-13). | W36 |
 | G19 | RP-5 §6.3 | `radio_skips_read` said mail read in a mail program is not offered by radio, not whether it is picked up (its copies dropped) or only hidden. | A post office hiding it leaves gateways offering copies of mail already read while offline. | Taken as picked up, learned without delaying a session: RP-5 0.19.0 §6.3. **Settled and built** (2026-11-13). | W36 |
+| G20 | RP-1 §7.3 | Which keys a gateway trusts, offline, for a post office its operator names by URL because its DNS records are not published (the gateway's settings, design §5.2): §7.3 trusts only post offices found in DNS and one hop of their lists. | Such a gateway could check no caller offline. | For the gateway's own post office, the key that signed the gateway's own credential (fetched over HTTPS at registration), and those an info document signed by it adds, as §7.2 does from DNS; built that way (2026-11-13), not yet in RP-1. | W28 |
 
 ---
 
@@ -1058,7 +1059,7 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 
 | Idea | Requested by | Why | The alternative | Decided | Reconsider if |
 |---|---|---|---|---|---|
-| W9. Usual gateways set in the panel | The plan | Consolidated into W27: the setting does nothing until copies are placed ahead. | Built as part of W27. | 2026-11-11, the editor's proposal | — |
+| W9. Usual gateways set in the panel | The plan | Consolidated into W27: the setting does nothing until copies are placed ahead. | Built as part of W27 (2026-11-13). | 2026-11-11, the editor's proposal | — |
 | W12. Email-only members | The plan | Consolidated into W36: what they need is its mail path. | Built as part of W36. | 2026-11-11, the editor's proposal | — |
 | W25. The gateway renews its own credential | The plan | Consolidated into W8: one renewal rule for every credential. | Built as part of W8. | 2026-11-11, the editor's proposal | — |
 | W39. A domain served by several post offices | The plan: concept §12, a later option | Not a goal for now (concept §1). A breaking protocol change: RP-1 §7.1 allows one API record per domain, and serials (RP-3 §6.2) are one post office's numbering. | Backups and a quick rebuild (W38); a user who owns their domain can move it. | The concept, 2026-11-09 | A group needs addresses that outlive its post office, and W38 is not enough. |
@@ -1103,3 +1104,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.12 | 2026-11-13 | The author's decisions: W36 built next, its mail-losing part first; W27, W28 and W29 in one release after it. Gap G16: third-party mail and a licensed account's own mail program (RP-6 §5.1). |
 | 0.3.13 | 2026-11-13 | W38: the mail server's mailboxes backed up each night by the jobs runner with Stalwart stopped, carried by a downloaded backup and put back by `restore`; Health shows them and when a backup last left the server. Gap G17, found with W1: a reply to mail the post office sent as email keeps no thread. |
 | 0.3.14 | 2026-11-13 | W36's first part built: mail users submit from their mail programs reaches the radio and fills their accept lists; mail sent by radio to users here reaches their mail programs, and an email-only member (W12) gets it by email alone; `radio_skips_read` takes mail read in a mail program as picked up. Gaps G18 and G19, settled by RP-6 0.7.0 and RP-5 0.19.0. |
+| 0.3.15 | 2026-11-13 | W27, W28 and W29 implemented, to go out together: the gateway holds copies placed ahead and polls for them, answers sessions from its store when cut off and reports them, and the client follows what a cut-off gateway queued (RP-7 §3.6); W9 built with W27, W6's queued state with W29. The conformance tester's Phase 3 tests C-09, G-03, G-05 and the parts of P-05 and P-06 that need neither local delivery nor forwarding. Gap G20: the keys a gateway trusts for a post office named by URL with no DNS. |

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! The post office role's tests (the outline's §3.4): P-01 to P-04 and P-07 to P-10. The tester
+//! The post office role's tests (the outline's §3.4): P-01 to P-10, P-05 and P-06 without what
+//! needs local delivery or forwarding (Phase 4). The tester
 //! starts the post office from its driver file in a fresh directory for each test, and plays its
 //! users' clients, a gateway, another post office's user, and the mail server around it: its
 //! door called as an MTA hook (the MTA Hooks draft's shape), and a stand-in submission port that
@@ -238,20 +239,28 @@ impl Po {
 
     /// RP-5 §6.4: a gateway its owner registers, logged in.
     fn gateway(&self, owner: &Account) -> Result<Account, String> {
+        self.gateway_holding(owner, &Json::Null)
+    }
+
+    /// RP-5 §6.4: a gateway its owner registers, its record saying it holds `copies` when that is
+    /// not null (RP-5 §4.4), logged in.
+    fn gateway_holding(&self, owner: &Account, copies: &Json) -> Result<Account, String> {
         let key = new_key();
         let mut signed = GATEWAY.as_bytes().to_vec();
         signed.extend_from_slice(self.base.as_bytes());
         let sig = crypto::sign(context::API_GATEWAY, &signed, &key);
+        let mut record = json!({"callsign": GATEWAY, "operator": owner.operator,
+                                "channels": [], "hours": "always", "internet": true});
+        if !copies.is_null() {
+            record["copies"] = copies.clone();
+        }
         let (status, answer) = self.call(
             "POST",
             "/gateways",
             Some(&owner.token),
-            Some(
-                &json!({"record": {"callsign": GATEWAY, "operator": owner.operator,
-                                    "channels": [], "hours": "always", "internet": true},
+            Some(&json!({"record": record,
                          "device": base64url::encode(key.verifying_key().as_bytes()),
-                         "signature": base64url::encode(&sig)}),
-            ),
+                         "signature": base64url::encode(&sig)})),
         )?;
         if status != 201 {
             return Err(format!(
@@ -1055,6 +1064,249 @@ impl Run<'_> {
             "signature-invalid",
             "the same challenge twice",
         )?;
+        Ok(())
+    }
+
+    /// P-05: reports of sessions carried offline (RP-5 §5.6), without paths or local pickups:
+    /// each checked as at `started`, not by the post office's clock; messages taken as from a
+    /// session, pickups marked; a session whose statement fails refused whole, and one whose path
+    /// does not end at the reporting gateway refused `not-authorized`; one answer each, in order.
+    ///
+    /// # Errors
+    ///
+    /// The first deviation found.
+    pub fn p05(&mut self, _t: &mut Vec<String>) -> Outcome {
+        let po = self.start("P-05")?;
+        let a = po.enroll(self.driver, "facundo@radiopost.org", "KK4ODA", "Facundo")?;
+        let b = po.enroll(self.driver, "shelter3@radiopost.org", "N3CALL", "Shelter 3")?;
+        let gw = po.gateway(&a)?;
+        // mail waiting for Facundo, which he picked up from a copy while the gateway was cut off
+        let to_a = mail(&b.address, &a.address, "Water at the school", 40);
+        po.hand_in(&gw, &b, &[&to_a])?;
+        let opened = po.open(&gw, &a, &[])?;
+        let serial = opened["waiting"][0]["serial"]
+            .as_u64()
+            .ok_or("no message waiting for the account")?;
+        if let Some(sid) = opened["session"].as_str() {
+            let _ = po.call("DELETE", &format!("/sessions/{sid}"), Some(&gw.token), None);
+        }
+        // carried by a gateway whose clock runs 15 minutes ahead: its statement's time is
+        // `started`, which the post office checks it against, not its own clock
+        let out = mail(&a.address, "maria@example.com", "Power is out", 40);
+        let started = now() + 900;
+        let form = Form::Time {
+            time: started,
+            nonce: random(),
+        };
+        let mut ok = Po::session_body(&a, GATEWAY, &[&out], form, started);
+        ok["messages"] = json!([{"id": out.content_id().text(),
+                                 "air": base64url::encode(&out.air_form(Compression::None))}]);
+        ok["pickups"] = json!([serial]);
+        let mut forged = ok.clone();
+        forged["signature"] = base64url::encode(&[7u8; 64]).into();
+        let mut elsewhere = Po::session_body(&a, GATEWAY, &[], Po::time_form(), now());
+        elsewhere["path"] = json!([GATEWAY, "N2CALL-5"]);
+        let (status, answer) = po.call(
+            "POST",
+            "/reports",
+            Some(&gw.token),
+            Some(&json!({"sessions": [ok, forged, elsewhere]})),
+        )?;
+        if status != 200 {
+            return Err(format!("a report answered {status} {answer} (RP-5 §5.6)"));
+        }
+        let s = answer["sessions"].as_array().cloned().unwrap_or_default();
+        if s.len() != 3 {
+            return Err(format!(
+                "{} answers for three sessions reported (RP-5 §5.6: one each, in order)",
+                s.len()
+            ));
+        }
+        if s[0]["results"] != json!([{"id": out.content_id().text(), "status": "accepted"}]) {
+            return Err(format!(
+                "a session started 15 minutes ahead of the post office's clock, checked at its \
+                 `started`: {} where its message accepted was due (RP-5 §5.6, RP-1 §6.3)",
+                s[0]
+            ));
+        }
+        if s[1]["name"] != "signature-invalid" || s[1].get("results").is_some() {
+            return Err(format!(
+                "a session whose signature fails: {} where signature-invalid, nothing taken, was \
+                 due (RP-5 §5.6)",
+                s[1]
+            ));
+        }
+        if s[2]["name"] != "not-authorized" {
+            return Err(format!(
+                "a path that does not end at the reporting gateway: {} where not-authorized was \
+                 due (RP-5 §5.6)",
+                s[2]
+            ));
+        }
+        // the pickup marked: not offered again
+        let again = po.open(&gw, &a, &[&out])?;
+        if again["waiting"]
+            .as_array()
+            .is_some_and(|w| w.iter().any(|e| e["serial"] == json!(serial)))
+        {
+            return Err("a pickup reported is offered again (RP-5 §5.6, §5.5)".into());
+        }
+        if again["decline"][0]["name"] != "already-have" {
+            return Err(format!(
+                "the message reported, offered again: {} where already-have was due (RP-5 §5.2)",
+                again["decline"]
+            ));
+        }
+        // and reported a second time, it is a duplicate
+        let mut twice = Po::session_body(&a, GATEWAY, &[&out], Po::time_form(), now());
+        twice["messages"] = json!([{"id": out.content_id().text(),
+                                    "air": base64url::encode(&out.air_form(Compression::None))}]);
+        let (_, answer) = po.call(
+            "POST",
+            "/reports",
+            Some(&gw.token),
+            Some(&json!({"sessions": [twice]})),
+        )?;
+        if answer["sessions"][0]["results"][0]["status"] != "duplicate" {
+            return Err(format!(
+                "a message reported twice: {} where duplicate was due (RP-5 §5.4)",
+                answer["sessions"][0]
+            ));
+        }
+        Ok(())
+    }
+
+    /// P-06: copies placed ahead and their drops (RP-5 §5.8), without forward items: none while
+    /// no user names the gateway (`placing` false), a copy of mail for a user who does, with its
+    /// list entry, its air form within the record's `max_air_bytes` and its `expires`; nothing
+    /// again after an acknowledged cursor; a `drop` once the user picks the message up.
+    ///
+    /// # Errors
+    ///
+    /// The first deviation found.
+    #[allow(clippy::too_many_lines, reason = "one copy, placed, held and dropped")]
+    pub fn p06(&mut self, _t: &mut Vec<String>) -> Outcome {
+        let po = self.start("P-06")?;
+        let a = po.enroll(self.driver, "facundo@radiopost.org", "KK4ODA", "Facundo")?;
+        let b = po.enroll(self.driver, "shelter3@radiopost.org", "N3CALL", "Shelter 3")?;
+        let gw =
+            po.gateway_holding(&a, &json!({"users": 10, "days": 7, "max_air_bytes": 16384}))?;
+        let poll = |after: &str| -> Result<Json, String> {
+            let (status, answer) = po.call(
+                "GET",
+                &format!("/copies?after={after}&wait=0"),
+                Some(&gw.token),
+                None,
+            )?;
+            if status != 200 {
+                return Err(format!(
+                    "GET /copies answered {status} {answer} (RP-5 §5.8)"
+                ));
+            }
+            Ok(answer)
+        };
+        let first = poll("")?;
+        if first["placing"] != false || first["items"].as_array().is_some_and(|i| !i.is_empty()) {
+            return Err(format!(
+                "a gateway no user names as usual: {first} where `placing` false and no items \
+                 were due (RP-5 §5.8)"
+            ));
+        }
+        let (status, _) = po.call(
+            "PUT",
+            "/settings",
+            Some(&a.token),
+            Some(&json!({"usual_gateways": [GATEWAY]})),
+        )?;
+        if status != 204 && status != 200 {
+            return Err(format!("PUT /settings answered {status} (RP-5 §6.3)"));
+        }
+        let to_a = mail(&b.address, &a.address, "Water at the school", 40);
+        po.hand_in(&gw, &b, &[&to_a])?;
+        let placed = poll(first["cursor"].as_str().unwrap_or(""))?;
+        if placed["placing"] != true {
+            return Err(format!(
+                "`placing` {} once a user names the gateway (RP-5 §5.8)",
+                placed["placing"]
+            ));
+        }
+        let items = placed["items"].as_array().cloned().unwrap_or_default();
+        let [copy] = &items[..] else {
+            return Err(format!(
+                "{} items where the one copy was due (RP-5 §5.8)",
+                items.len()
+            ));
+        };
+        let serial = copy["serial"].as_u64().unwrap_or(0);
+        let air = copy["air"]
+            .as_str()
+            .and_then(base64url::decode)
+            .ok_or("the copy carries no air form, though it fits max_air_bytes (RP-5 §5.8)")?;
+        let expires = copy["expires"].as_u64().unwrap_or(0);
+        if copy["kind"] != "copy"
+            || copy["address"] != json!(a.address)
+            || copy["id"] != json!(to_a.content_id().text())
+            || copy["from"] != json!(b.address)
+            || copy["third_party"] != false
+            || Message::from_air(&air).map(|m| m.content_id()).ok() != Some(to_a.content_id())
+        {
+            return Err(format!(
+                "the copy {copy} is not the message waiting, as RP-5 §5.8 lists it"
+            ));
+        }
+        if expires.abs_diff(now() + 7 * 86_400) > 600 {
+            return Err(format!(
+                "the copy expires at {expires}: the record's 7 days from now was due (RP-5 §4.4, §5.8)"
+            ));
+        }
+        // the same air form the session serves (RP-5 §5.3)
+        let opened = po.open(&gw, &a, &[])?;
+        let sid = opened["session"]
+            .as_str()
+            .ok_or("no session ID")?
+            .to_owned();
+        let (_, served) = po.call(
+            "GET",
+            &format!("/sessions/{sid}/messages/{serial}"),
+            Some(&gw.token),
+            None,
+        )?;
+        if served["air"].as_str().and_then(base64url::decode) != Some(air) {
+            return Err("the copy's air form is not the one sessions serve (RP-5 §5.3)".into());
+        }
+        let cursor = placed["cursor"].as_str().unwrap_or("").to_owned();
+        let (status, _) = po.call(
+            "POST",
+            "/copies/ack",
+            Some(&gw.token),
+            Some(&json!({"cursor": cursor})),
+        )?;
+        if status != 204 && status != 200 {
+            return Err(format!("POST /copies/ack answered {status} (RP-5 §5.8)"));
+        }
+        let quiet = poll(&cursor)?;
+        if quiet["items"].as_array().is_some_and(|i| !i.is_empty()) {
+            return Err("items sent again after an acknowledged cursor (RP-5 §5.8)".into());
+        }
+        // picked up through the session: dropped
+        let (status, _) = po.call(
+            "POST",
+            &format!("/sessions/{sid}/pickups"),
+            Some(&gw.token),
+            Some(&json!({"serials": [serial]})),
+        )?;
+        if status != 204 {
+            return Err(format!("the pickup answered {status} (RP-5 §5.5)"));
+        }
+        let dropped = poll(&cursor)?;
+        let drop = json!([{"kind": "drop", "address": a.address, "serial": serial}]);
+        if dropped["items"] != drop {
+            return Err(format!(
+                "after the pickup: {} where {drop} was due (RP-5 §5.5, §5.8)",
+                dropped["items"]
+            ));
+        }
+        let _ = po.call("DELETE", &format!("/sessions/{sid}"), Some(&gw.token), None);
         Ok(())
     }
 

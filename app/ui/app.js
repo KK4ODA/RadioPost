@@ -570,6 +570,17 @@ async function openFolder(name) {
       tag.title = `Deleted from the ${m.was} ${new Date(m.deleted * 1000).toLocaleString()}`;
       tr.children[1].prepend(tag);
     }
+    // where a message sent by radio is (RP-7 §3.6): queued at a cut-off gateway, or in doubt
+    if (m.queued) {
+      const doubtful = m.state === "may have been dropped";
+      const since = new Date(m.queued.at * 1000).toLocaleString();
+      const tag = el("span", {class: doubtful ? "tag bad" : "tag",
+        text: doubtful ? "may have been dropped" : `queued at ${m.queued.gateway}`,
+        title: doubtful
+          ? `Queued at ${m.queued.gateway} since ${since}, with no word that it reached your post office: it may have been dropped unsent. It is offered again on each call.`
+          : `Queued at ${m.queued.gateway} since ${since}: that gateway could not reach your post office. It is offered again until a gateway that can confirms it.`});
+      tr.children[1].prepend(tag);
+    }
     tr.append(rowActions(m, name));
     tr.title = `${m.short}${m.station ? ` · via ${m.station}` : ""}`;
     tr.addEventListener("click", () => openMessage(m.id, {folder: name, was: m.was}));
@@ -968,6 +979,50 @@ function showAccept(entries) {
 async function changeAccept(change) {
   try {
     showAccept((await api("accept", change)).entries);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// Usual gateways (RP-5 §6.3, §5.8), picked from the gateway list kept here, and whether mail read
+// in a mail program is skipped by radio: the settings at the post office, merged there.
+let usualChosen = new Set();
+async function loadUsual() {
+  try {
+    const [settings, list] = await Promise.all([api("settings"), api("gateways")]);
+    usualChosen = new Set(settings.usual_gateways || []);
+    $("skip-read").checked = settings.radio_skips_read === true;
+    const known = new Map(list.gateways.map((g) => [g.callsign, g]));
+    const names = [...new Set([...list.gateways.map((g) => g.callsign), ...usualChosen])];
+    $("usual").replaceChildren(...(names.length ? names : [null]).map((call) => {
+      if (call === null) {
+        return el("li", {class: "note",
+          text: "No gateway list yet: refresh it in Gateways while you have the Internet."});
+      }
+      const g = known.get(call);
+      const box = el("input", {type: "checkbox"});
+      box.checked = usualChosen.has(call);
+      box.addEventListener("change", () => {
+        if (box.checked) usualChosen.add(call); else usualChosen.delete(call);
+      });
+      const holds = g && g.copies && Object.keys(g.copies).length;
+      const note = !g ? "not in the list kept here"
+        : holds ? `holds copies, ${g.copies.days} days` : "holds no copies";
+      const where = g ? [g.place, g.post_office].filter(Boolean).join(", ") : "";
+      return el("li", {}, el("label", {class: "check", title: note},
+        box, el("span", {class: "mono", text: call}),
+        el("span", {class: "note", text: [where, note].filter(Boolean).join(" · ")})));
+    }));
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function saveUsual() {
+  try {
+    await api("settings", {usual_gateways: [...usualChosen],
+                           radio_skips_read: $("skip-read").checked});
+    toast("Saved at your post office.");
   } catch (e) {
     toast(e.message, true);
   }
@@ -1981,6 +2036,8 @@ function wire() {
     $("accept-new").value = "";
   });
   $("accept-load").addEventListener("click", () => changeAccept({}));
+  $("usual-load").addEventListener("click", loadUsual);
+  $("usual-save").addEventListener("click", saveUsual);
   $("t-save").addEventListener("click", async () => {
     await act("trust", {domain: $("t-domain").value, public: $("t-key").value});
     $("t-key").value = "";

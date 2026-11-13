@@ -13,13 +13,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use radiopost::ContentId;
 use radiopost::message::{Compression, Message};
 use radiopost::session::called::{Called, CalledConfig};
 use radiopost::session::client::{Chooser, Client, ClientConfig};
 use radiopost::session::{
     Caps, Event as SessionEvent, Outgoing, Progress, Proof, Proofs, WaitingEntry,
 };
+use radiopost::{ContentId, ErrorCode};
 use rpmi::base64;
 use rpmi::host::{Carrier, Direction, Engine, Event, Host};
 use rpmi::tcp::Connection;
@@ -210,8 +210,11 @@ pub struct Report {
     pub transmissions: Vec<Vec<u8>>,
     /// Messages received.
     pub received: Vec<ContentId>,
-    /// Messages the other station took.
+    /// Messages the other station took: sent, or queued at a cut-off gateway (`queued`).
     pub delivered: Vec<ContentId>,
+    /// Of those, the messages a cut-off gateway took into its queue (RP-7 §3.6): not sent yet,
+    /// and offered again.
+    pub queued: Vec<ContentId>,
     /// Why the call or the session failed, when it did.
     pub failed: Option<String>,
 }
@@ -513,6 +516,10 @@ struct SessionStats {
     /// The session's clock.
     now: u64,
     welcomed: bool,
+    /// The station called is a gateway (not a station, RP-3 §10).
+    gateway: bool,
+    /// What its `WELCOME` said of the post office (RP-3 §5.2 `online`).
+    online: Option<bool>,
     top_serial: Option<u64>,
     /// The waiting list the gateway gave, and the serials that came.
     listed: Vec<WaitingEntry>,
@@ -566,6 +573,7 @@ fn apply(
     say: &mut dyn FnMut(&str),
 ) -> Result<(), Error> {
     match e {
+        SessionEvent::Welcome { online } => welcomed(online, stats, say),
         SessionEvent::Listed(entries) => {
             stats.welcomed = true;
             stats.listed.clone_from(&entries);
@@ -598,15 +606,11 @@ fn apply(
                 ),
             );
         }
-        SessionEvent::Delivered(id) => {
-            store.delivered(&id);
-            if let Some(air) = stats.airs.get(&id) {
-                stats.sent.push((id, air.clone()));
-            }
-            store.save()?;
-            tell(say, &format!("delivered {}", &id.text()[..6]));
-            report.delivered.push(id);
-        }
+        SessionEvent::Delivered(id) => handed(id, store, report, stats, say)?,
+        SessionEvent::NotTaken {
+            id,
+            code: ErrorCode::AlreadyHave,
+        } if stats.gateway => already_had(id, store, report, stats, say)?,
         SessionEvent::NotTaken { id, code } => {
             tell(
                 say,
@@ -660,6 +664,124 @@ fn apply(
         SessionEvent::End => {}
     }
     Ok(())
+}
+
+/// The station called is ready: whether it is a gateway that reaches the post office now.
+fn welcomed(online: bool, stats: &mut SessionStats, say: &mut dyn FnMut(&str)) {
+    stats.online = Some(online);
+    if stats.gateway && !online {
+        tell(
+            say,
+            "the gateway cannot reach your post office now: what it takes waits in its queue, \
+             and is offered again until a gateway that can confirms it",
+        );
+    }
+}
+
+/// What a gateway now holds of this client, and what it listed (RP-3 §6.2, RP-7 §3.6).
+fn remember_gateway(store: &mut Store, remote: &str, cursor: u64, stats: &SessionStats) {
+    let top = stats.top_serial.map_or(cursor, |t| t.max(cursor));
+    store.set_gateway(remote, top, true);
+    if let Some(online) = stats.online {
+        store.set_gateway_online(remote, online);
+    }
+    store.listed(remote, stats.now, &stats.listed, &stats.came);
+}
+
+/// A message the other station took: sent, or queued when a cut-off gateway took it (RP-7
+/// §3.6).
+fn handed(
+    id: ContentId,
+    store: &mut Store,
+    report: &mut Report,
+    stats: &mut SessionStats,
+    say: &mut dyn FnMut(&str),
+) -> Result<(), Error> {
+    if let Some(air) = stats.airs.get(&id) {
+        stats.sent.push((id, air.clone()));
+    }
+    if stats.gateway && stats.online == Some(false) {
+        store.queued_at(&id, &report.remote, stats.now);
+        store.save()?;
+        tell(
+            say,
+            &format!(
+                "{} queued at {}: it stays in the outbox until a gateway that reaches the post \
+                 office confirms it",
+                &id.text()[..6],
+                report.remote
+            ),
+        );
+        report.queued.push(id);
+    } else {
+        store.delivered(&id);
+        store.save()?;
+        tell(say, &format!("delivered {}", &id.text()[..6]));
+    }
+    report.delivered.push(id);
+    Ok(())
+}
+
+/// A gateway declined a message `already-have` (RP-7 §3.6): an online one's post office holds
+/// it, so it is sent; a cut-off one holds it in its queue, or passed it on.
+fn already_had(
+    id: ContentId,
+    store: &mut Store,
+    report: &mut Report,
+    stats: &SessionStats,
+    say: &mut dyn FnMut(&str),
+) -> Result<(), Error> {
+    if stats.online == Some(true) {
+        store.delivered(&id);
+        store.save()?;
+        tell(
+            say,
+            &format!("{} is already at the post office: sent", &id.text()[..6]),
+        );
+        report.delivered.push(id);
+    } else {
+        if store.queued_for(&id).is_none() {
+            store.queued_at(&id, &report.remote, stats.now);
+            store.save()?;
+        }
+        tell(
+            say,
+            &format!(
+                "{} is already in {}'s queue: it stays in the outbox",
+                &id.text()[..6],
+                report.remote
+            ),
+        );
+    }
+    Ok(())
+}
+
+/// What a call to a gateway offers (RP-7 §3.6): the outbox, less what a gateway cut off when
+/// last called queued less than 30 days ago; what may have been dropped unsent is said, and
+/// offered all the same. A station is offered the whole outbox.
+fn offered(
+    store: &Store,
+    remote: &str,
+    kind: Kind,
+    now: u64,
+    say: &mut dyn FnMut(&str),
+) -> Vec<crate::store::Waiting> {
+    if kind == Kind::Station {
+        return store.outbox.clone();
+    }
+    for q in store.doubtful(now) {
+        tell(
+            say,
+            &format!(
+                "{} has waited in {}'s queue for {} days with no word that it reached the post \
+                 office: it may have been dropped unsent; offered again",
+                &q.id.text()[..6],
+                q.gateway,
+                now.saturating_sub(q.at) / 86_400
+            ),
+        );
+    }
+    store.outbox_for(remote, now)
 }
 
 /// A message received: its sender in the window, its ID alone in the log file.
@@ -780,9 +902,11 @@ pub fn call(
     let mut outbox = Vec::new();
     let mut stats = SessionStats {
         now,
+        gateway: kind == Kind::Gateway,
         ..SessionStats::default()
     };
-    for w in &store.outbox {
+    let offered = offered(store, remote, kind, now, say);
+    for w in &offered {
         let o = outgoing(store.message(&w.id)?, opts.packing);
         stats.airs.insert(w.id, o.air.clone());
         outbox.push(o);
@@ -835,9 +959,7 @@ pub fn call(
     store.save()?;
     result?;
     if kind == Kind::Gateway && stats.welcomed {
-        let top = stats.top_serial.map_or(cursor, |t| t.max(cursor));
-        store.set_gateway(remote, top, true);
-        store.listed(remote, stats.now, &stats.listed, &stats.came);
+        remember_gateway(store, remote, cursor, &stats);
     }
     store.save()?;
     tell(say, &format!("the session with {remote} is over"));

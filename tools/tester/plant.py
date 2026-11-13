@@ -57,8 +57,13 @@ FAULTS = {
     ),
     "C-08": (
         CALLED,
-        "if message.recipients().contains(&self.me.address.as_str()) {",
-        "if true {",
+        "let ours = message.recipients().contains(&self.me.address.as_str());",
+        "let ours = true;",
+    ),
+    "C-09": (
+        "app/client/src/session.rs",
+        "if stats.gateway && stats.online == Some(false) {",
+        "if false {",
     ),
     "C-12": ("app/client/src/session.rs", '"role": role,', '"role": "caller",'),
     "C-11": (
@@ -81,11 +86,17 @@ FAULTS = {
         "self.notes.push(Note::PostOffice(code));",
         "self.notes.push(Note::PostOffice(code)); let code = ErrorCode::Internal;",
     ),
+    "G-03": (
+        "core/gateway/src/offline.rs",
+        "Err(code) if unreachable(code) => {",
+        "Err(code) if false && unreachable(code) => {",
+    ),
     "G-04": (
         STATION,
         ".filter(|(_, _, _, _, when)| at.saturating_sub(*when) < UPLOAD_KEPT_S)",
         ".filter(|_| false)",
     ),
+    "G-05": (GATEWAY, "if third && !may_list_third_party {", "if false {"),
     "G-07": (
         GATEWAY,
         "let max = usize::try_from(self.cfg.caps.max_pdu).unwrap_or(usize::MAX);",
@@ -93,9 +104,9 @@ FAULTS = {
     ),
     "G-08": (GATEWAY, "if self.caller_caps.renew {", "if false {"),
     "G-09": (
-        STATION,
-        "                if blocked.iter().any(|b| b == domain)",
-        "                if false",
+        "core/gateway/src/upkeep.rs",
+        "    if settings.blocked.iter().any(|b| b == domain)",
+        "    if false",
     ),
     "P-01": (
         "core/postoffice/src/documents.rs",
@@ -109,11 +120,17 @@ FAULTS = {
     ),
     "P-03": (OFFICE, 'self.state.codes.remove(text(body, "code"));', ""),
     "P-04": (OFFICE, "if started.abs_diff(self.now) > TIME_WINDOW_S {", "if false {"),
+    "P-05": (OFFICE, "self.picked_up(&stmt.address, &pickups);", ""),
+    "P-06": (
+        OFFICE,
+        'items.push(json!({"kind": "drop", "address": address, "serial": serial}));',
+        "",
+    ),
     "P-07": (OFFICE, "if !self.state.had.insert(message.content_id().text()) {", "if false {"),
     "P-08": (
         "core/postoffice/src/mail.rs",
-        "if sender.is_empty() || on_list(sender, accept) || known {",
-        "if true {",
+        "    } else if on_list(sender, accept) {",
+        "    } else if true {",
     ),
     "P-09": ("core/postoffice/src/mail.rs", "iso(path.started),", "iso(path.started + 1),"),
     "P-10": (

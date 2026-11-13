@@ -441,6 +441,18 @@
           </div>
         </div>
         <div class="card">
+          <h2 title="RP-5 §6.3: kept at your post office">Usual gateways</h2>
+          <p class="note">Your post office copies the mail waiting for you to the gateways you name here, when they hold copies, so you can pick it up there while the Internet or your post office is down.</p>
+          <ul class="entries usual" id="usual"></ul>
+          <label class="check" title="Mail you have already read in a mail program is not offered again by radio, and its copies at gateways are dropped (radio_skips_read)">
+            <input type="checkbox" id="skip-read"> Skip mail I have read in a mail program
+          </label>
+          <div class="row">
+            <button id="usual-save" title="Save at your post office, over the Internet">Save</button>
+            <button class="quiet" id="usual-load" title="Read your settings from your post office, and the gateways from the list kept here">Read</button>
+          </div>
+        </div>
+        <div class="card">
           <h2>This device's key</h2>
           <p class="mono" id="device" title="Give this public key to your post office when you enroll"></p>
           <button id="make-key" title="Make this device's key; it never leaves this computer">Make a key</button>

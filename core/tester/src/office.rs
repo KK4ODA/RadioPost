@@ -9,10 +9,13 @@
 //! under test is judged by what it sends and how it answers, which the tests read here.
 
 use std::collections::BTreeMap;
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ed25519_dalek::SigningKey;
 use radiopost::credential::flags;
+use radiopost_postoffice::documents::Info;
 use radiopost_postoffice::{Config, PostOffice, Request, State};
 use serde_json::{Value as Json, json};
 use tiny_http::{Header, Response, Server};
@@ -55,16 +58,79 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// The test post office and the test DNS zone, on one port of this machine.
+/// The test post office and the test DNS zone, on one port of this machine, reached through a
+/// link the tests can cut, as the Internet goes down (RP-3 §9, RP-7 §1).
 pub struct TestOffice {
     office: Shared<PostOffice>,
     log: Shared<Vec<Exchange>>,
     zone: Shared<BTreeMap<String, Vec<String>>>,
     asked: Shared<Vec<String>>,
+    link: Link,
     /// The API's base URL (RP-5 §1).
     pub base: String,
     /// The DNS-over-HTTPS resolver serving the test zone.
     pub resolver: String,
+}
+
+/// A TCP link to the post office's port that can be cut: while cut, connections are refused and
+/// those open broken, so the post office and the test zone cannot be reached at all.
+struct Link {
+    cut: Arc<AtomicBool>,
+    open: Shared<Vec<TcpStream>>,
+}
+
+impl Link {
+    fn start(target: SocketAddr) -> Result<(Link, SocketAddr), String> {
+        let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
+        let at = listener.local_addr().map_err(|e| e.to_string())?;
+        let cut = Arc::new(AtomicBool::new(false));
+        let open: Shared<Vec<TcpStream>> = Arc::default();
+        let (c, o) = (cut.clone(), open.clone());
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                if c.load(Ordering::Relaxed) {
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue;
+                }
+                let Ok(far) = TcpStream::connect(target) else {
+                    continue;
+                };
+                let (Ok(near2), Ok(far2)) = (stream.try_clone(), far.try_clone()) else {
+                    continue;
+                };
+                {
+                    let mut keep = lock(&o);
+                    keep.extend(stream.try_clone().ok());
+                    keep.extend(far.try_clone().ok());
+                }
+                for (mut from, mut to) in [(near2, far2), (far, stream)] {
+                    std::thread::spawn(move || {
+                        let _ = std::io::copy(&mut from, &mut to);
+                        let _ = to.shutdown(Shutdown::Write);
+                    });
+                }
+            }
+        });
+        Ok((Link { cut, open }, at))
+    }
+}
+
+/// What the test post office's info document says (RP-5 §4.1).
+fn info() -> Info {
+    Info {
+        operator: "KK4ODA".into(),
+        contact: format!("postmaster@{DOMAIN}"),
+        country: "US".into(),
+        max_air_bytes: 65_536,
+        max_email_bytes: 10_485_760,
+        gateways: "any".into(),
+        mail: json!({}),
+        updated: 0,
+        not_before: 0,
+        not_after: u64::MAX,
+        post_offices: Vec::new(),
+        applications: None,
+    }
 }
 
 /// The answer to `/dns-query?name=…&type=TXT`, as DNS-over-HTTPS JSON resolvers give it.
@@ -105,7 +171,8 @@ impl TestOffice {
             .to_ip()
             .map(|a| a.port())
             .ok_or("no port")?;
-        let base = format!("http://127.0.0.1:{port}/rp/v1");
+        let (link, at) = Link::start(std::net::SocketAddr::from(([127, 0, 0, 1], port)))?;
+        let base = format!("http://{at}/rp/v1");
         let key = offices
             .key_of(DOMAIN)
             .ok_or("no test key for radiopost.org")?
@@ -149,8 +216,9 @@ impl TestOffice {
             log: Arc::default(),
             zone: Arc::new(Mutex::new(zone)),
             asked: Arc::default(),
+            link,
             base,
-            resolver: format!("http://127.0.0.1:{port}/dns-query"),
+            resolver: format!("http://{at}/dns-query"),
         };
         let (office, log, zone, asked) = (
             me.office.clone(),
@@ -182,6 +250,22 @@ impl TestOffice {
                     .and_then(|h| h.value.as_str().strip_prefix("Bearer ").map(str::to_owned));
                 let method = request.method().as_str().to_owned();
                 let path = url.strip_prefix("/rp/v1").unwrap_or(&url).to_owned();
+                // its public documents, signed with the test key (RP-5 §4)
+                if method == "GET"
+                    && let Some(jws) = lock(&office).signed_document(&info(), &path, now())
+                {
+                    lock(&log).push(Exchange {
+                        method,
+                        path,
+                        body: None,
+                        status: 200,
+                        answer: None,
+                    });
+                    let _ = request.respond(Response::from_string(jws).with_header(
+                        Header::from_bytes("Content-Type", "application/jose").expect("a header"),
+                    ));
+                    continue;
+                }
                 let answer = lock(&office).handle(
                     now(),
                     &Request {
@@ -209,6 +293,19 @@ impl TestOffice {
             }
         });
         Ok(me)
+    }
+
+    /// The Internet goes down: the post office and the test zone cannot be reached.
+    pub fn cut(&self) {
+        self.link.cut.store(true, Ordering::Relaxed);
+        for s in lock(&self.link.open).drain(..) {
+            let _ = s.shutdown(Shutdown::Both);
+        }
+    }
+
+    /// The Internet is back.
+    pub fn restore(&self) {
+        self.link.cut.store(false, Ordering::Relaxed);
     }
 
     /// The post office itself, to put mail in a mailbox or look at what it holds.

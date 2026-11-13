@@ -221,6 +221,7 @@ impl Panel {
                 Ok(json!({"lines": lines, "next": next}))
             }
             (Method::Get, "/api/sessions") => Ok(json!(monitor.sessions())),
+            (Method::Get, "/api/held") => Ok(held(dir)),
             (Method::Post, "/api/setup") => {
                 self.stopped()?;
                 self.setup(body)?;
@@ -297,6 +298,7 @@ impl Panel {
         };
         let checks_rules = body["operator_checks_rules"].as_bool().unwrap_or(false);
         let at_start = body["answer_at_start"].as_bool().unwrap_or(true);
+        let copies = copies_of(&body["copies"])?;
         match Settings::load(dir) {
             Ok(mut s) => {
                 s.callsign = callsign;
@@ -304,6 +306,7 @@ impl Panel {
                 s.country = country;
                 s.operator_checks_rules = checks_rules;
                 s.answer_at_start = at_start;
+                s.copies = copies;
                 s.save(dir)
             }
             Err(_) => station::make(
@@ -318,6 +321,7 @@ impl Panel {
                     only: None,
                     operator_checks_rules: checks_rules,
                     answer_at_start: at_start,
+                    copies,
                 },
             ),
         }
@@ -397,9 +401,109 @@ impl Panel {
             "running": self.runner.running(),
             "status": self.runner.monitor().status(),
             "client": {"home": home.display().to_string(), "enrolled": enrolled},
+            "held": held_summary(dir),
             "aether": AETHER,
             "update": self.updates.status(),
         })
+    }
+}
+
+/// When `store.json` was last read for the page's header, and what it said.
+type Summary = Option<(
+    std::path::PathBuf,
+    Option<std::time::SystemTime>,
+    u64,
+    Value,
+)>;
+
+/// What the gateway holds, in numbers, for the page's header (W27, W28): read again only when
+/// `store.json` changed, since the page asks every second and the copies' text makes it large.
+fn held_summary(dir: &std::path::Path) -> Value {
+    static LAST: std::sync::Mutex<Summary> = std::sync::Mutex::new(None);
+    let meta = std::fs::metadata(dir.join("store.json")).ok();
+    let stamp = (
+        meta.as_ref().and_then(|m| m.modified().ok()),
+        meta.as_ref().map_or(0, std::fs::Metadata::len),
+    );
+    let mut last = LAST
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((d, when, len, v)) = last.as_ref()
+        && d == dir
+        && (*when, *len) == stamp
+    {
+        return v.clone();
+    }
+    let s = crate::store::Store::load(dir);
+    let v = json!({
+        "copies": s.copies.iter().filter(|c| !c.picked).count(),
+        "users": s.users().len(),
+        "queued": s.records.iter().map(|r| r.messages.len()).sum::<usize>(),
+        "records": s.records.len(),
+        "forwards": s.forwards.len(),
+    });
+    *last = Some((dir.to_owned(), stamp.0, stamp.1, v.clone()));
+    v
+}
+
+/// What the gateway holds, for the page's Held tab: the copies placed ahead by user (never their
+/// text), the queue waiting to be reported, the last reports, the post offices it polls and the
+/// keys it keeps.
+fn held(dir: &std::path::Path) -> Value {
+    let s = crate::store::Store::load(dir);
+    let copies: Vec<Value> = s
+        .copies
+        .iter()
+        .map(|c| {
+            json!({"address": c.address, "serial": c.serial, "from": c.from,
+                   "subject": c.subject, "size": c.size, "held": c.air.is_none(),
+                   "expires": c.expires, "by": c.by, "picked": c.picked})
+        })
+        .collect();
+    let queue: Vec<Value> = s
+        .records
+        .iter()
+        .map(|r| {
+            json!({"operator": r.operator, "address": r.address, "started": r.started,
+                   "messages": r.messages.len(), "pickups": r.pickups.len(), "domain": r.domain,
+                   "done": r.done, "tries": r.tries, "error": r.error})
+        })
+        .collect();
+    let keys: Value = s
+        .keys
+        .iter()
+        .map(|(d, k)| {
+            (
+                d.clone(),
+                json!({"how": k.how, "fetched": k.fetched, "error": k.error,
+                       "keys": k.found.keys.len(), "revoked": k.found.serials.len()}),
+            )
+        })
+        .collect::<serde_json::Map<_, _>>()
+        .into();
+    json!({"copies": copies, "queue": queue, "reported": s.reported, "polls": s.polls,
+           "keys": keys, "forwards": s.forwards.len()})
+}
+
+/// RP-5 §4.4 `copies`: whether the gateway holds copies placed ahead, and its limits.
+fn copies_of(v: &Value) -> Result<Option<station::CopiesSettings>, String> {
+    if v.is_null() || v == &Value::Bool(false) || v["on"] == Value::Bool(false) {
+        return Ok(None);
+    }
+    let n = |k: &str| v[k].as_u64().filter(|n| *n > 0);
+    match (n("users"), n("days"), n("max_air_bytes")) {
+        (Some(users), Some(days), Some(max_air_bytes)) if days <= 60 => {
+            Ok(Some(station::CopiesSettings {
+                users,
+                days,
+                max_air_bytes,
+            }))
+        }
+        _ => Err(
+            "copies placed ahead: how many users, how many days (at most 60) and the largest \
+             message in bytes"
+                .into(),
+        ),
     }
 }
 

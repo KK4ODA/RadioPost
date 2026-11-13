@@ -53,6 +53,7 @@ fn gateway(
         only: None,
         operator_checks_rules: true,
         answer_at_start: true,
+        copies: None,
     }
     .save(&gw)
     .expect("saved");

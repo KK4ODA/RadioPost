@@ -38,7 +38,7 @@ fn the_postoffice_passes_the_conformance_tests() {
     assert_eq!(
         ran,
         [
-            "P-01", "P-02", "P-03", "P-04", "P-07", "P-08", "P-09", "P-10"
+            "P-01", "P-02", "P-03", "P-04", "P-05", "P-06", "P-07", "P-08", "P-09", "P-10"
         ]
     );
 }

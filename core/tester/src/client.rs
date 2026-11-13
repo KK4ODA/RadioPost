@@ -800,6 +800,113 @@ impl Run<'_> {
         Ok(())
     }
 
+    /// C-09: a message a cut-off gateway takes is queued, not sent: it stays in the outbox, is not
+    /// offered to that gateway again while it was cut off at the last call, is offered to
+    /// another, and is sent once an online gateway declines it `already-have` (RP-7 §3.6).
+    ///
+    /// # Errors
+    ///
+    /// The first deviation found.
+    pub fn c09(&mut self, peer_out: &mut Vec<String>) -> Outcome {
+        let trust = self.offices.trust();
+        let (adapter, prog) = self.setup("C-09", 4096)?;
+        prog.compose("maria@example.com", "Queued", "Taken by a cut-off gateway.")?;
+        let mut queued = None;
+        // visit 1: N1CALL-10, cut off, takes it; visit 2: N1CALL-10 again, still cut off; visit
+        // 3: N2CALL-5, online, whose post office already holds it
+        for (visit, gateway) in [(1, GATEWAY), (2, GATEWAY), (3, OTHER_GATEWAY)] {
+            let mut peer = adapter.peer(&[GATEWAY, OTHER_GATEWAY], true)?;
+            let running = prog.call(gateway, false)?;
+            let r = (|| -> Outcome {
+                peer.wait_link(Duration::from_secs(20))?;
+                let hello = check_hello(&peer.expect("HELLO")?, &prog, gateway, &trust)?;
+                let offered: Vec<ContentId> = hello.offers.iter().map(|(id, _)| *id).collect();
+                match visit {
+                    1 => {
+                        let [a] = offered[..] else {
+                            return Err(format!("{} offers for one message", offered.len()));
+                        };
+                        queued = Some(a);
+                        peer.send(&[
+                            with_online(&gateway_ready(vec![(a, 0)], &[], 4096), false),
+                            done(),
+                        ]);
+                        let turn = program_turn(&mut peer, 4096, &HashMap::new())?;
+                        let whole = check_sent(&turn, &hello.offers)?;
+                        peer.send(&[receipt(&whole, &[]), done()]);
+                        peer.expect_hang_up(Duration::from_secs(30))?;
+                        if !contains(&prog.folder("outbox")?, a) {
+                            return Err("a message a cut-off gateway took (`online` false) left \
+                                        the outbox: it is queued there, not sent (RP-3 §5.5, \
+                                        RP-7 §3.6)"
+                                .into());
+                        }
+                        Ok(())
+                    }
+                    2 => {
+                        if queued.is_some_and(|a| offered.contains(&a)) {
+                            return Err("the message was offered again to the gateway that \
+                                        queued it, cut off at the last call, within 30 days \
+                                        (RP-7 §3.6)"
+                                .into());
+                        }
+                        let mut w = with_online(&gateway_ready(vec![], &[], 4096), false);
+                        if !offered.is_empty() {
+                            w = with_online(
+                                &gateway_ready(
+                                    offered.iter().map(|id| (*id, 0)).collect(),
+                                    &[],
+                                    4096,
+                                ),
+                                false,
+                            );
+                        }
+                        peer.send(&[w, done()]);
+                        let turn = program_turn(&mut peer, 4096, &HashMap::new())?;
+                        let whole = check_sent(&turn, &hello.offers)?;
+                        peer.send(&[receipt(&whole, &[]), done()]);
+                        peer.expect_hang_up(Duration::from_secs(30))
+                    }
+                    _ => {
+                        let a = queued.ok_or("nothing was queued")?;
+                        if !offered.contains(&a) {
+                            return Err("the queued message was not offered again to another \
+                                        gateway (RP-7 §3.6)"
+                                .into());
+                        }
+                        let w = welcome(&Ready {
+                            accept: vec![],
+                            decline: vec![(a, code("already-have"))],
+                            waiting: &[],
+                            max_pdu: 4096,
+                            cached: true,
+                            proof: None,
+                            time: now(),
+                        });
+                        peer.send(&[w, done()]);
+                        let turn = program_turn(&mut peer, 4096, &HashMap::new())?;
+                        if turn.sent.contains_key(&a) {
+                            return Err("a MSG for an offer declined (RP-3 §5.2)".into());
+                        }
+                        peer.send(&[receipt(&[], &[]), done()]);
+                        peer.expect_hang_up(Duration::from_secs(30))?;
+                        if contains(&prog.folder("outbox")?, a) {
+                            return Err("an online gateway declined it `already-have`, so the \
+                                        post office holds it, yet it stays in the outbox \
+                                        (RP-7 §3.6)"
+                                .into());
+                        }
+                        Ok(())
+                    }
+                }
+            })();
+            let (_, said) = running.finish(Duration::from_secs(15));
+            peer_out.extend(std::mem::take(&mut peer.transcript));
+            r.map_err(|e| format!("visit {visit}: {e}\nthe program said: {}", said.trim()))?;
+        }
+        Ok(())
+    }
+
     /// C-05: offers declined and messages failed are not sent, and stay in the outbox (RP-3 §5.2,
     /// §5.4, §5.9).
     ///
@@ -1554,6 +1661,24 @@ impl Resume {
         }
         Ok(())
     }
+}
+
+/// A `WELCOME` with key 11 `online` set as given (RP-3 §5.2).
+fn with_online(welcome: &Value, online: bool) -> Value {
+    let entries = welcome
+        .as_map()
+        .map(<[_]>::to_vec)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(k, v)| {
+            if k == Value::Uint(11) {
+                (k, Value::Bool(online))
+            } else {
+                (k, v)
+            }
+        })
+        .collect();
+    Value::Map(entries)
 }
 
 /// A gateway's `WELCOME` `ready`, online, holding the caller's credential.

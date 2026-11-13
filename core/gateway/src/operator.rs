@@ -83,6 +83,15 @@ pub fn register(dir: &Path, home: &Path, mut record: Json) -> Result<String, Str
     let base = base.trim_end_matches('/').to_owned();
     record["callsign"] = settings.callsign.clone().into();
     record["operator"] = credential.body.operator.clone().into();
+    // RP-5 §4.4: the record says whether it holds copies placed ahead, and its limits
+    match &settings.copies {
+        Some(c) => record["copies"] = c.record(),
+        None => {
+            if let Some(o) = record.as_object_mut() {
+                o.remove("copies");
+            }
+        }
+    }
     let mut signed = settings.callsign.clone().into_bytes();
     signed.extend_from_slice(base.as_bytes());
     let signature = crypto::sign(context::API_GATEWAY, &signed, &gateway);

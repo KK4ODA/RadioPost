@@ -216,6 +216,49 @@ pub struct Store {
     /// An application for an account waiting for the post office's operators (RP-5 §6.7):
     /// `{"id", "base", "address", "operator", "name", "contact", "status", "text"?}`.
     pub application: Option<Value>,
+    /// Messages a cut-off gateway took, queued there and not yet confirmed by an online one
+    /// (RP-7 §3.6): they stay in the outbox, and are offered again.
+    pub queued: Vec<Queued>,
+}
+
+/// A message queued at a cut-off gateway (RP-7 §3.6).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Queued {
+    /// The message.
+    pub id: ContentId,
+    /// The gateway that took it.
+    pub gateway: String,
+    /// When.
+    pub at: u64,
+}
+
+/// RP-7 §3.6: after this long queued and unconfirmed, a message may have been dropped unsent.
+pub const QUEUED_DOUBTFUL_S: u64 = 30 * 86_400;
+
+/// Where a message the user wrote is (RP-7 §3.6, wishlist W6): `written` (not yet taken by a
+/// gateway), `queued` at a cut-off gateway, `may have been dropped` after 30 days queued and
+/// unconfirmed, or `sent` once a post office holds it.
+#[must_use]
+pub fn view(queued_at: Option<u64>, confirmed: bool, now: u64) -> &'static str {
+    match (confirmed, queued_at) {
+        (true, _) => "sent",
+        (false, None) => "written",
+        (false, Some(at)) if now.saturating_sub(at) >= QUEUED_DOUBTFUL_S => "may have been dropped",
+        (false, Some(_)) => "queued",
+    }
+}
+
+/// RP-7 §3.6: whether a message queued at `queued_at` is offered again to `calling`: always,
+/// unless that gateway said `online` false the last time this client called it and the message
+/// was queued less than 30 days ago (`cut_off`: whether it did, for the gateways called before).
+#[must_use]
+pub fn offer_again(
+    queued_at: u64,
+    calling: &str,
+    cut_off: &dyn Fn(&str) -> Option<bool>,
+    now: u64,
+) -> bool {
+    cut_off(calling) != Some(true) || now.saturating_sub(queued_at) >= QUEUED_DOUBTFUL_S
 }
 
 /// A trash entry as the state file writes it: `id`, `was` (the folder), `deleted`, and the
@@ -253,6 +296,22 @@ fn trashed_from(v: &Value) -> Option<Trashed> {
         was,
         at: v["deleted"].as_u64()?,
     })
+}
+
+fn queued_from(v: &Value) -> Vec<Queued> {
+    v.as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|q| {
+                    Some(Queued {
+                        id: ContentId::from_text(q["id"].as_str()?)?,
+                        gateway: q["gateway"].as_str()?.to_owned(),
+                        at: q["at"].as_u64()?,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn id_list(v: &Value) -> Vec<ContentId> {
@@ -296,6 +355,7 @@ impl Store {
             waiting: None,
             fetch_next: Vec::new(),
             application: None,
+            queued: Vec::new(),
         };
         let path = home.join("state.json");
         if !path.exists() {
@@ -369,6 +429,7 @@ impl Store {
             .as_array()
             .map(|a| a.iter().filter_map(Value::as_u64).collect())
             .unwrap_or_default();
+        store.queued = queued_from(&state["queued"]);
         Ok(store)
     }
 
@@ -408,6 +469,9 @@ impl Store {
             "waiting": self.waiting,
             "fetch_next": self.fetch_next,
             "application": self.application,
+            "queued": self.queued.iter().map(|q| json!({
+                "id": q.id.text(), "gateway": q.gateway, "at": q.at,
+            })).collect::<Vec<_>>(),
         });
         let text = serde_json::to_string_pretty(&state).map_err(|e| e.to_string())?;
         write(&self.home.join("state.json"), text.as_bytes())
@@ -614,9 +678,60 @@ impl Store {
     /// so it is not sent over the air again. Either way it is sent.
     pub fn delivered(&mut self, id: &ContentId) {
         self.outbox.retain(|w| w.id != *id);
+        self.queued.retain(|q| q.id != *id);
         if !self.sent.contains(id) {
             self.sent.push(*id);
         }
+    }
+
+    /// A message a cut-off gateway took (RP-7 §3.6): queued there at `at`, not sent. It stays in
+    /// the outbox, and is offered again until an online gateway confirms it.
+    pub fn queued_at(&mut self, id: &ContentId, gateway: &str, at: u64) {
+        if !self.outbox.iter().any(|w| w.id == *id) {
+            return;
+        }
+        self.queued.retain(|q| q.id != *id);
+        self.queued.push(Queued {
+            id: *id,
+            gateway: gateway.to_owned(),
+            at,
+        });
+    }
+
+    /// Where it is queued, when it is.
+    #[must_use]
+    pub fn queued_for(&self, id: &ContentId) -> Option<&Queued> {
+        self.queued.iter().find(|q| q.id == *id)
+    }
+
+    /// Where a message of the outbox or the sent folder is (RP-7 §3.6): see [`view`].
+    #[must_use]
+    pub fn state_of(&self, id: &ContentId, now: u64) -> &'static str {
+        view(
+            self.queued_for(id).map(|q| q.at),
+            self.sent.contains(id),
+            now,
+        )
+    }
+
+    /// The outbox as offered to `gateway` at `now` (RP-7 §3.6): every message, but one queued
+    /// less than 30 days ago when that gateway said `online` false the last time it was called.
+    #[must_use]
+    pub fn outbox_for(&self, gateway: &str, now: u64) -> Vec<Waiting> {
+        let cut_off = |g: &str| {
+            self.gateways
+                .get(g)
+                .and_then(|v| v["online"].as_bool())
+                .map(|online| !online)
+        };
+        self.outbox
+            .iter()
+            .filter(|w| {
+                self.queued_for(&w.id)
+                    .is_none_or(|q| offer_again(q.at, gateway, &cut_off, now))
+            })
+            .cloned()
+            .collect()
     }
 
     /// A message received: kept, and put in the inbox.
@@ -1094,10 +1209,33 @@ impl Store {
 
     /// Remembers what a gateway now holds.
     pub fn set_gateway(&mut self, callsign: &str, cursor: u64, credential_cached: bool) {
-        self.gateways.insert(
-            callsign.to_owned(),
-            json!({"cursor": cursor, "credential_cached": credential_cached}),
-        );
+        let online = self.gateways.get(callsign).map(|g| g["online"].clone());
+        let mut g = json!({"cursor": cursor, "credential_cached": credential_cached});
+        if let Some(o) = online.filter(Value::is_boolean) {
+            g["online"] = o;
+        }
+        self.gateways.insert(callsign.to_owned(), g);
+    }
+
+    /// Remembers whether a gateway reached the post office when last called (`WELCOME`
+    /// `online`, RP-7 §3.6).
+    pub fn set_gateway_online(&mut self, callsign: &str, online: bool) {
+        let g = self
+            .gateways
+            .entry(callsign.to_owned())
+            .or_insert_with(|| json!({"cursor": 0, "credential_cached": false}));
+        g["online"] = online.into();
+    }
+
+    /// The messages queued 30 days or more, unconfirmed: they may have been dropped unsent
+    /// (RP-7 §3.6).
+    #[must_use]
+    pub fn doubtful(&self, now: u64) -> Vec<Queued> {
+        self.queued
+            .iter()
+            .filter(|q| now.saturating_sub(q.at) >= QUEUED_DOUBTFUL_S)
+            .cloned()
+            .collect()
     }
 }
 

@@ -157,6 +157,15 @@ function render(s) {
     $("s-out").textContent = now.picked_up;
   }
 
+  const h = s.held || {};
+  $("held-copies").textContent = !settings || !settings.copies
+    ? "Copies placed ahead: not held (Setup)."
+    : `${h.copies || 0} cop${h.copies === 1 ? "y" : "ies"} held for ${h.users || 0} user${h.users === 1 ? "" : "s"}.`;
+  $("held-queue").textContent = h.records
+    ? `${h.records} session${h.records === 1 ? "" : "s"} carried while cut off, with ${h.queued} message${h.queued === 1 ? "" : "s"}, waiting to be reported.`
+    : "Nothing waiting to be reported.";
+  $("held-queue").className = h.records ? "bad" : "";
+
   $("setup-open").hidden = !settings;
   if (!formsFilled) fillForms(s);
   renderPostOffices(s);
@@ -181,6 +190,13 @@ function fillForms(s) {
   g.country.value = settings ? settings.country : "US";
   g.operator_checks_rules.checked = settings ? settings.operator_checks_rules : false;
   g.answer_at_start.checked = settings ? settings.answer_at_start : true;
+  const copies = settings && settings.copies;
+  g.copies_on.checked = !!copies;
+  if (copies) {
+    g.copies_users.value = copies.users;
+    g.copies_days.value = copies.days;
+    g.copies_kb.value = Math.round(copies.max_air_bytes / 1024);
+  }
   $("register-form").elements.home.value = s.client.home;
   if (!$("channel-rows").children.length) addChannel(7.101, 2300);
 }
@@ -235,6 +251,42 @@ function addChannel(mhz = "", bandwidth = 2300) {
   $("channel-rows").append(tr);
 }
 
+// what the gateway holds: copies by user and the queue, never a message's text
+async function refreshHeld() {
+  if ($("held-view").hidden) return;
+  const h = await api("held");
+  $("copy-rows").replaceChildren(...h.copies.filter((c) => !c.picked).map((c) => {
+    const tr = document.createElement("tr");
+    [c.address, c.serial, c.from, c.subject, c.size, c.expires ? day(c.expires) : ""]
+      .forEach((text, i) => {
+        const td = document.createElement("td");
+        td.textContent = text;
+        if (i === 1 || i === 4) td.className = "n";
+        if (i === 4 && c.held) td.title = "Too large to hold its text: listed only";
+        tr.append(td);
+      });
+    return tr;
+  }));
+  $("queue-rows").replaceChildren(...h.queue.map((r) => {
+    const tr = document.createElement("tr");
+    [when(r.started), r.operator, r.address, r.messages, r.pickups,
+     r.error ? `${r.error} (${r.tries})` : r.done ? "not tried yet" : "under way"]
+      .forEach((text, i) => {
+        const td = document.createElement("td");
+        td.textContent = text;
+        if (i === 3 || i === 4) td.className = "n";
+        tr.append(td);
+      });
+    return tr;
+  }));
+  $("reported").replaceChildren(...h.reported.slice().reverse().slice(0, 10).map((r) => {
+    const li = document.createElement("li");
+    li.textContent = `${when(r.at)}: ${r.address}, ${r.code ? `refused (${r.code})`
+      : `${r.taken} taken${r.refused ? `, ${r.refused} refused` : ""}, ${r.pickups} picked up`}`;
+    return li;
+  }));
+}
+
 async function refreshSessions() {
   const sessions = await api("sessions");
   shownSessions = sessions.length;
@@ -282,6 +334,7 @@ async function tick() {
       lastLogged = s.status.logged;
       await refreshLog();
       await refreshSessions();
+      await refreshHeld();
     } else if (shownSessions < 0) {
       await refreshSessions();
     }
@@ -314,6 +367,11 @@ $("check").addEventListener("click", async () => {
   await act("check", {}, render);
   $("check").disabled = false;
 });
+$("held-open").addEventListener("click", () => {
+  $("held-view").hidden = !$("held-view").hidden;
+  $("held-open").textContent = $("held-view").hidden ? "Show" : "Hide";
+  refreshHeld();
+});
 $("setup-open").addEventListener("click", () => show("setup"));
 $("setup-go").addEventListener("click", () => show("setup"));
 $("back").addEventListener("click", () => show("station"));
@@ -326,7 +384,11 @@ $("gateway-form").addEventListener("submit", (e) => {
     callsign: f.callsign.value, modem: f.modem.value, country: f.country.value,
     operator_checks_rules: f.operator_checks_rules.checked,
     answer_at_start: f.answer_at_start.checked,
-  }, (s) => { render(s); toast("Saved."); });
+    copies: f.copies_on.checked
+      ? {users: Number(f.copies_users.value), days: Number(f.copies_days.value),
+         max_air_bytes: Math.round(Number(f.copies_kb.value) * 1024)}
+      : null,
+  }, (s) => { render(s); toast(s.credential ? "Saved. Register again so the post office knows." : "Saved."); });
 });
 
 $("register-form").addEventListener("submit", (e) => {

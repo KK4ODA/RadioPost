@@ -3,15 +3,16 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.4.2 |
+| **Version** | 0.5.0 |
 | **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §7 |
 
 An outline of the program that tells an implementer whether their program does what the
-specifications require. It was Phase 0's last part; Phase 1 built its first half and Phase 2 its
-gateway and post office tests (§6), as `core/tester` (`radiopost-tester`).
+specifications require. It was Phase 0's last part; Phase 1 built its first half, Phase 2 its
+gateway and post office tests, and Phase 3 the offline ones (§6), as `core/tester`
+(`radiopost-tester`).
 
 ---
 
@@ -70,9 +71,11 @@ A gateway in conformance mode asks only the tester's DNS resolver (DNS over HTTP
 test zone) and reaches the test post office at the URL it is given: the test post office serves
 plain HTTP on the loopback interface, which RP-1 §7.1 has a reader ignore in DNS. Its driver file
 also names `post_office`, `block`, `credential` (a credential the test post office issued for its
-key) and `serve`; `radiopost-gateway`'s is `core/tester/drivers/radiopost-gateway.json`. The test
-post office is the core's own post office on the published test key, whose every exchange the
-tests read.
+key), `copies` (hold copies placed ahead, for G-03) and `serve`; `radiopost-gateway`'s is
+`core/tester/drivers/radiopost-gateway.json`. The test post office is the core's own post office on
+the published test key, whose every exchange the tests read; it serves its signed documents (RP-5
+§4), and the gateway reaches it and the test zone through a link the tester cuts to take the
+Internet away (G-03).
 
 A post office is started by the tester in a fresh directory for each test, from its driver file
 (`init`, `know`, `dns`, `code`, `serve`, and `door`, the URL of its door); the tester chooses its
@@ -126,7 +129,7 @@ RP-0 §3: RP-1 §4, §5, §6, RP-2, RP-3 client side.
 | C-06 | Bad frames from the gateway (an unknown type, not CBOR) answered `ERROR` `malformed`, and one over the program's `max_pdu` `ERROR` `too-large` (RP-3 §2, §4). | `pdus` `invalid` |
 | C-07 | Station to station, calling: the station called's proof checked before anything is taken; a bad one answered `ERROR` and the call ended (RP-3 §10, RP-1 §6.5). | `session-03`, `statements` |
 | C-08 | Station to station, called: only mail for its own account taken, its own proof given (RP-3 §10). | `session-03` |
-| C-09 | A cut-off gateway: mail kept as queued and offered again until an online gateway confirms it (RP-7 §3.6). | `queued` |
+| C-09 | A cut-off gateway: mail kept as queued, not offered again to that gateway while it was cut off at the last call, offered to another, and sent once an online gateway declines it `already-have` (RP-7 §3.6). | `queued` |
 | C-10 | Local mail: listed with serial 0, asked for by content ID, taken without a serial (RP-3 §5.2, §5.6, RP-7 §4.4). | `session-05` |
 | C-11 | 300 seconds of nothing end the session, and the caller hangs up (RP-3 §8). | — |
 | C-12 | Station-to-station sessions reported over the Internet (RP-5 §6.6). | `direct` |
@@ -139,7 +142,7 @@ RP-0 §3: RP-1, RP-2 §2, §3, §4, §5, RP-3 gateway side, RP-5 §5 as the call
 |---|---|---|
 | G-01 | `session-01` at an online gateway: the post office asked while the link turns around, `WELCOME` within a second (SHOULD), the report and the session closed (RP-3 §9, RP-5 §5.2, §5.7). | `session-01`, `api-exchanges` |
 | G-02 | Credentials and statements refused in RP-1 §5's and §6.3's order, each with its code: expired, revoked, an unknown post office, a bad signature, a skewed clock, a replayed nonce (RP-3 §5.9). | `credentials`, `statements` |
-| G-03 | Offline: users checked with the keys and revocation lists it holds, copies served, the queue kept, everything reported when the Internet returns (RP-1 §7.3, RP-5 §5.6, §5.8). | `api-exchanges` |
+| G-03 | Offline: users checked with the keys and revocation lists it holds (a revoked credential, a post office it never fetched), copies served with the flag `copy` and a `NOTICE`, the queue kept and an offer in it declined `already-have`, everything reported when the Internet returns (RP-1 §7.3, RP-3 §9, RP-5 §5.6, §5.8, RP-7 §3.6). | `api-exchanges`, `queued` |
 | G-04 | Resumes across gateways (RP-3 §7). | `session-02` |
 | G-05 | Third-party mail held back from a station abroad, with a `NOTICE` (RP-6 §5.1). | `third-party` |
 | G-06 | Local delivery while cut off (RP-7 §4.4). | `session-05`, `local-delivery` |
@@ -225,7 +228,7 @@ RP-0 §3: RP-4, the adapter's side.
 |---|---|---|
 | 1 | The test adapter (and with it the loopback adapter); conformance mode; C-01 to C-08 and C-11; A-01 to A-04 against the TCP adapter. | Client, modem adapter |
 | 2 | The test post office; G-01, G-02, G-04, G-07, G-08, G-09; P-01 to P-04 and P-07 to P-10; C-12 (built: G-09 checks DNS online, the one hop of lists being for a gateway offline, Phase 3; P-08 leaves out the case of the vectors' own `max_email_bytes`). | Gateway, online; post office |
-| 3 | C-09, C-10; G-03, G-05, G-06; P-05, P-06. | Offline |
+| 3 | C-09, C-10; G-03, G-05, G-06; P-05, P-06 (built: C-09, G-03, G-05; P-05 without paths or local pickups, P-06 without forward items. C-10, G-06 and the rest of P-05 and P-06 come with local delivery and forwarding, W31 and W30). | Offline |
 | 4 | F-01 to F-06. | Forwarding gateway |
 | 5 | A-05, and A-01 to A-04 for each new adapter. | More adapters |
 
@@ -250,3 +253,4 @@ RP-0 §3: RP-4, the adapter's side.
 | 0.4.0 | 2026-11-10 | Phase 2's tests built: a gateway's and a post office's conformance mode and driver files (§2.3), the test post office, G-01, G-02, G-04, G-07 to G-09, P-01 to P-04, P-07 to P-10 and C-12 (§6). Writing them found a gateway that replayed a caller's last transmission while the link was quiet, and a post office that used an enrollment code at a refused attempt (RP-5 0.12.1). |
 | 0.4.1 | 2026-11-10 | §2.3: the tester calls a post office's door in Stalwart's shape, the mail server's verdicts in `serverHeaders`, since a door no longer reads them from the message's own headers (RP-6 0.5.0). |
 | 0.4.2 | 2026-11-13 | P-04 checks the air form a waiting message is served as (compression 0 or 1, RP-5 0.18.0 §5.3) and that the size listed is its own, not the uncompressed form's, which it had assumed. |
+| 0.5.0 | 2026-11-13 | Phase 3's tests built (§6): C-09, G-03, G-05, and P-05 and P-06 without what needs local delivery or forwarding; the gateway's driver gains `copies`, and the test post office its signed documents and a link the tester cuts (§2.3). Each shown failing on a planted fault. |

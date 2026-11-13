@@ -2,7 +2,9 @@
 
 How a licensed operator sets up a RadioPost gateway on the computer at their radio, registers it
 with their post office, and leaves it answering. Users call the gateway by radio; it carries each
-session to the user's own post office over the Internet (RP-3 §9, RP-5 §5).
+session to the user's own post office over the Internet (RP-3 §9, RP-5 §5). When the Internet is
+down, it goes on: it checks callers itself, hands them the copies of their mail it holds, keeps
+what they send, and reports it all when the Internet is back (§4).
 
 ---
 
@@ -56,8 +58,11 @@ the gateway**.
 **Modem** at `ws://127.0.0.1:8515/v1`, where Aether listens on the same computer. **Country** is
 where the gateway operates, two letters: it decides which third-party mail the gateway may hand
 over (RP-6 §5.1). Leave *The modem does not check the band rules* clear: Aether checks them. Keep
-*Answer calls when the app opens* ticked for a gateway left on its own. Click **Save**. The gateway
-makes its key; it is shown under the form.
+*Answer calls when the app opens* ticked for a gateway left on its own. Tick *Hold copies of
+users' mail, for when the Internet is down* for a gateway with room to spare (§4), and say for how
+many users, how many days, and the largest message it holds with its text. Click **Save**. The
+gateway makes its key; it is shown under the form. Change the copies setting later, and register
+again (step 2) so that the post office knows.
 
 **2. Registration.** The form shows the account the RadioPost app on this computer is enrolled
 as. **RadioPost app's home** is the folder where that app keeps its key and credential
@@ -94,6 +99,9 @@ gateway's credential and when it runs out, in red from two weeks before. **Sessi
 the account, how long, the messages the caller sent and picked up, and how it ended. The log at
 the bottom says what the gateway does.
 
+**Held** says how many copies placed ahead the gateway holds, for how many users, and how many
+sessions carried while the Internet was down wait to be reported; **Show** lists them (§4).
+
 **Stop** ends a session under way and lets the modem go. Settings change only while the gateway is
 stopped. Closing the window stops the gateway too; while it answers, it asks first.
 
@@ -108,7 +116,48 @@ update, checks that the project's update key signed it, installs it and opens th
 answering as before. On a Linux `.deb` install it asks for your password, as installing a package
 does.
 
-## 4. The rules
+## 4. When the Internet is down
+
+**Copies placed ahead** (RP-5 §5.8). Users name their usual gateways in their RadioPost's Setup.
+When this gateway holds copies (Setup, step 1, and registered), their post office copies the mail
+waiting for them here as it arrives, and the gateway keeps it: a message up to the size you set
+with its text, a larger one listed only. The gateway asks its own post office for copies without
+stopping, and any other post office that says it places copies here; it only makes outgoing
+connections, so a home router needs no change. A copy goes when its user picks the message up,
+here or anywhere, or after the days you set.
+
+**A session while cut off** (RP-3 §9, RP-7 §1). When a caller's post office cannot be reached,
+the gateway answers from what it holds, and says so to the caller in a notice:
+
+* it checks the caller's credential and signature itself, with the post office's keys and list of
+  revoked credentials, which it fetches and keeps while online and refreshes every six hours
+  (RP-1 §7.3). A caller from a post office it never fetched is refused (*unknown post office*). A
+  post office named in Setup step 3 is anchored on the key that signed the gateway's own
+  credential; others come from DNS, and one hop of their lists of post offices;
+* it hands the caller the copies it holds for them; third-party mail only as the rules allow
+  (§5);
+* it keeps what the caller sends in its queue, written to disk before it tells the caller it has
+  it. The caller's RadioPost shows those messages *queued* at this gateway, and offers them again
+  until a gateway that reaches the post office confirms them;
+* held attachments cannot be asked for: the notice says so.
+
+**When the Internet is back** (RP-5 §5.6). The gateway reports each session it carried while cut
+off to the caller's post office, oldest first: the messages go on, the pickups are marked, and the
+copies of what was picked up are dropped at every gateway that holds them. It tries every minute,
+and at once when a poll shows the post office answers again. A session the post office refuses
+(a forged or revoked credential) is dropped and the log says why; one not reported in 30 days is
+dropped too. It remembers for 30 days what it passed on, so that a caller who offers it again is
+told *already have* (RP-7 §3.6).
+
+The **Held** box shows it all: **Show** lists each copy (whose, from whom, until when; never the
+text), each session waiting to be reported with its last try, and the last reports. On the
+command line: `radiopost-gateway held`, and `radiopost-gateway copies --users 50 --days 7
+--max-air-bytes 16384` (or `--off`) for the setting.
+
+Forwarding by radio to a partner gateway that can reach the Internet, and handing mail between
+two users of a cut-off gateway, come later (Phase 4, wishlist W30 and W31).
+
+## 5. The rules
 
 * **Control.** A gateway left answering with nobody at the radio is under **automatic control**.
   Set Aether's control to Automatic: Aether then transmits only in the segments where automatic
@@ -118,8 +167,10 @@ does.
 * **No encryption.** RadioPost signs; it never encrypts (RP-0 §5).
 * **Third-party traffic.** The post office marks mail that is third-party traffic, and the gateway
   hands it only to stations in countries that allow it, by the gateway's **Country** (RP-6 §5.1).
+  A caller from elsewhere is told in a notice how many such messages wait for them at their post
+  office.
 
-## 5. A gateway with no screen
+## 6. A gateway with no screen
 
 On a computer with no screen, run the gateway from the command line with the same directory and
 panel:
@@ -151,7 +202,7 @@ WantedBy=multi-user.target
 run this way: `sudo radiopost-gateway update`, then restart it (`sudo systemctl restart` its unit);
 the panel and its log say when a newer release is out.
 
-## 6. What is kept
+## 7. What is kept
 
 The gateway's directory is `.radiopost-gateway` in your home directory (`$RADIOPOST_GATEWAY` names
 another; Setup shows where):
@@ -162,10 +213,11 @@ another; Setup shows where):
 | `key.hex` | The gateway's key. Back it up: a new key needs a new registration. Never share it. |
 | `credential.hex` | The gateway's credential, from its registration. |
 | `held.json` | Callers' credentials seen, and pieces of uploads a broken link left (RP-3 §7). |
+| `store.json` | What it holds for when the Internet is down (§4): copies placed ahead, the sessions carried while cut off and not yet reported, what it passed on, and the post offices' keys and revocation lists. Keep it: a session in it that is lost is mail its sender's RadioPost offers again only after 30 days. |
 | `sessions.json` | The last 200 sessions carried, as the Sessions list shows them. |
 | `gateway.log` | Everything the log at the bottom of the window says, with the date and time (UTC), from 0.1.0-beta.8 on; also why the connection to Aether ended, and any program fault. Past 2 MB it is kept as `gateway.log.old` and a new one begun. From Aether 0.2.0-beta.150 and RadioPost Gateway 0.1.0-beta.9, Aether's *Send files* carries both. |
 
-## 7. When something is wrong
+## 8. When something is wrong
 
 | You see | Do |
 |---|---|
@@ -178,7 +230,9 @@ another; Setup shows where):
 | A post office *not found* | Its DNS records are not published: name it in Setup, step 3. |
 | A post office *refused the gateway* | The credential has run out or was revoked: register again (Setup, step 2). |
 | A session ended *nothing heard for 300 seconds* | The path faded or the caller left: the caller's mail is resumed on its next call (RP-3 §7). |
+| *polling … for copies: post-office-unreachable* | The Internet or the post office is down: the gateway answers from what it holds (§4), and says when the post office answers again. |
+| Held: sessions waiting to be reported, the last try *not reached* | The same: they are reported when the post office can be reached. A last try naming a code (*signature-invalid*) means the post office refused it: the log says so. |
 
 To report a problem, open an issue on [RadioPost's repository](https://github.com/KK4ODA/RadioPost/issues)
-with `gateway.log` (§6) and, for a session that failed, Aether's recording of it. From Aether
+with `gateway.log` (§7) and, for a session that failed, Aether's recording of it. From Aether
 0.2.0-beta.150, Aether's Log tab → *Send files…* sends both at once.

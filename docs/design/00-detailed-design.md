@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.36 |
+| **Version** | 0.1.37 |
 | **Updated** | 2026-11-13 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -166,7 +166,7 @@ messages as queued at KK4ODA-1 until a gateway that is online confirms them (RP-
 |---|---|---|
 | Session engine | The gateway side of RP-3. | RP-3 |
 | Verifier | Checks credentials and statements, online or not. | RP-1 §5, §6 |
-| Key cache | Post office keys, info documents, revocation lists, refreshed every 6 hours. | RP-1 §7, RP-5 §4 |
+| Key cache | Post office keys, info documents, revocation lists, refreshed every 6 hours: from DNS and one hop of lists, or for a post office named in its settings with no DNS, from the key that signed its own credential. | RP-1 §7, RP-5 §4 |
 | Post office client | Sessions, submissions, pickups, reports; copies from its own post office and each other that says it places them (D37). | RP-5 §5 |
 | Store | The outgoing queue, copies placed ahead, partial uploads, the replay cache, credentials seen. | RP-3 §7 |
 | Modem host | Talks RPMI to one adapter per radio. | RP-4 |
@@ -304,7 +304,7 @@ the core against `vectors/` on every push, with the checks that run today.
 | 0 | These documents brought to complete drafts; test vectors; the conformance tester's outline. | All |
 | 1 | The core library; the client; the TCP and Aether adapters; station-to-station sessions between two clients; the conformance tester's first half ([its §6](01-conformance.md)). | RP-1–RP-4 |
 | 2 | The RadioPost service with Stalwart; the gateway, online; ordinary email both ways. The pilot: `radiopost.org` with KK4ODA-1. | RP-5, RP-6 |
-| 3 | Copies placed ahead; the offline queue; reports. | RP-5 §5.6, §5.8 |
+| 3 | Copies placed ahead; the offline queue; reports; the sender's client following queued mail. | RP-5 §5.6, §5.8, RP-7 §3.6 |
 | 4 | Forwarding by radio. | RP-7 |
 | 5 | More adapters (VARA, ARDOP, AGWPE); forms; the phone. | RP-4, new |
 
@@ -368,3 +368,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.34 | 2026-11-12 | D36 built: the client's gateway list read from every post office its own knows (RP-5 §4.4). |
 | 0.1.35 | 2026-11-12 | D37 built on the post office's side: copies at gateways of other post offices, `placing`, items only to the listing post office's credential; the gateway's polling comes with Phase 3. |
 | 0.1.36 | 2026-11-13 | D39, drafted for the author: modem names as a registry (RP-0 0.7.0 §9.4), an unknown one ignored, and what an FM channel states (RP-5 0.17.0 §4.4); `mercury` and `aether-fm` registered. Aether FM in §5.4's adapters. |
+| 0.1.37 | 2026-11-13 | Phase 3's core built: copies placed ahead (the gateway's side), the offline queue and its reports, and the sender's client following queued mail (RP-7 §3.6). The key cache anchors a post office named in a gateway's settings, with no DNS, on the key that signed the gateway's own credential (gap G20). |

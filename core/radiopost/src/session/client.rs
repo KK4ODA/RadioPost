@@ -400,6 +400,9 @@ impl Client {
             }
         }
         self.peer_caps = Caps::from_value(pdu.get(9));
+        self.events.push(Event::Welcome {
+            online: pdu.get(11) == Some(&Value::Bool(true)),
+        });
         for (id, code) in listed_pairs(pdu.get(6)) {
             let code = ErrorCode::from_code(code).unwrap_or(ErrorCode::Internal);
             self.events.push(Event::NotTaken { id, code });

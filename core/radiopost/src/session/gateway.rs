@@ -59,6 +59,11 @@ pub trait Upstream {
     fn files(&mut self, asked: &[(u64, Vec<u8>)]) -> Result<(), ErrorCode>;
     /// The session is over (RP-5 §5.7).
     fn close(&mut self);
+    /// Whether this is the caller's post office itself, or the gateway answering from what it
+    /// holds because the post office cannot be reached (`WELCOME` `online`, RP-3 §5.2, §9).
+    fn online(&self) -> bool {
+        true
+    }
 }
 
 /// The post office of a domain, or why there is none to reach.
@@ -154,6 +159,9 @@ fn entry_of(e: &Json) -> Option<(WaitingEntry, bool)> {
     let mut f = 0;
     if held {
         f |= flags::HELD;
+    }
+    if e.get("copy").and_then(Json::as_bool) == Some(true) {
+        f |= flags::COPY;
     }
     if third {
         f |= flags::THIRD_PARTY;
@@ -484,13 +492,16 @@ impl Gateway {
         Value::int_map(entries)
     }
 
-    fn welcome_ready(&mut self, hello: &Value, answer: &Json) {
+    /// The waiting entries the post office (or the gateway's own store) gave that this caller may
+    /// be handed, kept as listed; and how many third-party ones were held back (RP-6 §5.1).
+    fn list(&mut self, hello: &Value, answer: &Json) -> (Vec<WaitingEntry>, usize) {
         let operator = hello
             .get(4)
             .and_then(Value::as_text)
             .unwrap_or("")
             .to_owned();
         let may_list_third_party = (self.third_party)(&operator);
+        let mut held_back = 0;
         let mut entries = Vec::new();
         for e in answer
             .get("waiting")
@@ -502,6 +513,7 @@ impl Gateway {
                 continue;
             };
             if third && !may_list_third_party {
+                held_back += 1;
                 continue; // RP-6 §5.1: not listed for this station
             }
             self.listed.push(Listed {
@@ -510,6 +522,12 @@ impl Gateway {
             });
             entries.push(entry);
         }
+        (entries, held_back)
+    }
+
+    fn welcome_ready(&mut self, hello: &Value, answer: &Json) {
+        let online = self.upstream.as_ref().is_none_or(|u| u.online());
+        let (entries, held_back) = self.list(hello, answer);
         // An upload broken in an earlier session resumes from what this gateway holds (RP-3 §7).
         let accept: Vec<Value> = answer
             .get("accept")
@@ -561,7 +579,7 @@ impl Gateway {
             (8, Value::Uint(more)),
             (9, self.cfg.caps.to_value()),
             (10, Value::Uint(self.cfg.time)),
-            (11, Value::Bool(true)),
+            (11, Value::Bool(online)),
             (12, Value::Bool(true)),
         ]);
         let mut pdus = vec![welcome];
@@ -575,6 +593,7 @@ impl Gateway {
                 (1, Value::bytes(&renewed)),
             ]));
         }
+        pdus.extend(self.notices(answer, held_back));
         // Unasked: what fits the caller's `auto`, and the rest of what it holds in part (§5.2).
         let auto = hello.get(10).and_then(Value::as_u64).unwrap_or(0);
         let partials = listed_pairs(hello.get(11));
@@ -587,6 +606,27 @@ impl Gateway {
         pdus.push(done());
         self.queued.push(transmission(&pdus));
         self.state = State::Exchange;
+    }
+
+    /// Why the gateway answers from what it holds (RP-3 §9), and the third-party mail it held back
+    /// (RP-6 §5.1), as `NOTICE`s: said before the mail, so the caller reads them first.
+    fn notices(&mut self, answer: &Json, held_back: usize) -> Vec<Value> {
+        let mut texts: Vec<String> = answer
+            .get("notice")
+            .and_then(Json::as_str)
+            .map(str::to_owned)
+            .into_iter()
+            .collect();
+        if held_back > 0 {
+            texts.push(third_party_notice(held_back));
+        }
+        texts
+            .into_iter()
+            .map(|text| {
+                self.events.push(Event::Notice(text.clone()));
+                Value::int_map(vec![(0, Value::Uint(kind::NOTICE)), (1, Value::Text(text))])
+            })
+            .collect()
     }
 
     /// A waiting message's `MSG` pieces from `offset`, fetched from the post office.
@@ -701,6 +741,20 @@ impl Gateway {
             self.queued.push(transmission(&pdus));
         }
     }
+}
+
+/// What a `NOTICE` tells a station abroad of the third-party mail held back for it (RP-6 §5.1).
+#[must_use]
+pub fn third_party_notice(held: usize) -> String {
+    let what = if held == 1 {
+        "1 message waits".to_owned()
+    } else {
+        format!("{held} messages wait")
+    };
+    format!(
+        "{what} for you from senders not shown to be licensed. Third-party rules keep this \
+         gateway from handing them to a station in your country: they stay at your post office."
+    )
 }
 
 /// What a `NOTICE` tells the user of held attachments asked for (RP-3 §5.6).

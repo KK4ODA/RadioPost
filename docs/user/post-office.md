@@ -487,8 +487,11 @@ administrator's account already reads what was seen.
 * **A licensed user's own mail program** makes third-party mail, as mail from the Internet does
   (RP-6 §5.1, wishlist G16): it is held back from stations abroad without an arrangement.
 * **DKIM keys are not rotated** while DNS is managed by hand.
-* **Copies placed ahead**, the offline queue and reports are Phase 3; forwarding by radio is
-  Phase 4.
+* **Forwarding by radio** is Phase 4, and mail handed between two users of a gateway cut off from
+  the Internet comes with it or just before (wishlist W30, W31). Copies placed ahead and a cut-off
+  gateway's reports are built: gateways that hold copies ask `GET /copies` and wait up to a minute
+  for an answer (RP-5 §5.8), so each holds one connection open through Caddy, whose defaults let
+  it.
 * **A backup mail server.** While the server is down, senders retry for days; a second mail
   server that took mail meanwhile would need the accept lists, or it would bounce to forged
   senders later (wishlist W38).
