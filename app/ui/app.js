@@ -112,6 +112,8 @@ function show(view) {
                     "composer", "setup", "office"]) {
     $(id).hidden = id !== view;
   }
+  // the usual gateways are read afresh each time, for the callsign in use now
+  if (view === "setup") loadUsual();
 }
 
 // a choice kept in this browser: whom to call, what to fetch
@@ -987,9 +989,27 @@ async function changeAccept(change) {
 // Usual gateways (RP-5 §6.3, §5.8), picked from the gateway list kept here, and whether mail read
 // in a mail program is skipped by radio: the settings at the post office, merged there.
 let usualChosen = new Set();
+// Save sends both settings whole, so it waits until they have been read from the post office:
+// saved before, it would put an empty list in place of the usual gateways kept there.
+let usualReading = 0;
+
 async function loadUsual() {
+  const reading = ++usualReading;
+  const ready = (yes) => {
+    $("usual-save").disabled = !yes;
+    $("skip-read").disabled = !yes;
+  };
+  ready(false);
+  if (!meAddress) {
+    usualChosen = new Set();
+    $("usual").replaceChildren();
+    $("usual-state").textContent = "Read from your post office once this computer is enrolled.";
+    return;
+  }
+  $("usual-state").textContent = "Reading your settings from your post office…";
   try {
     const [settings, list] = await Promise.all([api("settings"), api("gateways")]);
+    if (reading !== usualReading) return;
     usualChosen = new Set(settings.usual_gateways || []);
     $("skip-read").checked = settings.radio_skips_read === true;
     const known = new Map(list.gateways.map((g) => [g.callsign, g]));
@@ -1013,8 +1033,14 @@ async function loadUsual() {
         box, el("span", {class: "mono", text: call}),
         el("span", {class: "note", text: [where, note].filter(Boolean).join(" · ")})));
     }));
+    $("usual-state").textContent = "";
+    ready(true);
   } catch (e) {
-    toast(e.message, true);
+    if (reading !== usualReading) return;
+    usualChosen = new Set();
+    $("usual").replaceChildren();
+    $("usual-state").textContent =
+      `Your settings could not be read (${e.message}): Read again with the Internet to change them.`;
   }
 }
 

@@ -94,9 +94,10 @@ setting, the post office's gateway list in *Choose a gateway*, and the *Waiting*
 what to fetch next) or a station, listens for one, sends the reports, and holds the setup: enrollment with a code
 or an application the operators decide (asked after every minute while it waits),
 the post office and renewal, the accept list, the **usual gateways** (ticked from the gateway list
-kept here, with whether each holds copies, and *Skip mail I have read in a mail program*; **Read**
-and **Save** reach the post office over the Internet, which merges them into the rest of the
-settings, RP-5 §6.3), the device key, a credential imported by hand and the post offices trusted.
+kept here, with whether each holds copies, and *Skip mail I have read in a mail program*; read
+from the post office over the Internet each time Setup opens, and **Save**, which the post office
+merges into the rest of the settings, RP-5 §6.3, waits until they have been read, so that it never
+saves an empty list over the one kept there), the device key, a credential imported by hand and the post offices trusted.
 In the outbox, a message a cut-off gateway took carries *queued at* that gateway (its tooltip says
 since when), and in red *may have been dropped* after 30 days with no confirmation (RP-7 §3.6). Setup's **Add another callsign** makes a home for another callsign and
 opens its enrollment; with two or more, the top of the window is a list that chooses the one the
