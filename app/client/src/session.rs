@@ -349,6 +349,10 @@ pub(crate) fn adapter_for(modem: &str) -> Result<String, Error> {
     Ok(at.to_string())
 }
 
+/// How long a `busy` answer to `hello` is tried again: an adapter that serves one program at a
+/// time (RP-4 §3) may answer it while it is still closing this program's last connection.
+const BUSY_PATIENCE: Duration = Duration::from_secs(2);
+
 /// A connection to the adapter, with the host's requests numbered.
 struct Modem {
     conn: Connection,
@@ -369,17 +373,32 @@ impl Modem {
             ));
         }
         let adapter = adapter_for(&opts.adapter)?;
-        let conn = Connection::open(adapter.as_str())
-            .map_err(|e| format!("cannot reach the modem's adapter at {}: {e}", opts.adapter))?;
-        conn.set_timeout(Some(opts.quiet))
-            .map_err(|e| e.to_string())?;
-        let mut modem = Modem {
-            conn,
-            host: Host::new(),
-            name: opts.adapter.clone(),
+        // an adapter that serves one program at a time may not yet have seen this program's last
+        // connection close, so `busy` is tried again for a moment before it is believed
+        let patience = std::time::Instant::now() + BUSY_PATIENCE;
+        let mut modem = loop {
+            let conn = Connection::open(adapter.as_str()).map_err(|e| {
+                format!("cannot reach the modem's adapter at {}: {e}", opts.adapter)
+            })?;
+            conn.set_timeout(Some(opts.quiet))
+                .map_err(|e| e.to_string())?;
+            let mut modem = Modem {
+                conn,
+                host: Host::new(),
+                name: opts.adapter.clone(),
+            };
+            let hello = modem.host.hello(&opts.app);
+            match modem.ask(&hello) {
+                Ok(_) => break modem,
+                Err(why)
+                    if why.starts_with("the modem refused hello: busy")
+                        && std::time::Instant::now() < patience =>
+                {
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                Err(why) => return Err(why),
+            }
         };
-        let hello = modem.host.hello(&opts.app);
-        modem.ask(&hello)?;
         let callsigns = modem.host.callsigns(&[me.operator.as_str()]);
         modem.ask(&callsigns)?;
         Ok((modem, me.operator))
