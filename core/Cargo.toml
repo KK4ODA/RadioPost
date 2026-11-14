@@ -4,7 +4,7 @@ resolver = "3"
 members = ["radiopost", "api", "rpmi", "issuer", "tester", "postoffice", "gateway", "update", "../adapters/aether", "../adapters/tcp", "../adapters/mercury", "../app/client"]
 
 [workspace.package]
-version = "0.1.0-beta.13"
+version = "0.1.0-beta.14"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"

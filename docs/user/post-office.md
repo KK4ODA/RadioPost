@@ -16,7 +16,7 @@ step, and says what you do by hand (the mail server's setup page, the DNS record
 with the values to type:
 
 ```
-curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.13/radiopost-tools-linux-x64.zip
+curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.14/radiopost-tools-linux-x64.zip
 unzip radiopost-tools-linux-x64.zip
 ./radiopost-tools-linux-x64/radiopost-po install --domain radiopost.org --operator KK4ODA --contact postmaster@radiopost.org
 ```
@@ -279,7 +279,7 @@ answers `451 4.7.1`, and the sending server tries again. Addresses that are no R
 
 ```
 apt install -y unzip
-curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.13/radiopost-tools-linux-x64.zip
+curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.14/radiopost-tools-linux-x64.zip
 unzip radiopost-tools-linux-x64.zip
 install -m 0755 radiopost-tools-linux-x64/radiopost-po /usr/local/bin/
 useradd --system --home-dir /var/lib/radiopost --create-home --shell /usr/sbin/nologin radiopost
@@ -471,7 +471,7 @@ update key signed it, and replaces `radiopost-po` (and any other RadioPost progr
 `/usr/local/bin`). It changes nothing when the signature does not match. The post office's
 directory, its key and its state are not touched.
 
-**Updating to the release that brings one mailbox** (the first after 0.1.0-beta.13): a post office
+**Updating to the release that brings one mailbox** (0.1.0-beta.14): a post office
 set up before it calls the door only on port 25. In Stalwart's administration, MTA Hooks, set the
 hook's Enable to `true` for every session (§5.7), save, and restart Stalwart (`systemctl restart
 stalwart`). Until then mail users send from their mail programs to each other does not reach the

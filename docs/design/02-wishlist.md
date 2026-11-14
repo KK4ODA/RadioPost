@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.15 |
-| **Updated** | 2026-11-13 |
+| **Version** | 0.3.16 |
+| **Updated** | 2026-11-14 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §9 and §10 |
@@ -640,7 +640,7 @@ read, including from members with no licence who use only a mail program.
 | Effort | Large: JMAP both ways, and every path mail takes inside the post office. |
 | Priority | **High.** Mail that never reaches the radio is mail silently lost to a radio user, and pilot users with the Internet will meet it at once. |
 | Recommendation | Accept. Also fill the accept list from mail sent in a mail program, as from mail sent by radio (RP-5 §6.5 names only radio paths): concept §5.1 promises that writing to someone adds them, and that removes most of the need for W37. |
-| Status | In progress: the first part is implemented; the Sent folder and pickups marked read are not. |
+| Status | In progress: the first part is implemented (released in 0.1.0-beta.14); the Sent folder and pickups marked read are not. |
 | Author decision | **Decided** (2026-11-13): built next, in two parts. First what loses mail or wastes air: mail from a mail program to a user here reaches the radio, mail sent by radio to a user here reaches the mail program, `radio_skips_read` is honoured, and mail sent from a mail program fills the accept list. Later: mail sent by radio in the mail program's Sent folder, and radio pickups marked read there |
 
 ### W37. The accept list on a web page
@@ -720,7 +720,7 @@ Internet or the post office is down. The user names those gateways in the client
 | Effort | Large: the long poll, the gateway's store, drops and expiry, the client's setting. |
 | Priority | **High**: first of Phase 3. |
 | Recommendation | Accept. |
-| Status | Implemented, on `main`; released with W28 and W29. |
+| Status | Implemented; released in 0.1.0-beta.14 with W28 and W29. |
 | Author decision | **Decided** (CLAUDE.md): first of the Internet-down features. **Decided** (2026-11-13): W27, W28 and W29 go out in one release, after W36's first part |
 
 ### W28. The gateway's queue while offline, and its reports
@@ -738,7 +738,7 @@ and reports everything once it is back.
 | Effort | Large. |
 | Priority | **High**: second of Phase 3. |
 | Recommendation | Accept, shipped with W29. |
-| Status | Implemented, on `main`; released with W27 and W29. |
+| Status | Implemented; released in 0.1.0-beta.14 with W27 and W29. |
 | Author decision | **Decided** (CLAUDE.md): second, after copies placed ahead. **Decided** (2026-11-13): in one release with W27 and W29 |
 
 ### W29. The sender's client follows queued mail
@@ -756,7 +756,7 @@ and says so if it may have been lost.
 | Effort | Medium. |
 | Priority | **High.** Without it, a message a cut-off gateway drops is lost with nobody told (D25). |
 | Recommendation | Accept, and ship with W28, never after it. |
-| Status | Implemented, on `main`; released with W27 and W28. |
+| Status | Implemented; released in 0.1.0-beta.14 with W27 and W28. |
 | Author decision | **Decided** (2026-11-13): in one release with W27 and W28 |
 
 ### W30. Forwarding by radio
@@ -1105,3 +1105,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.13 | 2026-11-13 | W38: the mail server's mailboxes backed up each night by the jobs runner with Stalwart stopped, carried by a downloaded backup and put back by `restore`; Health shows them and when a backup last left the server. Gap G17, found with W1: a reply to mail the post office sent as email keeps no thread. |
 | 0.3.14 | 2026-11-13 | W36's first part built: mail users submit from their mail programs reaches the radio and fills their accept lists; mail sent by radio to users here reaches their mail programs, and an email-only member (W12) gets it by email alone; `radio_skips_read` takes mail read in a mail program as picked up. Gaps G18 and G19, settled by RP-6 0.7.0 and RP-5 0.19.0. |
 | 0.3.15 | 2026-11-13 | W27, W28 and W29 implemented, to go out together: the gateway holds copies placed ahead and polls for them, answers sessions from its store when cut off and reports them, and the client follows what a cut-off gateway queued (RP-7 §3.6); W9 built with W27, W6's queued state with W29. The conformance tester's Phase 3 tests C-09, G-03, G-05 and the parts of P-05 and P-06 that need neither local delivery nor forwarding. Gap G20: the keys a gateway trusts for a post office named by URL with no DNS. |
+| 0.3.16 | 2026-11-14 | W36's first part and W27, W28 and W29 released in 0.1.0-beta.14. |

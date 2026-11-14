@@ -141,7 +141,7 @@ The gateway's operator sees each session too, in RadioPost Gateway's Sessions li
 * **Forwarding by radio** between gateways, and mail handed between two users of a gateway cut
   off from the Internet, are Phase 4.
 
-The Internet down is covered from the release after 0.1.0-beta.13: name your usual gateways in
+The Internet down is covered from 0.1.0-beta.14: name your usual gateways in
 RadioPost's Setup, and a gateway that holds copies has your mail when the Internet is down; what
 you send through a gateway that cannot reach the post office shows *queued at* that gateway in your
 outbox until a gateway that can confirms it ([the gateway's guide](gateway.md), §4). To try it,
