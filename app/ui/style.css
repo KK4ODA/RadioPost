@@ -39,8 +39,10 @@ label.check { display: flex; gap: 6px; align-items: center; }
 label.check input { width: auto; height: auto; margin: 0; }
 h1 { font-size: 20px; margin: 0 0 14px; }
 h2 { font-size: 13px; text-transform: none; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+h3 { font-size: 12px; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
 .mono { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
 .row { display: flex; gap: 8px; margin: 4px 0 12px; flex-wrap: wrap; }
+.row input.short { flex: 0 1 13rem; width: auto; min-width: 8rem; }
 #callsign-tools { margin: 12px 0 0; }
 
 .top { display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: var(--panel);

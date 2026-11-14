@@ -319,11 +319,25 @@
           </div>
           <div class="card">
             <h2>Backups</h2>
-            <p class="note">Each night the server keeps a backup of the post office beside itself, the last seven, and one of the mail server's mailboxes, the last three. Keep one on this computer too, sealed with a passphrase, in case the server is lost: it holds the post office's key, and the newest mailboxes go with it.</p>
+            <p class="note">Each night the server keeps a backup of the post office beside itself, the last seven, and one of the mail server's mailboxes, the last three. A backup that stays on the server is lost with it: keep them on a computer of yours too. Each holds the post office's key, and the newest mailboxes go with it.</p>
             <table class="list" aria-label="Backups on the server">
               <thead><tr><th>Backup</th><th class="n">Size</th><th>Made</th></tr></thead>
               <tbody id="o-backups"></tbody>
             </table>
+            <h3>On this computer, by itself</h3>
+            <p class="note" id="o-auto-state"></p>
+            <div class="row">
+              <input id="o-auto-computer" class="short" type="text" placeholder="This computer's name" title="The name the desk shows for this computer, so you know which one fetches the backups">
+              <input id="o-auto-folder" class="grow" type="text" placeholder="The folder" title="Where the backups go: a folder of its own, a drive, or one another program copies elsewhere. Left empty, RadioPost backups in your home folder">
+              <button type="button" id="o-auto" title="While this app is open, fetch each new backup the server makes, sealed to a key only this computer holds">Turn on</button>
+              <button type="button" class="quiet" id="o-auto-now" title="Look for a new backup now" hidden>Fetch now</button>
+            </div>
+            <p class="note" id="o-auto-key" hidden></p>
+            <table class="list" aria-label="Computers the backups go to" id="o-keys-table" hidden>
+              <thead><tr><th>Computer</th><th>Added</th><th>Last fetched</th><th></th></tr></thead>
+              <tbody id="o-keys"></tbody>
+            </table>
+            <h3>By hand, with a passphrase</h3>
             <div class="row">
               <input id="o-pass1" class="grow" type="password" placeholder="A passphrase, 12 characters or more" autocomplete="new-password" title="It seals the backup: without it the file cannot be opened, by anyone, you included. Keep it somewhere safe">
               <input id="o-pass2" class="grow" type="password" placeholder="The same again" autocomplete="new-password">

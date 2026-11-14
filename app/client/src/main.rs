@@ -42,6 +42,11 @@ usage: radiopost [--home DIR] [--as CALLSIGN] COMMAND ...
   addresses [--add 'NAME <ADDR>']... [--remove ADDR]...
                            the address list: whom you have written to, offered as To and Cc are
                            typed in the panel; this computer's own, not the accept list
+  backups [on [NAME] [--folder DIR] | off | fetch | open FILE [OUT]]
+                           a post office operator's computer: on, it fetches each new backup of
+                           the post office by itself while the app is open, sealed to a key
+                           only this computer holds; fetch gets one now; open writes what a
+                           fetched backup holds as the zip `radiopost-po restore` takes
   accept [--add ENTRY]... [--remove ENTRY]...
                            the accept list: addresses, or @domain (RP-5 §6.5)
   compose --to ADDR [--to ADDR] [--cc ADDR] [--subject TEXT] [--priority 0|1|2]
@@ -419,6 +424,58 @@ fn answering(
     )))
 }
 
+/// `backups`: a post office operator's computer fetching its backups (wishlist W38).
+fn backups_command(base: &std::path::Path, args: &Args) -> Result<(), Error> {
+    use radiopost_client::backups;
+    let token = std::sync::Arc::default();
+    let store = || Store::open(base);
+    let said = match args.rest.first().map(String::as_str) {
+        None => backups::status(base),
+        Some("on") => {
+            let name = args
+                .rest
+                .get(1)
+                .cloned()
+                .unwrap_or_else(backups::computer_name);
+            let into = args.one("--folder").map(std::path::PathBuf::from);
+            backups::turn_on(&store()?, &token, base, &name, into.as_deref())?
+        }
+        Some("off") => backups::turn_off(&store()?, &token, base)?,
+        Some("fetch") => {
+            match backups::fetch_if_new(&store()?, &token, base, now())? {
+                Some(line) => println!("{line}"),
+                None => println!("nothing new to fetch, or backups are off"),
+            }
+            return Ok(());
+        }
+        Some("open") => {
+            let file = args.rest.get(1).ok_or("backups open FILE [OUT]")?;
+            let zip = backups::open(
+                base,
+                &std::fs::read(file).map_err(|e| format!("{file}: {e}"))?,
+            )?;
+            let out = args
+                .rest
+                .get(2)
+                .cloned()
+                .unwrap_or_else(|| format!("{}.zip", file.trim_end_matches(".rpbackup")));
+            std::fs::write(&out, zip).map_err(|e| format!("{out}: {e}"))?;
+            println!(
+                "{out}: the post office's key, settings, state and held attachments, and its \
+                 mailboxes if it carried them; copy it to the server, `radiopost-po restore \
+                 {out}`, and delete it after"
+            );
+            return Ok(());
+        }
+        Some(other) => return Err(format!("backups {other}? on, off, fetch or open")),
+    };
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&said).unwrap_or_default()
+    );
+    Ok(())
+}
+
 #[allow(clippy::too_many_lines, reason = "one arm a command")]
 fn run(words: &[String]) -> Result<(), Error> {
     let mut words = words;
@@ -772,6 +829,7 @@ fn run(words: &[String]) -> Result<(), Error> {
                 println!("{:<40} {used}", e.written());
             }
         }
+        "backups" => backups_command(&base, &args)?,
         "accept" => {
             for entry in online::accept_list(&store, &args.all("--add"), &args.all("--remove"))? {
                 println!("{entry}");

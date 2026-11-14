@@ -398,15 +398,28 @@ pub fn offsite_line(offsite: &Json, at: u64) -> Line {
     } else {
         "without the mailboxes"
     };
-    let text = format!(
-        "backups off the server: last downloaded {}, by {}, {with}",
-        ago(at.saturating_sub(when)),
-        last["by"].as_str().unwrap_or("an operator")
-    );
+    let by = last["by"].as_str().unwrap_or("an operator");
+    let (text, late) = match last["to"].as_str() {
+        // fetched by an operator's computer by itself, while the RadioPost app was open
+        Some(to) => (
+            format!(
+                "backups off the server: last fetched {}, by {by}'s computer {to}, {with}",
+                ago(at.saturating_sub(when))
+            ),
+            format!("open the RadioPost app on {to}, or download one"),
+        ),
+        None => (
+            format!(
+                "backups off the server: last downloaded {}, by {by}, {with}",
+                ago(at.saturating_sub(when))
+            ),
+            "download a newer one".to_owned(),
+        ),
+    };
     if days > 30 {
-        line(Verdict::Fail, format!("{text}: download one now"))
+        line(Verdict::Fail, format!("{text}: {late} now"))
     } else if days > 7 {
-        line(Verdict::Warn, format!("{text}: download a newer one"))
+        line(Verdict::Warn, format!("{text}: {late}"))
     } else {
         line(Verdict::Ok, text)
     }
@@ -498,6 +511,24 @@ mod tests {
             offsite_line(&without, now)
                 .text
                 .ends_with("without the mailboxes")
+        );
+        // fetched by an operator's computer by itself: said so, and what to do when it stops
+        let fetched = |days_ago: u64| {
+            json!({"since": 0, "last": {"at": now - days_ago * DAY, "by": "KK4ODA", "bytes": 1,
+                                         "mail": "stalwart-2026-11-13.tar.gz", "to": "shack-pc"}})
+        };
+        assert_eq!(
+            offsite_line(&fetched(0), now).text,
+            "backups off the server: last fetched today, by KK4ODA's computer shack-pc, with \
+             the mailboxes"
+        );
+        let late = offsite_line(&fetched(8), now);
+        assert_eq!(late.verdict, Verdict::Warn);
+        assert!(
+            late.text
+                .ends_with(": open the RadioPost app on shack-pc, or download one"),
+            "{}",
+            late.text
         );
     }
 }

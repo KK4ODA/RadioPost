@@ -2606,9 +2606,12 @@ name = "radiopost-api"
 version = "0.1.0-beta.16"
 dependencies = [
  "ed25519-dalek",
+ "getrandom 0.3.4",
  "radiopost",
+ "ring",
  "serde_json",
  "ureq",
+ "x25519-dalek",
 ]
 
 [[package]]
@@ -5259,6 +5262,17 @@ dependencies = [
  "libc",
  "once_cell",
  "pkg-config",
+]
+
+[[package]]
+name = "x25519-dalek"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7e8131a03190127fb2263afc72b322ecadae46b6ff8c6f399ff5d02f5559af6"
+dependencies = [
+ "curve25519-dalek",
+ "rand_core",
+ "zeroize",
 ]
 
 [[package]]

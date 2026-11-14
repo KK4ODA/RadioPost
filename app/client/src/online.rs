@@ -245,6 +245,29 @@ pub fn office(
     path: &str,
     body: Option<&Value>,
 ) -> Result<(u16, Value), Error> {
+    office_reading(
+        store,
+        token,
+        method,
+        path,
+        body,
+        radiopost_api::ANSWER_LIMIT,
+    )
+}
+
+/// As [`office`], reading answers of up to `limit` bytes: a backup carries the mailboxes.
+///
+/// # Errors
+///
+/// No credential, a path outside `/office/`, or no answer.
+pub fn office_reading(
+    store: &Store,
+    token: &Arc<Mutex<Option<String>>>,
+    method: &str,
+    path: &str,
+    body: Option<&Value>,
+    limit: u64,
+) -> Result<(u16, Value), Error> {
     if !path.starts_with("/office/") || path.contains("..") {
         return Err(format!("{path} is not an operator's request"));
     }
@@ -260,7 +283,8 @@ pub fn office(
             key: store.device()?,
         }),
         Arc::clone(token),
-    );
+    )
+    .reading_up_to(limit);
     match api.call(method, path, body) {
         Ok((status, answer)) => Ok((status, answer.unwrap_or(Value::Null))),
         Err(code) => Err(format!("the post office: {}", code.name())),

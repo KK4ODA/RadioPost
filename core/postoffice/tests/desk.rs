@@ -428,6 +428,110 @@ fn the_operator_runs_applications_from_the_client() {
         "backups off the server: last downloaded today, by KK4ODA, with the mailboxes"
     );
 
+    // the operator's computer fetches backups by itself: it registers its public key once,
+    // and each backup comes sealed to it, with nothing secret on the server
+    let shack = radiopost_api::sealing::KeyPair::generate().expect("a key pair");
+    let other = radiopost_api::sealing::KeyPair::generate().expect("a key pair");
+    let public = radiopost::cbor::hex(&shack.public());
+    let (status, _) = http(
+        &api,
+        "POST",
+        "/rp/v1/office/backup-keys",
+        Some(&op),
+        Some(&json!({"public": "abcd", "label": "shack-pc"})),
+    );
+    assert_eq!(status, 400, "not a key");
+    let (status, _) = http(
+        &api,
+        "POST",
+        "/rp/v1/office/backup-keys",
+        Some(&jose_token),
+        Some(&json!({"public": public, "label": "shack-pc"})),
+    );
+    assert_eq!(status, 403, "only an operator");
+    let (status, added) = http(
+        &api,
+        "POST",
+        "/rp/v1/office/backup-keys",
+        Some(&op),
+        Some(&json!({"public": public, "label": "shack-pc"})),
+    );
+    assert_eq!(status, 200, "{added}");
+    assert_eq!(added["id"], shack.id().as_str());
+    assert_eq!(added["keys"][0]["label"], "shack-pc");
+    assert_eq!(added["keys"][0]["added_by"], "KK4ODA");
+    let (status, _) = http(
+        &api,
+        "POST",
+        "/rp/v1/office/backup",
+        Some(&op),
+        Some(&json!({"key": other.id()})),
+    );
+    assert_eq!(status, 404, "a computer never registered");
+    let (status, fetched) = http(
+        &api,
+        "POST",
+        "/rp/v1/office/backup",
+        Some(&op),
+        Some(&json!({"key": shack.id()})),
+    );
+    assert_eq!(status, 200, "{fetched}");
+    assert_eq!(fetched["mail"], "stalwart-2026-11-13.tar.gz");
+    let file = base64url::decode(fetched["data"].as_str().expect("data")).expect("base64url");
+    assert!(
+        radiopost_postoffice::backups::open(&file, Some("a passphrase long enough"))
+            .expect_err("sealed to a computer, not a passphrase")
+            .contains(&shack.id())
+    );
+    assert!(radiopost_api::sealing::open(&file, &other).is_err());
+    let zip = radiopost_api::sealing::open(&file, &shack).expect("opened on its computer");
+    let to = dir.join("restored-from-shack");
+    let written = radiopost_postoffice::backups::restore(&zip, &to, false).expect("restored");
+    assert!(written.contains(&"key.hex".to_owned()));
+    let mut opened = zip::ZipArchive::new(std::io::Cursor::new(zip)).expect("a zip");
+    assert!(
+        opened.by_name("mail/stalwart-2026-11-13.tar.gz").is_ok(),
+        "the mailboxes"
+    );
+    // written down for Health, and for the computer
+    let (_, listed) = http(&api, "GET", "/rp/v1/office/backups", Some(&op), None);
+    assert_eq!(listed["downloaded"]["to"], "shack-pc");
+    assert_eq!(listed["keys"][0]["fetched_bytes"], file.len());
+    let off = radiopost_postoffice::health::offsite_line(
+        &radiopost_postoffice::backups::offsite(&dir, serve::now()),
+        serve::now(),
+    );
+    assert_eq!(
+        off.text,
+        "backups off the server: last fetched today, by KK4ODA's computer shack-pc, with the \
+         mailboxes"
+    );
+    // forgotten, it gets no more
+    let (status, _) = http(
+        &api,
+        "DELETE",
+        &format!("/rp/v1/office/backup-keys/{}", shack.id()),
+        Some(&op),
+        None,
+    );
+    assert_eq!(status, 200);
+    let (status, _) = http(
+        &api,
+        "POST",
+        "/rp/v1/office/backup",
+        Some(&op),
+        Some(&json!({"key": shack.id()})),
+    );
+    assert_eq!(status, 404, "forgotten");
+    let (status, _) = http(
+        &api,
+        "DELETE",
+        &format!("/rp/v1/office/backup-keys/{}", shack.id()),
+        Some(&op),
+        None,
+    );
+    assert_eq!(status, 404, "already forgotten");
+
     // the server's own commands see the same
     let (_, listed) = http(&admin, "GET", "/applications", None, None);
     assert_eq!(listed["applications"][0]["status"], json!("approved"));

@@ -20,6 +20,13 @@
 //! runner ([`crate::jobs`]) makes one each night: Stalwart stopped, its data archived, Stalwart
 //! started again ([`mail_backup`], `backups/mail/`, the last [`MAIL_KEEP`]). A downloaded backup
 //! carries the newest, and `radiopost-po restore` puts it back ([`restore_mail`]).
+//!
+//! **Backups that leave by themselves** (the author's choice, 2026-11-14). An operator's computer
+//! running the RadioPost app registers its public key ([`add_key`], `backups/keys.json`, at most
+//! [`MAX_KEYS`]), and while the app is open it fetches each new backup, mailboxes included,
+//! sealed to that key ([`seal_for`]; `radiopost_api::sealing`). Nothing secret is kept on the
+//! server: whoever holds it, or the file, cannot open it. The fetch is written down as a download
+//! is, so Health counts it.
 
 use std::fmt::Write as _;
 use std::io::{Cursor, Read as _, Write as _};
@@ -176,6 +183,12 @@ pub fn seal(zip: &[u8], passphrase: &str) -> Result<Vec<u8>, String> {
 pub fn open(file: &[u8], passphrase: Option<&str>) -> Result<Vec<u8>, String> {
     if file.starts_with(b"PK") {
         return Ok(file.to_vec());
+    }
+    if let Some(id) = radiopost_api::sealing::recipient(file) {
+        return Err(format!(
+            "this backup is sealed to the computer whose key is {id}: open it there with \
+             `radiopost backups open FILE`, and restore the zip it writes"
+        ));
     }
     let rest = file.strip_prefix(MAGIC).ok_or("not a RadioPost backup")?;
     if rest.len() < 28 + 16 {
@@ -615,6 +628,117 @@ fn unpack(tarball: &Path, name: &str, server: &MailServer, now: u64) -> Result<S
     }
 }
 
+// -- the operators' computers ----------------------------------------------------------------------
+
+/// The most computers a post office seals backups to.
+pub const MAX_KEYS: usize = 8;
+
+fn keys_file(dir: &Path) -> PathBuf {
+    dir.join("backups").join("keys.json")
+}
+
+/// The computers backups are sealed to: each `id`, `public` (hex), `label`, `added_by`,
+/// `added_at`, and `fetched_at` and `fetched_bytes` once one has fetched.
+#[must_use]
+pub fn keys(dir: &Path) -> Vec<Json> {
+    std::fs::read_to_string(keys_file(dir))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Json>(&t).ok())
+        .and_then(|k| k["keys"].as_array().cloned())
+        .unwrap_or_default()
+}
+
+fn save_keys(dir: &Path, keys: &[Json]) -> Result<(), String> {
+    std::fs::create_dir_all(dir.join("backups")).map_err(|e| e.to_string())?;
+    let path = keys_file(dir);
+    let part = path.with_extension("part");
+    std::fs::write(&part, json!({"keys": keys}).to_string()).map_err(|e| e.to_string())?;
+    std::fs::rename(&part, &path).map_err(|e| e.to_string())
+}
+
+/// Registers a computer's public key (`public`, hex) under `label`, by `by` at `at`, or renames
+/// one already registered. Returns its key ID.
+///
+/// # Errors
+///
+/// Not a usable public key, [`MAX_KEYS`] already, or the list could not be written.
+pub fn add_key(dir: &Path, public: &str, label: &str, by: &str, at: u64) -> Result<String, String> {
+    let key = radiopost_api::sealing::public_from_hex(public)?;
+    // a key nothing can be sealed to is refused here, not on the first night
+    radiopost_api::sealing::seal(b"", &key)?;
+    let id = radiopost_api::sealing::key_id(&key);
+    let label: String = label
+        .trim()
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(60)
+        .collect();
+    let mut list = keys(dir);
+    if let Some(known) = list.iter_mut().find(|k| k["id"] == id.as_str()) {
+        known["label"] = label.into();
+    } else {
+        if list.len() >= MAX_KEYS {
+            return Err(format!(
+                "backups go to {MAX_KEYS} computers at most: forget one first"
+            ));
+        }
+        list.push(
+            json!({"id": id, "public": radiopost::cbor::hex(&key), "label": label,
+                         "added_by": by, "added_at": at}),
+        );
+    }
+    save_keys(dir, &list)?;
+    Ok(id)
+}
+
+/// Forgets a computer: backups are no longer sealed to it. Whether it was registered.
+///
+/// # Errors
+///
+/// The list could not be written.
+pub fn remove_key(dir: &Path, id: &str) -> Result<bool, String> {
+    let mut list = keys(dir);
+    let before = list.len();
+    list.retain(|k| k["id"] != id);
+    if list.len() == before {
+        return Ok(false);
+    }
+    save_keys(dir, &list)?;
+    Ok(true)
+}
+
+/// A backup to leave the server, its mailboxes included, sealed to the registered computer `id`:
+/// the file, and the mailboxes' backup it carries.
+///
+/// # Errors
+///
+/// No such computer, or the backup could not be made or sealed.
+pub fn seal_for(dir: &Path, id: &str) -> Result<(Vec<u8>, Option<String>), String> {
+    let known = keys(dir)
+        .into_iter()
+        .find(|k| k["id"] == id)
+        .ok_or_else(|| format!("no computer {id} is registered for backups"))?;
+    let public =
+        radiopost_api::sealing::public_from_hex(known["public"].as_str().unwrap_or_default())?;
+    let mail = mail_list(dir).into_iter().next().map(|(name, _, _)| name);
+    let sealed = radiopost_api::sealing::seal(&archive(dir, true)?, &public)?;
+    Ok((sealed, mail))
+}
+
+/// Writes down that the computer `id` fetched a backup of `bytes` at `at`.
+///
+/// # Errors
+///
+/// The list could not be written.
+pub fn fetched(dir: &Path, id: &str, at: u64, bytes: usize) -> Result<(), String> {
+    let mut list = keys(dir);
+    for k in list.iter_mut().filter(|k| k["id"] == id) {
+        k["fetched_at"] = at.into();
+        k["fetched_bytes"] = bytes.into();
+    }
+    save_keys(dir, &list)
+}
+
 // -- backups that left the server ------------------------------------------------------------------
 
 /// Where the service writes down the backups downloaded from the desk.
@@ -623,7 +747,8 @@ fn downloads_file(dir: &Path) -> PathBuf {
 }
 
 /// What is known of backups that left the server: since when it has been watched, and the last
-/// one downloaded (`at`, `by`, `bytes`, and `mail`, the mailboxes' backup it carried, if any).
+/// one downloaded or fetched (`at`, `by`, `bytes`, `mail`, the mailboxes' backup it carried, if
+/// any, and `to`, the computer that fetched it by itself).
 #[must_use]
 pub fn offsite(dir: &Path, now: u64) -> Json {
     let path = downloads_file(dir);
@@ -641,8 +766,8 @@ pub fn offsite(dir: &Path, now: u64) -> Json {
     fresh
 }
 
-/// A backup downloaded from the desk, at `at`, by `by`, `bytes` long, carrying the mailboxes'
-/// backup `mail`.
+/// A backup that left the server at `at`, taken by the operator `by`, `bytes` long, carrying the
+/// mailboxes' backup `mail`: downloaded from the desk, or fetched by the computer `to` by itself.
 ///
 /// # Errors
 ///
@@ -653,9 +778,10 @@ pub fn downloaded(
     by: &str,
     bytes: usize,
     mail: Option<&str>,
+    to: Option<&str>,
 ) -> Result<(), String> {
     let mut known = offsite(dir, at);
-    known["last"] = json!({"at": at, "by": by, "bytes": bytes, "mail": mail});
+    known["last"] = json!({"at": at, "by": by, "bytes": bytes, "mail": mail, "to": to});
     std::fs::write(downloads_file(dir), known.to_string()).map_err(|e| e.to_string())
 }
 
@@ -879,6 +1005,61 @@ mod tests {
     }
 
     #[test]
+    fn computers_are_registered_once_each_and_at_most_eight() {
+        let dir = office("keys");
+        let laptop = radiopost_api::sealing::KeyPair::generate().expect("a key pair");
+        let public = radiopost::cbor::hex(&laptop.public());
+        let id = add_key(&dir, &public, "laptop", "KK4ODA", 10).expect("added");
+        assert_eq!(id, laptop.id());
+        // the same key again renames it, and adds none
+        add_key(&dir, &public, "shack laptop", "KK4ODA", 20).expect("renamed");
+        let listed = keys(&dir);
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0]["label"], "shack laptop");
+        assert_eq!(listed[0]["added_at"], 10, "added when first registered");
+        assert!(add_key(&dir, &"00".repeat(32), "nobody", "KK4ODA", 30).is_err());
+        for _ in 1..MAX_KEYS {
+            let k = radiopost_api::sealing::KeyPair::generate().expect("a key pair");
+            add_key(
+                &dir,
+                &radiopost::cbor::hex(&k.public()),
+                "another",
+                "KK4ODA",
+                40,
+            )
+            .expect("added");
+        }
+        let k = radiopost_api::sealing::KeyPair::generate().expect("a key pair");
+        assert!(
+            add_key(
+                &dir,
+                &radiopost::cbor::hex(&k.public()),
+                "one too many",
+                "KK4ODA",
+                50
+            )
+            .expect_err("full")
+            .contains("8 computers")
+        );
+        // a backup sealed to it opens there, carrying the post office
+        let (file, mail) = seal_for(&dir, &id).expect("sealed");
+        assert_eq!(mail, None, "no mailboxes' backup yet");
+        let zip = radiopost_api::sealing::open(&file, &laptop).expect("opened");
+        assert!(
+            zip::ZipArchive::new(Cursor::new(zip))
+                .expect("a zip")
+                .by_name("key.hex")
+                .is_ok()
+        );
+        fetched(&dir, &id, 60, file.len()).expect("written down");
+        assert_eq!(keys(&dir)[0]["fetched_at"], 60);
+        assert!(remove_key(&dir, &id).expect("removed"));
+        assert!(!remove_key(&dir, &id).expect("nothing to remove"));
+        assert!(seal_for(&dir, &id).is_err(), "forgotten");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_download_is_written_down() {
         let dir = office("downloads");
         let first = offsite(&dir, 100);
@@ -890,13 +1071,15 @@ mod tests {
             "KK4ODA",
             1234,
             Some("stalwart-2026-11-13.tar.gz"),
+            None,
         )
         .expect("kept");
         let known = offsite(&dir, 400);
         assert_eq!(known["since"], 100);
         assert_eq!(
             known["last"],
-            json!({"at": 300, "by": "KK4ODA", "bytes": 1234, "mail": "stalwart-2026-11-13.tar.gz"})
+            json!({"at": 300, "by": "KK4ODA", "bytes": 1234, "mail": "stalwart-2026-11-13.tar.gz",
+                   "to": null})
         );
         let _ = std::fs::remove_dir_all(dir);
     }

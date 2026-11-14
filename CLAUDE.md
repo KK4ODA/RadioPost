@@ -231,7 +231,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `aftercare.rs` send the emails. `health.rs` checks hourly and emails on change (an amber
   `Warn` sends nothing); `backups.rs` seals with ring's PBKDF2 and ChaCha20-Poly1305, and backs up
   Stalwart's `/var/lib/stalwart` and `/etc/stalwart` with Stalwart stopped (`mail_backup`, the jobs
-  runner's nightly `mail-backup`; `restore_mail`; tests use a stand-in `MailServer`); `jobs.rs` is the fixed table a root-owned
+  runner's nightly `mail-backup`; `restore_mail`; tests use a stand-in `MailServer`), and seals
+  a backup to an operator's computer (`/office/backup-keys`, `seal_for`; `radiopost_api::sealing`:
+  X25519, HKDF-SHA256, ChaCha20-Poly1305), which the client's `backups.rs` fetches by itself while
+  its panel runs (W38); a backup is new by name, time and size, since one made again the same day
+  keeps its name. `radiopost_api::Http` reads answers up to `ANSWER_LIMIT` (10 MB) unless told
+  more (`reading_up_to`): ureq's own limit had made a larger download fail silently. `jobs.rs` is the fixed table a root-owned
   systemd path unit runs from `requests/new/`; `install.rs` plans a Debian set-up against a
   `Probe` (tests plan a fresh and a set-up server). The desk goes by callsign, so nobody becomes an
   operator by applying, and a code naming an operator's callsign for anyone but the asking operator

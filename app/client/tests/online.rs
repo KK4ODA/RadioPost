@@ -769,3 +769,158 @@ fn two_callsigns_share_one_computer_and_keep_their_own_mail() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Waits, a tenth of a second at a time for at most 30 s, until `done` says so.
+fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while !done() {
+        assert!(std::time::Instant::now() < deadline, "never: {what}");
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// The post office's operator keeps its backups on a computer of theirs by themselves (wishlist
+/// W38): turned on from the panel, the computer registers its key and fetches the backup at once,
+/// again only when the server has made a new one, into the folder chosen; the file opens with that
+/// computer's key alone, as the zip `radiopost-po restore` takes; and a computer the post office
+/// has forgotten stops, and says why.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn the_operators_computer_keeps_the_post_offices_backups() {
+    let dir = scratch("panel-backups");
+    let po = dir.join("po");
+    let (running, base, _) = post_office(&po);
+    let (_, answer) = running.admin(
+        "POST",
+        "/code",
+        json!({"address": "kk4oda@test.example", "operator": "KK4ODA"})
+            .to_string()
+            .as_bytes(),
+    );
+    let code = serde_json::from_str::<serde_json::Value>(&answer).expect("JSON")["code"]
+        .as_str()
+        .expect("a code")
+        .to_owned();
+    let home = dir.join("operator");
+    let op = radiopost_client::panel::Panel::new(&home, None)
+        .with_backups_every(Duration::from_millis(300))
+        .start("127.0.0.1:0")
+        .expect("the operator's panel");
+    let (status, said) = panel(
+        op,
+        "enroll",
+        &json!({"address": "kk4oda@test.example", "operator": "KK4ODA", "code": code,
+                "url": base}),
+    );
+    assert_eq!(status, 200, "{said}");
+    assert_eq!(
+        panel_get(op, "/api/backups")["on"],
+        false,
+        "off until turned on"
+    );
+
+    // last night's backup is on the server; the operator turns this on, into a drive of theirs
+    radiopost_postoffice::backups::nightly(&po, "2026-11-13").expect("made");
+    let usb = dir.join("usb");
+    let (status, on) = panel(
+        op,
+        "backups",
+        &json!({"on": true, "computer": "shack-pc", "folder": usb}),
+    );
+    assert_eq!(status, 200, "{on}");
+    assert_eq!(on["on"], true);
+    assert_eq!(on["computer"], "shack-pc");
+    assert_eq!(on["folder"], usb.display().to_string());
+    let kept_lines = || {
+        panel_log(op)
+            .iter()
+            .filter(|l| l.starts_with("kept the post office's backup"))
+            .count()
+    };
+    wait_until("the first backup is fetched", || kept_lines() == 1);
+    // the server's newest backup made again under its own name, a second later
+    let made_again = || {
+        thread::sleep(Duration::from_millis(1100));
+        let newest = radiopost_postoffice::backups::list(&po)[0].0.clone();
+        let day = newest
+            .strip_prefix("radiopost-")
+            .and_then(|n| n.strip_suffix(".zip"))
+            .expect("a nightly's name");
+        radiopost_postoffice::backups::nightly(&po, day).expect("made");
+    };
+    let fetched = panel_get(op, "/api/backups")["fetched"].clone();
+    let path = std::path::PathBuf::from(fetched["path"].as_str().expect("a path"));
+    assert!(path.starts_with(&usb), "{fetched}");
+    let file = std::fs::read(&path).expect("kept");
+    assert!(radiopost_api::sealing::is_sealed(&file), "sealed");
+    assert_eq!(
+        radiopost_postoffice::backups::offsite(&po, serve::now())["last"]["to"],
+        "shack-pc",
+        "the post office wrote it down"
+    );
+
+    // it opens on this computer, as the zip a restore takes
+    let out = dir.join("restore-me.zip");
+    let said = radiopost(
+        &home,
+        &[
+            "backups",
+            "open",
+            path.to_str().expect("a path"),
+            out.to_str().expect("a path"),
+        ],
+    )
+    .expect("opened");
+    assert!(said.contains("radiopost-po restore"), "{said}");
+    let to = dir.join("restored");
+    let written =
+        radiopost_postoffice::backups::restore(&std::fs::read(&out).expect("written"), &to, false)
+            .expect("restored");
+    assert!(written.contains(&"key.hex".to_owned()));
+    assert_eq!(
+        std::fs::read(to.join("key.hex")).expect("read"),
+        std::fs::read(po.join("key.hex")).expect("read")
+    );
+    // and nowhere else: another home's key does not open it
+    let stranger = dir.join("stranger");
+    std::fs::create_dir_all(&stranger).expect("a home");
+    assert!(radiopost_client::backups::open(&stranger, &file).is_err());
+
+    // nothing new on the server: nothing fetched, however often it looks
+    thread::sleep(Duration::from_millis(1200));
+    assert_eq!(kept_lines(), 1, "fetched once");
+    // a backup made again: fetched once more, though it keeps its name (the service made today's
+    // at start, and a backup made again the same day is named alike)
+    made_again();
+    wait_until("the new backup is fetched", || kept_lines() == 2);
+
+    // turned off: the post office forgets this computer, and nothing more comes
+    let (status, off) = panel(op, "backups", &json!({"on": false}));
+    assert_eq!(status, 200, "{off}");
+    assert_eq!(off["on"], false);
+    assert_eq!(
+        radiopost_postoffice::backups::keys(&po),
+        Vec::<serde_json::Value>::new()
+    );
+    made_again();
+    thread::sleep(Duration::from_millis(1200));
+    assert_eq!(kept_lines(), 2, "off");
+
+    // on again, then forgotten on the server's side: it stops, and says why
+    let (status, _) = panel(op, "backups", &json!({"on": true, "folder": usb}));
+    assert_eq!(status, 200);
+    wait_until("fetched again", || kept_lines() == 3);
+    let id = panel_get(op, "/api/backups")["key"]
+        .as_str()
+        .expect("a key")
+        .to_owned();
+    assert!(radiopost_postoffice::backups::remove_key(&po, &id).expect("forgotten"));
+    made_again();
+    wait_until("it says the post office forgot it", || {
+        panel_log(op)
+            .iter()
+            .any(|l| l.contains("no longer knows this computer"))
+    });
+    assert_eq!(panel_get(op, "/api/backups")["on"], false);
+    let _ = std::fs::remove_dir_all(&dir);
+}

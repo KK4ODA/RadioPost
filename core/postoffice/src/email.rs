@@ -400,7 +400,7 @@ impl Running {
             .collect();
         // RP-1 §7.5: the domain of mail that reaches the door is met, to be looked up later
         if hook.stage == "rcpt"
-            && hook.recipients.last().is_some_and(&account)
+            && hook.recipients.last().is_some_and(account)
             && let Some((_, domain)) = hook.sender.rsplit_once('@')
         {
             self.met(domain, "door");

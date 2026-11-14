@@ -3,6 +3,8 @@
 //! renewing the token when it runs out, requests and their problem codes (§1), enrollment (§6.1),
 //! and a domain's post office found in DNS (RP-1 §7.1) by DNS over HTTPS.
 
+pub mod sealing;
+
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
@@ -42,7 +44,12 @@ pub struct Http {
     account: Option<Arc<Account>>,
     token: Arc<Mutex<Option<String>>>,
     agent: ureq::Agent,
+    limit: u64,
 }
+
+/// The largest answer read, unless a request says otherwise ([`Http::reading_up_to`]): what ureq
+/// reads by default.
+pub const ANSWER_LIMIT: u64 = 10 * 1024 * 1024;
 
 impl Http {
     /// The API at `base` (its base URL, RP-5 §1), logged in as `account`; `token` may be shared by
@@ -54,7 +61,16 @@ impl Http {
             account: Some(account),
             token,
             agent: agent(),
+            limit: ANSWER_LIMIT,
         }
+    }
+
+    /// The same API, reading answers of up to `bytes`: a post office's backup, which carries its
+    /// mailboxes, is larger than any other answer.
+    #[must_use]
+    pub fn reading_up_to(mut self, bytes: u64) -> Http {
+        self.limit = bytes;
+        self
     }
 
     /// The API at `base` with no credential: enrollment and the public documents.
@@ -65,6 +81,7 @@ impl Http {
             account: None,
             token: Arc::new(Mutex::new(None)),
             agent: agent(),
+            limit: ANSWER_LIMIT,
         }
     }
 
@@ -134,7 +151,14 @@ impl Http {
         };
         let mut response = result.map_err(|_| ErrorCode::PostOfficeUnreachable)?;
         let status = response.status().as_u16();
-        let text = response.body_mut().read_to_string().unwrap_or_default();
+        // an answer cut off at the limit is no answer, not an empty one
+        let text = response
+            .body_mut()
+            .with_config()
+            .limit(self.limit)
+            .lossy_utf8(true)
+            .read_to_string()
+            .map_err(|_| ErrorCode::PostOfficeUnreachable)?;
         Ok((status, text))
     }
 

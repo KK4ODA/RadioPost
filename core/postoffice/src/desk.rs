@@ -22,6 +22,17 @@ fn ok(body: &Json) -> Answer {
     (200, "application/json", body.to_string())
 }
 
+/// A request the desk could not do, with the reason in words (RP-5 §1's `malformed`).
+fn malformed(why: &str) -> Answer {
+    (
+        400,
+        "application/problem+json",
+        json!({"type": "about:blank", "title": why, "status": 400, "code": 2,
+               "name": "malformed"})
+        .to_string(),
+    )
+}
+
 fn refused(code: ErrorCode, status: u16) -> Answer {
     let p = problem(code, Some(status));
     (
@@ -77,11 +88,12 @@ impl Running {
         ) || (method == "GET" && route.starts_with("/office/lookup/"))
             || matches!(
                 (method, route),
-                ("GET" | "POST", "/office/health")
+                ("GET" | "POST", "/office/health" | "/office/backup-keys")
                     | ("GET", "/office/jobs" | "/office/backups")
                     | ("POST", "/office/backup")
             )
-            || (method == "POST" && route.starts_with("/office/jobs/"));
+            || (method == "POST" && route.starts_with("/office/jobs/"))
+            || (method == "DELETE" && route.starts_with("/office/backup-keys/"));
         if !own {
             return None;
         }
@@ -202,8 +214,103 @@ impl Running {
         })
     }
 
+    /// The computers that fetch the backups by themselves (wishlist W38): each registered by its
+    /// public key, and a backup sealed to one of them, nothing secret asked.
+    fn desk_backup_keys(
+        &self,
+        method: &str,
+        route: &str,
+        who: &str,
+        body: &Json,
+    ) -> Option<Answer> {
+        let text = |k: &str| body.get(k).and_then(Json::as_str).unwrap_or("").to_owned();
+        Some(match (method, route) {
+            // the computers that fetch backups by themselves, each by its public key
+            ("GET", "/office/backup-keys") => {
+                ok(&json!({"keys": crate::backups::keys(self.files().dir())}))
+            }
+            ("POST", "/office/backup-keys") => {
+                let dir = self.files().dir();
+                match crate::backups::add_key(dir, &text("public"), &text("label"), who, now()) {
+                    Ok(id) => {
+                        eprintln!(
+                            "radiopost-po: {who} registered the computer {:?} ({id}) for backups",
+                            text("label")
+                        );
+                        ok(&json!({"id": id, "keys": crate::backups::keys(dir)}))
+                    }
+                    Err(e) => malformed(&e),
+                }
+            }
+            ("DELETE", _) if route.starts_with("/office/backup-keys/") => {
+                let dir = self.files().dir();
+                let id = route.trim_start_matches("/office/backup-keys/");
+                match crate::backups::remove_key(dir, id) {
+                    Ok(true) => {
+                        eprintln!("radiopost-po: {who} forgot the backup computer {id}");
+                        ok(&json!({"keys": crate::backups::keys(dir)}))
+                    }
+                    Ok(false) => refused(ErrorCode::UnknownMessage, 404),
+                    Err(e) => {
+                        eprintln!("radiopost-po: the backup computers: {e}");
+                        refused(ErrorCode::Internal, 500)
+                    }
+                }
+            }
+            // a backup for a registered computer: sealed to its key, nothing secret asked
+            ("POST", "/office/backup") if body.get("key").is_some_and(Json::is_string) => {
+                let dir = self.files().dir();
+                let id = text("key");
+                let Some(label) = crate::backups::keys(dir)
+                    .into_iter()
+                    .find(|k| k["id"] == id.as_str())
+                    .map(|k| k["label"].as_str().unwrap_or_default().to_owned())
+                else {
+                    return Some(refused(ErrorCode::UnknownMessage, 404));
+                };
+                match crate::backups::seal_for(dir, &id) {
+                    Ok((sealed, mail)) => {
+                        let at = now();
+                        eprintln!(
+                            "radiopost-po: the computer {label:?} of {who} fetched a backup{}",
+                            mail.as_deref().map_or_else(String::new, |m| format!(
+                                ", with the mailboxes of {m}"
+                            ))
+                        );
+                        let noted = crate::backups::downloaded(
+                            dir,
+                            at,
+                            who,
+                            sealed.len(),
+                            mail.as_deref(),
+                            Some(&label),
+                        )
+                        .and_then(|()| crate::backups::fetched(dir, &id, at, sealed.len()));
+                        if let Err(e) = noted {
+                            eprintln!("radiopost-po: the fetch was not written down: {e}");
+                        }
+                        let domain = self.settings().domains.first().cloned().unwrap_or_default();
+                        let name = format!("{domain}-{}.rpbackup", crate::lookups::day(at));
+                        ok(
+                            &json!({"name": name, "bytes": sealed.len(), "mail": mail, "key": id,
+                                   "data": radiopost::base64url::encode(&sealed)}),
+                        )
+                    }
+                    Err(e) => {
+                        eprintln!("radiopost-po: a backup for {id}: {e}");
+                        refused(ErrorCode::Internal, 500)
+                    }
+                }
+            }
+            _ => return None,
+        })
+    }
+
     /// The desk's share of the server's care: health, jobs, backups.
     fn desk_care(&self, method: &str, route: &str, who: &str, body: &Json) -> Option<Answer> {
+        if let Some(answer) = self.desk_backup_keys(method, route, who, body) {
+            return Some(answer);
+        }
         let text = |k: &str| body.get(k).and_then(Json::as_str).unwrap_or("").to_owned();
         Some(match (method, route) {
             ("GET", "/office/health") => ok(&self.health().unwrap_or_else(|| self.health_now())),
@@ -229,7 +336,8 @@ impl Running {
                 };
                 ok(&json!({"backups": listed(crate::backups::list(dir)),
                            "mail": listed(crate::backups::mail_list(dir)),
-                           "downloaded": crate::backups::offsite(dir, now())["last"]}))
+                           "downloaded": crate::backups::offsite(dir, now())["last"],
+                           "keys": crate::backups::keys(dir)}))
             }
             ("POST", "/office/backup") => {
                 let dir = self.files().dir();
@@ -247,9 +355,14 @@ impl Running {
                                 ", with the mailboxes of {m}"
                             ))
                         );
-                        if let Err(e) =
-                            crate::backups::downloaded(dir, at, who, sealed.len(), mail.as_deref())
-                        {
+                        if let Err(e) = crate::backups::downloaded(
+                            dir,
+                            at,
+                            who,
+                            sealed.len(),
+                            mail.as_deref(),
+                            None,
+                        ) {
                             eprintln!("radiopost-po: the download was not written down: {e}");
                         }
                         let domain = self.settings().domains.first().cloned().unwrap_or_default();
@@ -257,13 +370,7 @@ impl Running {
                         ok(&json!({"name": name, "bytes": sealed.len(), "mail": mail,
                                    "data": radiopost::base64url::encode(&sealed)}))
                     }
-                    Err(e) => (
-                        400,
-                        "application/problem+json",
-                        json!({"type": "about:blank", "title": e, "status": 400, "code": 2,
-                               "name": "malformed"})
-                        .to_string(),
-                    ),
+                    Err(e) => malformed(&e),
                 }
             }
             _ => return None,

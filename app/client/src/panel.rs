@@ -111,6 +111,10 @@ pub struct Panel {
     office_token: Arc<Mutex<Option<String>>>,
     /// The app's connection to Aether between calls.
     presence: Presence,
+    /// Set, the thread that fetches the post office's backups looks now, not at its hour.
+    backups_now: Arc<AtomicBool>,
+    /// How often that thread looks: [`crate::backups::EVERY`], shorter in tests.
+    backups_every: std::time::Duration,
 }
 
 /// When the panel renews the credential: first after `first`, then every `every`, once it has
@@ -205,7 +209,16 @@ impl Panel {
             live: Arc::default(),
             office_token: Arc::default(),
             presence: Presence::new(home),
+            backups_now: Arc::new(AtomicBool::new(true)),
+            backups_every: crate::backups::EVERY,
         }
+    }
+
+    /// The same panel, looking for a new backup of the post office every `every`: for tests.
+    #[must_use]
+    pub fn with_backups_every(mut self, every: std::time::Duration) -> Panel {
+        self.backups_every = every;
+        self
     }
 
     /// The same panel, renewing first after `first`, then every `every`, once the credential has
@@ -271,6 +284,8 @@ impl Panel {
         self.presence.start();
         let renewing = self.clone();
         thread::spawn(move || renewing.keep_renewed());
+        let backing_up = self.clone();
+        thread::spawn(move || backing_up.keep_backed_up());
         thread::spawn(move || {
             for request in server.incoming_requests() {
                 self.handle(request);
@@ -299,6 +314,79 @@ impl Panel {
             }
             thread::sleep(self.renewal.every);
         }
+    }
+
+    /// Fetches the post office's new backups onto this computer whenever it is turned on, for as
+    /// long as the panel runs: at start, every [`crate::backups::EVERY`], and when asked. A
+    /// failure is said once until it changes. It reads the first home's credential and writes
+    /// nothing a session writes, so it goes on during a session too.
+    fn keep_backed_up(&self) {
+        let mut said = String::new();
+        let step = std::time::Duration::from_millis(200);
+        loop {
+            let mut waited = std::time::Duration::ZERO;
+            while waited < self.backups_every && !self.backups_now.swap(false, Ordering::Relaxed) {
+                thread::sleep(step);
+                waited += step;
+            }
+            let result = Store::open(&self.base).and_then(|store| {
+                crate::backups::fetch_if_new(&store, &self.office_token, &self.base, now())
+            });
+            let line = match result {
+                Ok(Some(line)) => {
+                    said.clear();
+                    line
+                }
+                Ok(None) => continue,
+                Err(why) if why == said => continue,
+                Err(why) => {
+                    said.clone_from(&why);
+                    format!(
+                        "could not fetch the post office's backup: {why}; trying again every hour \
+                         while this window is open"
+                    )
+                }
+            };
+            radiopost::logfile::line(&line);
+            lock(&self.activity).log.push(line);
+        }
+    }
+
+    /// The post office's backups kept on this computer: turned on or off (`on`, and `computer`,
+    /// the name the desk shows), or what is known of them.
+    fn backups(&self, method: &Method, path: &str, body: &Value) -> Result<Value, Error> {
+        if *method == Method::Get {
+            return Ok(crate::backups::status(&self.base));
+        }
+        if path == "/api/backups/fetch" {
+            self.backups_now.store(true, Ordering::Relaxed);
+            return Ok(crate::backups::status(&self.base));
+        }
+        let store = Store::open(&self.base)?;
+        let answer = if body["on"].as_bool().unwrap_or(false) {
+            let computer = body["computer"]
+                .as_str()
+                .map(str::trim)
+                .filter(|c| !c.is_empty())
+                .map_or_else(crate::backups::computer_name, str::to_owned);
+            let into = body["folder"]
+                .as_str()
+                .map(str::trim)
+                .filter(|f| !f.is_empty())
+                .map(PathBuf::from);
+            let on = crate::backups::turn_on(
+                &store,
+                &self.office_token,
+                &self.base,
+                &computer,
+                into.as_deref(),
+            )?;
+            self.backups_now.store(true, Ordering::Relaxed);
+            on
+        } else {
+            crate::backups::turn_off(&store, &self.office_token, &self.base)?
+        };
+        Ok(answer)
     }
 
     /// One try for the credential at `home`: what to say of it, if anything (`said` is what was
@@ -530,6 +618,7 @@ impl Panel {
             (Method::Post, p) if ONLINE.contains(&p) => self.online(path, body),
             (Method::Post, "/api/office") => self.office(body),
             (Method::Post, "/api/office-backup") => self.office_backup(body),
+            (_, "/api/backups" | "/api/backups/fetch") => self.backups(method, path, body),
             (Method::Post, "/api/terminal") => {
                 let target = body["target"].as_str().unwrap_or("").trim();
                 Ok(json!({"opened": crate::terminal::open(target)?}))
@@ -700,12 +789,14 @@ impl Panel {
     fn office_backup(&self, body: &Value) -> Result<Value, Error> {
         let store = Store::open(&self.home())?;
         let sent = json!({"passphrase": body["passphrase"].as_str().unwrap_or("")});
-        let (status, answer) = online::office(
+        // the mailboxes go with it: past ten megabytes, a smaller limit read no backup at all
+        let (status, answer) = online::office_reading(
             &store,
             &self.office_token,
             "POST",
             "/office/backup",
             Some(&sent),
+            1 << 30,
         )?;
         if status != 200 {
             return Err(answer["title"]
@@ -723,10 +814,7 @@ impl Panel {
             .chars()
             .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
             .collect();
-        let home = std::env::var_os("HOME")
-            .or_else(|| std::env::var_os("USERPROFILE"))
-            .map_or_else(|| self.base.clone(), PathBuf::from);
-        let folder = home.join("RadioPost backups");
+        let folder = crate::backups::folder(&self.base);
         std::fs::create_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
         let path = folder.join(name);
         std::fs::write(&path, &data).map_err(|e| format!("{}: {e}", path.display()))?;

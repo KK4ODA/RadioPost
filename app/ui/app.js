@@ -1724,8 +1724,63 @@ async function renderServer() {
   if (!(b.backups || []).length && !(b.mail || []).length) $("o-backups").append(el("tr", {}, el("td", {class: "note", colspan: "3", text: "None yet: the first is made tonight."})));
   const d = b.downloaded;
   $("o-downloaded").textContent = d
-    ? `Last downloaded ${day(d.at)} by ${d.by}, ${d.mail ? "with the mailboxes" : "without the mailboxes"}.`
+    ? `The last copy off the server: ${day(d.at)}, ${d.to ? `fetched by ${d.to}` : `downloaded by ${d.by}`}, ${d.mail ? "with the mailboxes" : "without the mailboxes"}.`
     : "None downloaded yet: a backup that stays on the server is lost with it.";
+  await renderAutoBackups(b.keys || []);
+}
+
+// the backups this computer fetches by itself (wishlist W38), and the computers the post office
+// sends them to
+async function renderAutoBackups(keys) {
+  const a = await api("backups");
+  const f = a.fetched;
+  $("o-auto-state").textContent = a.on
+    ? `On: while this app is open, ${a.computer || "this computer"} fetches each new backup into ${a.folder}. `
+      + (f ? `Last fetched ${day(f.at)}: ${f.name}, ${kb(f.bytes)}${f.mail ? ", with the mailboxes" : ""}.` : "Nothing fetched yet.")
+    : "Off. Turned on, this computer fetches each new backup while the app is open, sealed to a key only it holds: nothing secret is kept on the server.";
+  if (!$("o-auto-computer").matches(":focus") && !$("o-auto-computer").value) $("o-auto-computer").value = a.computer || "";
+  if (!$("o-auto-folder").matches(":focus") && !$("o-auto-folder").value) $("o-auto-folder").value = a.folder || "";
+  $("o-auto-computer").disabled = $("o-auto-folder").disabled = Boolean(a.on);
+  $("o-auto").textContent = a.on ? "Turn off" : "Turn on";
+  $("o-auto").title = a.on
+    ? "Stop fetching: the post office forgets this computer. The backups already here stay, and still open here"
+    : "While this app is open, fetch each new backup the server makes, sealed to a key only this computer holds";
+  $("o-auto-now").hidden = !a.on;
+  $("o-auto-key").hidden = !a.on && !f;
+  $("o-auto-key").textContent = `What opens them is this computer's key, ${a.key_file}: keep a copy of it somewhere else, or turn this on on a second computer of yours too. To open one: radiopost backups open FILE.`;
+  $("o-keys-table").hidden = !keys.length;
+  $("o-keys").replaceChildren(...keys.map((k) => {
+    const forget = el("button", {type: "button", class: "quiet", text: "Forget",
+      title: "The post office stops sealing backups to this computer: do this for a computer lost or given away"});
+    forget.addEventListener("click", (e) => armed(e.currentTarget, "Click again to forget it", async () => {
+      try { await desk("DELETE", `/office/backup-keys/${k.id}`); await renderServer(); }
+      catch (err) { toast(err.message, true); }
+    }));
+    const mine = k.id === a.key && a.on;
+    return el("tr", {title: `Key ${k.id}`},
+      el("td", {text: `${k.label}${mine ? " (this one)" : ""}`}),
+      el("td", {text: `${day(k.added_at)} by ${k.added_by}`}),
+      el("td", {text: k.fetched_at ? `${day(k.fetched_at)}, ${kb(k.fetched_bytes)}` : "not yet"}),
+      el("td", {}, forget));
+  }));
+}
+
+async function toggleAutoBackups() {
+  const on = $("o-auto").textContent === "Turn on";
+  $("o-auto").disabled = true;
+  try {
+    await api("backups", on
+      ? {on: true, computer: $("o-auto-computer").value.trim(), folder: $("o-auto-folder").value.trim()}
+      : {on: false});
+    toast(on ? "Turned on: the newest backup is on its way." : "Turned off: the backups already here stay.");
+    // the first fetch takes a moment
+    await renderServer();
+    if (on) setTimeout(() => renderServer().catch(() => {}), 3000);
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    $("o-auto").disabled = false;
+  }
 }
 
 // what a Claude session needs to help with the server: no mail, no names, no keys
@@ -1973,6 +2028,11 @@ function wire() {
     $("o-dkim-save").disabled = false;
   });
   $("o-backup").addEventListener("click", downloadBackup);
+  $("o-auto").addEventListener("click", toggleAutoBackups);
+  $("o-auto-now").addEventListener("click", async () => {
+    try { await api("backups/fetch", {}); setTimeout(() => renderServer().catch(() => {}), 2000); }
+    catch (e) { toast(e.message, true); }
+  });
   $("o-ssh").value = kept("ssh", "");
   $("o-term").addEventListener("click", async () => {
     const target = $("o-ssh").value.trim();
