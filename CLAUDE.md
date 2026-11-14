@@ -297,6 +297,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
 - **Cross-references** are written `RP-n §x.y`; check them when sections move.
 - **Plain language**: short sentences, no filler, requirement words in capitals only where they are
   requirements.
+- **No read timeouts on sockets.** A connection a thread polls (a host's to its adapter, an
+  adapter's to its modem, the Aether adapter's WebSocket) is read through
+  `rpmi::polled::PolledStream`: on Windows a read whose `SO_RCVTIMEO` runs out can fail with os
+  error 997 and lose data (Aether found it on 2026-11-12; its `core/aetherd/src/polled.rs`). End
+  such a connection from another thread with its `Closer`, not a `shutdown` on a clone. A one-shot
+  request that gives up at its timeout (an HTTP call) may keep one.
 - **Amateur radio rules**: nothing on the air is encrypted; every encoding is published; VARA is a
   black box — cite only its published documents (the TNC command list).
 - Figures: edit the generator, run it, check the render, commit the script and the SVGs together.

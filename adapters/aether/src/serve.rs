@@ -4,6 +4,11 @@
 //!
 //! A host's thread reads its lines; the connection's thread owns the bridge, the WebSocket and
 //! the writer to the host, and wakes every few milliseconds to read Aether and the host's lines.
+//!
+//! The WebSocket is read through a [`PolledStream`], a thread of its own doing plain blocking
+//! reads, never with a read timeout on its socket: on Windows a read whose timeout runs out can
+//! fail with os error 997 ("Overlapped I/O operation is in progress"), which ended RadioPost
+//! Gateway's connection to Aether, and its claim, four times on 2026-11-12.
 
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
@@ -13,15 +18,18 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use rpmi::polled::PolledStream;
 use rpmi::tcp::MAX_LINE;
 use rpmi::wire::line_of;
-use tungstenite::stream::MaybeTlsStream;
+use tungstenite::client::IntoClientRequest;
 use tungstenite::{Message as Ws, WebSocket};
 
 use crate::bridge::{Bridge, Out};
 
 /// How long a read of Aether waits before the host's lines are looked at again.
 const POLL: Duration = Duration::from_millis(10);
+/// How long Aether has to answer the WebSocket's opening handshake.
+const HANDSHAKE: Duration = Duration::from_secs(10);
 /// How long a host that left waits for Aether to take its abort.
 const LEAVING: Duration = Duration::from_secs(2);
 
@@ -111,12 +119,29 @@ pub fn listen_noting(
     Ok(local)
 }
 
-fn open_aether(url: &str) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, String> {
-    let (ws, _) = tungstenite::connect(url).map_err(|e| e.to_string())?;
-    if let MaybeTlsStream::Plain(s) = ws.get_ref() {
-        s.set_read_timeout(Some(POLL)).map_err(|e| e.to_string())?;
-        s.set_nodelay(true).map_err(|e| e.to_string())?;
+/// Opens the WebSocket to Aether's control API at `url` (`ws://`, on this machine or the
+/// station's network): the handshake waits up to [`HANDSHAKE`] for each read, and every read after
+/// it up to [`POLL`].
+fn open_aether(url: &str) -> Result<WebSocket<PolledStream>, String> {
+    let request = url.into_client_request().map_err(|e| e.to_string())?;
+    if request.uri().scheme_str() != Some("ws") {
+        return Err(format!("{url} is not a ws:// address"));
     }
+    let host = request
+        .uri()
+        .host()
+        .ok_or("the address names no host")?
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .to_owned();
+    let port = request.uri().port_u16().unwrap_or(80);
+    let tcp = TcpStream::connect((host.as_str(), port))
+        .map_err(|e| format!("cannot connect to {host}:{port}: {e}"))?;
+    tcp.set_nodelay(true).map_err(|e| e.to_string())?;
+    let stream =
+        PolledStream::new(&tcp, Some(HANDSHAKE), "aether-ws-reader").map_err(|e| e.to_string())?;
+    let (ws, _) = tungstenite::client(request, stream).map_err(|e| e.to_string())?;
+    ws.get_ref().set_wait(Some(POLL));
     Ok(ws)
 }
 
@@ -205,7 +230,7 @@ fn serve_reaching(host: &TcpStream, aether: &str, note: &Note, log: Option<&Path
 
 /// The host is gone: what it held on the air is ended, and Aether's answer awaited a moment so
 /// the abort is done before the claim goes. Whether there was anything to end.
-fn left(bridge: &mut Bridge, ws: &mut WebSocket<MaybeTlsStream<TcpStream>>) -> bool {
+fn left(bridge: &mut Bridge, ws: &mut WebSocket<PolledStream>) -> bool {
     let asked = bridge.host_left();
     let held = !asked.is_empty();
     for out in asked {
@@ -242,7 +267,7 @@ fn left(bridge: &mut Bridge, ws: &mut WebSocket<MaybeTlsStream<TcpStream>>) -> b
 /// claim again. Closed, it is the host's cue to open the modem afresh.
 fn run(
     bridge: &mut Bridge,
-    ws: &mut Option<WebSocket<MaybeTlsStream<TcpStream>>>,
+    ws: &mut Option<WebSocket<PolledStream>>,
     host: &TcpStream,
     rx: &Receiver<FromHost>,
 ) -> Option<String> {

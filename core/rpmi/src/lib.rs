@@ -10,12 +10,15 @@
 //!   reference that made the vectors has them: the loopback adapter, and the conformance tester's
 //!   test adapter.
 //! * [`tcp`]: the channel served on loopback ports, and a host's connection to any adapter.
+//! * [`polled`]: a TCP connection read a while at a time without a read timeout on its socket,
+//!   which Windows does not keep safely: a host's connection, and an adapter's to its modem.
 //!
-//! None of it but [`tcp`] does input or output, and nothing has a clock.
+//! None of it but [`tcp`] and [`polled`] does input or output, and nothing has a clock.
 
 pub mod base64;
 pub mod channel;
 pub mod host;
+pub mod polled;
 pub mod tcp;
 pub mod wire;
 

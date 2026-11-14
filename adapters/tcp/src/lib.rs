@@ -5,6 +5,9 @@
 //! One host has the adapter (`shared` false): a second is turned away at its `hello`. It keeps one
 //! link or call at a time. Each link has a thread that writes what the host sends and reads what
 //! arrives; the host's state is behind one lock.
+//!
+//! A link's socket is read through an [`rpmi::polled::PolledStream`], never with a read timeout
+//! on the socket: on Windows such a read can fail with os error 997 and lose what it had.
 
 pub mod tls;
 
@@ -17,6 +20,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
 
+use rpmi::polled::{Closer, PolledStream};
 use rpmi::wire::{Caps, Message, Request, admit, answer, answer_with, error, line_of, parse_line};
 use rustls::{ClientConfig, ClientConnection, ServerConfig, ServerConnection, StreamOwned};
 use serde_json::{Value, json};
@@ -73,9 +77,9 @@ pub fn caps() -> Caps {
 
 /// A link's connection, plain or TLS.
 enum Stream {
-    Plain(TcpStream),
-    Client(Box<StreamOwned<ClientConnection, TcpStream>>),
-    Server(Box<StreamOwned<ServerConnection, TcpStream>>),
+    Plain(PolledStream),
+    Client(Box<StreamOwned<ClientConnection, PolledStream>>),
+    Server(Box<StreamOwned<ServerConnection, PolledStream>>),
 }
 
 impl Read for Stream {
@@ -122,10 +126,10 @@ impl Stream {
                 &s.sock
             }
         };
-        let _ = raw.shutdown(Shutdown::Write);
+        let _ = raw.shutdown_write();
     }
 
-    fn raw(&self) -> &TcpStream {
+    fn raw(&self) -> &PolledStream {
         match self {
             Stream::Plain(s) => s,
             Stream::Client(s) => &s.sock,
@@ -173,7 +177,8 @@ struct Link {
     direction: &'static str,
     queued: usize,
     tx: Sender<ToLink>,
-    raw: TcpStream,
+    /// Ends the link from the host's side (`abort`): see [`Closer`].
+    raw: Closer,
 }
 
 struct Conn {
@@ -243,7 +248,7 @@ impl Adapter {
         thread::spawn(move || {
             for stream in listener.incoming().flatten() {
                 let me = me.clone();
-                thread::spawn(move || me.answer(stream));
+                thread::spawn(move || me.answer(&stream));
             }
         });
     }
@@ -412,7 +417,7 @@ impl Adapter {
             },
             Request::Abort { link: Some(link) } => match conn.link.take() {
                 Some(l) if l.name == link => {
-                    let _ = l.raw.shutdown(Shutdown::Both);
+                    l.raw.close();
                     conn.emit(answer("ok", id));
                     conn.emit(answer_with(
                         "disconnected",
@@ -580,7 +585,8 @@ impl Adapter {
         }
         let tcp = tcp.ok_or(last)?;
         let _ = tcp.set_nodelay(true);
-        let _ = tcp.set_read_timeout(Some(ANSWER_WAIT));
+        let tcp = PolledStream::new(&tcp, Some(ANSWER_WAIT), "rptcp-link")
+            .map_err(|e| ("refused", format!("{addr}: {e}")))?;
         let mut s = match &self.cfg.security {
             Security::Plain => Stream::Plain(tcp),
             Security::Tls { client, .. } => {
@@ -664,9 +670,11 @@ impl Adapter {
 
     // -- calls in -------------------------------------------------------------------------------
 
-    fn answer(&self, tcp: TcpStream) {
+    fn answer(&self, tcp: &TcpStream) {
         let _ = tcp.set_nodelay(true);
-        let _ = tcp.set_read_timeout(Some(ANSWER_WAIT));
+        let Ok(tcp) = PolledStream::new(tcp, Some(ANSWER_WAIT), "rptcp-link") else {
+            return;
+        };
         let mut s = match &self.cfg.security {
             Security::Plain => Stream::Plain(tcp),
             Security::Tls {
@@ -763,12 +771,8 @@ impl Adapter {
         direction: &'static str,
         s: Stream,
     ) -> bool {
-        let Ok(raw) = s.raw().try_clone() else {
-            return false;
-        };
-        if raw.set_read_timeout(Some(POLL)).is_err() {
-            return false;
-        }
+        let raw = s.raw().closer();
+        s.raw().set_wait(Some(POLL));
         let (tx, rx) = channel::<ToLink>();
         conn.link = Some(Link {
             name: name.to_owned(),
@@ -807,7 +811,7 @@ impl Adapter {
                     Err(TryRecvError::Empty) => break,
                     // aborted, or the host left: the link is already gone from its state
                     Err(TryRecvError::Disconnected) => {
-                        let _ = s.raw().shutdown(Shutdown::Both);
+                        s.raw().closer().close();
                         return;
                     }
                 }

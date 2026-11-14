@@ -9,7 +9,8 @@
 //! connections, so that another program may have Mercury.
 //!
 //! Each host has a thread that reads its lines; one thread, the station's, owns the bridge and
-//! Mercury's two connections.
+//! Mercury's two connections. It reads them through [`PolledStream`]s, never with a read timeout
+//! on their sockets: on Windows such a read can fail with os error 997 and lose what it had.
 
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
@@ -19,6 +20,7 @@ use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use rpmi::polled::PolledStream;
 use rpmi::tcp::MAX_LINE;
 use rpmi::wire::{Message, Request, VERSION, admit, error, line_of, parse_line, speaks};
 
@@ -197,8 +199,8 @@ fn lobby(stream: &TcpStream, occupied: &AtomicBool, arrivals: &Sender<Arrival>) 
 
 /// The adapter's two connections to Mercury.
 struct Modem {
-    control: TcpStream,
-    data: TcpStream,
+    control: PolledStream,
+    data: PolledStream,
     partial: Vec<u8>,
 }
 
@@ -217,16 +219,14 @@ impl Modem {
             .map_err(|e| format!("its control port: {e}"))?;
         let data = TcpStream::connect_timeout(&data_addr, REACH)
             .map_err(|e| format!("its data port: {e}"))?;
-        let set = |s: &TcpStream, wait: Duration| -> io::Result<()> {
+        let polled = |s: &TcpStream, wait: Duration, name: &str| -> io::Result<PolledStream> {
             s.set_nodelay(true)?;
-            s.set_read_timeout(Some(wait))?;
-            s.set_write_timeout(Some(REACH))
+            s.set_write_timeout(Some(REACH))?;
+            PolledStream::new(s, Some(wait), name)
         };
-        set(&control, POLL).map_err(|e| e.to_string())?;
-        set(&data, DATA_POLL).map_err(|e| e.to_string())?;
         Ok(Modem {
-            control,
-            data,
+            control: polled(&control, POLL, "mercury-control").map_err(|e| e.to_string())?,
+            data: polled(&data, DATA_POLL, "mercury-data").map_err(|e| e.to_string())?,
             partial: Vec::new(),
         })
     }

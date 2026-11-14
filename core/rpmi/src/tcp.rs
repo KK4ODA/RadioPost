@@ -5,6 +5,10 @@
 //! The server keeps the channel behind one lock and gives each connection a reader thread and a
 //! writer thread, so a host that stops reading holds up nobody else. A call nobody answers is
 //! given up after the server's call timeout.
+//!
+//! A host's [`Connection`] waits for lines through a [`PolledStream`], never a read timeout on its
+//! socket (Windows can fail such a read with os error 997 and lose what it had), and a line that
+//! comes in pieces across a wait is kept whole.
 
 use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -15,6 +19,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::channel::{Channel, Out};
+use crate::polled::PolledStream;
 use crate::wire::{Message, line_of};
 
 /// The most a line may hold: a `send` of `max_queue` bytes is well under it.
@@ -282,8 +287,10 @@ fn serve(inner: &Arc<Mutex<Inner>>, station: usize, stream: TcpStream) {
 
 /// A host's connection to an adapter.
 pub struct Connection {
-    reader: BufReader<TcpStream>,
+    reader: BufReader<PolledStream>,
     writer: TcpStream,
+    /// A line read in part when a wait ran out: the rest follows it.
+    partial: Vec<u8>,
 }
 
 impl Connection {
@@ -297,17 +304,20 @@ impl Connection {
         stream.set_nodelay(true)?;
         Ok(Connection {
             writer: stream.try_clone()?,
-            reader: BufReader::new(stream),
+            reader: BufReader::new(PolledStream::new(&stream, None, "rpmi-host-reader")?),
+            partial: Vec::new(),
         })
     }
 
-    /// Waits at most this long for each line; `None` waits for ever.
+    /// Waits at most this long for each line; `None` waits for ever. A wait that runs out reads
+    /// as [`io::ErrorKind::TimedOut`], and the connection is as it was.
     ///
     /// # Errors
     ///
-    /// The socket refused the setting.
+    /// None now; kept for the callers written when it set the socket's read timeout.
     pub fn set_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
-        self.writer.set_read_timeout(timeout)
+        self.reader.get_ref().set_wait(timeout);
+        Ok(())
     }
 
     /// Writes one request.
@@ -331,17 +341,28 @@ impl Connection {
         self.writer.write_all(b"\n")
     }
 
-    /// The adapter's next message; `None` when it has closed the connection.
+    /// The adapter's next message; `None` when it has closed the connection. A wait that runs
+    /// out mid-line keeps what came: the next read finishes the line.
     ///
     /// # Errors
     ///
-    /// The connection failed, or the adapter wrote a line that is not a JSON object.
+    /// The wait ran out ([`io::ErrorKind::TimedOut`]), the connection failed, or the adapter
+    /// wrote a line that is not a JSON object.
     pub fn read_message(&mut self) -> io::Result<Option<Message>> {
-        let mut line = String::new();
-        if self.reader.read_line(&mut line)? == 0 {
-            return Ok(None);
+        loop {
+            match self.reader.read_until(b'\n', &mut self.partial) {
+                Ok(0) if self.partial.is_empty() => return Ok(None),
+                // the last line, with no LF before the close, is read as it is
+                Ok(0) => break,
+                Ok(_) if self.partial.last() == Some(&b'\n') => break,
+                // the connection closed after part of a line: the next read says so
+                Ok(_) => {}
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(e) => return Err(e),
+            }
         }
-        match serde_json::from_str(&line) {
+        let line = std::mem::take(&mut self.partial);
+        match serde_json::from_slice(&line) {
             Ok(serde_json::Value::Object(m)) => Ok(Some(m)),
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -352,6 +373,6 @@ impl Connection {
 
     /// Closes the connection: the adapter lets the host's callsigns go (RP-4 §1.1).
     pub fn close(self) {
-        let _ = self.writer.shutdown(Shutdown::Both);
+        self.reader.get_ref().closer().close();
     }
 }
