@@ -6,8 +6,9 @@
 //! `radiopost-gateway panel` serves it; the window shows the panel. The page talks only to that
 //! server: the window grants it no access to the application (no Tauri commands, no
 //! capabilities). The gateway answers as soon as the app opens when it is set to, as an unattended
-//! gateway should. Closing the window stops it; while it answers, the window asks first, since
-//! callers then get no answer, and a session under way ends.
+//! gateway should. Closing the window stops it; unless it is stopped, the window asks first and
+//! says what closing stops, by its state: the wait for the modem, listening (calls to its callsign
+//! then go unanswered), or the session under way.
 //!
 //! It updates itself: the panel says when a newer release is out (asked when it opens and every
 //! six hours), and its Update and restart stops the gateway, installs the update with Tauri's
@@ -55,18 +56,33 @@ fn start(dir: &Path) -> Result<(SocketAddr, Arc<Runner>, Arc<Watch>), String> {
     Ok((at, runner, updates))
 }
 
-/// What closing the window would end, in the operator's words; `None` when the gateway is not
-/// answering.
-fn interrupts(running: bool, status: &Status) -> Option<String> {
-    if let Some(s) = &status.session {
-        return Some(format!(
-            "A session with {} is under way: closing ends it, and the gateway stops answering.",
-            s.remote
-        ));
+/// What closing the window would stop, in the panel's words, by the gateway's state; `None` when
+/// the gateway is stopped, or not running at all (a state its answering loop left as it died
+/// stops nothing). `callsign` is the gateway's own, as the panel's header shows it.
+fn interrupts(running: bool, status: &Status, callsign: Option<&str>) -> Option<String> {
+    if !running {
+        return None;
     }
-    running.then(|| {
-        "The gateway is answering calls: closing stops it, and callers get no answer.".to_owned()
-    })
+    match status.state {
+        "stopped" => None,
+        "opening" => Some(
+            "The gateway is waiting for the modem, to listen for calls. Closing it stops that."
+                .to_owned(),
+        ),
+        "session" => Some(format!(
+            "A session with {} is under way: closing ends it, and the gateway stops answering.",
+            status
+                .session
+                .as_ref()
+                .map_or("a station", |s| s.remote.as_str())
+        )),
+        // `listening`, and any state named later: the gateway answers calls
+        _ => Some(format!(
+            "The gateway is listening for calls. Closing it stops listening, and calls to {} go \
+             unanswered until it runs again.",
+            callsign.unwrap_or("it")
+        )),
+    }
 }
 
 /// The gateway stopped, the update on offer downloaded, its signature checked with the project's
@@ -146,8 +162,14 @@ fn main() {
             let asking = window.clone();
             window.on_window_event(move |event| {
                 if let WindowEvent::CloseRequested { api, .. } = event
-                    && let Some(what) =
-                        interrupts(asking_runner.running(), &asking_runner.monitor().status())
+                    && let Some(what) = interrupts(
+                        asking_runner.running(),
+                        &asking_runner.monitor().status(),
+                        Settings::load(asking_runner.dir())
+                            .ok()
+                            .map(|s| s.callsign)
+                            .as_deref(),
+                    )
                 {
                     api.prevent_close();
                     let window = asking.clone();
@@ -220,27 +242,57 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// Closing asks first while the gateway answers, and says so when a session is under way.
+    /// Closing asks first while the gateway runs, saying what its state stops; stopped, or not
+    /// running, it closes at once.
     #[test]
-    fn closing_asks_while_the_gateway_answers() {
-        let idle = Status {
-            state: "stopped",
+    fn closing_says_what_it_stops() {
+        let at = |state| Status {
+            state,
             since: 0,
             problem: None,
             session: None,
             logged: 0,
             checks: Vec::new(),
         };
-        assert_eq!(interrupts(false, &idle), None);
-        assert!(interrupts(true, &idle).is_some_and(|w| w.contains("answering")));
+        let call = Some("N1CALL-10");
+        assert_eq!(interrupts(true, &at("stopped"), call), None);
+        assert_eq!(interrupts(false, &at("stopped"), call), None);
+        // a loop that died leaves its state behind, and nothing runs to stop
+        assert_eq!(interrupts(false, &at("listening"), call), None);
+        assert_eq!(
+            interrupts(true, &at("opening"), call).as_deref(),
+            Some(
+                "The gateway is waiting for the modem, to listen for calls. Closing it stops that."
+            )
+        );
+        assert_eq!(
+            interrupts(true, &at("listening"), call).as_deref(),
+            Some(
+                "The gateway is listening for calls. Closing it stops listening, and calls to \
+                 N1CALL-10 go unanswered until it runs again."
+            )
+        );
+        // the settings not to hand
+        assert_eq!(
+            interrupts(true, &at("listening"), None).as_deref(),
+            Some(
+                "The gateway is listening for calls. Closing it stops listening, and calls to it \
+                 go unanswered until it runs again."
+            )
+        );
         let busy = Status {
-            state: "session",
             session: Some(SessionRecord {
                 remote: "WD5EMA".into(),
                 ..SessionRecord::default()
             }),
-            ..idle
+            ..at("session")
         };
-        assert!(interrupts(true, &busy).is_some_and(|w| w.contains("WD5EMA")));
+        assert_eq!(
+            interrupts(true, &busy, call).as_deref(),
+            Some(
+                "A session with WD5EMA is under way: closing ends it, and the gateway stops \
+                 answering."
+            )
+        );
     }
 }

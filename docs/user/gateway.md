@@ -103,7 +103,14 @@ the bottom says what the gateway does.
 sessions carried while the Internet was down wait to be reported; **Show** lists them (§4).
 
 **Stop** ends a session under way and lets the modem go. Settings change only while the gateway is
-stopped. Closing the window stops the gateway too; while it answers, it asks first.
+stopped. Closing the window stops the gateway too. Stopped, it closes at once; otherwise it asks
+first, and says what closing stops:
+
+| Badge | Closing |
+|---|---|
+| Waiting for the modem | Stops the wait: the gateway was not listening for calls yet. |
+| Listening | Stops listening: calls to the gateway's callsign go unanswered until it runs again. |
+| Session | Ends the session with the station named, and the gateway stops answering. |
 
 **Unattended.** With *Answer calls when the app opens* ticked, the gateway answers as soon as the
 app opens. To have it open when you sign in: on Windows, put a shortcut to RadioPost Gateway in the
