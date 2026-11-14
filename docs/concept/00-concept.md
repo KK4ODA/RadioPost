@@ -1,6 +1,6 @@
 # RadioPost: a federated mail system for amateur radio
 
-*Concept document, 2026-11-12. A detailed design follows it. Licence:
+*Concept document, 2026-11-14. A detailed design follows it. Licence:
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).*
 
 **RadioPost** lets licensed amateurs send and receive ordinary email by radio, through gateways
@@ -351,7 +351,7 @@ queue. Afterwards, the post office drops the copy at N2CALL-5.
 * It keeps that mail in its queue and hands it to the post office when the Internet returns, or
   forwards it by radio (§6.3).
 * The client shows where each message is: *written*, *sent by radio*, *waiting at KK4ODA-1*, *at
-  radiopost.org*, *delivered to the recipient's provider*.
+  radiopost.org*. A message the recipient's provider refuses comes back as a message.
 
 ### 6.3 Forwarding by radio
 

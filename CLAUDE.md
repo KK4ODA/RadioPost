@@ -322,6 +322,13 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   (README, concept §1, the design's introduction) and never speak of a move from Winlink.
 - Priorities for the Internet-down features: copies placed ahead, the gateway's queue, then
   forwarding by radio.
+- (2026-11-14) The next stages (design §9): the pilot's mail protected first (backups off the
+  server by themselves, blocking callers, one mailbox's second part, DKIM rotation), then local
+  delivery (W31), then forwarding in three stages with its first trial on the air between two
+  gateways on one shared channel, then the dial (W14, W40), then RP-0 to RP-6 frozen as 1.0 once
+  forwarding is built, then Phase 5. *Delivered to the recipient's provider* is dropped (G5). LoTW
+  enrollment (W10) is built when the author supplies a test certificate, RSA-1024 and SHA-1
+  accepted for proof of licence.
 - Stalwart as the post office's mail server (others possible behind JMAP/SMTP); the door answers
   its MTA hooks (D29).
 - (2026-11-12) With more than one post office: a client's gateway list read from every post

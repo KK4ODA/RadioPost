@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.38 |
+| **Version** | 0.1.39 |
 | **Updated** | 2026-11-14 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -308,6 +308,23 @@ the core against `vectors/` on every push, with the checks that run today.
 | 4 | Forwarding by radio. | RP-7 |
 | 5 | More adapters (VARA, ARDOP, AGWPE); forms; the phone. | RP-4, new |
 
+Phases 0 to 2 and Phase 3's core are built. The author set the next stages on 2026-11-14:
+
+| Stage | Builds | Wishes |
+|---|---|---|
+| 1 | Protecting the pilot's mail: backups sent off the server by themselves; blocking a caller by address or callsign; the rest of one mailbox (mail sent by radio in the mail program's Sent folder, radio pickups marked read there); DKIM keys rotated. | W38, W24, W36 |
+| 2 | Phase 3's last part, local delivery at a cut-off gateway (RP-7 §4.4), with the tests waiting on it (C-10, G-06, the rest of P-05 and P-06). | W31 |
+| 3 | Phase 4, the forwarding session: gateway to gateway, `PROOF`, session records and the partner's checks (RP-7 §2, §3). | W30 |
+| 4 | Phase 4, mail for a cut-off area: the post office decides a gateway is cut off, signs placements, and partners carry forward items (RP-7 §4.1 to §4.3). | W30 |
+| 5 | Phase 4, windows and routes (RP-7 §5, §6), F-01 to F-06, and a first trial on the air between two gateways **on one shared channel**, so no radio is retuned. | W30 |
+| 6 | The dial: an optional RP-4 addition to read and set the radio's frequency (§13 of the wishlist, G3 and G8), so a gateway can call a partner on another channel; choosing a gateway tunes the radio; the gateway checks the band rules itself for modems other than Aether. | W14, W40 |
+| 7 | RP-0 to RP-6 frozen as version 1.0 once forwarding is built: the open gaps settled first, changes afterwards careful and announced; a public test service for other implementers. | W43 |
+| 8 | Phase 5. | W20 to W23, W26, W32 |
+
+Enrollment with an LoTW certificate (W10) is built when the author supplies a certificate to test
+with; LoTW's RSA-1024 and SHA-1 are accepted, since the certificate proves a licence at enrollment
+and protects no mail.
+
 What the author and users ask for, inside this order and beyond it, is kept in
 [the wishlist](02-wishlist.md): each wish grouped, given a proposed priority, and checked against
 the specifications, with what has been set aside and why.
@@ -370,3 +387,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.36 | 2026-11-13 | D39, drafted for the author: modem names as a registry (RP-0 0.7.0 §9.4), an unknown one ignored, and what an FM channel states (RP-5 0.17.0 §4.4); `mercury` and `aether-fm` registered. Aether FM in §5.4's adapters. |
 | 0.1.37 | 2026-11-13 | Phase 3's core built: copies placed ahead (the gateway's side), the offline queue and its reports, and the sender's client following queued mail (RP-7 §3.6). The key cache anchors a post office named in a gateway's settings, with no DNS, on the key that signed the gateway's own credential (gap G20). |
 | 0.1.38 | 2026-11-14 | §5.4: the client's connection to Aether between calls, through RPMI with `hello` alone (RP-4 0.7.0), so Aether's header names the app while it is open. |
+| 0.1.39 | 2026-11-14 | §9: the next stages, as the author set them: the pilot's mail protected first, then local delivery, then Phase 4 in three parts with its first trial on one shared channel, the dial, RP-0 to RP-6 frozen as 1.0 after forwarding, then Phase 5; LoTW enrollment with RSA-1024 and SHA-1 accepted. |

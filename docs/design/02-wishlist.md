@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.16 |
+| **Version** | 0.3.17 |
 | **Updated** | 2026-11-14 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -109,7 +109,7 @@ rules:
 | W3 | Photos made small, and the time on the air shown | Mail | Medium | Fits today | Planned |
 | W4 | The full text of a trimmed message | Mail | Low | Fits today as modified; optional addition as asked | Proposed |
 | W5 | Mail kept as `.eml` files | Mail | Low | Fits today | Planned |
-| W6 | Where each message is | Mail | Medium | Fits today; optional addition for *delivered* | In progress |
+| W6 | Where each message is | Mail | Medium | Fits today | Implemented |
 | W7 | Several accounts in one client | Setup | Medium | Fits today, a call each | Implemented |
 | W8 | Credentials renewed before they lapse | Setup | High | Fits today | Implemented |
 | W9 | Usual gateways set in the panel | — | — | — | Consolidated into W27 |
@@ -251,8 +251,8 @@ Open the client's mail in any mail program, and back it up as ordinary files.
 
 ### W6. Where each message is
 
-See each sent message's state: written, sent by radio, waiting at a gateway, at the post office,
-delivered to the recipient's mail server.
+See each sent message's state: written, sent by radio, waiting at a gateway, at the post office.
+*Delivered to the recipient's mail server* is dropped (the author, 2026-11-14; G5).
 
 | | |
 |---|---|
@@ -264,8 +264,8 @@ delivered to the recipient's mail server.
 | Effort | Small for the states the radio reports; medium with *delivered*. |
 | Priority | **Medium.** Users of a system built for outages need to know where their mail is. |
 | Recommendation | **Modify**: show what the radio already reports; leave *delivered* until users ask, since a failure already arrives as a message. |
-| Status | In progress: the states the radio reports are shown; *delivered* is not. |
-| Author decision | None yet. |
+| Status | Implemented: the states the radio reports are shown; *delivered* is dropped. |
+| Author decision | **Decided** (2026-11-14): drop *delivered*. Nothing reports it, and a failure already comes back as a message. |
 
 ### W47. Deleting messages, and a trash
 
@@ -340,7 +340,7 @@ Join radiopost.org without waiting for the sysop: prove the callsign with an LoT
 | Priority | **Medium.** The sysop becomes the bottleneck once the pilot passes a handful of testers. |
 | Recommendation | Accept, as the post office's own, outside RP-5. |
 | Status | Planned. |
-| Author decision | **Decided** (2026-11-09, D33, CLAUDE.md): radiopost.org enrolls on an LoTW certificate or the sysop's check. |
+| Author decision | **Decided** (2026-11-09, D33, CLAUDE.md): radiopost.org enrolls on an LoTW certificate or the sysop's check. Built when the author supplies a TQSL certificate to test with (never kept in the project); LoTW's RSA-1024 and SHA-1 accepted, since the certificate only proves a licence at enrollment (2026-11-14). |
 
 ### W11. A trustee manages a role mailbox
 
@@ -603,7 +603,7 @@ The gateway's operator refuses one account, or one station, that misuses the gat
 | Priority | **Medium.** Operators need it before a gateway is widely known; they stop violating traffic once they know of it (RP-6 §5.2). |
 | Recommendation | Accept, in the panel too. |
 | Status | Planned. |
-| Author decision | None yet. |
+| Author decision | **Decided** (2026-11-14): next, in stage 1 (design §9), with the pilot's backups and mailbox. |
 
 ### W26. One gateway, several modems
 
@@ -641,7 +641,7 @@ read, including from members with no licence who use only a mail program.
 | Priority | **High.** Mail that never reaches the radio is mail silently lost to a radio user, and pilot users with the Internet will meet it at once. |
 | Recommendation | Accept. Also fill the accept list from mail sent in a mail program, as from mail sent by radio (RP-5 §6.5 names only radio paths): concept §5.1 promises that writing to someone adds them, and that removes most of the need for W37. |
 | Status | In progress: the first part is implemented (released in 0.1.0-beta.14); the Sent folder and pickups marked read are not. |
-| Author decision | **Decided** (2026-11-13): built next, in two parts. First what loses mail or wastes air: mail from a mail program to a user here reaches the radio, mail sent by radio to a user here reaches the mail program, `radio_skips_read` is honoured, and mail sent from a mail program fills the accept list. Later: mail sent by radio in the mail program's Sent folder, and radio pickups marked read there |
+| Author decision | **Decided** (2026-11-13): built next, in two parts. First what loses mail or wastes air: mail from a mail program to a user here reaches the radio, mail sent by radio to a user here reaches the mail program, `radio_skips_read` is honoured, and mail sent from a mail program fills the accept list. Later: mail sent by radio in the mail program's Sent folder, and radio pickups marked read there (2026-11-14) Its second part is stage 1 (design §9). |
 
 ### W37. The accept list on a web page
 
@@ -675,7 +675,7 @@ A post office that loses its server loses no mail, and is rebuilt in hours.
 | Priority | **Critical** for the backups: the pilot's server now holds real mail, its users' accounts and the post office's key. The backup mail server is **Medium**. |
 | Recommendation | Accept: backups now, and a restore tried once; the backup mail server after. |
 | Status | In progress: the backups are built, the mailboxes included; the backup mail server is not. |
-| Author decision | None yet. |
+| Author decision | **Decided** (2026-11-14): next, in stage 1 (design §9): backups sent off the server by themselves; the backup mail server after. |
 | Notes | A backup mail server must refuse as the door does, or it sends bounces to forged senders later (D15, RP-6 §2.1), so it needs the accept lists (concept §13 left this open). Without one, senders retry for days (RFC 5321) and only time is lost. Concept §8.5 has the nightly copy go to a third company; today it reaches the operator's computer only when they download one, which Health turns amber and red to prompt. A large mail store makes the download large: it travels whole in one HTTPS answer. |
 
 ### W49. The post office run from the client, and set up by its program
@@ -774,7 +774,7 @@ Mail leaves an area that has lost the Internet, and comes back in, by radio betw
 | Priority | **Medium**: Phase 4. |
 | Recommendation | Accept. |
 | Status | Planned. |
-| Author decision | **Decided** (CLAUDE.md): after the gateway's queue. |
+| Author decision | **Decided** (CLAUDE.md): after the gateway's queue. (2026-11-14) Stages 3 to 5 (design §9); its first trial on the air between two gateways on one shared channel, the dial (W14, W40) after. |
 
 ### W31. Local delivery at a cut-off gateway
 
@@ -791,7 +791,7 @@ Neighbours who use the same cut-off gateway (a shelter and the EOC) exchange mai
 | Priority | **Medium.** In an outage, much of the mail that matters is between neighbours (D24). |
 | Recommendation | **Modify**: build it right after W28, in Phase 3, not with W30. It needs only the copies (which say who the local users are) and the offline reports. This keeps the author's order: forwarding still comes after the queue. |
 | Status | Planned. |
-| Author decision | None yet. |
+| Author decision | **Decided** (2026-11-14): stage 2 (design §9), after the pilot's protection and before forwarding. |
 
 ---
 
@@ -1033,7 +1033,7 @@ document.
 | G2 | RP-5 §5.3 | Which compression the post office's air form may use. It never sees the caller's `caps` (RP-2 §4 has the sender choose one both ends take). | A post office using code 2 would serve mail some clients cannot read; ours served everything uncompressed. | Code 0 or 1 only, 1 when smaller. **Settled** (2026-11-13): RP-5 0.18.0 §5.3, built with W18. | W18, W19 |
 | G3 | RP-4 | Any frequency. RP-4 §8 has the host check the band rules when the modem does not, with no way to learn the dial. | Gateways on other modems trust a configured dial; the client cannot tune. | An optional dial capability (T1). | W14, W40 |
 | G4 | RP-4 §2 | A transport off the machine: loopback or a Unix socket only, and no authentication. | No common way for a phone to drive a modem in another box. | Leave it until a phone needs it. | W23 |
-| G5 | Concept §6.2 | *Delivered to the recipient's provider* is promised; nothing reports it (RP-5, RP-6). | Users are promised what no program can show. | Drop it from the concept, or an optional client endpoint in RP-5 §6. | W6 |
+| G5 | Concept §6.2 | *Delivered to the recipient's provider* is promised; nothing reports it (RP-5, RP-6). | Users are promised what no program can show. | Drop it from the concept, or an optional client endpoint in RP-5 §6. **Settled** (2026-11-14): dropped from the concept. | W6 |
 | G6 | Design §5.1 | Says the client keeps mail as `.eml`; the client keeps the canonical encoding. | Design and program disagree. | Export `.eml`, and say so in the design. | W5 |
 | G7 | RP-2 §4 | Dictionary 1 "becomes a requirement" once adopted. | A change others cannot ignore, where a negotiated option would not be one. | Decide with the corpus's numbers, with G2. | W19 |
 | G8 | RP-4 §1.1 | What belongs to the whole station on a shared modem, such as the dial, or a whole Aether profile (RP-4 §9.1 leaves the bandwidth open in the same way). | One host can move every other host's station, even to another radio. | Refuse a station-wide change while another host's link or call is up. | W14, W44 |
@@ -1106,3 +1106,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.14 | 2026-11-13 | W36's first part built: mail users submit from their mail programs reaches the radio and fills their accept lists; mail sent by radio to users here reaches their mail programs, and an email-only member (W12) gets it by email alone; `radio_skips_read` takes mail read in a mail program as picked up. Gaps G18 and G19, settled by RP-6 0.7.0 and RP-5 0.19.0. |
 | 0.3.15 | 2026-11-13 | W27, W28 and W29 implemented, to go out together: the gateway holds copies placed ahead and polls for them, answers sessions from its store when cut off and reports them, and the client follows what a cut-off gateway queued (RP-7 §3.6); W9 built with W27, W6's queued state with W29. The conformance tester's Phase 3 tests C-09, G-03, G-05 and the parts of P-05 and P-06 that need neither local delivery nor forwarding. Gap G20: the keys a gateway trusts for a post office named by URL with no DNS. |
 | 0.3.16 | 2026-11-14 | W36's first part and W27, W28 and W29 released in 0.1.0-beta.14. |
+| 0.3.17 | 2026-11-14 | The author's decisions on the next stages (design §9): W24, W38 and W36's second part first, then W31, then W30 in three stages with its first trial on one shared channel. W6 implemented with *delivered* dropped (G5 settled). W10 built when a test certificate is supplied, RSA-1024 and SHA-1 accepted. |
