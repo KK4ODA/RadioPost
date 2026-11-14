@@ -10,6 +10,10 @@
 //! sessions are its own, and every `state` event says whose session it is (`owner`). An Aether
 //! without claims has no `status.claims`: the host has the modem to itself, `callsigns` sets the
 //! station's list, and `listen` off is refused.
+//!
+//! The host's `hello` names it to Aether too (`hello {app}`, Aether's ADR-0114), claiming nothing:
+//! a host that holds its connection open between calls, with no callsigns, is named on Aether's
+//! panel all the same.
 
 use std::collections::HashMap;
 
@@ -519,11 +523,19 @@ impl Bridge {
                     ],
                 )));
                 self.update_busy(&mut out);
-                if self.shared
-                    && let Some(path) = self.log.clone()
-                {
-                    let params = json!({"path": path, "app": self.app});
-                    out.push(self.ask("share.include", params, Waiting::Nothing));
+                if self.shared {
+                    // Aether names the program among those using the station for as long as this
+                    // connection lasts, and claims nothing for it (its ADR-0114, 0.2.0-beta.159):
+                    // a host between calls, which says hello and nothing more, is seen too. An
+                    // earlier Aether answers `unknown_method`, and nothing waits on the answer.
+                    if !self.app.trim().is_empty() {
+                        let params = json!({"app": self.app});
+                        out.push(self.ask("hello", params, Waiting::Nothing));
+                    }
+                    if let Some(path) = self.log.clone() {
+                        let params = json!({"path": path, "app": self.app});
+                        out.push(self.ask("share.include", params, Waiting::Nothing));
+                    }
                 }
             }
             Waiting::Claim { rid, wanted } => {

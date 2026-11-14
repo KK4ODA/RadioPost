@@ -73,6 +73,16 @@ pub fn home(given: Option<&str>) -> PathBuf {
     PathBuf::from(base).join(".radiopost")
 }
 
+/// [`Store::conformance`] for the home at `home`, read without opening it: opening makes the
+/// home's folders, and a look from outside a session must change nothing.
+#[must_use]
+pub fn conformance_at(home: &Path) -> Option<String> {
+    fs::read_to_string(home.join("conformance"))
+        .ok()
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty())
+}
+
 /// A message waiting to be sent, with the serial it is offered under to a station that calls
 /// (RP-3 §10).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1153,10 +1163,7 @@ impl Store {
     /// §2.3): it then reaches no other modem, so the published test keys never reach the air.
     #[must_use]
     pub fn conformance(&self) -> Option<String> {
-        fs::read_to_string(self.home.join("conformance"))
-            .ok()
-            .map(|s| s.trim().to_owned())
-            .filter(|s| !s.is_empty())
+        conformance_at(&self.home)
     }
 
     /// Enters conformance mode with the test adapter at `adapter`, or leaves it with `None`.

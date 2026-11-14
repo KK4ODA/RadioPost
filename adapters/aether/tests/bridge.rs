@@ -11,6 +11,8 @@ use serde_json::{Value, json};
 /// Aether as its control API specification has it, for the methods the adapter uses.
 struct Aether {
     claims: bool,
+    /// It knows `hello` (0.2.0-beta.159, its ADR-0114); an earlier one answers `unknown_method`.
+    hello: bool,
     refuse: Vec<&'static str>,
     connect_error: Option<&'static str>,
     asked: Vec<Value>,
@@ -20,6 +22,7 @@ impl Aether {
     fn new(claims: bool) -> Aether {
         Aether {
             claims,
+            hello: true,
             refuse: Vec::new(),
             connect_error: None,
             asked: Vec::new(),
@@ -76,6 +79,8 @@ impl Aether {
             "abort" => ok(json!({"orderly": false})),
             "datagram.send" => ok(json!({"accepted": 1, "queued": 1, "limit": 16})),
             "share.include" => ok(json!({"app": params["app"], "path": params["path"], "logs": 1})),
+            "hello" if self.hello => ok(json!({"id": 7, "app": params["app"]})),
+            "hello" => refused("unknown_method"),
             other => panic!("the adapter asked Aether for {other}"),
         }
     }
@@ -173,8 +178,8 @@ fn hello_is_status_and_capabilities() {
         .iter()
         .filter_map(|r| r["method"].as_str())
         .collect();
-    assert_eq!(methods, ["status", "capabilities"]);
-    // without claims the host has the modem to itself
+    assert_eq!(methods, ["status", "capabilities", "hello"]);
+    // without claims the host has the modem to itself, and Aether names no programs
     let mut b = Bridge::new();
     let mut a = Aether::new(false);
     let said = line(
@@ -183,6 +188,85 @@ fn hello_is_status_and_capabilities() {
         r#"{"op":"hello","id":1,"version":[1,1],"app":"x"}"#,
     );
     assert_eq!(lines(&said)[0]["caps"]["shared"], false);
+    assert!(
+        a.asked.iter().all(|r| r["method"] != "hello"),
+        "{:?}",
+        a.asked
+    );
+}
+
+/// Aether's header named no program between the RadioPost app's calls, and said "calls to KK4ODA-1
+/// not answered" (2026-11-13). The host's `hello` names it to Aether, claiming nothing (Aether's
+/// ADR-0114): a host that holds its connection open with no callsigns is seen, and changes nothing
+/// the station answers. Its calls claim under the same name.
+#[test]
+fn a_hosts_hello_names_it_to_aether_and_claims_nothing() {
+    let mut b = Bridge::new();
+    let mut a = Aether::new(true);
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"hello","id":1,"version":[1,1],"app":"RadioPost client 0.1.0"}"#,
+    );
+    assert_eq!(
+        lines(&said).len(),
+        1,
+        "the hello answer alone: {:?}",
+        lines(&said)
+    );
+    let named: Vec<&Value> = a.asked.iter().filter(|r| r["method"] == "hello").collect();
+    assert_eq!(named.len(), 1);
+    assert_eq!(named[0]["params"], json!({"app": "RadioPost client 0.1.0"}));
+    assert!(
+        a.asked.iter().all(|r| r["method"] != "claim"),
+        "a host between calls claims nothing: {:?}",
+        a.asked
+    );
+    assert!(!b.awaiting());
+    // events go on reaching it while it holds no callsigns: another's session is busy
+    let others = json!({"name": "connected", "detail": "W1AW (master)", "owner": 9});
+    assert_eq!(
+        lines(&event(&mut b, &mut a, "state", &others)),
+        [json!({"op": "busy", "busy": true})]
+    );
+    // a call's connection claims under the name it said hello with
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"callsigns","id":2,"callsigns":["KK4ODA"]}"#,
+    );
+    let claim = a
+        .asked
+        .iter()
+        .find(|r| r["method"] == "claim")
+        .expect("a claim");
+    assert_eq!(claim["params"]["app"], "RadioPost client 0.1.0");
+
+    // an Aether from before `hello` refuses it: the host hears nothing of it, nothing waits
+    let mut b = Bridge::new();
+    let mut a = Aether::new(true);
+    a.hello = false;
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"hello","id":1,"version":[1,1],"app":"RadioPost client 0.1.0"}"#,
+    );
+    assert_eq!(lines(&said).len(), 1, "{:?}", lines(&said));
+    assert_eq!(lines(&said)[0]["op"], "hello");
+    assert!(!b.awaiting());
+    // a host with no name gives Aether none to show
+    let mut b = Bridge::new();
+    let mut a = Aether::new(true);
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"hello","id":1,"version":[1,1],"app":""}"#,
+    );
+    assert!(
+        a.asked.iter().all(|r| r["method"] != "hello"),
+        "{:?}",
+        a.asked
+    );
 }
 
 /// The mobile's client lost its connection to Aether twice on 2026-11-12, and why was in its

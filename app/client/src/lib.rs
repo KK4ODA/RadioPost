@@ -14,6 +14,8 @@
 //!   radio.
 //! * [`grid`]: Maidenhead grid squares, to rank gateways by distance.
 //! * [`panel`]: the page in `app/ui/` and its JSON API, served on the loopback interface.
+//! * [`presence`]: the panel's connection to Aether between calls, which names the app there and
+//!   claims nothing.
 //! * [`terminal`]: a terminal on the post office's server, over SSH, for its operators.
 //!
 //! `radiopost` is its command-line program; the desktop application (Tauri, D27) is built on the
@@ -31,6 +33,7 @@ pub mod grid;
 pub use radiopost::logfile;
 pub mod online;
 pub mod panel;
+pub mod presence;
 pub mod renewal;
 pub mod session;
 pub mod store;

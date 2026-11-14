@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.37 |
-| **Updated** | 2026-11-13 |
+| **Version** | 0.1.38 |
+| **Updated** | 2026-11-14 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The concept](../concept/00-concept.md) |
@@ -201,7 +201,7 @@ server with those interfaces could replace Stalwart (concept §8.1).
 
 | Adapter | Modem's interface | Notes |
 |---|---|---|
-| Aether | Control API, WebSocket | Delivery receipts, quality, busy, rules checked by the modem. Could become native RPMI. Shareable from 0.2.0-beta.146: each program claims its callsigns (its ADR-0106, RP-4 §9.1). |
+| Aether | Control API, WebSocket | Delivery receipts, quality, busy, rules checked by the modem. Could become native RPMI. Shareable from 0.2.0-beta.146: each program claims its callsigns (its ADR-0106, RP-4 §9.1). While the client runs it holds one connection to the adapter with `hello` alone, so Aether names it between calls without a claim (its ADR-0114, RP-4 §3, §9.1): through RPMI rather than a WebSocket of its own, so the adapter stays the one place that speaks Aether's API, and the same `hello` serves any shared modem that shows its programs. |
 | Aether FM | Control API, WebSocket, as Aether | In design: Aether's own air interface for FM radios, listed as `aether-fm` (RP-0 §9.4). The Aether adapter serves it once it reads the modem's name from Aether rather than assuming Aether HF. |
 | VARA HF, VARA FM | Published TNC commands, two TCP ports | No delivery receipts. |
 | Mercury | VARA-style TNC commands, two TCP ports (RP-4 §9.6) | Built, `adapters/mercury`. Delivery from its `BUFFER`, which counts what the other station has not confirmed. One program at a time; checks no band rules. Mercury does not identify the station, so the adapter sends `CQFRAME` with the station's callsign after each session. |
@@ -369,3 +369,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.35 | 2026-11-12 | D37 built on the post office's side: copies at gateways of other post offices, `placing`, items only to the listing post office's credential; the gateway's polling comes with Phase 3. |
 | 0.1.36 | 2026-11-13 | D39, drafted for the author: modem names as a registry (RP-0 0.7.0 §9.4), an unknown one ignored, and what an FM channel states (RP-5 0.17.0 §4.4); `mercury` and `aether-fm` registered. Aether FM in §5.4's adapters. |
 | 0.1.37 | 2026-11-13 | Phase 3's core built: copies placed ahead (the gateway's side), the offline queue and its reports, and the sender's client following queued mail (RP-7 §3.6). The key cache anchors a post office named in a gateway's settings, with no DNS, on the key that signed the gateway's own credential (gap G20). |
+| 0.1.38 | 2026-11-14 | §5.4: the client's connection to Aether between calls, through RPMI with `hello` alone (RP-4 0.7.0), so Aether's header names the app while it is open. |

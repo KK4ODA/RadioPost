@@ -8,8 +8,8 @@
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -44,6 +44,34 @@ pub fn quiet() -> Note {
     Arc::new(|_| {})
 }
 
+/// Why Aether could not be reached, as last said, for the hosts of one listener. A host that
+/// opens the modem again every few seconds while Aether is away (a gateway waiting for it, the
+/// client's connection between calls) is answered `no-modem` each time, but the note says it once
+/// for each reason, and says when Aether is reached again.
+#[derive(Default)]
+struct Reach(Mutex<Option<String>>);
+
+impl Reach {
+    /// Aether could not be reached, for `why`: whether to say so.
+    fn missed(&self, why: &str) -> bool {
+        let mut last = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        if last.as_deref() == Some(why) {
+            return false;
+        }
+        *last = Some(why.to_owned());
+        true
+    }
+
+    /// Aether was reached: whether it had not been, last time.
+    fn reached(&self) -> bool {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
+            .is_some()
+    }
+}
+
 /// Listens for hosts and serves each through its own connection to Aether at `aether`
 /// (`ws://127.0.0.1:8515/v1`). Returns the address taken; the adapter runs on threads of its own.
 ///
@@ -70,12 +98,14 @@ pub fn listen_noting(
     let listener = TcpListener::bind(addr)?;
     let local = listener.local_addr()?;
     let aether = aether.to_owned();
+    let reach = Arc::new(Reach::default());
     thread::spawn(move || {
         for stream in listener.incoming().flatten() {
             let aether = aether.clone();
             let note = Arc::clone(&note);
             let log = log.clone();
-            thread::spawn(move || serve_noting(&stream, &aether, &note, log.as_deref()));
+            let reach = Arc::clone(&reach);
+            thread::spawn(move || serve_reaching(&stream, &aether, &note, log.as_deref(), &reach));
         }
     });
     Ok(local)
@@ -127,6 +157,12 @@ pub fn serve(host: &TcpStream, aether: &str) {
 /// ended, and when a host left with a link or call up; and offering Aether `log`, the
 /// program's own log file, once the host has said hello.
 pub fn serve_noting(host: &TcpStream, aether: &str, note: &Note, log: Option<&Path>) {
+    serve_reaching(host, aether, note, log, &Reach::default());
+}
+
+/// [`serve_noting`], with what was last said of reaching Aether shared with the listener's other
+/// hosts ([`Reach`]).
+fn serve_reaching(host: &TcpStream, aether: &str, note: &Note, log: Option<&Path>, reach: &Reach) {
     let _ = host.set_nodelay(true);
     let Ok(reader) = host.try_clone() else {
         return;
@@ -134,9 +170,16 @@ pub fn serve_noting(host: &TcpStream, aether: &str, note: &Note, log: Option<&Pa
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || read_host(reader, &tx));
     let mut ws = match open_aether(aether) {
-        Ok(ws) => Some(ws),
+        Ok(ws) => {
+            if reach.reached() {
+                note(&format!("Aether at {aether} can be reached again"));
+            }
+            Some(ws)
+        }
         Err(why) => {
-            note(&format!("Aether at {aether} could not be reached: {why}"));
+            if reach.missed(&why) {
+                note(&format!("Aether at {aether} could not be reached: {why}"));
+            }
             None
         }
     };

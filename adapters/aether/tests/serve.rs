@@ -138,7 +138,14 @@ fn aether_going_away_closes_the_hosts_connection() {
     let methods: Vec<String> = asked.try_iter().collect();
     assert_eq!(
         methods,
-        ["status", "capabilities", "share.include", "claim", "listen"]
+        [
+            "status",
+            "capabilities",
+            "hello",
+            "share.include",
+            "claim",
+            "listen"
+        ]
     );
     // Aether stops after the listen: the host is let go, not left listening for nothing
     assert!(
@@ -174,6 +181,49 @@ fn an_aether_that_cannot_be_reached_is_said_so() {
     assert!(
         said.iter()
             .any(|l| l.starts_with(&format!("Aether at {aether} could not be reached: "))),
+        "{said:?}"
+    );
+}
+
+/// A host that opens the modem again every few seconds while Aether is away (a gateway waiting for
+/// it, the client's connection between calls) is answered `no-modem` each time, but the program's
+/// log is told once, and told again when Aether is back.
+#[test]
+fn an_aether_away_is_said_once_and_its_return_too() {
+    let free = TcpListener::bind("127.0.0.1:0").expect("a port");
+    let port = free.local_addr().expect("bound");
+    drop(free);
+    let aether = format!("ws://{port}/v1");
+    let (note, said) = notes();
+    let at = radiopost_aether::serve::listen_noting("127.0.0.1:0", &aether, note, None)
+        .expect("an adapter");
+    let hello = r#"{"op":"hello","id":1,"version":[1,1],"app":"RadioPost client test"}"#;
+    for _ in 0..3 {
+        let mut host = Connection::open(at).expect("the adapter");
+        assert_eq!(ask(&mut host, hello)["code"], "no-modem");
+        host.close();
+    }
+    // Aether starts on its port
+    let listener = TcpListener::bind(port).expect("the same port again");
+    let (tx, _asked) = mpsc::channel();
+    thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            let tx = tx.clone();
+            thread::spawn(move || serve_until_listen(stream, &tx));
+        }
+    });
+    let mut host = Connection::open(at).expect("the adapter");
+    assert_eq!(ask(&mut host, hello)["op"], "hello");
+    let said = said.lock().expect("notes").clone();
+    let away = format!("Aether at {aether} could not be reached: ");
+    assert_eq!(
+        said.iter().filter(|l| l.starts_with(&away)).count(),
+        1,
+        "{said:?}"
+    );
+    assert_eq!(
+        said.last(),
+        Some(&format!("Aether at {aether} can be reached again")),
         "{said:?}"
     );
 }

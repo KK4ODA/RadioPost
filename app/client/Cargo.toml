@@ -30,6 +30,8 @@ unicode-normalization = "0.1"
 [dev-dependencies]
 radiopost-tester = { path = "../../core/tester" }
 radiopost-postoffice = { path = "../../core/postoffice" }
+# a stand-in for Aether's control API, for the app's connection between calls
+tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
 
 [lints]
 workspace = true

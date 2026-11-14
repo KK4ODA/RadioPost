@@ -161,13 +161,21 @@ impl Live {
     }
 }
 
+/// The program's name and version, as its `hello` gives them (RP-4 §3). Its calls claim callsigns
+/// under it, and its connection between calls ([`crate::presence`]) says it too, so Aether shows
+/// the two as one program.
+#[must_use]
+pub fn app_name() -> String {
+    format!("RadioPost client {}", env!("CARGO_PKG_VERSION"))
+}
+
 impl Options {
     /// Settings for an adapter at `adapter`, with the program's own clock and draws.
     #[must_use]
     pub fn new(adapter: &str) -> Options {
         Options {
             adapter: adapter.to_owned(),
-            app: format!("RadioPost client {}", env!("CARGO_PKG_VERSION")),
+            app: app_name(),
             clock: None,
             nonce: None,
             session_id: None,
@@ -315,7 +323,7 @@ impl Engine for Answering {
 /// The address to reach a modem at: an RPMI adapter's `host:port` as given, or for Aether HF's
 /// control API (`ws://…`) the Aether adapter (RP-4 §9.1) this program runs for it, started on first
 /// use and kept, one for each address.
-fn adapter_for(modem: &str) -> Result<String, Error> {
+pub(crate) fn adapter_for(modem: &str) -> Result<String, Error> {
     static RUNNING: OnceLock<Mutex<HashMap<String, SocketAddr>>> = OnceLock::new();
     if !modem.starts_with("ws://") {
         return Ok(modem.to_owned());

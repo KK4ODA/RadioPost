@@ -1394,7 +1394,7 @@
     },
     {
       "name": "a shared modem",
-      "story": "The gateway station N1CALL shares its modem between RadioPost (N1CALL-10) and another mail program (N1CALL-1). The other program cannot take N1CALL-10, and N1CALL-1 is a different callsign. A call to N1CALL-1 is answered only once that program listens. While its link is up, RadioPost hears only `busy`: its status lists no links, the other program's link is `not-connected` to it, and its own call is refused `busy`. When the other program's connection closes, its callsign goes with it.",
+      "story": "The gateway station N1CALL shares its modem between RadioPost (N1CALL-10) and another mail program (N1CALL-1). The other program cannot take N1CALL-10, and N1CALL-1 is a different callsign. A call to N1CALL-1 is answered only once that program listens. While its link is up, RadioPost hears only `busy`: its status lists no links, the other program's link is `not-connected` to it, and its own call is refused `busy`. When the other program's connection closes, its callsign goes with it. Throughout, the station's RadioPost app holds a connection with `hello` alone, a host between calls (RP-4 §3): it holds no callsign, nothing is answered for it, and it hears only `busy`.",
       "steps": [
         {
           "station": "N1CALL",
@@ -1478,6 +1478,53 @@
           "message": {
             "op": "ok",
             "id": 3
+          }
+        },
+        {
+          "note": "The station's RadioPost app keeps a connection between its calls: `hello` alone, no callsigns (RP-4 §3)."
+        },
+        {
+          "station": "N1CALL",
+          "host": "app",
+          "connection": "opened"
+        },
+        {
+          "station": "N1CALL",
+          "host": "app",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost client 0.1.0"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "app",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": true
+            }
           }
         },
         {
@@ -1750,6 +1797,15 @@
         },
         {
           "station": "N1CALL",
+          "host": "app",
+          "to": "host",
+          "message": {
+            "op": "busy",
+            "busy": true
+          }
+        },
+        {
+          "station": "N1CALL",
           "host": "radiopost",
           "to": "adapter",
           "message": {
@@ -1768,6 +1824,28 @@
             "callsigns": [
               "N1CALL-10"
             ],
+            "busy": true,
+            "links": []
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "app",
+          "to": "adapter",
+          "message": {
+            "op": "status",
+            "id": 2
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "app",
+          "to": "host",
+          "message": {
+            "op": "status",
+            "id": 2,
+            "listening": false,
+            "callsigns": [],
             "busy": true,
             "links": []
           }
@@ -1857,6 +1935,15 @@
         {
           "station": "N1CALL",
           "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "busy",
+            "busy": false
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "app",
           "to": "host",
           "message": {
             "op": "busy",

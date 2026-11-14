@@ -45,6 +45,11 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   the client: home directory store, composing (NFC, LF), and `session::call`/`answer` over any
   RPMI adapter; `rpmi-loopback` serves the simulated channel for running two clients by hand. A
   modem given as `ws://…` is Aether's control API: the client runs the Aether adapter in-process.
+  While the panel runs, `presence.rs` holds one more connection to that adapter with `hello` alone
+  (RP-4 0.7.0 §3), which the bridge passes on as Aether's `hello {app}` (its ADR-0114), so Aether's
+  header names the app between calls. No callsigns on it: under Aether's ADR-0108 any claim speaks
+  for the station. The page tells the panel its modem (`POST /api/modem`); only `ws://` and only a
+  shared Aether get the connection, never in conformance mode; retries every 5 s, logged once.
   Several callsigns (W46, W7; the author's decisions 2026-11-13): each a home of its own, the first
   the home as before and the others in `callsigns/<n>` under it, `chosen` naming the one in use
   (`callsigns.rs`); the panel opens the chosen home at each request and changes it only while idle,

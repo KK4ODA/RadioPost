@@ -16,6 +16,12 @@ the RadioPost app, and the gateway, which its operator runs with RadioPost Gatew
   callsign (its Setup step 1) is yours. RadioPost calls as the callsign it was enrolled with,
   whatever Aether's Setup says: there is nothing to copy into Aether. While RadioPost holds that
   callsign, from Aether 0.2.0-beta.149, Aether's Setup shows it greyed (*KK4ODA · RadioPost*).
+* **Aether's header shows RadioPost while it is open** (from Aether 0.2.0-beta.159 and RadioPost
+  0.1.0-beta.15): *✓ RadioPost client* between calls, and *✓ RadioPost client · listening* while it
+  listens. Open but idle, RadioPost holds no callsign, so it changes nothing Aether answers. Closed,
+  it is gone from the header within a moment. With an older RadioPost or Aether, RadioPost shows
+  only during a call or while it listens; between calls an Aether under automatic control then
+  says *calls to* its callsign *not answered*, which is normal: no program answers for it.
 * **Aether keying the radio itself** (Aether's Setup step 2: CAT, serial, rigctld, FLRig, CM108
   or VOX, not *Host*), with its ports as they are. RadioPost talks to Aether's control port,
   8515 (`ws://127.0.0.1:8515/v1`). The host programs port, 8300, is for Winlink Express and VarAC;

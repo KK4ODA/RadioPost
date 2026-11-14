@@ -296,6 +296,117 @@ fn code_of(m: &Message) -> &str {
         .unwrap_or("")
 }
 
+/// Aether's `status`, asked over a WebSocket of its own.
+fn aether_status(control: &str) -> Json {
+    let (mut ws, _) = tungstenite::connect(control).expect("Aether's control API");
+    let ask = serde_json::json!({"id": "status", "method": "status", "params": {}});
+    ws.send(tungstenite::Message::text(ask.to_string()))
+        .expect("sent");
+    loop {
+        let tungstenite::Message::Text(text) = ws.read().expect("an answer") else {
+            continue;
+        };
+        let answer: Json = serde_json::from_str(&text).expect("JSON");
+        if answer["id"] == "status" {
+            let _ = ws.close(None);
+            return answer["result"].clone();
+        }
+    }
+}
+
+/// The programs Aether names, one name for each connection, in its order.
+fn programs(status: &Json) -> Vec<String> {
+    status["programs"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .map(|p| p["app"].as_str().unwrap_or("").to_owned())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Waits until Aether names `want`, in that order.
+fn named_within(control: &str, want: &[&str]) -> Json {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let status = aether_status(control);
+        if programs(&status) == want {
+            return status;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Aether names {:?}, not {want:?}",
+            programs(&status)
+        );
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// The RadioPost app between calls (Aether's ADR-0114): a host that says `hello` and nothing more
+/// is named by Aether while its connection lasts, holds no callsign, and changes nothing the
+/// station answers. A call's connection under the same name claims beside it; each goes when its
+/// connection closes. Needs an `aetherd` with `hello` (0.2.0-beta.159 or later).
+#[test]
+#[ignore = "needs AETHERD, an aetherd binary of 0.2.0-beta.159 or later"]
+fn a_host_between_calls_is_named_and_claims_nothing() {
+    let binary = std::env::var("AETHERD").expect("AETHERD names an aetherd binary");
+    let dir = std::env::temp_dir().join(format!("radiopost-named-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a directory");
+    let mut modem = Daemon::start(&binary, &dir, "a", "N1CALL", "listen = \"127.0.0.1:0\"");
+    let control = modem.control();
+    let adapter = radiopost_aether::serve::listen("127.0.0.1:0", &control).expect("a port");
+    let open = || {
+        let c = Connection::open(adapter).expect("the adapter");
+        c.set_timeout(Some(Duration::from_secs(20)))
+            .expect("a timeout");
+        c
+    };
+    let app = "RadioPost client 0.1.0-beta.15";
+    let before = aether_status(&control);
+    assert!(
+        before["programs"].as_array().is_some(),
+        "this aetherd has no status.programs: it is older than ADR-0114"
+    );
+    assert_eq!(programs(&before), Vec::<String>::new());
+
+    // the app, idle: hello alone
+    let (mut idle, mut h1) = (open(), Host::new());
+    let hello = ask(&mut idle, &h1.hello(app));
+    assert_eq!(hello["caps"]["shared"], true, "{hello:?}");
+    let now = named_within(&control, &[app]);
+    assert_eq!(
+        now["claims"],
+        serde_json::json!([]),
+        "a hello claims nothing"
+    );
+    for key in ["answering", "not_answering", "callsigns", "own_callsigns"] {
+        assert_eq!(now[key], before[key], "{key}: the idle app changes nothing");
+    }
+
+    // a call's connection: the same name, a claim, listening
+    let (mut call, mut h2) = (open(), Host::new());
+    ask(&mut call, &h2.hello(app));
+    assert_eq!(
+        code_of(&ask(&mut call, &h2.callsigns(&["N1CALL-10"]))),
+        "ok"
+    );
+    assert_eq!(code_of(&ask(&mut call, &h2.listen(true))), "ok");
+    let now = named_within(&control, &[app, app]);
+    let claims = now["claims"].as_array().expect("claims");
+    assert_eq!(claims.len(), 1, "{claims:?}");
+    assert_eq!(claims[0]["app"], app);
+
+    // the call's connection ends, then the app's: nothing is left behind
+    call.close();
+    named_within(&control, &[app]);
+    idle.close();
+    let after = named_within(&control, &[]);
+    assert_eq!(after["claims"], serde_json::json!([]));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// RP-4 §1.1 on a real station: each host's callsigns are a claim of its own, the first claim
 /// keeps a callsign, and a host that leaves lets its callsigns go (Aether's ADR-0106).
 #[test]

@@ -2083,6 +2083,14 @@ def rpmi_shared() -> list[dict[str, Any]]:
     gateway = rpmi_adapter(w, "N1CALL", "g", shared=True)
     caller = rpmi_adapter(w, "N3CALL", "c", shared=False)
     rpmi_start(gateway, "radiopost", "RadioPost gateway 0.1.0", ["N1CALL-10"], listen=True)
+    w.note(
+        "The station's RadioPost app keeps a connection between its calls: `hello` alone, no "
+        "callsigns (RP-4 §3)."
+    )
+    gateway.open("app")
+    gateway.request(
+        "app", {"op": "hello", "id": 1, "version": [1, 1], "app": "RadioPost client 0.1.0"}
+    )
     gateway.open("other")
     gateway.request("other", {"op": "hello", "id": 1, "version": [1, 1], "app": "Other mail 2.3"})
     gateway.request("other", {"op": "callsigns", "id": 2, "callsigns": ["N1CALL-10"]})
@@ -2098,6 +2106,7 @@ def rpmi_shared() -> list[dict[str, Any]]:
     caller.request("client", {"op": "connect", "id": 4, "remote": "N1CALL-1"})
     other_link = link_of(gateway, "other")
     gateway.request("radiopost", {"op": "status", "id": 4})
+    gateway.request("app", {"op": "status", "id": 2})
     gateway.request(
         "radiopost",
         {"op": "send", "id": 5, "link": other_link, "data": rpmi.encode_data(b"not mine")},
@@ -2223,6 +2232,8 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "N1CALL radiopost hello 1": "hello",
                 "N1CALL radiopost callsigns 2": "ok",
                 "N1CALL radiopost listen 3": "ok",
+                "N1CALL app hello 1": "hello",  # a host between calls (§3)
+                "N1CALL app status 2": "status",
                 "N1CALL other hello 1": "hello",
                 "N1CALL other callsigns 2": "claimed",
                 "N1CALL other callsigns 3": "ok",
@@ -2246,6 +2257,22 @@ def make_rpmi_conversations() -> dict[str, Any]:
             for k in got.keys() | wanted.keys()
             if got.get(k) != wanted.get(k)
         }
+    # RP-4 §3, a host between calls: with `hello` alone it holds nothing and is told nothing but
+    # `busy` while another program's link is up, and its status says so.
+    heard = [
+        s["message"]
+        for s in shared
+        if (s.get("station"), s.get("host"), s.get("to")) == ("N1CALL", "app", "host")
+    ]
+    assert [m["op"] for m in heard] == ["hello", "busy", "status", "busy"], heard
+    assert [m["busy"] for m in heard if m["op"] == "busy"] == [True, False], heard
+    status = next(m for m in heard if m["op"] == "status")
+    assert (status["listening"], status["callsigns"], status["busy"], status["links"]) == (
+        False,
+        [],
+        True,
+        [],
+    ), status
     # RP-4 §4, §5: `delivered` only for a send with a `ref`, which it carries unchanged.
     reported = [
         s["message"]["ref"] for s in errors if s.get("message", {}).get("op") == "delivered"
@@ -2286,7 +2313,9 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "program listens. While its link is up, RadioPost hears only `busy`: its status "
                 "lists no links, the other program's link is `not-connected` to it, and its own "
                 "call is refused `busy`. When the other program's connection closes, its "
-                "callsign goes with it."
+                "callsign goes with it. Throughout, the station's RadioPost app holds a "
+                "connection with `hello` alone, a host between calls (RP-4 §3): it holds no "
+                "callsign, nothing is answered for it, and it hears only `busy`."
             ),
             "steps": shared,
         },

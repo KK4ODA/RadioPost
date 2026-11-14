@@ -96,7 +96,10 @@ both stations and check it works with the radio (its *Tune* or a probe), at the 
 agree (500 or 2300 Hz, Aether's setting). RadioPost answers and calls as the callsign of its
 credential (say KK4ODA at one station and WD5EMA at the other), whatever Aether's own callsign is.
 While RadioPost listens or calls, it answers for the station, and Aether hands it every call to
-that callsign. There is nothing to copy into Aether's Setup.
+that callsign. There is nothing to copy into Aether's Setup. From Aether 0.2.0-beta.159 and
+RadioPost 0.1.0-beta.15, Aether's header shows *✓ RadioPost client* while RadioPost is open, and
+*✓ RadioPost client · listening* while it listens. Open but idle, RadioPost holds no callsign, so
+Aether answers as it would without it.
 
 **Station A** (it answers): in RadioPost's *Station* area, click **Listen**. The badge at the top
 says *Listening*.

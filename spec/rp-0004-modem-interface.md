@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.6.6 |
-| **Updated** | 2026-11-12 |
+| **Version** | 0.7.0 |
+| **Updated** | 2026-11-14 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -139,6 +139,13 @@ If no version is in common the adapter answers `error` `unsupported-version` and
 that is not shared (§1.1) answers the `hello` of a second host, while a host that has said `hello`
 is still connected, with `error` `busy` and closes that connection. Until it has answered `hello`,
 it answers any other request with `error` `refused`.
+
+**A host between calls.** A host MAY keep a connection open with `hello` alone, so that a modem
+that shows the programs using it shows this one between its calls too (§9.1). With no callsigns
+it answers nothing and calls nothing, so it changes nothing the station does; its calls and its
+listening go on connections of their own. It does so only when `caps.shared` is true: an adapter
+that is not shared would turn its other connections away (above). It reads and ignores the events
+it is sent, such as `busy`.
 
 ---
 
@@ -291,7 +298,7 @@ end of this section.
 
 | RPMI | Aether control API |
 |---|---|
-| `hello` | `status` and `capabilities`: `caps.shared` is true when `status.claims` is present, and `caps.bandwidths` is the one Aether runs (`capabilities.bandwidth_hz`). `delivery`, `broadcast`, `quality`, `busy` and `regulatory` are true, and `max_links` is 1. `modem` is `Aether HF` and `status.version`. |
+| `hello` | `status` and `capabilities`: `caps.shared` is true when `status.claims` is present, and `caps.bandwidths` is the one Aether runs (`capabilities.bandwidth_hz`). `delivery`, `broadcast`, `quality`, `busy` and `regulatory` are true, and `max_links` is 1. `modem` is `Aether HF` and `status.version`. Then, when shared, `hello {app}` with the host's `app` (below, *A host between calls*). |
 | `callsigns` | `claim {callsigns, app}`, with the host's `app`. Aether takes the callsigns it can and lists each one another program holds in `refused`. RPMI keeps the host's list whole, so on a refusal the adapter claims the host's earlier list again and answers `error` `claimed` naming the refused callsigns. |
 | `listen` | `listen {enabled}` on that claim. A claim starts with it off, as RPMI's does. |
 | `connect` | `connect {remote, callsign}`, with `callsign` set to `as`. The call and its session are the host's. Aether's `claimed`, and `bad_params` for a callsign the claim does not hold, are RPMI's `not-authorized`. `already_connected` is `busy`. `refused` (an answer-only station) and `regulatory` are `refused`. |
@@ -318,6 +325,18 @@ program and its modem shows on both sides, and the operator sends both at once. 
 a file named `*.log`; an earlier Aether refuses the method, and the adapter does not wait for the
 answer. The log is shared with others, so it says what happened and never what was said: no
 correspondent's address and no subject.
+
+**A host between calls.** From 0.2.0-beta.159 (its
+[ADR-0114](https://github.com/KK4ODA/aether-hf/blob/master/docs/adr/0114-a-program-may-say-who-it-is-without-claiming-a-callsign.md))
+a program says who it is with `hello {app}` on its WebSocket connection, and Aether names it among
+the programs using the station (`status.programs`, and its header) while the connection lasts. A
+`hello` claims no callsign, so it changes nothing the station answers; a claim, by contrast, makes
+its program speak for the station (ADR-0108), and Aether's own callsigns would rest. So the adapter
+says `hello` with the host's `app` once the host's `hello` is answered, on a shared Aether, and a
+host that keeps its connection open with no callsigns (§3) is named all the same. Aether shows two
+connections whose names match, less a version at the end, as one program: a host's calls and its
+connection between calls say the same `app`. An earlier Aether answers `unknown_method`, and the
+adapter does not wait for the answer.
 
 **Beside a program on Aether's VARA-compatible port.** RMS Trimode, Winlink Express or VarAC on
 Aether's VARA-compatible host port holds the callsigns its `MYCALL` names. While such a program is
@@ -500,3 +519,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 0.6.4 | 2026-11-12 | §9.6, Mercury, found by writing its adapter from Mercury's `docs/TNC.md` and its source: the mapping; one program at a time; `LISTEN OFF` held until nothing of the host's is up, since Mercury's ends a session unsaid; no `CONNECT` for a second after a command that Mercury may answer with a `DISCONNECTED` of no session; `BUFFER` as delivery, and when its 0 is believed; the callsigns Mercury can carry; and that Mercury neither checks band rules nor identifies the station. |
 | 0.6.5 | 2026-11-12 | §9.6: the Mercury adapter identifies the station with `CQFRAME` after each session, and after answers that came to none; the station called first, the caller once it has heard it; a `connect` waits for it, and so its `ok` comes at once and Mercury's refusal is `failed` `refused`. |
 | 0.6.6 | 2026-11-12 | §9.6, found by running the adapter on two Mercury 1.9.23 processes: the caller waits 0.7 s after it has heard the called station's `CQFRAME`, as Mercury waits before it answers a frame; without it the caller keyed 0.13 s before the called station had unkeyed. |
+| 0.7.0 | 2026-11-14 | A host between calls (§3): a connection with `hello` alone, on a shared adapter only, so a modem that shows the programs using it shows the host when no call is up. §9.1: the adapter says `hello {app}` to a shared Aether (its ADR-0114, 0.2.0-beta.159), which names the program without a claim; asked for when Aether's header said "calls to KK4ODA-1 not answered" with the RadioPost app open and idle. |

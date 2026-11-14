@@ -12,6 +12,10 @@
 //! month ([`crate::renewal`]): when it starts and every hour, between sessions, as the activity
 //! `renewing`.
 //!
+//! While it runs and its modem is Aether, it holds a connection that says who it is and nothing
+//! more ([`crate::presence`]), so Aether names the app between calls too. The page says which
+//! modem (`POST /api/modem`, from its Modem box), as each call and listening does.
+//!
 //! Only this machine's own pages reach it: a request must name the panel's own host (so a page
 //! that rebinds a name to 127.0.0.1 is refused), and a change must carry `X-RadioPost: 1`, which
 //! another site's page cannot send without a preflight the panel never grants.
@@ -37,6 +41,7 @@ use crate::addresses;
 use crate::callsigns;
 use crate::compose::{self, Answer, Draft, File, media_type};
 use crate::online;
+use crate::presence::Presence;
 use crate::session::{self, Fetch, Kind, Options};
 use crate::store::{Error, Folder, Store, unhex};
 
@@ -104,6 +109,8 @@ pub struct Panel {
     live: Arc<Mutex<session::Live>>,
     /// The post office's token for the operator's requests (RP-5 §7), kept between them.
     office_token: Arc<Mutex<Option<String>>>,
+    /// The app's connection to Aether between calls.
+    presence: Presence,
 }
 
 /// When the panel renews the credential: first after `first`, then every `every`, once it has
@@ -162,6 +169,15 @@ fn plain(named: &[(Option<String>, String)]) -> Vec<String> {
     named.iter().map(|(_, a)| a.clone()).collect()
 }
 
+/// The modem the page names, or RP-4 §2's adapter port when it names none.
+fn modem_or_default(adapter: &str) -> String {
+    if adapter.is_empty() {
+        format!("127.0.0.1:{}", rpmi::DEFAULT_PORT)
+    } else {
+        adapter.to_owned()
+    }
+}
+
 impl Panel {
     /// A panel for the home at `home` and the callsigns it holds, serving its page from `ui` when
     /// given.
@@ -188,6 +204,7 @@ impl Panel {
             },
             live: Arc::default(),
             office_token: Arc::default(),
+            presence: Presence::new(home),
         }
     }
 
@@ -221,6 +238,21 @@ impl Panel {
         &self.updates
     }
 
+    /// The same panel, trying Aether again after `retry` when it holds no connection between
+    /// calls ([`crate::presence`]): for tests, which cannot wait five seconds.
+    #[must_use]
+    pub fn retrying_aether_every(mut self, retry: std::time::Duration) -> Panel {
+        self.presence = self.presence.retrying_every(retry);
+        self
+    }
+
+    /// The program is ending: the connection between calls closes, so Aether says the app has
+    /// gone, rather than learning it from a connection cut at the exit. A clone of the panel kept
+    /// before [`Panel::start`] ends the running panel's.
+    pub fn leave(&self) {
+        self.presence.stop();
+    }
+
     /// Serves on `addr` (loopback; port 0 picks one) on a thread of its own; returns the address.
     ///
     /// # Errors
@@ -236,6 +268,7 @@ impl Panel {
             return Err("the panel listens only on the loopback interface".into());
         }
         self.addr = local;
+        self.presence.start();
         let renewing = self.clone();
         thread::spawn(move || renewing.keep_renewed());
         thread::spawn(move || {
@@ -484,6 +517,12 @@ impl Panel {
             }
             (Method::Post, "/api/listen") => {
                 self.run(None, Kind::Station, &text("adapter"), Fetch::All)
+            }
+            (Method::Post, "/api/modem") => {
+                // the page's Modem box, when it loads and when it changes: the app's connection
+                // between calls follows it (only to Aether)
+                self.presence.set_modem(&modem_or_default(&text("adapter")));
+                Ok(json!({}))
             }
             (_, "/api/gateways" | "/api/grid" | "/api/waiting" | "/api/fetch") => {
                 self.gateway_side(method, path, body)
@@ -1061,11 +1100,10 @@ impl Panel {
             a.failed = None;
         }
         self.stop.store(false, Ordering::Relaxed);
-        let mut opts = Options::new(if adapter.is_empty() {
-            "127.0.0.1:8600"
-        } else {
-            adapter
-        });
+        let adapter = modem_or_default(adapter);
+        // the modem a call or listening goes through is the app's modem between calls too
+        self.presence.set_modem(&adapter);
+        let mut opts = Options::new(&adapter);
         opts.stop = Some(Arc::clone(&self.stop));
         opts.fetch = fetch;
         *self.live.lock().unwrap_or_else(PoisonError::into_inner) = session::Live::default();

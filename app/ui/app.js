@@ -954,6 +954,13 @@ function adapter() {
   return value;
 }
 
+// the Modem box, told to the panel when the page opens and when it changes: between calls the app
+// holds a connection to Aether that names it there (app/client/src/presence.rs). Quiet: a panel
+// that cannot take it says nothing here.
+function tellModem() {
+  api("modem", {adapter: adapter()}).catch(() => { /* the next change or call tells it */ });
+}
+
 async function act(path, body) {
   try {
     await api(path, body);
@@ -1811,6 +1818,8 @@ function wire() {
     const kept = localStorage.getItem("radiopost.adapter");
     if (kept) $("adapter").value = kept;
   } catch { /* not kept */ }
+  tellModem();
+  $("adapter").addEventListener("change", tellModem);
   for (const b of document.querySelectorAll("[data-folder]")) {
     b.addEventListener("click", () => openFolder(b.dataset.folder));
   }

@@ -6,7 +6,8 @@
 //! it, and the window shows it. The page talks only to that server: the window grants it no access
 //! to the application (no Tauri commands, no capabilities). Closing the window ends the program;
 //! while a call, a session or listening is under way, it asks first, since closing ends that too and
-//! leaves the other station waiting on the air.
+//! leaves the other station waiting on the air. While it runs, the panel holds a connection to
+//! Aether that names the app there between calls, and closes it as the program ends.
 //!
 //! It updates itself: the panel says when a newer release is out (asked when it opens and every
 //! six hours), and its Update and restart installs it with Tauri's updater, from the update
@@ -21,7 +22,7 @@ use std::sync::Arc;
 use radiopost_client::panel::Panel;
 use radiopost_client::store;
 use radiopost_update::{Install, Product, Watch};
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_updater::UpdaterExt as _;
 
@@ -99,6 +100,7 @@ fn main() {
     };
     let url = format!("http://{at}/");
     let updates = Arc::clone(panel.updates());
+    let leaving = panel.clone();
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -143,10 +145,19 @@ fn main() {
             });
             Ok(())
         })
-        .run(tauri::generate_context!());
-    if let Err(e) = result {
-        eprintln!("RadioPost: the window cannot open: {e}");
-        std::process::exit(1);
+        .build(tauri::generate_context!());
+    match result {
+        // the program ends: its connection to Aether between calls closes first, so Aether says
+        // the app has gone
+        Ok(app) => app.run(move |_, event| {
+            if let RunEvent::Exit = event {
+                leaving.leave();
+            }
+        }),
+        Err(e) => {
+            eprintln!("RadioPost: the window cannot open: {e}");
+            std::process::exit(1);
+        }
     }
 }
 
