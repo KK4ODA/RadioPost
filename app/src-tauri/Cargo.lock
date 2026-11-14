@@ -2584,7 +2584,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "radiopost"
-version = "0.1.0-beta.14"
+version = "0.1.0-beta.15"
 dependencies = [
  "ed25519-dalek",
  "flate2",
@@ -2594,7 +2594,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-aether"
-version = "0.1.0-beta.14"
+version = "0.1.0-beta.15"
 dependencies = [
  "rpmi",
  "serde_json",
@@ -2603,7 +2603,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-api"
-version = "0.1.0-beta.14"
+version = "0.1.0-beta.15"
 dependencies = [
  "ed25519-dalek",
  "radiopost",
@@ -2613,7 +2613,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-app"
-version = "0.1.0-beta.14"
+version = "0.1.0-beta.15"
 dependencies = [
  "radiopost-client",
  "radiopost-update",
@@ -2626,7 +2626,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-client"
-version = "0.1.0-beta.14"
+version = "0.1.0-beta.15"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -2642,7 +2642,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-update"
-version = "0.1.0-beta.14"
+version = "0.1.0-beta.15"
 dependencies = [
  "base64 0.22.1",
  "minisign-verify",
@@ -2823,7 +2823,7 @@ dependencies = [
 
 [[package]]
 name = "rpmi"
-version = "0.1.0-beta.14"
+version = "0.1.0-beta.15"
 dependencies = [
  "serde_json",
 ]
