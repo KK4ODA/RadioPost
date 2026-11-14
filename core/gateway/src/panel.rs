@@ -65,7 +65,7 @@ pub struct Panel {
 }
 
 /// A callsign as RP-1 writes one: letters and digits, a `/` part or a `-` SSID allowed.
-fn callsign_ok(c: &str) -> bool {
+pub(crate) fn callsign_ok(c: &str) -> bool {
     c.len() >= 3
         && c.len() <= 16
         && c.chars()
@@ -222,6 +222,27 @@ impl Panel {
             }
             (Method::Get, "/api/sessions") => Ok(json!(monitor.sessions())),
             (Method::Get, "/api/held") => Ok(held(dir)),
+            // the callers refused (wishlist W24): changed while the gateway answers, read at the
+            // next call
+            (Method::Get, "/api/refused") => Ok(json!(crate::refused::list(dir))),
+            (Method::Post, "/api/refused") => {
+                let said = match text(body, "remove") {
+                    "" => crate::refused::add(
+                        dir,
+                        text(body, "caller"),
+                        text(body, "note"),
+                        station::now(),
+                    )?,
+                    caller => {
+                        if !crate::refused::remove(dir, caller)? {
+                            return Err(format!("{caller} was not refused"));
+                        }
+                        format!("carrying {caller}'s sessions again from the next call on")
+                    }
+                };
+                monitor.log(&said);
+                Ok(json!(crate::refused::list(dir)))
+            }
             (Method::Post, "/api/setup") => {
                 self.stopped()?;
                 self.setup(body)?;

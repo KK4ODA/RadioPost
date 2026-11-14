@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.18 |
+| **Version** | 0.3.19 |
 | **Updated** | 2026-11-14 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -127,7 +127,7 @@ rules:
 | W21 | An ARDOP adapter | Adapters | Low | Needs specification review | Planned |
 | W22 | An AX.25 packet adapter | Adapters | Low | Fits today | Planned |
 | W23 | A phone version | Radio | Low | Fits today; optional addition for RPMI across devices | Planned |
-| W24 | Block a caller by address or callsign | Operation | Medium | Fits today | Planned |
+| W24 | Block a caller by address or callsign | Operation | Medium | Fits today | Implemented |
 | W25 | The gateway renews its own credential | — | — | — | Consolidated into W8 |
 | W26 | One gateway, several modems | Operation | Medium | Fits today; G11 to name Mercury | Planned |
 | W27 | Copies placed ahead | Offline | High | Fits today | Implemented |
@@ -597,12 +597,12 @@ The gateway's operator refuses one account, or one station, that misuses the gat
 | Requested by | The plan: concept §9. Requesters: 0. |
 | Component | Gateway. |
 | Compatibility | **Fits today**: `ERROR` `refused-by-policy` after `HELLO`, with a text (RP-3 §5.9, RP-0 §9.3). |
-| Existing coverage | Partly built: the operator can block post offices from the command line (RP-1 §7.3); not addresses or callsigns, and nothing in the panel. |
+| Existing coverage | **Implemented** (2026-11-14): the gateway's operator refuses an account by its address or a station by its callsign (without an SSID, every SSID of it), with a note for themselves, from the panel's *Refused* card or `radiopost-gateway block --caller` / `unblock --caller` / `blocked`. The list is `refused.json`, read at each call, so it changes while the gateway answers. The engine answers a refused caller's `HELLO`, by the statement's address and callsign and again by the credential's, with `refused-by-policy` and the text "<gateway>'s operator does not carry sessions for <entry>" (RP-3 §5.9), before anything reaches a post office; the session is kept as refused. Post offices are blocked from the command line (RP-1 §7.3). |
 | Dependencies | None. |
 | Effort | Small. |
 | Priority | **Medium.** Operators need it before a gateway is widely known; they stop violating traffic once they know of it (RP-6 §5.2). |
 | Recommendation | Accept, in the panel too. |
-| Status | Planned. |
+| Status | Implemented. |
 | Author decision | **Decided** (2026-11-14): next, in stage 1 (design §9), with the pilot's backups and mailbox. |
 
 ### W26. One gateway, several modems
@@ -1108,3 +1108,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.16 | 2026-11-14 | W36's first part and W27, W28 and W29 released in 0.1.0-beta.14. |
 | 0.3.17 | 2026-11-14 | The author's decisions on the next stages (design §9): W24, W38 and W36's second part first, then W31, then W30 in three stages with its first trial on one shared channel. W6 implemented with *delivered* dropped (G5 settled). W10 built when a test certificate is supplied, RSA-1024 and SHA-1 accepted. |
 | 0.3.18 | 2026-11-14 | W38: backups go off the server by themselves, to the operator's computers while the app is open, sealed to a key each computer holds; Health counts a fetch. |
+| 0.3.19 | 2026-11-14 | W24 implemented: a gateway's operator refuses a caller by address or callsign, from the panel or the command line, while it answers. |

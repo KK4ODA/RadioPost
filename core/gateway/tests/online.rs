@@ -1082,3 +1082,66 @@ fn the_gateway_renews_its_own_credential_and_answers_with_it() {
     );
     assert_eq!(credential().serial, after.serial, "nothing kept");
 }
+
+/// Wishlist W24: a caller the gateway's operator refuses, by callsign (every SSID of it) or by
+/// address, is answered with `refused-by-policy` and a line saying so, from its next call on while
+/// the gateway answers; taken off the list, it is carried again.
+#[test]
+fn a_caller_the_operator_refuses_is_told_so_and_carried_again_once_taken_off() {
+    let dir = scratch("refused-caller");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (_server, at_user, at_gateway) = loopback();
+    let (gw, _rx) = gateway(&dir, &running, &base, &po_key, at_gateway);
+    let mut user = client(
+        &dir.join("wd5ema"),
+        &running,
+        &po_key,
+        "club@test.example",
+        "WD5EMA",
+    );
+    let opts = Options::new(&at_user.to_string());
+    let call = |user: &mut Store| {
+        let mut said = Vec::new();
+        let report = session::call(user, "KK4ODA-1", Kind::Gateway, &opts, &mut |s| {
+            said.push(s.to_owned());
+        })
+        .expect("called");
+        (report.failed, said)
+    };
+
+    // refused by its callsign without an SSID, while the gateway answers
+    let added = radiopost_gateway::refused::add(&gw, "wd5ema", "testing W24", 1).expect("added");
+    assert!(added.contains("every SSID"), "{added}");
+    let (failed, said) = call(&mut user);
+    let failed = failed.expect("refused");
+    assert!(
+        failed.contains("refused-by-policy")
+            && failed.contains("KK4ODA-1's operator does not carry sessions for WD5EMA"),
+        "{failed} {said:?}"
+    );
+    assert!(
+        !failed.contains("testing W24"),
+        "the note stays with the operator"
+    );
+
+    // by its address, whatever its case
+    assert!(radiopost_gateway::refused::remove(&gw, "WD5EMA").expect("removed"));
+    radiopost_gateway::refused::add(&gw, "Club@Test.Example", "", 2).expect("added");
+    let (failed, said) = call(&mut user);
+    let failed = failed.expect("refused");
+    assert!(
+        failed.contains("does not carry sessions for club@test.example"),
+        "{failed} {said:?}"
+    );
+
+    // another station's SSID refuses only that one
+    assert!(radiopost_gateway::refused::remove(&gw, "club@test.example").expect("removed"));
+    radiopost_gateway::refused::add(&gw, "WD5EMA-7", "", 3).expect("added");
+    let (failed, said) = call(&mut user);
+    assert_eq!(failed, None, "{said:?}");
+
+    // and off the list, carried again
+    assert!(radiopost_gateway::refused::remove(&gw, "wd5ema-7").expect("removed"));
+    let (failed, said) = call(&mut user);
+    assert_eq!(failed, None, "{said:?}");
+}

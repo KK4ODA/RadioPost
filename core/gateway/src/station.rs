@@ -601,6 +601,8 @@ impl Station {
                 .filter_map(|c| base64url::decode(c))
                 .collect(),
             uploads,
+            // read at each call, so a caller refused while the gateway answers is refused next
+            refused: crate::refused::callers(&self.dir),
         }
     }
 
@@ -634,7 +636,7 @@ impl Station {
                         ));
                     }
                 }
-                Note::PostOffice(_) => {}
+                Note::PostOffice(_) | Note::Refused(_) => {}
             }
         }
         self.held
@@ -1002,8 +1004,10 @@ fn carry(
     };
     let notes = carrier.engine_mut().0.take_notes();
     for note in &notes {
-        if let Note::PostOffice(code) = note {
-            monitor.post_office_failed(*code);
+        match note {
+            Note::PostOffice(code) => monitor.post_office_failed(*code),
+            Note::Refused(entry) => monitor.refused(entry),
+            _ => {}
         }
     }
     station.keep(notes);

@@ -233,6 +233,7 @@ fn set_up(
 
 /// The operator's whole path: set up, registered, started, a call carried, checked, stopped.
 #[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
 fn a_gateway_set_up_registered_and_run_from_its_panel() {
     let dir = scratch("panel-run");
     let (running, base, po_key) = post_office(&dir.join("po"));
@@ -313,6 +314,64 @@ fn a_gateway_set_up_registered_and_run_from_its_panel() {
         "{log:?}"
     );
 
+    // refused from the panel while it answers (wishlist W24): told so at its next call, and the
+    // session kept says which entry refused it
+    let list = page
+        .post(
+            "/api/refused",
+            &json!({"caller": "wd5ema", "note": "for the test"}),
+        )
+        .expect("refused");
+    assert_eq!(list[0]["caller"], "WD5EMA", "{list}");
+    assert!(
+        page.post("/api/refused", &json!({"caller": "not a caller"}))
+            .is_err()
+    );
+    let report = session::call(
+        &mut user,
+        "KK4ODA-1",
+        Kind::Gateway,
+        &Options::new(&at_user.to_string()),
+        &mut |_| {},
+    )
+    .expect("called");
+    let failed = report.failed.expect("refused");
+    assert!(
+        failed.contains("does not carry sessions for WD5EMA"),
+        "{failed}"
+    );
+    let until = Instant::now() + Duration::from_secs(20);
+    let sessions = loop {
+        let s = page.get("/api/sessions");
+        if s.as_array().is_some_and(|a| a.len() == 2) {
+            break s;
+        }
+        assert!(
+            Instant::now() < until,
+            "the refused session is never recorded"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    assert_eq!(sessions[0]["refused"], "WD5EMA", "{sessions}");
+    assert!(sessions[1].get("refused").is_none(), "{sessions}");
+    page.wait_for("listening");
+    assert!(
+        page.log()
+            .iter()
+            .any(|l| l == "refused the caller: the operator refuses WD5EMA"),
+        "{:?}",
+        page.log()
+    );
+    let list = page
+        .post("/api/refused", &json!({"remove": "WD5EMA"}))
+        .expect("taken off");
+    assert_eq!(list, json!([]));
+    assert!(
+        page.post("/api/refused", &json!({"remove": "WD5EMA"}))
+            .is_err(),
+        "not refused any more"
+    );
+
     // the post offices, checked now
     let state = page.post("/api/check", &json!({})).expect("checked");
     let checks = &state["status"]["checks"];
@@ -329,7 +388,7 @@ fn a_gateway_set_up_registered_and_run_from_its_panel() {
 
     // the sessions are kept for the next run
     let again = Runner::new(&gw);
-    assert_eq!(again.monitor().sessions().len(), 1);
+    assert_eq!(again.monitor().sessions().len(), 2);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

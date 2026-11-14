@@ -41,6 +41,8 @@ h1 { font-size: 20px; margin: 18px 0 10px; }
 h2 { font-size: 13px; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
 .mono { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
 .row { display: flex; gap: 8px; margin: 4px 0 12px; flex-wrap: wrap; }
+.row input { flex: 0 1 16rem; width: auto; min-width: 10rem; }
+.row input.grow { flex: 1; }
 .note { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
 .ok { color: var(--ok); }
 .bad { color: var(--bad); }

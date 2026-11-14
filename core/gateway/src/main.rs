@@ -40,6 +40,12 @@ directory, as the RadioPost Gateway app has it.
                      to B bytes with their text (RP-5 §5.8); register again to publish it
   held               what the gateway holds: copies placed ahead, the queue, the last reports
   block --domain D   carry no sessions to a domain's post office (RP-1 §7.3)
+  block --caller C [--note TEXT]
+                     refuse a caller from its next call on: an address, or a callsign
+                     (without an SSID, every SSID of it); the note is for you alone
+  unblock --caller C | --domain D
+                     carry that caller's, or that post office's, sessions again
+  blocked            the callers and post offices refused
   key                the gateway's public key
   serve              answer calls and carry each session to the caller's post office
   update             replace radiopost-gateway, and the other RadioPost programs beside it, with
@@ -202,6 +208,61 @@ fn held(dir: &Path) {
     }
 }
 
+/// `block`, `unblock` and `blocked`: callers refused (wishlist W24), read at each call, and post
+/// offices blocked (RP-1 §7.3), a setting.
+fn blocking(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
+    match command {
+        "block" => {
+            if let Some(caller) = a.one("--caller") {
+                let note = a.one("--note").unwrap_or_default();
+                println!(
+                    "{}",
+                    radiopost_gateway::refused::add(dir, &caller, &note, station::now())?
+                );
+                return Ok(());
+            }
+            let mut s = Settings::load(dir)?;
+            let d = a.need("--domain")?.to_lowercase();
+            if !s.blocked.contains(&d) {
+                s.blocked.push(d);
+            }
+            s.save(dir)
+        }
+        "unblock" => {
+            if let Some(caller) = a.one("--caller") {
+                if !radiopost_gateway::refused::remove(dir, &caller)? {
+                    return Err(format!("{caller} was not refused"));
+                }
+                println!("carrying {caller}'s sessions again from the next call on");
+                return Ok(());
+            }
+            let mut s = Settings::load(dir)?;
+            let d = a.need("--domain")?.to_lowercase();
+            if !s.blocked.contains(&d) {
+                return Err(format!("{d} was not blocked"));
+            }
+            s.blocked.retain(|b| *b != d);
+            s.save(dir)
+        }
+        "blocked" => {
+            let s = Settings::load(dir)?;
+            for d in &s.blocked {
+                println!("post office {d}");
+            }
+            for r in radiopost_gateway::refused::list(dir) {
+                let note = if r.note.is_empty() {
+                    String::new()
+                } else {
+                    format!(": {}", r.note)
+                };
+                println!("caller {}{note}", r.caller);
+            }
+            Ok(())
+        }
+        _ => Err(format!("unknown command {command}")),
+    }
+}
+
 fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
     match command {
         "init" => init(dir, a),
@@ -232,14 +293,7 @@ fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
             held(dir);
             Ok(())
         }
-        "block" => {
-            let mut s = Settings::load(dir)?;
-            let d = a.need("--domain")?.to_lowercase();
-            if !s.blocked.contains(&d) {
-                s.blocked.push(d);
-            }
-            s.save(dir)
-        }
+        "block" | "unblock" | "blocked" => blocking(dir, a, command),
         "key" => {
             println!(
                 "{}",

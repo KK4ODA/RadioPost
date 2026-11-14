@@ -102,6 +102,16 @@ the bottom says what the gateway does.
 **Held** says how many copies placed ahead the gateway holds, for how many users, and how many
 sessions carried while the Internet was down wait to be reported; **Show** lists them (§4).
 
+**Refused** lists the callers you refuse, and **Show** lets you add one. Name an account by its
+address (`ana@example.org`) or a station by its callsign: a callsign without an SSID refuses every
+SSID of it (`N0CALL` refuses `N0CALL-5`), and `N0CALL-5` refuses that station alone. The note is
+for you; the caller is told only that this gateway's operator does not carry its sessions
+(`refused-by-policy`). It applies from the caller's next call, whether the gateway is answering or
+not, and nothing of it reaches the post office. The Sessions list shows such a call as refused, and
+**Carry again** takes a caller off the list. Do it when a station misuses the gateway, such as mail
+the rules do not allow on the air: the operator who learns of it must stop it. A whole post
+office is refused from the command line (§6).
+
 **Stop** ends a session under way and lets the modem go. Settings change only while the gateway is
 stopped. Closing the window stops the gateway too. Stopped, it closes at once; otherwise it asks
 first, and says what closing stops:
@@ -216,7 +226,11 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
-`radiopost-gateway serve` answers calls with no panel at all, as before. To update a gateway
+`radiopost-gateway serve` answers calls with no panel at all, as before. `radiopost-gateway block
+--caller N0CALL --note "why"` refuses a caller, `unblock --caller N0CALL` carries it again, and
+`blocked` lists the callers and post offices refused; a running gateway takes the change at the
+next call. `block --domain example.org` refuses a whole post office (RP-1 §7.3) and `unblock
+--domain` lifts it; that one is a setting, so stop the gateway first. To update a gateway
 run this way: `sudo radiopost-gateway update`, then restart it (`sudo systemctl restart` its unit);
 the panel and its log say when a newer release is out.
 
@@ -233,6 +247,7 @@ another; Setup shows where):
 | `held.json` | Callers' credentials seen, and pieces of uploads a broken link left (RP-3 §7). |
 | `store.json` | What it holds for when the Internet is down (§4): copies placed ahead, the sessions carried while cut off and not yet reported, what it passed on, and the post offices' keys and revocation lists. Keep it: a session in it that is lost is mail its sender's RadioPost offers again only after 30 days. |
 | `sessions.json` | The last 200 sessions carried, as the Sessions list shows them. |
+| `refused.json` | The callers you refuse, each with your note and since when. |
 | `gateway.log` | Everything the log at the bottom of the window says, with the date and time (UTC), from 0.1.0-beta.8 on; also why the connection to Aether ended, and any program fault. Past 2 MB it is kept as `gateway.log.old` and a new one begun. From Aether 0.2.0-beta.150 and RadioPost Gateway 0.1.0-beta.9, Aether's *Send files* carries both. |
 
 ## 8. When something is wrong

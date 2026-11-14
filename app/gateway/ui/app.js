@@ -287,18 +287,49 @@ async function refreshHeld() {
   }));
 }
 
+// the callers refused (wishlist W24), read at each call
+async function refreshRefused() {
+  const list = await api("refused");
+  $("refused-count").textContent = list.length
+    ? `${list.length} ${list.length === 1 ? "caller" : "callers"}: ${list.slice(0, 5).map((r) => r.caller).join(", ")}${list.length > 5 ? ` and ${list.length - 5} more` : ""}`
+    : "None.";
+  $("refused-rows").replaceChildren(...list.map((r) => {
+    const tr = document.createElement("tr");
+    [r.caller, r.note || "", r.at ? day(r.at) : ""].forEach((text, i) => {
+      const td = document.createElement("td");
+      td.textContent = text;
+      if (i === 0) td.className = "mono";
+      tr.append(td);
+    });
+    const td = document.createElement("td");
+    const b = document.createElement("button");
+    b.className = "quiet";
+    b.textContent = "Carry again";
+    b.title = `Carry ${r.caller}'s sessions again from its next call on`;
+    b.addEventListener("click", () => act("refused", {remove: r.caller}, () => {
+      toast(`${r.caller}'s sessions are carried again from its next call on.`);
+      refreshRefused();
+    }));
+    td.append(b);
+    tr.append(td);
+    return tr;
+  }));
+  $("refused-rows").closest(".table-wrap").hidden = list.length === 0;
+}
+
 async function refreshSessions() {
   const sessions = await api("sessions");
   shownSessions = sessions.length;
   $("rows").replaceChildren(...sessions.map((r) => {
     const tr = document.createElement("tr");
-    const ended = r.result === "over";
+    const ended = r.result === "over" && !r.refused;
     tr.className = ended ? "" : "failed";
     const cells = [
       when(r.started), r.remote, r.account || "—",
       r.ended ? length(r.started, r.ended) : "",
       r.handed_in, r.picked_up,
-      ended ? "over" : r.result + (r.post_office ? `; ${postOffice(r.post_office)}` : ""),
+      r.refused ? `refused: you refuse ${r.refused}`
+        : ended ? "over" : r.result + (r.post_office ? `; ${postOffice(r.post_office)}` : ""),
     ];
     cells.forEach((text, i) => {
       const td = document.createElement("td");
@@ -335,6 +366,7 @@ async function tick() {
       await refreshLog();
       await refreshSessions();
       await refreshHeld();
+      await refreshRefused();
     } else if (shownSessions < 0) {
       await refreshSessions();
     }
@@ -366,6 +398,22 @@ $("check").addEventListener("click", async () => {
   $("check").disabled = true;
   await act("check", {}, render);
   $("check").disabled = false;
+});
+$("refused-open").addEventListener("click", () => {
+  $("refused-view").hidden = !$("refused-view").hidden;
+  $("refused-open").textContent = $("refused-view").hidden ? "Show" : "Hide";
+  if (!$("refused-view").hidden) $("refuse-form").caller.focus();
+});
+$("refuse-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const f = e.currentTarget;
+  const typed = f.caller.value.trim();
+  act("refused", {caller: typed, note: f.note.value.trim()}, (list) => {
+    const kept = list.find((r) => r.caller.toLowerCase() === typed.toLowerCase());
+    toast(`Refusing ${kept ? kept.caller : typed} from its next call on.`);
+    f.reset();
+    refreshRefused();
+  });
 });
 $("held-open").addEventListener("click", () => {
   $("held-view").hidden = !$("held-view").hidden;

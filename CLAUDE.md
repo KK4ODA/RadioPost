@@ -189,6 +189,11 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `station::run` waits for a modem that is away and stops when asked; `serve` is `run` with no one
   to ask. A gateway's credential names the gateway as its operator (RP-5 §6.4) and lasts 90 days:
   registering again replaces it. `tests/common` holds the gateway tests' post office and clients.
+  Callers refused (W24): `refused.rs`, `refused.json` beside the settings and read at each call
+  (the settings are held while it answers; a refusal is wanted at once), handed to the engine as
+  `GatewayConfig::refused`; `session::gateway::refused_caller` is the rule (an address whatever its
+  case, a callsign without an SSID every SSID of it), checked at `HELLO` and again on the
+  credential, answered `refused-by-policy` with a text, and `Note::Refused` marks the session.
   The client's gateway side: `online::gateways` fetches RP-5 §4.4's list, its JWS checked with the
   keys the home trusts for the user's domain (and those its signed `info` adds, RP-1 §7.2), and
   keeps it in `state.json` for when there is no Internet; `grid.rs` ranks it by distance from the

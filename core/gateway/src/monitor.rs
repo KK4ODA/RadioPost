@@ -39,6 +39,9 @@ pub struct SessionRecord {
     pub failed: u32,
     /// The post office could not be reached or refused the session: its error code's name.
     pub post_office: Option<String>,
+    /// The operator refuses this caller (wishlist W24): the entry that refused it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refused: Option<String>,
     /// How it ended: `over` when the caller hung up, else why; `None` while under way.
     pub result: Option<String>,
 }
@@ -204,6 +207,14 @@ impl Monitor {
         if let (Some(a), Some(s)) = (account, self.lock().session.as_mut()) {
             s.account = Some(a.to_owned());
         }
+    }
+
+    /// The caller was refused by the operator's choice of `entry` (wishlist W24).
+    pub fn refused(&self, entry: &str) {
+        if let Some(s) = self.lock().session.as_mut() {
+            s.refused = Some(entry.to_owned());
+        }
+        self.log(&format!("refused the caller: the operator refuses {entry}"));
     }
 
     /// The post office failed the session with `code`.

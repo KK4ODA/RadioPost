@@ -478,6 +478,15 @@ fn error_pdu(code: ErrorCode) -> Value {
     ])
 }
 
+/// An `ERROR` with a text for the operator (RP-3 §5.9).
+fn error_pdu_saying(code: ErrorCode, text: &str) -> Value {
+    Value::int_map(vec![
+        (0, Value::Uint(kind::ERROR)),
+        (1, Value::Uint(u64::from(code.code()))),
+        (2, Value::Text(text.to_owned())),
+    ])
+}
+
 /// Frames a transmission's PDUs into the bytes written to the link.
 fn transmission(pdus: &[Value]) -> Vec<u8> {
     pdus.iter()

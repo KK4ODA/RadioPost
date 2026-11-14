@@ -18,6 +18,7 @@ pub mod monitor;
 pub mod offline;
 pub mod operator;
 pub mod panel;
+pub mod refused;
 pub mod runner;
 pub mod station;
 pub mod store;

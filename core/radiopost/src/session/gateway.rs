@@ -13,8 +13,8 @@ use std::collections::HashMap;
 use serde_json::{Value as Json, json};
 
 use super::{
-    Caps, Event, Inbound, Outgoing, Receipts, VERSION, WaitingEntry, done, error_pdu, flags,
-    listed_ids, listed_pairs, msg_pdus, piece_for, transmission,
+    Caps, Event, Inbound, Outgoing, Receipts, VERSION, WaitingEntry, done, error_pdu,
+    error_pdu_saying, flags, listed_ids, listed_pairs, msg_pdus, piece_for, transmission,
 };
 use crate::base64url;
 use crate::cbor::Value;
@@ -91,6 +91,31 @@ pub struct GatewayConfig {
     /// Pieces of uploads broken in earlier sessions, by account and content ID, with the air
     /// form's whole length (RP-3 §7).
     pub uploads: HashMap<(String, ContentId), (Vec<u8>, u64)>,
+    /// Callers its operator refuses: addresses, and callsigns, a callsign without an SSID
+    /// refusing every SSID of it ([`refused_caller`]).
+    pub refused: Vec<String>,
+}
+
+/// The entry of `refused` that refuses a caller with this address and this callsign, if any: an
+/// address matches whatever its case, and a callsign without an SSID every SSID of it
+/// (`N0CALL` refuses `N0CALL-5`; `N0CALL-5` refuses that one alone).
+#[must_use]
+pub fn refused_caller<'a>(refused: &'a [String], address: &str, callsign: &str) -> Option<&'a str> {
+    let callsign = callsign.trim().to_ascii_uppercase();
+    let base = callsign.split('-').next().unwrap_or("");
+    refused
+        .iter()
+        .find(|entry| {
+            let entry = entry.trim();
+            if entry.contains('@') {
+                !address.is_empty() && entry.eq_ignore_ascii_case(address.trim())
+            } else {
+                let entry = entry.to_ascii_uppercase();
+                !callsign.is_empty()
+                    && (entry == callsign || (!entry.contains('-') && entry == base))
+            }
+        })
+        .map(String::as_str)
 }
 
 /// What the gateway's engine tells the program besides RP-3's events.
@@ -98,6 +123,9 @@ pub struct GatewayConfig {
 pub enum Note {
     /// A credential to keep, so the caller may send its hash next time.
     Credential(Vec<u8>),
+    /// The caller was refused because the operator refuses this entry of
+    /// [`GatewayConfig::refused`].
+    Refused(String),
     /// Pieces of an upload to keep for at least 24 hours (RP-3 §7); none held when it completed.
     Upload {
         /// The account.
@@ -258,6 +286,36 @@ impl Gateway {
         std::mem::take(&mut self.events)
     }
 
+    /// The caller refused by its operator's choice (wishlist W24): `refused-by-policy`, saying so.
+    fn refuse(&mut self, entry: &str) {
+        let text = format!(
+            "{}'s operator does not carry sessions for {entry}",
+            self.cfg.callsign
+        );
+        self.queued.push(transmission(&[error_pdu_saying(
+            ErrorCode::RefusedByPolicy,
+            &text,
+        )]));
+        self.events.push(Event::Refused(ErrorCode::RefusedByPolicy));
+        self.notes.push(Note::Refused(entry.to_owned()));
+        self.state = State::Over;
+        if let Some(mut up) = self.upstream.take() {
+            up.close();
+        }
+    }
+
+    /// Whether the caller is one its operator refuses, by the address and callsign it gave; if so,
+    /// it is refused.
+    fn refuses(&mut self, address: &str, callsign: &str) -> bool {
+        match refused_caller(&self.cfg.refused, address, callsign).map(str::to_owned) {
+            Some(entry) => {
+                self.refuse(&entry);
+                true
+            }
+            None => false,
+        }
+    }
+
     fn fail(&mut self, code: ErrorCode) {
         self.queued.push(transmission(&[error_pdu(code)]));
         self.events.push(Event::Refused(code));
@@ -328,6 +386,11 @@ impl Gateway {
             // Forwarding between gateways is RP-7's, not taken here.
             return self.fail(ErrorCode::RefusedByPolicy);
         }
+        // the operator's refusals, by what the statement says (RP-3 §5.1 keys 3 and 4)
+        let said = |k| pdu.get(k).and_then(Value::as_text).unwrap_or("").to_owned();
+        if self.refuses(&said(3), &said(4)) {
+            return;
+        }
         self.caller_caps = Caps::from_value(pdu.get(12));
         let mut hello = pdu.clone();
         if hello.get(13).is_none() {
@@ -384,6 +447,10 @@ impl Gateway {
         let Some(body) = Credential::decode(&cred).map(|c| c.body) else {
             return self.fail(ErrorCode::CredentialInvalid);
         };
+        // and by what the credential says, which the post office holds the statement to
+        if self.refuses(&body.address, &body.operator) {
+            return;
+        }
         self.address.clone_from(&body.address);
         let text = |k| {
             hello

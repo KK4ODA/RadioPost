@@ -218,6 +218,7 @@ fn the_gateway_writes_session_01s_gateway_side_byte_for_byte() {
         piece: 4096,
         credentials: vec![w.credentials["facundo"].0.clone()],
         uploads: HashMap::new(),
+        refused: Vec::new(),
     };
     let upstreams: Upstreams = Box::new(move |domain| {
         assert_eq!(domain, "radiopost.org");
@@ -310,6 +311,7 @@ fn uploads_and_downloads_resume_across_gateways_as_session_02_says() {
             } else {
                 HashMap::new()
             },
+            refused: Vec::new(),
         };
         let office = office.clone();
         let upstreams: Upstreams = Box::new(move |_| {
@@ -451,6 +453,7 @@ fn ask_for_held(
         piece: 4096,
         credentials: vec![w.credentials["facundo"].0.clone()],
         uploads: HashMap::new(),
+        refused: Vec::new(),
     };
     let up = office.clone();
     let upstreams: Upstreams = Box::new(move |_| {
