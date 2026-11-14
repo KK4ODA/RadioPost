@@ -117,6 +117,17 @@ app opens. To have it open when you sign in: on Windows, put a shortcut to Radio
 Startup folder (Win+R, `shell:startup`); on macOS, add it to Login Items (System Settings,
 General); on Linux, to your desktop's startup applications.
 
+**Arranging the windows.** RadioPost Gateway, the RadioPost client and Aether each open where you
+left them, at the size you left them, so arrange them once. One layout that fits a single screen:
+
+- RadioPost Gateway on the left, as tall as the screen.
+- Aether in **Compact** at the top right: the state, the four readings and the two plots. Stretch
+  it to the width you want.
+- The RadioPost client under Aether, as wide as Aether.
+
+Aether keeps Compact's size separate from Full's. A window left on a screen that is no longer
+connected opens where the system puts it.
+
 **Updates.** When a newer release is out, a line at the top of the window says so (the gateway
 asks when it opens and every six hours). **Update and restart** stops the gateway, downloads the
 update, checks that the project's update key signed it, installs it and opens the app again,

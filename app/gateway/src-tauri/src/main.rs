@@ -14,6 +14,9 @@
 //! six hours), and its Update and restart stops the gateway, installs the update with Tauri's
 //! updater from the update channel's `gateway.json`, only when the project's update key signed
 //! it (`radiopost-update`), and starts again, answering as it is set to.
+//!
+//! The window opens where the operator left it, at the size they left it (`WINDOW_KEPT`), so
+//! the gateway arranged once beside Aether and the client's window opens that way again.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -29,10 +32,19 @@ use radiopost_update::{Install, Product, Watch};
 use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_updater::UpdaterExt as _;
+use tauri_plugin_window_state::StateFlags;
 
 /// The panel's port, the same as `radiopost-gateway panel`'s; another free port when that one is
 /// taken.
 const PORT: u16 = 8621;
+
+/// What the window keeps from one run to the next: where it was, its size, and whether it was
+/// maximized, in the application's configuration folder (`.window-state.json`). An operator who
+/// stacks the gateway, Aether and the client on one screen does it once (KK4ODA, 2026-11-14).
+/// A place on a screen no longer connected is not used: the system places the window instead.
+const WINDOW_KEPT: StateFlags = StateFlags::SIZE
+    .union(StateFlags::POSITION)
+    .union(StateFlags::MAXIMIZED);
 
 /// Starts the gateway's panel for the gateway in `dir`, and the gateway itself when it is set to
 /// answer at start: where the panel is, the gateway's runner, and what the panel shows of
@@ -146,6 +158,11 @@ fn main() {
         .plugin(
             tauri_plugin_updater::Builder::new()
                 .pubkey(radiopost_update::public_key())
+                .build(),
+        )
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(WINDOW_KEPT)
                 .build(),
         )
         .setup(move |app| {
