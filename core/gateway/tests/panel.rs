@@ -7,7 +7,7 @@
 mod common;
 
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpStream};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -425,15 +425,16 @@ fn a_modem_away_is_waited_for_and_the_wait_stopped() {
     let dir = scratch("panel-away");
     let (running, base, po_key) = post_office(&dir.join("po"));
     let gw = dir.join("gateway");
-    let nobody = TcpListener::bind("127.0.0.1:0")
-        .and_then(|l| l.local_addr())
-        .expect("a port");
+    // port 0: nothing ever listens there (binding it asks for any port), so every connection
+    // fails. A port found free and let go can be taken by a test running alongside, and the
+    // gateway then waits on whatever answered there, saying no problem.
+    let nobody = "127.0.0.1:0";
     let page = Page {
         at: Panel::new(Arc::new(Runner::new(&gw)), None)
             .start("127.0.0.1:0")
             .expect("a port"),
     };
-    set_up(&page, &dir, &nobody.to_string(), &running, &base, &po_key);
+    set_up(&page, &dir, nobody, &running, &base, &po_key);
     page.post("/api/start", &json!({})).expect("started");
     let until = Instant::now() + Duration::from_secs(20);
     let state = loop {
