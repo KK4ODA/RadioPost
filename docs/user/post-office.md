@@ -519,14 +519,10 @@ more; one in *Replace* mode needs the permissions §8 names for them.
   decided by a person, or by the postcard.
 * **A licensed user's own mail program** makes third-party mail, as mail from the Internet does
   (RP-6 §5.1, wishlist G16): it is held back from stations abroad without an arrangement.
-* **Forwarding by radio** is built but for the gateways' windows and the published list of routes
-  (wishlist W30, stage 5): the routes are set from the server (§14), and a cut-off gateway's
-  operator calls its partner by hand. Gateways that hold copies ask `GET /copies` and wait up to a
-  minute for an answer (RP-5 §5.8), so each holds one connection open through Caddy, whose
-  defaults let it.
-* **A backup mail server.** While the server is down, senders retry for days; a second mail
-  server that took mail meanwhile would need the accept lists, or it would bounce to forged
-  senders later (wishlist W38).
+* **Forwarding by radio** is built (wishlist W30): routes are set from the server and published
+  (§14), and a cut-off gateway calls its partners in their windows. Its first trial on the air is
+  for later. Gateways that hold copies ask `GET /copies` and wait up to a minute for an answer
+  (RP-5 §5.8), so each holds one connection open through Caddy, whose defaults let it.
 
 ## 12. The desk
 
@@ -667,3 +663,74 @@ office this one knows (§13).
 
 The service publishes its routes, signed, at `GET /routes` (RP-5 §4.5), beside its gateway list:
 anyone can read which gateway holds an area's mail when it is cut off.
+
+## 15. A backup mail server
+
+A second mail server, listed in DNS after the post office's own, takes the post office's mail
+while its server is down and hands it on when it is back (wishlist W38). Without one, senders
+retry for days and only time is lost; with one, mail is not left waiting at senders' servers.
+
+A backup must refuse as the door does, or it would take mail the door refuses and later bounce it
+to senders who may be forged. So it runs a door of its own, `radiopost-po backup-door`, which
+judges with a copy of the accounts and accept lists that it fetches from the post office every five
+minutes and keeps for when the post office cannot be reached. It checks SPF, DKIM and DMARC itself.
+What it takes carries its verdicts in a header, `X-RadioPost-Door`, sealed with a key it shares
+with the post office: the post office's door takes those verdicts, since the sender's SPF cannot
+pass from the backup's address. A header anyone else writes does not check, and is ignored.
+
+1. **A token, on the post office.**
+
+   ```
+   radiopost-po --dir /var/lib/radiopost backup-mx --add mx2
+   ```
+
+   prints the backup's token once. Put it on the backup in a file only root can read.
+   `backup-mx` lists the backups; `backup-mx --remove mx2` takes one away: its token stops
+   working at once, and its seals are no longer taken.
+
+2. **The backup's server.** Another machine, at another provider if you can, with its own name
+   (`mx2.radiopost.org`), A record and reverse DNS, a certificate (§4), Stalwart (§5.1 to §5.3)
+   and the tools archive of the same release as the post office.
+
+3. **Stalwart on the backup.** It holds no mailboxes for the post office's domains: it relays
+   their mail to the post office's server.
+   * Relay the domains: allow relaying for recipients at the post office's domains on port 25
+     (an RCPT rule such as `rcpt_domain == 'radiopost.org'`), and route their mail to the post
+     office's server, `po.radiopost.org`, port 25. Keep trying for five days.
+   * The MTA hook as on the post office (§5.7, item 2), with the URL `http://127.0.0.1:8472/`,
+     stages `rcpt` and `data`, *temporary failure on error*. The backup's door listens on the
+     loopback address only, and needs no token there.
+   * Sender authentication as on the post office (§5.4).
+
+4. **The backup's door.** The first time:
+
+   ```
+   radiopost-po --dir /var/lib/radiopost-backup backup-door \
+       --primary https://po.radiopost.org/rp/v1 --token-file /root/mx2.token \
+       --host mx2.radiopost.org
+   ```
+
+   It keeps those settings in its directory; after that `radiopost-po --dir
+   /var/lib/radiopost-backup backup-door` runs it. Run it as a systemd service like the post
+   office's (§6). Its log says when it has fetched the accounts, and when the post office could not
+   be reached and it is working from its copy. Until it has a first copy it holds every message
+   back with `451`, so the sender tries again.
+
+5. **The post office's Stalwart**, which now also receives mail from the backup: in Sender
+   Authentication, make DMARC verify skip the backup's address (`remote_ip ==` the backup's
+   address: `disable`; otherwise `strict`). Mail relayed by the backup fails SPF there, and a
+   sender who signs with SPF alone and publishes `p=reject` would be refused. The door still judges
+   that mail, with the backup's verdicts.
+
+6. **DNS**, last, once a test message through the backup has reached a mailbox:
+
+   ```
+   radiopost.org.   MX   20 mx2.radiopost.org.
+   ```
+
+   The post office's own MX stays at `10`, so senders use the backup only when the post office does
+   not answer.
+
+To test it before the MX record, send a message to the backup's address directly
+(`swaks --to user@radiopost.org --server mx2.radiopost.org`), and check that it reaches the
+user, and that a sender not on the user's accept list is refused at the backup.

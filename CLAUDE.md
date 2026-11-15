@@ -178,6 +178,11 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   asked for `MAIL FROM` but never sent to; its judgements are functions of what was found. The
   door logs each decision with addresses and a reason (`mail::rcpt_why`, `data_why`), never
   the message.
+  The backup mail server (W38, `backup_mx.rs`): `radiopost-po backup-door` on a second machine
+  judges with `email::first_refusal` (shared with the door) over a snapshot fetched from
+  `GET /door/snapshot` (a token made by `backup-mx --add`, kept as its hash) and seals its
+  verdicts in `X-RadioPost-Door` (HMAC under a key derived from the token, over the envelope
+  sender, the body and the time); the door takes a seal that checks in place of its own checks.
   Held attachments by radio (RP-3 §5.6 `files`, RP-5 §5.3, RP-6 §2.5): the client asks by serial
   and `ref` (`radiopost attachments`, kept in `state.json` until a gateway's `DONE` answers the
   `REQUEST`), the gateway passes them to the post office and says how it went in a `NOTICE`, and

@@ -293,6 +293,44 @@ pub fn hook_answer(draft: bool, reply: &str, text: &str) -> (u16, String) {
     (200, answer.to_string())
 }
 
+/// The first refusal for the post office's accounts among a hook call's recipients (RP-6 §2.1):
+/// at `RCPT TO` the recipient just added, at `DATA` each of `ours` in turn, checked again at
+/// `RCPT` and then the message; with its reply, why, and the recipient. What the post office's
+/// door and a backup's door (W38) both judge by.
+#[must_use]
+pub fn first_refusal(
+    hook: &Hook,
+    door: &Door<'_>,
+    account: &dyn Fn(&String) -> bool,
+    ours: &[String],
+) -> Option<((&'static str, &'static str), String)> {
+    let verdicts = Verdicts {
+        dmarc: &hook.dmarc,
+        dkim_pass: &hook.dkim_pass,
+    };
+    match hook.stage.as_str() {
+        "rcpt" => hook
+            .recipients
+            .last()
+            .filter(|r| account(r))
+            .map(|r| (mail::rcpt_why(&hook.sender, r, door), r.clone()))
+            .filter(|((reply, _), _)| *reply != mail::OK_RCPT),
+        "data" => {
+            let raw = hook.raw.as_deref().unwrap_or_default();
+            ours.iter().find_map(|r| {
+                let at_rcpt = mail::rcpt_why(&hook.sender, r, door);
+                let answer = if at_rcpt.0 == mail::OK_RCPT {
+                    mail::data_why(&hook.sender, r, raw, &verdicts, door)
+                } else {
+                    at_rcpt
+                };
+                (answer.0 != mail::OK_DATA).then(|| (answer, r.clone()))
+            })
+        }
+        _ => None,
+    }
+}
+
 /// One line of the operator's log about the door: what it did with mail from `sender` to
 /// `recipients` at a stage, its reply and why. Addresses only, never the message.
 #[must_use]
@@ -323,7 +361,8 @@ pub fn door_log(
 pub const TRY_LATER: &str = "451 4.7.1";
 
 /// RP-6 §2.3: what a refusal says, in plain words.
-fn refusal_text(reply: &str, recipient: &str, max_email_bytes: u64) -> String {
+#[must_use]
+pub fn refusal_text(reply: &str, recipient: &str, max_email_bytes: u64) -> String {
     let domain = mail::domain_of(recipient);
     match reply {
         TRY_LATER => format!(
@@ -418,31 +457,7 @@ impl Running {
             max_email_bytes: max,
             sent: &sent,
         };
-        let verdicts = Verdicts {
-            dmarc: &hook.dmarc,
-            dkim_pass: &hook.dkim_pass,
-        };
-        let refused = match hook.stage.as_str() {
-            "rcpt" => hook
-                .recipients
-                .last()
-                .filter(|r| account(r))
-                .map(|r| (mail::rcpt_why(&hook.sender, r, &door), r.clone()))
-                .filter(|((reply, _), _)| *reply != mail::OK_RCPT),
-            "data" => {
-                let raw = hook.raw.as_deref().unwrap_or_default();
-                ours.iter().find_map(|r| {
-                    let at_rcpt = mail::rcpt_why(&hook.sender, r, &door);
-                    let answer = if at_rcpt.0 == mail::OK_RCPT {
-                        mail::data_why(&hook.sender, r, raw, &verdicts, &door)
-                    } else {
-                        at_rcpt
-                    };
-                    (answer.0 != mail::OK_DATA).then(|| (answer, r.clone()))
-                })
-            }
-            _ => None,
-        };
+        let refused = first_refusal(&hook, &door, &account, &ours);
         drop(office);
         if let Some(((reply, why), recipient)) = refused {
             eprintln!(
@@ -548,7 +563,25 @@ impl Running {
             return None;
         }
         if !hook.given {
-            self.check_sender(hook);
+            // mail a backup mail server took carries its verdicts, sealed (W38)
+            let keys: Vec<[u8; 32]> = self
+                .office()
+                .state
+                .backup_mx
+                .iter()
+                .filter_map(|b| crate::backup_mx::key_from_hex(&b.key))
+                .collect();
+            let sealed = hook
+                .raw
+                .as_deref()
+                .and_then(|raw| crate::backup_mx::verified(raw, &hook.sender, &keys, now()));
+            if let Some((dmarc, dkim)) = sealed {
+                hook.dmarc = dmarc;
+                hook.dkim_pass = dkim;
+                hook.given = true;
+            } else {
+                self.check_sender(hook);
+            }
         }
         if hook.dmarc != "temperror" {
             return None;

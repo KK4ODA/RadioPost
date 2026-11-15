@@ -4,6 +4,7 @@
 
 pub mod aftercare;
 pub mod auth;
+pub mod backup_mx;
 pub mod backups;
 pub mod check;
 pub mod desk;

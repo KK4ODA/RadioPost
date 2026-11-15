@@ -404,6 +404,35 @@ impl Running {
         }
     }
 
+    /// What the door judges with, for a backup mail server whose token this is (W38): `401`
+    /// to any other.
+    fn door_snapshot(&self, method: &str, token: Option<&str>) -> (u16, &'static str, String) {
+        let hash = token.map(crate::backup_mx::token_hash);
+        let mut office = self.office();
+        office.at(now());
+        let known = hash.is_some_and(|h| office.state.backup_mx.iter().any(|b| b.token_hash == h));
+        if !known {
+            return (401, "application/problem+json", problem_text(401));
+        }
+        if method != "GET" {
+            return (405, "application/problem+json", problem_text(405));
+        }
+        let settings = self.settings();
+        let snapshot = crate::backup_mx::Snapshot {
+            issued: office.now(),
+            domains: settings.domains.clone(),
+            max_email_bytes: settings.info.max_email_bytes,
+            accounts: office.door_accounts(),
+            known_post_offices: office.known_post_offices(),
+            sent: office.state.sent_ids.keys().cloned().collect(),
+        };
+        (
+            200,
+            "application/json",
+            serde_json::to_string(&snapshot).unwrap_or_default(),
+        )
+    }
+
     /// Answers one API request: a public document, or [`PostOffice::handle`]'s answer.
     #[must_use]
     pub fn api(
@@ -444,6 +473,9 @@ impl Running {
                 p.body.unwrap_or_default().to_string(),
             );
         };
+        if path == crate::backup_mx::SNAPSHOT_PATH {
+            return self.door_snapshot(method, token);
+        }
         if path.starts_with("/office/")
             && let Some(answer) = self.desk(method, path, token, body.as_ref())
         {
@@ -601,6 +633,7 @@ impl Running {
                 }
             }
             (_, "/routes") => admin_routes(&mut office, method, &body),
+            (_, "/backup-mx") => admin_backup_mx(&mut office, method, &body),
             ("POST", "/name") => {
                 office.state.names.insert(text("address"), text("name"));
                 Ok(json!({"address": text("address"), "name": text("name")}))
@@ -678,6 +711,37 @@ fn admin_routes(office: &mut PostOffice, method: &str, body: &Json) -> Result<Js
         }
     }
     Ok(json!({"routes": office.state.routes}))
+}
+
+/// The backup mail servers (wishlist W38), for `radiopost-po backup-mx`: `add` one by name (its
+/// token, shown once), `remove` one, or list them. A name added again gets a new token.
+fn admin_backup_mx(office: &mut PostOffice, method: &str, body: &Json) -> Result<Json, String> {
+    let mut token = None;
+    if method == "POST" {
+        if let Some(name) = body["add"].as_str().map(str::trim) {
+            if name.is_empty() {
+                return Err("a backup mail server needs a name".to_owned());
+            }
+            let random = office.fresh("backup mx token", 32);
+            let (record, t) = crate::backup_mx::make(name, &random, office.now());
+            office.state.backup_mx.retain(|b| b.name != name);
+            office.state.backup_mx.push(record);
+            token = Some(t);
+        } else if let Some(name) = body["remove"].as_str() {
+            let before = office.state.backup_mx.len();
+            office.state.backup_mx.retain(|b| b.name != name.trim());
+            if office.state.backup_mx.len() == before {
+                return Err(format!("no backup mail server called {name}"));
+            }
+        }
+    }
+    let list: Vec<Json> = office
+        .state
+        .backup_mx
+        .iter()
+        .map(|b| json!({"name": b.name, "added": b.added}))
+        .collect();
+    Ok(json!({"backup_mx": list, "token": token}))
 }
 
 /// The operator's port's view of applications (RP-5 §7.3), for `radiopost-po applications`,

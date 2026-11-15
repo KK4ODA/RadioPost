@@ -396,6 +396,9 @@ pub struct State {
     pub routes: Vec<RadioRoute>,
     /// The gateways it counts cut off (RP-7 §4.1).
     pub cut: BTreeSet<String>,
+    /// Its backup mail servers (wishlist W38): the token each fetches the door's snapshot with,
+    /// as a hash, and the key it seals its verdicts with.
+    pub backup_mx: Vec<crate::backup_mx::BackupMx>,
     /// For each cut-off gateway, the forward items placed for it: (`via`, address, serial), to
     /// drop when it polls again (RP-7 §4.1).
     pub forwarded: BTreeMap<String, Vec<(String, String, u64)>>,

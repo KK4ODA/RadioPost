@@ -83,6 +83,16 @@ usage: radiopost-po --dir DIR COMMAND
                      the Internet, its users' mail goes to --via, which holds it for that
                      gateway to collect by radio; --users-at empty removes the route
   routes             the radio routes
+  backup-mx [--add NAME | --remove NAME]
+                     the backup mail servers (wishlist W38): --add makes one's token, shown
+                     once, which it fetches the door's copy of the accounts with and seals
+                     its verdicts with; --remove takes one away
+  backup-door --primary URL --token-file FILE [--listen ADDR] [--host NAME]
+                     on the backup mail server: its own door, for its mail server's MTA hook
+                     (--listen, 127.0.0.1:8472 by default), judging as the post office's does
+                     with a copy fetched from it every five minutes; --host is the name its
+                     mail server receives as. Kept in the directory and run again with no
+                     flags
   outgoing           the mail waiting to go on by email
   status             accounts, gateways, codes, sessions
   check [--dkim SELECTOR,…] [--resolver URL]
@@ -965,6 +975,8 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
         "health" | "jobs" | "backup" | "restore" | "mail-backup" => care(&dir, &files, a, command),
         "approve" | "decline" | "postcard" => decide(&files, a, command),
         "route" | "routes" => routes(&files, a, command),
+        "backup-mx" => backup_mx(&files, a),
+        "backup-door" => backup_door(&dir, a),
         "outgoing" | "status" => {
             let answer = admin(&files, "GET", &format!("/{command}"), &Json::Null)?;
             println!(
@@ -995,6 +1007,56 @@ fn routes(files: &Files, a: &Args, command: &str) -> Result<(), String> {
     };
     print_routes(&answer);
     Ok(())
+}
+
+/// The backup mail servers (W38), on the post office: add one (its token, shown once), remove
+/// one, or list them.
+fn backup_mx(files: &Files, a: &Args) -> Result<(), String> {
+    let body = match (a.one("--add"), a.one("--remove")) {
+        (Some(name), _) => json!({"add": name}),
+        (None, Some(name)) => json!({"remove": name}),
+        (None, None) => Json::Null,
+    };
+    let method = if body.is_null() { "GET" } else { "POST" };
+    let answer = admin(files, method, "/backup-mx", &body)?;
+    if let Some(token) = answer["token"].as_str() {
+        println!(
+            "the backup's token, shown once (give it to `radiopost-po backup-door \
+             --token-file` on the backup):\n{token}"
+        );
+    }
+    for b in answer["backup_mx"].as_array().into_iter().flatten() {
+        println!("{}", b["name"].as_str().unwrap_or_default());
+    }
+    Ok(())
+}
+
+/// The backup mail server's door (W38): its settings from the flags, kept, or from the
+/// directory, and then run.
+fn backup_door(dir: &std::path::Path, a: &Args) -> Result<(), String> {
+    let file = dir.join("backup-door.json");
+    let settings = if let Some(primary) = a.one("--primary") {
+        let token = std::fs::read_to_string(a.need("--token-file")?)
+            .map_err(|e| format!("--token-file: {e}"))?
+            .trim()
+            .to_owned();
+        let s = radiopost_postoffice::backup_mx::Settings {
+            primary,
+            token,
+            listen: a.one("--listen").unwrap_or_else(|| "127.0.0.1:8472".into()),
+            host: a.one("--host").unwrap_or_default(),
+        };
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        let text = serde_json::to_string_pretty(&s).map_err(|e| e.to_string())?;
+        std::fs::write(&file, text).map_err(|e| format!("{}: {e}", file.display()))?;
+        s
+    } else {
+        let text = std::fs::read_to_string(&file).map_err(|_| {
+            "no backup door set up here: --primary URL --token-file FILE".to_owned()
+        })?;
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e}", file.display()))?
+    };
+    radiopost_postoffice::backup_mx::run(dir, &settings)
 }
 
 /// Each radio route on a line of its own.
