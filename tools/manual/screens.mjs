@@ -223,7 +223,11 @@ function gatewayApi(world) {
         {caller: "N3CALL", note: "Sent business mail through the gateway", at: T - 5 * DAY}];
       case "partners": return world.partners ?? [
         {callsign: "N1CALL-10", records: 0, messages: 0, forwards: 0, called: T - 4 * DAY,
-         said: "nothing to forward"}];
+         said: "nothing to forward", next_window: T + 51 * 60}];
+      case "windows": return world.windows ?? [
+        {channel: {dial_hz: 7101000, mode: "USB", modem: "aether", bandwidth_hz: 2300,
+                   occupied_hz: [7101240, 7103760]},
+         every_s: 3600, at_s: 900, length_s: 600, why: null}];
       default: return {error: `no ${method} ${path}`, status: 404};
     }
   };

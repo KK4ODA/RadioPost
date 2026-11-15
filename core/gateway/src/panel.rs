@@ -239,6 +239,42 @@ impl Panel {
         Ok(partners(dir))
     }
 
+    /// The gateway's own windows (RP-7 §5), added and removed while it is stopped; published at
+    /// its next registration.
+    fn windows_api(&self, body: &Value) -> Result<Value, String> {
+        self.stopped()?;
+        let dir = self.runner.dir();
+        let mut s = Settings::load(dir)?;
+        if let Some(n) = body["remove"].as_u64() {
+            let i = usize::try_from(n).unwrap_or(0);
+            if i == 0 || i > s.windows.len() {
+                return Err(format!("there is no window {n}"));
+            }
+            s.windows.remove(i - 1);
+        } else {
+            let a = &body["add"];
+            let n = |k: &str| {
+                a[k].as_u64()
+                    .ok_or_else(|| format!("the window's {k} is missing"))
+            };
+            let window = station::WindowSettings {
+                dial_hz: n("dial_hz")?,
+                mode: a["mode"].as_str().unwrap_or("USB").to_owned(),
+                modem: a["modem"].as_str().unwrap_or("aether").to_owned(),
+                bandwidth_hz: n("bandwidth_hz")?,
+                every_s: n("every_s")?,
+                at_s: n("at_s")?,
+                length_s: n("length_s")?,
+            };
+            if let Some(why) = window.refused(&s.country) {
+                return Err(format!("This window cannot be published: {why}."));
+            }
+            s.windows.push(window);
+        }
+        s.save(dir)?;
+        Ok(windows(dir))
+    }
+
     fn api(&self, method: &Method, path: &str, query: &str, body: &Value) -> Result<Value, String> {
         let param = |name: &str| {
             query
@@ -281,6 +317,9 @@ impl Panel {
             // partners (RP-7 §1, §2)
             (Method::Get, "/api/partners") => Ok(partners(dir)),
             (Method::Post, "/api/partners" | "/api/forward") => self.partners_api(path, body),
+            // its windows, when partners may call it (RP-7 §5)
+            (Method::Get, "/api/windows") => Ok(windows(dir)),
+            (Method::Post, "/api/windows") => self.windows_api(body),
             (Method::Post, "/api/setup") => {
                 self.stopped()?;
                 self.setup(body)?;
@@ -568,7 +607,8 @@ fn copies_of(v: &Value) -> Result<Option<station::CopiesSettings>, String> {
     }
 }
 
-/// The partners, each with how the last call to it went and what waits for it (RP-7 §1, §3.2).
+/// The partners, each with how the last call to it went, what waits for it, and when its next
+/// window opens, from the gateway lists it keeps (RP-7 §1, §3.2, §5).
 fn partners(dir: &std::path::Path) -> Value {
     let settings = Settings::load(dir).ok();
     let s = crate::store::Store::load(dir);
@@ -576,6 +616,16 @@ fn partners(dir: &std::path::Path) -> Value {
         .as_ref()
         .map(|x| x.callsign.clone())
         .unwrap_or_default();
+    let country = settings
+        .as_ref()
+        .map(|x| x.country.clone())
+        .unwrap_or_default();
+    let own = station::identity(dir)
+        .ok()
+        .and_then(|(_, a)| radiopost::credential::Credential::decode(&a.credential))
+        .map(|c| c.body.domain())
+        .unwrap_or_default();
+    let now = station::now();
     let list: Vec<Value> = settings
         .map(|x| x.partners)
         .unwrap_or_default()
@@ -583,13 +633,35 @@ fn partners(dir: &std::path::Path) -> Value {
         .map(|p| {
             let state = s.partners.get(&p.callsign).cloned().unwrap_or_default();
             let (records, messages) = crate::forward::outbox(&s, &me, &p.callsign);
+            let next = s
+                .record_of(&own, &p.callsign)
+                .map(|r| crate::forward::windows_of(&r, &country))
+                .and_then(|ws| ws.iter().map(|w| w.next(now)).min());
             json!({"callsign": p.callsign, "called": state.called, "said": state.said,
                    "online": state.online, "cursor": state.cursor,
                    "records": records.len(), "messages": messages.len(),
-                   "forwards": s.forwards_for(&p.callsign, 0).len()})
+                   "forwards": s.forwards_for(&p.callsign, 0).len(), "next_window": next})
         })
         .collect();
     json!(list)
+}
+
+/// The gateway's own windows, each with whether its country's rules let it publish it (RP-7 §5,
+/// §5.1).
+fn windows(dir: &std::path::Path) -> Value {
+    let Ok(s) = Settings::load(dir) else {
+        return json!([]);
+    };
+    json!(
+        s.windows
+            .iter()
+            .map(|w| {
+                let mut v = w.record();
+                v["why"] = w.refused(&s.country).map_or(Value::Null, Value::from);
+                v
+            })
+            .collect::<Vec<_>>()
+    )
 }
 
 fn text<'a>(body: &'a Value, name: &str) -> &'a str {

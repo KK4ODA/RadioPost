@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.0.0 |
+| **Version** | 1.1.0 |
 | **Updated** | 2026-11-15 |
 | **Describes** | RadioPost 0.1.0-beta.20 |
 | **Licence** | CC BY 4.0 |
@@ -913,10 +913,29 @@ every session waiting to be reported. Both gateways must be on the same channel.
 reports them to the post offices, or forwards them on if it is cut off too. In the same call the
 partner hands back mail its post office gave it for this gateway's users.
 
-The gateway can also call a partner by itself while it is cut off, during the partner's
-**windows**: times when the partner listens for forwarding calls. Windows are set on the command
-line for now ([section 23](#23-a-gateway-with-no-screen)): `radiopost-gateway window --dial MHZ
---bandwidth HZ --every S --at S --length S`, then register again to publish them.
+**Windows** are the times a gateway listens for its partners' calls: a channel, and a time that
+comes round every hour or every few hours. To set this gateway's own:
+
+1. **Stop** the gateway, and open the **Partners** view.
+2. Under **Windows**, type the dial in MHz (upper sideband), choose Aether's bandwidth, how often
+   the window opens, when (UTC; for every hour only the minutes count), and for how many minutes.
+3. Click **Add**. A window is refused when Aether's signal on it would not lie inside a segment
+   where the rules let an unattended station start a data transmission; the message says why.
+   On 40 m, dials from 7.0998 to 7.1022 MHz fit at 2300 Hz.
+4. **Register again** in Setup: partners read your windows from your record at your post office.
+
+While it is cut off, the gateway calls each partner by itself during that partner's windows. It
+tries once, then twice more a minute apart if nobody answers, then waits for the next window. It
+never calls while Aether says the channel is busy, and it does not tune the radio: the partner's
+window must be on the channel your radio is on. The **Next window** column shows when each
+partner's next window opens (*None published* until the gateway has read the partner's record).
+If one partner reached the Internet at its last call and opens a window within the hour, the
+gateway keeps its sessions for that partner, and calls the others only to collect its users'
+mail.
+
+On the command line ([section 23](#23-a-gateway-with-no-screen)): `radiopost-gateway window
+--dial 7.101 --bandwidth 2300 --every 3600 --at 900 --length 600`, `windows`, and
+`window --remove 1`.
 
 ## 23. A gateway with no screen
 
@@ -1166,3 +1185,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | Version | Date | Changes |
 |---|---|---|
 | 1.0.0 | 2026-11-15 | First edition: the client, RadioPost Gateway, and how they work with Aether HF. |
+| 1.1.0 | 2026-11-15 | §22: a gateway's own windows set in the Partners view, calls by itself in a partner's windows, the Next window column, and which partner gets the sessions. |

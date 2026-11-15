@@ -71,8 +71,22 @@
           <button type="submit" title="Name this gateway as a partner">Add</button>
         </form>
         <div class="table-wrap"><table class="list" aria-label="Partners">
-          <thead><tr><th>Partner</th><th class="n" title="Sessions waiting to go to the partner, and the messages the post office gave this gateway to hold for it">Sessions waiting</th><th>Last call</th><th></th></tr></thead>
+          <thead><tr><th>Partner</th><th class="n" title="Sessions waiting to go to the partner, and the messages the post office gave this gateway to hold for it">Sessions waiting</th><th title="When the partner's next window opens, from its record at its post office: cut off, this gateway calls it then by itself (RP-7 §5)">Next window</th><th>Last call</th><th></th></tr></thead>
           <tbody id="partner-rows"></tbody>
+        </table></div>
+        <h2 title="When this gateway listens for its partners' calls (RP-7 §5)">Windows</h2>
+        <p class="note">When partners may call this gateway: a channel, and a time that comes round every hour or every few hours. A cut-off partner calls only inside one, and this gateway calls its partners inside theirs. A window is published only inside a segment where your country's rules let an unattended station start a data transmission. Partners read your windows from your record at your post office, so register again in Setup after a change. Stop the gateway to add or remove one.</p>
+        <form class="row" id="window-form">
+          <input name="dial" required inputmode="decimal" placeholder="7.1010" title="The dial frequency in MHz, upper sideband" autocomplete="off">
+          <select name="bandwidth" class="narrow" title="Aether's bandwidth"><option value="2300">2300 Hz</option><option value="500">500 Hz</option></select>
+          <select name="every" class="narrow" title="How often the window opens"><option value="3600">Every hour</option><option value="10800">Every 3 hours</option><option value="21600">Every 6 hours</option><option value="43200">Every 12 hours</option><option value="86400">Every day</option></select>
+          <input name="at" required type="time" value="00:15" title="When it opens, UTC. Every hour: only the minutes count">
+          <input name="length" required type="number" min="1" max="1440" value="10" title="How long it stays open, minutes">
+          <button type="submit" title="Add this window">Add</button>
+        </form>
+        <div class="table-wrap"><table class="list" aria-label="Windows">
+          <thead><tr><th>Channel</th><th>Open</th><th title="Whether your country's rules let an unattended station use it (RP-7 §5.1)">Published</th><th></th></tr></thead>
+          <tbody id="window-rows"></tbody>
         </table></div>
       </section>
 

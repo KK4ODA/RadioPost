@@ -331,7 +331,11 @@ async function refreshPartners() {
     const waiting = (p.records
       ? `${p.records}${p.messages ? ` (${p.messages} ${p.messages === 1 ? "message" : "messages"})` : ""}`
       : "0") + held;
-    [p.callsign, waiting, last].forEach((text, i) => {
+    const at = Date.now() / 1000;
+    const next = p.next_window == null
+      ? "None published"
+      : p.next_window <= at ? "Open now" : when(p.next_window);
+    [p.callsign, waiting, next, last].forEach((text, i) => {
       const td = document.createElement("td");
       td.textContent = text;
       if (i === 0) td.className = "mono";
@@ -359,6 +363,49 @@ async function refreshPartners() {
     return tr;
   }));
   $("partner-rows").closest(".table-wrap").hidden = list.length === 0;
+}
+
+// the gateway's own windows (RP-7 §5): when its partners may call it
+const EVERY = {3600: "Every hour", 10800: "Every 3 hours", 21600: "Every 6 hours",
+  43200: "Every 12 hours", 86400: "Every day"};
+const two = (n) => String(n).padStart(2, "0");
+
+function schedule(w) {
+  const every = EVERY[w.every_s] || `Every ${w.every_s} s`;
+  const minutes = two(Math.floor(w.at_s / 60) % 60);
+  const at = w.every_s === 3600
+    ? `at :${minutes}`
+    : `at ${two(Math.floor(w.at_s / 3600) % 24)}:${minutes} UTC`;
+  return `${every} ${at}, for ${Math.round(w.length_s / 60)} min`;
+}
+
+async function refreshWindows() {
+  const list = await api("windows");
+  $("window-rows").replaceChildren(...list.map((w, i) => {
+    const tr = document.createElement("tr");
+    const c = w.channel;
+    const channel = `${(c.dial_hz / 1e6).toFixed(4)} MHz ${c.mode}, ${c.modem} ${c.bandwidth_hz} Hz`;
+    const published = w.why ? `No: ${w.why}` : "Yes";
+    [channel, schedule(w), published].forEach((text) => {
+      const td = document.createElement("td");
+      td.textContent = text;
+      tr.append(td);
+    });
+    const td = document.createElement("td");
+    const drop = document.createElement("button");
+    drop.className = "quiet";
+    drop.textContent = "Remove";
+    drop.title = "Take this window off; register again in Setup to publish the change";
+    drop.disabled = !!(state && state.running);
+    drop.addEventListener("click", () => act("windows", {remove: i + 1}, () => {
+      toast("Window removed. Register again in Setup to publish the change.");
+      refreshWindows();
+    }));
+    td.append(drop);
+    tr.append(td);
+    return tr;
+  }));
+  $("window-rows").closest(".table-wrap").hidden = list.length === 0;
 }
 
 async function refreshSessions() {
@@ -412,6 +459,7 @@ async function tick() {
       await refreshHeld();
       await refreshRefused();
       await refreshPartners();
+      if (!$("partners-view").hidden) await refreshWindows();
     } else if (shownSessions < 0) {
       await refreshSessions();
     }
@@ -463,7 +511,29 @@ $("refuse-form").addEventListener("submit", (e) => {
 $("partners-open").addEventListener("click", () => {
   $("partners-view").hidden = !$("partners-view").hidden;
   $("partners-open").textContent = $("partners-view").hidden ? "Show" : "Hide";
-  if (!$("partners-view").hidden) refreshPartners();
+  if (!$("partners-view").hidden) {
+    refreshPartners();
+    refreshWindows();
+  }
+});
+$("window-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const f = e.currentTarget;
+  const every = Number(f.every.value);
+  const [h, m] = f.at.value.split(":").map(Number);
+  const add = {
+    dial_hz: Math.round(Number(f.dial.value.replace(",", ".")) * 1e6),
+    mode: "USB",
+    modem: "aether",
+    bandwidth_hz: Number(f.bandwidth.value),
+    every_s: every,
+    at_s: (h * 3600 + m * 60) % every,
+    length_s: Number(f.length.value) * 60,
+  };
+  act("windows", {add}, () => {
+    toast("Window added. Register again in Setup to publish it.");
+    refreshWindows();
+  });
 });
 $("partner-form").addEventListener("submit", (e) => {
   e.preventDefault();
