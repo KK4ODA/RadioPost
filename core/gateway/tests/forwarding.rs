@@ -239,8 +239,13 @@ fn a_cut_off_gateway_forwards_its_queue_to_a_partner() {
 
     // 4. its operator forwards the queue to KK4ODA-2
     m_one.request_forward("KK4ODA-2");
+    // the call's summary is saved after the call, apart from what each of its events changed
     until(&one, &says_one, "the record let go", |h| {
-        h.records.is_empty() && h.passed_on.contains_key(&note_id.text())
+        h.records.is_empty()
+            && h.passed_on.contains_key(&note_id.text())
+            && h.partners
+                .get("KK4ODA-2")
+                .is_some_and(|p| !p.said.is_empty())
     });
     let held = Held::load(&one);
     let partner = &held.partners["KK4ODA-2"];
