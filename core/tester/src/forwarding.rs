@@ -401,14 +401,31 @@ fn offer_again(peer: &mut Peer, user: &User, m: &Message) -> Result<Vec<(Vec<u8>
 }
 
 /// The gateway's keys and revocation list fetched, so it can check users while cut off.
+///
+/// The request is logged before it is answered, so the answer has still to reach the gateway,
+/// with whatever it fetches next: the cut waits until the gateway has asked nothing for two
+/// seconds (ten at most). Cut at once, the answer was lost on a busy machine, and the gateway
+/// rightly had no keys to check users with.
 fn ready(office: &TestOffice) -> Outcome {
-    if wait_long(office, Duration::from_secs(60), |e| {
+    if !wait_long(office, Duration::from_secs(60), |e| {
         e.method == "GET" && e.path == "/revocations"
     }) {
-        Ok(())
-    } else {
-        Err("the gateway did not fetch its post office's revocation list (RP-1 §7.3)".into())
+        return Err(
+            "the gateway did not fetch its post office's revocation list (RP-1 §7.3)".into(),
+        );
     }
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut seen = office.exchanges().len();
+    let mut since = Instant::now();
+    while Instant::now() < deadline && since.elapsed() < Duration::from_secs(2) {
+        std::thread::sleep(Duration::from_millis(100));
+        let n = office.exchanges().len();
+        if n != seen {
+            seen = n;
+            since = Instant::now();
+        }
+    }
+    Ok(())
 }
 
 /// The gateway's partners' records read from the post office's gateway list (RP-5 §4.4, RP-7 §5).
