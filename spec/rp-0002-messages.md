@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Status** | Draft |
-| **Version** | 0.2.0 |
-| **Updated** | 2026-11-09 |
+| **Status** | Stable |
+| **Version** | 1.0.0 |
+| **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -108,8 +108,10 @@ published like every encoding on the air, so it is trained only on a corpus Radi
 publishes with this specification, never on real mail: the CBOR structure of messages, common
 domains and words, forms in the style of ICS-213, and short notes in English and Spanish. It is
 adopted only if, on a held-out part of that corpus, it makes messages of under 1 000 bytes at least
-20 % smaller than DEFLATE at their median. Then code 3 becomes a requirement, with the dictionary
-and its SHA-256 in this specification; until then it is not used.
+20 % smaller than DEFLATE at their median. Then a MINOR version of this specification publishes the
+dictionary and its SHA-256, and code 3 is an option a station uses only with one that says it
+supports it (`caps`, RP-3 §5.1), like code 2: never a requirement, so a station without it keeps
+working. Until then code 3 is not used.
 
 ---
 
@@ -128,8 +130,9 @@ and the recipient asks for them only if it wants them (RP-3 §6, RP-5 §5.3).
 ## 6. Text shown for a message *(informative)*
 
 Clients show `from`, `subject`, `date` and `priority` in lists, and the `body` with any attachments
-when opened. A message with `trimmed` set SHOULD say so, and SHOULD let the user ask for the full
-text. Content IDs SHOULD be shown, if at all, as the first 6 base32 characters (RP-0 §6.3).
+when opened. A message with `trimmed` set SHOULD say so, and SHOULD show the message its `reply_to`
+names when the client holds it: that is the history the post office trimmed. The full text stays
+at the post office, where the user reads it by email (RP-6). Content IDs SHOULD be shown, if at all, as the first 6 base32 characters (RP-0 §6.3).
 
 ---
 
@@ -167,3 +170,4 @@ content IDs and air forms, and air forms that must be refused.
 | 0.1.1 | 2026-11-09 | Licence stated: CC BY 4.0. |
 | 0.1.2 | 2026-11-09 | The example is the test vector's, its sizes measured; test vectors. |
 | 0.2.0 | 2026-11-09 | Dictionary 1: trained only on a published corpus, adopted only if it beats DEFLATE by 20 % on short messages (§4). |
+| 1.0.0 | 2026-11-15 | Stable (D41). §4: dictionary 1, if adopted, is an option both ends say they support, never a requirement (gap G7). §6: a trimmed message points to the one it answers; nothing on the air asks for the full text (gap G1). |

@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Draft |
-| **Version** | 0.8.0 |
+| **Status** | Stable |
+| **Version** | 1.0.0 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -229,7 +229,7 @@ from a gateway, so that its DKIM signature and SPF match its domain.
 | `Date:` | `date`, as RFC 5322 date-time in UTC, written `+0000`: `Mon, 09 Nov 2026 14:30:00 +0000`. |
 | `Subject:` | `subject`, encoded if needed (RFC 2047). |
 | `Message-ID:` | `<` the content ID in base32 `@` the sender's domain `>`: `<kdj2eowb2e7wqq4y5ttq@radiopost.org>`. |
-| `In-Reply-To:`, `References:` | When `reply_to` names a message whose `Message-ID` the post office knows (§2.4, step 8). |
+| `In-Reply-To:`, `References:` | When `reply_to` names a message whose `Message-ID` the post office knows: the email the message was made of (§2.4, step 8), or the email this post office sent for it (this table's `Message-ID`). The first wins where it knows both. |
 | `Radio-Path:` | §3.2. |
 | `Importance:` | `high` when `priority` is 1 or 2. |
 | `MIME-Version`, `Content-Type` | `text/plain; charset=utf-8` for the body; `multipart/mixed` with base64 parts when there are `files` or the part of §4. The text is `7bit` when it is ASCII with no line over 998 bytes, and `quoted-printable` UTF-8 otherwise. |
@@ -424,3 +424,4 @@ and the session files.
 | 0.6.1 | 2026-11-12 | §2.1, §2.2, §4: the post offices a post office knows are RP-1 §7.5's (RP-1 0.6.0). |
 | 0.7.0 | 2026-11-13 | §2.6, one mailbox: mail a user submits from a mail program is not judged at the door, becomes the RadioPost message of each recipient here (third-party, §5.1) and fills the sender's accept list; mail sent by radio to accounts here also reaches the mail server as §3.1's email, and a recipient here with no account gets only the email; mail read in a mail program is matched by `Message-ID`. Nothing said what became of mail a user sent from a mail program to another user of the same post office, which never reached the radio. |
 | 0.8.0 | 2026-11-15 | §2.6, one mailbox, the rest of it: mail an account sends by radio goes into its Sent folder as §3.1's email, read; mail picked up by radio is marked read in the mail server, mail that reaches it later when it arrives; both in the background. A mail program had shown neither, so a user reading in both saw mail they had read by radio as new, and none of what they had sent by radio. |
+| 1.0.0 | 2026-11-15 | Stable (D41). §3.1: a reply restores its thread from the email this post office sent for the message it answers, as well as from one that came in (gap G17). Test vectors: `facundo-followup`. |

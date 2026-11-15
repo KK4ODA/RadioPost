@@ -547,6 +547,31 @@
           "exact": false
         }
       ]
+    },
+    {
+      "name": "facundo-followup",
+      "fields": {
+        "v": 1,
+        "from": "facundo@radiopost.org",
+        "to": [
+          "maria@example.com"
+        ],
+        "date": 1794237000,
+        "subject": "Re: Are you safe?",
+        "body": "Power is back on the north side. Still no phone.\n",
+        "reply_to_hex": "50d3a23ac1d13f684398ece7"
+      },
+      "diagnostic": "{1: 1, 2: \"facundo@radiopost.org\", 3: [\"maria@example.com\"], 5: 1794237000, 6: \"Re: Are you safe?\", 7: \"Power is back on the north side. Still no phone.\\n\", 10: h'50d3a23ac1d13f684398ece7'}",
+      "canonical_hex": "a701010275666163756e646f40726164696f706f73742e6f72670381716d61726961406578616d706c652e636f6d051a6af1e248067152653a2041726520796f7520736166653f077831506f776572206973206261636b206f6e20746865206e6f72746820736964652e205374696c6c206e6f2070686f6e652e0a0a4c50d3a23ac1d13f684398ece7",
+      "content_id_hex": "0453663abeccd3e3b44c915b",
+      "content_id_text": "arjwmov6ztj6hncmsfnq",
+      "air": [
+        {
+          "compression": 0,
+          "hex": "00a701010275666163756e646f40726164696f706f73742e6f72670381716d61726961406578616d706c652e636f6d051a6af1e248067152653a2041726520796f7520736166653f077831506f776572206973206261636b206f6e20746865206e6f72746820736964652e205374696c6c206e6f2070686f6e652e0a0a4c50d3a23ac1d13f684398ece7",
+          "exact": true
+        }
+      ]
     }
   ],
   "invalid": [

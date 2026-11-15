@@ -493,7 +493,12 @@ def from_message(fields: dict[str, Any], ctx: dict[str, Any]) -> tuple[dict[str,
     headers["Date"] = rfc5322_date(fields["date"])
     headers["Subject"] = encoded_header(fields["subject"])
     headers["Message-ID"] = f"<{cid}@{domain}>"
-    replied = ctx.get("message_ids", {}).get(fields.get("reply_to", b""))
+    reply_to = fields.get("reply_to", b"")
+    replied = ctx.get("message_ids", {}).get(reply_to)
+    if not replied and reply_to:
+        # a message this post office sent out as email: the Message-ID it gave it (§3.1)
+        sent = ctx.get("sent_message_ids", {})
+        replied = next((mid for mid, cid in sent.items() if cid == reply_to), None)
     if replied:
         headers["In-Reply-To"] = replied
         headers["References"] = replied

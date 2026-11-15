@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Status** | Draft |
-| **Version** | 0.11.0 |
-| **Updated** | 2026-11-10 |
+| **Status** | Stable |
+| **Version** | 1.0.0 |
+| **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2; carried by RP-4 |
@@ -343,6 +343,10 @@ link's timing (as on Aether), its disconnect is also the fastest.
 A session's end changes nothing that was not receipted: mail not receipted stays waiting at the
 gateway, and mail sent but not receipted stays in the client's outbox, to be offered again.
 
+**A link carries one session.** A second account, or a second session, needs a new call. A later
+MINOR version may let a session follow another on the same link when both stations say so in
+`caps`; until then a station never starts one.
+
 ---
 
 ## 9. What the gateway does meanwhile *(informative)*
@@ -460,3 +464,4 @@ has one example of each PDU, and frames that must be refused.
 | 0.9.0 | 2026-11-09 | A gateway always ends `WELCOME`'s transmission with `DONE` (§5.2), and how a station knows its turn has come (§5.7): `session-01` and the example (§12) had left that `DONE` out, so the client could not tell the gateway's turn was over. The example's credential hash and third-party flags brought up to date. Found by writing the session engines. |
 | 0.10.0 | 2026-11-09 | A frame over the receiver's `max_pdu` is answered `ERROR` `too-large` (§2): the section named only frames that do not decode. A `pdus.json` case. Found by writing the conformance tester. |
 | 0.11.0 | 2026-11-10 | §5.6: a gateway passes `files` to the post office and says in a `NOTICE` how that went; what comes is RP-6 §2.5. |
+| 1.0.0 | 2026-11-15 | Stable (D41). §8: a link carries one session (gap G9). |

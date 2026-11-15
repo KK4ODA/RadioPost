@@ -488,6 +488,16 @@ def messages() -> dict[str, dict[str, Any]]:
         "N3CALL for Shelter 3\n",
     }
     m["facundo-reply"]["reply_to"] = rp.content_id(cbor.encode(rp.message_map(m["maria-419"])))
+    # RP-6 §3.1: a follow-up by radio to a message radiopost.org sent out as email (gap G17)
+    m["facundo-followup"] = {
+        "v": 1,
+        "from": "facundo@radiopost.org",
+        "to": ["maria@example.com"],
+        "date": T_SESSION + 1800,
+        "subject": "Re: Are you safe?",
+        "body": "Power is back on the north side. Still no phone.\n",
+        "reply_to": rp.content_id(cbor.encode(rp.message_map(m["facundo-reply"]))),
+    }
     return m
 
 
@@ -6430,6 +6440,11 @@ def outbound() -> dict[str, tuple[dict[str, str], bytes]]:
         "facundo-to-ana": mail.from_message(
             MESSAGES["facundo-to-ana"], facundo | {"proof": proof_of("facundo-to-ana")}
         ),
+        # answering facundo-reply, which this post office sent as email: its Message-ID (G17)
+        "facundo-followup": mail.from_message(
+            MESSAGES["facundo-followup"],
+            facundo | {"sent_message_ids": {facundo_reply_id(): encoded("facundo-reply")[1]}},
+        ),
         "shelter3-priority": mail.from_message(
             MESSAGES["shelter3-priority"],
             {
@@ -6479,7 +6494,19 @@ def between_emails(sent: bytes) -> list[tuple[str, bytes]]:
 
 def make_email_out() -> dict[str, Any]:
     cases = []
-    for name, (headers, raw) in outbound().items():
+    made = outbound()
+    # RP-6 §3.1, worked out from the text: a reply restores the thread from the email that came
+    # (§2.4 step 8), or from the email this post office sent (gap G17); a first message has none
+    threads = {
+        "facundo-reply": MARIA_ID,
+        "facundo-to-ana": None,
+        "shelter3-priority": None,
+        "facundo-followup": facundo_reply_id(),
+    }
+    for name, want in threads.items():
+        headers = made[name][0]
+        assert headers.get("In-Reply-To") == want and headers.get("References") == want, name
+    for name, (headers, raw) in made.items():
         cases.append(
             {
                 "message": name,
@@ -6502,6 +6529,8 @@ def make_email_out() -> dict[str, Any]:
         f"{T_SESSION + 40}, gateway session {SESSION_ID.hex()}); #419 came as {MARIA_ID}",
         "facundo-to-ana": "as facundo-reply; every recipient (ana@hampost.org) at a RadioPost "
         "post office, so the part is added, with session-01's proof",
+        "facundo-followup": "as facundo-reply; the post office sent facundo-reply as email, "
+        f"with the Message-ID {facundo_reply_id()}",
         "shelter3-priority": "display name Shelter 3; N3CALL via N2CALL-5, started "
         f"{T_SESSION - 1140}, gateway session {stream('shelter session id', 8).hex()}; "
         "eoc@radiopost.org is in the same post office, so no part",

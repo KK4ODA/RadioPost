@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Draft |
-| **Version** | 0.8.0 |
+| **Status** | Stable |
+| **Version** | 1.0.0 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -75,7 +75,9 @@ The rules above then hold trivially: everything the modem does is this host's.
 ## 2. Transport and framing
 
 The adapter listens; the host connects to it, over **TCP on the loopback interface** (default port
-**8600**) or a **Unix domain socket**. Each host keeps one connection.
+**8600**) or a **Unix domain socket**. Each host keeps one connection. Nothing authenticates the
+host, so an adapter never listens beyond its own machine; a transport between machines, with its
+own authentication, would be a later MINOR addition (gap G4).
 
 Messages are **JSON Lines**: one JSON object (RP-0 §4.2) per line, UTF-8, ended by LF. Every object
 has an `op` member naming it. Byte data is in a `data` member in **standard base64** (RFC 4648 §4,
@@ -558,3 +560,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 0.6.6 | 2026-11-12 | §9.6, found by running the adapter on two Mercury 1.9.23 processes: the caller waits 0.7 s after it has heard the called station's `CQFRAME`, as Mercury waits before it answers a frame; without it the caller keyed 0.13 s before the called station had unkeyed. |
 | 0.7.0 | 2026-11-14 | A host between calls (§3): a connection with `hello` alone, on a shared adapter only, so a modem that shows the programs using it shows the host when no call is up. §9.1: the adapter says `hello {app}` to a shared Aether (its ADR-0114, 0.2.0-beta.159), which names the program without a claim; asked for when Aether's header said "calls to KK4ODA-1 not answered" with the RadioPost app open and idle. |
 | 0.8.0 | 2026-11-15 | The dial (§4.1, wishlist W14, W40; gaps G3, G8): `caps.dial`, `dial` and `tune`, the `dial` event to every host, `tune` refused `busy` while any link or call is up on the station since the dial is the whole station's (§1.1), a host that moved the station tuning back, and the host's own rules check reading the dial (§8). An adapter that cannot read the dial just now answers `dial` `refused`. §9.1: Aether's `status.frequency_hz`, `can_tune`, `frequency.set` and `dial` event, the station's state checked before `frequency.set`; §9.5 and §9.6 have no dial. Test vectors: the dial conversation, and the simulated modem's starting dial (`modem.dial_hz`). |
+| 1.0.0 | 2026-11-15 | Stable (D41). §2: an adapter never listens beyond its own machine; a transport between machines is left for a later addition (gap G4). |

@@ -224,7 +224,7 @@ impl Running {
             .get(&task.account)
             .cloned()
             .unwrap_or_default();
-        let ids = office.state.email_ids.clone();
+        let ids = office.thread_ids();
         drop(office);
         let message_id = |cid: &[u8]| ids.get(&radiopost::cbor::hex(cid)).cloned();
         let (_, email) = mail::from_message(

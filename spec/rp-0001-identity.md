@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Draft |
-| **Version** | 0.7.0 |
+| **Status** | Stable |
+| **Version** | 1.0.0 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -285,6 +285,11 @@ holds while offline. It learns a post office:
 * while offline, a post office named in the list of one it trusts that way: one hop only, so a list
   learned from a list does not count.
 
+A gateway whose own post office does not publish its records in DNS reaches it at a URL its
+operator gives. For that post office it trusts the key that signed the gateway's own credential,
+fetched over HTTPS when the gateway registered (RP-5 §6.4), and the keys an info document signed by
+that key adds (§7.2), as it would from DNS.
+
 Its operator can block any post office, which the gateway then treats as unknown
 (`unknown-post-office`), or limit the gateway to the post offices the operator names. Anyone can
 set up a post office, and a dishonest one could issue credentials for callsigns its users do not
@@ -385,3 +390,4 @@ A serial MAY be dropped from the list once the credential it names has expired.
 | 0.5.1 | 2026-11-10 | §6.3: a post office opening a session takes a challenge-form statement's challenge as the gateway's, once (RP-5 0.12.0). |
 | 0.6.0 | 2026-11-12 | Which post offices a post office knows (§7.5): those its operators accept, their records and documents fetched and refreshed as a gateway's are; what knowing means; others found as mail crosses and kept as seen, for the operators; why it differs from a gateway's trust. §7.3 had covered gateways only, and the door, RP-5 §2 and RP-6 §4 rested on a list each operator typed, with no key rotation followed. Test vectors (`dns.json`, `office_cases`). |
 | 0.7.0 | 2026-11-15 | §6.3 steps 2 and 3 compare base callsigns (RP-0 §6.1), so a station on the air as `VE3/KK4ODA/P` or `KK4ODA-7` proves itself with its `KK4ODA` credential, and a client answers under an SSID of its callsign; a gateway called still checks its own callsign exactly (gaps G10, G12). An earlier verifier refuses such a statement `not-authorized`, so nothing is taken that should not be. |
+| 1.0.0 | 2026-11-15 | Stable (D41). §7.3: the keys a gateway trusts for its own post office when its operator names it by URL (gap G20). |

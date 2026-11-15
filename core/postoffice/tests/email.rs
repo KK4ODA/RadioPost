@@ -434,12 +434,21 @@ fn messages_become_the_emails_rp6_3_says() {
         proof: None,
     };
     let maria_419 = message("maria-419").content_id().0;
-    let ids = |id: &[u8]| (id == maria_419).then(|| "<CAF.maria.419@mail.example.com>".to_owned());
+    let facundo_reply = message("facundo-reply").content_id();
+    let sent_reply = format!("<{}@radiopost.org>", facundo_reply.text());
+    // the email #419 came as (§2.4 step 8), and the one this post office sent (§3.1, gap G17)
+    let ids = |id: &[u8]| {
+        if id == maria_419 {
+            Some("<CAF.maria.419@mail.example.com>".to_owned())
+        } else {
+            (id == facundo_reply.0).then(|| sent_reply.clone())
+        }
+    };
     for e in file["emails"].as_array().expect("emails") {
         let name = e["message"].as_str().expect("name");
         let m = message(name);
         let (display, path, with_part) = match name {
-            "facundo-reply" => ("Facundo", &facundo, false),
+            "facundo-reply" | "facundo-followup" => ("Facundo", &facundo, false),
             "facundo-to-ana" => ("Facundo", &facundo, true),
             _ => ("Shelter 3", &shelter, false),
         };

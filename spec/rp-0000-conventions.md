@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Draft |
-| **Version** | 0.8.0 |
+| **Status** | Stable |
+| **Version** | 1.0.0 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -232,6 +232,10 @@ Each document has a version `MAJOR.MINOR.PATCH`:
 While a document is a **Draft** its version stays below 1.0.0: a change to its requirements
 raises MINOR, anything else PATCH. A Draft's next MINOR may break what the last one allowed.
 
+A **Stable** document is at 1.0.0 or above, and its version moves as the list above says: a
+MAJOR comes only with a new protocol version (§8.3). RP-0 to RP-6 became Stable at 1.0.0 on
+2026-11-15, as radiopost.org's pilot runs them; RP-7 stays a Draft.
+
 ### 8.3 Protocol versions
 
 The protocols themselves carry small integer versions, negotiated by the programs:
@@ -253,6 +257,10 @@ version for at least a year.
 Changes are proposed as pull requests to the RadioPost repository, as described in
 `CONTRIBUTING.md`. A change to a protocol must update, in the same pull request: the specification,
 its change log, the affected registries (§9), and the test vectors (§8.6).
+
+A change to a **Stable** document is announced: its pull request says so in its title, its
+change-log row says what an implementation must do (nothing, for a MINOR one), and the release
+notes of the programs that carry it name it.
 
 ### 8.5 Licence
 
@@ -359,3 +367,4 @@ ignores what carries it (RP-5 §4.4): a modem added after the program was writte
 | 0.6.0 | 2026-11-12 | The context `RadioPost-api-apply-v1` (§9.2), for RP-5's applications. |
 | 0.7.0 | 2026-11-13 | Modem names (§9.4): the six RP-5 §4.4 listed with no registry, and `mercury` and `aether-fm` added; a program ignores a name it does not know. |
 | 0.8.0 | 2026-11-15 | A callsign's base (§6.1), for RP-1 §6.3's checks (gaps G10, G12). |
+| 1.0.0 | 2026-11-15 | Stable, with RP-1 to RP-6 (D41): §8.2 says how a Stable document's version moves, §8.4 that its changes are announced. |

@@ -771,7 +771,7 @@ impl Running {
         let from = message.from().unwrap_or("").to_owned();
         let (name, known, ids) = {
             let office = self.office();
-            let ids: BTreeMap<String, String> = office.state.email_ids.clone();
+            let ids: BTreeMap<String, String> = office.thread_ids();
             (
                 office.state.names.get(&from).cloned().unwrap_or_default(),
                 office.known_post_offices(),

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.47 |
+| **Version** | 0.1.48 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -113,6 +113,7 @@ reasoning; the specifications hold the result.
 | D38 | **A post office knows another only by its operators' choice** (RP-1 §7.5): it finds others as mail crosses and keeps them as seen; its operators accept or block each; for those accepted it follows the DNS records and documents, as a gateway does. | Knowing a post office lets its users' mail past the accept lists and onto the air unflagged, on its word that they are licensed. A gateway can trust from DNS because the user calling it is on the air under their own licence (D32); at the door, anyone can publish a DNS record. Following DNS keeps rotated keys and revocations current, which a typed key does not. | Trust from DNS, as a gateway's (any domain's mail past the accept lists, unflagged onto the air); one hop of lists (trust two steps from an operator's choice); a list kept by the project (a centre); keys typed by the operator only (no rotation, no revocations). |
 | D39 | **Modem names are a registry, and an unknown one is ignored** (RP-0 §9.4, RP-5 §4.4): the names in gateway records and forwarding windows are kept in RP-0's registries, each one modem's air interface; a reader skips a channel whose modem it does not know. An FM channel states its carrier and its width. | A new modem (Mercury, Aether FM) must be listable without a new version of every client, and a client must not offer a channel it cannot call. A modem behind an FM radio's audio cannot measure its deviation, so the channel is the one thing it can state. | The six names fixed in RP-5's text (no way to add one); any string, unregistered (two programs name one modem differently); a name per adapter (one air interface listed twice); the occupied band measured, as on HF (impossible through FM audio). |
 | D40 | **Callsigns are compared by their base** (RP-0 §6.1, RP-1 §6.3): a statement's `operator` passes when it shares its base with the credential's, so a station on the air portable or under an SSID (`VE3/KK4ODA/P`, `KK4ODA-7`) proves itself with its one credential; a client called checks the callsign called by its base, so it answers under any SSID of its callsign; a gateway called still checks its own callsign exactly, since callers choose it by that name. The base is the longest part between the `/`, the SSID off, of two as long the last, as Aether reads it. (The author, 2026-11-15, before RP-0 to RP-6 are frozen at 1.0; gaps G10, G12.) | A licensee on the air portable, mobile or as a second station is the same licensee; a credential for each form would be a credential for each trip. An older verifier refuses such a statement, so nothing is taken that should not be. | Exact comparison, each on-air form its own credential. |
+| D41 | **RP-0 to RP-6 are Stable at 1.0.0** (RP-0 §8): radiopost.org's pilot runs them; a change an implementation cannot ignore comes only with a new protocol version, and every change to them is announced. The open gaps were settled first: G1 (a trimmed message points to the one it answers), G4 (no transport between machines), G7 (dictionary 1 an option, never a requirement), G9 (one session a link), G10 and G12 (D40), G17 (a reply's thread from the email sent), G20 (a gateway's own post office named by URL). RP-7 stays a Draft. (The author, 2026-11-15.) | Implementers need a target that holds still; each settled gap was cheapest to change before it. | Waiting for a second implementation first (Candidate, RP-0 §8.1): none is in sight, and the pilot already runs them. |
 
 ---
 
@@ -155,7 +156,7 @@ messages as queued at KK4ODA-1 until a gateway that is online confirms them (RP-
 | Part | Does | Spec |
 |---|---|---|
 | Keys and credentials | Generates the device key, enrolls, renews, remembers which gateways hold its credential. | RP-1, RP-5 §6 |
-| Message store | Mail as standard `.eml` files, plus each message's air form and content ID. | RP-2 |
+| Message store | Each message's canonical encoding (RP-2 §3), the bytes its content ID names, with its air form; an `.eml` export is a wish (W5). | RP-2 |
 | Session engine | The client side of RP-3: `HELLO`, transfers, receipts, resume; mail queued at cut-off gateways, offered again until confirmed. | RP-3, RP-7 §3.6 |
 | Modem host | Talks RPMI to an adapter; or embeds one. | RP-4 |
 | Gateway list | From its post office's gateway document and those of the post offices it knows (D36); ranked by distance, band and hours. | RP-5 §4.4 |
@@ -319,7 +320,7 @@ Phases 0 to 2 and Phase 3's core are built. The author set the next stages on 20
 | 4 | Phase 4, mail for a cut-off area: the post office decides a gateway is cut off, signs placements, and partners carry forward items (RP-7 §4.1 to §4.3). **Built** (2026-11-15): routes set from the server, the copies a gateway never acknowledged forwarded along with what arrives after (RP-7 0.11.0), the vectors' post office stories replayed exactly; P-06's forward items (with `--slow`). | W30 |
 | 5 | Phase 4, windows and routes (RP-7 §5, §6), F-01 to F-06, and a first trial on the air between two gateways **on one shared channel**, so no radio is retuned. **Built** (2026-11-15): a gateway's windows in its settings and its record, only inside its country's segments; routes published at `GET /routes`; a cut-off gateway calling its partners inside their windows by itself (three tries a minute apart, never on a busy channel), with the windows read from the gateway lists it keeps, and choosing between partners as RP-7 §6.2 says; F-01 to F-06; [the trial's guide](../user/on-air-forwarding.md). The trial on the air is deferred by the author (2026-11-15): too early in the process. | W30 |
 | 6 | The dial: an optional RP-4 addition to read and set the radio's frequency (§13 of the wishlist, G3 and G8), so a gateway can call a partner on another channel; choosing a gateway tunes the radio; the gateway checks the band rules itself for modems other than Aether. **Built** (2026-11-15): RP-4 0.8.0 §4.1 with its vectors, the Aether adapter's mapping, the client's **Channel** and `--dial`, a gateway tuning to its partner's window and back, and a gateway judging its dial against its country's segments when the modem checks no rules. | W14, W40 |
-| 7 | RP-0 to RP-6 frozen as version 1.0 once forwarding is built: the open gaps settled first, changes afterwards careful and announced; a public test service for other implementers. | W43 |
+| 7 | RP-0 to RP-6 frozen as version 1.0 once forwarding is built: the open gaps settled first, changes afterwards careful and announced; a public test service for other implementers. **RP-0 to RP-6 Stable at 1.0.0** (2026-11-15, D41), the open gaps settled. | W43 |
 | 8 | Phase 5. | W20 to W23, W26, W32 |
 
 Enrollment with an LoTW certificate (W10) is built when the author supplies a certificate to test
@@ -397,3 +398,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.45 | 2026-11-15 | §9: the forwarding trial on the air deferred by the author until later. |
 | 0.1.46 | 2026-11-15 | §9: stage 6 built, the dial (W14, W40; RP-4 0.8.0). |
 | 0.1.47 | 2026-11-15 | D40: callsigns compared by their base (RP-0 0.8.0 §6.1, RP-1 0.7.0 §6.3; gaps G10, G12). |
+| 0.1.48 | 2026-11-15 | D41: RP-0 to RP-6 Stable at 1.0.0, the open gaps settled; §5.1: the client keeps each message's canonical encoding (G6). |

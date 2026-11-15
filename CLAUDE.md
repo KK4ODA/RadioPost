@@ -459,6 +459,10 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   accepted for proof of licence.
 - Stalwart as the post office's mail server (others possible behind JMAP/SMTP); the door answers
   its MTA hooks (D29).
+- (2026-11-15) RP-0 to RP-6 are **Stable at 1.0.0** (D41), the open gaps settled first: a change an
+  implementation cannot ignore now needs a new protocol version (RP-0 §8.3), and every change to
+  them is announced (§8.4). RP-7 stays a Draft. Callsigns are compared by their base (D40, RP-0
+  §6.1, RP-1 §6.3): a gateway's own exactly, a client's and a statement's `operator` by base.
 - (2026-11-15) The forwarding trial on the air (stage 5, `docs/user/on-air-forwarding.md`) is
   deferred until later: too early in the process.
 - (2026-11-12) With more than one post office: a client's gateway list read from every post

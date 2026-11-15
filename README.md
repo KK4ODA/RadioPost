@@ -69,8 +69,10 @@ it goes on the air.
 
 ## Status
 
-The specifications are **drafts**: anything may change, and nothing is ready to deploy. All eight
-(RP-0 to RP-7) are written, with test vectors for RP-1 to RP-7.
+**RP-0 to RP-6 are Stable at 1.0.0** (2026-11-15): radiopost.org's pilot runs them, and a change
+an existing implementation cannot ignore now comes only with a new protocol version (RP-0 §8.3).
+RP-7, forwarding between gateways, is still a draft. All eight are written, with test vectors for
+RP-1 to RP-7.
 
 The programs follow the [order of work](docs/design/00-detailed-design.md#9-order-of-work), in
 Rust, each checked against the test vectors:

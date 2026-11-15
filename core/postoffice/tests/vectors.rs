@@ -853,3 +853,26 @@ fn local_pickups_reported_through_a_partner() {
         |_, _| {},
     );
 }
+
+/// RP-6 §3.1 (gap G17): a reply's thread comes from the email the message was made of, or from
+/// the email this post office sent for it; the email that came wins where both are kept.
+#[test]
+fn a_reply_finds_its_thread_in_the_email_sent_as_well_as_the_one_that_came() {
+    let w = world();
+    let mut office = post_office(&w, 1);
+    office
+        .state
+        .sent_ids
+        .insert("<sent@radiopost.org>".into(), "aa".repeat(12));
+    office
+        .state
+        .email_ids
+        .insert("bb".repeat(12), "<came@mail.example.com>".into());
+    office
+        .state
+        .sent_ids
+        .insert("<also-sent@radiopost.org>".into(), "bb".repeat(12));
+    let ids = office.thread_ids();
+    assert_eq!(ids[&"aa".repeat(12)], "<sent@radiopost.org>");
+    assert_eq!(ids[&"bb".repeat(12)], "<came@mail.example.com>");
+}

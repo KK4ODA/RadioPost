@@ -832,6 +832,21 @@ impl PostOffice {
         bytes.try_into().ok()
     }
 
+    /// The `Message-ID` a reply restores its thread from, by the content ID it answers (RP-6
+    /// §3.1): the email the message was made of (§2.4 step 8), or the email this post office sent
+    /// for it.
+    #[must_use]
+    pub fn thread_ids(&self) -> BTreeMap<String, String> {
+        let mut ids: BTreeMap<String, String> = self
+            .state
+            .sent_ids
+            .iter()
+            .map(|(message_id, cid)| (cid.clone(), message_id.clone()))
+            .collect();
+        ids.extend(self.state.email_ids.clone());
+        ids
+    }
+
     /// The `Message-ID` of the email a message was made of, by its content ID (RP-6 §2.4 step 8).
     #[must_use]
     pub fn email_message_id(&self, content_id: &[u8]) -> Option<String> {

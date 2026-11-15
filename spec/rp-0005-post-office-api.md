@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Status** | Draft |
-| **Version** | 0.19.0 |
-| **Updated** | 2026-11-13 |
+| **Status** | Stable |
+| **Version** | 1.0.0 |
+| **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-3 |
@@ -827,3 +827,4 @@ read from the home's and every post office it knows) and `vectors/api.json` (the
 | 0.17.0 | 2026-11-13 | §4.4: a channel's `modem` comes from RP-0 §9.4's registry, and a reader ignores a channel whose modem it does not know (the list of six had no way to grow and no rule for a name a client did not know); `mode` `USB` or `FM`; on an `FM` channel `dial_hz` is the carrier and `bandwidth_hz` the channel's width. |
 | 0.18.0 | 2026-11-13 | §5.3: the post office's air form uses compression 0 or 1, 1 when it gives fewer bytes, never 2 or 3, and the sizes that decide what is held are judged on it. Nothing said which: the air form is made once for every gateway and never sees the caller's `caps`, so a post office using 2 would serve mail some clients cannot read. |
 | 0.19.0 | 2026-11-13 | §6.3: `radio_skips_read` takes mail read in a mail program as picked up, so its copies placed ahead are dropped too, learned without delaying a session; default false. It had said only that such mail is not offered, which a post office could meet by hiding it while gateways kept offering its copies. §6.5: mail the user sends from a mail program fills the accept list too, every recipient of the submission (RP-6 §2.6): concept §5.1 promises that writing to someone adds them, and §6.5 named only mail sent by radio; it now names §6.6's station-to-station mail too, which already filled it. |
+| 1.0.0 | 2026-11-15 | Stable (D41), with no change to its requirements. |
