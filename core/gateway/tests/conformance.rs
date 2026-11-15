@@ -38,7 +38,7 @@ fn the_gateway_passes_the_conformance_tests() {
     assert_eq!(
         ran,
         [
-            "G-01", "G-02", "G-03", "G-04", "G-05", "G-07", "G-08", "G-09"
+            "G-01", "G-02", "G-03", "G-04", "G-05", "G-06", "G-07", "G-08", "G-09"
         ]
     );
 }

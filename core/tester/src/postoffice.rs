@@ -1067,10 +1067,13 @@ impl Run<'_> {
         Ok(())
     }
 
-    /// P-05: reports of sessions carried offline (RP-5 §5.6), without paths or local pickups:
-    /// each checked as at `started`, not by the post office's clock; messages taken as from a
-    /// session, pickups marked; a session whose statement fails refused whole, and one whose path
-    /// does not end at the reporting gateway refused `not-authorized`; one answer each, in order.
+    /// P-05: reports of sessions carried offline (RP-5 §5.6), without paths: each checked as at
+    /// `started`, not by the post office's clock; messages taken as from a session, pickups
+    /// marked; a session whose statement fails refused whole, and one whose path does not end at
+    /// the reporting gateway refused `not-authorized`; one answer each, in order. Local pickups
+    /// (RP-7 §4.4): a message one user handed a cut-off gateway for another, who took it there,
+    /// reported pickup first, is marked picked up once the post office holds it, and not
+    /// offered to them again.
     ///
     /// # Errors
     ///
@@ -1173,7 +1176,7 @@ impl Run<'_> {
                 answer["sessions"][0]
             ));
         }
-        Ok(())
+        local_pickup_reported_first(&po, &gw, &a, &b)
     }
 
     /// P-06: copies placed ahead and their drops (RP-5 §5.8), without forward items: none while
@@ -1866,4 +1869,41 @@ fn iso(seconds: u64) -> String {
         rem % 3600 / 60,
         rem % 60
     )
+}
+
+/// P-05's local pickup (RP-7 §4.4): `b` handed a cut-off gateway a message for `a`, who took it
+/// there; reported pickup first, it is marked once the post office holds it, and not offered to
+/// `a` again.
+fn local_pickup_reported_first(po: &Po, gw: &Account, a: &Account, b: &Account) -> Outcome {
+    // a local pickup, reported before the session that brought the message (RP-7 §4.4)
+    let note = mail(&b.address, &a.address, "Spark plug", 40);
+    let mut took = Po::session_body(a, GATEWAY, &[], Po::time_form(), now());
+    took["local_pickups"] = json!([note.content_id().text()]);
+    let mut handed = Po::session_body(b, GATEWAY, &[&note], Po::time_form(), now());
+    handed["messages"] = json!([{"id": note.content_id().text(),
+                                     "air": base64url::encode(&note.air_form(Compression::None))}]);
+    let (status, answer) = po.call(
+        "POST",
+        "/reports",
+        Some(&gw.token),
+        Some(&json!({"sessions": [took, handed]})),
+    )?;
+    if status != 200 || answer["sessions"][1]["results"][0]["status"] != "accepted" {
+        return Err(format!(
+            "a local pickup and the message it took, reported together: {status} {answer} \
+                 (RP-5 §5.6)"
+        ));
+    }
+    let after = po.open(gw, a, &[])?;
+    if after["waiting"]
+        .as_array()
+        .is_some_and(|w| w.iter().any(|e| e["id"] == json!(note.content_id().text())))
+    {
+        return Err(
+            "a message the user picked up at a cut-off gateway, reported as a local pickup, \
+                 is offered to them again (RP-5 §5.6 `local_pickups`, RP-7 §4.4)"
+                .into(),
+        );
+    }
+    Ok(())
 }

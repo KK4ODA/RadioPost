@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.20 |
+| **Version** | 0.3.21 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -134,7 +134,7 @@ rules:
 | W28 | The gateway's queue while offline, and its reports | Offline | High | Fits today | Implemented |
 | W29 | The sender's client follows queued mail | Offline | High | Fits today | Implemented |
 | W30 | Forwarding by radio | Offline | Medium | Fits today | Planned |
-| W31 | Local delivery at a cut-off gateway | Offline | Medium | Fits today | Planned |
+| W31 | Local delivery at a cut-off gateway | Offline | Medium | Fits today | Implemented |
 | W32 | Forms | Applications | Medium | Application layer (recommended); optional addition (RP-2 key 13) | Planned |
 | W33 | Position reports | Applications | Low | Application layer; optional addition as broadcasts | Planned |
 | W34 | Bulletins | Applications | Low | Application layer; optional addition as broadcasts | Planned |
@@ -785,12 +785,12 @@ Neighbours who use the same cut-off gateway (a shelter and the EOC) exchange mai
 | Requested by | The plan: D24. Requesters: 0. |
 | Component | Gateway; the client asks by content ID (RP-3 §5.6, `ids`). |
 | Compatibility | **Fits today**: RP-7 §4.4, reported with `local_pickups` (RP-5 §5.6). |
-| Existing coverage | Specified, not built. Specified in RP-7, so listed in Phase 4. |
+| Existing coverage | **Implemented** (2026-11-15). A cut-off gateway's local users are those it received a copy placed ahead for in the last 30 days (`Store::copies_seen`, `session::gateway::is_local`); a message handed to it that names one is kept for them, listed with serial 0 and the flag `local` after the copies of the same priority, sent by content ID without a serial (RP-3 §5.6 key 4), and its pickup reported with the user's record (`local_pickups`, RP-5 §5.6); what was kept goes once the sender's record is reported. The client asks for local mail by content ID and keeps it; its Waiting folder shows it kept at the gateway. `session-05` replays byte for byte on both sides, `local-delivery`'s cases against the rule; C-10, G-06 and P-05's local pickups pass. |
 | Dependencies | W27, W28. It needs no partners and no forwarding. |
 | Effort | Medium. |
 | Priority | **Medium.** In an outage, much of the mail that matters is between neighbours (D24). |
 | Recommendation | **Modify**: build it right after W28, in Phase 3, not with W30. It needs only the copies (which say who the local users are) and the offline reports. This keeps the author's order: forwarding still comes after the queue. |
-| Status | Planned. |
+| Status | Implemented. |
 | Author decision | **Decided** (2026-11-14): stage 2 (design §9), after the pilot's protection and before forwarding. |
 
 ---
@@ -1110,3 +1110,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.18 | 2026-11-14 | W38: backups go off the server by themselves, to the operator's computers while the app is open, sealed to a key each computer holds; Health counts a fetch. |
 | 0.3.19 | 2026-11-14 | W24 implemented: a gateway's operator refuses a caller by address or callsign, from the panel or the command line, while it answers. |
 | 0.3.20 | 2026-11-15 | W36's second part implemented: mail sent by radio in the Sent folder, and pickups by radio marked read (RP-6 0.8.0 §2.6). |
+| 0.3.21 | 2026-11-15 | W31 implemented: local delivery at a cut-off gateway (RP-7 §4.4), with C-10, G-06 and P-05's local pickups. |

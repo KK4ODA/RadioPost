@@ -65,6 +65,11 @@ FAULTS = {
         "if stats.gateway && stats.online == Some(false) {",
         "if false {",
     ),
+    "C-10": (
+        "core/radiopost/src/session/client.rs",
+        "let is_local = |w: &WaitingEntry| w.flags & super::flags::LOCAL != 0;",
+        "let is_local = |_: &WaitingEntry| false;",
+    ),
     "C-12": ("app/client/src/session.rs", '"role": role,', '"role": "caller",'),
     "C-11": (
         "app/client/src/session.rs",
@@ -97,6 +102,11 @@ FAULTS = {
         ".filter(|_| false)",
     ),
     "G-05": (GATEWAY, "if third && !may_list_third_party {", "if false {"),
+    "G-06": (
+        "core/gateway/src/offline.rs",
+        "for address in local {",
+        "for address in local.into_iter().take(0) {",
+    ),
     "G-07": (
         GATEWAY,
         "let max = usize::try_from(self.cfg.caps.max_pdu).unwrap_or(usize::MAX);",
@@ -120,7 +130,9 @@ FAULTS = {
     ),
     "P-03": (OFFICE, 'self.state.codes.remove(text(body, "code"));', ""),
     "P-04": (OFFICE, "if started.abs_diff(self.now) > TIME_WINDOW_S {", "if false {"),
-    "P-05": (OFFICE, "self.picked_up(&stmt.address, &pickups);", ""),
+    "P-05": (OFFICE, "self.picked_up(&stmt.address, &pickups, true);", ""),
+    # a second fault for one test is named after it, then a word: run under the test's ID
+    "P-05 local": (OFFICE, ".extend(local);", ".extend(Vec::<String>::new());"),
     "P-06": (
         OFFICE,
         'items.push(json!({"kind": "drop", "address": address, "serial": serial}));',
@@ -188,13 +200,15 @@ def plant(test: str, scratch: Path) -> str:
     else:
         ran = run_adapter(tester, str(target / "debug/radiopost-tcp"), test)
     lines = ran.stdout.splitlines()
-    caught = ran.returncode == 1 and any(ln.startswith(f"{test} FAIL") for ln in lines)
+    test_id = test.split(maxsplit=1)[0]
+    caught = ran.returncode == 1 and any(ln.startswith(f"{test_id} FAIL") for ln in lines)
     why = lines[1].strip() if len(lines) > 1 else ran.stderr.strip()
     return ("caught: " if caught else "MISSED: ") + why
 
 
 def run_test(command: list[str], test: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run([*command, "--only", test], capture_output=True, text=True, check=False)
+    only = test.split(maxsplit=1)[0]
+    return subprocess.run([*command, "--only", only], capture_output=True, text=True, check=False)
 
 
 def run_adapter(tester: str, adapter: str, test: str) -> subprocess.CompletedProcess[str]:

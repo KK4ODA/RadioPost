@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.40 |
+| **Version** | 0.1.41 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -313,7 +313,7 @@ Phases 0 to 2 and Phase 3's core are built. The author set the next stages on 20
 | Stage | Builds | Wishes |
 |---|---|---|
 | 1 | Protecting the pilot's mail: backups sent off the server by themselves; blocking a caller by address or callsign; the rest of one mailbox (mail sent by radio in the mail program's Sent folder, radio pickups marked read there); DKIM keys rotated. **Built** (2026-11-15); the Sent folder, the read marks and the DKIM rotation tried against stand-ins, to be tried on the pilot's Stalwart. | W38, W24, W36 |
-| 2 | Phase 3's last part, local delivery at a cut-off gateway (RP-7 §4.4), with the tests waiting on it (C-10, G-06, the rest of P-05 and P-06). | W31 |
+| 2 | Phase 3's last part, local delivery at a cut-off gateway (RP-7 §4.4), with the tests waiting on it (C-10, G-06, the rest of P-05 and P-06). **Built** (2026-11-15): C-10, G-06 and P-05's local pickups; P-05's paths and P-06's forward items come with stage 3, being forwarding's. | W31 |
 | 3 | Phase 4, the forwarding session: gateway to gateway, `PROOF`, session records and the partner's checks (RP-7 §2, §3). | W30 |
 | 4 | Phase 4, mail for a cut-off area: the post office decides a gateway is cut off, signs placements, and partners carry forward items (RP-7 §4.1 to §4.3). | W30 |
 | 5 | Phase 4, windows and routes (RP-7 §5, §6), F-01 to F-06, and a first trial on the air between two gateways **on one shared channel**, so no radio is retuned. | W30 |
@@ -389,3 +389,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.38 | 2026-11-14 | §5.4: the client's connection to Aether between calls, through RPMI with `hello` alone (RP-4 0.7.0), so Aether's header names the app while it is open. |
 | 0.1.39 | 2026-11-14 | §9: the next stages, as the author set them: the pilot's mail protected first, then local delivery, then Phase 4 in three parts with its first trial on one shared channel, the dial, RP-0 to RP-6 frozen as 1.0 after forwarding, then Phase 5; LoTW enrollment with RSA-1024 and SHA-1 accepted. |
 | 0.1.40 | 2026-11-15 | §9: stage 1 built. The DKIM keys are rotated by hand on the desk, one checked step at a time, as Stalwart's own rotation goes: Stalwart rotates only when it manages the DNS too. |
+| 0.1.41 | 2026-11-15 | §9: stage 2 built, local delivery at a cut-off gateway (W31). |

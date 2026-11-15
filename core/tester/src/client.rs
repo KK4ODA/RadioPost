@@ -76,6 +76,15 @@ fn entry(serial: u64, m: &Message) -> Value {
     ])
 }
 
+/// A local waiting entry (RP-7 §4.4): serial 0 and the flag `local` (4).
+fn local_entry(m: &Message) -> Value {
+    let Value::Array(mut fields) = entry(0, m) else {
+        unreachable!("an entry is an array")
+    };
+    fields[6] = Value::Uint(4);
+    Value::Array(fields)
+}
+
 /// `n` words a compressor can do little with, different every time.
 fn words(n: usize) -> String {
     const LETTERS: &[u8] = b"etaoinshrdlucmfwypvbgkqjxz";
@@ -398,6 +407,8 @@ struct Turn {
     complete: Vec<ContentId>,
     failed: Vec<(ContentId, u64)>,
     request: Vec<u64>,
+    /// Asked for by content ID (RP-3 §5.6 key 4).
+    request_ids: Vec<ContentId>,
 }
 
 /// The program's turn, with `held` the pieces of messages the tester already holds (and their
@@ -475,6 +486,7 @@ fn program_turn_answering(
                         .flatten()
                         .filter_map(Value::as_u64),
                 );
+                t.request_ids.extend(ids(p.get(4)));
                 return Ok(t);
             }
             kind::DONE => return Ok(t),
@@ -905,6 +917,100 @@ impl Run<'_> {
             r.map_err(|e| format!("visit {visit}: {e}\nthe program said: {}", said.trim()))?;
         }
         Ok(())
+    }
+
+    /// C-10: local mail (RP-7 §4.4): listed with serial 0 and the flag `local` by a cut-off
+    /// gateway, one small enough to come unasked and taken without a serial, the other asked for
+    /// by content ID (RP-3 §5.6 key 4), never by serial 0, and both kept.
+    ///
+    /// # Errors
+    ///
+    /// The first deviation found.
+    pub fn c10(&mut self, peer_out: &mut Vec<String>) -> Outcome {
+        let trust = self.offices.trust();
+        let (adapter, prog) = self.setup("C-10", 4096)?;
+        let mut peer = adapter.peer(&[GATEWAY], true)?;
+        let running = prog.call(GATEWAY, false)?;
+        let result = (|| {
+            peer.wait_link(Duration::from_secs(20))?;
+            let hello = check_hello(&peer.expect("HELLO")?, &prog, GATEWAY, &trust)?;
+            let small = mail(
+                "neighbour@radiopost.org",
+                &prog.address,
+                "Spark plug",
+                "Can you bring one?",
+            );
+            let long = "A longer note, handed over at the gateway while it is cut off. ".repeat(40);
+            let big = mail("shelter@radiopost.org", &prog.address, "Roster", &long);
+            if small.air_form(Compression::None).len() as u64 > hello.auto
+                || big.air_form(Compression::None).len() as u64 <= hello.auto
+            {
+                return Err(format!(
+                    "the program's `auto` of {} leaves no room for one message sent unasked \
+                     and one asked for",
+                    hello.auto
+                ));
+            }
+            let waiting = [local_entry(&small), local_entry(&big)];
+            let mut first = vec![with_online(
+                &welcome(&Ready {
+                    accept: vec![],
+                    decline: vec![],
+                    waiting: &waiting,
+                    max_pdu: 4096,
+                    cached: true,
+                    proof: None,
+                    time: now(),
+                }),
+                false,
+            )];
+            first.extend(msgs(&small, 0, 900, None));
+            first.push(done());
+            peer.send(&first);
+            let turn = program_turn(&mut peer, 4096, &HashMap::new())?;
+            if !turn.complete.contains(&small.content_id()) {
+                return Err(
+                    "a local message sent unasked, without a serial, is not in the \
+                            RECEIPT's `complete` (RP-7 §4.4)"
+                        .into(),
+                );
+            }
+            if turn.request.contains(&0) {
+                return Err(
+                    "a REQUEST for serial 0: a local message is asked for by its content \
+                            ID, key 4 (RP-3 §5.6)"
+                        .into(),
+                );
+            }
+            if turn.request_ids != [big.content_id()] {
+                return Err(format!(
+                    "the REQUEST asked by content ID for {} messages: the one local message too \
+                     large to come unasked is asked for by its content ID (RP-3 §5.6 key 4)",
+                    turn.request_ids.len()
+                ));
+            }
+            let mut second = msgs(&big, 0, 900, None);
+            second.push(done());
+            peer.send(&second);
+            let last = program_turn(&mut peer, 4096, &HashMap::new())?;
+            if !last.complete.contains(&big.content_id()) {
+                return Err("the local message asked for is not in the last RECEIPT".into());
+            }
+            peer.expect_hang_up(Duration::from_secs(30))?;
+            let inbox = prog.folder("inbox")?;
+            for m in [&small, &big] {
+                if !contains(&inbox, m.content_id()) {
+                    return Err(format!(
+                        "the local message {} is not in the inbox",
+                        m.content_id().text()
+                    ));
+                }
+            }
+            Ok(())
+        })();
+        let (_, said) = running.finish(Duration::from_secs(10));
+        peer_out.extend(peer.transcript);
+        result.map_err(|e| format!("{e}\nthe program said: {}", said.trim()))
     }
 
     /// C-05: offers declined and messages failed are not sent, and stay in the outbox (RP-3 §5.2,

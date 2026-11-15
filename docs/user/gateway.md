@@ -167,11 +167,19 @@ the gateway answers from what it holds, and says so to the caller in a notice:
 * it keeps what the caller sends in its queue, written to disk before it tells the caller it has
   it. The caller's RadioPost shows those messages *queued* at this gateway, and offers them again
   until a gateway that reaches the post office confirms them;
-* held attachments cannot be asked for: the notice says so.
+* held attachments cannot be asked for: the notice says so;
+* **mail between its own users is handed over at once** (RP-7 §4.4). Its own users, here, are
+  those it received a copy placed ahead for in the last 30 days. When one sends a message to
+  another, the gateway keeps it for the other too, and offers it at their next call, cut off or
+  not yet reported, without waiting for their post office. Their RadioPost takes it as any other
+  message; its pickup is reported with their session, and their post office then marks it picked
+  up, so it is not offered to them again.
 
 **When the Internet is back** (RP-5 §5.6). The gateway reports each session it carried while cut
-off to the caller's post office, oldest first: the messages go on, the pickups are marked, and the
-copies of what was picked up are dropped at every gateway that holds them. It tries every minute,
+off to the caller's post office, oldest first: the messages go on, the pickups are marked (those
+of mail handed over here too), and the copies of what was picked up are dropped at every gateway
+that holds them. What it kept for its own users goes once the message's session is reported: from
+then on it comes back as copies placed ahead. It tries every minute,
 and at once when a poll shows the post office answers again. A session the post office refuses
 (a forged or revoked credential) is dropped and the log says why; one not reported in 30 days is
 dropped too. It remembers for 30 days what it passed on, so that a caller who offers it again is
@@ -182,8 +190,8 @@ text), each session waiting to be reported with its last try, and the last repor
 command line: `radiopost-gateway held`, and `radiopost-gateway copies --users 50 --days 7
 --max-air-bytes 16384` (or `--off`) for the setting.
 
-Forwarding by radio to a partner gateway that can reach the Internet, and handing mail between
-two users of a cut-off gateway, come later (Phase 4, wishlist W30 and W31).
+Forwarding by radio to a partner gateway that can reach the Internet comes later (Phase 4,
+wishlist W30).
 
 ## 5. The rules
 

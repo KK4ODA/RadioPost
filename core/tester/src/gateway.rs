@@ -1080,6 +1080,215 @@ impl Run<'_> {
         result
     }
 
+    /// G-06: local delivery while cut off (RP-7 §4.4). Two users name the gateway as usual and
+    /// have copies placed ahead there, so both are its local users. With the Internet cut, one
+    /// hands it a message for the other; when the other calls, listing only, it is listed with
+    /// serial 0 and the flag `local` after the copy, sent without a serial when asked for by
+    /// content ID, and once the Internet is back the session is reported with it as a local
+    /// pickup, and the post office marks it picked up.
+    ///
+    /// # Errors
+    ///
+    /// The first deviation found.
+    #[allow(clippy::too_many_lines, reason = "one outage, in order")]
+    pub fn g06(&mut self, transcript: &mut Vec<String>) -> Outcome {
+        let office = TestOffice::start(&self.offices)?;
+        let adapter = TestAdapter::new(4096)?;
+        let shelter = office.user("shelter3@radiopost.org", "N3CALL");
+        let club = office.user("club@radiopost.org", "WD5EMA");
+        {
+            let mut o = office.office();
+            o.state.gateways.insert(
+                GATEWAY.into(),
+                serde_json::json!({"callsign": GATEWAY, "operator": "N1CALL", "hours": "always",
+                    "internet": true, "copies": {"users": 10, "days": 7, "max_air_bytes": 16384},
+                    "updated": now()}),
+            );
+            for u in [&shelter, &club] {
+                o.state.settings.insert(
+                    u.address.clone(),
+                    serde_json::json!({"usual_gateways": [GATEWAY]}),
+                );
+            }
+        }
+        let _gw = self.gateway_holding("G-06", &office, adapter.program_at, GATEWAY, &[], true)?;
+        for (u, serial) in [(&shelter, 3), (&club, 7)] {
+            let m = mail("eoc@radiopost.org", &u.address, "Shelter roster", 80);
+            office.office().deliver(
+                &u.address,
+                serial,
+                &m.air_form(Compression::None),
+                "eoc@radiopost.org",
+                "Shelter roster",
+                0,
+                false,
+            );
+        }
+        let held = wait_long(&office, Duration::from_secs(60), |e| {
+            e.path == "/copies/ack"
+                && e.body.as_ref().and_then(|b| b["cursor"].as_str()) == Some("c_2")
+        });
+        if !held {
+            return Err(
+                "the gateway, holding copies, did not poll for both copies placed ahead and \
+                 acknowledge them (RP-5 §5.8)"
+                    .into(),
+            );
+        }
+        if !wait_long(&office, Duration::from_secs(30), |e| {
+            e.method == "GET" && e.path == "/revocations"
+        }) {
+            return Err(
+                "the gateway did not fetch the post office's revocation list (RP-1 §7.3)".into(),
+            );
+        }
+        office.cut();
+        let mut peer = adapter.peer(&["N3CALL", "WD5EMA"], false)?;
+        let result = (|| -> Outcome {
+            // Shelter 3 hands it a message for the club, a local user
+            let note = mail(&shelter.address, &club.address, "Spark plug", 120);
+            let mut hello = Hello::new(&shelter, GATEWAY);
+            hello.offers = vec![&note];
+            peer.call_within(GATEWAY, Duration::from_secs(15))?;
+            peer.send(&[hello.pdu()]);
+            let pdus = turn(&mut peer, "WELCOME and DONE")?;
+            expect_welcome(&pdus[0], 0)?;
+            let mut mine = msg_pieces(&note, 0, 900);
+            mine.push(done());
+            peer.send(&mine);
+            let receipted = answer(&mut peer, "a RECEIPT for the message")?;
+            if !receipted.iter().any(|p| {
+                kind_of(p) == kind::RECEIPT
+                    && p.get(1).and_then(Value::as_array).is_some_and(|c| {
+                        c.iter()
+                            .any(|i| i.as_bytes() == Some(note.content_id().as_bytes()))
+                    })
+            }) {
+                return Err("the message handed in is not receipted complete (RP-3 §5.5)".into());
+            }
+            peer.hang_up();
+
+            // the club calls, listing only: its copy, then the local message
+            let mut hello = Hello::new(&club, GATEWAY);
+            hello.auto = 0;
+            peer.call_within(GATEWAY, Duration::from_secs(15))?;
+            peer.send(&[hello.pdu()]);
+            let pdus = turn(&mut peer, "WELCOME, NOTICE and DONE")?;
+            let session = expect_welcome(&pdus[0], 0)?;
+            let entries: Vec<(u64, Vec<u8>, u64)> = pdus[0]
+                .get(7)
+                .and_then(Value::as_array)
+                .unwrap_or(&[])
+                .iter()
+                .filter_map(|e| {
+                    let e = e.as_array()?;
+                    Some((
+                        e.first()?.as_u64()?,
+                        e.get(1)?.as_bytes()?.to_vec(),
+                        e.get(6)?.as_u64()?,
+                    ))
+                })
+                .collect();
+            let local: Vec<&(u64, Vec<u8>, u64)> = entries
+                .iter()
+                .filter(|(_, id, _)| id == note.content_id().as_bytes())
+                .collect();
+            let [(serial, _, flags)] = local[..] else {
+                return Err(format!(
+                    "WELCOME waiting {entries:?}: the message Shelter 3 handed in, for a local \
+                     user, was due (RP-7 §4.4)"
+                ));
+            };
+            if *serial != 0 || flags & 4 == 0 {
+                return Err(format!(
+                    "the local message listed with serial {serial} and flags {flags}: serial 0 \
+                     and the flag `local` (4) were due (RP-7 §4.4)"
+                ));
+            }
+            if entries.last().map(|(_, id, _)| id.as_slice()) != Some(note.content_id().as_bytes())
+            {
+                return Err(
+                    "the local message is not listed after the copy of the same \
+                            priority (RP-7 §4.4, RP-3 §6.1)"
+                        .into(),
+                );
+            }
+            peer.send(&[Value::int_map(vec![
+                (0, Value::Uint(kind::REQUEST)),
+                (
+                    4,
+                    Value::Array(vec![Value::bytes(note.content_id().as_bytes())]),
+                ),
+            ])]);
+            let sent = answer(&mut peer, "the local message, asked for by content ID")?;
+            if sent.iter().any(|p| {
+                kind_of(p) == kind::MSG
+                    && p.get(1).and_then(Value::as_bytes) == Some(note.content_id().as_bytes())
+                    && p.get(5).is_some()
+            }) {
+                return Err("the local message's MSG carries a serial (RP-7 §4.4)".into());
+            }
+            let (air, _) = assemble(&sent, note.content_id(), 0)?;
+            if air != note.air_form(Compression::None) {
+                return Err("the local message is not the air form Shelter 3 handed in".into());
+            }
+            peer.send(&[receipt(&[note.content_id()]), done()]);
+            peer.hang_up();
+            if office
+                .office()
+                .state
+                .had
+                .contains(&note.content_id().text())
+            {
+                return Err("the post office has the message, yet it was cut off".into());
+            }
+
+            // the Internet is back: both sessions reported, the club's with its local pickup
+            office.restore();
+            let wanted = note.content_id().text();
+            let reported = wait_long(&office, Duration::from_secs(90), |e| {
+                e.path == "/reports"
+                    && e.body.as_ref().is_some_and(|b| {
+                        b["sessions"].as_array().into_iter().flatten().any(|s| {
+                            s["local_pickups"]
+                                .as_array()
+                                .is_some_and(|l| l.iter().any(|i| i.as_str() == Some(&wanted)))
+                        })
+                    })
+            });
+            if !reported {
+                return Err(
+                    "the club's session was not reported with the local pickup once the post \
+                     office could be reached (RP-5 §5.6 `local_pickups`)"
+                        .into(),
+                );
+            }
+            let _ = session;
+            let deadline = Instant::now() + Duration::from_secs(30);
+            let picked = || {
+                office
+                    .office()
+                    .state
+                    .mailboxes
+                    .get(&club.address)
+                    .is_some_and(|b| b.iter().any(|w| w.id == wanted && w.picked))
+            };
+            while !picked() && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            if !picked() {
+                return Err(
+                    "the post office did not mark the local message picked up for the \
+                            club (RP-7 §4.4)"
+                        .into(),
+                );
+            }
+            Ok(())
+        })();
+        transcript.append(&mut peer.transcript);
+        result
+    }
+
     /// G-05: third-party mail held back from a station abroad, with a `NOTICE`; the rest listed
     /// (RP-6 §5.1).
     ///

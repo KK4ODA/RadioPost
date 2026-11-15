@@ -194,6 +194,17 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `GatewayConfig::refused`; `session::gateway::refused_caller` is the rule (an address whatever its
   case, a callsign without an SSID every SSID of it), checked at `HELLO` and again on the
   credential, answered `refused-by-policy` with a text, and `Note::Refused` marks the session.
+  Local delivery while cut off (W31, RP-7 §4.4): `Store::copies_seen` (when a copy last arrived
+  for each address) names the local users (`session::gateway::is_local`, `local_recipients`, a
+  copy in the last 30 days); `offline.rs` keeps a message naming one in `Store::local`, lists it
+  with serial 0 and the flag `local` after the copies of each priority, serves it by content ID
+  (`Upstream::fetch_local`) and keeps its pickup in the user's record (`picked_up_local`,
+  `Record::local_pickups`, reported only when there are some); what was kept goes once the
+  sender's record is reported. The engines: the gateway's reads `REQUEST` key 4; the client's
+  `Chooser` returns content IDs (`client::by_serials` for the old callers) and asks for local
+  mail under key 4. `session-05` replays both sides (`radiopost/tests/sessions.rs`,
+  `gateway/tests/session05.rs`, the cut-off `NOTICE` text given by `Offline::with_notice`); C-10,
+  G-06 and P-05's local pickups; `plant.py` takes a second fault for a test as `"P-05 local"`.
   The client's gateway side: `online::gateways` fetches RP-5 §4.4's list, its JWS checked with the
   keys the home trusts for the user's domain (and those its signed `info` adds, RP-1 §7.2), and
   keeps it in `state.json` for when there is no Internet; `grid.rs` ranks it by distance from the

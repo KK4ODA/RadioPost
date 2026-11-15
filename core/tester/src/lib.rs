@@ -118,6 +118,12 @@ pub const CLIENT_TESTS: &[ClientTest] = &[
         run: |r, t| r.c09(t),
     },
     ClientTest {
+        id: "C-10",
+        checks: "Local mail at a cut-off gateway: listed with serial 0, asked for by content ID, taken without a serial (RP-3 §5.6, RP-7 §4.4)",
+        slow: false,
+        run: |r, t| r.c10(t),
+    },
+    ClientTest {
         id: "C-12",
         checks: "A station-to-station session reported to the post office with both proofs (RP-5 §6.6)",
         slow: false,
@@ -140,7 +146,7 @@ pub struct GatewayTest {
     run: fn(&mut gateway::Run<'_>, &mut Vec<String>, bool) -> harness::Outcome,
 }
 
-/// The gateway's tests, in order (Phase 2: a gateway online; Phase 3: G-03 and G-05).
+/// The gateway's tests, in order (Phase 2: a gateway online; Phase 3: G-03, G-05 and G-06).
 pub const GATEWAY_TESTS: &[GatewayTest] = &[
     GatewayTest {
         id: "G-01",
@@ -166,6 +172,11 @@ pub const GATEWAY_TESTS: &[GatewayTest] = &[
         id: "G-05",
         checks: "Third-party mail held back from a station abroad, with a NOTICE (RP-6 §5.1)",
         run: |r, t, _| r.g05(t),
+    },
+    GatewayTest {
+        id: "G-06",
+        checks: "Local delivery while cut off: mail for a local user listed with serial 0, sent by content ID without a serial, the pickup reported (RP-7 §4.4, RP-5 §5.6)",
+        run: |r, t, _| r.g06(t),
     },
     GatewayTest {
         id: "G-07",
@@ -258,7 +269,7 @@ pub const POST_OFFICE_TESTS: &[PostOfficeTest] = &[
     },
     PostOfficeTest {
         id: "P-05",
-        checks: "Reports of sessions carried offline, checked at their start, one answer each; pickups and messages taken (RP-5 §5.6)",
+        checks: "Reports of sessions carried offline, checked at their start, one answer each; pickups, local pickups and messages taken (RP-5 §5.6, RP-7 §4.4)",
         run: |r, t| r.p05(t),
     },
     PostOfficeTest {
