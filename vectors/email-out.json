@@ -5,12 +5,13 @@
     "RP-6": "§3.1, §3.2, §4"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "A post office given the named message (messages.json) and the `context` makes an email whose headers have the values in `headers`, compared after unfolding and RFC 2047 decoding, and whose decoded text is the message's body and the footer. `email` is one spelling of it, before DKIM signing: header order, folding and the MIME boundary are the writer's. `part_hex`, where present, is the `application/radiopost-message` part's CBOR, exact (RP-6 §4).",
+  "rule": "A post office given the named message (messages.json) and the `context` makes an email whose headers have the values in `headers`, compared after unfolding and RFC 2047 decoding, and whose decoded text is the message's body and the footer: for a form, its text with its template (RP-2 §8.4). `email` is one spelling of it, before DKIM signing: header order, folding and the MIME boundary are the writer's. `part_hex`, where present, is the `application/radiopost-message` part's CBOR, exact (RP-6 §4).",
   "context": {
     "facundo-reply": "display name Facundo; session-01 (KK4ODA via N1CALL-10, started 1794235240, gateway session ec7b31841ec47c47); #419 came as <CAF.maria.419@mail.example.com>",
     "facundo-to-ana": "as facundo-reply; every recipient (ana@hampost.org) at a RadioPost post office, so the part is added, with session-01's proof",
     "facundo-followup": "as facundo-reply; the post office sent facundo-reply as email, with the Message-ID <kdj2eowb2e7wqq4y5ttq@radiopost.org>",
-    "shelter3-priority": "display name Shelter 3; N3CALL via N2CALL-5, started 1794234060, gateway session 86e5b36c010212ce; eoc@radiopost.org is in the same post office, so no part"
+    "shelter3-priority": "display name Shelter 3; N3CALL via N2CALL-5, started 1794234060, gateway session 86e5b36c010212ce; eoc@radiopost.org is in the same post office, so no part",
+    "shelter3-213": "display name Shelter 3; N3CALL via N2CALL-5, started 1794233340, gateway session 221dbd553c46664d; the post office holds the published templates (forms/ics-213.json), so the email is the form's text"
   },
   "emails": [
     {
@@ -62,6 +63,22 @@
         "Content-Transfer-Encoding": "7bit"
       },
       "email": "From: Facundo <facundo@radiopost.org>\r\nTo: maria@example.com\r\nDate: Mon, 09 Nov 2026 15:10:00 +0000\r\nSubject: Re: Are you safe?\r\nMessage-ID: <arjwmov6ztj6hncmsfnq@radiopost.org>\r\nIn-Reply-To: <kdj2eowb2e7wqq4y5ttq@radiopost.org>\r\nReferences: <kdj2eowb2e7wqq4y5ttq@radiopost.org>\r\nRadio-Path: KK4ODA via N1CALL-10; at=2026-11-09T14:40:40Z; session=ec7b31841ec47c47\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 7bit\r\n\r\nPower is back on the north side. Still no phone.\r\n-- \r\nSent by amateur radio through RadioPost. Please reply in plain text, under 20 kB.\r\nAmateur radio carries no business content.\r\n",
+      "part_hex": null
+    },
+    {
+      "message": "shelter3-213",
+      "headers": {
+        "From": "Shelter 3 <shelter3@radiopost.org>",
+        "To": "eoc@radiopost.org",
+        "Date": "Mon, 09 Nov 2026 14:10:00 +0000",
+        "Subject": "Cots and water for tonight",
+        "Message-ID": "<sahp75tv6yd4g3r5uo4q@radiopost.org>",
+        "Radio-Path": "N3CALL via N2CALL-5; at=2026-11-09T14:09:00Z; session=221dbd553c46664d",
+        "MIME-Version": "1.0",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Transfer-Encoding": "7bit"
+      },
+      "email": "From: Shelter 3 <shelter3@radiopost.org>\r\nTo: eoc@radiopost.org\r\nDate: Mon, 09 Nov 2026 14:10:00 +0000\r\nSubject: Cots and water for tonight\r\nMessage-ID: <sahp75tv6yd4g3r5uo4q@radiopost.org>\r\nRadio-Path: N3CALL via N2CALL-5; at=2026-11-09T14:09:00Z; session=221dbd553c46664d\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 7bit\r\n\r\nICS-213 General Message\r\n\r\nIncident name: Storm response, Atlanta\r\nTo (name and position): Duty officer, county EOC\r\nFrom (name and position): J. Park, Shelter 3 manager\r\nSubject: Cots and water for tonight\r\nDate: 2026-11-09\r\nTime: 14:10 UTC\r\nMessage:\r\n140 people tonight, 30 more expected by 20:00.\r\nNeed 40 cots and 300 litres of drinking water.\r\nGenerator fuel for 12 hours.\r\nApproved by (name and position): J. Park, Shelter 3 manager\r\n-- \r\nSent by amateur radio through RadioPost. Please reply in plain text, under 20 kB.\r\nAmateur radio carries no business content.\r\n",
       "part_hex": null
     },
     {

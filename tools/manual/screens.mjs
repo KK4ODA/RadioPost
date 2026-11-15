@@ -17,7 +17,7 @@
 
 import {createRequire} from "node:module";
 import {readFile} from "node:fs/promises";
-import {mkdirSync} from "node:fs";
+import {mkdirSync, readFileSync} from "node:fs";
 import {dirname, extname, join, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 
@@ -217,6 +217,16 @@ function deskAnswer(method, path, body) {
   return DESK_GET[path] || {};
 }
 
+// the forms the panel holds, as /api/forms gives them (RP-2 §8): ICS-213, its fingerprint from
+// vectors/forms.json
+const ICS_213 = JSON.parse(readFileSync(join(ROOT, "forms", "ics-213.json"), "utf8"));
+const FORMS = [{
+  template: JSON.parse(readFileSync(join(ROOT, "vectors", "forms.json"), "utf8"))
+    .templates[0].fingerprint_hex,
+  name: ICS_213.name, note: ICS_213.note,
+  fields: ICS_213.fields.map((f) => ({required: false, choices: [], bound: null, max: null, ...f})),
+}];
+
 function clientApi(world) {
   return (method, path, query, body) => {
     const s = world.state;
@@ -230,6 +240,7 @@ function clientApi(world) {
       case "settings": return {usual_gateways: ["KK4ODA-1"], radio_skips_read: false};
       case "accept": return {entries: ["maria@example.com", "jim@hampost.org", "@hampost.org"]};
       case "addresses": return {entries: ADDRESSES};
+      case "forms": return FORMS;
       case "modem": return {};
       case "backups": return {on: true, computer: "shack-pc", folder: "D:\\RadioPost backups",
         key: "k1", key_file: "C:\\Users\\you\\.radiopost\\backup.key",
@@ -510,6 +521,27 @@ const SHOTS = {
       + "the spare battery box.\n\n73,\nAna, N0CALL");
     await page.locator("body").click({position: {x: 1200, y: 760}});
     await shot(page, "client-compose");
+    await context.close();
+  },
+
+  async "client-form"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+                                                 height: 1300});
+    await spreadLog(page, "log", T - 1300, 19);
+    await page.click("#write");
+    const form = page.locator("#composer");
+    await form.locator("input[name=to]").fill("eoc@radiopost.org");
+    await form.locator("input[name=subject]").fill("Cots and water for tonight");
+    await form.locator("select[name=form]").selectOption({label: "ICS-213 General Message"});
+    const field = (n) => page.locator(`#c-form-fields [data-field="${n}"]`);
+    await field(1).fill("Storm response, Atlanta");
+    await field(2).fill("Duty officer, county EOC");
+    await field(3).fill("J. Park, Shelter 3 manager");
+    await field(7).fill("140 people tonight, 30 more expected by 20:00.\n"
+      + "Need 40 cots and 300 litres of drinking water.\nGenerator fuel for 12 hours.");
+    await field(8).fill("J. Park, Shelter 3 manager");
+    await page.locator("body").click({position: {x: 1200, y: 1200}});
+    await shot(page, "client-form");
     await context.close();
   },
 

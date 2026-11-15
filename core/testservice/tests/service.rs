@@ -160,6 +160,7 @@ fn a_client_enrolls_calls_both_stations_and_passes() {
         files: Vec::new(),
         priority: 0,
         reply_to: None,
+        form: None,
     }
     .message()
     .expect("a message");

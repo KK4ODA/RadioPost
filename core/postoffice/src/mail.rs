@@ -970,6 +970,13 @@ pub struct Leaving<'a> {
     pub compress: bool,
 }
 
+/// RadioPost's published form templates (RP-2 §8.3), read once.
+fn published_templates() -> &'static [radiopost::forms::Template] {
+    static TEMPLATES: std::sync::OnceLock<Vec<radiopost::forms::Template>> =
+        std::sync::OnceLock::new();
+    TEMPLATES.get_or_init(radiopost::forms::Template::published)
+}
+
 /// §3.1: the email a message handed in by radio becomes, before DKIM signing: its headers by name
 /// and the whole email in CRLF.
 #[must_use]
@@ -1019,7 +1026,15 @@ pub fn from_message(message: &Message, ctx: &Leaving<'_>) -> (Vec<(String, Strin
         headers.push(("Importance".into(), "high".into()));
     }
     headers.push(("MIME-Version".into(), "1.0".into()));
-    let (encoding, body) = body_part(field(key::BODY).and_then(Value::as_text).unwrap_or(""));
+    // a form is written as its text, made from the published templates (RP-2 §8.4)
+    let templates = published_templates();
+    let text = radiopost::forms::shown(message, templates).unwrap_or_else(|| {
+        field(key::BODY)
+            .and_then(Value::as_text)
+            .unwrap_or("")
+            .to_owned()
+    });
+    let (encoding, body) = body_part(&text);
     let files: Vec<(String, String, Vec<u8>)> = field(key::FILES)
         .and_then(Value::as_array)
         .unwrap_or(&[])

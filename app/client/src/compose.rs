@@ -40,6 +40,8 @@ pub struct Draft {
     pub priority: u64,
     /// The content ID of the message this answers.
     pub reply_to: Option<[u8; 12]>,
+    /// A filled-in form (RP-2 §8): its template's fingerprint and its values.
+    pub form: Option<radiopost::forms::Form>,
 }
 
 /// RP-0 §4.3: NFC, and a single LF for every line ending.
@@ -509,15 +511,192 @@ impl Draft {
         if let Some(id) = self.reply_to {
             entries.push((key::REPLY_TO, Value::bytes(&id)));
         }
+        if let Some(form) = &self.form {
+            entries.push((key::FORM, checked_form(form)?.to_cbor()));
+        }
         Message::from_map(&Value::int_map(entries)).map_err(|e| format!("not a message: {}", e.0))
     }
+}
+
+/// A form from the command line: the template named by its fingerprint, or by the start of its
+/// name (`ics-213`), and `N=VALUE` fields, each value read as its field's type: a date
+/// `YYYY-MM-DD`, a time `HH:MM` (UTC), a choice by its text or number, a check `yes` or `no`, and
+/// `\n` in a text for a line break.
+///
+/// # Errors
+///
+/// No such template, a field it does not have, or a value that does not read as its type.
+pub fn form_from_args(which: &str, fields: &[String]) -> Result<radiopost::forms::Form, String> {
+    use radiopost::forms::Kind;
+    let templates = radiopost::forms::Template::published();
+    let wanted = which.to_lowercase();
+    let template = templates
+        .iter()
+        .find(|x| {
+            radiopost::cbor::hex(&x.fingerprint()) == wanted
+                || x.name.to_lowercase().starts_with(&wanted)
+        })
+        .ok_or_else(|| format!("no form {which}: `radiopost forms` lists them"))?;
+    let mut values = Vec::new();
+    for given in fields {
+        let (n, text) = given
+            .split_once('=')
+            .ok_or_else(|| format!("--field {given}: write it N=VALUE"))?;
+        let n: u64 = n
+            .trim()
+            .parse()
+            .map_err(|_| format!("--field {given}: N is a number"))?;
+        let field = template
+            .fields
+            .iter()
+            .find(|f| f.n == n)
+            .ok_or_else(|| format!("{} has no field {n}", template.name))?;
+        let bad = || {
+            format!(
+                "field {n} ({}): {text:?} is not a {}",
+                field.label,
+                field.kind.name()
+            )
+        };
+        let value = match field.kind {
+            Kind::Line => Value::text(text),
+            Kind::Text => Value::text(&text.replace("\\n", "\n")),
+            Kind::Date => {
+                let parts: Vec<u64> = text.split('-').filter_map(|p| p.parse().ok()).collect();
+                let [year, month, day] = parts[..] else {
+                    return Err(bad());
+                };
+                Value::Uint(days_from_civil(year, month, day).ok_or_else(bad)?)
+            }
+            Kind::Time => {
+                let (h, m) = text.split_once(':').ok_or_else(bad)?;
+                let (h, m): (u64, u64) =
+                    (h.parse().map_err(|_| bad())?, m.parse().map_err(|_| bad())?);
+                if h > 23 || m > 59 {
+                    return Err(bad());
+                }
+                Value::Uint(h * 60 + m)
+            }
+            Kind::Number => Value::int(text.trim().parse().map_err(|_| bad())?),
+            Kind::Choice => {
+                let i = field
+                    .choices
+                    .iter()
+                    .position(|c| c.eq_ignore_ascii_case(text.trim()))
+                    .map(|i| i as u64)
+                    .or_else(|| text.trim().parse().ok())
+                    .ok_or_else(bad)?;
+                Value::Uint(i)
+            }
+            Kind::Check => match text.trim().to_lowercase().as_str() {
+                "yes" | "true" | "y" => Value::Bool(true),
+                "no" | "false" | "n" => Value::Bool(false),
+                _ => return Err(bad()),
+            },
+        };
+        values.retain(|(other, _): &(u64, Value)| *other != n);
+        values.push((n, value));
+    }
+    values.sort_by_key(|(n, _)| *n);
+    checked_form(&radiopost::forms::Form {
+        template: template.fingerprint(),
+        values,
+    })
+}
+
+/// Days since 1970-01-01 of a date in the proleptic Gregorian calendar, if it is one on or after.
+fn days_from_civil(y: u64, m: u64, d: u64) -> Option<u64> {
+    let month_days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+    let in_month =
+        month_days.get(usize::try_from(m.checked_sub(1)?).ok()?)? + u64::from(leap && m == 2);
+    if y < 1970 || d == 0 || d > in_month {
+        return None;
+    }
+    // Howard Hinnant's days_from_civil
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y / 400;
+    let yoe = y - era * 400;
+    let mp = (m + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some(era * 146_097 + doe - 719_468)
+}
+
+/// A form as it goes: its text values normalised (RP-0 §4.3), and filling its template when this
+/// client holds it (RP-2 §8.2: a client sends no values that do not).
+///
+/// # Errors
+///
+/// The values do not fill the template, and why.
+pub fn checked_form(form: &radiopost::forms::Form) -> Result<radiopost::forms::Form, String> {
+    let values: Vec<(u64, Value)> = form
+        .values
+        .iter()
+        .map(|(n, v)| match v {
+            Value::Text(t) => (*n, Value::text(normalise(t).as_str())),
+            other => (*n, other.clone()),
+        })
+        .collect();
+    let form = radiopost::forms::Form {
+        template: form.template,
+        values,
+    };
+    let templates = radiopost::forms::Template::published();
+    if let Some(t) = templates.iter().find(|t| t.fingerprint() == form.template)
+        && let Some(why) = t.problem(&form.values)
+    {
+        return Err(format!("the form is not filled in: {why} (RP-2 §8.2)"));
+    }
+    Ok(form)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        Draft, File, checked_address, normalise, parse_addresses, reply_subject, utc, with_note,
+        Draft, File, checked_address, days_from_civil, form_from_args, normalise, parse_addresses,
+        reply_subject, utc, with_note,
     };
+
+    #[test]
+    fn a_form_from_the_command_line_goes_as_its_values() {
+        assert_eq!(days_from_civil(1970, 1, 1), Some(0));
+        assert_eq!(days_from_civil(2026, 11, 9), Some(20_766));
+        assert_eq!(days_from_civil(2026, 2, 29), None);
+        let fields = [
+            "2=Duty officer, county EOC".to_owned(),
+            "3=J. Park, Shelter 3 manager".to_owned(),
+            "7=140 people tonight.\\nNeed 40 cots.".to_owned(),
+        ];
+        let form = form_from_args("ics-213", &fields).expect("a form");
+        let draft = Draft {
+            from: "shelter3@radiopost.org".into(),
+            to: vec!["eoc@radiopost.org".into()],
+            cc: Vec::new(),
+            date: 1_794_233_400,
+            subject: "Cots".into(),
+            body: String::new(),
+            files: Vec::new(),
+            priority: 0,
+            reply_to: None,
+            form: Some(form),
+        };
+        let m = draft.message().expect("a message");
+        let text =
+            radiopost::forms::shown(&m, &radiopost::forms::Template::published()).expect("a form");
+        assert!(
+            text.starts_with("ICS-213 General Message\n\nTo (name and position): Duty officer")
+                && text.contains("Subject: Cots\nDate: 2026-11-09\nTime: 14:10 UTC\n")
+                && text.contains("Message:\n140 people tonight.\nNeed 40 cots.\n"),
+            "{text}"
+        );
+        // what does not fill the template is not sent (RP-2 §8.2)
+        let missing = form_from_args("ics-213", &fields[..2]).expect_err("refused");
+        assert!(missing.contains("a required field missing"), "{missing}");
+        let bound = form_from_args("ics-213", &["4=Water".to_owned()]).expect_err("refused");
+        assert!(bound.contains("a bound field"), "{bound}");
+        assert!(form_from_args("ics-205", &[]).is_err());
+    }
 
     #[test]
     fn a_reply_says_re_once() {

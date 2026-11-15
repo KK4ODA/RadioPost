@@ -189,7 +189,11 @@
             <option value="0">Routine</option><option value="1">Priority</option><option value="2">Emergency</option>
           </select>
         </label>
-        <label title="Plain text">Text <textarea name="body" rows="12"></textarea></label>
+        <label title="A form sends only what you fill in: its wording stays with each station, so it takes less time on the air. The Subject is the form's subject, and the date and time are the message's">Form
+          <select name="form" id="c-form" class="narrow"><option value="">None</option></select>
+        </label>
+        <fieldset class="form-fields" id="c-form-fields" hidden></fieldset>
+        <label title="Plain text; with a form, a note sent below it" id="c-body-label"><span id="c-body-name">Text</span> <textarea name="body" rows="12"></textarea></label>
         <ul class="files carried" id="c-files" title="The forwarded message's files: untick one to leave it out. Every byte goes on the air"></ul>
         <ul class="files held" id="c-held" title="Held at the post office, so a forward cannot carry them: ask for them on your next call to a gateway, then forward the message they come in"></ul>
         <label title="Files carried in the message: keep them small, every byte goes on the air">Attach <input type="file" name="files" multiple></label>

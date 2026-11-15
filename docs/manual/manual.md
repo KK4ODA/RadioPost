@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.6.0 |
+| **Version** | 1.7.0 |
 | **Updated** | 2026-11-15 |
 | **Describes** | RadioPost 0.1.0-beta.22 |
 | **Licence** | CC BY 4.0 |
@@ -390,6 +390,22 @@ You write messages at any time. They wait in the outbox until a session carries 
 RadioPost checks each address before it takes the message. If one is wrong, it says which, and
 keeps what you wrote.
 
+**Forms.** To send a form, such as an ICS-213 General Message, choose it under **Form**. Its fields
+appear below. Fill in the ones marked with a star, and any others you need. The **Subject** is the
+form's subject, and the date and time are the message's own. **Note** takes anything you add below
+the form; it is usually empty.
+
+![The New message form with ICS-213 General Message chosen and its fields filled in](screens/client-form.png)
+
+*Figure 10. Writing a form.*
+
+Only what you type goes on the air. The form's wording stays on each computer, so a form takes less
+time than the same text typed out (about a fifth less for a short ICS-213). The station that
+receives it shows the whole form. Someone reading it by email gets it as text, with the labels.
+
+If a field is missing or too long, RadioPost says which, and keeps what you wrote. A form that
+reaches a program without that form shows its values by field number.
+
 **Who can write back.** Your post office lets email in only from addresses on your **accept
 list**. Writing to someone adds them to it, so their answer gets through. You can add others in
 Setup ([Accept list](#accept-list)).
@@ -400,7 +416,7 @@ it could not reach the Internet carries a tag: *queued at* that gateway
 
 ![The Outbox with two messages, one tagged queued at N1CALL-10](screens/client-outbox.png)
 
-*Figure 10. The outbox.*
+*Figure 11. The outbox.*
 
 **Changed your mind?** The trash can at the end of a row moves the message to the **Trash**.
 The note that follows has **Undo**.
@@ -422,7 +438,7 @@ A call to a gateway sends your outbox and fetches what waits for you, in one ses
 
 ![The Gateways page: three gateways with their place, distance, channels and hours](screens/client-gateways.png)
 
-*Figure 11. Choosing a gateway.*
+*Figure 12. Choosing a gateway.*
 
 ### 8.2 Tune and call
 
@@ -455,7 +471,7 @@ A message counts as sent once Aether has put it on the air, not when RadioPost h
 
 ![The window during a session: 49% carried, with the transfer card at the bottom right](screens/client-session.png)
 
-*Figure 12. A session under way.*
+*Figure 13. A session under way.*
 
 The log says what happens: the call, each message delivered or received, what waits, and the end.
 A few short messages take a minute or two at 2300 Hz on a fair path, longer on a weak one. Your
@@ -470,7 +486,7 @@ Click a message in the **Inbox** to read it.
 
 ![A message open in the reader, with an attachment held at the post office](screens/client-reader.png)
 
-*Figure 13. Reading a message.*
+*Figure 14. Reading a message.*
 
 - **Reply** answers the sender. The other end's mail program keeps the thread. RadioPost does not
   quote the message you answer, because every byte goes on the air: it shows the original under
@@ -494,7 +510,7 @@ kept for you has no tick box: it comes with what you fetch.
 
 ![The Waiting folder with three messages and one ticked to fetch](screens/client-waiting.png)
 
-*Figure 14. Choosing what to fetch next.*
+*Figure 15. Choosing what to fetch next.*
 
 ## 10. Station to station
 
@@ -504,7 +520,7 @@ credential.
 
 ![Station A calls, station B listens, mail crosses both ways, and each post office is told later](fig/direct.svg)
 
-*Figure 15. Station to station.*
+*Figure 16. Station to station.*
 
 Agree on a frequency and a bandwidth first. Both stations tune Aether to them.
 
@@ -531,7 +547,7 @@ its own account, its own address and its own mail.
 
 ![One computer with three callsigns, each its own account, and a shared key, address list and log](fig/callsigns.svg)
 
-*Figure 16. Several callsigns on one computer.*
+*Figure 17. Several callsigns on one computer.*
 
 ### 11.1 Add a callsign
 
@@ -593,7 +609,7 @@ Click **Setup** at the bottom of the left-hand column.
 
 ![The Setup page: enrollment, post office, accept list and usual gateways](screens/client-setup.png)
 
-*Figure 17. Setup.*
+*Figure 18. Setup.*
 
 ### Enroll with your post office
 
@@ -681,7 +697,7 @@ RadioPost keeps working when the Internet fails at a gateway.
 
 ![Before: the post office copies your mail to your usual gateway. During: the gateway serves the copies and keeps what you send. After: it reports](fig/cutoff.svg)
 
-*Figure 18. When the Internet is down.*
+*Figure 19. When the Internet is down.*
 
 **Before.** Name your usual gateways in Setup ([section 12](#usual-gateways)). Your post office
 then copies each new message for you to them as it arrives.
@@ -724,7 +740,7 @@ licensed operator can run one.
 
 ![Two users call the gateway by radio; the gateway's computer runs RadioPost Gateway and Aether HF and reaches each caller's post office](fig/gateway.svg)
 
-*Figure 19. A gateway station.*
+*Figure 20. A gateway station.*
 
 A gateway is usually left answering with nobody at the radio. It is then under **automatic
 control**, and the rules for that apply ([The rules](#36-the-rules)).
@@ -759,13 +775,13 @@ Open RadioPost Gateway. Until it is set up and registered, it says what is missi
 
 ![A new RadioPost Gateway: the notice says it is not set up, with Set up the gateway](screens/gateway-first.png)
 
-*Figure 20. RadioPost Gateway before setup.*
+*Figure 21. RadioPost Gateway before setup.*
 
 Click **Set up the gateway**. Setup has three steps.
 
 ![The gateway's Setup page: the gateway, its registration with two channels, and post offices](screens/gateway-setup.png)
 
-*Figure 21. Setting up the gateway.*
+*Figure 22. Setting up the gateway.*
 
 ### Step 1. The gateway
 
@@ -830,7 +846,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 ![The RadioPost Gateway window with numbered marks on its parts](screens/gateway-window.png)
 
-*Figure 22. The RadioPost Gateway window.*
+*Figure 23. The RadioPost Gateway window.*
 
 1. **The gateway's callsign**, and the account it is registered under.
 2. **What it is doing** (the table below).
@@ -861,7 +877,7 @@ While a session runs, a box shows who called, the account, since when, and the m
 
 ![The window during a session, with the Session under way box](screens/gateway-session.png)
 
-*Figure 23. A session at the gateway.*
+*Figure 24. A session at the gateway.*
 
 **Stopping and closing.** **Stop** ends a session under way and lets Aether go. Closing the
 window stops the gateway too. If it is answering, it asks first and says what closing stops.
@@ -924,7 +940,7 @@ text), each session waiting to be reported with its last try, and the last repor
 
 ![The Partners, Callers refused and Copies placed ahead panels, opened](screens/gateway-held.png)
 
-*Figure 24. What the gateway holds, its partners and the callers it refuses.*
+*Figure 25. What the gateway holds, its partners and the callers it refuses.*
 
 ## 22. Partners: forwarding by radio
 
@@ -1054,7 +1070,7 @@ on this tab.
 
 ![The Applications tab: one application waiting with its licence check, and the Decided list](screens/desk-applications.png)
 
-*Figure 25. Applications.*
+*Figure 26. Applications.*
 
 Each application shows the person's name, callsign and when they asked, the **Address** they
 want, their **Email now**, and what the post office found of the callsign:
@@ -1092,7 +1108,7 @@ the mailbox was made (*mailbox*, or *no mailbox* in red) and the applicant email
 
 ![The Accounts tab: five accounts with their names, devices and mail waiting](screens/desk-accounts.png)
 
-*Figure 26. Accounts.*
+*Figure 27. Accounts.*
 
 Every account, one a row:
 
@@ -1119,7 +1135,7 @@ that exists. Use it for someone you know holds the callsign.
 
 ![The New code tab: an address, a callsign and a name filled in, the licence checked, and the code made](screens/desk-code.png)
 
-*Figure 27. Making a code.*
+*Figure 28. Making a code.*
 
 1. Open **New code**.
 2. Fill in:
@@ -1163,7 +1179,7 @@ Know only post offices whose operators you trust to check callsigns. At first no
 
 ![The Post offices tab: one post office known, one seen, none blocked](screens/desk-others.png)
 
-*Figure 28. Other post offices.*
+*Figure 29. Other post offices.*
 
 - **Known**: the post offices you know, who runs each, when its records were last fetched, and
   whether DNSSEC signed them. They are fetched again every six hours. **Forget** stops knowing one;
@@ -1184,7 +1200,7 @@ when a check turns red, and again when all pass.
 
 ![The Health tab: eleven checks passed and one amber line about backups](screens/desk-health.png)
 
-*Figure 29. Health.*
+*Figure 30. Health.*
 
 Each line is one check:
 
@@ -1211,7 +1227,7 @@ The **Server** tab lets you look after the server without logging in to it.
 
 ![The Server tab: the jobs, one with its output open, and When you need more](screens/desk-server.png)
 
-*Figure 30. Jobs and a terminal.*
+*Figure 31. Jobs and a terminal.*
 
 **Jobs** are a fixed list of tasks the server's administrator account runs for you:
 
@@ -1246,7 +1262,7 @@ says the one command to run on the server, once.
 
 ![The Backups and DKIM keys boxes on the Server tab](screens/desk-backups.png)
 
-*Figure 31. Backups and DKIM keys.*
+*Figure 32. Backups and DKIM keys.*
 
 ### Backups
 
@@ -1303,7 +1319,7 @@ when they are older than 180 days.
 
 ![The Settings tab: applications, licence lookups, mailboxes and this post office](screens/desk-settings.png)
 
-*Figure 32. Settings.*
+*Figure 33. Settings.*
 
 ### Applications
 
@@ -1583,3 +1599,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.4.2 | 2026-11-15 | Links to Aether's manual go to its new home, `docs/manual/manual.md`, and its chapters there. |
 | 1.5.0 | 2026-11-15 | §8: the call box's **Channel**, and **Call** tuning the radio there and back when Aether can set the dial. §19: the badge **Not answering here**. §22: a gateway tunes to its partner's window and back. §39: three new messages. §40: the quick reference tunes by **Channel**. |
 | 1.6.0 | 2026-11-15 | §18: **More modems**, and *More than one modem*: a gateway answering on several modems, one session at a time. §18 step 2: each channel's **Modem**. §19: **Modem** names them all. |
+| 1.7.0 | 2026-11-15 | §7: **Form**, and sending an ICS-213 as its values alone; a form message reads as the form. |

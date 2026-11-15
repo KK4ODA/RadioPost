@@ -55,13 +55,16 @@ usage: radiopost [--home DIR] [--as CALLSIGN] COMMAND ...
   accept [--add ENTRY]... [--remove ENTRY]...
                            the accept list: addresses, or @domain (RP-5 §6.5)
   compose --to ADDR [--to ADDR] [--group NAME] [--cc ADDR] [--subject TEXT] [--priority 0|1|2]
-          [--attach FILE]... [--body FILE]
+          [--attach FILE]... [--body FILE] [--form NAME --field N=VALUE...]
           [--reply ID | --reply-all ID | --forward ID]
                            write a message into the outbox; the text from stdin without --body.
+                           --form sends a form (`forms` lists them) as its values alone, each
+                           field by its number; a form's --body is a note added below it
                            --reply answers a message received, to its sender, in its thread, the
                            original not quoted; --reply-all copies its other recipients too;
                            --forward passes any message on with its text and files, your text
                            above it. --to, --cc and --subject replace what these fill in
+  forms                    the forms this client holds, with their fields' numbers and types
   import FILE              put a message, in its canonical encoding (RP-2), in the outbox
   outbox | inbox | sent | trash
                            list a folder
@@ -360,7 +363,12 @@ fn show(m: &Message) -> String {
         );
     }
     out.push('\n');
-    out.push_str(map.get(key::BODY).and_then(Value::as_text).unwrap_or(""));
+    // a form shows as its text, made from the template this client holds (RP-2 §8.4)
+    let templates = radiopost::forms::Template::published();
+    match radiopost::forms::shown(m, &templates) {
+        Some(text) => out.push_str(&text),
+        None => out.push_str(map.get(key::BODY).and_then(Value::as_text).unwrap_or("")),
+    }
     out
 }
 
@@ -653,8 +661,14 @@ fn run(words: &[String]) -> Result<(), Error> {
         "compose" => {
             let me = store.me()?;
             let answering = answering(&store, &me.address, &args)?;
+            let form = args
+                .one("--form")
+                .map(|which| compose::form_from_args(&which, &args.all("--field")))
+                .transpose()?;
             let body = if let Some(path) = args.one("--body") {
                 std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))?
+            } else if form.is_some() {
+                String::new()
             } else {
                 let mut text = String::new();
                 std::io::stdin()
@@ -720,6 +734,7 @@ fn run(words: &[String]) -> Result<(), Error> {
                     .one("--priority")
                     .map_or(Ok(0), |p| p.parse().map_err(|_| "--priority is 0, 1 or 2"))?,
                 reply_to: start.reply_to,
+                form,
             };
             let id = store.queue(&draft.message()?)?;
             addresses::remember(&base, &[to, cc].concat(), now())?;
@@ -906,6 +921,19 @@ fn run(words: &[String]) -> Result<(), Error> {
                     r["sent"].as_array().map_or(0, Vec::len),
                     r["received"].as_array().map_or(0, Vec::len)
                 );
+            }
+        }
+        "forms" => {
+            for t in radiopost::forms::Template::published() {
+                println!("{} ({})", t.name, radiopost::cbor::hex(&t.fingerprint()));
+                for f in &t.fields {
+                    let how = match f.bound {
+                        Some(b) => format!("the message's {}", b.name()),
+                        None if f.required => format!("{}, required", f.kind.name()),
+                        None => f.kind.name().to_owned(),
+                    };
+                    println!("  {:>3}  {} ({how})", f.n, f.label);
+                }
             }
         }
         "show" => {

@@ -1,0 +1,17 @@
+{
+  "name": "ICS-213 General Message",
+  "note": "After FEMA's ICS 213 General Message, a United States government form in the public domain.",
+  "fields": [
+    {"n": 1, "label": "Incident name", "type": "line", "max": 80},
+    {"n": 2, "label": "To (name and position)", "type": "line", "required": true, "max": 80},
+    {"n": 3, "label": "From (name and position)", "type": "line", "required": true, "max": 80},
+    {"n": 4, "label": "Subject", "type": "line", "bound": "subject"},
+    {"n": 5, "label": "Date", "type": "date", "bound": "date"},
+    {"n": 6, "label": "Time", "type": "time", "bound": "time"},
+    {"n": 7, "label": "Message", "type": "text", "required": true},
+    {"n": 8, "label": "Approved by (name and position)", "type": "line", "max": 80},
+    {"n": 9, "label": "Reply", "type": "text"},
+    {"n": 10, "label": "Replied by (name and position)", "type": "line", "max": 80},
+    {"n": 11, "label": "Reply date and time", "type": "line", "max": 40}
+  ]
+}

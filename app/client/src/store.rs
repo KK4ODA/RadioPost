@@ -1311,6 +1311,7 @@ mod tests {
             files: Vec::new(),
             priority: 0,
             reply_to: None,
+            form: None,
         }
         .message()
         .expect("a message")

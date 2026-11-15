@@ -17,6 +17,13 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   the gaps found in them; what is set aside and why).
 - **Code** (Phase 1 on, D27, D28): Rust throughout, in this repository — `core/`, a Cargo
   workspace (the core library, the gateway, the service), `app/` (the Tauri client) and `adapters/`.
+  Forms (W32, RP-2 1.1.0 §8): a form travels as its template's fingerprint (8 bytes of SHA-256 of
+  the template's CBOR) and its values by field number; `forms/*.json` are the published templates
+  (ICS-213 first), `radiopost::forms` reads them (`Template::published`, compiled in), checks values
+  (`problem`) and makes the text (`shown`); `rpref/forms.py` and `vectors/forms.json` are its
+  reference. The client's composer has **Form** (`/api/forms`), `compose --form --field N=VALUE`,
+  `forms`; the post office writes a form's text into the email (RP-6 1.1.0 §3.1). A new template
+  goes in `forms/` and in `make.py`, never a change to a published one.
   `core/radiopost` is the library of RadioPost's objects; `tests/vectors.rs` replays `vectors/`
   against it, and CI runs `cargo fmt`, `cargo clippy -D warnings` (Aether's lint levels) and
   `cargo test --locked` (`core/README.md`). Writing it found two gaps in the vectors: no ID text

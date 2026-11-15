@@ -14,6 +14,7 @@ pub mod credential;
 pub mod crypto;
 pub mod dns;
 pub mod error;
+pub mod forms;
 pub mod forwarding;
 pub mod gateway_list;
 pub mod jws;

@@ -21,7 +21,7 @@ from email.header import Header
 from email.message import EmailMessage
 from typing import Any, ClassVar
 
-from . import cbor, rp
+from . import cbor, forms, rp
 
 # -- §2.1: the door ------------------------------------------------------------------------------
 
@@ -408,6 +408,8 @@ def encode_fields(fields: dict[str, Any]) -> bytes:
     for name in ("files", "held"):
         if name in out:
             out[name] = [file_map(f) for f in out[name]]
+    if "form" in out:
+        out["form"] = forms.form_map(out["form"]["template"], out["form"]["values"])
     return cbor.encode(rp.message_map(out))
 
 
@@ -476,6 +478,17 @@ def part_bytes(proof: dict[str, Any]) -> bytes:
     )
 
 
+def text_of(fields: dict[str, Any], templates: list[dict[str, Any]]) -> str:
+    """§3.1: the email's text: the body, or a form's text (RP-2 §8.4), which ends with the body."""
+    if "form" not in fields:
+        return str(fields["body"])
+    form = fields["form"]
+    for t in templates:
+        if forms.fingerprint(t) == form["template"] and forms.problem(t, form["values"]) is None:
+            return forms.text(t, fields)
+    return forms.text_without(fields)
+
+
 def from_message(fields: dict[str, Any], ctx: dict[str, Any]) -> tuple[dict[str, str], bytes]:
     """§3.1: the email a message handed in by radio becomes, before DKIM signing.
 
@@ -506,7 +519,7 @@ def from_message(fields: dict[str, Any], ctx: dict[str, Any]) -> tuple[dict[str,
     if fields.get("priority", 0) >= 1:
         headers["Importance"] = "high"
     headers["MIME-Version"] = "1.0"
-    encoding, body = body_part(fields["body"])
+    encoding, body = body_part(text_of(fields, ctx.get("templates", [])))
     proof = ctx.get("proof")
     if proof is None and not fields.get("files"):
         headers["Content-Type"] = "text/plain; charset=utf-8"

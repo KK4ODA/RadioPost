@@ -562,6 +562,7 @@ impl Panel {
         let text = |name: &str| body[name].as_str().unwrap_or("").trim().to_owned();
         match (method, path) {
             (Method::Get, "/api/state") => self.state(),
+            (Method::Get, "/api/forms") => Ok(forms_json()),
             (Method::Get, "/api/settings") => {
                 let store = Store::open(&self.home())?;
                 online::settings(&store, None)
@@ -841,6 +842,19 @@ impl Panel {
             .and_then(Cbor::as_text)
             .unwrap_or("")
             .into();
+        // a form shows as its text, made from the template this client holds (RP-2 §8.4)
+        if let Some(form) = radiopost::forms::Form::of(&m) {
+            let templates = radiopost::forms::Template::published();
+            let name = templates
+                .iter()
+                .find(|t| t.fingerprint() == form.template)
+                .map(|t| t.name.clone());
+            v["form"] = json!({
+                "template": radiopost::cbor::hex(&form.template),
+                "name": name,
+                "text": radiopost::forms::shown(&m, &templates),
+            });
+        }
         v["files"] = map
             .get(key::FILES)
             .and_then(Cbor::as_array)
@@ -977,6 +991,7 @@ impl Panel {
             files,
             priority: body["priority"].as_u64().unwrap_or(0),
             reply_to,
+            form: form_of(&body["form"])?,
         };
         let id = store.queue(&draft.message()?)?;
         // the address list learns whom the message is for; a failure there loses no message
@@ -1299,4 +1314,52 @@ impl Panel {
         });
         Ok(json!({}))
     }
+}
+
+/// The templates this client holds (RP-2 §8.3), for the composer: each with its fingerprint.
+fn forms_json() -> Value {
+    radiopost::forms::Template::published()
+        .iter()
+        .map(|t| {
+            let fields: Vec<Value> = t
+                .fields
+                .iter()
+                .map(|f| {
+                    json!({"n": f.n, "label": f.label, "type": f.kind.name(),
+                           "required": f.required, "choices": f.choices,
+                           "bound": f.bound.map(radiopost::forms::Bound::name), "max": f.max})
+                })
+                .collect();
+            json!({"template": radiopost::cbor::hex(&t.fingerprint()), "name": t.name,
+                   "note": t.note, "fields": fields})
+        })
+        .collect()
+}
+
+/// A form from the composer: `{template, values}`, the values by field number, text, integers or
+/// booleans; `null` for none.
+fn form_of(form: &Value) -> Result<Option<radiopost::forms::Form>, Error> {
+    if form.is_null() {
+        return Ok(None);
+    }
+    let template: [u8; 8] = form["template"]
+        .as_str()
+        .and_then(crate::store::unhex)
+        .and_then(|b| b.try_into().ok())
+        .ok_or("a form names its template's fingerprint, 16 hex digits")?;
+    let mut values = Vec::new();
+    for (n, v) in form["values"].as_object().into_iter().flatten() {
+        let n: u64 = n.parse().map_err(|_| "a form's fields are numbered")?;
+        let value = match v {
+            Value::String(t) if t.is_empty() => continue,
+            Value::String(t) => Cbor::text(t),
+            Value::Bool(b) => Cbor::Bool(*b),
+            Value::Number(x) => Cbor::int(x.as_i64().ok_or("a form's numbers are integers")?),
+            Value::Null => continue,
+            _ => return Err("a form's values are text, integers or yes and no".into()),
+        };
+        values.push((n, value));
+    }
+    values.sort_by_key(|(n, _)| *n);
+    Ok(Some(radiopost::forms::Form { template, values }))
 }

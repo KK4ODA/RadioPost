@@ -26,7 +26,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from rpref import cbor, ed25519, fwd, jws, mail, po, rp, rpmi
+from rpref import cbor, ed25519, forms, fwd, jws, mail, po, rp, rpmi
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "vectors"
@@ -312,6 +312,18 @@ REPORT = "Road report, Central Texas, as driven this morning. Times are local.\n
 )
 
 
+FORMS_DIR = ROOT / "forms"
+
+
+def form_template(name: str) -> dict[str, Any]:
+    """A published template (forms/*.json, RP-2 §8.1)."""
+    loaded: dict[str, Any] = json.loads((FORMS_DIR / f"{name}.json").read_text(encoding="utf-8"))
+    return loaded
+
+
+ICS_213 = form_template("ics-213")
+
+
 def messages() -> dict[str, dict[str, Any]]:
     """The messages of the vectors, by name, as named fields (RP-2 §2)."""
     m: dict[str, dict[str, Any]] = {}
@@ -498,6 +510,29 @@ def messages() -> dict[str, dict[str, Any]]:
         "body": "Power is back on the north side. Still no phone.\n",
         "reply_to": rp.content_id(cbor.encode(rp.message_map(m["facundo-reply"]))),
     }
+    # RP-2 §8: Shelter 3's ICS-213, its values alone; subject, date and time are the message's
+    m["shelter3-213"] = {
+        "v": 1,
+        "from": "shelter3@radiopost.org",
+        "to": ["eoc@radiopost.org"],
+        "date": T_SESSION - 1800,
+        "subject": "Cots and water for tonight",
+        "body": "",
+        "form": {
+            "template": forms.fingerprint(ICS_213),
+            "values": {
+                1: "Storm response, Atlanta",
+                2: "Duty officer, county EOC",
+                3: "J. Park, Shelter 3 manager",
+                7: (
+                    "140 people tonight, 30 more expected by 20:00.\n"
+                    "Need 40 cots and 300 litres of drinking water.\n"
+                    "Generator fuel for 12 hours."
+                ),
+                8: "J. Park, Shelter 3 manager",
+            },
+        },
+    }
     return m
 
 
@@ -506,10 +541,11 @@ def to_json(value: Any) -> Any:
     if isinstance(value, dict):
         out = {}
         for k, v in value.items():
+            # a form's values are numbered: JSON names them by their numbers
             if isinstance(v, bytes):
                 out[f"{k}_hex"] = v.hex()
             else:
-                out[k] = to_json(v)
+                out[str(k)] = to_json(v)
         return out
     if isinstance(value, list):
         return [to_json(v) for v in value]
@@ -541,6 +577,8 @@ def cbor_message(fields: dict[str, Any]) -> dict[int | str, Any]:
         out["files"] = [file_map(f) for f in out["files"]]
     if "held" in out:
         out["held"] = [file_map(f) for f in out["held"]]
+    if "form" in out:
+        out["form"] = forms.form_map(out["form"]["template"], out["form"]["values"])
     return rp.message_map(out)
 
 
@@ -6445,6 +6483,20 @@ def outbound() -> dict[str, tuple[dict[str, str], bytes]]:
             MESSAGES["facundo-followup"],
             facundo | {"sent_message_ids": {facundo_reply_id(): encoded("facundo-reply")[1]}},
         ),
+        # RP-2 §8: a form becomes its text, the post office holding the published templates
+        "shelter3-213": mail.from_message(
+            MESSAGES["shelter3-213"],
+            {
+                "display_name": "Shelter 3",
+                "radio_path": {
+                    "operator": "N3CALL",
+                    "gateways": ["N2CALL-5"],
+                    "started": T_SESSION - 1860,
+                    "session": stream("shelter form session id", 8).hex(),
+                },
+                "templates": [ICS_213],
+            },
+        ),
         "shelter3-priority": mail.from_message(
             MESSAGES["shelter3-priority"],
             {
@@ -6501,6 +6553,7 @@ def make_email_out() -> dict[str, Any]:
         "facundo-reply": MARIA_ID,
         "facundo-to-ana": None,
         "shelter3-priority": None,
+        "shelter3-213": None,
         "facundo-followup": facundo_reply_id(),
     }
     for name, want in threads.items():
@@ -6519,7 +6572,8 @@ def make_email_out() -> dict[str, Any]:
     out["rule"] = (
         "A post office given the named message (messages.json) and the `context` makes an email "
         "whose headers have the values in `headers`, compared after unfolding and RFC 2047 "
-        "decoding, and whose decoded text is the message's body and the footer. `email` is one "
+        "decoding, and whose decoded text is the message's body and the footer: for a form, its "
+        "text with its template (RP-2 §8.4). `email` is one "
         "spelling of it, before DKIM signing: header order, folding and the MIME boundary are "
         "the writer's. `part_hex`, where present, is the `application/radiopost-message` part's "
         "CBOR, exact (RP-6 §4)."
@@ -6534,6 +6588,10 @@ def make_email_out() -> dict[str, Any]:
         "shelter3-priority": "display name Shelter 3; N3CALL via N2CALL-5, started "
         f"{T_SESSION - 1140}, gateway session {stream('shelter session id', 8).hex()}; "
         "eoc@radiopost.org is in the same post office, so no part",
+        "shelter3-213": "display name Shelter 3; N3CALL via N2CALL-5, started "
+        f"{T_SESSION - 1860}, gateway session {stream('shelter form session id', 8).hex()}; "
+        "the post office holds the published templates (forms/ics-213.json), so the email is the "
+        "form's text",
     }
     out["emails"] = cases
     return out
@@ -7191,10 +7249,83 @@ def make_api() -> dict[str, Any]:
 # -- writing and checking ------------------------------------------------------------------------
 
 
+def make_forms() -> dict[str, Any]:
+    """RP-2 §8: the published templates, the form message's text, and values checked."""
+    fp = forms.fingerprint(ICS_213)
+    templates = [
+        {
+            "file": "forms/ics-213.json",
+            "diagnostic": cbor.diagnostic(forms.template_map(ICS_213)),
+            "canonical_hex": cbor.encode(forms.template_map(ICS_213)).hex(),
+            "fingerprint_hex": fp.hex(),
+        }
+    ]
+    m = MESSAGES["shelter3-213"]
+    shown = [
+        {
+            "message": "shelter3-213",
+            "template_file": "forms/ics-213.json",
+            "text": forms.text(ICS_213, m),
+            "text_without_template": forms.text_without(m),
+        }
+    ]
+    full = dict(m["form"]["values"])
+    least = {2: full[2], 3: full[3], 7: full[7]}
+    cases_in: list[tuple[str, dict[int, Any]]] = [
+        ("Shelter 3's form", full),
+        ("only the required fields", least),
+        ("a field the template does not have", {**least, 12: "x"}),
+        ("the subject among the values: it is bound", {**least, 4: "Water"}),
+        ("the message missing: it is required", {2: full[2], 3: full[3]}),
+        ("a line with a line break", {**least, 2: "Duty officer\ncounty EOC"}),
+        ("a number where text goes", {**least, 7: 140}),
+        ("a line over its max of 80", {**least, 1: "x" * 81}),
+        ("an empty field sent", {**least, 8: ""}),
+        ("a text ending with a line break", {**least, 7: "Need cots.\n"}),
+    ]
+    checks = [
+        {
+            "what": what,
+            "values": {str(k): v for k, v in values.items()},
+            "expect": forms.problem(ICS_213, values) or "fills the template",
+        }
+        for what, values in cases_in
+    ]
+    confirm(  # RP-2 §8.2, as written
+        checks,
+        {
+            "Shelter 3's form": "fills the template",
+            "only the required fields": "fills the template",
+            "a field the template does not have": "a field the template does not have",
+            "the subject among the values: it is bound": "a bound field among the values",
+            "the message missing: it is required": "a required field missing",
+            "a line with a line break": "a line value with a line break",
+            "a number where text goes": "a value of the wrong type",
+            "a line over its max of 80": "a value longer than the field's max",
+            "an empty field sent": "an empty value: an empty field is left out",
+            "a text ending with a line break": "a text value ending with a line break",
+        },
+    )
+    out = header(
+        "Forms: templates, fingerprints, a form's text and its values checked", {"RP-2": "§8"}
+    )
+    out["rule"] = (
+        "Each template file becomes exactly `canonical_hex` (RP-2 §8.1) and has the fingerprint "
+        "`fingerprint_hex`. The named message (messages.json) shows as `text` with its template "
+        "and as `text_without_template` without it (§8.4). Each check's `values`, against "
+        "ICS-213, give `expect`: `fills the template`, or why not (§8.2)."
+    )
+    out["templates"] = templates
+    out["shown"] = shown
+    out["checks"] = checks
+    return out
+
+
 FILES = {
     "keys.json": make_keys,
     "cbor.json": make_cbor,
     "messages.json": make_messages,
+    "forms.json": make_forms,
     "credentials.json": make_credentials,
     "statements.json": make_statements,
     "pdus.json": make_pdus,
@@ -7250,6 +7381,11 @@ def self_check(name: str, data: dict[str, Any]) -> None:
             except cbor.NotCanonical:
                 continue
             raise AssertionError(f"accepted invalid CBOR {v['hex']}")
+    if name == "forms.json":
+        for t in data["templates"]:
+            canonical = bytes.fromhex(t["canonical_hex"])
+            assert cbor.encode(cbor.decode(canonical)) == canonical
+            assert hashlib.sha256(canonical).digest()[:8].hex() == t["fingerprint_hex"]
     if name == "messages.json":
         for m in data["messages"]:
             for air in m["air"]:
@@ -7691,7 +7827,8 @@ def check_email_out(data: dict[str, Any]) -> None:
         assert str(parsed["Message-ID"]) == f"<{cid}@{mail.domain_of(fields['from'])}>"
         body = parsed.get_body(preferencelist=("plain",))
         assert body is not None
-        assert body.get_content().replace("\r\n", "\n") == fields["body"] + mail.FOOTER
+        want = mail.text_of(fields, [ICS_213])
+        assert body.get_content().replace("\r\n", "\n") == want + mail.FOOTER
         if case["part_hex"]:
             assert mail.find_part(case["email"].encode("utf-8")) == bytes.fromhex(case["part_hex"])
 

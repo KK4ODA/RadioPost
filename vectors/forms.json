@@ -1,0 +1,122 @@
+{
+  "radiopost_vectors": "Forms: templates, fingerprints, a form's text and its values checked",
+  "format": 1,
+  "specs": {
+    "RP-2": "§8"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "Each template file becomes exactly `canonical_hex` (RP-2 §8.1) and has the fingerprint `fingerprint_hex`. The named message (messages.json) shows as `text` with its template and as `text_without_template` without it (§8.4). Each check's `values`, against ICS-213, give `expect`: `fills the template`, or why not (§8.2).",
+  "templates": [
+    {
+      "file": "forms/ics-213.json",
+      "diagnostic": "{1: \"ICS-213 General Message\", 2: [{1: 1, 2: \"Incident name\", 3: 0, 7: 80}, {1: 2, 2: \"To (name and position)\", 3: 0, 4: true, 7: 80}, {1: 3, 2: \"From (name and position)\", 3: 0, 4: true, 7: 80}, {1: 4, 2: \"Subject\", 3: 0, 6: 1}, {1: 5, 2: \"Date\", 3: 2, 6: 2}, {1: 6, 2: \"Time\", 3: 3, 6: 3}, {1: 7, 2: \"Message\", 3: 1, 4: true}, {1: 8, 2: \"Approved by (name and position)\", 3: 0, 7: 80}, {1: 9, 2: \"Reply\", 3: 1}, {1: 10, 2: \"Replied by (name and position)\", 3: 0, 7: 80}, {1: 11, 2: \"Reply date and time\", 3: 0, 7: 40}], 3: \"After FEMA's ICS 213 General Message, a United States government form in the public domain.\"}",
+      "canonical_hex": "a301774943532d3231332047656e6572616c204d657373616765028ba40101026d496e636964656e74206e616d650300071850a501020276546f20286e616d6520616e6420706f736974696f6e29030004f5071850a5010302781846726f6d20286e616d6520616e6420706f736974696f6e29030004f5071850a4010402675375626a65637403000601a4010502644461746503020602a40106026454696d6503030603a4010702674d657373616765030104f5a4010802781f417070726f76656420627920286e616d6520616e6420706f736974696f6e290300071850a3010902655265706c790301a4010a02781e5265706c69656420627920286e616d6520616e6420706f736974696f6e290300071850a4010b02735265706c79206461746520616e642074696d65030007182803785b41667465722046454d41277320494353203231332047656e6572616c204d6573736167652c206120556e697465642053746174657320676f7665726e6d656e7420666f726d20696e20746865207075626c696320646f6d61696e2e",
+      "fingerprint_hex": "25393c52580e7a3c"
+    }
+  ],
+  "shown": [
+    {
+      "message": "shelter3-213",
+      "template_file": "forms/ics-213.json",
+      "text": "ICS-213 General Message\n\nIncident name: Storm response, Atlanta\nTo (name and position): Duty officer, county EOC\nFrom (name and position): J. Park, Shelter 3 manager\nSubject: Cots and water for tonight\nDate: 2026-11-09\nTime: 14:10 UTC\nMessage:\n140 people tonight, 30 more expected by 20:00.\nNeed 40 cots and 300 litres of drinking water.\nGenerator fuel for 12 hours.\nApproved by (name and position): J. Park, Shelter 3 manager\n",
+      "text_without_template": "Form 25393c52580e7a3c\n\nField 1: Storm response, Atlanta\nField 2: Duty officer, county EOC\nField 3: J. Park, Shelter 3 manager\nField 7:\n140 people tonight, 30 more expected by 20:00.\nNeed 40 cots and 300 litres of drinking water.\nGenerator fuel for 12 hours.\nField 8: J. Park, Shelter 3 manager\n"
+    }
+  ],
+  "checks": [
+    {
+      "what": "Shelter 3's form",
+      "values": {
+        "1": "Storm response, Atlanta",
+        "2": "Duty officer, county EOC",
+        "3": "J. Park, Shelter 3 manager",
+        "7": "140 people tonight, 30 more expected by 20:00.\nNeed 40 cots and 300 litres of drinking water.\nGenerator fuel for 12 hours.",
+        "8": "J. Park, Shelter 3 manager"
+      },
+      "expect": "fills the template"
+    },
+    {
+      "what": "only the required fields",
+      "values": {
+        "2": "Duty officer, county EOC",
+        "3": "J. Park, Shelter 3 manager",
+        "7": "140 people tonight, 30 more expected by 20:00.\nNeed 40 cots and 300 litres of drinking water.\nGenerator fuel for 12 hours."
+      },
+      "expect": "fills the template"
+    },
+    {
+      "what": "a field the template does not have",
+      "values": {
+        "2": "Duty officer, county EOC",
+        "3": "J. Park, Shelter 3 manager",
+        "7": "140 people tonight, 30 more expected by 20:00.\nNeed 40 cots and 300 litres of drinking water.\nGenerator fuel for 12 hours.",
+        "12": "x"
+      },
+      "expect": "a field the template does not have"
+    },
+    {
+      "what": "the subject among the values: it is bound",
+      "values": {
+        "2": "Duty officer, county EOC",
+        "3": "J. Park, Shelter 3 manager",
+        "7": "140 people tonight, 30 more expected by 20:00.\nNeed 40 cots and 300 litres of drinking water.\nGenerator fuel for 12 hours.",
+        "4": "Water"
+      },
+      "expect": "a bound field among the values"
+    },
+    {
+      "what": "the message missing: it is required",
+      "values": {
+        "2": "Duty officer, county EOC",
+        "3": "J. Park, Shelter 3 manager"
+      },
+      "expect": "a required field missing"
+    },
+    {
+      "what": "a line with a line break",
+      "values": {
+        "2": "Duty officer\ncounty EOC",
+        "3": "J. Park, Shelter 3 manager",
+        "7": "140 people tonight, 30 more expected by 20:00.\nNeed 40 cots and 300 litres of drinking water.\nGenerator fuel for 12 hours."
+      },
+      "expect": "a line value with a line break"
+    },
+    {
+      "what": "a number where text goes",
+      "values": {
+        "2": "Duty officer, county EOC",
+        "3": "J. Park, Shelter 3 manager",
+        "7": 140
+      },
+      "expect": "a value of the wrong type"
+    },
+    {
+      "what": "a line over its max of 80",
+      "values": {
+        "2": "Duty officer, county EOC",
+        "3": "J. Park, Shelter 3 manager",
+        "7": "140 people tonight, 30 more expected by 20:00.\nNeed 40 cots and 300 litres of drinking water.\nGenerator fuel for 12 hours.",
+        "1": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "expect": "a value longer than the field's max"
+    },
+    {
+      "what": "an empty field sent",
+      "values": {
+        "2": "Duty officer, county EOC",
+        "3": "J. Park, Shelter 3 manager",
+        "7": "140 people tonight, 30 more expected by 20:00.\nNeed 40 cots and 300 litres of drinking water.\nGenerator fuel for 12 hours.",
+        "8": ""
+      },
+      "expect": "an empty value: an empty field is left out"
+    },
+    {
+      "what": "a text ending with a line break",
+      "values": {
+        "2": "Duty officer, county EOC",
+        "3": "J. Park, Shelter 3 manager",
+        "7": "Need cots.\n"
+      },
+      "expect": "a text value ending with a line break"
+    }
+  ]
+}

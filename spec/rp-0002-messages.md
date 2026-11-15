@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.0.0 |
+| **Version** | 1.1.0 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -41,7 +41,7 @@ A message is a CBOR map (RP-0 §4.1):
 | 10 | `reply_to` | bstr .size 12 | no | The content ID of the message this answers. |
 | 11 | `flags` | uint | no | Bits: 1 `trimmed` (quoted history was removed; the full text is held at the post office), 2 `held` (some attachments are held at the post office; see key 12). |
 | 12 | `held` | array of held-file | no | Attachments not carried, which the recipient may ask for. |
-| 13 | `form` | map | no | Reserved for forms (a later specification). |
+| 13 | `form` | map | no | A filled-in form: its template's fingerprint and its values (§8). |
 
 A **file** is a map: `1` `name` (text), `2` `type` (text, an Internet media type such as
 `image/jpeg`), `3` `data` (bstr).
@@ -162,6 +162,125 @@ content IDs and air forms, and air forms that must be refused.
 
 ---
 
+## 8. Forms
+
+A form, such as an ICS-213 General Message, travels as its **values alone**. Its wording, the labels
+and the order of its fields, stays in a **template** each station holds, named in the message by
+the template's fingerprint. Each end makes the form's text from the template (§8.4), so the labels
+never go on the air.
+
+Measured on `shelter3-213` (`vectors/messages.json`), an ICS-213 with five fields filled in: 253
+bytes on the air with DEFLATE as a form, against 320 for the same text sent as a message's `body`
+(333 and 513 bytes uncompressed). The longer a form's wording and the shorter its answers, the more
+it saves.
+
+### 8.1 The template
+
+A template is a CBOR map:
+
+| Key | Name | Type | Required | Meaning |
+|---|---|---|---|---|
+| 1 | `name` | text | yes | The form's name, as shown: `ICS-213 General Message`. |
+| 2 | `fields` | array of field | yes | In the order the form shows them. |
+| 3 | `note` | text | no | Where the form comes from. |
+
+A **field** is a map:
+
+| Key | Name | Type | Required | Meaning |
+|---|---|---|---|---|
+| 1 | `n` | uint | yes | Its number, 1 to 255, used once in the template. |
+| 2 | `label` | text | yes | As shown. |
+| 3 | `type` | uint | yes | Below. |
+| 4 | `required` | bool | no | `true`: the form is not filled in without it. |
+| 5 | `choices` | array of text | for `choice` | The choices, in order. |
+| 6 | `bound` | uint | no | 1: the message's `subject`; 2: the date of its `date`; 3: the time of its `date`. A bound field's value is the message's own, and is never among the values. |
+| 7 | `max` | uint | no | The most characters (Unicode code points) of a `line` or `text` value. |
+
+| Type | Name | A value is |
+|---|---|---|
+| 0 | `line` | text with no line break |
+| 1 | `text` | text, lines joined by LF, not ending with one |
+| 2 | `date` | uint: days since 1970-01-01, UTC |
+| 3 | `time` | uint: minutes after midnight UTC, 0 to 1439 |
+| 4 | `number` | int |
+| 5 | `choice` | uint: the index of a choice |
+| 6 | `check` | bool |
+
+The template's **fingerprint** is the first 8 bytes of SHA-256 of its deterministic CBOR encoding
+(RP-0 §4.1). Any change to a template makes another template, with another fingerprint: a published
+template is never changed, a new one is published.
+
+RadioPost publishes its templates in its repository's `forms/` directory, as JSON with the names of
+the tables above (a type and a `bound` by name), each with its fingerprint in `vectors/forms.json`.
+The first is ICS-213, after FEMA's public-domain form. A client SHOULD hold every published
+template, and MAY hold others: a group's own forms, shared as files.
+
+### 8.2 The form in a message
+
+Key 13, `form`, is a map:
+
+| Key | Name | Type | Meaning |
+|---|---|---|---|
+| 1 | `template` | bstr .size 8 | The template's fingerprint. |
+| 2 | `values` | map of uint to value | Each field filled in, by its number, a value of its type. |
+
+The values **fill the template** when every number is a field of it that is not bound, every value
+is of its field's type and within its `max` and `choices`, no `line` value has a line break, no
+`text` value ends with one, no value is empty text (an empty field is left out), and every required
+field that is not bound has a value. A client MUST NOT send values that do not fill their template.
+
+A form message's `subject` is the form's subject, whether or not a field is bound to it, so that
+lists of messages read as usual. Its `body` holds anything the sender adds to the form, and is
+usually empty.
+
+A station that does not hold the template, or finds values that do not fill it, keeps the message
+as it is: RP-2's rules for the message do not change, and the content ID covers the form. It shows
+the form as §8.4 says.
+
+### 8.3 Templates and the air
+
+Only the fingerprint and the values go on the air. A template is shared beforehand: published with
+the programs, or passed between stations as a file. A station that receives a form it has no
+template for shows its values by number (§8.4); its operator can ask the sender for the template.
+
+### 8.4 The text a form shows as
+
+With its template, a form message shows as this text, which is also what a post office writes in
+the email it makes of it (RP-6 §3.1):
+
+```
+<the template's name>
+
+<label>: <value>
+<label>:
+<a text value, its lines as they are>
+```
+
+One line for each field in the template's order that has a value: a bound field the message's
+(the subject when it is not empty; the date as `YYYY-MM-DD`; the time as `HH:MM UTC`), any other its
+value from `values`. A `text` field's label stands alone and its value follows on the lines after.
+A `date` value is written `YYYY-MM-DD`, a `time` `HH:MM UTC`, a `choice` as its choice's text, a
+`check` `Yes` or `No`, a `number` in decimal. A field with no value is left out. The text ends with
+a line break, and a non-empty `body` follows after an empty line.
+
+Without its template, or with values that do not fill it, the form shows as:
+
+```
+Form <the fingerprint in lowercase hex>
+
+Field <n>: <value>
+Field <n>:
+<a value with line breaks, its lines as they are>
+```
+
+the values in the order of their numbers, text as it is, an integer in decimal, a bool `Yes` or `No`;
+then the `body` in the same way.
+
+Test vectors: `vectors/forms.json`: ICS-213's encoding and fingerprint, `shelter3-213`'s text with
+and without its template, and ten sets of values checked against the template.
+
+---
+
 ## Change log
 
 | Version | Date | Change |
@@ -171,3 +290,4 @@ content IDs and air forms, and air forms that must be refused.
 | 0.1.2 | 2026-11-09 | The example is the test vector's, its sizes measured; test vectors. |
 | 0.2.0 | 2026-11-09 | Dictionary 1: trained only on a published corpus, adopted only if it beats DEFLATE by 20 % on short messages (§4). |
 | 1.0.0 | 2026-11-15 | Stable (D41). §4: dictionary 1, if adopted, is an option both ends say they support, never a requirement (gap G7). §6: a trimmed message points to the one it answers; nothing on the air asks for the full text (gap G1). |
+| 1.1.0 | 2026-11-15 | Forms (§8, key 13, wishlist W32): a form travels as its template's fingerprint and its values by field number, the template held by each station; the template's CBOR map, its fingerprint, the values that fill it and the text a form shows as. An implementation that does not show forms keeps key 13 as before: nothing it must do. Test vectors: `forms.json`, and `shelter3-213` in `messages.json`. |

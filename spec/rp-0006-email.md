@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.0.0 |
+| **Version** | 1.1.0 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -234,6 +234,11 @@ from a gateway, so that its DKIM signature and SPF match its domain.
 | `Importance:` | `high` when `priority` is 1 or 2. |
 | `MIME-Version`, `Content-Type` | `text/plain; charset=utf-8` for the body; `multipart/mixed` with base64 parts when there are `files` or the part of §4. The text is `7bit` when it is ASCII with no line over 998 bytes, and `quoted-printable` UTF-8 otherwise. |
 
+A message with a form (RP-2 §8) is written as the form's text (RP-2 §8.4): with the template when
+the post office holds it, as every post office SHOULD for RadioPost's published templates, and as
+the values by number when it does not. The text replaces the `body`, which that text already ends
+with.
+
 The body ends with a short footer, after the usual signature line of two dashes and a space, so
 that mail programs leave it out of replies. The post office MAY reword it:
 
@@ -425,3 +430,4 @@ and the session files.
 | 0.7.0 | 2026-11-13 | §2.6, one mailbox: mail a user submits from a mail program is not judged at the door, becomes the RadioPost message of each recipient here (third-party, §5.1) and fills the sender's accept list; mail sent by radio to accounts here also reaches the mail server as §3.1's email, and a recipient here with no account gets only the email; mail read in a mail program is matched by `Message-ID`. Nothing said what became of mail a user sent from a mail program to another user of the same post office, which never reached the radio. |
 | 0.8.0 | 2026-11-15 | §2.6, one mailbox, the rest of it: mail an account sends by radio goes into its Sent folder as §3.1's email, read; mail picked up by radio is marked read in the mail server, mail that reaches it later when it arrives; both in the background. A mail program had shown neither, so a user reading in both saw mail they had read by radio as new, and none of what they had sent by radio. |
 | 1.0.0 | 2026-11-15 | Stable (D41). §3.1: a reply restores its thread from the email this post office sent for the message it answers, as well as from one that came in (gap G17). Test vectors: `facundo-followup`. |
+| 1.1.0 | 2026-11-15 | §3.1: a message with a form becomes the form's text (RP-2 1.1.0 §8.4). A post office that does not yet write it sends the message's `body` as before, which is all it must do until it holds the templates. Test vectors: `shelter3-213` in `email-out.json`. |

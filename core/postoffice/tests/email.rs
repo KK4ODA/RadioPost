@@ -433,6 +433,13 @@ fn messages_become_the_emails_rp6_3_says() {
         session: "86e5b36c010212ce".into(),
         proof: None,
     };
+    let shelter_form = Carried {
+        operator: "N3CALL".into(),
+        gateways: vec!["N2CALL-5".into()],
+        started: 1_794_233_340,
+        session: "221dbd553c46664d".into(),
+        proof: None,
+    };
     let maria_419 = message("maria-419").content_id().0;
     let facundo_reply = message("facundo-reply").content_id();
     let sent_reply = format!("<{}@radiopost.org>", facundo_reply.text());
@@ -450,6 +457,7 @@ fn messages_become_the_emails_rp6_3_says() {
         let (display, path, with_part) = match name {
             "facundo-reply" | "facundo-followup" => ("Facundo", &facundo, false),
             "facundo-to-ana" => ("Facundo", &facundo, true),
+            "shelter3-213" => ("Shelter 3", &shelter_form, false),
             _ => ("Shelter 3", &shelter, false),
         };
         let (headers, email) = mail::from_message(
@@ -483,13 +491,16 @@ fn messages_become_the_emails_rp6_3_says() {
             e["headers"].as_object().expect("headers").len(),
             "{name}"
         );
-        // the decoded text is the body and the footer
+        // the decoded text is the body and the footer: a form's text, for a form (RP-2 §8.4)
         let parsed = mail::parse(&email).expect("an email");
-        let body = m
-            .map()
-            .get(radiopost::message::key::BODY)
-            .and_then(Value::as_text)
-            .expect("a body");
+        let published = radiopost::forms::Template::published();
+        let body = radiopost::forms::shown(&m, &published).unwrap_or_else(|| {
+            m.map()
+                .get(radiopost::message::key::BODY)
+                .and_then(Value::as_text)
+                .expect("a body")
+                .to_owned()
+        });
         let text = mail::text(&parsed.body_text(0).expect("a text part"));
         assert_eq!(text, format!("{body}{}", mail::FOOTER), "{name}");
         let part = mail::find_part(&email).map(|p| radiopost::cbor::hex(&p));

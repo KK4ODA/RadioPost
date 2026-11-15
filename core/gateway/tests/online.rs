@@ -535,6 +535,7 @@ fn a_reply_by_radio_keeps_the_email_thread() {
         files: started.files,
         priority: 0,
         reply_to: started.reply_to,
+        form: None,
     }
     .message()
     .expect("a message");

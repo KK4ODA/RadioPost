@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.36 |
+| **Version** | 0.3.37 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -135,7 +135,7 @@ rules:
 | W29 | The sender's client follows queued mail | Offline | High | Fits today | Implemented |
 | W30 | Forwarding by radio | Offline | Medium | Fits today | Implemented; trial on the air deferred |
 | W31 | Local delivery at a cut-off gateway | Offline | Medium | Fits today | Implemented |
-| W32 | Forms | Applications | Medium | Application layer (recommended); optional addition (RP-2 key 13) | Planned |
+| W32 | Forms | Applications | Medium | Optional addition: RP-2 1.1.0 §8, key 13 | Implemented |
 | W33 | Position reports | Applications | Low | Application layer; optional addition as broadcasts | Planned |
 | W34 | Bulletins | Applications | Low | Application layer; optional addition as broadcasts | Planned |
 | W35 | Services that answer by mail | Applications | Low | Application layer | Planned |
@@ -807,12 +807,12 @@ readable copy.
 | Requested by | The plan: concept §10, later; design §9, Phase 5; RP-2 §2 reserves key 13 for forms. Requesters: 0. |
 | Component | Client; a published form format. |
 | Compatibility | Recommended: an **application-layer capability**, the form's data as a file of a published type in `files`, with the sender's client writing the readable text in `body`, so any client and any email reader shows it; nothing below changes. As reserved: an **optional protocol addition** defining key 13 (RP-2 §2), with RP-6 saying how a form becomes email. |
-| Existing coverage | Planned, Phase 5; key 13 reserved. |
+| Existing coverage | **Implemented** (2026-11-15), as key 13 (RP-2 1.1.0 §8, RP-6 1.1.0 §3.1): a form travels as its template's 8-byte fingerprint and its values by field number, typed (dates as days, times as minutes), with fields bound to the message's subject, date and time left out. Each station holds the template (`forms/`, ICS-213 first, after FEMA's public-domain form) and makes the form's text from it; without it, the values by number. The client's **Form** in the composer and `compose --form --field`, `forms`, `show`; the post office writes the form's text in the email. Test vectors: `forms.json`, `shelter3-213`. |
 | Dependencies | None. |
 | Effort | Large: a template format, a set of forms, an editor and a viewer. |
 | Priority | **Medium**; likely to rise, since emergency groups ask for forms first. |
-| Recommendation | **Modify**: application layer first. Interoperability needs a published form format either way, but as a file it asks nothing of RP-2 or RP-6. Use key 13 only if a measured air-time saving pays for a specification. |
-| Status | Planned. |
+| Recommendation | **Modify**: application layer first. Interoperability needs a published form format either way, but as a file it asks nothing of RP-2 or RP-6. Use key 13 only if a measured air-time saving pays for a specification. Measured (2026-11-15, the author asking that forms take as little air as possible): an ICS-213 with five fields is 253 bytes on the air as values, against 320 as text and 778 as a form file with its text (XML in `files`); key 13 was used. |
+| Status | Implemented. |
 | Author decision | No compatibility with Winlink's programs (CLAUDE.md, decided): templates from FEMA's public forms in an open format (concept §10), not Winlink's. |
 
 ### W33. Position reports
@@ -1126,3 +1126,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.34 | 2026-11-15 | W26 implemented: one gateway answering on several modems, one session at a time; the registration's channels name their modems. |
 | 0.3.35 | 2026-11-15 | W22 implemented: the packet adapter on a TNC's AGWPE port (RP-4 1.0.2 §9.4), tried against a stand-in. |
 | 0.3.36 | 2026-11-15 | W21: RP-4 §9.3 checked against ardopcf's host interface (1.0.3), and the ARDOP adapter built, tried against a stand-in. |
+| 0.3.37 | 2026-11-15 | W32 implemented: forms as their values alone (RP-2 1.1.0 §8, RP-6 1.1.0), ICS-213 published, measured against text and a form file. |

@@ -261,6 +261,7 @@ pub fn draft(from: &str, to: &str, subject: &str, body: &str) -> radiopost::mess
         files: Vec::new(),
         priority: 0,
         reply_to: None,
+        form: None,
     }
     .message()
     .expect("a message")

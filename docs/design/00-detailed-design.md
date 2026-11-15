@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.53 |
+| **Version** | 0.1.54 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -321,7 +321,7 @@ Phases 0 to 2 and Phase 3's core are built. The author set the next stages on 20
 | 5 | Phase 4, windows and routes (RP-7 §5, §6), F-01 to F-06, and a first trial on the air between two gateways **on one shared channel**, so no radio is retuned. **Built** (2026-11-15): a gateway's windows in its settings and its record, only inside its country's segments; routes published at `GET /routes`; a cut-off gateway calling its partners inside their windows by itself (three tries a minute apart, never on a busy channel), with the windows read from the gateway lists it keeps, and choosing between partners as RP-7 §6.2 says; F-01 to F-06; [the trial's guide](../user/on-air-forwarding.md). The trial on the air is deferred by the author (2026-11-15): too early in the process. | W30 |
 | 6 | The dial: an optional RP-4 addition to read and set the radio's frequency (§13 of the wishlist, G3 and G8), so a gateway can call a partner on another channel; choosing a gateway tunes the radio; the gateway checks the band rules itself for modems other than Aether. **Built** (2026-11-15): RP-4 0.8.0 §4.1 with its vectors, the Aether adapter's mapping, the client's **Channel** and `--dial`, a gateway tuning to its partner's window and back, and a gateway judging its dial against its country's segments when the modem checks no rules. | W14, W40 |
 | 7 | RP-0 to RP-6 frozen as version 1.0 once forwarding is built: the open gaps settled first, changes afterwards careful and announced; a public test service for other implementers. **Built** (2026-11-15): RP-0 to RP-6 Stable at 1.0.0 (D41), the open gaps settled; `radiopost-test-service`, a test post office, gateway and station on the Internet with a report of each session. | W43 |
-| 8 | Phase 5: VARA (W20), one gateway on several modems (W26), AX.25 packet (W22), ARDOP (W21), forms (W32); the phone later. **VARA built** (2026-11-15); **one gateway on several modems built** (2026-11-15), one session at a time; **packet built** (2026-11-15); **ARDOP built** (2026-11-15). | W20 to W23, W26, W32 |
+| 8 | Phase 5: VARA (W20), one gateway on several modems (W26), AX.25 packet (W22), ARDOP (W21), forms (W32); the phone later. **VARA built** (2026-11-15); **one gateway on several modems built** (2026-11-15), one session at a time; **packet built** (2026-11-15); **ARDOP built** (2026-11-15); **forms built** (2026-11-15), RP-2 1.1.0 §8. Phase 5 is built but for the phone. | W20 to W23, W26, W32 |
 
 Enrollment with an LoTW certificate (W10) is built when the author supplies a certificate to test
 with; LoTW's RSA-1024 and SHA-1 are accepted, since the certificate proves a licence at enrollment
@@ -403,3 +403,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.51 | 2026-11-15 | §9: one gateway on several modems (W26), one session at a time. |
 | 0.1.52 | 2026-11-15 | §5.4, §9: the packet adapter (W22, RP-4 1.0.2 §9.4). |
 | 0.1.53 | 2026-11-15 | §5.4, §9: the ARDOP adapter (W21, RP-4 1.0.3 §9.3); §10: ARDOP's host interface checked, no longer open. |
+| 0.1.54 | 2026-11-15 | §9: forms (W32), RP-2 1.1.0 §8; Phase 5 built but for the phone. |

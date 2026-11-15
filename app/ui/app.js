@@ -944,9 +944,82 @@ let answering = null;
 const ANSWER_TITLES = {reply: "Reply", "reply-all": "Reply to all", forward: "Forward"};
 
 // the composer emptied, for a new message
+// Forms (RP-2 §8): the templates this computer holds, and the fields of the one chosen. Only the
+// values go on the air; each station makes the form's text from its own copy of the template.
+let templates = [];
+
+async function loadForms() {
+  try {
+    templates = await api("forms");
+  } catch {
+    templates = [];
+  }
+  const select = $("c-form");
+  select.replaceChildren(el("option", {value: "", text: "None"}),
+    ...templates.map((t) => el("option", {value: t.template, text: t.name})));
+}
+
+const DAY_MS = 86400000;
+
+// the composer's fields for the form chosen, or none
+function showFormFields() {
+  const box = $("c-form-fields");
+  const t = templates.find((x) => x.template === $("c-form").value);
+  box.hidden = !t;
+  $("c-body-name").textContent = t ? "Note" : "Text";
+  $("composer").body.rows = t ? 3 : 12;
+  if (!t) {
+    box.replaceChildren();
+    return;
+  }
+  const legend = el("legend", {text: t.name, title: t.note || ""});
+  box.replaceChildren(legend, ...t.fields.filter((f) => !f.bound).map((f) => {
+    let input;
+    if (f.type === "text") {
+      input = el("textarea", {rows: 5});
+    } else if (f.type === "choice") {
+      input = el("select", {}, el("option", {value: "", text: ""}),
+        ...f.choices.map((c, i) => el("option", {value: String(i), text: c})));
+    } else {
+      input = el("input", {type: {date: "date", time: "time", number: "number",
+        check: "checkbox"}[f.type] || "text"});
+    }
+    if (f.max) input.maxLength = f.max;
+    input.dataset.field = String(f.n);
+    input.dataset.kind = f.type;
+    input.required = !!f.required;
+    const label = el("label", {class: f.type === "check" ? "check" : "",
+      title: f.required ? "Required" : "Optional: left out when empty"});
+    label.append(`${f.label}${f.required ? " *" : ""} `, input);
+    return label;
+  }));
+}
+
+// what the form's fields hold: {template, values} by field number, empty fields left out
+function formValues() {
+  const template = $("c-form").value;
+  if (!template) return null;
+  const values = {};
+  for (const input of $("c-form-fields").querySelectorAll("[data-field]")) {
+    const kind = input.dataset.kind;
+    let v;
+    if (kind === "check") v = input.checked ? true : null;
+    else if (input.value.trim() === "") v = null;
+    else if (kind === "date") v = Math.floor(Date.parse(`${input.value}T00:00:00Z`) / DAY_MS);
+    else if (kind === "time") {
+      const [h, m] = input.value.split(":").map(Number);
+      v = h * 60 + m;
+    } else if (kind === "number" || kind === "choice") v = Number(input.value);
+    else v = kind === "line" ? input.value.trim() : input.value.replace(/\s+$/, "");
+    if (v !== null) values[input.dataset.field] = v;
+  }
+  return {template, values};
+}
+
 function newComposer() {
   const form = $("composer");
   form.reset();
+  showFormFields();
   answering = null;
   $("c-title").textContent = "New message";
   $("c-files").replaceChildren();
@@ -1073,7 +1146,9 @@ async function openMessage(id, from = {folder}) {
     li.append(ask);
     return li;
   }));
-  $("r-body").textContent = m.body;
+  // a form shows as its text, made by the panel from the template this computer holds
+  $("r-body").textContent = m.form ? m.form.text : m.body;
+  $("r-body").classList.toggle("form-text", !!m.form);
   show("reader");
 }
 
@@ -1096,6 +1171,8 @@ async function send(event) {
     to: form.to.value, cc: form.cc.value, subject: form.subject.value,
     priority: Number(form.priority.value), body: form.body.value, files,
   };
+  const filled = formValues();
+  if (filled) message.form = filled;
   if (answering?.replyTo) message.reply_to = answering.replyTo;
   if (answering?.how === "forward") {
     message.forward = answering.id;
@@ -2138,6 +2215,7 @@ function wire() {
   $("address-new").addEventListener("keydown", (e) => { if (e.key === "Enter") addAddress(); });
   $("cancel").addEventListener("click", () => { newComposer(); openFolder(folder); });
   $("composer").addEventListener("submit", send);
+  $("c-form").addEventListener("change", showFormFields);
   $("back").addEventListener("click", () => openFolder(folder));
   $("r-reply").addEventListener("click", () => answer("reply"));
   $("r-reply-all").addEventListener("click", () => answer("reply-all"));
@@ -2387,6 +2465,7 @@ function wire() {
 async function start() {
   wire();
   await loadAddresses();
+  await loadForms();
   const s = await refresh();
   if (!s.device || !s.me) show("setup");
   else await openFolder("inbox");
