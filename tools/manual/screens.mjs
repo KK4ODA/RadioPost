@@ -105,7 +105,7 @@ const CLIENT_LOG = [
 
 function clientState(over = {}) {
   return {
-    me: ME, device: "8f3c2a1b9d0e4f5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c",
+    me: ME, device: DEVICE,
     trusted: ["radiopost.org"], post_office: null, application: null,
     callsigns: [{id: 1, chosen: true, ...ME}],
     counts: {outbox: OUTBOX.length, inbox: INBOX.length, sent: SENT.length, trash: 0, reports: 0,
@@ -116,10 +116,15 @@ function clientState(over = {}) {
   };
 }
 
-// The desk, for the screenshot of an operator approving an application.
-const DESK = {
+// The post office desk, for the screenshots of its tabs: an operator's view of radiopost.org.
+const DEVICE = "8f3c2a1b9d0e4f5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c";
+const MY_DEVICE = Buffer.from(DEVICE, "hex").toString("base64url");
+const cred = (operator, serial, days, device, revoked = false) =>
+  ({operator, serial, expires: T + days * DAY, device, revoked});
+const DESK_GET = {
   "/office/status": {domains: ["radiopost.org"], accounts: 23, applications: 1, codes: 2,
-    sessions: 0, operators: ["KK4ODA"], version: "0.1.0-beta.20"},
+    sessions: 0, operators: ["KK4ODA"], version: "0.1.0-beta.21", outgoing: 0, seen: 1,
+    health: {fails: 0}},
   "/office/applications": {applications: [
     {application: "ap_example", status: "pending", name: "Pat Rivera", operator: "N2CALL",
      address: "pat@radiopost.org", contact: "pat.rivera@example.net", received: T - 2400,
@@ -131,7 +136,83 @@ const DESK = {
      decided: T - 3 * DAY + 3600, told: {to: "lee@example.com"},
      mailbox: {made: "lee@radiopost.org"}},
   ]},
+  "/office/accounts": {accounts: [
+    {address: "ana@radiopost.org", name: "Ana Lopez", waiting: 3,
+     credentials: [cred("N0CALL", 1204, 71, "Qm9hcmRtYW4tbGFwdG9wLWtleS1leGFtcGxl")]},
+    {address: "club@radiopost.org", name: "Riverside Radio Club", waiting: 0,
+     credentials: [cred("N1CALL", 1220, 88, "Q2x1Yi1zdGF0aW9uLWtleS1leGFtcGxlLTEy")]},
+    {address: "facundo@radiopost.org", name: "Facundo", waiting: 0,
+     credentials: [cred("KK4ODA", 1187, 63, MY_DEVICE),
+                   cred("KK4ODA", 1011, 12, "TW9iaWxlLWxhcHRvcC1rZXktZXhhbXBsZS0w", true)]},
+    {address: "lee@radiopost.org", name: "Lee Chen", waiting: 1,
+     credentials: [cred("N3CALL", 1215, 86, "TGVlLWNoZW4tZGV2aWNlLWtleS1leGFtcGxl")]},
+    {address: "shelter3@radiopost.org", name: "Shelter 3", waiting: 0, credentials: []},
+  ]},
+  "/office/outgoing": {outgoing: []},
+  "/office/post-offices": {
+    known: [{domain: "hampost.org", operator: "N1CALL", country: "US",
+             contact: "postmaster@hampost.org", found: T - 3 * 3600, api: true, dnssec: true}],
+    seen: [{domain: "qsl-mail.example.net", operator: "N4CALL", country: "US",
+            how: ["door", "list:hampost.org"], last: T - DAY, api: true, dnssec: false}],
+    blocked: [], looking_up: []},
+  "/office/health": {at: T - 1400, lines: [
+    {verdict: "ok", text: "_radiopost.radiopost.org: api https://po.radiopost.org/rp/v1"},
+    {verdict: "ok", text: "https://po.radiopost.org/rp/v1/info: signed by key 37030f82"},
+    {verdict: "ok", text: "radiopost.org: MX po.radiopost.org"},
+    {verdict: "ok", text: "radiopost.org: SPF \"v=spf1 mx -all\""},
+    {verdict: "ok", text: "_dmarc.radiopost.org: \"v=DMARC1; p=quarantine; rua=mailto:postmaster@radiopost.org\""},
+    {verdict: "ok", text: "v1-rsa-20261110._domainkey.radiopost.org: a DKIM key, RSA"},
+    {verdict: "ok", text: "the door answers, and the token is right"},
+    {verdict: "ok", text: "disk: 41210 MB free (18% used)"},
+    {verdict: "ok", text: "backups: last night's, radiopost.org-2026-11-14.rpbackup"},
+    {verdict: "ok", text: "mailboxes: backed up today, stalwart-2026-11-14.tar.gz, 38.2 MB"},
+    {verdict: "warn", text: "backups off the server: last fetched 9 days ago, by KK4ODA's computer shack-pc, with the mailboxes: open the RadioPost app on shack-pc, or download one"},
+    {verdict: "note", text: "RadioPost 0.1.0-beta.22 is out: the desk's Server tab installs it"},
+  ]},
+  "/office/settings": {applications: "open", domains: ["radiopost.org"], operators: ["KK4ODA"],
+    contact: "postmaster@radiopost.org", base_url: "https://po.radiopost.org/rp/v1",
+    fcc: {on: true, count: 1606615, made: T - 2 * DAY}, qrz: {username: "kk4oda", password: true},
+    mailboxes: {kind: "stalwart", url: "http://127.0.0.1:8080", key: true}, smtp: true,
+    dkim: ["v1-rsa-20261110", "v1-ed25519-20261110"]},
+  "/office/jobs": {runner: true, jobs: [
+    {name: "update", what: "Install the newest RadioPost release, its signature checked, and restart the post office",
+     last: {ok: true, finished: T - 6 * DAY, by: "KK4ODA"}},
+    {name: "restart", what: "Restart the post office"},
+    {name: "restart-mail", what: "Restart the mail server (Stalwart)"},
+    {name: "services", what: "Whether the post office, the mail server and the web server run",
+     last: {ok: true, finished: T - 2 * 3600, by: "KK4ODA",
+            output: "radiopost-po: active (running)\nstalwart: active (running)\ncaddy: active (running)"}},
+    {name: "log", what: "The post office's log, its last 300 lines"},
+    {name: "disk", what: "Disk space"},
+    {name: "mail-backup", what: "Back up the mail server's mailboxes now: Stalwart stopped for a moment, its data archived, started again; the last three kept (done each night)",
+     last: {ok: true, finished: T - 6 * 3600}},
+  ]},
+  "/office/backups": {
+    backups: [{name: "radiopost.org-2026-11-14.rpbackup", bytes: 2184000, at: T - 9 * 3600},
+              {name: "radiopost.org-2026-11-13.rpbackup", bytes: 2151000, at: T - 33 * 3600}],
+    mail: [{name: "stalwart-2026-11-14.tar.gz", bytes: 38200000, at: T - 6 * 3600}],
+    downloaded: {at: T - 9 * DAY, to: "shack-pc", by: "KK4ODA", mail: "stalwart-2026-11-05.tar.gz"},
+    keys: [{id: "k1", label: "shack-pc", added_at: T - 12 * DAY, added_by: "KK4ODA",
+            fetched_at: T - 9 * DAY, fetched_bytes: 40100000}]},
+  "/office/dkim": {next: "start", rotate_after_days: 180, rotation: null, keys: [
+    {id: "a", selector: "v1-rsa-20261110", algorithm: "rsa", stage: "active",
+     created: "2026-11-10T14:02:00Z"},
+    {id: "b", selector: "v1-ed25519-20261110", algorithm: "ed25519", stage: "active",
+     created: "2026-11-10T14:02:00Z"}]},
 };
+
+function deskAnswer(method, path, body) {
+  if (method === "POST" && path === "/office/codes") {
+    return {code: "H7KQ-2MXD", address: body.address, operator: body.operator,
+            expires: T + 7 * DAY};
+  }
+  if (path.startsWith("/office/lookup/")) {
+    return {verdict: "good", lines: [
+      "FCC: N4CALL, Extra class, SAM OKAFOR, Athens GA, licence good until 2033-08-19.",
+      "The name matches the licence."], flags: []};
+  }
+  return DESK_GET[path] || {};
+}
 
 function clientApi(world) {
   return (method, path, query, body) => {
@@ -147,9 +228,13 @@ function clientApi(world) {
       case "accept": return {entries: ["maria@example.com", "jim@hampost.org", "@hampost.org"]};
       case "addresses": return {entries: ADDRESSES};
       case "modem": return {};
+      case "backups": return {on: true, computer: "shack-pc", folder: "D:\\RadioPost backups",
+        key: "k1", key_file: "C:\\Users\\you\\.radiopost\\backup.key",
+        fetched: {at: T - 9 * DAY, name: "radiopost.org-2026-11-05.rpbackup", bytes: 40100000,
+                  mail: true}};
       case "office": {
         if (!world.operator) return {status: 403, body: {title: "Forbidden", name: "forbidden"}};
-        return {status: 200, body: DESK[body.path] || {}};
+        return {status: 200, body: deskAnswer(body.method, body.path, body.body || {})};
       }
       default: return {error: `no ${method} ${path}`, status: 404};
     }
@@ -339,6 +424,27 @@ function clientWorld(over = {}) {
           operator: over.operator || false};
 }
 
+// the desk on one tab, as KK4ODA, an operator of radiopost.org
+async function openDesk(browser, tab, height = 900) {
+  const world = clientWorld({state: {me: {address: "facundo@radiopost.org", operator: "KK4ODA",
+                                          expires: T + 63 * DAY}},
+                             operator: true});
+  const {page} = await open(browser, {ui: CLIENT_UI, api: clientApi(world), height});
+  await spreadLog(page, "log", T - 1300, 19);
+  await page.waitForTimeout(300);
+  await page.click("#office-open");
+  await page.waitForTimeout(300);
+  await page.click(`[data-otab=${tab}]`);
+  await page.waitForTimeout(500);
+  return page;
+}
+
+// the desk alone, without the folders and the log: larger on the page
+async function shotMain(page, name) {
+  await page.screenshot({path: join(OUT, `${name}.png`), clip: await unionClip(page, ["#office"])});
+  console.log(`docs/manual/screens/${name}.png`);
+}
+
 const SHOTS = {
   async "client-window"(browser) {
     const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
@@ -485,16 +591,79 @@ const SHOTS = {
     await context.close();
   },
 
-  async "client-desk"(browser) {
-    const world = clientWorld({state: {me: {...ME, operator: "KK4ODA", address: "facundo@radiopost.org"}},
-                               operator: true});
-    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(world), height: 860});
-    await spreadLog(page, "log", T - 1300, 19);
+  async "desk-applications"(browser) {
+    const page = await openDesk(browser, "applications");
+    await page.click("#o-decided-box summary");
+    await page.waitForTimeout(200);
+    await shotMain(page, "desk-applications");
+    await page.context().close();
+  },
+
+  async "desk-accounts"(browser) {
+    const page = await openDesk(browser, "accounts");
+    await shotMain(page, "desk-accounts");
+    await page.context().close();
+  },
+
+  async "desk-code"(browser) {
+    const page = await openDesk(browser, "code");
+    const form = page.locator("#o-code");
+    await form.locator("input[name=address]").fill("sam@radiopost.org");
+    await form.locator("input[name=operator]").fill("N4CALL");
+    await form.locator("input[name=name]").fill("Sam Okafor");
+    await page.click("#o-code-check");
     await page.waitForTimeout(300);
-    await page.click("#office-open");
-    await page.waitForTimeout(400);
-    await shot(page, "client-desk");
-    await context.close();
+    const evidence = await page.locator("#o-code-evidence").innerHTML();
+    await form.locator("button[type=submit]").click();
+    await page.waitForTimeout(300);
+    // the form empties once the code is made: show what was typed with the code
+    await page.evaluate((html) => {
+      const f = document.getElementById("o-code");
+      f.address.value = "sam@radiopost.org";
+      f.operator.value = "N4CALL";
+      f.name.value = "Sam Okafor";
+      document.getElementById("o-code-evidence").innerHTML = html;
+    }, evidence);
+    await shotMain(page, "desk-code");
+    await page.context().close();
+  },
+
+  async "desk-others"(browser) {
+    const page = await openDesk(browser, "others");
+    await shotMain(page, "desk-others");
+    await page.context().close();
+  },
+
+  async "desk-health"(browser) {
+    const page = await openDesk(browser, "health");
+    await shotMain(page, "desk-health");
+    await page.context().close();
+  },
+
+  async "desk-server"(browser) {
+    const page = await openDesk(browser, "server", 1500);
+    await page.locator("#o-jobs details summary").first().click();
+    await page.waitForTimeout(200);
+    await page.screenshot({path: join(OUT, "desk-server.png"), clip: await unionClip(page,
+      ["#office > .head", "#o-server > .card:nth-child(2)"])});
+    console.log("docs/manual/screens/desk-server.png");
+    await page.context().close();
+  },
+
+  async "desk-backups"(browser) {
+    const page = await openDesk(browser, "server", 2000);
+    await page.screenshot({path: join(OUT, "desk-backups.png"), clip: await unionClip(page,
+      ["#o-server > .card:nth-child(3)", "#o-server > .card:nth-child(4)"])});
+    console.log("docs/manual/screens/desk-backups.png");
+    await page.context().close();
+  },
+
+  async "desk-settings"(browser) {
+    const page = await openDesk(browser, "settings", 1400);
+    await page.screenshot({path: join(OUT, "desk-settings.png"), clip: await unionClip(page,
+      ["#office > .head", "#o-settings"])});
+    console.log("docs/manual/screens/desk-settings.png");
+    await page.context().close();
   },
 
   async "gateway-window"(browser) {

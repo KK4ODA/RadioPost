@@ -359,7 +359,7 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   RPMI adapters on a simulated channel in `rpmi.py`, JWS in `jws.py`, a post office in `po.py`,
   email in and out in `mail.py`, forwarding in `fwd.py`; standard library only, self-tested against RFC 8032 §7.1 and
   RFC 8949 Appendix A at every run).
-- `docs/manual/` — **the user's manual** for the client and RadioPost Gateway (`manual.md`, its
+- `docs/manual/` — **the user's manual** for the client, its post office desk and RadioPost Gateway (`manual.md`, its
   schematics in `fig/` from `tools/figures/manual.py`, its screenshots in `screens/` from
   `node tools/manual/screens.mjs`: the real panels in headless Chromium, their API answered with
   made-up data). `tools/manual/build.py` writes its contents (`toc`), checks it (`check`, CI) and

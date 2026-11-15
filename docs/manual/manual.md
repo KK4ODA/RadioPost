@@ -5,14 +5,14 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.3.0 |
+| **Version** | 1.4.0 |
 | **Updated** | 2026-11-15 |
 | **Describes** | RadioPost 0.1.0-beta.21 |
 | **Licence** | CC BY 4.0 |
 
-This manual shows you how to send and receive email by radio with RadioPost, and how to run a
-RadioPost gateway for others. It is written for licensed amateurs. You do not need to know how
-RadioPost works inside.
+This manual shows you how to send and receive email by radio with RadioPost, how to run a
+RadioPost gateway for others, and how a post office's operators look after it from the post office
+desk. It is written for licensed amateurs. You do not need to know how RadioPost works inside.
 
 The modem RadioPost uses, Aether HF, has
 [its own manual](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md). This
@@ -55,14 +55,27 @@ manual points to it wherever Aether is the place to set something.
 - [23. A gateway with no screen](#23-a-gateway-with-no-screen)
 - [24. What the gateway keeps](#24-what-the-gateway-keeps)
 
-**[Part 4. Help](#part-4-help)**
+**[Part 4. The post office desk](#part-4-the-post-office-desk)**
 
-- [25. RadioPost and Aether HF](#25-radiopost-and-aether-hf)
-- [26. The rules](#26-the-rules)
-- [27. Troubleshooting](#27-troubleshooting)
-- [28. Reporting a problem](#28-reporting-a-problem)
-- [29. Glossary](#29-glossary)
-- [30. Quick reference](#30-quick-reference)
+- [25. The desk at a glance](#25-the-desk-at-a-glance)
+- [26. Applications](#26-applications)
+- [27. Accounts and devices](#27-accounts-and-devices)
+- [28. Codes](#28-codes)
+- [29. Mail out](#29-mail-out)
+- [30. Other post offices](#30-other-post-offices)
+- [31. Health](#31-health)
+- [32. The server: jobs and a terminal](#32-the-server-jobs-and-a-terminal)
+- [33. Backups and DKIM keys](#33-backups-and-dkim-keys)
+- [34. Settings](#34-settings)
+
+**[Part 5. Help](#part-5-help)**
+
+- [35. RadioPost and Aether HF](#35-radiopost-and-aether-hf)
+- [36. The rules](#36-the-rules)
+- [37. Troubleshooting](#37-troubleshooting)
+- [38. Reporting a problem](#38-reporting-a-problem)
+- [39. Glossary](#39-glossary)
+- [40. Quick reference](#40-quick-reference)
 
 **[Appendix](#appendix)**
 
@@ -160,7 +173,7 @@ mail ahead of time, and it keeps what you send until it can pass it on
 | Session | One radio contact between two stations, from the call to the end. |
 | Gateway | A station that passes sessions to post offices over the Internet. |
 
-There is a full [glossary](#29-glossary) at the end.
+There is a full [glossary](#39-glossary) at the end.
 
 **What RadioPost is not.** It is not Winlink, and does not talk to Winlink's programs. It is
 not meant to replace Winlink. You can run both on one radio. RadioPost is a place for amateurs
@@ -307,7 +320,7 @@ What the operators can decide:
 | *it takes no applications, or not for that domain* | The post office is not taking applications now, or the address is at a domain it does not serve. | Check the part after `@`. Ask the operator for a code instead. |
 | *that address is taken, or already asked for* | Someone has that address, or an application for it is waiting. | Choose another address. |
 | *a field is not as it should be* | Usually an SSID on the callsign, capitals in the address, or an empty name. | Fix the field, then **Apply** again. |
-| *… operates this post office, so nobody may apply with it* | That callsign runs the post office. Nobody becomes an operator by applying. | The operator makes a code for it instead ([The post office desk](#15-if-you-run-a-post-office)). |
+| *… operates this post office, so nobody may apply with it* | That callsign runs the post office. Nobody becomes an operator by applying. | The operator makes a code for it instead ([New codes](#28-codes)). |
 | *cannot reach …* | No Internet, or the post office is down. | Try again later. |
 
 ### 5.4 Your credential
@@ -692,33 +705,10 @@ Held attachments cannot be asked for while the gateway is cut off.
 
 ## 15. If you run a post office
 
-If your callsign runs a post office, RadioPost shows a **Post office** button in the left-hand
-column. It opens the operator's desk. This chapter covers what the desk does with users. Setting
-up the post office itself is in [the post office guide](../user/post-office.md).
-
-![The Post office desk with one application waiting, its licence check and the Approve button](screens/client-desk.png)
-
-*Figure 19. The operator's desk, Applications tab.*
-
-**Applications.** Each person waiting shows their name, callsign, the address asked for, their
-email now, and what the post office found of the callsign (the FCC's records, QRZ). That is
-evidence, not proof: anyone can read who holds a callsign.
-
-- **Approve** makes the account. The applicant's RadioPost collects the credential within a
-  minute. Tick **Role mailbox** first for a mailbox shared by several licensed operators.
-- **Decline…** asks for a reason, which the applicant reads.
-- **Send a postcard** makes a code good for 30 days and a card to print and post to the address
-  on the licence.
-- **Look up again** asks the licence databases again.
-
-**Settings.** **Take applications for accounts** turns applications on or off. Off, the client
-refuses with *it takes no applications*.
-
-**New code.** A one-time code for someone you know holds the callsign: a new account, or a new
-device for an existing one. Give them the code; it works once, for a week.
-
-The other tabs (**Accounts**, **Mail out**, **Post offices**, **Health**, **Server**) are covered
-in [the post office guide](../user/post-office.md).
+If your callsign is one of a post office's operators, RadioPost shows a **Post office** button in
+the left-hand column. It opens the post office desk: applications, accounts, codes, the server's
+health, its jobs, its backups and its settings. [Part 4](#part-4-the-post-office-desk) covers it,
+tab by tab.
 
 ---
 
@@ -732,10 +722,10 @@ licensed operator can run one.
 
 ![Two users call the gateway by radio; the gateway's computer runs RadioPost Gateway and Aether HF and reaches each caller's post office](fig/gateway.svg)
 
-*Figure 20. A gateway station.*
+*Figure 19. A gateway station.*
 
 A gateway is usually left answering with nobody at the radio. It is then under **automatic
-control**, and the rules for that apply ([The rules](#26-the-rules)).
+control**, and the rules for that apply ([The rules](#36-the-rules)).
 
 When the Internet is down, a gateway keeps answering. It can hold copies of its users' mail, keep
 what they send, and pass it to a partner gateway by radio
@@ -767,13 +757,13 @@ Open RadioPost Gateway. Until it is set up and registered, it says what is missi
 
 ![A new RadioPost Gateway: the notice says it is not set up, with Set up the gateway](screens/gateway-first.png)
 
-*Figure 21. RadioPost Gateway before setup.*
+*Figure 20. RadioPost Gateway before setup.*
 
 Click **Set up the gateway**. Setup has three steps.
 
 ![The gateway's Setup page: the gateway, its registration with two channels, and post offices](screens/gateway-setup.png)
 
-*Figure 22. Setting up the gateway.*
+*Figure 21. Setting up the gateway.*
 
 ### Step 1. The gateway
 
@@ -820,7 +810,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 ![The RadioPost Gateway window with numbered marks on its parts](screens/gateway-window.png)
 
-*Figure 23. The RadioPost Gateway window.*
+*Figure 22. The RadioPost Gateway window.*
 
 1. **The gateway's callsign**, and the account it is registered under.
 2. **What it is doing** (the table below).
@@ -850,7 +840,7 @@ While a session runs, a box shows who called, the account, since when, and the m
 
 ![The window during a session, with the Session under way box](screens/gateway-session.png)
 
-*Figure 24. A session at the gateway.*
+*Figure 23. A session at the gateway.*
 
 **Stopping and closing.** **Stop** ends a session under way and lets Aether go. Closing the
 window stops the gateway too. If it is answering, it asks first and says what closing stops.
@@ -913,7 +903,7 @@ text), each session waiting to be reported with its last try, and the last repor
 
 ![The Partners, Callers refused and Copies placed ahead panels, opened](screens/gateway-held.png)
 
-*Figure 25. What the gateway holds, its partners and the callers it refuses.*
+*Figure 24. What the gateway holds, its partners and the callers it refuses.*
 
 ## 22. Partners: forwarding by radio
 
@@ -998,9 +988,343 @@ In the folder `.radiopost-gateway` in your home folder (Setup's last line says w
 
 ---
 
-# Part 4. Help
+# Part 4. The post office desk
 
-## 25. RadioPost and Aether HF
+## 25. The desk at a glance
+
+A post office keeps its users' mailboxes and exchanges their mail with the rest of the world. Its
+operators run it from the RadioPost client, on the **post office desk**. This part is for them.
+Setting up the server itself (the mail server, the web server, DNS) is in
+[the post office guide](../user/post-office.md).
+
+**Who sees it.** The desk goes by callsign. RadioPost shows a **Post office** button in the
+left-hand column when the callsign chosen at the top of the window is one of the post office's
+operators. The number on the button is how many applications wait. Nobody becomes an operator by
+applying: the post office's settings name its operators.
+
+**What it needs.** The Internet. The desk talks to your post office as you, with your credential.
+
+**Opening it.** Click **Post office**. At the top:
+
+- **Post office** and the domain it serves, such as *radiopost.org*.
+- A summary line: how many accounts, applications waiting, codes not yet used, sessions open, the
+  post office's version, mail waiting to go out by email, and a newer release when there is one.
+- **Refresh** asks the post office again.
+
+| Tab | What you do there | Chapter |
+|---|---|---|
+| **Applications** | Approve, decline or postcard the people asking for an account. | [26](#26-applications) |
+| **Accounts** | See every account and its devices; rename; revoke a lost device. | [27](#27-accounts-and-devices) |
+| **New code** | Make a one-time code for a new account or a new device. | [28](#28-codes) |
+| **Mail out** | See mail sent by radio still waiting to go out by email. | [29](#29-mail-out) |
+| **Post offices** | Know, forget or block other post offices. | [30](#30-other-post-offices) |
+| **Health** | Read the hourly check of the whole post office. | [31](#31-health) |
+| **Server** | Run jobs on the server, open a terminal, keep backups, rotate keys. | [32](#32-the-server-jobs-and-a-terminal) and [33](#33-backups-and-dkim-keys) |
+| **Settings** | Applications, licence lookups, mailboxes. | [34](#34-settings) |
+
+Every button and box has a tooltip that says what it does.
+
+## 26. Applications
+
+When applications are on ([Settings](#34-settings)), licensees can ask for an account from their
+RadioPost client ([section 5.2](#52-by-applying)). You are emailed when one arrives, and it waits
+on this tab.
+
+![The Applications tab: one application waiting with its licence check, and the Decided list](screens/desk-applications.png)
+
+*Figure 25. Applications.*
+
+Each application shows the person's name, callsign and when they asked, the **Address** they
+want, their **Email now**, and what the post office found of the callsign:
+
+- a **green** bar: an active licence in the applicant's name;
+- an **amber** bar: something to check, such as another name, a club callsign or an earlier
+  application;
+- a **red** bar: no licence, or one no longer valid.
+
+That is evidence, not proof: anyone can read who holds a callsign. To decide:
+
+1. Read the evidence. Click **Look up again** to ask the licence databases again.
+2. Choose one:
+   - **Approve** makes the account and issues its credential. The applicant's RadioPost collects
+     it within a minute, while it is open. Tick **Role mailbox** first for a mailbox several
+     licensed operators share, such as a club's or a shelter's.
+   - **Decline…** opens a box for the reason. Type a sentence the applicant will read (the list
+     offers common ones) and click **Send**.
+   - **Send a postcard** makes a code good for 30 days, and a card to print and post to the
+     address on the licence. Whoever holds the card can read that address, so it shows the
+     applicant lives there.
+
+When you approve, the post office can also make the person's mailbox and email them a welcome with
+their first password ([Settings](#mailboxes)).
+
+**Decided** lists the applications decided in the last week: the decision, and after it whether
+the mailbox was made (*mailbox*, or *no mailbox* in red) and the applicant emailed (*emailed* or
+*not emailed*). A postcard shows its code and **Print the card**.
+
+> **Note.** An application naming one of the post office's own operator callsigns can only be
+> declined: approved, it would give its holder this desk. The card says so in red. An operator
+> adds a device of their own with a code instead ([section 28](#28-codes)).
+
+## 27. Accounts and devices
+
+![The Accounts tab: five accounts with their names, devices and mail waiting](screens/desk-accounts.png)
+
+*Figure 26. Accounts.*
+
+Every account, one a row:
+
+- **Address**, the account.
+- **Name**, the name on the email the account sends. **Rename** (or **Name it**) changes it:
+  type the name and click **Save**.
+- **Devices**: each computer enrolled for the account, with its callsign and until when its
+  credential runs. *this computer* marks the one you are using. A revoked one is crossed out.
+- **Waiting**: messages waiting for the account's next call to a gateway.
+
+**Find** shows the accounts whose address, name or callsign contains what you type.
+
+**A lost or stolen computer.** Click **Revoke** beside its device, then again to confirm. Every
+credential of that device stops working: it can no longer log in or call a gateway. Gateways
+learn of it from the post office's list of revoked credentials. The account itself stays; give
+its owner a code for their new computer ([section 28](#28-codes)).
+
+Revoking the computer you are using takes the desk away from it: the button says so first.
+
+## 28. Codes
+
+A code lets someone enroll without applying: for a new account, or for a new device of an account
+that exists. Use it for someone you know holds the callsign.
+
+![The New code tab: an address, a callsign and a name filled in, the licence checked, and the code made](screens/desk-code.png)
+
+*Figure 27. Making a code.*
+
+1. Open **New code**.
+2. Fill in:
+   - **Address**: the account, at your post office's domain.
+   - **Callsign**: their callsign, as on the air.
+   - **Name**: the name on the email the account sends. Leave it empty to keep an existing
+     account's name.
+3. Click **Check the licence** to see what the post office finds of that callsign and name.
+4. Tick **A role mailbox** for a shared mailbox.
+5. Click **Make code**.
+
+The code shows in large letters, with whom it is for and until when. **Copy** copies it. Give it
+to the person by email, by phone or on paper. It works once, for a week. They enroll with it in
+their RadioPost's Setup ([section 5.1](#51-with-a-code-from-the-operator)).
+
+> **Note.** A code naming one of the post office's operator callsigns, for someone else's address,
+> would give its holder this desk. The desk stops first with a red box, *This person will be able
+> to run the post office*, and makes the code only if you click **Make it anyway**. A code for a
+> new device of your own needs no box.
+
+## 29. Mail out
+
+**Mail out** lists mail your users sent by radio that waits to go out as ordinary email: the
+message's ID, whom it is for, and since when. Normally it is empty: mail leaves within a minute.
+
+Mail that stays here means the mail server is not taking it. Look at [Health](#31-health), and
+run the **mail-log** job on the [Server](#32-the-server-jobs-and-a-terminal) tab to read the mail
+server's log.
+
+## 30. Other post offices
+
+Your users' mail reaches every other post office as ordinary email, whether you know it or not. A
+post office you **know** is one whose word you take that its users are licensed:
+
+- mail from its users needs no place on your users' accept lists, and goes on the air without the
+  third-party flag;
+- its gateways log in here, and your users can use them;
+- your post office lists its gateways for your users' clients.
+
+Know only post offices whose operators you trust to check callsigns. At first none is known.
+
+![The Post offices tab: one post office known, one seen, none blocked](screens/desk-others.png)
+
+*Figure 28. Other post offices.*
+
+- **Known**: the post offices you know, who runs each, when its records were last fetched, and
+  whether DNSSEC signed them. They are fetched again every six hours. **Forget** stops knowing one;
+  **Block** also hides it. To know a new one, type its domain and click **Know**. **Fetch now**
+  fetches them all at once.
+- **Seen**: post offices the service met (at the door, in mail your users sent, on a credential,
+  or in a known post office's list) and that publish a RadioPost record. **Know** one, or **Block**
+  it so it is not shown again.
+- **Blocked**: those you blocked. **Unblock** lets one be seen again.
+
+A known post office that cannot be fetched keeps what was last fetched. After a day, Health turns
+red, because its list of revoked credentials may be out of date.
+
+## 31. Health
+
+The post office checks itself every hour, from outside and inside, and emails its contact address
+when a check turns red, and again when all pass.
+
+![The Health tab: eleven checks passed and one amber line about backups](screens/desk-health.png)
+
+*Figure 29. Health.*
+
+Each line is one check:
+
+| Mark | Means |
+|---|---|
+| ✓ (green) | Passes. |
+| ! (amber) | Worth a look soon. No email is sent for amber. |
+| ✗ (red) | Something to fix. The **Health** tab shows how many. |
+| • (grey) | For your information, such as a newer release. |
+
+It checks the post office's DNS records, its certificate and its API from outside, the door
+where mail comes in, the mail server, free disk space, mail stuck going out, last night's backups,
+when a backup last left the server, whether the jobs runner is installed, the DKIM keys' age and a
+key rotation waiting on you, and each known post office's records.
+
+- **Check now** runs every check at once (a few seconds).
+- **DKIM selectors**: give the names of your DKIM keys once, as your mail server names them
+  (such as `v1-rsa-20261110, v1-ed25519-20261110`), and click **Save**. The check then looks for
+  their records in DNS.
+
+## 32. The server: jobs and a terminal
+
+The **Server** tab lets you look after the server without logging in to it.
+
+![The Server tab: the jobs, one with its output open, and When you need more](screens/desk-server.png)
+
+*Figure 30. Jobs and a terminal.*
+
+**Jobs** are a fixed list of tasks the server's administrator account runs for you:
+
+| Job | Does |
+|---|---|
+| **update** | Installs the newest RadioPost release, its signature checked, and restarts the post office. |
+| **restart**, **restart-mail** | Restarts the post office, or the mail server. |
+| **certificate** | Copies the web server's certificate to the mail server now. |
+| **services** | Says whether the post office, the mail server and the web server run. |
+| **log**, **mail-log** | The last lines of the post office's or the mail server's log. |
+| **disk**, **firewall**, **ports**, **logins** | Disk space, the firewall's rules, what listens on which port, who logged in lately. |
+| **system-updates** | Installs the operating system's security updates now rather than tonight. |
+| **mail-backup** | Backs up the mailboxes now (done each night). |
+| **check** | Checks the post office from outside. |
+
+Click **Run** beside a job. **update**, **restart** and **restart-mail** ask for a second click.
+The line under the job says it is waiting, running, then done or failed, when and by whom.
+**What it said** shows its output.
+
+If every job stays *asked for, waiting for the runner*, the jobs runner is not installed. The tab
+says the one command to run on the server, once.
+
+**When you need more.** For what no job does:
+
+- **Open a terminal** opens a terminal on this computer, logged in to the server by SSH, such as
+  `root@po.radiopost.org`. It uses this computer's own SSH key: the desk keeps no password and no
+  key of the server's. **Setting up the key, once** says how.
+- **Copy for Claude** copies the server's state (versions, checks, settings, the jobs' last output;
+  no mail, no names, no keys) to paste into a Claude session that helps you.
+
+## 33. Backups and DKIM keys
+
+![The Backups and DKIM keys boxes on the Server tab](screens/desk-backups.png)
+
+*Figure 31. Backups and DKIM keys.*
+
+### Backups
+
+Each night the server keeps a backup of the post office beside itself (the last seven), and one of
+the mail server's mailboxes (the last three). The table lists them. A backup that stays on the
+server is lost with it, so keep copies on a computer of yours. There are two ways.
+
+**On this computer, by itself** (the better way):
+
+1. Type a name for this computer, such as `shack-pc`, and the folder the backups go to (a drive
+   of its own, or a folder another program copies elsewhere). Left empty, the folder is
+   `RadioPost backups` in your home folder.
+2. Click **Turn on**.
+
+While RadioPost is open, it looks every hour and fetches each new backup, sealed to a key only
+this computer holds. **Fetch now** looks at once. The last ten are kept.
+
+> **Note.** The key that opens these backups is a file on this computer (the box names it,
+> `backup.key`). Lose the computer and its key, and its backups go with them. Keep a copy of the
+> key somewhere else, such as a USB stick in a drawer, or turn this on on a second computer too.
+
+The table under it lists every computer the backups go to. **Forget** one that was lost or given
+away: the post office stops sealing backups to it.
+
+**By hand, with a passphrase.** Type a passphrase of 12 characters or more, twice, and click
+**Download a backup**. The backup, with the newest mailboxes, is sealed with the passphrase and
+kept on this computer in `RadioPost backups`. Without the passphrase nobody can open it, you
+included.
+
+The line at the bottom says when a copy last left the server. Health turns amber 7 days after the
+last one and red after 30. Restoring a backup on a new server is in
+[the post office guide](../user/post-office.md#12-the-desk).
+
+### DKIM keys
+
+The mail server signs outgoing mail with DKIM keys, so receivers can tell it came from your
+domain. Since you edit DNS yourself, the keys are rotated by hand, one checked step at a time. The
+table shows the keys, their algorithm, their stage and when they were made. Health turns amber
+when they are older than 180 days.
+
+1. Click **Start a rotation**. The post office makes new keys and gives them to the mail server,
+   signing nothing yet.
+2. The desk shows a TXT record for each new key. Click **Copy** beside each and publish it at your
+   DNS provider (most want the name without the domain, the part ending in `._domainkey`).
+3. Click **Switch to the new keys**. The desk checks each record is visible in DNS, then the new
+   keys sign.
+4. Keep the old records for a week, for mail still on its way. The desk says until when.
+5. When the desk asks, remove the old records from DNS and click **End the rotation**. It checks
+   they are gone.
+
+**Stop**, before the switch, takes the new keys back.
+
+## 34. Settings
+
+![The Settings tab: applications, licence lookups, mailboxes and this post office](screens/desk-settings.png)
+
+*Figure 32. Settings.*
+
+### Applications
+
+**Take applications for accounts** lets licensees apply from their RadioPost client. Each
+application then waits on the Applications tab. It saves as soon as you tick it. Untick it to close
+applications: only the codes you make then let anyone in, and the client tells applicants *it
+takes no applications*.
+
+### Licence lookups
+
+What the post office finds of each callsign shows beside each application and code.
+
+- **Look US callsigns up in a copy of the FCC's licence database** keeps a copy of the FCC's
+  file on the server, fetched each week (about 200 MB to fetch, 170 MB kept). Lookups stay on the
+  server: nobody learns whom you look up. **Fetch it now** fetches it at once.
+- **QRZ.com**, with your own account, for callsigns of every country: type your QRZ username and
+  password and click **Save**. Without an XML subscription QRZ gives only a few fields. **Clear**
+  forgets the account.
+
+### Mailboxes
+
+The mail server refuses email for an account with no mailbox, so each approved account needs one.
+Under **Make each mailbox**, choose:
+
+- **By hand, in the mail server**: you make each one yourself.
+- **In Stalwart, by its API**: give **Stalwart's address** as the server reaches it (such as
+  `http://127.0.0.1:8080`) and an **API key** made in Stalwart's administration. The post office
+  makes the mailbox when you approve, and emails the new user their first password.
+- **By a program on the server**: name the program; it is given the address and the name.
+
+Click **Save**, then **Check**: it asks the mail server without making anything. The line under
+it says whether welcome emails can go out.
+
+### This post office
+
+Its domains, its operators' callsigns, its contact address and its API address, as the post office
+publishes them.
+
+---
+
+# Part 5. Help
+
+## 35. RadioPost and Aether HF
 
 RadioPost is the mail program. Aether HF is the modem. Each is set up in its own window:
 
@@ -1027,7 +1351,7 @@ its host programs port. One program at a time answers for one callsign: close a 
 the same callsign as RadioPost while you test. Aether's manual covers them in
 [section 12](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md#12-using-winlink-express-pat-varac-and-kiss-programs).
 
-## 26. The rules
+## 36. The rules
 
 These notes follow the US rules (Part 97). Check your own country's.
 
@@ -1045,7 +1369,7 @@ These notes follow the US rules (Part 97). Check your own country's.
   such mail, and a gateway hands it over only where its country allows.
 - **No business.** Do not send messages for business or pay.
 
-## 27. Troubleshooting
+## 37. Troubleshooting
 
 ### The client
 
@@ -1081,7 +1405,20 @@ These notes follow the US rules (Part 97). Check your own country's.
 | *polling … for copies: post-office-unreachable* | The Internet or the post office is down. The gateway answers from what it holds. |
 | Held: sessions waiting, last try *not reached* | They are reported when the post office can be reached. |
 
-## 28. Reporting a problem
+### The post office desk
+
+| You see | Do |
+|---|---|
+| No **Post office** button | The callsign chosen at the top is not one of the post office's operators: choose yours. The desk also needs the Internet. |
+| Applicants are told *it takes no applications* | Tick **Take applications for accounts** in **Settings**. |
+| *no mailbox* beside an approved account | The mail server did not make it. Make it in the mail server by hand, and check **Settings**, **Mailboxes**, with **Check**. |
+| *not emailed* beside a decision | The email to the applicant did not go. **Settings**, **Mailboxes** says whether the post office can send email. |
+| A red line in **Health** | Fix what it says. You are emailed when a line turns red, and again when all pass. |
+| Mail waits in **Mail out** | The mail server is not taking it: run the **mail-log** job and read it. |
+| Jobs stay *asked for, waiting for the runner* | The jobs runner is not installed. Run the command the **Server** tab gives, once, on the server. |
+| *The last copy off the server* is old | Open RadioPost on the computer that fetches backups, or **Download a backup**. |
+
+## 38. Reporting a problem
 
 Open an issue on [RadioPost's repository](https://github.com/KK4ODA/RadioPost/issues). Say:
 
@@ -1098,7 +1435,7 @@ Attach the log:
 For a session that failed or was slow, turn on Aether's **Record** before you try again, then use
 Aether's **Send files…** on its Log tab. It sends Aether's recording with both RadioPost logs.
 
-## 29. Glossary
+## 39. Glossary
 
 | Word | Means |
 |---|---|
@@ -1111,11 +1448,15 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 | Client | RadioPost, the program you send and read mail with. |
 | Credential | A signed file that proves your address and callsign belong together. Lasts 90 days and renews itself. |
 | Cut off | A gateway that cannot reach the Internet. It goes on answering. |
+| Desk | The post office desk: the client's **Post office** view, for a post office's operators. |
+| DKIM key | A key the mail server signs outgoing mail with, so receivers can tell it came from your domain. |
 | Device key | This computer's own key. It never leaves the computer. |
 | Enroll | Get a credential for this computer with a one-time code. |
 | Fetch | What a call to a gateway brings back of the mail waiting for you. |
 | Gateway | A station that passes sessions between radio and post offices. |
 | Held attachment | A file too large for the radio, kept at your post office until you ask for it. |
+| Job | A task on the post office's server that the desk asks for, from a fixed list. |
+| Known post office | Another post office whose word your post office takes that its users are licensed. |
 | Listen | Wait for one station to call you directly. |
 | Operator (of a post office) | Someone who runs a post office: approves accounts and gives codes. |
 | Partner | Another gateway this one forwards mail to by radio when cut off. |
@@ -1127,7 +1468,7 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 | Usual gateway | A gateway you named in Setup, which gets copies of your mail ahead of time. |
 | Waiting | What waited at your post office at your last call to a gateway. |
 
-## 30. Quick reference
+## 40. Quick reference
 
 **Send and fetch mail**
 
@@ -1151,6 +1492,12 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 2. **I have a code** and **Enroll**, or **Apply for an account** and **Apply**.
 3. Keep RadioPost open with that callsign chosen until it says *Approved*.
 4. Choose the callsign at the top before each session.
+
+**Approve an applicant** (post office operators)
+
+1. Choose your own callsign at the top. Click **Post office**.
+2. **Applications**: read the licence check.
+3. **Approve** (tick **Role mailbox** first for a shared one), or **Decline…** with a reason.
 
 **Start a gateway**
 
@@ -1207,3 +1554,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.1.0 | 2026-11-15 | §22: a gateway's own windows set in the Partners view, calls by itself in a partner's windows, the Next window column, and which partner gets the sessions. |
 | 1.2.0 | 2026-11-15 | §13: groups of addresses, and contact files imported. |
 | 1.3.0 | 2026-11-15 | §11.2, §12: **Listen** answers calls to any of your callsigns. |
+| 1.4.0 | 2026-11-15 | Part 4, the post office desk: one chapter for each tab (applications, accounts, codes, mail out, other post offices, health, the server's jobs, backups and DKIM keys, settings), with screenshots. §15 points to it; Help becomes Part 5 (§35–§40), with the desk's troubleshooting, glossary words and an approval card. Figure 16 says **Listen** answers any of your callsigns. |

@@ -469,7 +469,7 @@ def fig_callsigns() -> None:
         48,
         258,
         [
-            "A call goes out as the callsign chosen, and Listen answers that callsign only.",
+            "A call goes out as the callsign chosen. Listen answers calls to any of them.",
             "Change it between sessions. Every credential renews while RadioPost is open.",
         ],
     )

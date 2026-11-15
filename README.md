@@ -41,7 +41,7 @@ standing.
 
 | | |
 |---|---|
-| [The user's manual](docs/manual/manual.md) | How to send and receive email by radio with RadioPost, and how to run a RadioPost gateway: step by step, illustrated, printable. |
+| [The user's manual](docs/manual/manual.md) | How to send and receive email by radio with RadioPost, how to run a RadioPost gateway, and how to run a post office from its desk: step by step, illustrated, printable. |
 | [The concept](docs/concept/00-concept.md) | What RadioPost is and how it works, in plain language, with schematics. |
 | [The detailed design](docs/design/00-detailed-design.md) | The programs, the connections between them, and the decisions behind them. |
 | [The specifications](spec/README.md) | The protocols: what every client, gateway, post office and modem adapter implements. |
