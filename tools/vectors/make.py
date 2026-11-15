@@ -991,6 +991,32 @@ def make_statements() -> dict[str, Any]:
             "shelter3-n3call",
         ),
         "called-station": (called_statement(STATION_CLOCK), "device:ana", "ana"),
+        # RP-1 §6.3 step 2: on the air portable, under an SSID, with the credential for KK4ODA
+        "portable": (
+            rp.statement(
+                "facundo@radiopost.org",
+                "VE3/KK4ODA/P-7",
+                "N1CALL-10",
+                ids,
+                time=T_SESSION,
+                nonce=stream("portable nonce", 8),
+            ),
+            "device:facundo",
+            "facundo",
+        ),
+        # RP-1 §6.3 step 3: Ana calls Facundo's station at an SSID of his callsign (RP-3 §10)
+        "called-at-ssid": (
+            rp.statement(
+                rp.credential_body(credential("ana"))[3],
+                "N0CALL",
+                "KK4ODA-2",
+                [],
+                time=T_STATION,
+                nonce=stream("ssid call nonce", 8),
+            ),
+            "device:ana",
+            "ana",
+        ),
     }
     entries = []
     signed: dict[str, tuple[dict[int, Any], bytes, str]] = {}
@@ -1170,12 +1196,86 @@ def make_statements() -> dict[str, Any]:
             STATION_NONCE,
         ),
     ]
+    pt_stmt, pt_sig, pt_cred = signed["portable"]
+    ss_stmt, ss_sig, ss_cred = signed["called-at-ssid"]
+    base_cases = [
+        (
+            "on the air as VE3/KK4ODA/P-7, under the credential for KK4ODA",
+            pt_stmt,
+            pt_sig,
+            pt_cred,
+            "N1CALL-10",
+            T_SESSION + 41,
+            None,
+            [],
+            None,
+            "gateway",
+        ),
+        (
+            "a gateway named with another SSID of its callsign",
+            stmt,
+            sig,
+            cred,
+            "N1CALL-11",
+            T_SESSION + 41,
+            None,
+            [],
+            None,
+            "gateway",
+        ),
+        (
+            "called at KK4ODA-2, checked by the client KK4ODA",
+            ss_stmt,
+            ss_sig,
+            ss_cred,
+            "KK4ODA",
+            T_STATION,
+            None,
+            [],
+            None,
+            "client",
+        ),
+        (
+            "called at KK4ODA-2, checked as a gateway's callsign",
+            ss_stmt,
+            ss_sig,
+            ss_cred,
+            "KK4ODA",
+            T_STATION,
+            None,
+            [],
+            None,
+            "gateway",
+        ),
+        (
+            "called at KK4ODA-2, checked by another client",
+            ss_stmt,
+            ss_sig,
+            ss_cred,
+            "N3CALL",
+            T_STATION,
+            None,
+            [],
+            None,
+            "client",
+        ),
+    ]
     cases = []
-    for what, s, sg, c, me, now, challenge, seen, sent in [
-        (*case, None) for case in cases_in
-    ] + called_cases:
+    for what, s, sg, c, me, now, challenge, seen, sent, role in (
+        [(*case, None, "gateway") for case in cases_in]
+        + [(*case, "client") for case in called_cases]
+        + base_cases
+    ):
         result = rp.verify_statement(
-            s, sg, body(c), me=me, now=now, challenge=challenge, seen=seen, sent_nonce=sent
+            s,
+            sg,
+            body(c),
+            me=me,
+            now=now,
+            challenge=challenge,
+            seen=seen,
+            sent_nonce=sent,
+            verifier=role,
         )
         cases.append(
             {
@@ -1184,6 +1284,7 @@ def make_statements() -> dict[str, Any]:
                 "signature_hex": sg.hex(),
                 "credential": c,
                 "verifier": me,
+                "verifier_role": role,
                 "now": now,
                 "challenge_hex": challenge.hex() if challenge else None,
                 "seen": [[a, n.hex()] for a, n in seen],
@@ -1208,18 +1309,43 @@ def make_statements() -> dict[str, Any]:
             "called station, its clock two hours ahead: the clocks are not compared": "ok",
             "called station, the nonce of another session": "signature-invalid",
             "called station, checked by a caller it was not made for": "not-authorized",
+            # RP-1 §6.3 steps 2 and 3: base callsigns (RP-0 §6.1), a gateway's own exactly
+            "on the air as VE3/KK4ODA/P-7, under the credential for KK4ODA": "ok",
+            "a gateway named with another SSID of its callsign": "not-authorized",
+            "called at KK4ODA-2, checked by the client KK4ODA": "ok",
+            "called at KK4ODA-2, checked as a gateway's callsign": "not-authorized",
+            "called at KK4ODA-2, checked by another client": "not-authorized",
         },
     )
+    # RP-0 §6.1: each callsign's base, worked out from the rule, not from the reference
+    bases = {
+        "KK4ODA": "KK4ODA",
+        "VE3/KK4ODA": "KK4ODA",
+        "KK4ODA/P": "KK4ODA",
+        "KK4ODA-7": "KK4ODA",
+        "W4/KK4ODA/M-2": "KK4ODA",
+        "G4ABC/W4": "G4ABC",
+        "W4/G4ABC": "G4ABC",
+        "VE3X/W1AW": "W1AW",
+        "kk4oda-1": "KK4ODA",
+    }
+    for callsign, base in bases.items():
+        assert rp.base_callsign(callsign) == base, (callsign, rp.base_callsign(callsign))
     out = header(
-        "Session statements and how they verify", {"RP-1": "§6", "RP-3": "§5.1, §5.3, §10"}
+        "Session statements and how they verify",
+        {"RP-0": "§6.1", "RP-1": "§6", "RP-3": "§5.1, §5.3, §10"},
     )
     out["rule"] = (
         "A client produces exactly `statement_hex` and `signature_hex`. A verifier given a "
         "case's statement, signature, credential (already verified), its own callsign, its clock, "
         "the challenge it issued and the (address, nonce) pairs it has seen returns `expect`, "
-        "checking in RP-1 §6.3's order. A case with `sent_nonce_hex` is a caller checking the "
-        "station it called (RP-1 §6.5): steps 1 to 4, then the nonce in place of the clock."
+        "checking in RP-1 §6.3's order: `verifier_role` says whether it is a gateway, which "
+        "finds its own callsign exactly in step 3, or a client, which finds one that shares its "
+        "base (RP-0 §6.1). A case with `sent_nonce_hex` is a caller checking the station it "
+        "called (RP-1 §6.5): steps 1 to 4, then the nonce in place of the clock. Each of "
+        "`base_callsigns` is a callsign and its base."
     )
+    out["base_callsigns"] = [{"callsign": c, "base": b} for c, b in bases.items()]
     out["statements"] = entries
     out["verification"] = cases
     return out
@@ -1791,7 +1917,13 @@ def station_pdus() -> list[Transmission]:
     assert result == "ok" and body is not None
     assert (
         rp.verify_statement(
-            stmt, welcome[15], body, me="KK4ODA", now=T_STATION, sent_nonce=STATION_NONCE
+            stmt,
+            welcome[15],
+            body,
+            me="KK4ODA",
+            now=T_STATION,
+            sent_nonce=STATION_NONCE,
+            verifier="client",
         )
         == "ok"
     )
@@ -7582,7 +7714,9 @@ def check_station(data: dict[str, Any]) -> None:
     assert result == "ok" and body is not None
     stmt = rp.statement_from_welcome(hello, welcome)
     assert (
-        rp.verify_statement(stmt, welcome[15], body, me=hello[4], now=now, sent_nonce=hello[7])
+        rp.verify_statement(
+            stmt, welcome[15], body, me=hello[4], now=now, sent_nonce=hello[7], verifier="client"
+        )
         == "ok"
     )
 

@@ -394,8 +394,14 @@ fn check_hello_proof(
         challenge: None,
         sent_nonce: None,
     };
-    statement::verify(&stmt, sig, &body, called, &fresh)
-        .map_err(|c| format!("HELLO's statement fails RP-1 §6.3: {c}"))
+    statement::verify(
+        &stmt,
+        sig,
+        &body,
+        statement::Verifier::Gateway(called),
+        &fresh,
+    )
+    .map_err(|c| format!("HELLO's statement fails RP-1 §6.3: {c}"))
 }
 
 /// What the program sent in one turn, up to its `DONE` (RP-3 §5.7).
@@ -713,8 +719,14 @@ impl Run<'_> {
                 challenge: Some(challenge),
                 sent_nonce: None,
             };
-            statement::verify(&stmt, sig, &body, GATEWAY, &fresh)
-                .map_err(|c| format!("AUTH's signature is not over the challenge form: {c}"))?;
+            statement::verify(
+                &stmt,
+                sig,
+                &body,
+                statement::Verifier::Gateway(GATEWAY),
+                &fresh,
+            )
+            .map_err(|c| format!("AUTH's signature is not over the challenge form: {c}"))?;
             finish(&mut peer, &hello)
         })();
         let (_, said) = running.finish(Duration::from_secs(10));
@@ -1448,14 +1460,19 @@ impl Run<'_> {
             challenge: None,
             sent_nonce: Some(nonce),
         };
-        statement::verify(&own, &b64(&mine_proof["signature"]), &cred, CALLER, &fresh).map_err(
-            |c| {
-                format!(
-                    "`mine` is not the program's proof over the caller's nonce: {} (RP-1 §6.5)",
-                    c.name()
-                )
-            },
-        )?;
+        statement::verify(
+            &own,
+            &b64(&mine_proof["signature"]),
+            &cred,
+            statement::Verifier::Client(CALLER),
+            &fresh,
+        )
+        .map_err(|c| {
+            format!(
+                "`mine` is not the program's proof over the caller's nonce: {} (RP-1 §6.5)",
+                c.name()
+            )
+        })?;
         if cred.address != prog.address {
             return Err("`mine` is not the program's account".into());
         }
@@ -1676,8 +1693,14 @@ fn check_station_welcome(
         challenge: None,
         sent_nonce: Some(nonce),
     };
-    statement::verify(&own, sig, &body, CALLER, &fresh)
-        .map_err(|c| format!("its statement as the station called fails RP-1 §6.5: {c}"))?;
+    statement::verify(
+        &own,
+        sig,
+        &body,
+        statement::Verifier::Client(CALLER),
+        &fresh,
+    )
+    .map_err(|c| format!("its statement as the station called fails RP-1 §6.5: {c}"))?;
     Ok(Station { accepted, waiting })
 }
 

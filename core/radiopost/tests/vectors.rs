@@ -354,14 +354,22 @@ fn statements_are_signed_and_checked_as_rp1_says() {
             sent_nonce: case["sent_nonce_hex"].as_str().map(|h| array(&unhex(h))),
         };
         let body = body_of(text(case, "credential"));
-        let result = statement::verify(
-            &st,
-            &bytes(case, "signature_hex"),
-            &body,
-            text(case, "verifier"),
-            &freshness,
-        );
+        let me = match text(case, "verifier_role") {
+            "gateway" => statement::Verifier::Gateway(text(case, "verifier")),
+            "client" => statement::Verifier::Client(text(case, "verifier")),
+            other => panic!("{what}: a verifier is a gateway or a client, not {other}"),
+        };
+        let result = statement::verify(&st, &bytes(case, "signature_hex"), &body, me, &freshness);
         assert_eq!(verdict(&result), text(case, "expect"), "{what}");
+    }
+    // RP-0 §6.1: each callsign's base
+    for c in file["base_callsigns"].as_array().expect("base callsigns") {
+        let callsign = text(c, "callsign");
+        assert_eq!(
+            radiopost::callsign::base(callsign),
+            text(c, "base"),
+            "{callsign}"
+        );
     }
 }
 

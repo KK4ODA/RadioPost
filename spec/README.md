@@ -14,8 +14,8 @@ adapter from them.
 
 | Spec | Title | Status | Version | Governs |
 |---|---|---|---|---|
-| [RP-0](rp-0000-conventions.md) | Conventions | Draft | 0.7.0 | Requirement words, encodings, cryptography, identifiers, roles, how specs change, registries |
-| [RP-1](rp-0001-identity.md) | Identity | Draft | 0.6.0 | Keys, credentials, session statements, published keys, revocation |
+| [RP-0](rp-0000-conventions.md) | Conventions | Draft | 0.8.0 | Requirement words, encodings, cryptography, identifiers, roles, how specs change, registries |
+| [RP-1](rp-0001-identity.md) | Identity | Draft | 0.7.0 | Keys, credentials, session statements, published keys, revocation |
 | [RP-2](rp-0002-messages.md) | Messages | Draft | 0.2.0 | The message, its air form, its content ID |
 | [RP-3](rp-0003-session.md) | Session protocol | Draft | 0.11.0 | Client ↔ gateway over the radio |
 | [RP-4](rp-0004-modem-interface.md) | Modem interface | Draft | 0.8.0 | Client or gateway ↔ modem adapter |

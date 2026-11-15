@@ -1214,7 +1214,20 @@ pub fn answer(
         });
     };
     tell(say, &format!("{remote} called"));
-    if let Some((call, home)) = others.iter().find(|(c, _)| c.eq_ignore_ascii_case(&local)) {
+    // the home called; at an SSID or portable form of a callsign, that callsign's (RP-1 §6.3)
+    let called = others
+        .iter()
+        .find(|(c, _)| c.eq_ignore_ascii_case(&local))
+        .or_else(|| {
+            if radiopost::callsign::same_base(&local, &me) {
+                None
+            } else {
+                others
+                    .iter()
+                    .find(|(c, _)| radiopost::callsign::same_base(c, &local))
+            }
+        });
+    if let Some((call, home)) = called {
         tell(
             say,
             &format!("answering as {call}: the session's mail is in {call}'s folders"),

@@ -151,7 +151,13 @@ pub(crate) fn check_caller(
         challenge: stmt.challenge(),
         sent_nonce: None,
     };
-    statement::verify(&stmt, &signature, &cbody, me, &fresh)?;
+    statement::verify(
+        &stmt,
+        &signature,
+        &cbody,
+        statement::Verifier::Gateway(me),
+        &fresh,
+    )?;
     Ok((stmt, raw, cred, cbody))
 }
 

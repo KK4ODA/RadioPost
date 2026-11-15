@@ -1160,7 +1160,13 @@ impl PostOffice {
             challenge,
             sent_nonce: None,
         };
-        statement::verify(&stmt, &signature, &cbody, called, &fresh)?;
+        statement::verify(
+            &stmt,
+            &signature,
+            &cbody,
+            statement::Verifier::Gateway(called),
+            &fresh,
+        )?;
         Ok((stmt, cbody))
     }
 
@@ -2104,7 +2110,7 @@ impl PostOffice {
             &calling.0.1,
             &calling.0.2,
             calling.1,
-            &answering.1.operator,
+            statement::Verifier::Client(&answering.1.operator),
             &relayed,
         )?;
         let answered = Freshness {
@@ -2115,7 +2121,7 @@ impl PostOffice {
             &answering.0.1,
             &answering.0.2,
             answering.1,
-            &calling.1.operator,
+            statement::Verifier::Client(&calling.1.operator),
             &answered,
         )?;
         Ok((mine.1, theirs.1))

@@ -355,6 +355,21 @@ def statement(
     return out
 
 
+def base_callsign(callsign: str) -> str:
+    """RP-0 §6.1: the callsign without its SSID, prefix and suffix: of the parts its `/` separate,
+    the SSID taken off, the longest, or of two as long the last."""
+    best = ""
+    for part in callsign.strip().upper().split("-", 1)[0].split("/"):
+        if len(part) >= len(best):
+            best = part
+    return best
+
+
+def same_base(a: object, b: object) -> bool:
+    """RP-0 §6.1: two callsigns with one base."""
+    return isinstance(a, str) and isinstance(b, str) and base_callsign(a) == base_callsign(b)
+
+
 def verify_statement(
     stmt: dict[int, Any],
     signature: bytes,
@@ -365,15 +380,19 @@ def verify_statement(
     challenge: bytes | None = None,
     seen: list[tuple[str, bytes]] = (),  # type: ignore[assignment]
     sent_nonce: bytes | None = None,
+    verifier: str = "gateway",
 ) -> str:
     """RP-1 §6.3 steps 2 to 6, once the credential (step 1) has passed. ``body`` is its body.
 
-    With ``sent_nonce``, the statement is a called station's (RP-1 §6.5), checked by the caller:
-    its nonce must be the one the caller sent, and the clocks are not compared.
+    ``verifier`` is ``gateway`` or ``client``: step 3 has a gateway find its own callsign exactly,
+    and a client one that shares its base. With ``sent_nonce``, the statement is a called
+    station's (RP-1 §6.5), checked by the caller: its nonce must be the one the caller sent, and
+    the clocks are not compared.
     """
-    if stmt.get(1) != body[3] or stmt.get(2) != body[4]:
+    if stmt.get(1) != body[3] or not same_base(stmt.get(2), body[4]):
         return "not-authorized"
-    if stmt.get(3) != me:
+    named = stmt.get(3) == me if verifier == "gateway" else same_base(stmt.get(3), me)
+    if not named:
         return "not-authorized"
     if not verify(CTX_SESSION, cbor.encode(stmt), signature, body[5]):
         return "signature-invalid"

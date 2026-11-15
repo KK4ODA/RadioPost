@@ -235,7 +235,7 @@ pub fn check_proof(
         &statement,
         &proof.signature,
         &body,
-        &statement.gateway,
+        statement::Verifier::Gateway(&statement.gateway),
         &fresh,
     )?;
     if let Form::Time { time, .. } = statement.form

@@ -8,6 +8,7 @@
 //! this library and a specification disagree, the specification is right.
 
 pub mod base64url;
+pub mod callsign;
 pub mod cbor;
 pub mod credential;
 pub mod crypto;

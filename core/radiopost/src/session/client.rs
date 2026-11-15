@@ -568,7 +568,8 @@ impl Client {
             challenge: None,
             sent_nonce: Some(self.cfg.nonce),
         };
-        statement::verify(&stmt, sig, &body, &self.me.operator, &freshness)?;
+        let me = statement::Verifier::Client(&self.me.operator);
+        statement::verify(&stmt, sig, &body, me, &freshness)?;
         let proof = Proof {
             statement: stmt.encode(),
             signature: sig.to_vec(),

@@ -314,7 +314,10 @@ impl Called {
             sent_nonce: None,
         };
         let verdict = match signature {
-            Some(sig) => statement::verify(&stmt, sig, &body, &self.me.operator, &freshness),
+            Some(sig) => {
+                let me = statement::Verifier::Client(&self.me.operator);
+                statement::verify(&stmt, sig, &body, me, &freshness)
+            }
             None => Err(ErrorCode::TimeSkew),
         };
         match verdict {

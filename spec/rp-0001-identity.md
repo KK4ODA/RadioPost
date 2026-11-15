@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.6.0 |
-| **Updated** | 2026-11-12 |
+| **Version** | 0.7.0 |
+| **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -172,9 +172,14 @@ A verifier MUST check, in this order, and stop at the first failure:
 
 1. The credential, by §5, with the flags `send` if `messages` is not empty, and `receive` if mail
    is to be handed over. Otherwise the error §5 gives.
-2. `address` and `operator` equal the credential's. Otherwise `not-authorized`.
-3. `gateway` is the verifier's own callsign, when the verifier is the station the statement names:
-   the gateway called, or the caller in §6.5. Otherwise `not-authorized`.
+2. `address` equals the credential's, and `operator` shares its base with the credential's
+   (RP-0 §6.1): a station on the air as `VE3/KK4ODA/P` or `KK4ODA-7` signs with that callsign
+   under a credential for `KK4ODA`. Otherwise `not-authorized`.
+3. `gateway` names the verifier, when the verifier is the station the statement names: a gateway
+   called checks that it is its own callsign exactly, since callers choose a gateway by that name
+   (RP-5 §4.4); a client, called (RP-3 §10) or the caller in §6.5, checks that it shares its base
+   with its own, so a client answers under any SSID or portable form of its callsign. Otherwise
+   `not-authorized`.
 4. The signature, with the credential's device key. Otherwise `signature-invalid`.
 5. In time form: `time` is within **600 seconds** of the verifier's clock (600 is within), and the
    pair (`address`, `nonce`) has not been seen in the last 1 200 seconds; the gateway keeps a replay
@@ -379,3 +384,4 @@ A serial MAY be dropped from the list once the credential it names has expired.
 | 0.5.0 | 2026-11-09 | Which post offices a gateway trusts: by DNS, or one hop of post office lists; its operator may block or limit (§7.3). |
 | 0.5.1 | 2026-11-10 | §6.3: a post office opening a session takes a challenge-form statement's challenge as the gateway's, once (RP-5 0.12.0). |
 | 0.6.0 | 2026-11-12 | Which post offices a post office knows (§7.5): those its operators accept, their records and documents fetched and refreshed as a gateway's are; what knowing means; others found as mail crosses and kept as seen, for the operators; why it differs from a gateway's trust. §7.3 had covered gateways only, and the door, RP-5 §2 and RP-6 §4 rested on a list each operator typed, with no key rotation followed. Test vectors (`dns.json`, `office_cases`). |
+| 0.7.0 | 2026-11-15 | §6.3 steps 2 and 3 compare base callsigns (RP-0 §6.1), so a station on the air as `VE3/KK4ODA/P` or `KK4ODA-7` proves itself with its `KK4ODA` credential, and a client answers under an SSID of its callsign; a gateway called still checks its own callsign exactly (gaps G10, G12). An earlier verifier refuses such a statement `not-authorized`, so nothing is taken that should not be. |

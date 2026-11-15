@@ -729,7 +729,10 @@ class PostOffice:
             return "not-authorized"
         caller, called = (0, 1) if role == "caller" else (1, 0)
         (_, cstmt, csig), (_, dstmt, dsig) = proofs[caller], proofs[called]
-        result = rp.verify_statement(cstmt, csig, bodies[caller], me=bodies[called][4], now=started)
+        # station to station, both sides clients: callsigns compared by their base (RP-1 §6.3)
+        result = rp.verify_statement(
+            cstmt, csig, bodies[caller], me=bodies[called][4], now=started, verifier="client"
+        )
         if result == "ok":
             result = rp.verify_statement(
                 dstmt,
@@ -737,6 +740,7 @@ class PostOffice:
                 bodies[called],
                 me=bodies[caller][4],
                 now=started,
+                verifier="client",
                 sent_nonce=cstmt.get(5),
             )
         if result != "ok":

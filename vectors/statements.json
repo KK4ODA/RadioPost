@@ -2,11 +2,50 @@
   "radiopost_vectors": "Session statements and how they verify",
   "format": 1,
   "specs": {
+    "RP-0": "§6.1",
     "RP-1": "§6",
     "RP-3": "§5.1, §5.3, §10"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "A client produces exactly `statement_hex` and `signature_hex`. A verifier given a case's statement, signature, credential (already verified), its own callsign, its clock, the challenge it issued and the (address, nonce) pairs it has seen returns `expect`, checking in RP-1 §6.3's order. A case with `sent_nonce_hex` is a caller checking the station it called (RP-1 §6.5): steps 1 to 4, then the nonce in place of the clock.",
+  "rule": "A client produces exactly `statement_hex` and `signature_hex`. A verifier given a case's statement, signature, credential (already verified), its own callsign, its clock, the challenge it issued and the (address, nonce) pairs it has seen returns `expect`, checking in RP-1 §6.3's order: `verifier_role` says whether it is a gateway, which finds its own callsign exactly in step 3, or a client, which finds one that shares its base (RP-0 §6.1). A case with `sent_nonce_hex` is a caller checking the station it called (RP-1 §6.5): steps 1 to 4, then the nonce in place of the clock. Each of `base_callsigns` is a callsign and its base.",
+  "base_callsigns": [
+    {
+      "callsign": "KK4ODA",
+      "base": "KK4ODA"
+    },
+    {
+      "callsign": "VE3/KK4ODA",
+      "base": "KK4ODA"
+    },
+    {
+      "callsign": "KK4ODA/P",
+      "base": "KK4ODA"
+    },
+    {
+      "callsign": "KK4ODA-7",
+      "base": "KK4ODA"
+    },
+    {
+      "callsign": "W4/KK4ODA/M-2",
+      "base": "KK4ODA"
+    },
+    {
+      "callsign": "G4ABC/W4",
+      "base": "G4ABC"
+    },
+    {
+      "callsign": "W4/G4ABC",
+      "base": "G4ABC"
+    },
+    {
+      "callsign": "VE3X/W1AW",
+      "base": "W1AW"
+    },
+    {
+      "callsign": "kk4oda-1",
+      "base": "KK4ODA"
+    }
+  ],
   "statements": [
     {
       "name": "time-form",
@@ -39,6 +78,22 @@
       "statement_hex": "a6016f616e614068616d706f73742e6f726702664e3043414c4c03664b4b344f4441041a6af213af05480db0c3d9fd33002306814c0b5036895c73ec38608b9038",
       "signed_input_hex": "526164696f506f73742d73657373696f6e2d763100a6016f616e614068616d706f73742e6f726702664e3043414c4c03664b4b344f4441041a6af213af05480db0c3d9fd33002306814c0b5036895c73ec38608b9038",
       "signature_hex": "146d45151e4c884488abafb84f9a72ef2d1cab8236e36569f49c8649834f827415b63a4c923fb955ee49d7eea3c2112b0e6d7316afd66c7c9a9f9ad1974b8102"
+    },
+    {
+      "name": "portable",
+      "credential": "facundo",
+      "diagnostic": "{1: \"facundo@radiopost.org\", 2: \"VE3/KK4ODA/P-7\", 3: \"N1CALL-10\", 4: 1794235200, 5: h'10b9fb7bde93b856', 6: [h'50d3a23ac1d13f684398ece7', h'ab9dd2649f3a4c55a7837501']}",
+      "statement_hex": "a60175666163756e646f40726164696f706f73742e6f7267026e5645332f4b4b344f44412f502d3703694e3143414c4c2d3130041a6af1db40054810b9fb7bde93b85606824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signed_input_hex": "526164696f506f73742d73657373696f6e2d763100a60175666163756e646f40726164696f706f73742e6f7267026e5645332f4b4b344f44412f502d3703694e3143414c4c2d3130041a6af1db40054810b9fb7bde93b85606824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signature_hex": "d1b8f6b3e79a49b990a09b5f435792a8e0d229e50dd60075dcd150cf5484766fc75053aa1c846c80e68e6355d5b48de578d1c0d5ac23d9ec2218ceba2cdab60d"
+    },
+    {
+      "name": "called-at-ssid",
+      "credential": "ana",
+      "diagnostic": "{1: \"ana@hampost.org\", 2: \"N0CALL\", 3: \"KK4ODA-2\", 4: 1794249600, 5: h'95fe11b5ba558fb3', 6: []}",
+      "statement_hex": "a6016f616e614068616d706f73742e6f726702664e3043414c4c03684b4b344f44412d32041a6af21380054895fe11b5ba558fb30680",
+      "signed_input_hex": "526164696f506f73742d73657373696f6e2d763100a6016f616e614068616d706f73742e6f726702664e3043414c4c03684b4b344f44412d32041a6af21380054895fe11b5ba558fb30680",
+      "signature_hex": "dfd5d1e91d71866db301123e41399c1a6ae1d756596aadbec38dd253e74fc143ad535b1ad27b09c5607eba201f2995b606154d9d67d660397ecfc9f5acda9203"
     }
   ],
   "verification": [
@@ -48,6 +103,7 @@
       "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
       "credential": "facundo",
       "verifier": "N1CALL-10",
+      "verifier_role": "gateway",
       "now": 1794235241,
       "challenge_hex": null,
       "seen": [],
@@ -60,6 +116,7 @@
       "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
       "credential": "facundo",
       "verifier": "N1CALL-10",
+      "verifier_role": "gateway",
       "now": 1794235800,
       "challenge_hex": null,
       "seen": [],
@@ -72,6 +129,7 @@
       "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
       "credential": "facundo",
       "verifier": "N1CALL-10",
+      "verifier_role": "gateway",
       "now": 1794235801,
       "challenge_hex": null,
       "seen": [],
@@ -84,6 +142,7 @@
       "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
       "credential": "facundo",
       "verifier": "N1CALL-10",
+      "verifier_role": "gateway",
       "now": 1794235241,
       "challenge_hex": null,
       "seen": [
@@ -101,6 +160,7 @@
       "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
       "credential": "facundo",
       "verifier": "KK4ODA-1",
+      "verifier_role": "gateway",
       "now": 1794235241,
       "challenge_hex": null,
       "seen": [],
@@ -113,6 +173,7 @@
       "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
       "credential": "facundo",
       "verifier": "N1CALL-10",
+      "verifier_role": "gateway",
       "now": 1794235241,
       "challenge_hex": null,
       "seen": [],
@@ -125,6 +186,7 @@
       "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
       "credential": "facundo",
       "verifier": "N1CALL-10",
+      "verifier_role": "gateway",
       "now": 1794235241,
       "challenge_hex": null,
       "seen": [],
@@ -137,6 +199,7 @@
       "signature_hex": "a9904b079d5806a9d9be1001467f0ae7d3949121c384de80ec59a2ea65b1c84eaca9ca5df6b03a061abf2e8b03261d78ab3f34a278c40ebc05a32f777b7b110d",
       "credential": "facundo",
       "verifier": "N1CALL-10",
+      "verifier_role": "gateway",
       "now": 1794236100,
       "challenge_hex": "1b1ad94a572993440327a6d9be381e3d",
       "seen": [],
@@ -149,6 +212,7 @@
       "signature_hex": "a9904b079d5806a9d9be1001467f0ae7d3949121c384de80ec59a2ea65b1c84eaca9ca5df6b03a061abf2e8b03261d78ab3f34a278c40ebc05a32f777b7b110d",
       "credential": "facundo",
       "verifier": "N1CALL-10",
+      "verifier_role": "gateway",
       "now": 1794236100,
       "challenge_hex": "1835323e992eaff8a2857c5ea82d47fc",
       "seen": [],
@@ -161,6 +225,7 @@
       "signature_hex": "3a4b43b1521ede4b7ddef66389b449de520a85cc1b2fff263598e181dd38aacdc3394463c506d1da33528409918e5cb86934dec22e34c76b8ce8d09a4e915506",
       "credential": "shelter3-n3call",
       "verifier": "N2CALL-5",
+      "verifier_role": "gateway",
       "now": 1794235200,
       "challenge_hex": null,
       "seen": [],
@@ -173,6 +238,7 @@
       "signature_hex": "146d45151e4c884488abafb84f9a72ef2d1cab8236e36569f49c8649834f827415b63a4c923fb955ee49d7eea3c2112b0e6d7316afd66c7c9a9f9ad1974b8102",
       "credential": "ana",
       "verifier": "KK4ODA",
+      "verifier_role": "client",
       "now": 1794249600,
       "challenge_hex": null,
       "seen": [],
@@ -185,6 +251,7 @@
       "signature_hex": "65f00e02e1b361f46b63f46b9a9df461471a41801403dc67a53843b0958ee18fd28573db327120f8fd4ac09a82468ef27fb628ae9b1375e755dd864b3f1f9304",
       "credential": "ana",
       "verifier": "KK4ODA",
+      "verifier_role": "client",
       "now": 1794249600,
       "challenge_hex": null,
       "seen": [],
@@ -197,6 +264,7 @@
       "signature_hex": "146d45151e4c884488abafb84f9a72ef2d1cab8236e36569f49c8649834f827415b63a4c923fb955ee49d7eea3c2112b0e6d7316afd66c7c9a9f9ad1974b8102",
       "credential": "ana",
       "verifier": "KK4ODA",
+      "verifier_role": "client",
       "now": 1794249600,
       "challenge_hex": null,
       "seen": [],
@@ -209,10 +277,76 @@
       "signature_hex": "146d45151e4c884488abafb84f9a72ef2d1cab8236e36569f49c8649834f827415b63a4c923fb955ee49d7eea3c2112b0e6d7316afd66c7c9a9f9ad1974b8102",
       "credential": "ana",
       "verifier": "N3CALL",
+      "verifier_role": "client",
       "now": 1794249600,
       "challenge_hex": null,
       "seen": [],
       "sent_nonce_hex": "0db0c3d9fd330023",
+      "expect": "not-authorized"
+    },
+    {
+      "what": "on the air as VE3/KK4ODA/P-7, under the credential for KK4ODA",
+      "statement_hex": "a60175666163756e646f40726164696f706f73742e6f7267026e5645332f4b4b344f44412f502d3703694e3143414c4c2d3130041a6af1db40054810b9fb7bde93b85606824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signature_hex": "d1b8f6b3e79a49b990a09b5f435792a8e0d229e50dd60075dcd150cf5484766fc75053aa1c846c80e68e6355d5b48de578d1c0d5ac23d9ec2218ceba2cdab60d",
+      "credential": "facundo",
+      "verifier": "N1CALL-10",
+      "verifier_role": "gateway",
+      "now": 1794235241,
+      "challenge_hex": null,
+      "seen": [],
+      "sent_nonce_hex": null,
+      "expect": "ok"
+    },
+    {
+      "what": "a gateway named with another SSID of its callsign",
+      "statement_hex": "a60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d3130041a6af1db400548f3e403391bfdb0fd06824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signature_hex": "943c1303f1a30b85d2cf6debe8fd14a049197c66c92e434eeae6d01d14f7983dcf11fb7963cd0a49cf4c0ed89f864a862732d97acc32e30472157ff8c7854f01",
+      "credential": "facundo",
+      "verifier": "N1CALL-11",
+      "verifier_role": "gateway",
+      "now": 1794235241,
+      "challenge_hex": null,
+      "seen": [],
+      "sent_nonce_hex": null,
+      "expect": "not-authorized"
+    },
+    {
+      "what": "called at KK4ODA-2, checked by the client KK4ODA",
+      "statement_hex": "a6016f616e614068616d706f73742e6f726702664e3043414c4c03684b4b344f44412d32041a6af21380054895fe11b5ba558fb30680",
+      "signature_hex": "dfd5d1e91d71866db301123e41399c1a6ae1d756596aadbec38dd253e74fc143ad535b1ad27b09c5607eba201f2995b606154d9d67d660397ecfc9f5acda9203",
+      "credential": "ana",
+      "verifier": "KK4ODA",
+      "verifier_role": "client",
+      "now": 1794249600,
+      "challenge_hex": null,
+      "seen": [],
+      "sent_nonce_hex": null,
+      "expect": "ok"
+    },
+    {
+      "what": "called at KK4ODA-2, checked as a gateway's callsign",
+      "statement_hex": "a6016f616e614068616d706f73742e6f726702664e3043414c4c03684b4b344f44412d32041a6af21380054895fe11b5ba558fb30680",
+      "signature_hex": "dfd5d1e91d71866db301123e41399c1a6ae1d756596aadbec38dd253e74fc143ad535b1ad27b09c5607eba201f2995b606154d9d67d660397ecfc9f5acda9203",
+      "credential": "ana",
+      "verifier": "KK4ODA",
+      "verifier_role": "gateway",
+      "now": 1794249600,
+      "challenge_hex": null,
+      "seen": [],
+      "sent_nonce_hex": null,
+      "expect": "not-authorized"
+    },
+    {
+      "what": "called at KK4ODA-2, checked by another client",
+      "statement_hex": "a6016f616e614068616d706f73742e6f726702664e3043414c4c03684b4b344f44412d32041a6af21380054895fe11b5ba558fb30680",
+      "signature_hex": "dfd5d1e91d71866db301123e41399c1a6ae1d756596aadbec38dd253e74fc143ad535b1ad27b09c5607eba201f2995b606154d9d67d660397ecfc9f5acda9203",
+      "credential": "ana",
+      "verifier": "N3CALL",
+      "verifier_role": "client",
+      "now": 1794249600,
+      "challenge_hex": null,
+      "seen": [],
+      "sent_nonce_hex": null,
       "expect": "not-authorized"
     }
   ]

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.29 |
+| **Version** | 0.3.30 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -148,7 +148,7 @@ rules:
 | W42 | A monitor that decodes sessions off the air | Rules | Medium | Fits today | Planned |
 | W43 | A public test service | Adapters | Low | Fits today | Proposed |
 | W44 | One install, several radios | Setup | Medium | Fits today; needs specification review for a portable callsign | Proposed |
-| W45 | Station to station under an SSID | Radio | Low | Breaking protocol change, small, failing safe (G12) | Proposed |
+| W45 | Station to station under an SSID | Radio | Low | Breaking protocol change, small, failing safe (G12) | Partly implemented |
 | W46 | Several callsigns in one client, chosen from a list | Setup | Medium | Fits today, a call each | Implemented |
 | W47 | Deleting messages, and a trash | Mail | High | Fits today | Implemented |
 | W48 | What a session has carried, and what is left | Radio | Medium | Fits today | Implemented |
@@ -556,13 +556,13 @@ operator's several stations each keep an SSID of their own, so a listener can te
 | Requested by | The author (KK4ODA), 2026-11-11, planning a test between a laptop and the station's mini PC, both enrolled as KK4ODA. Requesters: 1. |
 | Component | Client; RP-1. |
 | Compatibility | **Breaking protocol change**, small, and failing safe. RP-1 §6.3 step 3 has the called client compare the callsign it was called at (`HELLO` `gateway`, RP-3 §5.1) with its own exactly, and its own is its credential's `operator`, so a call to `KK4ODA-2` is refused `not-authorized` by every client written to today's text (§13, G12). Comparing base callsigns (RP-0 §6.1) there, for a client answering (RP-3 §10), is a change every client must make to answer under an SSID; an older one refuses the call, so nothing is accepted that should not be. Gateways keep the exact comparison: a gateway's credential names its callsign with its SSID (RP-1 §3), and callers choose it by that name in the gateway list (RP-5 §4.4). |
-| Existing coverage | New. Two stations of one operator work today at the bare callsign: `KK4ODA` calls `KK4ODA`, and each identifies as `KK4ODA`. |
+| Existing coverage | **Protocol settled** (2026-11-15, D40): RP-1 0.7.0 §6.3 has a client called compare base callsigns, the engines and the post office verify that way, and a client routes a call at an SSID of one of its callsigns to that callsign's home. The client claims its callsigns at the modem as they are, so a call to an SSID reaches it only where the modem hands it over. |
 | Dependencies | G10 (the same comparison at step 2, for a prefix or suffix); W46 (the SSIDs a client answers to are its own setting). |
 | Effort | Small: the comparison in the client's engines, the SSIDs claimed at the modem (RP-4 §9.1), test vectors, RP-1's text. |
 | Priority | **Low.** It works today at the bare callsign; the SSID only tells listeners which station is which. |
 | Recommendation | **Accept, with G10**: one change to RP-1 §6.3, base callsigns compared at steps 2 and 3 for clients, made once while the specifications are Drafts. |
-| Status | Proposed. |
-| Author decision | None yet. |
+| Status | Partly implemented. |
+| Author decision | **Accepted** (2026-11-15): base callsigns, before 1.0 (D40). |
 | Notes | The caller's own SSID needs nothing: its `HELLO` names its credential's `operator`, which the called station's statement echoes (RP-1 §6.5), whatever callsign the modem calls as. |
 
 ### W48. What a session has carried, and what is left
@@ -1038,9 +1038,9 @@ document.
 | G7 | RP-2 §4 | Dictionary 1 "becomes a requirement" once adopted. | A change others cannot ignore, where a negotiated option would not be one. | Decide with the corpus's numbers, with G2. | W19 |
 | G8 | RP-4 §1.1 | What belongs to the whole station on a shared modem, such as the dial, or a whole Aether profile (RP-4 §9.1 leaves the bandwidth open in the same way). | One host can move every other host's station, even to another radio. | Refuse a station-wide change while another host's link or call is up. **Settled for the dial** (2026-11-15): RP-4 0.8.0 §1.1 and §4.1 refuse a `tune` while any host's link or call is up, and tell every host the new dial; a whole profile stays open (W44). | W14, W44 |
 | G9 | RP-3 §8 | Whether a second session may follow on the same link. | A client with several accounts pays a call for each. | Leave it, or allow it when both sides say so. | W7 |
-| G10 | RP-1 §6.3 | Step 2 requires the statement's `operator` to equal the credential's, yet `operator` is the callsign "as on the air" (RP-1 §6.1, RP-3 §5.1), and RP-6 §5.1 and D31 read where a station is from a prefix or suffix on it (`VE3/KK4ODA`). | A user abroad who signs with the host country's prefix is refused unless enrolled again for it; one who keeps the plain callsign is taken for a station at home, and the third-party check judges the wrong country. | Compare the base callsign, and let the statement carry the prefix and suffix: a change every verifier must make, cheapest while the specifications are Drafts. | W44 |
+| G10 | RP-1 §6.3 | Step 2 requires the statement's `operator` to equal the credential's, yet `operator` is the callsign "as on the air" (RP-1 §6.1, RP-3 §5.1), and RP-6 §5.1 and D31 read where a station is from a prefix or suffix on it (`VE3/KK4ODA`). | A user abroad who signs with the host country's prefix is refused unless enrolled again for it; one who keeps the plain callsign is taken for a station at home, and the third-party check judges the wrong country. | Compare the base callsign, and let the statement carry the prefix and suffix: a change every verifier must make, cheapest while the specifications are Drafts. **Settled** (2026-11-15, D40): RP-0 0.8.0 §6.1 defines the base, RP-1 0.7.0 §6.3 step 2 compares it. | W44 |
 | G11 | RP-5 §4.4 | Its `modem` values (`aether`, `vara-hf`, `vara-fm`, `ardop`, `ax25`, `tcp`) are a list with no registry, no way to add one, and no rule for a value a client does not know. | A gateway offering Mercury has no agreed name for it, and clients may treat an unknown name differently. | A registry of modem names in RP-0 §9, `mercury` its first new entry, and a client ignoring a channel whose modem it does not know. Drafted: RP-0 0.7.0 §9.4 and RP-5 0.17.0 §4.4, with `aether-fm` beside `mercury` (D39). | W20, W26, W44 |
-| G12 | RP-1 §6.3 | Step 3 compares the callsign a client was called at with its credential's exactly, so a client cannot answer under an SSID of its own callsign (RP-0 §6.1). | An operator's several stations must all answer at the bare callsign, and listeners cannot tell them apart. | For a client answering (RP-3 §10), compare base callsigns, as G10 proposes for step 2; gateways stay exact. | W45 |
+| G12 | RP-1 §6.3 | Step 3 compares the callsign a client was called at with its credential's exactly, so a client cannot answer under an SSID of its own callsign (RP-0 §6.1). | An operator's several stations must all answer at the bare callsign, and listeners cannot tell them apart. | For a client answering (RP-3 §10), compare base callsigns, as G10 proposes for step 2; gateways stay exact. **Settled** (2026-11-15, D40): RP-1 0.7.0 §6.3 step 3, a client by base, a gateway exactly. | W45 |
 | G13 | RP-5 §4.4 | A client's gateway list is one post office's registrations; nothing says how to read the others'. | A user never sees the gateways registered with other post offices, though any gateway serves them. | Read from every post office the home lists, the home's record winning: RP-5 0.16.0 §4.4, D36. **Built** (2026-11-12). | W17 |
 | G14 | RP-5 §5.8, RP-7 §4.1 | Copies at a gateway registered with another post office: where its record is found, how the gateway learns to poll there, and whose credential may collect them. A route through such a gateway has the same gaps. | Users' usual gateways must be registered with their own post office; the program skips the others without a word. | The record from the known post offices' lists, `placing` in the poll's answer, items only to the listing post office's credential: RP-5 0.16.0 and RP-7 0.9.0, D37. **Post office's side built** (2026-11-12); **the gateway's polling built with W27** (2026-11-13). | W27, W30 |
 | G15 | RP-1 §7.3 | Which post offices a post office knows: §7.3 covers gateways only, and the door, RP-5 §2 and RP-6 §4 rest on it. | Each operator types the others' keys, which are never refreshed: a rotated key, or a revocation, is missed, and a new post office is found by nobody. | Known by the operators' choice, found as mail crosses, followed in DNS: RP-1 0.6.0 §7.5, D38. **Built** (2026-11-12). | W49 |
@@ -1119,3 +1119,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.27 | 2026-11-15 | W46 implemented: *Listen* answers calls to any of the client's callsigns. |
 | 0.3.28 | 2026-11-15 | W38 implemented: the backup mail server, refusing as the door does, its verdicts sealed for the post office's door. |
 | 0.3.29 | 2026-11-15 | W14 and W40 implemented: the dial in RP-4 0.8.0, a call tuned to the gateway's channel and back, a gateway tuned to its partner's window, and a gateway that judges its dial itself. G3 settled, G8 settled for the dial. |
+| 0.3.30 | 2026-11-15 | G10 and G12 settled by the author (D40): callsigns compared by their base; W45 partly implemented. |

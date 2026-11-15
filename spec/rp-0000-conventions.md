@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.7.0 |
-| **Updated** | 2026-11-13 |
+| **Version** | 0.8.0 |
+| **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
@@ -161,6 +161,12 @@ callsign = [prefix "/"] base ["/" suffix] ["-" ssid]
 
 `base`, `prefix` and `suffix` are 1 to 10 letters and digits; the whole is at most 20 characters.
 Comparison is case-insensitive. A program MUST store and send callsigns in uppercase.
+
+A callsign's **base** is the callsign without its SSID, prefix and suffix: of the parts its `/`
+separate, once the SSID is taken off, the longest, or of two as long the last. `VE3/KK4ODA`,
+`KK4ODA/P`, `KK4ODA-7` and `W4/KK4ODA/M-2` all have the base `KK4ODA`. Where a check compares
+**base callsigns** (RP-1 §6.3), two callsigns pass when their bases are equal; the station is the
+same licensee on the air another way. Test vectors: `vectors/statements.json`, `base_callsigns`.
 
 ### 6.2 Addresses
 
@@ -352,3 +358,4 @@ ignores what carries it (RP-5 §4.4): a modem added after the program was writte
 | 0.5.1 | 2026-11-09 | §6.3: the example was not base32; each ID has one text, its unused bits zero; test vectors |
 | 0.6.0 | 2026-11-12 | The context `RadioPost-api-apply-v1` (§9.2), for RP-5's applications. |
 | 0.7.0 | 2026-11-13 | Modem names (§9.4): the six RP-5 §4.4 listed with no registry, and `mercury` and `aether-fm` added; a program ignores a name it does not know. |
+| 0.8.0 | 2026-11-15 | A callsign's base (§6.1), for RP-1 §6.3's checks (gaps G10, G12). |

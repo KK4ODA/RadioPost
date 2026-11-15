@@ -435,10 +435,15 @@ fn session_02_broken_and_resumed() {
 }
 
 fn station_caller(w: &World, file: &Json) -> Client {
+    station_caller_to(w, file, "N0CALL")
+}
+
+/// [`station_caller`], calling Ana's station at `called`.
+fn station_caller_to(w: &World, file: &Json, called: &str) -> Client {
     let cfg = ClientConfig {
         credential: w.credentials["facundo"].clone(),
         device: w.device("device:facundo"),
-        called: "N0CALL".into(),
+        called: called.into(),
         time: file["context"]["caller_clock"].as_u64().expect("clock"),
         nonce: nonce_of(&turns(file)[0]),
         outbox: vec![w.out("facundo-direct"), w.out("facundo-to-eoc")],
@@ -670,6 +675,38 @@ fn session_03_engine_to_engine() {
     }
     let expected: Vec<Vec<u8>> = turns(&file).into_iter().map(|t| t.bytes).collect();
     assert_eq!(written, expected);
+    assert!(caller.is_over());
+}
+
+/// RP-1 §6.3 step 3: a client answers at an SSID of its callsign (RP-0 §6.1): called at
+/// `N0CALL-2`, Ana's station takes Facundo's statement, and the session runs to its end.
+#[test]
+fn a_station_called_at_an_ssid_of_its_callsign_answers() {
+    let w = world();
+    let file = vectors("session-03.json");
+    let mut caller = station_caller_to(&w, &file, "N0CALL-2");
+    let mut station = ana(&w, &file);
+    let mut heard = Vec::new();
+    let mut last = caller.hello();
+    for _ in 0..8 {
+        heard.extend(station.receive(&last));
+        let Some(answer) = station.transmit() else {
+            break;
+        };
+        caller.receive(&answer);
+        let Some(next) = caller.transmit() else {
+            break;
+        };
+        last = next;
+    }
+    assert!(
+        !heard.iter().any(|e| matches!(e, Event::Refused(_))),
+        "{heard:?}"
+    );
+    assert!(
+        heard.iter().any(|e| matches!(e, Event::StationProved(_))),
+        "{heard:?}"
+    );
     assert!(caller.is_over());
 }
 
@@ -1145,7 +1182,13 @@ impl radiopost::session::gateway::Upstream for Partner {
             challenge: stmt.challenge(),
             sent_nonce: None,
         };
-        statement::verify(&stmt, &sig, &cbody, "N1CALL-10", &fresh)?;
+        statement::verify(
+            &stmt,
+            &sig,
+            &cbody,
+            statement::Verifier::Gateway("N1CALL-10"),
+            &fresh,
+        )?;
         self.log.lock().expect("log").opened.push(cbody.operator);
         let waiting: Vec<Json> = self
             .item

@@ -3,6 +3,7 @@
 
 use ed25519_dalek::SigningKey;
 
+use crate::callsign;
 use crate::cbor::{self, Value};
 use crate::credential::Body;
 use crate::crypto::{self, ContentId, context};
@@ -147,8 +148,28 @@ pub struct Freshness<'a> {
     pub sent_nonce: Option<[u8; 8]>,
 }
 
-/// RP-1 §6.3 steps 2 to 6, once the credential (step 1) has passed: `body` is its body, and `me`
-/// the callsign the statement must name.
+/// Who checks a statement, and the callsign it must name (RP-1 §6.3 step 3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Verifier<'a> {
+    /// A gateway called: its own callsign, exactly, since callers choose it by that name.
+    Gateway(&'a str),
+    /// A client, called or calling station to station: any callsign that shares its base
+    /// (RP-0 §6.1), so it answers under an SSID or portable form of its callsign.
+    Client(&'a str),
+}
+
+impl Verifier<'_> {
+    fn names(&self, called: &str) -> bool {
+        match self {
+            Verifier::Gateway(me) => called == *me,
+            Verifier::Client(me) => callsign::same_base(called, me),
+        }
+    }
+}
+
+/// RP-1 §6.3 steps 2 to 6, once the credential (step 1) has passed: `body` is its body. The
+/// statement's `operator` shares its base with the credential's (RP-0 §6.1): a station on the air
+/// as `VE3/KK4ODA/P` signs under its `KK4ODA` credential.
 ///
 /// # Errors
 /// The first check that fails, with its code.
@@ -156,13 +177,15 @@ pub fn verify(
     statement: &Statement,
     signature: &[u8],
     body: &Body,
-    me: &str,
+    me: Verifier<'_>,
     freshness: &Freshness<'_>,
 ) -> Result<(), ErrorCode> {
-    if statement.address != body.address || statement.operator != body.operator {
+    if statement.address != body.address
+        || !callsign::same_base(&statement.operator, &body.operator)
+    {
         return Err(ErrorCode::NotAuthorized);
     }
-    if statement.gateway != me {
+    if !me.names(&statement.gateway) {
         return Err(ErrorCode::NotAuthorized);
     }
     if !crypto::verify(
