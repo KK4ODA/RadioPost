@@ -381,7 +381,8 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
 - `docs/manual/` — **the user's manual** for the client, its post office desk and RadioPost Gateway (`manual.md`, its
   schematics in `fig/` from `tools/figures/manual.py`, its screenshots in `screens/` from
   `node tools/manual/screens.mjs`: the real panels in headless Chromium, their API answered with
-  made-up data). `tools/manual/build.py` writes its contents (`toc`), checks it (`check`, CI) and
+  made-up data; its `readme-…` shots are the README's pictures, in `docs/images/`, since
+  `build.py check` refuses a picture in the manual's folders that the manual does not use). `tools/manual/build.py` writes its contents (`toc`), checks it (`check`, CI) and
   prints it (`html`, `pdf` through Chrome; the Release workflow attaches the PDF). Its header's
   **Version** and change log follow `check_docs.py`'s rules; **Describes** is a `tools/release.py`
   site. Aether's manual (`KK4ODA/aether-hf`, `docs/manual/manual.md`) is cross-referenced, not

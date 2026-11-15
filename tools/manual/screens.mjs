@@ -8,7 +8,9 @@
 // program, and writes PNGs at twice the screen's size into docs/manual/screens/. The pages are the
 // ones in the tree, so a screenshot shows the panel as it is now; the data is made up and the
 // same at every run (the clock is fixed). Run it after changing what a panel shows, look at the
-// pictures, and commit them with the manual. With names, it takes only those shots.
+// pictures, and commit them with the manual. With names, it takes only those shots. The shots
+// named readme-… are the README's, written into docs/images/: one part of a window each, in a
+// narrower window, so that they can be read at the README's width.
 //
 // Needs Node and Playwright with its Chromium (`npm i -g playwright`, `npx playwright install
 // chromium`). The pictures depend on the fonts installed; the committed ones use Inter.
@@ -24,6 +26,7 @@ const {chromium} = require("playwright");
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const OUT = join(ROOT, "docs", "manual", "screens");
+const README_OUT = join(ROOT, "docs", "images");
 const ORIGIN = "http://radiopost.test";
 const NOW = new Date("2026-11-14T15:24:00-05:00");
 const T = Math.floor(NOW.getTime() / 1000);
@@ -425,11 +428,11 @@ function clientWorld(over = {}) {
 }
 
 // the desk on one tab, as KK4ODA, an operator of radiopost.org
-async function openDesk(browser, tab, height = 900) {
+async function openDesk(browser, tab, height = 900, width = 1280) {
   const world = clientWorld({state: {me: {address: "facundo@radiopost.org", operator: "KK4ODA",
                                           expires: T + 63 * DAY}},
                              operator: true});
-  const {page} = await open(browser, {ui: CLIENT_UI, api: clientApi(world), height});
+  const {page} = await open(browser, {ui: CLIENT_UI, api: clientApi(world), height, width});
   await spreadLog(page, "log", T - 1300, 19);
   await page.waitForTimeout(300);
   await page.click("#office-open");
@@ -443,6 +446,43 @@ async function openDesk(browser, tab, height = 900) {
 async function shotMain(page, name) {
   await page.screenshot({path: join(OUT, `${name}.png`), clip: await unionClip(page, ["#office"])});
   console.log(`docs/manual/screens/${name}.png`);
+}
+
+// a call to KK4ODA-1 under way, the gateway chosen from the list as the manual's §8 says: its
+// callsign in Call and its channels in Channel
+async function openInSession(browser, width = 1280, height = 900) {
+  const world = clientWorld({state: {
+    activity: {state: "session", remote: "KK4ODA-1", failed: null},
+    progress: {sending: {messages: 2, whole: 1, bytes: 3400, crossed: 2300},
+               receiving: {messages: 3, whole: 1, bytes: 9600, crossed: 4100},
+               receiving_now: true, rate_bps: 900}},
+    log: CLIENT_LOG.slice(0, 5)});
+  const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(world), width, height});
+  await page.click("#gateways-open");
+  await page.waitForTimeout(200);
+  await page.locator("#gateway-rows tr", {hasText: "KK4ODA-1"})
+    .getByRole("button", {name: "Choose"}).click();
+  await page.click("button[data-folder=inbox]");
+  await page.evaluate(() => { document.getElementById("toast").hidden = true; });
+  await page.locator("#callsign").blur();
+  await spreadLog(page, "log", T - 110, 17);
+  await page.waitForTimeout(1200);
+  return {page, context};
+}
+
+// RadioPost Gateway answering N0CALL
+function gatewayInSession() {
+  return {state: gatewayState({status: {state: "session", since: T - 95, problem: null,
+    logged: GW_LOG.length, checks: gatewayState().status.checks,
+    session: {remote: "N0CALL", account: "ana@radiopost.org", started: T - 95, handed_in: 1,
+              picked_up: 1}}}), sessions: GW_SESSIONS};
+}
+
+// a README picture: the whole window, or the box around the elements named
+async function readmeShot(page, name, selectors) {
+  const path = join(README_OUT, `${name}.png`);
+  await page.screenshot(selectors ? {path, clip: await unionClip(page, selectors)} : {path});
+  console.log(`docs/images/${name}.png`);
 }
 
 const SHOTS = {
@@ -494,24 +534,7 @@ const SHOTS = {
   },
 
   async "client-session"(browser) {
-    const world = clientWorld({state: {
-      activity: {state: "session", remote: "KK4ODA-1", failed: null},
-      progress: {sending: {messages: 2, whole: 1, bytes: 3400, crossed: 2300},
-                 receiving: {messages: 3, whole: 1, bytes: 9600, crossed: 4100},
-                 receiving_now: true, rate_bps: 900}},
-      log: CLIENT_LOG.slice(0, 5)});
-    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(world),
-                                                 height: 900});
-    // chosen from the list, as §8 says: its callsign in Call and its channels in Channel
-    await page.click("#gateways-open");
-    await page.waitForTimeout(200);
-    await page.locator("#gateway-rows tr", {hasText: "KK4ODA-1"})
-      .getByRole("button", {name: "Choose"}).click();
-    await page.click("button[data-folder=inbox]");
-    await page.evaluate(() => { document.getElementById("toast").hidden = true; });
-    await page.locator("#callsign").blur();
-    await spreadLog(page, "log", T - 110, 17);
-    await page.waitForTimeout(1200);
+    const {page, context} = await openInSession(browser);
     await shot(page, "client-session");
     await context.close();
   },
@@ -735,16 +758,53 @@ const SHOTS = {
   },
 
   async "gateway-session"(browser) {
-    const world = {state: gatewayState({status: {state: "session", since: T - 95, problem: null,
-      logged: GW_LOG.length, checks: gatewayState().status.checks,
-      session: {remote: "N0CALL", account: "ana@radiopost.org", started: T - 95, handed_in: 1,
-                picked_up: 1}}}), sessions: GW_SESSIONS};
-    const {page, context} = await open(browser, {ui: GATEWAY_UI, api: gatewayApi(world), height: 860});
+    const {page, context} = await open(browser, {ui: GATEWAY_UI, api: gatewayApi(gatewayInSession()),
+                                                 height: 860});
     await page.waitForTimeout(600);
     await page.screenshot({path: join(OUT, "gateway-session.png"), clip: await unionClip(page,
       ["body > header", "#session"])});
     console.log("docs/manual/screens/gateway-session.png");
     await context.close();
+  },
+
+  // ── the README's ─────────────────────────────────────────────────────────────────────────
+
+  async "readme-session"(browser) {
+    const {page, context} = await openInSession(browser, 1100, 900);
+    await readmeShot(page, "readme-session");
+    await context.close();
+  },
+
+  async "readme-reader"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+                                                 width: 1000, height: 760});
+    await page.locator("#rows tr").first().click();
+    await page.waitForTimeout(200);
+    await readmeShot(page, "readme-reader", ["#reader > *"]);
+    await context.close();
+  },
+
+  async "readme-gateways"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+                                                 width: 1100, height: 700});
+    await page.click("#gateways-open");
+    await page.waitForTimeout(200);
+    await readmeShot(page, "readme-gateways", ["#gateways-view > *"]);
+    await context.close();
+  },
+
+  async "readme-gateway"(browser) {
+    const {page, context} = await open(browser, {ui: GATEWAY_UI, api: gatewayApi(gatewayInSession()),
+                                                 width: 1100, height: 860});
+    await page.waitForTimeout(600);
+    await readmeShot(page, "readme-gateway", ["body > header", "#session"]);
+    await context.close();
+  },
+
+  async "readme-desk"(browser) {
+    const page = await openDesk(browser, "accounts", 760, 1100);
+    await readmeShot(page, "readme-desk", ["#office"]);
+    await page.context().close();
   },
 };
 
@@ -767,6 +827,7 @@ async function unionClip(page, selectors, width = 0) {
 
 const wanted = process.argv.slice(2);
 mkdirSync(OUT, {recursive: true});
+mkdirSync(README_OUT, {recursive: true});
 const browser = await chromium.launch();
 try {
   for (const [name, take] of Object.entries(SHOTS)) {
