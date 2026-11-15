@@ -1047,3 +1047,338 @@ fn radio_skips_read_takes_what_was_read_as_picked_up() {
     assert_eq!(running.learn_read().expect("read"), 0);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// A stand-in for Stalwart's mail over JMAP, for the Sent folder and read marks: each account's
+/// emails (`id`, `messageId`, `keywords`, `mailboxIds`, `raw`), the uploads taken, and the paths
+/// asked. Every account's Sent mailbox is `ms`.
+#[derive(Default)]
+struct Mail {
+    emails: std::collections::BTreeMap<String, Vec<Json>>,
+    blobs: std::collections::BTreeMap<String, String>,
+    paths: Vec<String>,
+}
+
+/// The stand-in's `Email/import`s: each email made of the blob it names, in the mailboxes asked.
+fn finish_imports(m: &mut Mail, answers: &mut [Json]) {
+    for a in answers.iter_mut() {
+        if a[0] == "Email/import" {
+            let e = a[1]["pending"].clone();
+            let account = a[1]["account"].as_str().unwrap_or("").to_owned();
+            let raw = m.blobs.get(e["blobId"].as_str().unwrap_or("")).cloned();
+            let Some(raw) = raw else {
+                *a = json!(["Email/import", {"notCreated": {"e": {"type": "blobNotFound"}}}, a[2]]);
+                continue;
+            };
+            let mid = raw
+                .lines()
+                .find_map(|l| l.strip_prefix("Message-ID: "))
+                .unwrap_or("")
+                .trim()
+                .trim_start_matches('<')
+                .trim_end_matches('>')
+                .to_owned();
+            let list = m.emails.entry(account).or_default();
+            let id = format!("s{}", list.len() + 1);
+            list.push(
+                json!({"id": id, "messageId": [mid], "keywords": e["keywords"],
+                             "mailboxIds": e["mailboxIds"], "raw": raw,
+                             "receivedAt": e["receivedAt"]}),
+            );
+            *a = json!(["Email/import", {"created": {"e": {"id": id}}}, a[2]]);
+        }
+    }
+}
+
+fn mail_server(mail: Arc<Mutex<Mail>>) -> String {
+    let server = tiny_http::Server::http("127.0.0.1:0").expect("a port");
+    let at = format!("http://{}", server.server_addr());
+    std::thread::spawn(move || {
+        for mut request in server.incoming_requests() {
+            let mut body = String::new();
+            let _ = request.as_reader().read_to_string(&mut body);
+            let authorised = request
+                .headers()
+                .iter()
+                .any(|h| h.field.equiv("Authorization") && h.value.as_str() == "Bearer API_reader");
+            if !authorised {
+                let _ = request.respond(tiny_http::Response::from_string("").with_status_code(401));
+                continue;
+            }
+            let path = request.url().to_owned();
+            let mut m = mail.lock().expect("the mail");
+            m.paths.push(path.clone());
+            let text = if path == "/jmap/session" {
+                // Stalwart names its public host, which the service may not reach it by
+                json!({"uploadUrl": "https://mail.public.example/jmap/upload/{accountId}/"})
+                    .to_string()
+            } else if let Some(account) = path.strip_prefix("/jmap/upload/") {
+                let blob = format!("B{}", m.blobs.len() + 1);
+                m.blobs.insert(blob.clone(), body);
+                json!({"accountId": account.trim_end_matches('/'), "blobId": blob}).to_string()
+            } else {
+                let asked: Json = serde_json::from_str(&body).unwrap_or(Json::Null);
+                let mut answers = Vec::new();
+                let mut last_ids: Vec<Json> = Vec::new();
+                for c in asked["methodCalls"].as_array().cloned().unwrap_or_default() {
+                    let account = c[1]["accountId"].as_str().unwrap_or("").to_owned();
+                    let emails = m.emails.entry(account.clone()).or_default();
+                    match c[0].as_str() {
+                        Some("x:Account/get") => answers.push(json!(["x:Account/get",
+                            {"list": [{"id": "b", "emailAddress": "facundo@test.example"},
+                                      {"id": "c", "emailAddress": "jose@test.example"}]}, c[2]])),
+                        Some("Mailbox/query") => {
+                            assert_eq!(c[1]["filter"], json!({"role": "sent"}));
+                            answers.push(json!(["Mailbox/query", {"ids": ["ms"]}, c[2]]));
+                        }
+                        Some("Email/query") => {
+                            let wanted = c[1]["filter"]["header"][1].as_str().unwrap_or("");
+                            assert_eq!(c[1]["filter"]["header"][0], "Message-ID");
+                            last_ids = emails
+                                .iter()
+                                .filter(|e| {
+                                    e["messageId"][0]
+                                        .as_str()
+                                        .is_some_and(|i| i.contains(wanted))
+                                })
+                                .map(|e| e["id"].clone())
+                                .collect();
+                            answers.push(json!(["Email/query", {"ids": last_ids}, c[2]]));
+                        }
+                        Some("Email/get") => {
+                            let list: Vec<Json> = emails
+                                .iter()
+                                .filter(|e| last_ids.contains(&e["id"]))
+                                .cloned()
+                                .collect();
+                            answers.push(json!(["Email/get", {"list": list}, c[2]]));
+                        }
+                        Some("Email/set") => {
+                            let update = c[1]["update"].as_object().cloned().unwrap_or_default();
+                            for (id, patch) in &update {
+                                assert_eq!(patch, &json!({"keywords/$seen": true}));
+                                for e in emails.iter_mut().filter(|e| e["id"] == id.as_str()) {
+                                    e["keywords"]["$seen"] = json!(true);
+                                }
+                            }
+                            let updated: serde_json::Map<String, Json> =
+                                update.keys().map(|k| (k.clone(), Json::Null)).collect();
+                            answers.push(json!(["Email/set", {"updated": updated}, c[2]]));
+                        }
+                        Some("Email/import") => {
+                            let e = &c[1]["emails"]["e"];
+                            answers.push(json!(["Email/import",
+                                                {"pending": e, "account": account}, c[2]]));
+                        }
+                        _ => answers.push(json!(["error", {"type": "unknownMethod"}, c[2]])),
+                    }
+                }
+                // imports are done here, where the blobs can be read
+                finish_imports(&mut m, &mut answers);
+                json!({"methodResponses": answers}).to_string()
+            };
+            drop(m);
+            let _ = request.respond(tiny_http::Response::from_string(text));
+        }
+    });
+    at
+}
+
+/// RP-6 §2.6, wishlist W36: a message a user sends by radio goes into their Sent folder, as the
+/// email RP-6 §3.1 makes of it, read, once; messages they pick up by radio are marked read in the
+/// mail program, one sent by radio to them once it reaches their mailbox; what the mail server
+/// never has is given up after two days. Without the mailboxes key it is said, and nothing is
+/// lost.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn mail_programs_show_what_the_radio_did() {
+    let dir = scratch("mirror");
+    let running = post_office(&dir);
+    with_users(&running);
+    let gateway = gateway_here(&running);
+
+    // Maria's email reaches Jose's mailbox, and the radio
+    let maria = MARIA.replace("facundo@test.example", "jose@test.example");
+    running
+        .email_in(
+            "maria@example.com",
+            &["jose@test.example".to_owned()],
+            maria.as_bytes(),
+        )
+        .expect("taken");
+    // Facundo sends by radio, to Jose and to Maria
+    let by_radio = message(
+        "facundo@test.example",
+        &["jose@test.example", "maria@example.com"],
+        "Sent by radio",
+        "From the field.\n",
+    );
+    let (session, _) = open_session(
+        &running,
+        &gateway,
+        "facundo@test.example",
+        0x51,
+        &[&by_radio],
+    );
+    call(
+        &running,
+        "POST",
+        &format!("/sessions/{session}/messages"),
+        Some(&gateway),
+        &json!({"messages": [{"id": by_radio.content_id().text(),
+                              "air": base64url::encode(&by_radio.air_form(Compression::None))}]}),
+    );
+    let radio_id = by_radio.content_id().text();
+    // Jose picks both up by radio
+    let (session, answer) = open_session(&running, &gateway, "jose@test.example", 0x52, &[]);
+    let serials: Vec<u64> = answer["waiting"]
+        .as_array()
+        .expect("waiting")
+        .iter()
+        .filter_map(|w| w["serial"].as_u64())
+        .collect();
+    assert_eq!(serials.len(), 2, "{answer}");
+    let (status, _) = call(
+        &running,
+        "POST",
+        &format!("/sessions/{session}/pickups"),
+        Some(&gateway),
+        &json!({"serials": serials}),
+    );
+    assert!(status < 300, "{status}");
+    let tasks: Vec<(String, String, String)> = running
+        .office()
+        .state
+        .to_mailboxes
+        .iter()
+        .map(|t| (t.kind.clone(), t.account.clone(), t.message_id.clone()))
+        .collect();
+    assert_eq!(
+        tasks,
+        [
+            (
+                "sent".to_owned(),
+                "facundo@test.example".to_owned(),
+                format!("<{radio_id}@test.example>")
+            ),
+            (
+                "read".to_owned(),
+                "jose@test.example".to_owned(),
+                "<m.1@mail.example.com>".to_owned()
+            ),
+            (
+                "read".to_owned(),
+                "jose@test.example".to_owned(),
+                format!("<{radio_id}@test.example>")
+            ),
+        ]
+    );
+
+    // no way to reach the mail server yet: said, and every task kept
+    let refused = running.mirror().expect_err("no mailboxes");
+    assert!(refused.contains("set mailboxes to Stalwart"), "{refused}");
+    assert_eq!(running.office().state.to_mailboxes.len(), 3);
+
+    // Jose's mailbox holds Maria's email, unread; Facundo's own copy of the radio's is not there
+    let mail = Arc::new(Mutex::new(Mail::default()));
+    mail.lock().expect("the mail").emails.insert(
+        "c".into(),
+        vec![
+            json!({"id": "j1", "messageId": ["m.1@mail.example.com"], "keywords": {},
+                    "mailboxIds": {"mi": true}}),
+        ],
+    );
+    let at = mail_server(Arc::clone(&mail));
+    {
+        let files = Files::new(&dir);
+        let mut settings = files.settings().expect("settings");
+        settings.mailboxes.kind = "stalwart".into();
+        settings.mailboxes.url = at;
+        settings.mailboxes.api_key = Some("API_reader".into());
+        running.set_settings(settings);
+    }
+    let done = running.mirror().expect("mirrored");
+    assert_eq!((done.sent, done.read, done.given_up), (1, 1, 0));
+    {
+        let m = mail.lock().expect("the mail");
+        let sent = &m.emails["b"];
+        assert_eq!(sent.len(), 1, "{sent:?}");
+        assert_eq!(sent[0]["mailboxIds"], json!({"ms": true}));
+        assert_eq!(sent[0]["keywords"], json!({"$seen": true}));
+        assert_eq!(sent[0]["messageId"][0], format!("{radio_id}@test.example"));
+        let raw = sent[0]["raw"].as_str().expect("the email");
+        assert!(raw.contains("Subject: Sent by radio"), "{raw}");
+        assert!(
+            raw.contains("To: jose@test.example, maria@example.com"),
+            "{raw}"
+        );
+        assert!(
+            !raw.contains("application/radiopost-message"),
+            "the sender's copy carries no RadioPost part: {raw}"
+        );
+        assert!(
+            m.paths.iter().any(|p| p == "/jmap/upload/b/"),
+            "uploaded to the address the service reaches the mail server at: {:?}",
+            m.paths
+        );
+        assert_eq!(m.emails["c"][0]["keywords"], json!({"$seen": true}));
+    }
+    // the radio's message is not in Jose's mailbox yet: its mark waits
+    assert_eq!(running.office().state.to_mailboxes.len(), 1);
+    assert_eq!(
+        running.mirror().expect("mirrored"),
+        radiopost_postoffice::mirror::Mirrored::default()
+    );
+
+    // the email reaches Jose's mailbox, unread: marked read at the next look
+    mail.lock()
+        .expect("the mail")
+        .emails
+        .get_mut("c")
+        .expect("Jose")
+        .push(
+            json!({"id": "j2", "messageId": [format!("{radio_id}@test.example")], "keywords": {},
+               "mailboxIds": {"mi": true}}),
+        );
+    let done = running.mirror().expect("mirrored");
+    assert_eq!((done.sent, done.read), (0, 1));
+    assert_eq!(
+        mail.lock().expect("the mail").emails["c"][1]["keywords"],
+        json!({"$seen": true})
+    );
+    assert_eq!(
+        running.office().state.to_mailboxes,
+        Vec::<radiopost_postoffice::office::MailboxTask>::new()
+    );
+
+    // filed already (a try cut short after the import): not filed twice
+    let again = radiopost_postoffice::office::MailboxTask {
+        kind: "sent".into(),
+        account: "facundo@test.example".into(),
+        message_id: format!("<{radio_id}@test.example>"),
+        air: base64url::encode(&by_radio.air_form(Compression::None)),
+        queued: serve::now(),
+    };
+    running.office().state.to_mailboxes.push(again);
+    assert_eq!(running.mirror().expect("mirrored").sent, 1);
+    assert_eq!(mail.lock().expect("the mail").emails["b"].len(), 1);
+
+    // a message the mail server never has is given up after two days
+    running
+        .office()
+        .state
+        .to_mailboxes
+        .push(radiopost_postoffice::office::MailboxTask {
+            kind: "read".into(),
+            account: "jose@test.example".into(),
+            message_id: "<never@example.com>".into(),
+            air: String::new(),
+            queued: serve::now() - 3 * 86_400,
+        });
+    let done = running.mirror().expect("mirrored");
+    assert_eq!((done.read, done.given_up), (0, 1));
+    assert_eq!(
+        running.office().state.to_mailboxes,
+        Vec::<radiopost_postoffice::office::MailboxTask>::new()
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}

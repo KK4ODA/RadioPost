@@ -106,6 +106,18 @@ fn jmap(settings: &MailboxSettings, calls: &Json) -> Result<Vec<Json>, String> {
     )
 }
 
+/// The `Authorization` header the post office signs in to Stalwart with: its API key, or the login.
+pub(crate) fn authorization(settings: &MailboxSettings) -> Option<String> {
+    if let Some(key) = &settings.api_key {
+        Some(format!("Bearer {key}"))
+    } else {
+        settings.login.as_ref().map(|login| {
+            let basic = crate::mail::base64_lines(login.as_bytes()).replace("\r\n", "");
+            format!("Basic {basic}")
+        })
+    }
+}
+
 /// One JMAP request to Stalwart with these capabilities: its method responses.
 ///
 /// # Errors
@@ -123,11 +135,8 @@ pub(crate) fn jmap_using(
         .into();
     let url = format!("{}/jmap/", settings.url.trim_end_matches('/'));
     let mut request = agent.post(&url).header("Content-Type", "application/json");
-    if let Some(key) = &settings.api_key {
-        request = request.header("Authorization", &format!("Bearer {key}"));
-    } else if let Some(login) = &settings.login {
-        let basic = crate::mail::base64_lines(login.as_bytes()).replace("\r\n", "");
-        request = request.header("Authorization", &format!("Basic {basic}"));
+    if let Some(auth) = authorization(settings) {
+        request = request.header("Authorization", &auth);
     }
     let body = json!({"using": using, "methodCalls": calls});
     let mut response = request

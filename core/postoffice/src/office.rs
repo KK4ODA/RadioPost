@@ -308,6 +308,28 @@ pub struct Outgoing {
     pub queued: u64,
 }
 
+/// What the mail server is still to be told so that a mail program shows what the radio did
+/// (RP-6 §2.6): a message sent by radio, for its sender's Sent folder, or one picked up by radio,
+/// to mark read. Done in the background by `crate::mirror`, retried until the mail server has the
+/// message, for at most [`MIRROR_KEPT_S`].
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MailboxTask {
+    /// `sent` or `read`.
+    pub kind: String,
+    /// The account whose mailbox it is.
+    pub account: String,
+    /// The message's `Message-ID` in the mail server, angle brackets kept.
+    pub message_id: String,
+    /// For `sent`: the message's air form, base64url, the email made of it as RP-6 §3.1 makes it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub air: String,
+    /// When it was queued, Unix seconds.
+    pub queued: u64,
+}
+
+/// How long a task for the mail server is tried (RP-6 §2.6): two days.
+pub const MIRROR_KEPT_S: u64 = 2 * 86_400;
+
 /// Everything a post office keeps between requests.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -369,6 +391,8 @@ pub struct State {
     pub listed: BTreeMap<String, Listed>,
     /// How many of each gateway's items it has acknowledged (RP-5 §5.8).
     pub acked: BTreeMap<String, usize>,
+    /// What the mail server is still to be told of mail sent and picked up by radio (RP-6 §2.6).
+    pub to_mailboxes: Vec<MailboxTask>,
 }
 
 /// A known post office's gateway list, as fetched and checked (RP-5 §4.4).
@@ -699,6 +723,31 @@ impl PostOffice {
     #[must_use]
     pub fn email_message_id(&self, content_id: &[u8]) -> Option<String> {
         self.state.email_ids.get(&hex(content_id)).cloned()
+    }
+
+    /// Takes the tasks for the mail server done or given up (RP-6 §2.6): those in `done`, and those
+    /// queued more than [`MIRROR_KEPT_S`] ago. How many were given up.
+    pub fn mailbox_tasks_done(&mut self, done: &[MailboxTask]) -> usize {
+        let now = self.now;
+        self.state.to_mailboxes.retain(|t| !done.contains(t));
+        let before = self.state.to_mailboxes.len();
+        self.state
+            .to_mailboxes
+            .retain(|t| now.saturating_sub(t.queued) <= MIRROR_KEPT_S);
+        before - self.state.to_mailboxes.len()
+    }
+
+    /// The `Message-ID` a message has in the mail server: the email's it was made of (RP-6 §2.4
+    /// step 8), or, for a RadioPost message, the one RP-6 §3.1 gives its email (`id` is its
+    /// content ID's text, `from` its sender).
+    #[must_use]
+    pub fn mail_message_id(&self, id: &str, from: &str) -> Option<String> {
+        let cid = ContentId::from_text(id)?;
+        if let Some(m) = self.email_message_id(&cid.0) {
+            return Some(m);
+        }
+        let domain = domain_of(from);
+        (!domain.is_empty()).then(|| format!("<{}@{domain}>", cid.text()))
     }
 
     /// An email left: it keeps the `Message-ID` it was sent under (RP-6 §3.1).
@@ -1144,7 +1193,7 @@ impl PostOffice {
                 if serials.iter().any(|s| !session.waiting.contains(s)) {
                     return problem(ErrorCode::UnknownMessage, None);
                 }
-                self.picked_up(&session.address, &serials);
+                self.picked_up(&session.address, &serials, true);
                 Response::empty()
             }
             ("POST", ["files"]) => self.files(&session.address, body),
@@ -1419,6 +1468,19 @@ impl PostOffice {
     /// at this post office's own domains get it in their mail-server mailboxes too, for their
     /// mail programs (RP-6 §2.6): one mailbox, whichever way it is read.
     fn send_on(&mut self, message: &Message, has_it: &str, route: Option<Route>) {
+        // the sender's mail program shows it in its Sent folder too (RP-6 §2.6)
+        let from = message.from().unwrap_or("").to_owned();
+        if self.is_account(&from)
+            && let Some(message_id) = self.mail_message_id(&message.content_id().text(), &from)
+        {
+            self.state.to_mailboxes.push(MailboxTask {
+                kind: "sent".into(),
+                account: from,
+                message_id,
+                air: base64url::encode(&crate::air_form(message, false)),
+                queued: self.now,
+            });
+        }
         let to: Vec<String> = message
             .recipients()
             .iter()
@@ -1455,7 +1517,7 @@ impl PostOffice {
                     .collect()
             })
             .unwrap_or_default();
-        self.picked_up(address, &serials);
+        self.picked_up(address, &serials, true);
     }
 
     /// RP-5 §6.5: the recipients of mail a user sent join the user's accept list.
@@ -1525,7 +1587,7 @@ impl PostOffice {
     /// picked up, and their copies placed ahead dropped. Returns how many were not already.
     pub fn read_in_mail_program(&mut self, address: &str, serials: &[u64]) -> usize {
         let before = self.unpicked(address);
-        self.picked_up(address, serials);
+        self.picked_up(address, serials, false);
         before - self.unpicked(address)
     }
 
@@ -1536,9 +1598,12 @@ impl PostOffice {
             .map_or(0, |b| b.iter().filter(|w| !w.picked).count())
     }
 
-    /// RP-5 §5.5: mark them, and have every copy placed ahead dropped (§5.8).
-    fn picked_up(&mut self, address: &str, serials: &[u64]) {
+    /// RP-5 §5.5: mark them, and have every copy placed ahead dropped (§5.8). Picked up by radio,
+    /// they are marked read in the mail program too (RP-6 §2.6); read there already, they are not
+    /// marked again.
+    fn picked_up(&mut self, address: &str, serials: &[u64], by_radio: bool) {
         let mut newly = Vec::new();
+        let mut read = Vec::new();
         if let Some(b) = self.state.mailboxes.get_mut(address) {
             for w in b
                 .iter_mut()
@@ -1546,6 +1611,20 @@ impl PostOffice {
             {
                 w.picked = true;
                 newly.push(w.serial);
+                read.push((w.id.clone(), w.from.clone()));
+            }
+        }
+        if by_radio && self.is_account(address) {
+            for (id, from) in read {
+                if let Some(message_id) = self.mail_message_id(&id, &from) {
+                    self.state.to_mailboxes.push(MailboxTask {
+                        kind: "read".into(),
+                        account: address.to_owned(),
+                        message_id,
+                        air: String::new(),
+                        queued: self.now,
+                    });
+                }
             }
         }
         for serial in newly {
@@ -1613,7 +1692,7 @@ impl PostOffice {
                 .and_then(Json::as_array)
                 .map(|a| a.iter().filter_map(Json::as_u64).collect())
                 .unwrap_or_default();
-            self.picked_up(&stmt.address, &pickups);
+            self.picked_up(&stmt.address, &pickups, true);
             let local: Vec<String> = s
                 .get("local_pickups")
                 .and_then(Json::as_array)

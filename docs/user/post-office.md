@@ -266,7 +266,13 @@ The door makes RP-6 §2.1's full check for the RadioPost accounts itself (§5.7)
 * a user who turns on `radio_skips_read` (`radiopost settings --set '{"radio_skips_read": true}'`)
   is not offered by radio what they read in a mail program. Every minute the service asks Stalwart which messages carry `$seen`,
   with the mailboxes key of §8, and takes those as picked up: their copies at gateways are
-  dropped too. Without that key it says so in its log, and offers everything.
+  dropped too. Without that key it says so in its log, and offers everything;
+* mail a user sends by radio goes into their Sent folder too, as the email that left, marked
+  read, and mail they pick up by radio is marked read in their mail program. The service does it
+  every minute with the same key; mail sent by radio to a user here reaches their mailbox by email,
+  sometimes after they picked it up, and is marked read when it does. What the mail server still
+  lacks after two days is given up. Without the key it says so in its log, and the radio works as
+  before.
 
 What the door reads (RP-6 §2.1): Stalwart 1.1 calls its hooks with the message as the client sent
 it, `Authentication-Results` and all, and with no verdicts of its own. The door never believes a
@@ -389,11 +395,14 @@ account needs one in Stalwart. In Settings, *Mailboxes*: give Stalwart's address
 office reaches it (`http://127.0.0.1:8080`) and an API key made in Stalwart's administration with
 the right to create accounts, then **Check** (it asks Stalwart for the domain, and makes nothing).
 The same key tells the service which messages users have read in their mail programs, for
-`radio_skips_read` (§5.7): it reads another account's mail by Stalwart's `impersonate`
-permission. A key in *Inherit* mode on an administrator's account has every permission it needs;
-a key that does only this, in *Replace* mode, needs `authenticate`, `impersonate`,
-`sysAccountGet`, `sysAccountQuery`, `jmapEmailQuery` and `jmapEmailGet` (tried on Stalwart
-1.1.0). The service never keeps a user's password.
+`radio_skips_read` (§5.7), and puts mail sent by radio in Sent folders and marks mail picked up by
+radio read: it reaches another account's mail by Stalwart's `impersonate` permission. A key in
+*Inherit* mode on an administrator's account has every permission it needs; a key that does only
+this, in *Replace* mode, needs `authenticate`, `impersonate`, `sysAccountGet`, `sysAccountQuery`,
+`jmapEmailQuery` and `jmapEmailGet` (tried on Stalwart 1.1.0), and for the Sent folder and the
+read marks `jmapEmailUpdate`, `jmapEmailImport`, `jmapMailboxQuery`, `jmapMailboxGet` and
+`jmapBlobUpload` (named from Stalwart's permissions reference, not yet tried on the server). The
+service never keeps a user's password.
 Each approval then makes the mailbox, and the welcome email gives the new user its first password
 and where mail programs connect. For another mail server, or a Stalwart whose interface differs,
 name a program instead: it is given the address and the name, and the password in
@@ -478,12 +487,15 @@ stalwart`). Until then mail users send from their mail programs to each other do
 radio. For `radio_skips_read`, the mailboxes key of §8 must be set; one in *Inherit* mode on an
 administrator's account already reads what was seen.
 
+**Updating to the release that fills Sent folders** (0.1.0-beta.17): mail sent by radio goes into
+the sender's Sent folder and mail picked up by radio is marked read, with the mailboxes key of §8.
+A key in *Inherit* mode needs nothing more; one in *Replace* mode needs the five permissions §8
+names for them.
+
 ## 11. What is not built yet
 
 * **Enrollment with a Logbook of the World certificate** (D33, wishlist W10): an application is
   decided by a person, or by the postcard.
-* **One mailbox, the rest of it** (wishlist W36). Mail sent by radio does not appear in the mail
-  program's Sent folder, and mail picked up by radio is not marked read in the mail program.
 * **A licensed user's own mail program** makes third-party mail, as mail from the Internet does
   (RP-6 §5.1, wishlist G16): it is held back from stations abroad without an arrangement.
 * **DKIM keys are not rotated** while DNS is managed by hand.

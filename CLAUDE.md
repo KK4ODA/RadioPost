@@ -233,7 +233,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   interface; `evidence.rs` judges good/warn/bad; `lookups.rs` looks each new application up on a
   worker thread. `mailboxes.rs` makes the mailbox at approval (Stalwart's JMAP `x:Domain/get` and
   `x:Account/set`, tried only against a stand-in; or a named program); `notices.rs` and
-  `aftercare.rs` send the emails. `health.rs` checks hourly and emails on change (an amber
+  `aftercare.rs` send the emails. One mailbox's second part (W36, RP-6 0.8.0 §2.6): `send_on` and
+  `picked_up(…, by_radio)` queue `State::to_mailboxes` (`MailboxTask`), and `mirror.rs`, run with
+  `seen.rs` every minute, imports §3.1's email into the sender's `sent`-role mailbox (uploaded to
+  the session's upload path on the host the service reaches Stalwart at) and sets `$seen` on what a
+  `Message-ID` finds, waiting for mail that reaches the mail server late, giving up after two days;
+  tried against a stand-in only (`tests/email_service.rs`'s `mail_server`). `health.rs` checks hourly and emails on change (an amber
   `Warn` sends nothing); `backups.rs` seals with ring's PBKDF2 and ChaCha20-Poly1305, and backs up
   Stalwart's `/var/lib/stalwart` and `/etc/stalwart` with Stalwart stopped (`mail_backup`, the jobs
   runner's nightly `mail-backup`; `restore_mail`; tests use a stand-in `MailServer`), and seals

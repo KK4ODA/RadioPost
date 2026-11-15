@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.7.0 |
-| **Updated** | 2026-11-13 |
+| **Version** | 0.8.0 |
+| **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-5 |
@@ -196,6 +196,19 @@ ordinary mail programs read (RP-5 §4.1 `mail`). Mail that reaches either reache
 * **Mail read in a mail program** is not offered by radio when the user asks so (RP-5 §6.3
   `radio_skips_read`). The post office matches the two views by `Message-ID`: the one the email
   came with (§2.4 step 8), or the one §3.1 gives a RadioPost message.
+* **Mail sent by radio, in the Sent folder.** A message an account of this post office hands in
+  by radio (RP-5 §5.4, §5.6, §6.6) SHOULD also be put in that account's mailbox for sent mail
+  (the mailbox with JMAP's role `sent`, RFC 8621 §2), as the email §3.1 makes of it without §4's
+  part, marked read, once: the sender's mail program shows what they sent by radio as if they had
+  sent it there.
+* **Mail picked up by radio is marked read** in the mail server (RP-5 §5.5, and §5.6 `pickups` and
+  `local_pickups`), the message found by `Message-ID` as above. Mail sent by radio to a user here
+  reaches the mail server as an email, maybe after the user picked it up by radio: it is marked
+  read when it arrives. Mail read in a mail program and taken as picked up is not marked again.
+
+The post office does the last two in the background, never while a gateway waits on a session
+(RP-3 §9), and may give a message up when the mail server does not have it after a time: neither
+changes what the radio offers.
 
 What the post office itself submits to its mail server (the email of mail sent by radio, its
 notices) is not made a RadioPost message again.
@@ -410,3 +423,4 @@ and the session files.
 | 0.6.0 | 2026-11-10 | §2.5: held attachments asked for: the message they come in, split by `max_air_bytes`, one too large for the air refused. RP-5 §5.3 had said they come later as a new message and nothing more. |
 | 0.6.1 | 2026-11-12 | §2.1, §2.2, §4: the post offices a post office knows are RP-1 §7.5's (RP-1 0.6.0). |
 | 0.7.0 | 2026-11-13 | §2.6, one mailbox: mail a user submits from a mail program is not judged at the door, becomes the RadioPost message of each recipient here (third-party, §5.1) and fills the sender's accept list; mail sent by radio to accounts here also reaches the mail server as §3.1's email, and a recipient here with no account gets only the email; mail read in a mail program is matched by `Message-ID`. Nothing said what became of mail a user sent from a mail program to another user of the same post office, which never reached the radio. |
+| 0.8.0 | 2026-11-15 | §2.6, one mailbox, the rest of it: mail an account sends by radio goes into its Sent folder as §3.1's email, read; mail picked up by radio is marked read in the mail server, mail that reaches it later when it arrives; both in the background. A mail program had shown neither, so a user reading in both saw mail they had read by radio as new, and none of what they had sent by radio. |

@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.19 |
-| **Updated** | 2026-11-14 |
+| **Version** | 0.3.20 |
+| **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §9 and §10 |
@@ -139,7 +139,7 @@ rules:
 | W33 | Position reports | Applications | Low | Application layer; optional addition as broadcasts | Planned |
 | W34 | Bulletins | Applications | Low | Application layer; optional addition as broadcasts | Planned |
 | W35 | Services that answer by mail | Applications | Low | Application layer | Planned |
-| W36 | One mailbox, by radio and by mail program | Operation | High | Fits today | In progress |
+| W36 | One mailbox, by radio and by mail program | Operation | High | Fits today | Implemented |
 | W37 | The accept list on a web page | Operation | Low | Fits today | Planned |
 | W38 | Backups and a backup mail server | Operation | Critical | Fits today | In progress |
 | W39 | A domain served by several post offices | — | — | Breaking (RP-1, RP-3) | Deferred |
@@ -635,12 +635,12 @@ read, including from members with no licence who use only a mail program.
 | Requested by | The plan: concept §3.1 (email-only members), §5.4; RP-5 §6.3, `radio_skips_read`. Requesters: 0. Includes W12. |
 | Component | Post office. |
 | Compatibility | **Fits today.** Email-only members hold no credential (RP-1 §1), and their mail to radio users is third-party traffic (RP-6 §5.1). |
-| Existing coverage | **First part built** (2026-11-13; RP-6 0.7.0 §2.6, RP-5 0.19.0 §6.3 and §6.5). The door sees mail users submit from their mail programs, signed in (Stalwart's MTA hook on every session, `context.sasl.login`, tried on Stalwart 1.1.0): not judged, filed for the radio for each account here (third-party, G16), its recipients added to the sender's accept list; the service's own submissions pass untouched. Mail sent by radio to a user here goes to their Stalwart mailbox too, as RP-6 §3.1's email; an address here with no account (an email-only member, W12) gets only the email, and no longer a radio mailbox that turned it into a judged account. `radio_skips_read`: every minute the service reads `$seen` over JMAP with the mailboxes key (Stalwart's `impersonate`, the account's `accountId`), matches by `Message-ID`, and takes what was read as picked up, dropping its copies. Not built: mail sent by radio in the mail program's Sent folder, and radio pickups marked read there ([the post office guide](../user/post-office.md), §11). |
+| Existing coverage | **First part built** (2026-11-13; RP-6 0.7.0 §2.6, RP-5 0.19.0 §6.3 and §6.5). The door sees mail users submit from their mail programs, signed in (Stalwart's MTA hook on every session, `context.sasl.login`, tried on Stalwart 1.1.0): not judged, filed for the radio for each account here (third-party, G16), its recipients added to the sender's accept list; the service's own submissions pass untouched. Mail sent by radio to a user here goes to their Stalwart mailbox too, as RP-6 §3.1's email; an address here with no account (an email-only member, W12) gets only the email, and no longer a radio mailbox that turned it into a judged account. `radio_skips_read`: every minute the service reads `$seen` over JMAP with the mailboxes key (Stalwart's `impersonate`, the account's `accountId`), matches by `Message-ID`, and takes what was read as picked up, dropping its copies. **Second part built** (2026-11-15; RP-6 0.8.0 §2.6): a message an account hands in by radio is queued for its Sent folder, and a pickup by radio for a read mark (`State::to_mailboxes`); every minute the service uploads §3.1's email (RFC 8620 §6.1, to the host it reaches the mail server at) and imports it into the mailbox with the role `sent`, read, unless it is there already, and sets `$seen` on the copies a `Message-ID` finds; mail that reaches the mail server after its pickup is marked when it does, and what never does is given up after two days. Tried against a stand-in only, not yet on Stalwart. |
 | Dependencies | None. |
 | Effort | Large: JMAP both ways, and every path mail takes inside the post office. |
 | Priority | **High.** Mail that never reaches the radio is mail silently lost to a radio user, and pilot users with the Internet will meet it at once. |
 | Recommendation | Accept. Also fill the accept list from mail sent in a mail program, as from mail sent by radio (RP-5 §6.5 names only radio paths): concept §5.1 promises that writing to someone adds them, and that removes most of the need for W37. |
-| Status | In progress: the first part is implemented (released in 0.1.0-beta.14); the Sent folder and pickups marked read are not. |
+| Status | Implemented: the first part released in 0.1.0-beta.14; the Sent folder and pickups marked read built, to be tried on the pilot's Stalwart. |
 | Author decision | **Decided** (2026-11-13): built next, in two parts. First what loses mail or wastes air: mail from a mail program to a user here reaches the radio, mail sent by radio to a user here reaches the mail program, `radio_skips_read` is honoured, and mail sent from a mail program fills the accept list. Later: mail sent by radio in the mail program's Sent folder, and radio pickups marked read there (2026-11-14) Its second part is stage 1 (design §9). |
 
 ### W37. The accept list on a web page
@@ -1109,3 +1109,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.17 | 2026-11-14 | The author's decisions on the next stages (design §9): W24, W38 and W36's second part first, then W31, then W30 in three stages with its first trial on one shared channel. W6 implemented with *delivered* dropped (G5 settled). W10 built when a test certificate is supplied, RSA-1024 and SHA-1 accepted. |
 | 0.3.18 | 2026-11-14 | W38: backups go off the server by themselves, to the operator's computers while the app is open, sealed to a key each computer holds; Health counts a fetch. |
 | 0.3.19 | 2026-11-14 | W24 implemented: a gateway's operator refuses a caller by address or callsign, from the panel or the command line, while it answers. |
+| 0.3.20 | 2026-11-15 | W36's second part implemented: mail sent by radio in the Sent folder, and pickups by radio marked read (RP-6 0.8.0 §2.6). |

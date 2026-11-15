@@ -17,11 +17,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use radiopost::crypto::ContentId;
 use serde_json::{Value as Json, json};
 
 use crate::mailboxes::{self, MailboxSettings};
-use crate::office::{PostOffice, domain_of};
+use crate::office::PostOffice;
 use crate::serve::{Running, now};
 
 /// How often the service asks the mail server what was read.
@@ -47,24 +46,13 @@ pub fn unread_by_radio(office: &PostOffice) -> BTreeMap<String, BTreeMap<String,
             .into_iter()
             .flatten()
             .filter(|w| !w.picked)
-            .filter_map(|w| Some((message_id_of(office, &w.id, &w.from)?, w.serial)))
+            .filter_map(|w| Some((office.mail_message_id(&w.id, &w.from)?, w.serial)))
             .collect();
         if !waiting.is_empty() {
             out.insert(address.clone(), waiting);
         }
     }
     out
-}
-
-/// The `Message-ID` a message has in the mail server: the email's it was made of (RP-6 §2.4
-/// step 8), or, for a RadioPost message, the one RP-6 §3.1 gives its email.
-fn message_id_of(office: &PostOffice, id: &str, from: &str) -> Option<String> {
-    let cid = ContentId::from_text(id)?;
-    if let Some(m) = office.email_message_id(&cid.0) {
-        return Some(m);
-    }
-    let domain = domain_of(from);
-    (!domain.is_empty()).then(|| format!("<{}@{domain}>", cid.text()))
 }
 
 /// The serials of `waiting` whose `Message-ID` is among those read (`read`, as JMAP gives them,
@@ -79,7 +67,7 @@ pub fn read_serials(waiting: &BTreeMap<String, u64>, read: &BTreeSet<String>) ->
 }
 
 /// Each account's JMAP `accountId` in Stalwart, by address in lowercase.
-fn account_ids(settings: &MailboxSettings) -> Result<BTreeMap<String, String>, String> {
+pub(crate) fn account_ids(settings: &MailboxSettings) -> Result<BTreeMap<String, String>, String> {
     let responses = mailboxes::jmap_using(
         settings,
         &["urn:ietf:params:jmap:core", "urn:stalwart:jmap"],
@@ -166,13 +154,38 @@ impl Running {
     }
 }
 
-/// Starts the look at what was read, every minute, on a thread of its own. A failure is said
-/// once until it changes.
+/// Starts the look at what was read, and at what the mail server is still to be told of the radio
+/// (`crate::mirror`), every minute, on a thread of its own. A failure is said once until it
+/// changes.
 pub fn start(running: &Arc<Running>) {
     let r = Arc::clone(running);
     std::thread::spawn(move || {
         let mut last = String::new();
+        let mut last_mirror = String::new();
         loop {
+            match r.mirror() {
+                Ok(m) => {
+                    if m.sent + m.read + m.given_up > 0 {
+                        eprintln!(
+                            "radiopost-po: mail programs show what the radio did: {} put in Sent, \
+                             {} marked read{}",
+                            m.sent,
+                            m.read,
+                            if m.given_up > 0 {
+                                format!(", {} given up after two days", m.given_up)
+                            } else {
+                                String::new()
+                            }
+                        );
+                    }
+                    last_mirror.clear();
+                }
+                Err(e) if e != last_mirror => {
+                    eprintln!("radiopost-po: showing the radio's mail in mail programs: {e}");
+                    last_mirror = e;
+                }
+                Err(_) => {}
+            }
             match r.learn_read() {
                 Ok(0) => {}
                 Ok(n) => {

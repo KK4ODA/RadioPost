@@ -18,6 +18,7 @@ pub mod licences;
 pub mod lookups;
 pub mod mail;
 pub mod mailboxes;
+pub mod mirror;
 pub mod notices;
 pub mod office;
 pub mod operator;
