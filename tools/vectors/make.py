@@ -3546,7 +3546,8 @@ def forwarding_office() -> tuple[Exchanges, dict[str, str], dict[str, Any]]:
 
 def placing_story() -> list[dict[str, Any]]:
     """RP-7 §4.1: a gateway last answered `placing` false is not counted cut off when it falls
-    silent; one that polled while the post office placed items at it is."""
+    silent; one that polled while the post office placed items at it is, and the copy it never
+    acknowledged goes to the route's `via`."""
     office, ex = cut_off_office()
     for address in office.settings:
         office.settings[address] = {"usual_gateways": []}
@@ -3564,11 +3565,17 @@ def placing_story() -> list[dict[str, Any]]:
     n1 = ex.login(t0 + 1300, "N1CALL-10", "gateway-n1call-10")
     ex.call(t0 + 1310, "N1CALL-10", "GET", "/copies?after=&wait=0", None, n1)
     ex.note(
-        "N2CALL-5 polls, `placing` true, and takes the copy of #501. Then it falls silent: 15 "
-        "minutes on it is cut off, and the next mail for Shelter 3 goes to N1CALL-10 as well."
+        "N2CALL-5 polls, `placing` true, takes the copy of #501 and acknowledges it. Then it falls "
+        "silent. Five minutes on, mail arrives for Shelter 3: its copy waits for N2CALL-5, which "
+        "never acknowledges it."
     )
-    ex.call(t0 + 1400, "N2CALL-5", "GET", "/copies?after=&wait=0", None, n2)
-    deliver(office, ex, "shelter3@radiopost.org", 502, "emergency-held", t0 + 1400 + 900 + 60)
+    polled = ex.call(t0 + 1400, "N2CALL-5", "GET", "/copies?after=&wait=0", None, n2)
+    ex.call(t0 + 1401, "N2CALL-5", "POST", "/copies/ack", {"cursor": polled["cursor"]}, n2)
+    deliver(office, ex, "shelter3@radiopost.org", 502, "emergency-held", t0 + 1400 + 300)
+    ex.note(
+        "15 minutes after its last poll N2CALL-5 is cut off: the copy it never acknowledged goes "
+        "to N1CALL-10, and #501, which it holds, does not."
+    )
     ex.call(t0 + 2400, "N1CALL-10", "GET", "/copies?after=&wait=0", None, n1)
     return ex.log
 
@@ -4056,6 +4063,7 @@ def make_forwarding() -> dict[str, Any]:
                 "200",
                 "200; placing true; []",
                 "200; placing true; [copy 501]",
+                "204",
                 "200; placing true; [forward 502]",
             ]
         },

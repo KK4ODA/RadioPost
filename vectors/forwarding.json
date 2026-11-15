@@ -1304,7 +1304,7 @@
       }
     },
     {
-      "note": "N2CALL-5 polls, `placing` true, and takes the copy of #501. Then it falls silent: 15 minutes on it is cut off, and the next mail for Shelter 3 goes to N1CALL-10 as well."
+      "note": "N2CALL-5 polls, `placing` true, takes the copy of #501 and acknowledges it. Then it falls silent. Five minutes on, mail arrives for Shelter 3: its copy waits for N2CALL-5, which never acknowledges it."
     },
     {
       "at": 1794461900,
@@ -1338,7 +1338,25 @@
       }
     },
     {
+      "at": 1794461901,
+      "who": "N2CALL-5",
+      "request": {
+        "method": "POST",
+        "path": "/copies/ack",
+        "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+        "body": {
+          "cursor": "c_1"
+        }
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
       "note": "Mail arrives for shelter3@radiopost.org: #502, 'Evacuation map'."
+    },
+    {
+      "note": "15 minutes after its last poll N2CALL-5 is cut off: the copy it never acknowledged goes to N1CALL-10, and #501, which it holds, does not."
     },
     {
       "at": 1794462900,
@@ -1365,9 +1383,9 @@
               "priority": 2,
               "third_party": false,
               "air": "AKoBAQJxZW9jQHJhZGlvcG9zdC5vcmcDgXZzaGVsdGVyM0ByYWRpb3Bvc3Qub3JnBIF1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8de8Bm5FdmFjdWF0aW9uIG1hcAd4JlJvdXRlIDMgY2xvc2VkLiBVc2UgdGhlIGF0dGFjaGVkIG1hcC4KCQILAgyBpAFnbWFwLnBkZgJvYXBwbGljYXRpb24vcGRmAxoAJJ8ABEjsqG_K3TDLWA",
-              "expires": 1795067660,
+              "expires": 1795067000,
               "gateway": "N2CALL-5",
-              "placement": "hEmiATIERPu9X1ygWD2mAQECdnNoZWx0ZXIzQHJhZGlvcG9zdC5vcmcDGQH2BEx0lhuhjJ4Angr0FFEFaE4yQ0FMTC01Bhpq_o8MWEAAZ2nRMYt9CPDCWFDlkbnHVryP448bBEtgKkoS85kXZrIFvTqo6RrFk13qDfnotci3jCJbUgZZ8SGTLH-6G88P"
+              "placement": "hEmiATIERPu9X1ygWD2mAQECdnNoZWx0ZXIzQHJhZGlvcG9zdC5vcmcDGQH2BEx0lhuhjJ4Angr0FFEFaE4yQ0FMTC01Bhpq_ox4WECddjr--5b3GOlmcuhOdv4Rouc_gLgVHXpVRanmFQDgeZKshr_Ki0hPHnHfevuaXN7fgOrq3npq9y9BuzUqIt0L"
             }
           ]
         }

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.10.1 |
+| **Version** | 0.11.0 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -197,8 +197,10 @@ places items at it, its own or another (RP-5 §5.8). A gateway that has never po
 not polled since the post office last answered it `placing` false, is not counted: the post office
 cannot tell whether it is cut off or has not yet started. From then on, for each of its
 routes (§6) whose `users_at` names that gateway, it places **forward items** at the route's `via`
-gateway: one for each message that is waiting for a user who named the cut-off gateway as usual
-(RP-5 §6.3), and for each that arrives while the gateway stays cut off.
+gateway: one for each message waiting for a user who named the cut-off gateway as usual (RP-5
+§6.3) whose copy the gateway never acknowledged (RP-5 §5.8: it holds the others), and one for each
+that arrives while the gateway stays cut off. So mail that arrived in the 15 minutes before the
+post office could tell is not left behind.
 
 Copies for the cut-off gateway itself are still placed, and wait for its next poll. When it polls
 again, the post office has the forward items it placed for it dropped at the `via` gateways (RP-5
@@ -455,7 +457,8 @@ message not offered to Facundo again.
 In `forwarding.json`, N1CALL-10 is hampost.org's gateway: radiopost.org takes its record from
 hampost.org's gateway list (§6.1, RP-5 §4.4), and serves its forward items to its credential from
 hampost.org. `placing` is §4.1's count: N2CALL-5, answered `placing` false and silent after, is
-not cut off; once it has polled while radiopost.org places items at it, it is.
+not cut off; once it has polled while radiopost.org places items at it, it is, and the copy it
+never acknowledged goes to N1CALL-10 while the one it did does not.
 
 `vectors/queued.json` has the sender's side (§3.6): when a client offers a queued message again,
 how a cut-off gateway answers, and what the client shows, and Shelter 3's session with N1CALL-10,
@@ -481,3 +484,4 @@ online, which declines the message `already-have` because the post office alread
 | 0.9.0 | 2026-11-12 | Gateways across post offices (RP-5 0.16.0). §4.1: a gateway is cut off only after it has polled, as the reference already read it, and not since a `placing` false; it polls every post office that places items at it. §6.1: a route may name gateways registered with another post office this one knows, and `via` polls it. Test vectors (`forwarding.json`: N1CALL-10's record from hampost.org's list; `placing`). |
 | 0.10.0 | 2026-11-13 | FM channels (§5): a window on an FM channel states the channel as `occupied_hz`, carrier less and plus half its width (RP-5 0.17.0 §4.4), since a modem on an FM radio's audio cannot measure the deviation. §5.1: the United States' table gains 2 m (144.1 to 148.0 MHz), 1.25 m (222 to 225 MHz) and 70 cm (430 to 450 MHz), read from the e-CFR current to 2026-11-10; 219 to 220 MHz (§97.303(l)) and 420 to 430 MHz (§97.303(m)(1), Line A) left out, and why. Test vectors (`forwarding.json`: eight FM windows). |
 | 0.10.1 | 2026-11-15 | Found writing the gateways' engines: a record whose messages the partner declined `already-have` is sent as one with no messages, and one with a message declined otherwise waits (§3.2); the partner takes a record only when every message of it the caller offered arrived and passed, and lists the rest of a broken record's messages failed with the same code, so the caller is not left waiting for their receipt (§3.3). |
+| 0.11.0 | 2026-11-15 | Found writing the post office's side: the messages waiting when a gateway is first counted cut off are forwarded only when the gateway never acknowledged their copies, and those it did acknowledge, which it holds, are not; mail that arrived in the 15 minutes before the post office could tell is no longer left behind (§4.1). Test vectors: `forwarding.json`'s `placing` story acknowledges #501 and shows #502, which arrived five minutes after the last poll, forwarded. |

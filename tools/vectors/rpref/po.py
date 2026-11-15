@@ -205,6 +205,7 @@ class PostOffice:
     routes: list[dict[str, Any]] = field(default_factory=list)  # radio routes (RP-7 §6)
     last_poll: dict[str, int] = field(default_factory=dict)  # gateway -> its last copies poll
     forwarded: dict[str, list[tuple[str, str, int]]] = field(default_factory=dict)  # RP-7 §4.1
+    cut: set[str] = field(default_factory=set)  # gateways counted cut off (RP-7 §4.1)
     picked_locally: dict[str, set[bytes]] = field(default_factory=dict)  # RP-7 §4.4, not yet here
     gateways: dict[str, dict[str, Any]] = field(default_factory=dict)
     # RP-5 §4.4: the gateway lists of the post offices it knows, as fetched and checked, by
@@ -247,6 +248,7 @@ class PostOffice:
         third_party: bool,
     ) -> None:
         """Mail arrives for a user (RP-6); copies go to the user's usual gateways (§5.8)."""
+        self._sweep()
         waiting = Waiting(serial, air, sender, subject, priority, third_party=third_party)
         self.mailboxes.setdefault(address, []).append(waiting)
         for callsign in self.settings.get(address, {}).get("usual_gateways", []):
@@ -271,6 +273,28 @@ class PostOffice:
         """RP-7 §4.1: a gateway that has polled before, but not for 15 minutes."""
         last = self.last_poll.get(callsign)
         return last is not None and self.now - last >= CUT_OFF_S
+
+    def _sweep(self) -> None:
+        """RP-7 §4.1: a gateway counted cut off for the first time has the copies it never
+        acknowledged forwarded: it may not hold them. Those it acknowledged, it holds."""
+        for callsign in sorted(self.last_poll):
+            if callsign in self.cut or not self._cut_off(callsign):
+                continue
+            self.cut.add(callsign)
+            for item in self.copies.get(callsign, [])[self.acked.get(callsign, 0) :]:
+                if item["kind"] != "copy":
+                    continue
+                address = item["address"]
+                waiting = next(
+                    (
+                        w
+                        for w in self.mailboxes.get(address, [])
+                        if w.serial == item["serial"] and not w.picked
+                    ),
+                    None,
+                )
+                if waiting is not None:
+                    self._place_forward(callsign, address, waiting, item)
 
     def _place_forward(
         self, cut: str, address: str, waiting: Waiting, copy: dict[str, Any]
@@ -341,6 +365,7 @@ class PostOffice:
     ) -> Response:
         route, _, query = path.partition("?")
         parts = route.strip("/").split("/")
+        self._sweep()
         if (method, route) == ("POST", "/auth/challenge"):
             return self.challenge()
         if (method, route) == ("POST", "/auth/token"):
@@ -891,6 +916,7 @@ class PostOffice:
         callsign = gateway[4]
         if not self._theirs(gateway):
             return 200, {"cursor": "c_0", "placing": False, "items": []}
+        self.cut.discard(callsign)
         for via, address, serial in self.forwarded.pop(callsign, []):
             drop = {"kind": "drop", "address": address, "serial": serial}
             self.copies.setdefault(via, []).append(drop)
