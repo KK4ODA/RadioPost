@@ -78,6 +78,11 @@ usage: radiopost-po --dir DIR COMMAND
   approve ID [--role] | decline ID --text TEXT | postcard ID
                      decide an application: its credential issued, refused with a reason, or a
                      code made to send by post to the address on the licence
+  route --via CALL --users-at CALL,CALL…
+                     a radio route (RP-7 §6.1): while a gateway of --users-at is cut off from
+                     the Internet, its users' mail goes to --via, which holds it for that
+                     gateway to collect by radio; --users-at empty removes the route
+  routes             the radio routes
   outgoing           the mail waiting to go on by email
   status             accounts, gateways, codes, sessions
   check [--dkim SELECTOR,…] [--resolver URL]
@@ -959,6 +964,7 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
         "mailboxes" => mailboxes(&files, a),
         "health" | "jobs" | "backup" | "restore" | "mail-backup" => care(&dir, &files, a, command),
         "approve" | "decline" | "postcard" => decide(&files, a, command),
+        "route" | "routes" => routes(&files, a, command),
         "outgoing" | "status" => {
             let answer = admin(&files, "GET", &format!("/{command}"), &Json::Null)?;
             println!(
@@ -969,6 +975,46 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
         }
         "check" => check(&files, a),
         _ => Err(format!("unknown command {command}\n{USAGE}")),
+    }
+}
+
+/// `route` and `routes`: the radio routes (RP-7 §6.1), set and listed on the operator's port.
+fn routes(files: &Files, a: &Args, command: &str) -> Result<(), String> {
+    let answer = if command == "route" {
+        let users_at: Vec<String> = a
+            .one("--users-at")
+            .unwrap_or_default()
+            .split(',')
+            .map(|c| c.trim().to_owned())
+            .filter(|c| !c.is_empty())
+            .collect();
+        let body = json!({"via": a.need("--via")?, "users_at": users_at});
+        admin(files, "POST", "/routes", &body)?
+    } else {
+        admin(files, "GET", "/routes", &Json::Null)?
+    };
+    print_routes(&answer);
+    Ok(())
+}
+
+/// Each radio route on a line of its own.
+fn print_routes(answer: &Json) {
+    let routes = answer["routes"].as_array().cloned().unwrap_or_default();
+    if routes.is_empty() {
+        println!("no routes");
+    }
+    for r in routes {
+        let at: Vec<&str> = r["users_at"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Json::as_str)
+            .collect();
+        println!(
+            "{} holds the mail of {} while they are cut off",
+            r["via"].as_str().unwrap_or(""),
+            at.join(", ")
+        );
     }
 }
 

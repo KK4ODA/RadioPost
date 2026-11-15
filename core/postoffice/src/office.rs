@@ -391,9 +391,30 @@ pub struct State {
     pub listed: BTreeMap<String, Listed>,
     /// How many of each gateway's items it has acknowledged (RP-5 §5.8).
     pub acked: BTreeMap<String, usize>,
+    /// Its radio routes (RP-7 §6.1): when the gateways of `users_at` are cut off, their users'
+    /// mail goes to `via`.
+    pub routes: Vec<RadioRoute>,
+    /// The gateways it counts cut off (RP-7 §4.1).
+    pub cut: BTreeSet<String>,
+    /// For each cut-off gateway, the forward items placed for it: (`via`, address, serial), to
+    /// drop when it polls again (RP-7 §4.1).
+    pub forwarded: BTreeMap<String, Vec<(String, String, u64)>>,
     /// What the mail server is still to be told of mail sent and picked up by radio (RP-6 §2.6).
     pub to_mailboxes: Vec<MailboxTask>,
 }
+
+/// A radio route (RP-7 §6.1).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RadioRoute {
+    /// The gateways whose users' mail it carries when they are cut off.
+    pub users_at: Vec<String>,
+    /// The gateway that holds it for them.
+    pub via: String,
+}
+
+/// How long a gateway may stop polling before it is counted cut off (RP-7 §4.1): 15 minutes.
+pub const CUT_OFF_S: u64 = 900;
 
 /// A known post office's gateway list, as fetched and checked (RP-5 §4.4).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -548,7 +569,8 @@ impl PostOffice {
         self.now = now;
     }
 
-    /// Mail arrives for a user (RP-6); copies go to the user's usual gateways (RP-5 §5.8).
+    /// Mail arrives for a user (RP-6); copies go to the user's usual gateways (RP-5 §5.8), and a
+    /// forward item for each that is cut off to its routes' `via` (RP-7 §4.1).
     #[allow(clippy::too_many_arguments, reason = "a mailbox entry's fields")]
     pub fn deliver(
         &mut self,
@@ -560,6 +582,7 @@ impl PostOffice {
         priority: u64,
         third_party: bool,
     ) {
+        self.sweep();
         let id = Message::from_air(air).map_or_else(|_| String::new(), |m| m.content_id().text());
         let waiting = Waiting {
             serial,
@@ -613,17 +636,104 @@ impl PostOffice {
                 item.insert("air".into(), waiting.air.clone().into());
             }
             item.insert("expires".into(), (self.now + days * 86_400).into());
-            self.state
-                .copies
-                .entry(callsign)
-                .or_default()
-                .push(Json::Object(item));
+            let item = Json::Object(item);
+            if self.cut_off(&callsign) {
+                self.place_forward(&callsign, &item);
+            }
+            self.state.copies.entry(callsign).or_default().push(item);
         }
         self.state
             .mailboxes
             .entry(address.to_owned())
             .or_default()
             .push(waiting);
+    }
+
+    /// RP-7 §4.1: a gateway that has polled, while this post office placed items at it, but not
+    /// for 15 minutes.
+    fn cut_off(&self, callsign: &str) -> bool {
+        self.state
+            .last_poll
+            .get(callsign)
+            .is_some_and(|last| self.now.saturating_sub(*last) >= CUT_OFF_S)
+    }
+
+    /// RP-7 §4.1: each gateway counted cut off for the first time has the copies it never
+    /// acknowledged forwarded, as it may not hold them; those it acknowledged it holds.
+    fn sweep(&mut self) {
+        let newly: Vec<String> = self
+            .state
+            .last_poll
+            .keys()
+            .filter(|c| !self.state.cut.contains(*c) && self.cut_off(c))
+            .cloned()
+            .collect();
+        for callsign in newly {
+            self.state.cut.insert(callsign.clone());
+            let acked = self.state.acked.get(&callsign).copied().unwrap_or(0);
+            let unacked: Vec<Json> = self
+                .state
+                .copies
+                .get(&callsign)
+                .map(|items| items.iter().skip(acked).cloned().collect())
+                .unwrap_or_default();
+            for item in unacked {
+                let address = item["address"].as_str().unwrap_or("");
+                let serial = item["serial"].as_u64().unwrap_or(0);
+                let waiting = self
+                    .state
+                    .mailboxes
+                    .get(address)
+                    .is_some_and(|b| b.iter().any(|w| w.serial == serial && !w.picked));
+                if item["kind"] == "copy" && waiting {
+                    self.place_forward(&callsign, &item);
+                }
+            }
+        }
+    }
+
+    /// RP-7 §4.1, §4.2: a copy for the cut-off gateway `cut`, placed as a forward item with the
+    /// post office's signed placement at each of its routes' `via`. A `via` no list names, or an
+    /// ambiguous one, places nothing (RP-7 §6.1).
+    fn place_forward(&mut self, cut: &str, copy: &Json) {
+        let routes: Vec<RadioRoute> = self
+            .state
+            .routes
+            .iter()
+            .filter(|r| r.users_at.iter().any(|u| u == cut))
+            .cloned()
+            .collect();
+        let address = copy["address"].as_str().unwrap_or("").to_owned();
+        let serial = copy["serial"].as_u64().unwrap_or(0);
+        let Some(id) = copy["id"].as_str().and_then(ContentId::from_text) else {
+            return;
+        };
+        let placed = radiopost::forwarding::Placed {
+            address: address.clone(),
+            serial,
+            id,
+            gateway: cut.to_owned(),
+            expires: copy["expires"].as_u64().unwrap_or(0),
+        };
+        for route in routes {
+            if self.record_of(&route.via).is_none() {
+                continue;
+            }
+            let mut item = copy.clone();
+            item["kind"] = "forward".into();
+            item["gateway"] = cut.into();
+            item["placement"] = base64url::encode(&placed.sign(&self.config.key)).into();
+            self.state
+                .copies
+                .entry(route.via.clone())
+                .or_default()
+                .push(item);
+            self.state
+                .forwarded
+                .entry(cut.to_owned())
+                .or_default()
+                .push((route.via, address.clone(), serial));
+        }
     }
 
     /// The next serial of an account's mailbox.
@@ -869,6 +979,7 @@ impl PostOffice {
     /// Answers a request at `now` (RP-5).
     pub fn handle(&mut self, now: u64, request: &Request) -> Response {
         self.now = now;
+        self.sweep();
         let empty = json!({});
         let body = request.body.as_ref().unwrap_or(&empty);
         let (route, query) = request.path.split_once('?').unwrap_or((&request.path, ""));
@@ -1773,6 +1884,10 @@ impl PostOffice {
             if usual && copies {
                 return true;
             }
+            // a route names it as `via` (RP-7 §6.1)
+            if self.state.routes.iter().any(|r| r.via == callsign) {
+                return true;
+            }
         }
         let held = self.state.copies.get(callsign).map_or(0, Vec::len);
         held > self.state.acked.get(callsign).copied().unwrap_or(0)
@@ -1784,6 +1899,20 @@ impl PostOffice {
     fn poll(&mut self, gateway: &Holder, query: &str) -> Response {
         if !self.theirs(gateway) {
             return Response::ok(200, json!({"cursor": "c_0", "placing": false, "items": []}));
+        }
+        // back from being cut off: its forward items are dropped where they wait (RP-7 §4.1)
+        self.state.cut.remove(&gateway.operator);
+        for (via, address, serial) in self
+            .state
+            .forwarded
+            .remove(&gateway.operator)
+            .unwrap_or_default()
+        {
+            self.state
+                .copies
+                .entry(via)
+                .or_default()
+                .push(json!({"kind": "drop", "address": address, "serial": serial}));
         }
         let after = query
             .split('&')

@@ -559,20 +559,7 @@ impl Running {
         office.at(now());
         let answer = match (method, path) {
             ("POST", "/code") => {
-                let mut f = 0;
-                for name in body
-                    .get("flags")
-                    .and_then(Json::as_array)
-                    .into_iter()
-                    .flatten()
-                {
-                    f |= match name.as_str() {
-                        Some("send") => flags::SEND,
-                        Some("receive") => flags::RECEIVE,
-                        Some("role") => flags::ROLE,
-                        _ => 0,
-                    };
-                }
+                let f = flags_named(&body);
                 let code = office.new_code();
                 office.add_code(&code, &text("address"), &text("operator"), f);
                 if !text("name").is_empty() {
@@ -613,6 +600,7 @@ impl Running {
                     None => Err("a device key, base64url".to_owned()),
                 }
             }
+            (_, "/routes") => admin_routes(&mut office, method, &body),
             ("POST", "/name") => {
                 office.state.names.insert(text("address"), text("name"));
                 Ok(json!({"address": text("address"), "name": text("name")}))
@@ -643,6 +631,53 @@ impl Running {
             Err(e) => (400, json!({"error": e}).to_string()),
         }
     }
+}
+
+/// The credential flags a request names, by name (RP-1 §4.2).
+fn flags_named(body: &Json) -> u64 {
+    body.get("flags")
+        .and_then(Json::as_array)
+        .into_iter()
+        .flatten()
+        .fold(0, |f, name| {
+            f | match name.as_str() {
+                Some("send") => flags::SEND,
+                Some("receive") => flags::RECEIVE,
+                Some("role") => flags::ROLE,
+                _ => 0,
+            }
+        })
+}
+
+/// The operator's port's radio routes (RP-7 §6.1), for `radiopost-po route` and `routes`: a route
+/// is set whole by its `via`, and one with no `users_at` is removed.
+fn admin_routes(office: &mut PostOffice, method: &str, body: &Json) -> Result<Json, String> {
+    if method == "POST" {
+        let via = body["via"]
+            .as_str()
+            .unwrap_or("")
+            .trim()
+            .to_ascii_uppercase();
+        if via.is_empty() {
+            return Err("a route names its via gateway".to_owned());
+        }
+        office.state.routes.retain(|r| r.via != via);
+        let users_at: Vec<String> = body["users_at"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Json::as_str)
+            .map(|c| c.trim().to_ascii_uppercase())
+            .filter(|c| !c.is_empty() && *c != via)
+            .collect();
+        if !users_at.is_empty() {
+            office
+                .state
+                .routes
+                .push(crate::office::RadioRoute { users_at, via });
+        }
+    }
+    Ok(json!({"routes": office.state.routes}))
 }
 
 /// The operator's port's view of applications (RP-5 §7.3), for `radiopost-po applications`,

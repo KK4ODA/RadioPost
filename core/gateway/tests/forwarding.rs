@@ -74,6 +74,21 @@ fn gateway(
     running: &Running,
     po_key: &ed25519_dalek::SigningKey,
 ) -> PathBuf {
+    gateway_holding(dir, callsign, partner, modem, base, running, po_key, None)
+}
+
+/// The same, holding copies placed ahead when `copies` says so (RP-5 §5.8).
+#[allow(clippy::too_many_arguments, reason = "a gateway's settings")]
+fn gateway_holding(
+    dir: &Path,
+    callsign: &str,
+    partner: &str,
+    modem: SocketAddr,
+    base: &str,
+    running: &Running,
+    po_key: &ed25519_dalek::SigningKey,
+    copies: Option<station::CopiesSettings>,
+) -> PathBuf {
     let home = dir.join(format!("{callsign}-operator"));
     let _operator = client(&home, running, po_key, "facundo@test.example", "KK4ODA");
     let gw = dir.join(callsign);
@@ -89,7 +104,7 @@ fn gateway(
         only: None,
         operator_checks_rules: true,
         answer_at_start: true,
-        copies: None,
+        copies,
         partners: vec![station::PartnerSettings {
             callsign: partner.into(),
         }],
@@ -271,5 +286,164 @@ fn a_cut_off_gateway_forwards_its_queue_to_a_partner() {
         (1, 1),
         "one session reported, its message taken"
     );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Answers a gateway again with its post office's address as `url`: one that does not answer cuts
+/// it off from the Internet, and its own puts it back.
+fn reconnect(
+    gw: &Path,
+    url: &str,
+    monitor: &Monitor,
+    thread: JoinHandle<()>,
+) -> (Arc<Monitor>, JoinHandle<()>, Receiver<String>) {
+    monitor.stop();
+    thread.join().expect("stopped");
+    let mut settings = station::Settings::load(gw).expect("settings");
+    settings
+        .post_offices
+        .insert("test.example".into(), url.into());
+    settings.save(gw).expect("saved");
+    let (m, t, says) = answer(gw);
+    listening(&m, &says);
+    (m, t, says)
+}
+
+/// RP-7 §4 end to end (W30 stage 4): mail for a user of a cut-off gateway reaches them by radio.
+///
+/// 1. The post office's route says KK4ODA-2 holds KK4ODA-1's users' mail while it is cut off.
+/// 2. KK4ODA-1 polls, then loses the Internet; after 15 minutes the post office counts it cut off.
+/// 3. Mail arrives for WD5EMA, who names KK4ODA-1 as usual: a forward item, with the post office's
+///    signed placement, goes to KK4ODA-2, which polls and holds it for KK4ODA-1.
+/// 4. KK4ODA-1 calls its partner: the item comes over with its placement, checked, and is held as
+///    a copy placed ahead. WD5EMA calls KK4ODA-1 and takes the mail, the Internet still down.
+/// 5. KK4ODA-1's Internet comes back: its poll ends the forwarding, and the post office drops the
+///    item at KK4ODA-2.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn mail_for_a_cut_off_area_reaches_it_by_radio() {
+    let dir = scratch("inward");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (_air, at_user, at_one, at_two) = air();
+    let copies = Some(station::CopiesSettings {
+        users: 10,
+        days: 7,
+        max_air_bytes: 16_384,
+    });
+    let one = gateway_holding(
+        &dir, "KK4ODA-1", "KK4ODA-2", at_one, &base, &running, &po_key, copies,
+    );
+    let two = gateway_holding(
+        &dir, "KK4ODA-2", "KK4ODA-1", at_two, &base, &running, &po_key, copies,
+    );
+
+    // 1. the route, set on the post office's operator port
+    let (status, routes) = running.admin(
+        "POST",
+        "/routes",
+        json!({"via": "kk4oda-2", "users_at": ["KK4ODA-1"]})
+            .to_string()
+            .as_bytes(),
+    );
+    assert_eq!(status, 200, "{routes}");
+    assert!(routes.contains(r#""via":"KK4ODA-2""#), "{routes}");
+    let mut user = client(
+        &dir.join("wd5ema"),
+        &running,
+        &po_key,
+        "club@test.example",
+        "WD5EMA",
+    );
+    user.post_office = Some(base.clone());
+    user.save().expect("saved");
+    radiopost_client::online::settings(&user, Some(&json!({"usual_gateways": ["KK4ODA-1"]})))
+        .expect("settings saved at the post office");
+
+    // 2. KK4ODA-2 answers and polls. KK4ODA-1 has lost the Internet: it answers with its post
+    //    office's address unreachable and the keys it kept from before (as KK4ODA-2 has them),
+    //    and the post office last heard its poll 16 minutes ago
+    let (m_two, _t_two, says_two) = answer(&two);
+    listening(&m_two, &says_two);
+    until(&two, &says_two, "the post office's keys kept", |h| {
+        h.keys.contains_key("test.example")
+    });
+    let keys = Held::load(&two).keys;
+    radiopost_gateway::store::Shared::open(&one)
+        .change(|s| s.keys = keys)
+        .expect("written");
+    let mut settings = station::Settings::load(&one).expect("settings");
+    settings
+        .post_offices
+        .insert("test.example".into(), "http://127.0.0.1:1".into());
+    settings.save(&one).expect("saved");
+    let (m_one, t_one, says_one) = answer(&one);
+    listening(&m_one, &says_one);
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while !running.office().state.last_poll.contains_key("KK4ODA-2") {
+        assert!(Instant::now() < deadline, "KK4ODA-2 polls");
+        thread::sleep(Duration::from_millis(200));
+    }
+    running
+        .office()
+        .state
+        .last_poll
+        .insert("KK4ODA-1".into(), station::now() - 16 * 60);
+
+    // 3. mail for WD5EMA: a forward item at KK4ODA-2, held for KK4ODA-1
+    running
+        .email_in(
+            "maria@example.com",
+            &["club@test.example".to_owned()],
+            b"From: maria@example.com\r\nTo: club@test.example\r\nSubject: Water\r\n\
+              Date: Sun, 15 Nov 2026 10:00:00 +0000\r\nMessage-ID: <water.1@example.com>\r\n\r\n\
+              The truck comes at noon.\r\n",
+        )
+        .expect("taken");
+    assert!(
+        running.office().state.cut.contains("KK4ODA-1"),
+        "counted cut off"
+    );
+    until(&two, &says_two, "the forward item held for KK4ODA-1", |h| {
+        h.forwards_for("KK4ODA-1", 0).len() == 1
+    });
+
+    // 4. KK4ODA-1 calls its partner and holds the mail; WD5EMA takes it there
+    m_one.request_forward("KK4ODA-2");
+    until(&one, &says_one, "the mail held for WD5EMA", |h| {
+        h.copies
+            .iter()
+            .any(|c| c.address == "club@test.example" && c.subject == "Water" && c.air.is_some())
+    });
+    until(&two, &says_two, "the forward item gone once taken", |h| {
+        h.forwards_for("KK4ODA-1", 0).is_empty()
+    });
+    assert_eq!(Held::load(&one).partners["KK4ODA-2"].cursor, 1);
+    let mut said = Vec::new();
+    let report = session::call(
+        &mut user,
+        "KK4ODA-1",
+        Kind::Gateway,
+        &Options::new(&at_user.to_string()),
+        &mut |s| said.push(s.to_owned()),
+    )
+    .expect("called");
+    assert_eq!(report.failed, None, "{said:?}");
+    assert_eq!(report.received.len(), 1, "the mail came by radio: {said:?}");
+
+    // 5. KK4ODA-1 is back: its poll ends the forwarding, the item dropped at KK4ODA-2
+    let _back = reconnect(&one, &base, &m_one, t_one);
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while running.office().state.cut.contains("KK4ODA-1") {
+        assert!(Instant::now() < deadline, "KK4ODA-1 polls again");
+        thread::sleep(Duration::from_millis(200));
+    }
+    let office = running.office();
+    assert!(office.state.forwarded.is_empty());
+    let last = office.state.copies["KK4ODA-2"]
+        .last()
+        .cloned()
+        .expect("an item");
+    assert_eq!(last["kind"], "drop", "{last}");
+    drop(office);
     let _ = std::fs::remove_dir_all(dir);
 }

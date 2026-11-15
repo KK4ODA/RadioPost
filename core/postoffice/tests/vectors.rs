@@ -661,3 +661,195 @@ fn applications_and_the_operator_endpoints_as_rp5_says() {
         );
     }
 }
+
+const T_WINDOW: u64 = 1_794_492_900; // session-04: N1CALL-10's window opens
+const T_CUT: u64 = T_WINDOW - 6 * 3600; // Atlanta loses the Internet
+const PO_HAMPOST: &str = "https://po.hampost.org/rp/v1";
+
+/// make.py's `cut_off_office`: radiopost.org on the day Atlanta loses the Internet. N2CALL-5 holds
+/// copies; N1CALL-10 is hampost.org's gateway, its record from hampost.org's list; the route sends
+/// N2CALL-5's users' mail to N1CALL-10 while it is cut off (RP-7 §4.1, §6.1).
+fn cut_off_office(w: &World) -> PostOffice {
+    use radiopost_postoffice::office::RadioRoute;
+    let mut office = post_office(w, 1050);
+    let window = vectors("forwarding.json")["context"]["window"].clone();
+    office.state.gateways.insert(
+        "N2CALL-5".into(),
+        serde_json::json!({"callsign": "N2CALL-5", "operator": "N2CALL",
+                           "copies": {"users": 50, "days": 7, "max_air_bytes": 16384}}),
+    );
+    office.state.listed.insert(
+        "hampost.org".into(),
+        Listed {
+            api: PO_HAMPOST.into(),
+            gateways: vec![
+                serde_json::json!({"callsign": "N1CALL-10", "operator": "N1CALL",
+                                              "forwarding": [window]}),
+            ],
+            fetched: 0,
+        },
+    );
+    office.state.routes = vec![RadioRoute {
+        users_at: vec!["N2CALL-5".into(), "KK4ODA-1".into()],
+        via: "N1CALL-10".into(),
+    }];
+    for (address, usual) in [
+        ("facundo@radiopost.org", vec!["KK4ODA-1", "N2CALL-5"]),
+        ("shelter3@radiopost.org", vec!["N2CALL-5"]),
+    ] {
+        office.state.settings.insert(
+            address.into(),
+            serde_json::json!({ "usual_gateways": usual }),
+        );
+    }
+    office
+}
+
+/// The notes that say mail arrives, `(address, serial) -> (message, when)`.
+fn arriving<'a>(
+    w: &'a World,
+    when: &'a [(&'a str, u64, &'a str, u64)],
+) -> impl FnMut(&mut PostOffice, &str) + 'a {
+    move |office, note| {
+        for (address, serial, name, at) in when {
+            if note.starts_with(&format!("Mail arrives for {address}: #{serial},")) {
+                deliver_at(office, w, address, *serial, name, *at);
+            }
+        }
+    }
+}
+
+/// The date a message was written.
+fn date_of(w: &World, name: &str) -> u64 {
+    w.messages[name]
+        .map()
+        .get(key::DATE)
+        .and_then(radiopost::cbor::Value::as_u64)
+        .expect("a date")
+}
+
+/// The forwarding story's steps until the Internet comes back to Atlanta, and after.
+fn forwarding_story() -> (Vec<Json>, Vec<Json>) {
+    let steps = vectors("forwarding.json")["post_office"]
+        .as_array()
+        .expect("steps")
+        .clone();
+    let back = steps
+        .iter()
+        .position(|s| {
+            s["note"]
+                .as_str()
+                .is_some_and(|n| n.starts_with("Atlanta's Internet returns"))
+        })
+        .expect("the Internet returns");
+    (steps[..back].to_vec(), steps[back..].to_vec())
+}
+
+/// RP-7 §4.1, §4.2, RP-5 §5.8: `forwarding.json`'s post office side, replayed exactly. N2CALL-5
+/// polls, then falls silent; 15 minutes on it is cut off, and mail for Shelter 3 goes to
+/// N1CALL-10 as a forward item with radiopost.org's placement. N1CALL-10 reports session-04's
+/// records with their path; a path that does not end at it is refused. When N2CALL-5 polls
+/// again, the forward item is dropped at N1CALL-10.
+#[test]
+fn a_cut_off_gateways_mail_goes_by_its_route() {
+    let w = world();
+    let mut office = cut_off_office(&w);
+    let arrivals = [
+        (
+            "facundo@radiopost.org",
+            421,
+            "maria-421",
+            date_of(&w, "maria-421"),
+        ),
+        (
+            "shelter3@radiopost.org",
+            501,
+            "ana-to-shelter3",
+            date_of(&w, "ana-to-shelter3") + 600,
+        ),
+    ];
+    let (before, after) = forwarding_story();
+    replay(&mut office, &before, "forwarding", arriving(&w, &arrivals));
+    replay(
+        &mut office,
+        &after,
+        "forwarding, back",
+        arriving(&w, &arrivals),
+    );
+    // the placement N1CALL-10 was given is the vector's, byte for byte
+    let placed = &vectors("forwarding.json")["placement"]["placement_hex"];
+    let item = office.state.copies["N1CALL-10"]
+        .iter()
+        .find(|i| i["kind"] == "forward")
+        .expect("the forward item");
+    let bytes = base64url::decode(item["placement"].as_str().expect("text")).expect("base64url");
+    assert_eq!(&radiopost::cbor::hex(&bytes), placed.as_str().expect("hex"));
+}
+
+/// RP-7 §4.1: a gateway last answered `placing` false is not counted cut off when it falls
+/// silent; one that polled while radiopost.org placed items at it is, and the copy it never
+/// acknowledged goes to N1CALL-10 while the one it did does not.
+#[test]
+fn a_gateway_is_counted_cut_off_only_after_a_poll_that_counts() {
+    let w = world();
+    let mut office = cut_off_office(&w);
+    for s in office.state.settings.values_mut() {
+        *s = serde_json::json!({"usual_gateways": []});
+    }
+    let t0 = T_CUT - 3 * 3600;
+    let arrivals = [
+        ("shelter3@radiopost.org", 501, "ana-to-shelter3", t0 + 1210),
+        ("shelter3@radiopost.org", 502, "emergency-held", t0 + 1700),
+    ];
+    let mut deliver = arriving(&w, &arrivals);
+    replay(
+        &mut office,
+        vectors("forwarding.json")["placing"]
+            .as_array()
+            .expect("steps"),
+        "placing",
+        |office, note| {
+            if note.starts_with("Shelter 3 names N2CALL-5 as usual") {
+                office.state.settings.insert(
+                    "shelter3@radiopost.org".into(),
+                    serde_json::json!({"usual_gateways": ["N2CALL-5"]}),
+                );
+            }
+            deliver(office, note);
+        },
+    );
+}
+
+/// RP-7 §4.4: `local-delivery.json`'s post office side, going on from the forwarding story before
+/// the Internet comes back: N1CALL-10 reports session-05's records with a local pickup; the
+/// message reaches Facundo's mailbox already picked up, its forward item placed and dropped in
+/// the same poll, and it is not offered to him again.
+#[test]
+fn local_pickups_reported_through_a_partner() {
+    let w = world();
+    let mut office = cut_off_office(&w);
+    let arrivals = [
+        (
+            "facundo@radiopost.org",
+            421,
+            "maria-421",
+            date_of(&w, "maria-421"),
+        ),
+        (
+            "shelter3@radiopost.org",
+            501,
+            "ana-to-shelter3",
+            date_of(&w, "ana-to-shelter3") + 600,
+        ),
+    ];
+    let (before, _) = forwarding_story();
+    replay(&mut office, &before, "forwarding", arriving(&w, &arrivals));
+    replay(
+        &mut office,
+        vectors("local-delivery.json")["post_office"]
+            .as_array()
+            .expect("steps"),
+        "local delivery",
+        |_, _| {},
+    );
+}
