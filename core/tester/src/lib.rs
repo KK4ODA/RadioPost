@@ -10,6 +10,7 @@
 
 pub mod adapter;
 pub mod client;
+pub mod forwarding;
 pub mod gateway;
 pub mod harness;
 pub mod mailserver;
@@ -144,54 +145,102 @@ pub struct GatewayTest {
     /// What it checks.
     pub checks: &'static str,
     run: fn(&mut gateway::Run<'_>, &mut Vec<String>, bool) -> harness::Outcome,
+    /// It waits for windows: run with `--slow`, or when named.
+    pub slow: bool,
 }
 
-/// The gateway's tests, in order (Phase 2: a gateway online; Phase 3: G-03, G-05 and G-06).
+/// The gateway's tests, in order (Phase 2: a gateway online; Phase 3: G-03, G-05 and G-06;
+/// Phase 4: F-01 to F-06, a forwarding gateway).
 pub const GATEWAY_TESTS: &[GatewayTest] = &[
     GatewayTest {
         id: "G-01",
         checks: "An online session: the post office asked while the link turns around, WELCOME, mail both ways, pickups reported, the session closed (RP-3 §9, RP-5 §5.2–§5.7)",
         run: |r, t, _| r.g01(t),
+        slow: false,
     },
     GatewayTest {
         id: "G-02",
         checks: "Credentials and statements refused in order, each with its code; a skewed clock or a replay answered with a challenge (RP-1 §5, §6.3, RP-3 §5.9)",
         run: |r, t, _| r.g02(t),
+        slow: false,
     },
     GatewayTest {
         id: "G-03",
         checks: "Offline: callers checked with the keys and revocation lists it holds, copies served, the queue kept, the session reported when the Internet returns (RP-1 §7.3, RP-3 §9, RP-5 §5.6, §5.8, RP-7 §3.6)",
         run: |r, t, _| r.g03(t),
+        slow: false,
     },
     GatewayTest {
         id: "G-04",
         checks: "A download resumed at another gateway, an upload at the same one (RP-3 §7)",
         run: |r, t, _| r.g04(t),
+        slow: false,
     },
     GatewayTest {
         id: "G-05",
         checks: "Third-party mail held back from a station abroad, with a NOTICE (RP-6 §5.1)",
         run: |r, t, _| r.g05(t),
+        slow: false,
     },
     GatewayTest {
         id: "G-06",
         checks: "Local delivery while cut off: mail for a local user listed with serial 0, sent by content ID without a serial, the pickup reported (RP-7 §4.4, RP-5 §5.6)",
         run: |r, t, _| r.g06(t),
+        slow: false,
     },
     GatewayTest {
         id: "G-07",
         checks: "A misbehaving caller: a frame over the limit, an unknown type, a message not accepted, and (--slow) a caller that never hangs up (RP-3 §2, §4, §5.4, §8)",
         run: |r, t, slow| r.g07(t, slow),
+        slow: false,
     },
     GatewayTest {
         id: "G-08",
         checks: "A credential renewed by radio (RP-3 §5.8, RP-5 §6.2)",
         run: |r, t, _| r.g08(t),
+        slow: false,
     },
     GatewayTest {
         id: "G-09",
         checks: "Post offices found in the DNS it is given, and a blocked one unknown (RP-1 §7.1, §7.3)",
         run: |r, t, _| r.g09(t),
+        slow: false,
+    },
+    GatewayTest {
+        id: "F-01",
+        checks: "Cut off, it calls a partner only inside the partner's window, at most three tries a minute apart, not on a busy channel (RP-7 §5)",
+        run: |r, t, _| r.f01(t),
+        slow: true,
+    },
+    GatewayTest {
+        id: "F-02",
+        checks: "Records sent as PROOF and checked: refusals in order with their codes, the record's statement, session and path, the credential by hash once the partner holds it, a taken record forwarded on (RP-7 §3.2–§3.5)",
+        run: |r, t, _| r.f02(t),
+        slow: false,
+    },
+    GatewayTest {
+        id: "F-03",
+        checks: "Placements checked in order, each failure with its code; the good one served as a copy placed ahead; the next call's cursor (RP-7 §2, §4.3)",
+        run: |r, t, _| r.f03(t),
+        slow: false,
+    },
+    GatewayTest {
+        id: "F-04",
+        checks: "Records kept for a partner that reaches the post offices, and sent to one that does not when none opens a window within the hour (RP-7 §6.2)",
+        run: |r, t, _| r.f04(t),
+        slow: false,
+    },
+    GatewayTest {
+        id: "F-05",
+        checks: "Windows published only inside the country's segments, with the channel and occupied band; and (--slow) a partner's window outside them never called in (RP-7 §5, §5.1)",
+        run: |r, t, slow| r.f05(t, slow),
+        slow: false,
+    },
+    GatewayTest {
+        id: "F-06",
+        checks: "Mail offered again at a cut-off gateway: already-have while queued and once passed on, a new message taken (RP-7 §3.5, §3.6)",
+        run: |r, t, _| r.f06(t),
+        slow: false,
     },
 ];
 
@@ -218,9 +267,13 @@ pub fn run_gateway(
         let started = Instant::now();
         let mut transcript = Vec::new();
         let slow = plan.slow || plan.only.iter().any(|o| o.eq_ignore_ascii_case(t.id));
-        let (passed, why) = match (t.run)(&mut run, &mut transcript, slow && plan.slow) {
-            Ok(()) => (Some(true), String::new()),
-            Err(e) => (Some(false), e),
+        let (passed, why) = if t.slow && !plan.slow && plan.only.is_empty() {
+            (None, "slow: run with --slow".to_owned())
+        } else {
+            match (t.run)(&mut run, &mut transcript, slow && plan.slow) {
+                Ok(()) => (Some(true), String::new()),
+                Err(e) => (Some(false), e),
+            }
         };
         let v = Verdict {
             id: t.id,

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! The conformance tester's gateway tests against this gateway, through the driver file the tester
-//! ships for it. G-07's 300-second wait runs only by hand: `radiopost-tester gateway --driver core/tester/drivers/radiopost-gateway.json --bin <radiopost-gateway> --slow`.
+//! ships for it. G-07's 300-second wait, F-01 and F-05's calls (which wait for partners' windows) run only by hand: `radiopost-tester gateway --driver core/tester/drivers/radiopost-gateway.json --bin <radiopost-gateway> --slow`.
 
 use std::path::Path;
 
@@ -38,7 +38,8 @@ fn the_gateway_passes_the_conformance_tests() {
     assert_eq!(
         ran,
         [
-            "G-01", "G-02", "G-03", "G-04", "G-05", "G-06", "G-07", "G-08", "G-09"
+            "G-01", "G-02", "G-03", "G-04", "G-05", "G-06", "G-07", "G-08", "G-09", "F-02", "F-03",
+            "F-04", "F-05", "F-06"
         ]
     );
 }

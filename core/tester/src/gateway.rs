@@ -27,19 +27,19 @@ pub const GATEWAY: &str = "N1CALL-10";
 /// A second gateway, for resuming elsewhere (RP-3 §7).
 pub const OTHER: &str = "N2CALL-5";
 
-fn code(name: &str) -> u64 {
+pub(crate) fn code(name: &str) -> u64 {
     ErrorCode::from_name(name).map_or(0, |c| u64::from(c.code()))
 }
 
-fn name_of(code: u64) -> String {
+pub(crate) fn name_of(code: u64) -> String {
     ErrorCode::from_code(code).map_or_else(|| format!("code {code}"), |c| c.name().to_owned())
 }
 
-fn kind_of(p: &Value) -> u64 {
+pub(crate) fn kind_of(p: &Value) -> u64 {
     p.get(0).and_then(Value::as_u64).unwrap_or(u64::MAX)
 }
 
-fn bytes_of(v: Option<&Value>) -> Vec<u8> {
+pub(crate) fn bytes_of(v: Option<&Value>) -> Vec<u8> {
     v.and_then(Value::as_bytes)
         .map(<[u8]>::to_vec)
         .unwrap_or_default()
@@ -73,21 +73,23 @@ pub(crate) fn mail(from: &str, to: &str, subject: &str, words: usize) -> Message
 }
 
 /// What the caller says in `HELLO` (RP-3 §5.1).
-struct Hello<'a> {
-    user: &'a User,
-    gateway: &'a str,
-    offers: Vec<&'a Message>,
-    auto: u64,
-    partials: Vec<(ContentId, u64)>,
-    renew: bool,
-    time: u64,
-    nonce: [u8; 8],
+pub(crate) struct Hello<'a> {
+    pub(crate) user: &'a User,
+    pub(crate) gateway: &'a str,
+    pub(crate) offers: Vec<&'a Message>,
+    pub(crate) auto: u64,
+    pub(crate) partials: Vec<(ContentId, u64)>,
+    pub(crate) renew: bool,
+    pub(crate) time: u64,
+    pub(crate) nonce: [u8; 8],
     /// Sign something other than the statement: a signature that does not verify.
-    bad_signature: bool,
+    pub(crate) bad_signature: bool,
+    /// 0, a client; 1, a gateway forwarding (RP-7 §2).
+    pub(crate) role: u64,
 }
 
 impl<'a> Hello<'a> {
-    fn new(user: &'a User, gateway: &'a str) -> Hello<'a> {
+    pub(crate) fn new(user: &'a User, gateway: &'a str) -> Hello<'a> {
         Hello {
             user,
             gateway,
@@ -98,10 +100,11 @@ impl<'a> Hello<'a> {
             time: now(),
             nonce: random(),
             bad_signature: false,
+            role: 0,
         }
     }
 
-    fn statement(&self, form: Form) -> Statement {
+    pub(crate) fn statement(&self, form: Form) -> Statement {
         Statement {
             address: self.user.address.clone(),
             operator: self.user.operator.clone(),
@@ -111,7 +114,7 @@ impl<'a> Hello<'a> {
         }
     }
 
-    fn pdu(&self) -> Value {
+    pub(crate) fn pdu(&self) -> Value {
         let stmt = self.statement(Form::Time {
             time: self.time,
             nonce: self.nonce,
@@ -146,7 +149,7 @@ impl<'a> Hello<'a> {
         let mut entries = vec![
             (0, Value::Uint(kind::HELLO)),
             (1, Value::Array(vec![Value::Uint(1), Value::Uint(1)])),
-            (2, Value::Uint(0)),
+            (2, Value::Uint(self.role)),
             (3, Value::text(&self.user.address)),
             (4, Value::text(&self.user.operator)),
             (5, Value::text(self.gateway)),
@@ -187,7 +190,7 @@ impl<'a> Hello<'a> {
     }
 }
 
-fn msg_pieces(m: &Message, from: usize, piece: usize) -> Vec<Value> {
+pub(crate) fn msg_pieces(m: &Message, from: usize, piece: usize) -> Vec<Value> {
     let air = m.air_form(Compression::None);
     let mut out = Vec::new();
     let mut at = from;
@@ -205,7 +208,7 @@ fn msg_pieces(m: &Message, from: usize, piece: usize) -> Vec<Value> {
     out
 }
 
-fn receipt(complete: &[ContentId]) -> Value {
+pub(crate) fn receipt(complete: &[ContentId]) -> Value {
     Value::int_map(vec![
         (0, Value::Uint(kind::RECEIPT)),
         (
@@ -220,7 +223,7 @@ fn receipt(complete: &[ContentId]) -> Value {
     ])
 }
 
-fn request(serials: &[u64]) -> Value {
+pub(crate) fn request(serials: &[u64]) -> Value {
     Value::int_map(vec![
         (0, Value::Uint(kind::REQUEST)),
         (
@@ -230,12 +233,12 @@ fn request(serials: &[u64]) -> Value {
     ])
 }
 
-fn done() -> Value {
+pub(crate) fn done() -> Value {
     Value::int_map(vec![(0, Value::Uint(kind::DONE))])
 }
 
 /// The gateway's PDUs until its `DONE` (or an `ERROR`, which ends the turn too).
-fn turn(peer: &mut Peer, what: &str) -> Result<Vec<Value>, String> {
+pub(crate) fn turn(peer: &mut Peer, what: &str) -> Result<Vec<Value>, String> {
     let mut out = Vec::new();
     loop {
         let p = peer.expect(what)?;
@@ -249,7 +252,7 @@ fn turn(peer: &mut Peer, what: &str) -> Result<Vec<Value>, String> {
 
 /// The gateway's answer to the caller's last turn: up to its `RECEIPT` (RP-3 §5.7: a turn after
 /// `MSG` PDUs ends with a `RECEIPT` listing each), or a `DONE` or `ERROR`.
-fn answer(peer: &mut Peer, what: &str) -> Result<Vec<Value>, String> {
+pub(crate) fn answer(peer: &mut Peer, what: &str) -> Result<Vec<Value>, String> {
     let mut out = Vec::new();
     loop {
         let p = peer.expect(what)?;
@@ -281,7 +284,7 @@ fn expect_error(peer: &mut Peer, want: &str) -> Outcome {
 }
 
 /// A `WELCOME` with `status`; its session ID.
-fn expect_welcome(p: &Value, status: u64) -> Result<Vec<u8>, String> {
+pub(crate) fn expect_welcome(p: &Value, status: u64) -> Result<Vec<u8>, String> {
     if kind_of(p) != kind::WELCOME {
         return Err(format!("{} where WELCOME was due", p.diagnostic()));
     }
@@ -302,7 +305,7 @@ fn expect_welcome(p: &Value, status: u64) -> Result<Vec<u8>, String> {
 }
 
 /// The air form carried by `MSG` PDUs for one message, from `from`: its bytes, and the serial.
-fn assemble(pdus: &[Value], id: ContentId, from: u64) -> Result<(Vec<u8>, u64), String> {
+pub(crate) fn assemble(pdus: &[Value], id: ContentId, from: u64) -> Result<(Vec<u8>, u64), String> {
     let mut out = Vec::new();
     let mut serial = 0;
     for p in pdus.iter().filter(|p| kind_of(p) == kind::MSG) {
@@ -323,7 +326,7 @@ fn assemble(pdus: &[Value], id: ContentId, from: u64) -> Result<(Vec<u8>, u64), 
 }
 
 /// A gateway under test, running.
-struct Gateway {
+pub(crate) struct Gateway {
     _running: Running,
 }
 
@@ -361,7 +364,7 @@ impl Run<'_> {
     }
 
     /// As [`Run::gateway`]; holding copies placed ahead when `copies` (RP-5 §5.8).
-    fn gateway_holding(
+    pub(crate) fn gateway_holding(
         &self,
         test: &str,
         office: &TestOffice,
@@ -370,6 +373,19 @@ impl Run<'_> {
         block: &[&str],
         copies: bool,
     ) -> Result<Gateway, String> {
+        let home = self.prepare(test, office, adapter, callsign, (block, copies))?;
+        self.serve(&home)
+    }
+
+    /// As [`Run::gateway_holding`], set up and not yet serving: its home.
+    pub(crate) fn prepare(
+        &self,
+        test: &str,
+        office: &TestOffice,
+        adapter: SocketAddr,
+        callsign: &str,
+        (block, copies): (&[&str], bool),
+    ) -> Result<PathBuf, String> {
         let home = self.scratch.join(test).join(callsign);
         let _ = std::fs::remove_dir_all(&home);
         std::fs::create_dir_all(home.parent().unwrap_or(&home)).map_err(|e| e.to_string())?;
@@ -414,7 +430,14 @@ impl Run<'_> {
         if copies {
             self.driver.run("copies", &[("home", &h)], "")?;
         }
-        let running = self.driver.start("serve", &[("home", &h)])?;
+        Ok(home)
+    }
+
+    /// The gateway set up in `home` starts serving.
+    pub(crate) fn serve(&self, home: &Path) -> Result<Gateway, String> {
+        let running = self
+            .driver
+            .start("serve", &[("home", &home.to_string_lossy())])?;
         Ok(Gateway { _running: running })
     }
 
@@ -563,7 +586,7 @@ impl Run<'_> {
     }
 
     /// One call with one `HELLO`, and the gateway's first PDU.
-    fn first_answer(peer: &mut Peer, hello: &Value) -> Result<Value, String> {
+    pub(crate) fn first_answer(peer: &mut Peer, hello: &Value) -> Result<Value, String> {
         peer.call_within(GATEWAY, Duration::from_secs(15))?;
         peer.send(std::slice::from_ref(hello));
         peer.expect("the gateway's answer to HELLO")
@@ -1515,7 +1538,7 @@ fn turn_rest(peer: &mut Peer, first: &Value) -> Result<Vec<Value>, String> {
     turn(peer, "the rest of the gateway's turn")
 }
 
-fn check_error(p: &Value, want: &str) -> Outcome {
+pub(crate) fn check_error(p: &Value, want: &str) -> Outcome {
     if kind_of(p) != kind::ERROR {
         return Err(format!(
             "{} where ERROR {want} was due (RP-3 §5.9)",
@@ -1575,7 +1598,7 @@ fn check_open(open: &Exchange, hello: &Hello<'_>, session: &[u8]) -> Outcome {
 }
 
 /// Waits up to five seconds for an exchange the gateway is due to make.
-fn wait_for(office: &TestOffice, found: impl FnMut(&Exchange) -> bool) -> bool {
+pub(crate) fn wait_for(office: &TestOffice, found: impl FnMut(&Exchange) -> bool) -> bool {
     wait_long(office, Duration::from_secs(5), found)
 }
 
@@ -1632,7 +1655,7 @@ fn check_report(
 }
 
 /// Whether an exchange `found` holds of comes within `limit`.
-fn wait_long(
+pub(crate) fn wait_long(
     office: &TestOffice,
     limit: Duration,
     mut found: impl FnMut(&Exchange) -> bool,

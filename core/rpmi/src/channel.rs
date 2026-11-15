@@ -104,7 +104,21 @@ pub struct Channel {
     links: Vec<Link>,
     calls: Vec<Call>,
     calls_made: u64,
+    placed: Vec<Placed>,
     out: Vec<Out>,
+}
+
+/// A call a host placed, answered or not: what a test reads to time a program's tries.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Placed {
+    /// The call's serial number.
+    pub serial: u64,
+    /// The station whose host placed it.
+    pub station: usize,
+    /// The callsign it called as.
+    pub local: String,
+    /// The callsign it called.
+    pub remote: String,
 }
 
 impl Channel {
@@ -133,6 +147,12 @@ impl Channel {
     /// What the adapters said since the last call, in order.
     pub fn take(&mut self) -> Vec<Out> {
         std::mem::take(&mut self.out)
+    }
+
+    /// Every call placed since the channel began, in order.
+    #[must_use]
+    pub fn placed(&self) -> &[Placed] {
+        &self.placed
     }
 
     /// The serial numbers of calls placed and not answered.
@@ -544,6 +564,12 @@ impl Channel {
         }
         self.ok(station, &name, id);
         self.calls_made += 1;
+        self.placed.push(Placed {
+            serial: self.calls_made,
+            station,
+            local: local.clone(),
+            remote: remote.into(),
+        });
         let call = Call {
             serial: self.calls_made,
             station,

@@ -468,6 +468,14 @@ pub struct TestAdapter {
     /// Where each program connects, when the test runs several (two gateways).
     pub programs_at: Vec<SocketAddr>,
     tester_station: usize,
+    bystanders: [usize; 2],
+}
+
+/// Two other stations holding a link between them: while it stands, every other station's
+/// channel is busy (RP-4 §1.1, §5).
+pub struct Busy {
+    _calling: Local,
+    _called: Local,
 }
 
 impl TestAdapter {
@@ -515,6 +523,10 @@ impl TestAdapter {
             })
             .collect();
         let tester_station = ch.add_station(station("tester", "t", 4096));
+        let bystanders = [
+            ch.add_station(station("bystander-a", "a", 4096)),
+            ch.add_station(station("bystander-b", "b", 4096)),
+        ];
         // a call nobody answers fails in 3 s: the tester calls a program until it listens
         let server = Server::new(ch, Duration::from_secs(3));
         let programs_at = stations
@@ -526,7 +538,58 @@ impl TestAdapter {
             program_at: programs_at[0],
             programs_at,
             tester_station,
+            bystanders,
         })
+    }
+
+    /// The calls the program's stations placed to `remote` so far, by serial, in order.
+    #[must_use]
+    pub fn calls_to(&self, remote: &str) -> Vec<u64> {
+        let tester = self.tester_station;
+        let bystanders = self.bystanders;
+        self.server.with_channel(|c| {
+            c.placed()
+                .iter()
+                .filter(|p| p.station != tester && !bystanders.contains(&p.station))
+                .filter(|p| p.remote.eq_ignore_ascii_case(remote))
+                .map(|p| p.serial)
+                .collect()
+        })
+    }
+
+    /// Two bystanders link up, so the channel is busy for everyone else until the [`Busy`] is
+    /// dropped.
+    ///
+    /// # Errors
+    ///
+    /// The bystanders could not link.
+    pub fn busy(&self) -> Result<Busy, String> {
+        let called = self.server.attach(self.bystanders[1], "bystander-b");
+        let calling = self.server.attach(self.bystanders[0], "bystander-a");
+        let mut host = Host::new();
+        let mut asks = vec![
+            (&called, host.hello("bystander")),
+            (&called, host.callsigns(&["W9BUSY"])),
+            (&called, host.listen(true)),
+            (&calling, host.hello("bystander")),
+            (&calling, host.callsigns(&["W9WAIT"])),
+            (&calling, host.connect("W9BUSY", None, None)),
+        ];
+        for (local, m) in asks.drain(..) {
+            local.send(&m);
+        }
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if let Some(m) = calling.next(Duration::from_millis(100))
+                && let Ok(Event::Connected { .. }) = Event::read(&m)
+            {
+                return Ok(Busy {
+                    _calling: calling,
+                    _called: called,
+                });
+            }
+        }
+        Err("the bystanders could not link to make the channel busy".into())
     }
 
     /// The tester's side of the air, answering to `callsigns`, listening or not.
@@ -645,6 +708,26 @@ impl Peer {
         let connect = self.host.connect(callsign, None, None);
         self.ask(&connect)?;
         self.wait_link(Duration::from_secs(20))
+    }
+
+    /// Calls the program's callsign as one of the tester's own, until it answers.
+    ///
+    /// # Errors
+    ///
+    /// No call was answered within the time.
+    pub fn call_as_within(&mut self, callsign: &str, as_call: &str, within: Duration) -> Outcome {
+        let deadline = Instant::now() + within;
+        loop {
+            let connect = self.host.connect(callsign, Some(as_call), None);
+            let tried = self
+                .ask(&connect)
+                .and_then(|()| self.wait_link(Duration::from_secs(20)));
+            match tried {
+                Ok(()) => return Ok(()),
+                Err(e) if Instant::now() >= deadline => return Err(e),
+                Err(_) => std::thread::sleep(Duration::from_millis(200)),
+            }
+        }
     }
 
     /// Calls the program's callsign until it answers: it may not be listening yet.

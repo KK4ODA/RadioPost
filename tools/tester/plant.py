@@ -5,7 +5,8 @@ For each test, it copies the repository, plants one fault in the copy of the pro
 for (the client, the TCP adapter, the gateway or the post office), builds it, and runs the
 tester's test against it: the test must fail. Run it by hand after changing a test or those
 programs; it builds once a fault, so it takes a few minutes, C-11 one more (its fault makes the
-client hang up after 60 s), and "P-06 slow" a quarter of an hour (it runs with --slow).
+client hang up after 60 s), "P-06 slow" a quarter of an hour (it runs with --slow), and F-01,
+F-04 and "F-05 slow" several minutes each (they wait for partners' windows).
 
     python3 tools/tester/plant.py [C-01 A-02 ...]
 
@@ -28,6 +29,8 @@ TCP = "adapters/tcp/src/lib.rs"
 GATEWAY = "core/radiopost/src/session/gateway.rs"
 STATION = "core/gateway/src/station.rs"
 OFFICE = "core/postoffice/src/office.rs"
+FORWARD = "core/gateway/src/forward.rs"
+FORWARDING = "core/radiopost/src/forwarding.rs"
 
 # test: (file, text, the text with the fault)
 FAULTS = {
@@ -118,9 +121,38 @@ FAULTS = {
         "    if settings.blocked.iter().any(|b| b == domain)",
         "    if false",
     ),
+    "F-01": (FORWARD, "        if busy {", "        if false && busy {"),
+    "F-02": (FORWARDING, "&& proof.path.len() <= MAX_PATH", "&& true"),
+    "F-02 hash": (
+        FORWARD,
+        "let hashed = hash_hex(&r.credential).is_some_and(|h| holds.contains(&h));",
+        "let hashed = false;",
+    ),
+    "F-03": (
+        FORWARDING,
+        "    if placed.id != *id || placed.gateway != me {",
+        "    if now >= placed.expires {\n        return Err(ErrorCode::RefusedByPolicy);\n    }\n"
+        "    if placed.id != *id || placed.gateway != me {",
+    ),
+    "F-04": (
+        FORWARD,
+        "let records = radiopost::forwarding::records_to(&partner, &views, now);",
+        "let records = true;",
+    ),
+    "F-05": (
+        STATION,
+        "if !radiopost::forwarding::window_allowed(occupied, country) {",
+        "if false {",
+    ),
+    "F-05 slow": (FORWARD, "radiopost::forwarding::window_allowed((low, high), country)", "true"),
+    "F-06": (
+        "core/gateway/src/store.rs",
+        ".is_some_and(|at| now.saturating_sub(*at) < KEEP_S)",
+        ".is_some_and(|_| false)",
+    ),
     "P-01": (
         "core/postoffice/src/documents.rs",
-        '"/routes" => json!({"issued": now, "routes": []}),',
+        '"/routes" => json!({"issued": now, "routes": self.state.routes}),',
         "",
     ),
     "P-02": (
@@ -163,6 +195,7 @@ FAULTS = {
 ROLES = {
     "C": ("radiopost-client", "radiopost", "radiopost.json", "client"),
     "G": ("radiopost-gateway", "radiopost-gateway", "radiopost-gateway.json", "gateway"),
+    "F": ("radiopost-gateway", "radiopost-gateway", "radiopost-gateway.json", "gateway"),
     "P": ("radiopost-postoffice", "radiopost-po", "radiopost-po.json", "post-office"),
 }
 
@@ -175,6 +208,10 @@ def faulty_tree(test: str, scratch: Path) -> Path | str:
     shutil.copytree(
         REPO, work, ignore=shutil.ignore_patterns("target", ".git", "node_modules", "__pycache__")
     )
+    # the copy keeps each file's time, so a file an earlier fault changed would read as older
+    # than the build that has the fault in it: every file a fault touches is new to cargo
+    for other in {p for p, _, _ in FAULTS.values()}:
+        os.utime(work / other)
     source = work / path
     original = source.read_text()
     if original.count(text) != 1:

@@ -16,10 +16,10 @@ usage:
       minutes: it runs with --slow, or when named in --only.
   radiopost-tester gateway --driver FILE --bin PROGRAM [--only ID,...] [--slow] [--json FILE]
                            [--scratch DIR]
-      test a gateway online (G-01, G-02, G-04, G-07 to G-09): the tester calls it through its
-      own modem adapter and runs the post office behind it (core/tester/drivers/
-      radiopost-gateway.json is radiopost-gateway's driver). G-07's 300-second wait runs with
-      --slow.
+      test a gateway (G-01 to G-09) and a forwarding gateway (F-01 to F-06): the tester calls it
+      through its own modem adapter, runs the post office behind it, and plays its partners
+      (core/tester/drivers/radiopost-gateway.json is radiopost-gateway's driver). G-07's
+      300-second wait, F-01 and F-05's calls, which wait for partners' windows, run with --slow.
   radiopost-tester post-office --driver FILE --bin PROGRAM [--only ID,...] [--slow] [--json FILE]
                                [--scratch DIR]
       test a post office (P-01 to P-10): the tester starts it in a fresh directory for each test,
