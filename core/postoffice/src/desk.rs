@@ -88,8 +88,10 @@ impl Running {
         ) || (method == "GET" && route.starts_with("/office/lookup/"))
             || matches!(
                 (method, route),
-                ("GET" | "POST", "/office/health" | "/office/backup-keys")
-                    | ("GET", "/office/jobs" | "/office/backups")
+                (
+                    "GET" | "POST",
+                    "/office/health" | "/office/backup-keys" | "/office/dkim"
+                ) | ("GET", "/office/jobs" | "/office/backups")
                     | ("POST", "/office/backup")
             )
             || (method == "POST" && route.starts_with("/office/jobs/"))
@@ -310,6 +312,19 @@ impl Running {
     fn desk_care(&self, method: &str, route: &str, who: &str, body: &Json) -> Option<Answer> {
         if let Some(answer) = self.desk_backup_keys(method, route, who, body) {
             return Some(answer);
+        }
+        // the DKIM keys rotated by hand, step by step (crate::dkim)
+        if route == "/office/dkim" {
+            let step = body.get("step").and_then(Json::as_str).unwrap_or("");
+            let answer = if method == "GET" {
+                self.dkim_view()
+            } else {
+                self.dkim_step(step, who)
+            };
+            return Some(match answer {
+                Ok(view) => ok(&view),
+                Err(e) => malformed(&e),
+            });
         }
         let text = |k: &str| body.get(k).and_then(Json::as_str).unwrap_or("").to_owned();
         Some(match (method, route) {

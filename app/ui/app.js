@@ -1727,6 +1727,67 @@ async function renderServer() {
     ? `The last copy off the server: ${day(d.at)}, ${d.to ? `fetched by ${d.to}` : `downloaded by ${d.by}`}, ${d.mail ? "with the mailboxes" : "without the mailboxes"}.`
     : "None downloaded yet: a backup that stays on the server is lost with it.";
   await renderAutoBackups(b.keys || []);
+  await renderDkim();
+}
+
+// the DKIM keys rotated by hand, one checked step at a time (the post office's dkim.rs)
+async function renderDkim() {
+  const buttons = ["o-dkim-start", "o-dkim-switch", "o-dkim-removed", "o-dkim-cancel"];
+  let v;
+  try {
+    v = await desk("GET", "/office/dkim");
+  } catch (e) {
+    $("o-dkim-state").textContent = e.message;
+    $("o-dkim-table").hidden = true;
+    $("o-dkim-records").replaceChildren();
+    for (const id of buttons) $(id).hidden = true;
+    return;
+  }
+  const keys = v.keys || [];
+  $("o-dkim-table").hidden = !keys.length;
+  $("o-dkim-keys").replaceChildren(...keys.map((k) => el("tr", {title: `Stalwart's ID ${k.id}`},
+    el("td", {class: "mono", text: k.selector}), el("td", {text: k.algorithm === "rsa" ? "RSA" : "Ed25519"}),
+    el("td", {text: k.stage}), el("td", {text: k.created ? day(Date.parse(k.created) / 1000) : ""}))));
+  const r = v.rotation;
+  const record = (rec, verb) => {
+    const copy = el("button", {type: "button", class: "quiet", text: "Copy",
+      title: "Copy the record's value, to paste into your DNS provider's TXT record"});
+    copy.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(rec.value); toast("Copied."); } catch { toast("Select the text and copy it.", true); }
+    });
+    return el("div", {class: "dkim-record"},
+      el("p", {}, el("b", {text: `${verb} `}), el("span", {class: "mono", text: rec.name}), " TXT"),
+      el("div", {class: "row"}, el("input", {class: "grow mono", value: rec.value, readonly: "", "aria-label": `${rec.name} TXT`}), copy));
+  };
+  const state = {
+    start: "No rotation under way. The hourly check turns amber when the keys are older than "
+      + `${v.rotate_after_days} days.`,
+    publish: "Publish these records in your DNS, then Switch: the switch waits until each is visible. "
+      + "Most DNS panels want the name without the domain (the part ending in ._domainkey).",
+    wait: r && r.remove_after ? `The new keys sign. Keep the old records published until ${day(r.remove_after)}; the hourly check says when.` : "",
+    remove: "Remove these records from your DNS, then End the rotation: it checks they are gone.",
+  }[v.next] || "";
+  $("o-dkim-state").textContent = state;
+  $("o-dkim-records").replaceChildren(...(v.next === "publish" ? (r.publish || []).map((x) => record(x, "Publish"))
+    : v.next === "remove" ? (r.unpublish || []).map((x) => record(x, "Remove")) : []));
+  $("o-dkim-start").hidden = v.next !== "start";
+  $("o-dkim-switch").hidden = v.next !== "publish";
+  $("o-dkim-cancel").hidden = v.next !== "publish";
+  $("o-dkim-removed").hidden = v.next !== "remove";
+}
+
+async function dkimStep(step, button) {
+  button.disabled = true;
+  try {
+    await desk("POST", "/office/dkim", {step});
+    toast({start: "New keys made: publish their records.", switch: "Switched: the new keys sign.",
+           removed: "The rotation is over.", cancel: "Stopped: the new keys were taken back."}[step]);
+    await renderDkim();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 // the backups this computer fetches by itself (wishlist W38), and the computers the post office
@@ -2029,6 +2090,10 @@ function wire() {
   });
   $("o-backup").addEventListener("click", downloadBackup);
   $("o-auto").addEventListener("click", toggleAutoBackups);
+  for (const [id, step] of [["o-dkim-start", "start"], ["o-dkim-switch", "switch"],
+                            ["o-dkim-removed", "removed"], ["o-dkim-cancel", "cancel"]]) {
+    $(id).addEventListener("click", (e) => dkimStep(step, e.currentTarget));
+  }
   $("o-auto-now").addEventListener("click", async () => {
     try { await api("backups/fetch", {}); setTimeout(() => renderServer().catch(() => {}), 2000); }
     catch (e) { toast(e.message, true); }

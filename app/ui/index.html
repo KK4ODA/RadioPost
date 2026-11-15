@@ -345,6 +345,22 @@
             </div>
             <p class="note" id="o-downloaded" title="Health turns amber 7 days after the last download, red after 30"></p>
           </div>
+          <div class="card">
+            <h2 title="The keys the mail server signs outgoing mail with, so receivers can tell it came from this domain">DKIM keys</h2>
+            <p class="note">Rotated by hand, since you edit DNS yourself: the post office makes the new keys and gives them to Stalwart, you publish their records, and it checks each step in DNS before the next. Mail is never signed with a key whose record is not published, and the old records stay a week for mail still on its way.</p>
+            <table class="list" aria-label="DKIM keys" id="o-dkim-table" hidden>
+              <thead><tr><th>Selector</th><th>Algorithm</th><th>Stage</th><th>Made</th></tr></thead>
+              <tbody id="o-dkim-keys"></tbody>
+            </table>
+            <p class="note" id="o-dkim-state"></p>
+            <div id="o-dkim-records"></div>
+            <div class="row">
+              <button type="button" id="o-dkim-start" title="Make new keys, given to Stalwart signing nothing until you publish their records" hidden>Start a rotation</button>
+              <button type="button" id="o-dkim-switch" title="Check that every new record is visible in DNS, then sign with the new keys" hidden>Switch to the new keys</button>
+              <button type="button" id="o-dkim-removed" title="Check that the old records are gone from DNS, then retire the old keys" hidden>End the rotation</button>
+              <button type="button" class="quiet" id="o-dkim-cancel" title="Take the new keys back: nothing else changes" hidden>Stop</button>
+            </div>
+          </div>
         </div>
 
         <div class="o-pane" id="o-settings" hidden>

@@ -24,3 +24,8 @@ unreadable_literal = "allow"
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+# an RSA key made in a test (`dkim`) takes seconds unoptimized: its big-number arithmetic is
+# optimized in debug builds too
+[profile.dev.package.num-bigint-dig]
+opt-level = 3

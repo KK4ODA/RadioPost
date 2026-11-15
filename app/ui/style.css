@@ -346,3 +346,4 @@ details.hint summary { cursor: pointer; color: var(--accent); font-size: 13px; m
 details.hint code, .note code { font-family: var(--mono); font-size: 12px; background: var(--bg);
                                 padding: 0 4px; border-radius: 4px; }
 #o-claude-text { font-family: var(--mono); font-size: 12px; margin-top: 8px; }
+.dkim-record p { margin: 6px 0 2px; font-size: 13px; }

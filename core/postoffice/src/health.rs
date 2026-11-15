@@ -54,6 +54,66 @@ impl Running {
     }
 
     /// What only the server sees: its disk, mail stuck going out, its backups, its runner.
+    /// The DKIM keys' age, and a rotation that waits on the operator (`crate::dkim`), at `at`.
+    #[must_use]
+    pub fn dkim_lines(&self, at: u64) -> Vec<Line> {
+        use crate::dkim;
+        let dir = self.files().dir().to_path_buf();
+        let Some(r) = dkim::rotation(&dir) else {
+            let selectors = self.settings().health.dkim;
+            return match dkim::age_days(&selectors, &crate::lookups::day(at)) {
+                Some(days) if days >= dkim::ROTATE_AFTER_DAYS => vec![line(
+                    Verdict::Warn,
+                    format!(
+                        "DKIM: the keys are {days} days old: rotate them (the Server tab, DKIM keys)"
+                    ),
+                )],
+                Some(days) => vec![line(
+                    Verdict::Ok,
+                    format!("DKIM: the keys are {days} days old"),
+                )],
+                None => Vec::new(),
+            };
+        };
+        let names = |ks: &[dkim::Key]| {
+            ks.iter()
+                .map(|k| format!("{}._domainkey.{}", k.selector, r.domain))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        match r.switched {
+            None if at.saturating_sub(r.started) > 86_400 => vec![line(
+                Verdict::Warn,
+                format!(
+                    "DKIM: a rotation waits since {}: publish {}, then Switch (the Server tab)",
+                    crate::mail::iso(r.started),
+                    names(&r.new)
+                ),
+            )],
+            None => vec![line(
+                Verdict::Note,
+                format!(
+                    "DKIM: a rotation started: publish {}, then Switch",
+                    names(&r.new)
+                ),
+            )],
+            Some(s) if at >= s + dkim::RETIRE_AFTER_S => vec![line(
+                Verdict::Warn,
+                format!(
+                    "DKIM: remove the old records {} from DNS, then End the rotation (the Server tab)",
+                    names(&r.old)
+                ),
+            )],
+            Some(s) => vec![line(
+                Verdict::Ok,
+                format!(
+                    "DKIM: the new keys sign; the old records stay published until {}",
+                    crate::mail::iso(s + dkim::RETIRE_AFTER_S)
+                ),
+            )],
+        }
+    }
+
     fn local_lines(&self) -> Vec<Line> {
         let dir = self.files().dir().to_path_buf();
         let at = now();
@@ -73,6 +133,7 @@ impl Running {
             )),
             None => out.push(line(Verdict::Note, "disk: `df` did not answer".into())),
         }
+        out.extend(self.dkim_lines(at));
         let oldest = self.office().state.outgoing.iter().map(|o| o.queued).min();
         match oldest {
             Some(q) if q > 0 && at.saturating_sub(q) > 7200 => out.push(line(

@@ -184,7 +184,7 @@ which the firewall keeps closed: reach it through an SSH tunnel
 | 2 Storage | The defaults (RocksDB in `/var/lib/stalwart/`). |
 | 3 Account directory | Use the internal directory. |
 | 4 Logging | The default (a log file in `/var/log/stalwart/`). |
-| 5 DNS | Manual DNS server management. An automatic one would keep a key that can change every domain of the DNS account on the server; the price of manual is that DKIM keys are not rotated. |
+| 5 DNS | Manual DNS server management. An automatic one would keep a key that can change every domain of the DNS account on the server; the price of manual is that Stalwart does not rotate the DKIM keys itself: the desk guides you through it (§5.5). |
 
 Keep the `admin@<domain>` password the last screen shows. Then `systemctl start stalwart-certs`
 and `systemctl restart stalwart`, and sign in at `https://po.<domain>/admin`.
@@ -221,6 +221,25 @@ The door makes RP-6 §2.1's full check for the RadioPost accounts itself (§5.7)
 
 **Management, Domains**, the menu next to the domain, **View Zone File**: Stalwart made an RSA key
 (`v1-rsa-…`), which RP-6 §1 asks for, and an Ed25519 one. Both records go into DNS in §7.
+
+**Rotating them.** Stalwart rotates DKIM keys by itself only when it manages the DNS too, so with
+DNS edited by hand the desk does it with you, on the Server tab, *DKIM keys*, one checked step at
+a time, as Stalwart's own rotation goes (its documentation, *DKIM key rotation*):
+
+1. **Start a rotation.** The post office makes a new RSA key (2048 bits) and a new Ed25519 one and
+   gives them to Stalwart as *pending*: they sign nothing yet. The desk shows each new record's
+   name and value; most DNS panels want the name without the domain (`v1-rsa-20261115._domainkey`).
+2. **Switch to the new keys** once you have published both. It checks that each is visible in DNS
+   first, then the new keys sign and the old ones *retire*. Mail is never signed with a key whose
+   record is not published.
+3. **End the rotation** a week later, once you have removed the old records: it checks they are
+   gone, and the old keys are *retired*. The week is for mail signed with the old keys still on
+   its way.
+
+*Stop* takes the new keys back before the switch. The hourly check turns amber when the keys are
+older than 180 days, and while a rotation waits on you, and checks the old and the new records
+while both are published. The post office keeps no private key: it makes each one in memory and
+hands it to Stalwart.
 
 ### 5.6 Hostinger's limit
 
@@ -401,8 +420,10 @@ radio read: it reaches another account's mail by Stalwart's `impersonate` permis
 this, in *Replace* mode, needs `authenticate`, `impersonate`, `sysAccountGet`, `sysAccountQuery`,
 `jmapEmailQuery` and `jmapEmailGet` (tried on Stalwart 1.1.0), and for the Sent folder and the
 read marks `jmapEmailUpdate`, `jmapEmailImport`, `jmapMailboxQuery`, `jmapMailboxGet` and
-`jmapBlobUpload` (named from Stalwart's permissions reference, not yet tried on the server). The
-service never keeps a user's password.
+`jmapBlobUpload`, and for rotating the DKIM keys (§5.5) `sysDomainGet`, `sysDkimSignatureGet`,
+`sysDkimSignatureQuery`, `sysDkimSignatureCreate`, `sysDkimSignatureUpdate` and
+`sysDkimSignatureDestroy` (all named from Stalwart's permissions reference, not yet tried on the
+server). The service never keeps a user's password.
 Each approval then makes the mailbox, and the welcome email gives the new user its first password
 and where mail programs connect. For another mail server, or a Stalwart whose interface differs,
 name a program instead: it is given the address and the name, and the password in
@@ -488,9 +509,9 @@ radio. For `radio_skips_read`, the mailboxes key of §8 must be set; one in *Inh
 administrator's account already reads what was seen.
 
 **Updating to the release that fills Sent folders** (0.1.0-beta.17): mail sent by radio goes into
-the sender's Sent folder and mail picked up by radio is marked read, with the mailboxes key of §8.
-A key in *Inherit* mode needs nothing more; one in *Replace* mode needs the five permissions §8
-names for them.
+the sender's Sent folder and mail picked up by radio is marked read, with the mailboxes key of §8,
+and the desk rotates the DKIM keys with the same key (§5.5). A key in *Inherit* mode needs nothing
+more; one in *Replace* mode needs the permissions §8 names for them.
 
 ## 11. What is not built yet
 
@@ -498,7 +519,6 @@ names for them.
   decided by a person, or by the postcard.
 * **A licensed user's own mail program** makes third-party mail, as mail from the Internet does
   (RP-6 §5.1, wishlist G16): it is held back from stations abroad without an arrangement.
-* **DKIM keys are not rotated** while DNS is managed by hand.
 * **Forwarding by radio** is Phase 4, and mail handed between two users of a gateway cut off from
   the Internet comes with it or just before (wishlist W30, W31). Copies placed ahead and a cut-off
   gateway's reports are built: gateways that hold copies ask `GET /copies` and wait up to a minute
@@ -520,8 +540,8 @@ the service's own additions over HTTPS, as your credential.
 | Accounts | Every account, its name (*Rename*) and its devices, each with *Revoke* for a lost one; the computer you are using is marked. |
 | New code | A code for a new account or a new device, after *Check the licence*. One that would give someone else the desk asks first, in red (§8). |
 | Mail out | What waits to go on by email. |
-| Health | Every check, as `check` does it from outside, and what only the server sees: free disk, email stuck going out, last night's backup, the mailboxes' last backup and its size, when a copy last left the server, fetched by a computer or downloaded (amber after 7 days, red after 30; never, amber at once and red after 30), whether the jobs runner is installed, a newer release. The service checks every hour and emails the contact address when a check turns red, and when all pass again (amber sends nothing). Give the DKIM selectors here once: saving them runs the check. |
-| Server | **Jobs** the server's administrator does for you: update, restart the post office or the mail server, copy the certificate, the services, both logs, disk, firewall, ports, logins, Debian's updates, `check`. The service asks; a root-owned systemd unit (`radiopost-po-jobs.path`) runs the job from a fixed list, programs and arguments with no shell, and its output comes back here. The installer puts the unit in place (`radiopost-po --dir /var/lib/radiopost jobs --install`). **Backups**: one of the post office each night beside the service, the last seven, and one of the mail server's mailboxes (below), the last three; **On this computer, by itself** (below) keeps each new one on a computer of yours while its app is open, and lists every computer the backups go to, each with *Forget* for one lost or given away; *Download a backup* seals one by hand with a passphrase of yours (PBKDF2, then ChaCha20-Poly1305), with the newest backup of the mailboxes in it, and keeps it on your computer in `RadioPost backups`. Only a copy that left the server counts. **When you need more**: a terminal on the server through your computer's own SSH, and *Copy for Claude*, the server's state (versions, checks, settings, the jobs' last output; no mail, names or keys) to paste into a Claude session. |
+| Health | Every check, as `check` does it from outside, and what only the server sees: free disk, email stuck going out, last night's backup, the mailboxes' last backup and its size, when a copy last left the server, fetched by a computer or downloaded (amber after 7 days, red after 30; never, amber at once and red after 30), whether the jobs runner is installed, a newer release, the DKIM keys' age (amber after 180 days) and a rotation waiting on you. The service checks every hour and emails the contact address when a check turns red, and when all pass again (amber sends nothing). Give the DKIM selectors here once: saving them runs the check. |
+| Server | **Jobs** the server's administrator does for you: update, restart the post office or the mail server, copy the certificate, the services, both logs, disk, firewall, ports, logins, Debian's updates, `check`. The service asks; a root-owned systemd unit (`radiopost-po-jobs.path`) runs the job from a fixed list, programs and arguments with no shell, and its output comes back here. The installer puts the unit in place (`radiopost-po --dir /var/lib/radiopost jobs --install`). **Backups**: one of the post office each night beside the service, the last seven, and one of the mail server's mailboxes (below), the last three; **On this computer, by itself** (below) keeps each new one on a computer of yours while its app is open, and lists every computer the backups go to, each with *Forget* for one lost or given away; *Download a backup* seals one by hand with a passphrase of yours (PBKDF2, then ChaCha20-Poly1305), with the newest backup of the mailboxes in it, and keeps it on your computer in `RadioPost backups`. Only a copy that left the server counts. **DKIM keys**: Stalwart's keys and their stages, and the rotation one step at a time (§5.5). **When you need more**: a terminal on the server through your computer's own SSH, and *Copy for Claude*, the server's state (versions, checks, settings, the jobs' last output; no mail, names or keys) to paste into a Claude session. |
 | Post offices | The other post offices you know, those seen and not known (*Know*, *Block*), and those blocked (§13). |
 | Settings | Take applications; licence lookups (the FCC copy, QRZ); mailboxes; who operates it. |
 

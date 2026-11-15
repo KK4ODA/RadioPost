@@ -7,6 +7,7 @@ pub mod auth;
 pub mod backups;
 pub mod check;
 pub mod desk;
+pub mod dkim;
 pub mod documents;
 pub mod email;
 pub mod evidence;

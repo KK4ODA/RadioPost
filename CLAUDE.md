@@ -238,7 +238,15 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `seen.rs` every minute, imports §3.1's email into the sender's `sent`-role mailbox (uploaded to
   the session's upload path on the host the service reaches Stalwart at) and sets `$seen` on what a
   `Message-ID` finds, waiting for mail that reaches the mail server late, giving up after two days;
-  tried against a stand-in only (`tests/email_service.rs`'s `mail_server`). `health.rs` checks hourly and emails on change (an amber
+  tried against a stand-in only (`tests/email_service.rs`'s `mail_server`). DKIM rotation by
+  hand (`dkim.rs`, the desk's `/office/dkim`, guide §5.5): Stalwart rotates only with automatic
+  DNS, so the post office makes the keys (RSA 2048 by `rsa`, Ed25519 as RFC 8410's PKCS #8, both
+  already in the tree through `mail-auth`; `num-bigint-dig` is optimized in debug builds so a
+  test's RSA key takes milliseconds), gives them to Stalwart `pending` (`x:DkimSignature/set`),
+  switches them `active` and the old `retiring` only once every record is in DNS, and `retired`
+  a week later once the old records are gone; a Stalwart that makes a new key active at once has
+  it destroyed again. `dkim-rotation.json` holds a rotation under way; Health reads the keys' age
+  from the selectors' dates. Tried against a stand-in only (`tests/dkim.rs`). `health.rs` checks hourly and emails on change (an amber
   `Warn` sends nothing); `backups.rs` seals with ring's PBKDF2 and ChaCha20-Poly1305, and backs up
   Stalwart's `/var/lib/stalwart` and `/etc/stalwart` with Stalwart stopped (`mail_backup`, the jobs
   runner's nightly `mail-backup`; `restore_mail`; tests use a stand-in `MailServer`), and seals

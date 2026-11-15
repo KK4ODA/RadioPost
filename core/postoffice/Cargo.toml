@@ -34,6 +34,10 @@ tokio = { version = "1", features = ["rt-multi-thread"] }
 zip = { version = "7", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 # sealing the backups the operator downloads: PBKDF2 and ChaCha20-Poly1305
 ring = "0.17"
+# the DKIM keys made for a rotation (`dkim`): RSA 2048 and its random source, both already in
+# the tree through mail-auth
+rsa = "0.9"
+rand_core = { version = "0.6", features = ["getrandom"] }
 
 [dev-dependencies]
 radiopost-tester = { path = "../tester" }

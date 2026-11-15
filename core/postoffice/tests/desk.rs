@@ -364,6 +364,24 @@ fn the_operator_runs_applications_from_the_client() {
     let (_, jobs) = http(&api, "GET", "/rp/v1/office/jobs", Some(&op), None);
     assert_eq!(disk(&jobs)["last"]["by"], json!("KK4ODA"));
 
+    // the DKIM keys are rotated through Stalwart, which this post office cannot reach: said
+    let (status, dkim) = http(&api, "GET", "/rp/v1/office/dkim", Some(&op), None);
+    assert_eq!(status, 400, "{dkim}");
+    assert!(
+        dkim["title"]
+            .as_str()
+            .is_some_and(|t| t.contains("set mailboxes to Stalwart")),
+        "{dkim}"
+    );
+    let (status, _) = http(
+        &api,
+        "POST",
+        "/rp/v1/office/dkim",
+        None,
+        Some(&json!({"step": "start"})),
+    );
+    assert_eq!(status, 401, "only an operator");
+
     // nothing has left the server yet
     let (_, listed) = http(&api, "GET", "/rp/v1/office/backups", Some(&op), None);
     assert_eq!(listed["downloaded"], Json::Null, "{listed}");
