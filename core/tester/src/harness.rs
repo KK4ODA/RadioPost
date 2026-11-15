@@ -542,17 +542,19 @@ impl TestAdapter {
         })
     }
 
-    /// The calls the program's stations placed to `remote` so far, by serial, in order.
+    /// The calls the program's stations asked for to `remote` so far, in order: each by its
+    /// place in the channel's log, and whether the modem refused it `busy`.
     #[must_use]
-    pub fn calls_to(&self, remote: &str) -> Vec<u64> {
+    pub fn calls_to(&self, remote: &str) -> Vec<(usize, bool)> {
         let tester = self.tester_station;
         let bystanders = self.bystanders;
         self.server.with_channel(|c| {
             c.placed()
                 .iter()
-                .filter(|p| p.station != tester && !bystanders.contains(&p.station))
-                .filter(|p| p.remote.eq_ignore_ascii_case(remote))
-                .map(|p| p.serial)
+                .enumerate()
+                .filter(|(_, p)| p.station != tester && !bystanders.contains(&p.station))
+                .filter(|(_, p)| p.remote.eq_ignore_ascii_case(remote))
+                .map(|(i, p)| (i, p.busy))
                 .collect()
         })
     }

@@ -426,9 +426,11 @@ fn listed(office: &TestOffice) -> Outcome {
     }
 }
 
-/// The calls the gateway placed to `partner`, each seen at a wall-clock second and an instant.
+/// The calls the gateway asked its modem for to `partner`, each seen at a wall-clock second and
+/// an instant: those the modem placed, and those it refused `busy`, which the gateway should not
+/// have asked for (RP-7 §5, RP-4 §5).
 struct Calls {
-    seen: Vec<(u64, u64, Instant)>,
+    seen: Vec<(usize, u64, Instant)>,
 }
 
 impl Calls {
@@ -437,9 +439,9 @@ impl Calls {
     }
 
     fn look(&mut self, adapter: &TestAdapter, partner: &str) {
-        for serial in adapter.calls_to(partner) {
-            if !self.seen.iter().any(|(s, _, _)| *s == serial) {
-                self.seen.push((serial, now(), Instant::now()));
+        for (at, _) in adapter.calls_to(partner) {
+            if !self.seen.iter().any(|(s, _, _)| *s == at) {
+                self.seen.push((at, now(), Instant::now()));
             }
         }
     }
@@ -588,8 +590,8 @@ impl Run<'_> {
         let while_busy = calls.between(open, busy_until - 1);
         if !while_busy.is_empty() {
             return Err(format!(
-                "it called {PARTNER} {} s into the window, on a channel its modem reported busy \
-                 (RP-7 §5, RP-4 §5)",
+                "it asked its modem to call {PARTNER} {} s into the window, on a channel the \
+                 modem reported busy (RP-7 §5, RP-4 §5)",
                 while_busy[0] - open
             ));
         }

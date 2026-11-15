@@ -108,11 +108,14 @@ pub struct Channel {
     out: Vec<Out>,
 }
 
-/// A call a host placed, answered or not: what a test reads to time a program's tries.
+/// A call a host asked for, placed or refused `busy`: what a test reads to time a program's
+/// tries.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Placed {
-    /// The call's serial number.
+    /// The call's serial number; 0 when it was refused.
     pub serial: u64,
+    /// Refused `busy`: a link or a call of the host's was up, or the channel was in use.
+    pub busy: bool,
     /// The station whose host placed it.
     pub station: usize,
     /// The callsign it called as.
@@ -149,7 +152,7 @@ impl Channel {
         std::mem::take(&mut self.out)
     }
 
-    /// Every call placed since the channel began, in order.
+    /// Every call asked for since the channel began, in order, those refused `busy` included.
     #[must_use]
     pub fn placed(&self) -> &[Placed] {
         &self.placed
@@ -559,6 +562,13 @@ impl Channel {
             .iter()
             .any(|c| c.station == station && c.host == name);
         if self.full(station) || calling || self.busy_for(station, &name) {
+            self.placed.push(Placed {
+                serial: 0,
+                busy: true,
+                station,
+                local,
+                remote: remote.into(),
+            });
             self.emit(station, &name, error(id, "busy", "a link or a call is up"));
             return;
         }
@@ -566,6 +576,7 @@ impl Channel {
         self.calls_made += 1;
         self.placed.push(Placed {
             serial: self.calls_made,
+            busy: false,
             station,
             local: local.clone(),
             remote: remote.into(),
