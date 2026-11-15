@@ -86,6 +86,9 @@ pub struct Options {
     /// Kept up to date while the session runs: how far its messages have crossed, for a window
     /// to show.
     pub live: Option<Arc<Mutex<Live>>>,
+    /// The client's other homes, one a callsign (wishlist W46): listening, it answers calls to
+    /// their callsigns too, each session carried by the home whose callsign was called.
+    pub also: Vec<std::path::PathBuf>,
 }
 
 /// A session as it runs: how far its messages have crossed both ways, and what the modem says.
@@ -188,6 +191,7 @@ impl Options {
             stop: None,
             renew_within: crate::renewal::WITHIN,
             live: None,
+            also: Vec::new(),
         }
     }
 
@@ -362,7 +366,7 @@ struct Modem {
 }
 
 impl Modem {
-    fn open(store: &Store, opts: &Options) -> Result<(Modem, String), Error> {
+    fn open(store: &Store, opts: &Options, extra: &[String]) -> Result<(Modem, String), Error> {
         let me = store.me()?;
         if let Some(test) = store.conformance()
             && opts.adapter != test
@@ -399,7 +403,9 @@ impl Modem {
                 Err(why) => return Err(why),
             }
         };
-        let callsigns = modem.host.callsigns(&[me.operator.as_str()]);
+        let mut claimed = vec![me.operator.as_str()];
+        claimed.extend(extra.iter().map(String::as_str));
+        let callsigns = modem.host.callsigns(&claimed);
         modem.ask(&callsigns)?;
         Ok((modem, me.operator))
     }
@@ -895,7 +901,7 @@ pub fn call(
     opts: &Options,
     say: &mut dyn FnMut(&str),
 ) -> Result<Report, Error> {
-    let (mut modem, _) = Modem::open(store, opts)?;
+    let (mut modem, _) = Modem::open(store, opts, &[])?;
     let connect = modem.host.connect(remote, None, opts.bandwidth);
     let id = connect.get("id").cloned();
     modem.ask(&connect)?;
@@ -1032,9 +1038,12 @@ fn ask_for_files(client: &mut Client, store: &Store, say: &mut dyn FnMut(&str)) 
     }
 }
 
-/// Waits for a station to call: its link's `connected` and its callsign, or `None` when the
-/// program said stop first.
-fn wait_for_call(modem: &mut Modem, opts: &Options) -> Result<Option<(Event, String)>, Error> {
+/// Waits for a station to call: its link's `connected`, its callsign and the callsign it
+/// called, or `None` when the program said stop first.
+fn wait_for_call(
+    modem: &mut Modem,
+    opts: &Options,
+) -> Result<Option<(Event, String, String)>, Error> {
     modem
         .conn
         .set_timeout(Some(Duration::from_millis(250)))
@@ -1053,11 +1062,12 @@ fn wait_for_call(modem: &mut Modem, opts: &Options) -> Result<Option<(Event, Str
         if let Event::Connected {
             direction: Direction::In,
             remote,
+            local,
             ..
         } = &e
         {
-            let remote = remote.clone();
-            break (e, remote);
+            let (remote, local) = (remote.clone(), local.clone());
+            break (e, remote, local);
         }
     };
     modem
@@ -1077,11 +1087,27 @@ pub fn answer(
     opts: &Options,
     say: &mut dyn FnMut(&str),
 ) -> Result<Report, Error> {
-    let (mut modem, me) = Modem::open(store, opts)?;
+    // the client's other callsigns, each with its home (W46)
+    let mine = store.me()?.operator;
+    let others: Vec<(String, std::path::PathBuf)> = opts
+        .also
+        .iter()
+        .filter_map(|home| {
+            let me = Store::open(home).ok()?.me().ok()?;
+            Some((me.operator, home.clone()))
+        })
+        .filter(|(c, _)| !c.eq_ignore_ascii_case(&mine))
+        .collect();
+    let extra: Vec<String> = others.iter().map(|(c, _)| c.clone()).collect();
+    let (mut modem, me) = Modem::open(store, opts, &extra)?;
     let listen = modem.host.listen(true);
     modem.ask(&listen)?;
-    tell(say, &format!("listening as {me}"));
-    let Some((connected, remote)) = wait_for_call(&mut modem, opts)? else {
+    let all = std::iter::once(me.clone())
+        .chain(extra.iter().cloned())
+        .collect::<Vec<_>>()
+        .join(", ");
+    tell(say, &format!("listening as {all}"));
+    let Some((connected, remote, local)) = wait_for_call(&mut modem, opts)? else {
         tell(say, "stopped listening");
         modem.conn.close();
         return Ok(Report {
@@ -1090,6 +1116,25 @@ pub fn answer(
         });
     };
     tell(say, &format!("{remote} called"));
+    if let Some((call, home)) = others.iter().find(|(c, _)| c.eq_ignore_ascii_case(&local)) {
+        tell(
+            say,
+            &format!("answering as {call}: the session's mail is in {call}'s folders"),
+        );
+        let mut other = Store::open(home)?;
+        return answer_on(&mut other, modem, (&connected, &remote), opts, say);
+    }
+    answer_on(store, modem, (&connected, &remote), opts, say)
+}
+
+/// The session of a call answered, carried by the home called (RP-3 §10).
+fn answer_on(
+    store: &mut Store,
+    mut modem: Modem,
+    (connected, remote): (&Event, &str),
+    opts: &Options,
+    say: &mut dyn FnMut(&str),
+) -> Result<Report, Error> {
     let now = opts.now();
     let mut mail = Vec::new();
     let mut stats = SessionStats {
@@ -1122,14 +1167,14 @@ pub fn answer(
     };
     let called = Called::new(cfg, mail_for).map_err(|e| format!("cannot answer: {e}"))?;
     let mut report = Report {
-        remote: remote.clone(),
+        remote: remote.to_owned(),
         ..Report::default()
     };
     let mut carrier = Carrier::new(Answering(called));
     let result = carry(
         &mut modem,
         &mut carrier,
-        &connected,
+        connected,
         store,
         &mut report,
         &mut stats,

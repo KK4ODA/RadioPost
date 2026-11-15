@@ -1251,6 +1251,11 @@ impl Panel {
         opts.fetch = fetch;
         *self.live.lock().unwrap_or_else(PoisonError::into_inner) = session::Live::default();
         opts.live = Some(Arc::clone(&self.live));
+        // listening answers calls to every callsign of this client (W46)
+        opts.also = callsigns::list(&self.base)
+            .into_iter()
+            .map(|c| c.home)
+            .collect();
         // read once the activity is set, so the callsign chosen cannot change before it is opened
         let home = self.home();
         let activity = Arc::clone(&self.activity);

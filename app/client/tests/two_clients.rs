@@ -208,6 +208,71 @@ fn setup(home: &Path, device: &str, credential: &str) {
     }
 }
 
+/// W46: a client with two callsigns listens as both. Its first is KK4ODA (Facundo's identity),
+/// its second N0CALL (Ana's); a call to N0CALL is answered by the second's home, which takes the
+/// mail for Ana, while the first's folders stay as they were.
+#[test]
+fn a_client_answers_a_call_to_any_of_its_callsigns() {
+    let dir = scratch("any-callsign");
+    let base = dir.join("listener");
+    let mut first = store_for(&base, "device:facundo", "facundo");
+    let second = radiopost_client::callsigns::home_of(&base, 2);
+    store_for(&second, "device:ana", "ana");
+    let mut caller = store_for(&dir.join("caller"), "device:facundo", "facundo");
+    caller.queue(&message("facundo-direct")).expect("queued");
+
+    let (_server, at_f, at_a) = loopback();
+    let mut listen = Options::new(&at_a.to_string());
+    listen.also = radiopost_client::callsigns::list(&base)
+        .into_iter()
+        .map(|c| c.home)
+        .collect();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let listener = thread::spawn(move || {
+        let mut said = Vec::new();
+        let report = session::answer(&mut first, &listen, &mut |s| {
+            if s.starts_with("listening") {
+                let _ = tx.send(s.to_owned());
+            }
+            said.push(s.to_owned());
+        })
+        .expect("answered");
+        (first, report, said)
+    });
+    let listening = rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("the station listens");
+    assert_eq!(
+        listening, "listening as KK4ODA, N0CALL",
+        "both callsigns claimed"
+    );
+    let mut said = Vec::new();
+    let called = session::call(
+        &mut caller,
+        "N0CALL",
+        Kind::Station,
+        &Options::new(&at_f.to_string()),
+        &mut |s| said.push(s.to_owned()),
+    )
+    .expect("called");
+    let (first, answered, heard) = listener.join().expect("the listener");
+    assert_eq!(
+        (called.failed, answered.failed),
+        (None, None),
+        "{said:?} {heard:?}"
+    );
+    assert!(
+        heard.iter().any(|l| l.starts_with("answering as N0CALL")),
+        "says which callsign answered: {heard:?}"
+    );
+    let id = message("facundo-direct").content_id();
+    let ana = Store::open(&second).expect("the second home");
+    assert_eq!(ana.inbox.iter().map(|a| a.id).collect::<Vec<_>>(), [id]);
+    assert_eq!(first.inbox, [], "the first callsign's folders untouched");
+    assert_eq!(caller.sent, [id]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The program as a user runs it: each writes to the other, Ana listens, Facundo calls her
 /// station, and each finds the other's message in the inbox and its own among the sent.
 #[test]

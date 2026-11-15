@@ -58,7 +58,8 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   Groups (W2) are `groups.json` beside `addresses.json` (a file of its own, so an older client
   leaves them alone); `contacts.rs` reads vCard and CSV exports for `addresses::import`.
   Separate accounts only: one account under two callsigns would split its mail between homes.
-  *Listen* answers the chosen callsign alone; answering any of them waits.
+  *Listen* answers calls to any of them (W46, 2026-11-15): `Options::also` holds the other homes,
+  every callsign is claimed, and the home whose callsign was called (the link's `local`) carries it.
   `core/issuer` (`radiopost-issue`) makes a post office key and issues credentials for on-air
   tests before Phase 2's post office; the vectors' keys never go on the air.
   `core/tester` (`radiopost-tester`) is the conformance tester's first half: it plays a gateway or

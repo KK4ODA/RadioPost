@@ -1001,7 +1001,10 @@ fn run(words: &[String]) -> Result<(), Error> {
             }
         }
         "listen" => {
-            let report = session::answer(&mut store, &options(&args)?, &mut |s| {
+            // calls to every callsign of this client are answered (W46)
+            let mut opts = options(&args)?;
+            opts.also = callsigns::list(&base).into_iter().map(|c| c.home).collect();
+            let report = session::answer(&mut store, &opts, &mut |s| {
                 println!("{s}");
             })?;
             if let Some(why) = report.failed {

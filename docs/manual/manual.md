@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.2.0 |
+| **Version** | 1.3.0 |
 | **Updated** | 2026-11-15 |
 | **Describes** | RadioPost 0.1.0-beta.21 |
 | **Licence** | CC BY 4.0 |
@@ -495,8 +495,8 @@ Agree on a frequency and a bandwidth first. Both stations tune Aether to them.
 
 **The station that answers:**
 
-1. Click **Listen**. The state reads *Listening*. RadioPost answers one call, as the callsign at
-   the top of the window.
+1. Click **Listen**. The state reads *Listening*. RadioPost answers one call, to the callsign at
+   the top of the window or to any other of yours.
 2. To stop waiting, click **Stop**.
 
 **The station that calls:**
@@ -546,7 +546,9 @@ Steps:
 ### 11.2 Use it
 
 - **Choose a callsign before each session**, from the list at the top of the window. A call goes
-  out as the callsign shown there. **Listen** answers only that callsign.
+  out as the callsign shown there. **Listen** answers calls to any of your callsigns. A call
+  to another than the one shown is carried by that callsign: its mail goes to that callsign's
+  folders, and the log says *answering as …*.
 - You can change it only while the station is idle.
 - Each callsign has its own folders. The address list and the log are shared.
 - Every credential renews while RadioPost is open, chosen or not.
@@ -1204,3 +1206,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.0.0 | 2026-11-15 | First edition: the client, RadioPost Gateway, and how they work with Aether HF. |
 | 1.1.0 | 2026-11-15 | §22: a gateway's own windows set in the Partners view, calls by itself in a partner's windows, the Next window column, and which partner gets the sessions. |
 | 1.2.0 | 2026-11-15 | §13: groups of addresses, and contact files imported. |
+| 1.3.0 | 2026-11-15 | §11.2, §12: **Listen** answers calls to any of your callsigns. |
