@@ -128,7 +128,7 @@ jobs:
         run: >
           cargo build --release --locked -p radiopost-client -p radiopost-aether -p rpmi
           -p radiopost-issue -p radiopost-tcp -p radiopost-mercury -p radiopost-tester
-          -p radiopost-gateway -p radiopost-postoffice
+          -p radiopost-gateway -p radiopost-postoffice -p radiopost-test-service
 
       - name: Collect
         shell: bash
@@ -139,7 +139,8 @@ jobs:
           tools="radiopost-tools-${{ matrix.name }}"
           mkdir -p "out/$tools"
           for b in radiopost radiopost-aether radiopost-tcp radiopost-mercury rpmi-loopback \
-              radiopost-issue radiopost-tester radiopost-gateway radiopost-po; do
+              radiopost-issue radiopost-tester radiopost-gateway radiopost-po \
+              radiopost-test-service; do
             cp "core/target/release/$b$exe" "out/$tools/"
           done
           cp LICENSE-MIT LICENSE-APACHE app/client/README.md "out/$tools/"
@@ -241,7 +242,7 @@ jobs:
           code-signed yet: Windows' SmartScreen asks once (More info, Run anyway), and on macOS open
           the app with Control-click, Open. The tools archive holds radiopost, radiopost-aether,
           radiopost-tcp, radiopost-mercury, rpmi-loopback, radiopost-issue, radiopost-tester,
-          radiopost-gateway and radiopost-po. RadioPost-Manual-<version>.pdf is the user's manual
+          radiopost-gateway, radiopost-po and radiopost-test-service. RadioPost-Manual-<version>.pdf is the user's manual
           for this release, and RadioPost-Server-Guide-<version>.pdf the guide to running a post
           office. SHA256SUMS lists every file's checksum."
           # $KIND holds two words for a draft

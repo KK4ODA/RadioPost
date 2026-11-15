@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+[package]
+name = "radiopost-test-service"
+description = "The public test service: a test post office, gateway and station on the Internet, for checking other programs against RadioPost's."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "radiopost-test-service"
+path = "src/main.rs"
+
+[dependencies]
+radiopost = { path = "../radiopost" }
+radiopost-postoffice = { path = "../postoffice" }
+radiopost-gateway = { path = "../gateway" }
+radiopost-tcp = { path = "../../adapters/tcp" }
+rpmi = { path = "../rpmi" }
+ed25519-dalek = "3"
+getrandom = "0.3"
+serde_json = { version = "1", features = ["preserve_order"] }
+tiny_http = "0.12"
+
+[dev-dependencies]
+radiopost-client = { path = "../../app/client" }
+
+[lints]
+workspace = true

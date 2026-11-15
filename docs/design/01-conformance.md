@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.9.0 |
+| **Version** | 0.10.0 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -236,8 +236,12 @@ RP-0 §3: RP-4, the adapter's side.
 
 ## 7. Not yet settled
 
-* A public test service: a tester on the Internet, and a test gateway on the air for over-the-air
-  trials, with the keys it would use.
+* A test gateway on the air, for over-the-air trials, with the keys it would use. The public
+  test service on the Internet is built (`radiopost-test-service`, [its guide](../user/test-service.md)):
+  a test post office with codes for any callsign, RPTEST-1 and RPTEST-2 reached through the TCP
+  adapter, and a report of each session's transmissions and checks. It plays the other side and
+  drives nothing, so it does not replace this tester; it does not yet call a gateway under test,
+  nor check a post office.
 * Tables for countries other than the United States (RP-6 §5.1, RP-7 §5.1): the tester checks US
   gateways first.
 
@@ -258,3 +262,4 @@ RP-0 §3: RP-4, the adapter's side.
 | 0.7.0 | 2026-11-15 | P-05's paths (§6, RP-7 §3.4): a session forwarded to the reporting gateway by radio, its statement naming the first gateway of its path, is taken. Shown failing on a planted fault ("P-05 path"). |
 | 0.8.0 | 2026-11-15 | P-06's forward items (§6, RP-7 §4.1, §4.2), with `--slow`: a route's `via` polls with `placing` true; once the gateway under test has been silent 15 minutes, mail for its user goes to the `via` as a forward item whose placement the post office signed for it, and the gateway's next poll drops it there. The post office's driver gains `route`. |
 | 0.9.0 | 2026-11-15 | Phase 4's tests built (§6, RP-7): F-01 (calls only in a partner's window, at most three a minute apart, none on a busy channel; `--slow`), F-02 (records refused in order with their codes, a record's `PROOF` as sent, the credential by hash once held, a taken record forwarded on), F-03 (placements checked in order, the good one held as a copy, the next `cursor`), F-04 (records kept for a partner that reaches the post offices), F-05 (windows published only inside the segments; with `--slow`, a partner's window outside them never called in), F-06 (mail offered again). The test adapter has two bystander stations to make the channel busy, and reads the calls a program places. Each shown failing on a planted fault. |
+| 0.10.0 | 2026-11-15 | §7: the public test service built (wishlist W43): what it checks, and what it leaves to this tester. |

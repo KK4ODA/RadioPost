@@ -100,7 +100,9 @@ Rust, each checked against the test vectors:
 The programs say when a newer release is out and update themselves. On-air tests can begin:
 [between two stations](docs/user/on-air-tests.md), and
 [email through a gateway](docs/user/on-air-gateway.md), and
-[forwarding between two gateways](docs/user/on-air-forwarding.md) (later).
+[forwarding between two gateways](docs/user/on-air-forwarding.md) (later). Writing a program of
+your own? [The public test service](docs/user/test-service.md) checks it against RadioPost's over
+the Internet.
 
 ## In this repository
 

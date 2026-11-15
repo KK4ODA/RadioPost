@@ -1494,6 +1494,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "radiopost-test-service"
+version = "0.1.0-beta.21"
+dependencies = [
+ "ed25519-dalek",
+ "getrandom 0.3.4",
+ "radiopost",
+ "radiopost-client",
+ "radiopost-gateway",
+ "radiopost-postoffice",
+ "radiopost-tcp",
+ "rpmi",
+ "serde_json",
+ "tiny_http",
+]
+
+[[package]]
 name = "radiopost-tester"
 version = "0.1.0-beta.21"
 dependencies = [

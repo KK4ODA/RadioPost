@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.31 |
+| **Version** | 0.3.32 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -146,7 +146,7 @@ rules:
 | W40 | The gateway checks the band rules itself | Rules | Medium | Fits today; optional addition to read the dial | Implemented |
 | W41 | Rules tables for other countries | Rules | Low | Optional addition (RP-6, RP-7) | Planned |
 | W42 | A monitor that decodes sessions off the air | Rules | Medium | Fits today | Planned |
-| W43 | A public test service | Adapters | Low | Fits today | Proposed |
+| W43 | A public test service | Adapters | Low | Fits today | Implemented |
 | W44 | One install, several radios | Setup | Medium | Fits today; needs specification review for a portable callsign | Proposed |
 | W45 | Station to station under an SSID | Radio | Low | Breaking protocol change, small, failing safe (G12) | Partly implemented |
 | W46 | Several callsigns in one client, chosen from a list | Setup | Medium | Fits today, a call each | Implemented |
@@ -936,13 +936,13 @@ Internet, and on the air against a test gateway.
 | Requested by | The plan: [the conformance tester](01-conformance.md), §7, not settled. Requesters: 0. |
 | Component | Tools. |
 | Compatibility | **Fits today**: the tester exists (`core/tester`); the vectors are published (RP-0 §8.6). |
-| Existing coverage | Not settled. |
+| Existing coverage | **Implemented** (2026-11-15): `radiopost-test-service` ([its guide](../user/test-service.md)): a test post office with its own key, published nowhere in DNS, giving enrollment codes for any callsign with three messages waiting; RPTEST-1, a gateway of it, and RPTEST-2, a client's station, answering calls through the TCP adapter (RP-4 §9.5, TLS with a pinned certificate); a report of each session, its transmissions decoded and four checks (framing, `HELLO` first, nothing refused, a clean end). Shipped in the tools archive for the author to host. It does not yet call a gateway under test, nor check a post office; the on-air test gateway waits for real keys. |
 | Dependencies | Real keys for an on-air test gateway: the published test keys never go on the air (the tester's §2.3). |
 | Effort | Medium. |
 | Priority | **Low**; rises with the first independent implementation, which every specification needs before it becomes Candidate (RP-0 §8.1). |
 | Recommendation | Defer until an independent implementer appears. |
-| Status | Proposed. |
-| Author decision | None yet. |
+| Status | Implemented. |
+| Author decision | **Accepted** (2026-11-15): hosted, over the Internet, before the first independent implementer. |
 
 ---
 
@@ -1121,3 +1121,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.29 | 2026-11-15 | W14 and W40 implemented: the dial in RP-4 0.8.0, a call tuned to the gateway's channel and back, a gateway tuned to its partner's window, and a gateway that judges its dial itself. G3 settled, G8 settled for the dial. |
 | 0.3.30 | 2026-11-15 | G10 and G12 settled by the author (D40): callsigns compared by their base; W45 partly implemented. |
 | 0.3.31 | 2026-11-15 | Every gap settled before RP-0 to RP-6 became Stable at 1.0.0 (D41): G1, G4, G6, G7, G9, G17, G20 by the specifications, G11, G13 to G15 as built. |
+| 0.3.32 | 2026-11-15 | W43 implemented: the public test service, hosted over the Internet. |

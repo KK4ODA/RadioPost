@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.48 |
+| **Version** | 0.1.49 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -320,7 +320,7 @@ Phases 0 to 2 and Phase 3's core are built. The author set the next stages on 20
 | 4 | Phase 4, mail for a cut-off area: the post office decides a gateway is cut off, signs placements, and partners carry forward items (RP-7 §4.1 to §4.3). **Built** (2026-11-15): routes set from the server, the copies a gateway never acknowledged forwarded along with what arrives after (RP-7 0.11.0), the vectors' post office stories replayed exactly; P-06's forward items (with `--slow`). | W30 |
 | 5 | Phase 4, windows and routes (RP-7 §5, §6), F-01 to F-06, and a first trial on the air between two gateways **on one shared channel**, so no radio is retuned. **Built** (2026-11-15): a gateway's windows in its settings and its record, only inside its country's segments; routes published at `GET /routes`; a cut-off gateway calling its partners inside their windows by itself (three tries a minute apart, never on a busy channel), with the windows read from the gateway lists it keeps, and choosing between partners as RP-7 §6.2 says; F-01 to F-06; [the trial's guide](../user/on-air-forwarding.md). The trial on the air is deferred by the author (2026-11-15): too early in the process. | W30 |
 | 6 | The dial: an optional RP-4 addition to read and set the radio's frequency (§13 of the wishlist, G3 and G8), so a gateway can call a partner on another channel; choosing a gateway tunes the radio; the gateway checks the band rules itself for modems other than Aether. **Built** (2026-11-15): RP-4 0.8.0 §4.1 with its vectors, the Aether adapter's mapping, the client's **Channel** and `--dial`, a gateway tuning to its partner's window and back, and a gateway judging its dial against its country's segments when the modem checks no rules. | W14, W40 |
-| 7 | RP-0 to RP-6 frozen as version 1.0 once forwarding is built: the open gaps settled first, changes afterwards careful and announced; a public test service for other implementers. **RP-0 to RP-6 Stable at 1.0.0** (2026-11-15, D41), the open gaps settled. | W43 |
+| 7 | RP-0 to RP-6 frozen as version 1.0 once forwarding is built: the open gaps settled first, changes afterwards careful and announced; a public test service for other implementers. **Built** (2026-11-15): RP-0 to RP-6 Stable at 1.0.0 (D41), the open gaps settled; `radiopost-test-service`, a test post office, gateway and station on the Internet with a report of each session. | W43 |
 | 8 | Phase 5. | W20 to W23, W26, W32 |
 
 Enrollment with an LoTW certificate (W10) is built when the author supplies a certificate to test
@@ -399,3 +399,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.46 | 2026-11-15 | §9: stage 6 built, the dial (W14, W40; RP-4 0.8.0). |
 | 0.1.47 | 2026-11-15 | D40: callsigns compared by their base (RP-0 0.8.0 §6.1, RP-1 0.7.0 §6.3; gaps G10, G12). |
 | 0.1.48 | 2026-11-15 | D41: RP-0 to RP-6 Stable at 1.0.0, the open gaps settled; §5.1: the client keeps each message's canonical encoding (G6). |
+| 0.1.49 | 2026-11-15 | §9: stage 7 built, with the public test service (W43). |

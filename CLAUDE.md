@@ -68,6 +68,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   Separate accounts only: one account under two callsigns would split its mail between homes.
   *Listen* answers calls to any of them (W46, 2026-11-15): `Options::also` holds the other homes,
   every callsign is claimed, and the home whose callsign was called (the link's `local`) carries it.
+  `core/testservice` (`radiopost-test-service`, wishlist W43, `docs/user/test-service.md`) is the
+  public test service: a test post office (the core's own, in its directory, published nowhere in
+  DNS) giving codes for any callsign, RPTEST-1 (the gateway engine, upstream `upstream::served`
+  to that post office in-process) and RPTEST-2 (the station engine) answering calls through an
+  in-process TCP adapter, and a report per session (`report`: four checks and every PDU decoded)
+  on its page. One session at a time. Shipped in the tools archive; the author hosts it.
   `core/issuer` (`radiopost-issue`) makes a post office key and issues credentials for on-air
   tests before Phase 2's post office; the vectors' keys never go on the air.
   `core/tester` (`radiopost-tester`) is the conformance tester's first half: it plays a gateway or

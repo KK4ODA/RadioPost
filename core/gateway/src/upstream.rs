@@ -168,6 +168,50 @@ pub fn in_process(
     })
 }
 
+/// A post office service in this process, reached through its API with a gateway's token: a
+/// gateway that runs beside its own post office, as the public test service's does.
+struct Served {
+    running: Arc<radiopost_postoffice::serve::Running>,
+    base_path: String,
+    token: String,
+}
+
+impl Transport for Served {
+    fn request(
+        &mut self,
+        method: &str,
+        path: &str,
+        body: Option<&Json>,
+    ) -> Result<Answer, ErrorCode> {
+        let bytes = body.map(|b| b.to_string().into_bytes()).unwrap_or_default();
+        let (status, _, text) = self.running.api(
+            method,
+            &format!("{}{path}", self.base_path),
+            Some(&self.token),
+            &bytes,
+        );
+        Ok((status, serde_json::from_str(&text).ok()))
+    }
+}
+
+/// The session calls to a post office service in this process, its API under `base_path`
+/// (`/rp/v1`), as a gateway logged in with `token`.
+#[must_use]
+pub fn served(
+    running: Arc<radiopost_postoffice::serve::Running>,
+    base_path: &str,
+    token: String,
+) -> Box<dyn Upstream + Send> {
+    Box::new(Session {
+        transport: Served {
+            running,
+            base_path: base_path.to_owned(),
+            token,
+        },
+        session: None,
+    })
+}
+
 impl Transport for Http {
     fn request(
         &mut self,

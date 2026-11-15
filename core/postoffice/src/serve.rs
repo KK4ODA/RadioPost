@@ -384,6 +384,16 @@ impl Running {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
+    /// Changes the post office in this process and saves its state: what a program that runs it
+    /// beside other parts does (the public test service's codes, mail and stations' credentials).
+    pub fn change<T>(&self, f: impl FnOnce(&mut PostOffice) -> T) -> T {
+        let mut office = self.office();
+        office.at(now());
+        let t = f(&mut office);
+        self.save(&office);
+        t
+    }
+
     /// Its settings, as they stand.
     pub(crate) fn settings(&self) -> Settings {
         self.settings
