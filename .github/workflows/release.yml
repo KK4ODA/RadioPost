@@ -127,7 +127,7 @@ jobs:
         working-directory: core
         run: >
           cargo build --release --locked -p radiopost-client -p radiopost-aether -p rpmi
-          -p radiopost-issue -p radiopost-tcp -p radiopost-mercury -p radiopost-tester
+          -p radiopost-issue -p radiopost-tcp -p radiopost-mercury -p radiopost-vara -p radiopost-tester
           -p radiopost-gateway -p radiopost-postoffice -p radiopost-test-service
 
       - name: Collect
@@ -138,7 +138,7 @@ jobs:
           [ "$RUNNER_OS" = "Windows" ] && exe=".exe"
           tools="radiopost-tools-${{ matrix.name }}"
           mkdir -p "out/$tools"
-          for b in radiopost radiopost-aether radiopost-tcp radiopost-mercury rpmi-loopback \
+          for b in radiopost radiopost-aether radiopost-tcp radiopost-mercury radiopost-vara rpmi-loopback \
               radiopost-issue radiopost-tester radiopost-gateway radiopost-po \
               radiopost-test-service; do
             cp "core/target/release/$b$exe" "out/$tools/"
@@ -241,7 +241,7 @@ jobs:
           later say when a newer release is out and update themselves. The installers are not
           code-signed yet: Windows' SmartScreen asks once (More info, Run anyway), and on macOS open
           the app with Control-click, Open. The tools archive holds radiopost, radiopost-aether,
-          radiopost-tcp, radiopost-mercury, rpmi-loopback, radiopost-issue, radiopost-tester,
+          radiopost-tcp, radiopost-mercury, radiopost-vara, rpmi-loopback, radiopost-issue, radiopost-tester,
           radiopost-gateway, radiopost-po and radiopost-test-service. RadioPost-Manual-<version>.pdf is the user's manual
           for this release, and RadioPost-Server-Guide-<version>.pdf the guide to running a post
           office. SHA256SUMS lists every file's checksum."

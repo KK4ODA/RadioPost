@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! One RPMI host on Mercury's TNC interface: RP-4 §9.6's table, with no input or output of its
-//! own.
+//! own. The same bridge serves VARA HF and VARA FM (RP-4 §9.2), whose published TNC commands
+//! Mercury's copy: [`Dialect`] says which, and what differs.
 //!
 //! The program gives the bridge each line the host writes ([`Bridge::from_host`]), each line
 //! Mercury writes on its control port ([`Bridge::from_modem`]), the bytes of its data port
@@ -78,6 +79,93 @@ const IDENT_BW: i64 = 2300;
 /// What a host is told when the modem there does not answer as Mercury does.
 const NOT_MERCURY: &str =
     "the modem there is not Mercury 1.9.23 or later: it does not know BUSYDETECT";
+/// What a host is told when the modem there does not answer as VARA's published commands say.
+const NOT_VARA: &str = "the modem there did not answer CHAT OFF as VARA's published commands do";
+
+/// The longest base of a callsign VARA's published grammar takes, and the shortest.
+const VARA_BASE: std::ops::RangeInclusive<usize> = 3..=7;
+
+/// Which modem is on the other side of the VARA-style TNC interface.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Dialect {
+    /// Mercury 1.9.23 or later (RP-4 §9.6): known by `BUSYDETECT`; `BUFFER` counts what the
+    /// other station has not confirmed, so delivery is reported; the station's callsign does not
+    /// go on the air, so the bridge identifies with `CQFRAME`.
+    Mercury,
+    /// VARA HF (RP-4 §9.2), by EA5HVK's published command list only: known by its answer to
+    /// `CHAT OFF`; `BUFFER` counts what is not yet sent, so delivery is not reported; the
+    /// station identifies as its operator sets VARA, and the bridge sends nothing for it.
+    VaraHf,
+    /// VARA FM (RP-4 §9.2): as VARA HF, with no bandwidth commands.
+    VaraFm,
+}
+
+impl Dialect {
+    /// The modem's name, as the host's `hello` gives it.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Dialect::Mercury => "Mercury",
+            Dialect::VaraHf => "VARA HF",
+            Dialect::VaraFm => "VARA FM",
+        }
+    }
+
+    /// The bandwidths a call may name.
+    #[must_use]
+    pub fn bandwidths(self) -> &'static [i64] {
+        match self {
+            Dialect::Mercury | Dialect::VaraHf => &BANDWIDTHS,
+            Dialect::VaraFm => &[],
+        }
+    }
+
+    fn is_vara(self) -> bool {
+        self != Dialect::Mercury
+    }
+
+    /// Why the modem cannot hold `callsign` for a host, if it cannot.
+    #[must_use]
+    pub fn callsign_fault(self, callsign: &str) -> Option<&'static str> {
+        if self.is_vara() {
+            vara_fault(callsign)
+        } else {
+            callsign_fault(callsign)
+        }
+    }
+
+    /// Why the modem cannot call `remote`, if it cannot.
+    #[must_use]
+    pub fn remote_fault(self, remote: &str) -> Option<&'static str> {
+        if self.is_vara() {
+            vara_fault(remote)
+        } else {
+            remote_fault(remote)
+        }
+    }
+}
+
+/// VARA's published callsign grammar: 3 to 7 capitals and digits, then `-1` to `-15`, `-T` or
+/// `-R`. So a callsign with `/` (RP-0 §6.1) cannot be used.
+#[must_use]
+pub fn vara_fault(callsign: &str) -> Option<&'static str> {
+    let (base, ssid) = match callsign.split_once('-') {
+        Some((base, ssid)) => (base, Some(ssid)),
+        None => (callsign, None),
+    };
+    let base_ok = VARA_BASE.contains(&base.len())
+        && base
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit());
+    let ssid_ok = ssid.is_none_or(|ssid| {
+        matches!(ssid, "T" | "R")
+            || ssid
+                .parse::<u8>()
+                .is_ok_and(|n| (1..=15).contains(&n) && !ssid.starts_with('0'))
+    });
+    (!(base_ok && ssid_ok))
+        .then_some("VARA takes callsigns of 3 to 7 capitals and digits, then -1 to -15, -T or -R")
+}
 
 /// What the bridge asks of the program that drives it.
 #[derive(Clone, Debug, PartialEq)]
@@ -200,6 +288,7 @@ struct Ident {
     reason = "the host's state and Mercury's, each its own flag"
 )]
 pub struct Bridge {
+    dialect: Dialect,
     now: u64,
     host: u64,
     hello: bool,
@@ -281,7 +370,14 @@ impl Bridge {
     /// A host on a Mercury that has just been reached.
     #[must_use]
     pub fn new() -> Bridge {
+        Bridge::speaking(Dialect::Mercury)
+    }
+
+    /// A host on a modem of `dialect` that has just been reached.
+    #[must_use]
+    pub fn speaking(dialect: Dialect) -> Bridge {
         Bridge {
+            dialect,
             now: 0,
             host: 0,
             hello: false,
@@ -319,11 +415,21 @@ impl Bridge {
     /// A host connected while Mercury cannot be reached: every request is answered `no-modem`.
     #[must_use]
     pub fn without_modem(why: &str) -> Bridge {
+        Bridge::without_modem_speaking(Dialect::Mercury, why)
+    }
+
+    /// A host connected while the modem of `dialect` cannot be reached.
+    #[must_use]
+    pub fn without_modem_speaking(dialect: Dialect, why: &str) -> Bridge {
         Bridge {
             modem_lost: true,
             lost_why: why.to_owned(),
-            ..Bridge::new()
+            ..Bridge::speaking(dialect)
         }
+    }
+
+    fn name(&self) -> &'static str {
+        self.dialect.name()
     }
 
     fn command(&mut self, line: &str, what: Waiting, out: &mut Vec<Out>) {
@@ -384,9 +490,10 @@ impl Bridge {
     fn say_hello(&mut self, rid: Option<&Value>, out: &mut Vec<Out>) {
         self.hello = true;
         let caps = Caps {
-            bandwidths: BANDWIDTHS.to_vec(),
+            bandwidths: self.dialect.bandwidths().to_vec(),
             max_links: 1,
-            delivery: true,
+            // VARA's BUFFER says what is sent, not what the other station holds
+            delivery: !self.dialect.is_vara(),
             broadcast: false,
             quality: true,
             busy: self.detector == Some(true),
@@ -400,7 +507,7 @@ impl Bridge {
             rid,
             &[
                 ("version", VERSION.into()),
-                ("modem", "Mercury".into()),
+                ("modem", self.name().into()),
                 ("caps", caps.to_json()),
             ],
         )));
@@ -437,6 +544,9 @@ impl Bridge {
             Request::Hello { .. } => {
                 if self.detector.is_some() {
                     self.say_hello(rid_ref, &mut out);
+                } else if self.dialect.is_vara() {
+                    // a published command, and what a mail program wants: VARA's chat mode off
+                    self.command("CHAT OFF", Waiting::Probe { rid }, &mut out);
                 } else {
                     // only Mercury knows this command, and only from 1.9.23
                     self.command("BUSYDETECT", Waiting::Probe { rid }, &mut out);
@@ -465,12 +575,15 @@ impl Bridge {
             Request::Disconnect { link } => self.on_disconnect(&link, rid_ref, &mut out),
             Request::Abort { link } => self.on_abort(link.as_deref(), rid_ref, &mut out),
             Request::Broadcast { .. } => {
-                let text = "Mercury's broadcasts are not carried by this adapter";
-                out.push(Out::Host(error(rid_ref, "unsupported", text)));
+                let text = format!(
+                    "{}'s broadcasts are not carried by this adapter",
+                    self.name()
+                );
+                out.push(Out::Host(error(rid_ref, "unsupported", &text)));
             }
             Request::Dial | Request::Tune(_) => {
-                let text = "Mercury's TNC commands have no dial";
-                out.push(Out::Host(error(rid_ref, "unsupported", text)));
+                let text = format!("{}'s TNC commands have no dial", self.name());
+                out.push(Out::Host(error(rid_ref, "unsupported", &text)));
             }
             Request::Status => out.push(Out::Host(self.status(rid_ref))),
         }
@@ -479,11 +592,16 @@ impl Bridge {
 
     fn on_callsigns(&mut self, wanted: Vec<String>, rid: Option<Value>, out: &mut Vec<Out>) {
         let fault = if wanted.len() > MAX_CALLSIGNS {
-            Some("Mercury answers for five callsigns at most".to_owned())
+            Some(format!(
+                "{} answers for five callsigns at most",
+                self.name()
+            ))
         } else {
-            wanted
-                .iter()
-                .find_map(|c| callsign_fault(c).map(|why| format!("{c}: {why}")))
+            wanted.iter().find_map(|c| {
+                self.dialect
+                    .callsign_fault(c)
+                    .map(|why| format!("{c}: {why}"))
+            })
         };
         if let Some(why) = fault {
             out.push(Out::Host(error(rid.as_ref(), "refused", &why)));
@@ -547,9 +665,13 @@ impl Bridge {
         }
         let bandwidth = match bandwidth.map(i64::try_from) {
             None => None,
-            Some(Ok(bw)) if BANDWIDTHS.contains(&bw) => Some(bw),
+            Some(Ok(bw)) if self.dialect.bandwidths().contains(&bw) => Some(bw),
             Some(_) => {
-                out.push(refuse("unsupported", "Mercury has 500, 2300 and 2750 Hz"));
+                let text = match self.dialect {
+                    Dialect::VaraFm => "VARA FM has no bandwidth to choose".to_owned(),
+                    d => format!("{} has 500, 2300 and 2750 Hz", d.name()),
+                };
+                out.push(refuse("unsupported", &text));
                 return;
             }
         };
@@ -558,14 +680,17 @@ impl Bridge {
             return;
         }
         if self.pending || self.ghost.is_some() {
-            out.push(refuse("busy", "Mercury is answering a call"));
+            out.push(refuse(
+                "busy",
+                &format!("{} is answering a call", self.name()),
+            ));
             return;
         }
-        if let Some(why) = remote_fault(remote) {
+        if let Some(why) = self.dialect.remote_fault(remote) {
             out.push(refuse("refused", why));
             return;
         }
-        if local.len() > MAX_CALLER {
+        if self.dialect == Dialect::Mercury && local.len() > MAX_CALLER {
             let text = "Mercury's CALL carries a caller's callsign of 14 characters at most";
             out.push(refuse("refused", text));
             return;
@@ -743,7 +868,8 @@ impl Bridge {
             l.fed_at = now;
             out.push(Out::Data(bytes));
         }
-        while l.refs.front().is_some_and(|(end, _)| *end <= l.acked) {
+        // VARA's BUFFER says what is sent, not what the other station holds: nothing is delivered
+        while !self.dialect.is_vara() && l.refs.front().is_some_and(|(end, _)| *end <= l.acked) {
             if let Some((_, reference)) = l.refs.pop_front() {
                 out.push(Out::Host(answer_with(
                     "delivered",
@@ -840,6 +966,10 @@ impl Bridge {
     /// The station has transmitted under `callsign`: it identifies once the air is its own, after
     /// the other station, `peer`, has identified if this station called it.
     fn owe(&mut self, callsign: &str, peer: Option<&str>, bandwidth: Option<i64>) {
+        if self.dialect.is_vara() {
+            // VARA identifies as its operator sets it: its published commands have nothing for it
+            return;
+        }
         if !self.owed.iter().any(|c| same(c, callsign)) {
             self.owed.push(callsign.to_owned());
         }
@@ -1005,10 +1135,23 @@ impl Bridge {
         let mine = asked.host == self.host;
         match asked.what {
             Waiting::Probe { rid } => {
+                if ok && self.dialect.is_vara() {
+                    // VARA took CHAT OFF: its busy detector reports whenever it changes its mind
+                    self.detector = Some(true);
+                    self.settle_listen(out);
+                    if mine {
+                        self.say_hello(rid.as_ref(), out);
+                    }
+                    return;
+                }
                 // any other answer than BUSYDETECT's own: not a Mercury this adapter knows
                 self.modem_lost = true;
                 self.lost_why.clear();
-                self.lost_why.push_str(NOT_MERCURY);
+                self.lost_why.push_str(if self.dialect.is_vara() {
+                    NOT_VARA
+                } else {
+                    NOT_MERCURY
+                });
                 if mine {
                     out.push(Out::Host(error(rid.as_ref(), "no-modem", &self.lost_why)));
                 }
@@ -1024,8 +1167,8 @@ impl Bridge {
                     self.callsigns = wanted;
                     Self::ok(rid.as_ref(), out);
                 } else {
-                    let text = "Mercury refused the callsigns";
-                    out.push(Out::Host(error(rid.as_ref(), "refused", text)));
+                    let text = format!("{} refused the callsigns", self.name());
+                    out.push(Out::Host(error(rid.as_ref(), "refused", &text)));
                 }
             }
             Waiting::Step { call } => {
@@ -1040,7 +1183,8 @@ impl Bridge {
                 } else {
                     self.mycall.clear();
                     self.bandwidth = None;
-                    self.end_call("refused", "Mercury refused what the call needs", out);
+                    let text = format!("{} refused what the call needs", self.name());
+                    self.end_call("refused", &text, out);
                 }
             }
             Waiting::Connect { call } => {
@@ -1053,7 +1197,8 @@ impl Bridge {
                         out.push(Out::Host(answer("ok", Some(&c.id))));
                     }
                 } else {
-                    self.end_call("refused", "Mercury refused the call", out);
+                    let text = format!("{} refused the call", self.name());
+                    self.end_call("refused", &text, out);
                     self.settle_listen(out);
                 }
             }
@@ -1067,7 +1212,7 @@ impl Bridge {
             }
             Waiting::Plain(what) => {
                 if !ok && mine && self.hello {
-                    let text = format!("Mercury refused {what}");
+                    let text = format!("{} refused {what}", self.name());
                     out.push(Out::Host(error(None, "refused", &text)));
                 }
             }
@@ -1109,7 +1254,8 @@ impl Bridge {
             return;
         }
         // a call to this station was answered: a call of the host's own has lost to it
-        self.end_call("busy", "Mercury answered a call first", out);
+        let text = format!("{} answered a call first", self.name());
+        self.end_call("busy", &text, out);
         let local = self.callsigns.iter().find(|c| same(c, dialed)).cloned();
         match local {
             Some(local) if self.hello && self.listening => {
@@ -1205,10 +1351,10 @@ impl Bridge {
         if let Some(l) = self.link.take() {
             self.owe_for(&l);
             let (reason, text) = if l.ending {
-                ("local", "the host ended the link")
+                ("local", "the host ended the link".to_owned())
             } else {
-                // Mercury does not say why: the other station closed it, or it was lost
-                ("remote", "Mercury says the session ended")
+                // the modem does not say why: the other station closed it, or it was lost
+                ("remote", format!("{} says the session ended", self.name()))
             };
             out.push(Out::Host(answer_with(
                 "disconnected",
@@ -1303,7 +1449,7 @@ impl Bridge {
     /// Mercury's connection closed, for the reason `why` (RP-4 §2.1): the host is told its link
     /// and its call are over, and its connection is closed.
     pub fn modem_lost(&mut self, why: &str) -> Vec<Out> {
-        let text = format!("Mercury went away: {why}");
+        let text = format!("{} went away: {why}", self.name());
         let mut out = Vec::new();
         self.modem_lost = true;
         self.lost_why.clone_from(&text);

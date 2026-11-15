@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+[package]
+name = "radiopost-vara"
+description = "An RPMI adapter (RP-4) for VARA HF and VARA FM, through their published TNC commands (RP-4 §9.2)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+# a member of the core workspace, so one lockfile and one CI job hold every crate
+workspace = "../../core"
+
+[dependencies]
+radiopost-mercury = { path = "../mercury" }
+rpmi = { path = "../../core/rpmi" }
+
+[dev-dependencies]
+radiopost-tester = { path = "../../core/tester" }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[lints]
+workspace = true

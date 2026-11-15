@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.32 |
+| **Version** | 0.3.33 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -123,7 +123,7 @@ rules:
 | W17 | Gateways ranked by propagation | Radio | Low | Fits today; optional addition for measurements | Planned |
 | W18 | Mail coming down compressed | Radio | High | Fits today | Implemented |
 | W19 | Shorter short messages: a dictionary | Radio | Low | Optional addition; breaking if made required | Planned |
-| W20 | An adapter for VARA-style modems: VARA and Mercury | Adapters | Medium | Fits today; G11 to name Mercury | In progress |
+| W20 | An adapter for VARA-style modems: VARA and Mercury | Adapters | Medium | Fits today; G11 to name Mercury | Implemented |
 | W21 | An ARDOP adapter | Adapters | Low | Needs specification review | Planned |
 | W22 | An AX.25 packet adapter | Adapters | Low | Fits today | Planned |
 | W23 | A phone version | Radio | Low | Fits today; optional addition for RPMI across devices | Planned |
@@ -882,12 +882,12 @@ HF modem, as a client or a gateway.
 | Requested by | The plan: concept §7, design §5.4, Phase 5 (VARA). The author (KK4ODA), 2026-11-11 (Mercury). Requesters: 1. |
 | Component | Adapter. |
 | Compatibility | **Fits today.** Mercury offers a VARA-compatible TNC interface (its `docs/TNC.md`: commands on port 8300, data on 8301), so RP-4 §9.2's mapping serves both; a note in RP-4 §9 on where Mercury differs is informative, a PATCH. Neither can be shared: a host holds the single `MYCALL` list. Neither checks band rules (RP-4 §8). Mercury's `BUFFER 0` means the other station has acknowledged everything, so its adapter can report `delivered`; VARA's means only sent. Naming Mercury in a gateway's record needs G11. |
-| Existing coverage | Mercury built (2026-11-12), `adapters/mercury` (`radiopost-mercury`), from Mercury's `docs/TNC.md` and its source, and RP-4 §9.6 written from it. It passes the tester's A-01 to A-04 through two adapters on a stand-in for two Mercury modems on one channel; and against two real Mercury 1.9.23 processes, their audio joined by named pipes at the air's pace (2026-11-12, about five and a half minutes). Running it on the real modem found that a CQ frame decodes before its sender unkeys: the caller now waits 0.7 s after the other station's (RP-4 0.6.6). VARA: planned for Phase 5. |
+| Existing coverage | Mercury built (2026-11-12), `adapters/mercury` (`radiopost-mercury`), from Mercury's `docs/TNC.md` and its source, and RP-4 §9.6 written from it. It passes the tester's A-01 to A-04 through two adapters on a stand-in for two Mercury modems on one channel; and against two real Mercury 1.9.23 processes, their audio joined by named pipes at the air's pace (2026-11-12, about five and a half minutes). Running it on the real modem found that a CQ frame decodes before its sender unkeys: the caller now waits 0.7 s after the other station's (RP-4 0.6.6). VARA built (2026-11-15), `adapters/vara` (`radiopost-vara`, `--fm` for VARA FM): Mercury's bridge speaking VARA's published commands, RP-4 1.0.1 §9.2. It passes A-01 to A-04 through two adapters on the Mercury stand-in in its VARA mode; it has never run against VARA, which the project does not run. |
 | Dependencies | W40 for an unattended gateway; G11 to list Mercury channels. |
 | Effort | Medium: one adapter, with each modem's differences. |
 | Priority | **Medium.** The author asks for Mercury, and the two modems reach many users. |
 | Recommendation | **Modify**: one adapter for both, built and tested against Mercury first. Mercury is open source and runs on Linux, so the adapter and the tester's A-01 to A-04 can run against a real modem in CI; VARA is proprietary and is never run by the project, so it follows from its published commands. Whether Mercury joins Phase 5's adapters, ahead of ARDOP, is the author's call. |
-| Status | In progress: Mercury built and run against the real modem; VARA not started. |
+| Status | Implemented: Mercury built and run against the real modem; VARA built from its published commands, tried against a stand-in only. |
 | Author decision | VARA is a black box (CLAUDE.md): only its published command list is used. |
 | Notes | Mercury's air interface is published (FreeDV and codec2 OFDM modes, documented in its repository), so an open monitor (W42) can read sessions over it, which it cannot over VARA. Mercury is GPL-3.0; the adapter talks to it over TCP, as the post office talks to Stalwart, so RadioPost's licences are unaffected. Writing the adapter found that Mercury does not identify the station: its CALL carries the caller's callsign, its ACCEPT only a CRC of the called station's, and a session's frames none (RP-4 §9.6). A gateway answering by Mercury never put its callsign on the air in a form anyone could read. The author's decision (2026-11-12): the adapter sends `CQFRAME` after each session, which carries a callsign any Mercury decodes; the station called first, the caller once it has heard it (RP-4 §9.6). Not covered: a session longer than ten minutes is not identified within it. |
 
@@ -1122,3 +1122,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.30 | 2026-11-15 | G10 and G12 settled by the author (D40): callsigns compared by their base; W45 partly implemented. |
 | 0.3.31 | 2026-11-15 | Every gap settled before RP-0 to RP-6 became Stable at 1.0.0 (D41): G1, G4, G6, G7, G9, G17, G20 by the specifications, G11, G13 to G15 as built. |
 | 0.3.32 | 2026-11-15 | W43 implemented: the public test service, hosted over the Internet. |
+| 0.3.33 | 2026-11-15 | W20 implemented: the VARA adapter, from VARA's published commands (RP-4 1.0.1 §9.2), tried against a stand-in. |

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.0.0 |
+| **Version** | 1.0.1 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -393,24 +393,33 @@ so the adapter answers `listen` off with `error` `unsupported`.
 ### 9.2 VARA HF and VARA FM
 
 VARA's published TNC command list (EA5HVK, *VARA Protocol Native TNC Commands*) uses a command port
-(text lines) and a data port (raw bytes), on two TCP ports:
+(text lines ended by CR, **8300** by default) and a data port (raw bytes, the next port). VARA is
+proprietary: an adapter uses only its published commands, and assumes nothing else about it.
+Mercury (§9.6) copies this interface, so RadioPost's VARA adapter is its Mercury adapter speaking
+VARA's commands, and this table gives what differs:
 
 | RPMI | VARA |
 |---|---|
-| `callsigns` | `MYCALL <call> [<call>…]` |
-| `listen` | `LISTEN ON` / `LISTEN OFF` |
-| `connect` | `CONNECT <as> <remote>`; `CONNECTED …` or `DISCONNECTED` follows |
-| `send` | write to the data port; `BUFFER <n>` gives `queued` |
-| `received` | read from the data port |
-| `disconnect` / `abort` | `DISCONNECT` / `ABORT` |
-| `bandwidth` | `BW500`, `BW2300`, `BW2750` before the call |
-| `busy` | `BUSY ON` / `BUSY OFF` |
-| `quality` | `SN <dB>` lines, where sent |
+| `hello` | `CHAT OFF`, a published command a mail program wants (VARA's chat mode off), which a modem that does not speak VARA's commands answers `WRONG`: anything but `OK` gives the host `no-modem`. `modem` is `VARA HF` or `VARA FM`, as the adapter's operator says which runs; `caps.bandwidths` is 500, 2300 and 2750 for VARA HF and none for VARA FM, which has no bandwidth commands; `busy` and `quality` are true; `delivery`, `broadcast`, `regulatory`, `shared` and `dial` are false. |
+| `callsigns` | `MYCALL <call> [<call>…]`. The published grammar is 3 to 7 capitals and digits, then `-1` to `-15`, `-T` or `-R`; the adapter refuses other callsigns (`refused`), so a callsign with `/` (RP-0 §6.1) cannot be used. |
+| `listen` | `LISTEN ON` / `LISTEN OFF`. `LISTEN OFF` is VARA's default, and ends a call or a session under way, so the adapter holds it as it does Mercury's (§9.6, *Answering*). |
+| `connect` | `CONNECT <as> <remote>`, after `MYCALL` with `as` first when it is not, and after `BW500`, `BW2300` or `BW2750` when the call names a bandwidth; `CONNECTED <caller> <called> [<bandwidth>]` or `DISCONNECTED` follows. `remote` keeps to the same grammar. |
+| `send` / `received` | The data port. `BUFFER <n>` gives `queued`. |
+| `disconnect` / `abort` | `DISCONNECT` / `ABORT`. |
+| `busy` | `BUSY ON` / `BUSY OFF`. |
+| `quality` | `SN <dB>` and `BITRATE` lines, where sent. |
+| `incoming` | `CONNECTED` for a call VARA answered; `PENDING` and `CANCELPENDING` say one is being answered. |
 
-VARA reports no delivery: `BUFFER 0` means sent, not acknowledged. Its command port has one
-`MYCALL` list and one `LISTEN` for the program that holds it, so an adapter for VARA has the modem
-to itself (`shared` false). VARA itself is proprietary; the adapter only uses its published
-commands.
+**Delivery.** VARA's `BUFFER <n>` counts the bytes not yet sent: `BUFFER 0` means sent, not
+acknowledged, so the adapter reports no `delivered` (`delivery` false). A message still counts as
+delivered only when the other side's `RECEIPT` lists it (RP-3 §5.5).
+
+**One program at a time.** VARA's command port has one `MYCALL` list and one `LISTEN` for the
+program that holds it, so the adapter has the modem to itself (`shared` false), as with Mercury.
+
+**Identification.** The published commands have nothing for it: the station identifies as its
+operator sets VARA up, and the adapter sends nothing for it (Mercury's adapter sends `CQFRAME`,
+§9.6, because Mercury does not identify the station).
 
 ### 9.3 ARDOP
 
@@ -561,3 +570,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 0.7.0 | 2026-11-14 | A host between calls (§3): a connection with `hello` alone, on a shared adapter only, so a modem that shows the programs using it shows the host when no call is up. §9.1: the adapter says `hello {app}` to a shared Aether (its ADR-0114, 0.2.0-beta.159), which names the program without a claim; asked for when Aether's header said "calls to KK4ODA-1 not answered" with the RadioPost app open and idle. |
 | 0.8.0 | 2026-11-15 | The dial (§4.1, wishlist W14, W40; gaps G3, G8): `caps.dial`, `dial` and `tune`, the `dial` event to every host, `tune` refused `busy` while any link or call is up on the station since the dial is the whole station's (§1.1), a host that moved the station tuning back, and the host's own rules check reading the dial (§8). An adapter that cannot read the dial just now answers `dial` `refused`. §9.1: Aether's `status.frequency_hz`, `can_tune`, `frequency.set` and `dial` event, the station's state checked before `frequency.set`; §9.5 and §9.6 have no dial. Test vectors: the dial conversation, and the simulated modem's starting dial (`modem.dial_hz`). |
 | 1.0.0 | 2026-11-15 | Stable (D41). §2: an adapter never listens beyond its own machine; a transport between machines is left for a later addition (gap G4). |
+| 1.0.1 | 2026-11-15 | §9.2 (informative), found by writing the VARA adapter: how `hello` tells VARA's interface from another (`CHAT OFF`), its caps for VARA HF and VARA FM, the published callsign grammar, `LISTEN OFF` held as Mercury's is, `BUFFER` as sent and not delivered, and that the adapter sends nothing to identify the station. Nothing for an implementation to do. |

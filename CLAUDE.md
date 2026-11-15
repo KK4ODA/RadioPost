@@ -109,6 +109,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   it (a frame decodes before its sender unkeys, found on the real modem; RP-4 0.6.6); a `connect`
   waits for it, so its `ok` comes at once. The stand-in keeps the IDs it heard, decodes a CQ frame
   before its sender unkeys, and logs two transmissions at once.
+  `adapters/vara` (`radiopost-vara`, `--fm` for VARA FM) is RP-4 §9.2: the same bridge and server
+  speaking VARA's published commands (`bridge::Dialect`, `serve::listen_speaking`). `hello` asks
+  `CHAT OFF` (`BUSYDETECT` is Mercury's alone); callsigns keep to VARA's published grammar
+  (`vara_fault`); no `delivered` (VARA's `BUFFER` counts what is not yet sent); no `CQFRAME`.
+  Its tests run on Mercury's stand-in in its VARA mode (`Air::vara`, reached by `#[path]`). VARA
+  is never run: only its published commands are used.
   `adapters/tcp` (`radiopost-tcp`) is RP-4 §9.5: links to other TCP adapters opened with one line
   each way (`RPTCP 1 <as> <called>`, `OK <callsign>` or `NO <code>`), TLS on the Internet with
   rustls and ring (a self-signed certificate made on first use, pinned by SHA-256 fingerprint, or

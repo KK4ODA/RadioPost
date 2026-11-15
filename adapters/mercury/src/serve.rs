@@ -24,7 +24,7 @@ use rpmi::polled::PolledStream;
 use rpmi::tcp::MAX_LINE;
 use rpmi::wire::{Message, Request, VERSION, admit, error, line_of, parse_line, speaks};
 
-use crate::bridge::{Bridge, Out};
+use crate::bridge::{Bridge, Dialect, Out};
 
 /// Mercury's control port when none is named; its data port is the next.
 pub const DEFAULT_MERCURY: &str = "127.0.0.1:8300";
@@ -84,12 +84,27 @@ pub fn listen_noting(
     mercury: &str,
     note: Note,
 ) -> io::Result<SocketAddr> {
+    listen_speaking(addr, mercury, Dialect::Mercury, note)
+}
+
+/// [`listen_noting`], to a modem of `dialect` at `modem`, its control port (VARA's is 8300 too,
+/// its data port the next).
+///
+/// # Errors
+///
+/// The address could not be taken.
+pub fn listen_speaking(
+    addr: impl ToSocketAddrs,
+    modem: &str,
+    dialect: Dialect,
+    note: Note,
+) -> io::Result<SocketAddr> {
     let listener = TcpListener::bind(addr)?;
     let local = listener.local_addr()?;
     let occupied = Arc::new(AtomicBool::new(false));
     let (arrivals, arrived) = mpsc::channel();
-    let mercury = mercury.to_owned();
-    thread::spawn(move || Station::new(&mercury, &note).run(&arrived));
+    let mercury = modem.to_owned();
+    thread::spawn(move || Station::new(&mercury, dialect, &note).run(&arrived));
     thread::spawn(move || {
         for stream in listener.incoming().flatten() {
             let occupied = Arc::clone(&occupied);
@@ -199,6 +214,7 @@ fn lobby(stream: &TcpStream, occupied: &AtomicBool, arrivals: &Sender<Arrival>) 
 
 /// The adapter's two connections to Mercury.
 struct Modem {
+    name: &'static str,
     control: PolledStream,
     data: PolledStream,
     partial: Vec<u8>,
@@ -207,7 +223,7 @@ struct Modem {
 impl Modem {
     /// Connects to the control port, then to the data port, the next one: Mercury closes the data
     /// connection of the program it takes the control port from.
-    fn open(mercury: &str) -> Result<Modem, String> {
+    fn open(mercury: &str, name: &'static str) -> Result<Modem, String> {
         let addr = mercury
             .to_socket_addrs()
             .map_err(|e| e.to_string())?
@@ -225,8 +241,9 @@ impl Modem {
             PolledStream::new(s, Some(wait), name)
         };
         Ok(Modem {
-            control: polled(&control, POLL, "mercury-control").map_err(|e| e.to_string())?,
-            data: polled(&data, DATA_POLL, "mercury-data").map_err(|e| e.to_string())?,
+            name,
+            control: polled(&control, POLL, "modem-control").map_err(|e| e.to_string())?,
+            data: polled(&data, DATA_POLL, "modem-data").map_err(|e| e.to_string())?,
             partial: Vec::new(),
         })
     }
@@ -244,7 +261,7 @@ impl Modem {
         let mut buf = [0u8; 4096];
         let mut lines = Vec::new();
         match self.control.read(&mut buf) {
-            Ok(0) => return Err("Mercury closed its control port".into()),
+            Ok(0) => return Err(format!("{} closed its control port", self.name)),
             Ok(n) => {
                 for &b in &buf[..n] {
                     if b == b'\r' || b == b'\n' {
@@ -262,7 +279,7 @@ impl Modem {
         }
         loop {
             match self.data.read(&mut buf) {
-                Ok(0) => return Err("Mercury closed its data port".into()),
+                Ok(0) => return Err(format!("{} closed its data port", self.name)),
                 Ok(n) => outs.extend(bridge.from_data(&buf[..n])),
                 Err(e) if waiting(&e) => break,
                 Err(e) => return Err(format!("a read of its data port failed: {e}")),
@@ -284,7 +301,7 @@ impl Modem {
             Out::Data(bytes) => self.data.write_all(bytes),
             Out::Host(_) | Out::CloseHost => Ok(()),
         }
-        .map_err(|e| format!("a write to Mercury failed: {e}"))
+        .map_err(|e| format!("a write to {} failed: {e}", self.name))
     }
 }
 
@@ -292,6 +309,7 @@ impl Modem {
 /// them.
 struct Station<'a> {
     mercury: &'a str,
+    dialect: Dialect,
     note: &'a Note,
     start: Instant,
     modem: Option<Modem>,
@@ -302,13 +320,14 @@ struct Station<'a> {
 }
 
 impl<'a> Station<'a> {
-    fn new(mercury: &'a str, note: &'a Note) -> Station<'a> {
+    fn new(mercury: &'a str, dialect: Dialect, note: &'a Note) -> Station<'a> {
         Station {
             mercury,
+            dialect,
             note,
             start: Instant::now(),
             modem: None,
-            bridge: Bridge::new(),
+            bridge: Bridge::speaking(dialect),
             host: None,
             left: None,
         }
@@ -342,15 +361,16 @@ impl<'a> Station<'a> {
     /// still holds it, and then this host joins that bridge.
     fn take(&mut self, arrival: Arrival) {
         if self.modem.is_none() {
-            match Modem::open(self.mercury) {
+            let name = self.dialect.name();
+            match Modem::open(self.mercury, name) {
                 Ok(m) => {
                     self.modem = Some(m);
-                    self.bridge = Bridge::new();
+                    self.bridge = Bridge::speaking(self.dialect);
                 }
                 Err(why) => {
-                    let why = format!("Mercury at {} could not be reached: {why}", self.mercury);
+                    let why = format!("{name} at {} could not be reached: {why}", self.mercury);
                     (self.note)(&why);
-                    self.bridge = Bridge::without_modem(&why);
+                    self.bridge = Bridge::without_modem_speaking(self.dialect, &why);
                 }
             }
         }
@@ -394,7 +414,8 @@ impl<'a> Station<'a> {
         }
         if let Some(why) = lost {
             (self.note)(&format!(
-                "the connection to Mercury at {} ended: {why}; the program's connection is closed",
+                "the connection to {} at {} ended: {why}; the program's connection is closed",
+                self.dialect.name(),
                 self.mercury
             ));
             self.modem = None;
@@ -408,7 +429,7 @@ impl<'a> Station<'a> {
             if self.modem.is_none() || self.bridge.settled() || overdue {
                 // closing the control port is how another program is let have Mercury
                 self.modem = None;
-                self.bridge = Bridge::new();
+                self.bridge = Bridge::speaking(self.dialect);
             }
         }
     }
@@ -452,7 +473,10 @@ impl<'a> Station<'a> {
         let _ = h.stream.shutdown(Shutdown::Both);
         let asked = self.bridge.host_left();
         if asked.contains(&Out::Command("ABORT".into())) {
-            (self.note)("the program left with a call or link up: Mercury asked to abort it");
+            (self.note)(&format!(
+                "the program left with a call or link up: {} asked to abort it",
+                self.dialect.name()
+            ));
         }
         for out in asked {
             if let Some(m) = self.modem.as_mut()

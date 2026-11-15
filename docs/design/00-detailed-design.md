@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.49 |
+| **Version** | 0.1.50 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -205,7 +205,7 @@ server with those interfaces could replace Stalwart (concept §8.1).
 |---|---|---|
 | Aether | Control API, WebSocket | Delivery receipts, quality, busy, rules checked by the modem. Could become native RPMI. Shareable from 0.2.0-beta.146: each program claims its callsigns (its ADR-0106, RP-4 §9.1). While the client runs it holds one connection to the adapter with `hello` alone, so Aether names it between calls without a claim (its ADR-0114, RP-4 §3, §9.1): through RPMI rather than a WebSocket of its own, so the adapter stays the one place that speaks Aether's API, and the same `hello` serves any shared modem that shows its programs. |
 | Aether FM | Control API, WebSocket, as Aether | In design: Aether's own air interface for FM radios, listed as `aether-fm` (RP-0 §9.4). The Aether adapter serves it once it reads the modem's name from Aether rather than assuming Aether HF. |
-| VARA HF, VARA FM | Published TNC commands, two TCP ports | No delivery receipts. |
+| VARA HF, VARA FM | Published TNC commands, two TCP ports (RP-4 §9.2) | Built, `adapters/vara`: Mercury's bridge speaking VARA's published commands. No delivery receipts: VARA's `BUFFER` counts what is not yet sent. One program at a time; checks no band rules. The station identifies as its operator sets VARA up; the adapter sends nothing for it. |
 | Mercury | VARA-style TNC commands, two TCP ports (RP-4 §9.6) | Built, `adapters/mercury`. Delivery from its `BUFFER`, which counts what the other station has not confirmed. One program at a time; checks no band rules. Mercury does not identify the station, so the adapter sends `CQFRAME` with the station's callsign after each session. |
 | ARDOP | Host command and data ports | To be checked against ARDOP's specification. |
 | AX.25 | AGWPE (Direwolf, TNCs) | VHF and UHF packet. |
@@ -321,7 +321,7 @@ Phases 0 to 2 and Phase 3's core are built. The author set the next stages on 20
 | 5 | Phase 4, windows and routes (RP-7 §5, §6), F-01 to F-06, and a first trial on the air between two gateways **on one shared channel**, so no radio is retuned. **Built** (2026-11-15): a gateway's windows in its settings and its record, only inside its country's segments; routes published at `GET /routes`; a cut-off gateway calling its partners inside their windows by itself (three tries a minute apart, never on a busy channel), with the windows read from the gateway lists it keeps, and choosing between partners as RP-7 §6.2 says; F-01 to F-06; [the trial's guide](../user/on-air-forwarding.md). The trial on the air is deferred by the author (2026-11-15): too early in the process. | W30 |
 | 6 | The dial: an optional RP-4 addition to read and set the radio's frequency (§13 of the wishlist, G3 and G8), so a gateway can call a partner on another channel; choosing a gateway tunes the radio; the gateway checks the band rules itself for modems other than Aether. **Built** (2026-11-15): RP-4 0.8.0 §4.1 with its vectors, the Aether adapter's mapping, the client's **Channel** and `--dial`, a gateway tuning to its partner's window and back, and a gateway judging its dial against its country's segments when the modem checks no rules. | W14, W40 |
 | 7 | RP-0 to RP-6 frozen as version 1.0 once forwarding is built: the open gaps settled first, changes afterwards careful and announced; a public test service for other implementers. **Built** (2026-11-15): RP-0 to RP-6 Stable at 1.0.0 (D41), the open gaps settled; `radiopost-test-service`, a test post office, gateway and station on the Internet with a report of each session. | W43 |
-| 8 | Phase 5. | W20 to W23, W26, W32 |
+| 8 | Phase 5: VARA (W20), one gateway on several modems (W26), AX.25 packet (W22), ARDOP (W21), forms (W32); the phone later. **VARA built** (2026-11-15). | W20 to W23, W26, W32 |
 
 Enrollment with an LoTW certificate (W10) is built when the author supplies a certificate to test
 with; LoTW's RSA-1024 and SHA-1 are accepted, since the certificate proves a licence at enrollment
@@ -400,3 +400,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.47 | 2026-11-15 | D40: callsigns compared by their base (RP-0 0.8.0 §6.1, RP-1 0.7.0 §6.3; gaps G10, G12). |
 | 0.1.48 | 2026-11-15 | D41: RP-0 to RP-6 Stable at 1.0.0, the open gaps settled; §5.1: the client keeps each message's canonical encoding (G6). |
 | 0.1.49 | 2026-11-15 | §9: stage 7 built, with the public test service (W43). |
+| 0.1.50 | 2026-11-15 | §5.4, §9: the VARA adapter built (W20, RP-4 1.0.1 §9.2), Phase 5's first step. |

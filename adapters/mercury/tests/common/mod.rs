@@ -23,6 +23,10 @@
 //! ([`Air::idents`]).
 //!
 //! What a host must not do to a real Mercury is kept in [`Air::faults`].
+//!
+//! [`Air::vara`] makes the two modems speak as VARA's published TNC commands say instead: they
+//! take `CHAT OFF`, do not know `BUSYDETECT`, and identify themselves, so a `CQFRAME` from the
+//! host is a fault (the adapter has no need to send one).
 
 #![allow(dead_code, reason = "each test file uses its own part")]
 
@@ -194,6 +198,8 @@ impl Tnc {
 }
 
 struct Inner {
+    /// The modems speak as VARA's published commands say, not as Mercury.
+    vara: bool,
     start: Instant,
     tnc: [Tnc; 2],
     timers: Vec<(u64, u64, Ev)>,
@@ -402,7 +408,12 @@ impl Inner {
                 self.tnc[at].bw = word[2..].parse().unwrap_or(2300);
                 self.tnc[at].say("OK");
             }
-            ("BUSYDETECT", []) => self.tnc[at].say("BUSYDETECT OFF"),
+            ("BUSYDETECT", []) if !self.vara => self.tnc[at].say("BUSYDETECT OFF"),
+            ("CHAT", ["ON" | "OFF"]) if self.vara => self.tnc[at].say("OK"),
+            ("CQFRAME", _) if self.vara => {
+                self.fault(at, "CQFRAME: VARA identifies the station itself");
+                self.tnc[at].say("OK");
+            }
             ("CQFRAME", [callsign, bw]) => match bw.parse::<i64>() {
                 Ok(bw @ (500 | 2300 | 2750)) => {
                     self.tnc[at].say("OK");
@@ -670,8 +681,18 @@ fn two_ports() -> (TcpListener, TcpListener) {
 impl Air {
     /// The channel and its two modems: the address of each one's control port.
     pub fn new() -> (Air, [SocketAddr; 2]) {
+        Air::speaking(false)
+    }
+
+    /// Two modems that speak as VARA's published TNC commands say.
+    pub fn vara() -> (Air, [SocketAddr; 2]) {
+        Air::speaking(true)
+    }
+
+    fn speaking(vara: bool) -> (Air, [SocketAddr; 2]) {
         let air = Air {
             inner: Arc::new(Mutex::new(Inner {
+                vara,
                 start: Instant::now(),
                 tnc: [Tnc::new(), Tnc::new()],
                 timers: Vec::new(),
