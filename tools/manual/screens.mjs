@@ -489,6 +489,22 @@ function gatewayInSession() {
               picked_up: 1}}}), sessions: GW_SESSIONS};
 }
 
+// a new message with ICS-213 chosen and its fields filled in, as the manual and the README show it
+async function fillForm(page) {
+  await page.click("#write");
+  const form = page.locator("#composer");
+  await form.locator("input[name=to]").fill("eoc@radiopost.org");
+  await form.locator("input[name=subject]").fill("Cots and water for tonight");
+  await form.locator("select[name=form]").selectOption({label: "ICS-213 General Message"});
+  const field = (n) => page.locator(`#c-form-fields [data-field="${n}"]`);
+  await field(1).fill("Storm response, Atlanta");
+  await field(2).fill("Duty officer, county EOC");
+  await field(3).fill("J. Park, Shelter 3 manager");
+  await field(7).fill("140 people tonight, 30 more expected by 20:00.\n"
+    + "Need 40 cots and 300 litres of drinking water.\nGenerator fuel for 12 hours.");
+  await field(8).fill("J. Park, Shelter 3 manager");
+}
+
 // a README picture: the whole window, or the box around the elements named
 async function readmeShot(page, name, selectors) {
   const path = join(README_OUT, `${name}.png`);
@@ -528,18 +544,7 @@ const SHOTS = {
     const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
                                                  height: 1300});
     await spreadLog(page, "log", T - 1300, 19);
-    await page.click("#write");
-    const form = page.locator("#composer");
-    await form.locator("input[name=to]").fill("eoc@radiopost.org");
-    await form.locator("input[name=subject]").fill("Cots and water for tonight");
-    await form.locator("select[name=form]").selectOption({label: "ICS-213 General Message"});
-    const field = (n) => page.locator(`#c-form-fields [data-field="${n}"]`);
-    await field(1).fill("Storm response, Atlanta");
-    await field(2).fill("Duty officer, county EOC");
-    await field(3).fill("J. Park, Shelter 3 manager");
-    await field(7).fill("140 people tonight, 30 more expected by 20:00.\n"
-      + "Need 40 cots and 300 litres of drinking water.\nGenerator fuel for 12 hours.");
-    await field(8).fill("J. Park, Shelter 3 manager");
+    await fillForm(page);
     await page.locator("body").click({position: {x: 1200, y: 1200}});
     await shot(page, "client-form");
     await context.close();
@@ -813,6 +818,17 @@ const SHOTS = {
     await page.locator("#rows tr").first().click();
     await page.waitForTimeout(200);
     await readmeShot(page, "readme-reader", ["#reader > *"]);
+    await context.close();
+  },
+
+  async "readme-form"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+                                                 width: 1000, height: 1300});
+    await fillForm(page);
+    await page.evaluate(() => document.activeElement.blur());
+    // down to the last field filled in: the rest of the form is empty boxes
+    await readmeShot(page, "readme-form", ["#c-title", "#composer input[name=to]",
+                                           '#c-form-fields [data-field="8"]']);
     await context.close();
   },
 

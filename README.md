@@ -34,7 +34,7 @@ Mail goes both ways in one call.</sub></p>
 > 2026-11-12, and the project's own post office, `radiopost.org`, has carried email since
 > 2026-11-11. Installers for Windows, macOS (Apple Silicon) and Linux are on the
 > [releases page](https://github.com/KK4ODA/RadioPost/releases), and the programs update
-> themselves. The protocols, RP-0 to RP-6, are Stable at 1.0.0.
+> themselves. The protocols RP-0 to RP-6 are Stable.
 
 ## How it works
 
@@ -63,6 +63,14 @@ attachments. A large attachment waits at your post office until you ask for it o
 
 <p align="center"><img src="docs/images/readme-reader.png" width="620" alt="A message open in RadioPost, with Reply, Reply all and Forward, and an attachment held at the post office with a button to ask for it on the next call"></p>
 
+**Send a form in less air time.** Choose ICS-213 General Message under **Form** and fill in its
+fields. Only what you type goes on the air, so a short ICS-213 takes about a fifth less time than
+the same text typed out. The station that receives it shows the whole form, and someone reading by
+email gets it as text with its labels. [Writing a message](docs/manual/manual.md#7-writing-a-message)
+says more.
+
+<p align="center"><img src="docs/images/readme-form.png" width="620" alt="The New message form with ICS-213 General Message chosen: To, Subject, and the form's fields filled in for a shelter asking a county EOC for cots and water"></p>
+
 **Find a gateway near you.** The list comes from your post office and the ones it knows, sorted
 by distance from your grid square, with each gateway's channels and hours. It is kept for when
 there is no Internet.
@@ -72,7 +80,8 @@ there is no Internet.
 **Run a gateway for others.** RadioPost Gateway answers calls by itself and passes each session to
 the caller's post office. It shows who is calling, the copies it holds for when the Internet is
 down, and which callers you refuse. It runs on the same Aether station as a Winlink gateway, on
-one radio.
+one radio. It can also answer on several modems, one session at a time: Aether and Mercury on one
+radio, or Aether on HF and packet on VHF.
 
 ![RadioPost Gateway during a session: its modem, post offices, registration, the copies it holds, refused callers, partners, and the session under way with N0CALL](docs/images/readme-gateway.png)
 
@@ -107,8 +116,26 @@ delivery curves and the constellations, is in
 
 Aether keys the radio, checks the band rules before every transmission and sends the Morse
 identifier. One Aether station serves RadioPost and Winlink programs side by side, on one radio.
-RadioPost does not depend on it: any modem with an adapter will do
-([RP-4](spec/rp-0004-modem-interface.md)).
+
+## Other modems
+
+RadioPost does not depend on Aether. It reaches a modem through an adapter, a small program that
+runs beside it ([RP-4](spec/rp-0004-modem-interface.md)). RadioPost's tools hold these:
+
+| Modem | Adapter | Tried so far |
+|---|---|---|
+| [Aether HF](https://github.com/KK4ODA/aether-hf) | Built into RadioPost | On the air since 2026-11-12 |
+| Mercury HF | `radiopost-mercury` | On the bench, against two real Mercury modems |
+| VARA HF and VARA FM | `radiopost-vara` | Against a stand-in written from VARA's published commands |
+| ARDOP (ardopcf) | `radiopost-ardop` | Against a stand-in written from ardopcf's documents and source |
+| AX.25 packet, on a TNC's AGWPE port (Dire Wolf and others) | `radiopost-packet` | Against a stand-in written from the AGWPE interface |
+
+Start the adapter and put its address, such as `127.0.0.1:8600`, in RadioPost's **Modem** box. A
+gateway adds its modems under **More modems**
+([More than one modem](docs/manual/manual.md#more-than-one-modem)). The VARA, ARDOP and packet
+adapters are new and come with the next release. Only Aether has carried RadioPost on the air so
+far, so a report from a station on any of the others is welcome. A sixth adapter, `radiopost-tcp`,
+joins two stations over the Internet, to try RadioPost before going on the air.
 
 ## Get started
 
@@ -116,7 +143,8 @@ RadioPost does not depend on it: any modem with an adapter will do
    data; an audio interface such as a SignaLink, a DigiRig or the radio's own USB audio; and a
    computer with Windows, macOS (Apple Silicon) or Linux.
 2. **Set up Aether HF** with your radio, from
-   [its manual](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#part-1-getting-started).
+   [its manual](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#part-1-getting-started),
+   or another modem with its adapter ([Other modems](#other-modems)).
 3. **Install RadioPost** from the [releases page](https://github.com/KK4ODA/RadioPost/releases):
    the `-setup.exe` for Windows, the `.dmg` for macOS, the `.deb` or `.AppImage` for Linux.
 4. **Get an address.** Ask your club whether it runs a post office. If not, use the project's
@@ -142,8 +170,9 @@ else's:
 
 * Write a client, a gateway or a post office of your own, or change ours. The code is open.
 * Put a new modem under it with an adapter. Nothing above the modem interface changes.
-* Build an application on top of it: forms, telemetry, a bulletin service, a bridge to something
-  else. A message is addressed and delivered the same way whatever it carries.
+* Build an application on top of it: telemetry, a bulletin service, a bridge to something else, or
+  a new form ([`forms/`](forms/README.md) says how). A message is addressed and delivered the same
+  way whatever it carries.
 * Run a post office for your club, on your own domain, with your own rules. Nobody's permission is
   needed.
 
@@ -165,16 +194,18 @@ office or modem adapter from the specifications, and it will work with everyone 
 
 RP-0 holds the conventions they all share. [The index](spec/README.md) says which parts of each
 apply. The [test vectors](vectors/README.md) give the exact bytes and verdicts: keys, credentials,
-messages, every PDU, whole sessions byte for byte, the modem interface's conversations, the post
+messages and forms, every PDU, whole sessions byte for byte, the modem interface's conversations, the post
 office's exchanges, email in and out, and forwarding. Check an implementation against them before
 it goes on the air. [The public test service](docs/user/test-service.md) checks a program of yours
 against RadioPost's over the Internet.
 
 ## Status
 
-**RP-0 to RP-6 are Stable at 1.0.0** (2026-11-15): radiopost.org's pilot runs them, and a change
+**RP-0 to RP-6 are Stable** (1.0.0 on 2026-11-15): radiopost.org's pilot runs them, and a change
 an existing implementation cannot ignore now comes only with a new protocol version (RP-0 §8.3).
-RP-7, forwarding between gateways, is still a draft. All eight are written, with test vectors for
+Since then, RP-2 and RP-6 1.1.0 have added forms, which a program that does not show them need
+not handle, and RP-4 1.0.3 describes the VARA, ARDOP and packet adapters. RP-7, forwarding between
+gateways, is still a draft. All eight are written, with test vectors for
 RP-1 to RP-7.
 
 The programs follow the [order of work](docs/design/00-detailed-design.md#9-order-of-work), in
@@ -188,9 +219,9 @@ Rust, each checked against the test vectors:
   (Dire Wolf), and one for TCP.
 * **The client** ([`app/client`](app/client/README.md)): mail to another station or through a
   gateway, on the command line, from its panel in a browser, or as a desktop application.
-* **The gateway**: it answers users' calls and carries their sessions to their post offices, as a
-  desktop application of its own, RadioPost Gateway ([`app/gateway`](app/gateway/README.md),
-  [the operator's guide](docs/user/gateway.md)). When the Internet is down it serves the copies of
+* **The gateway**: it answers users' calls, on one modem or several, and carries their sessions to
+  their post offices, as a desktop application of its own, RadioPost Gateway
+  ([`app/gateway`](app/gateway/README.md), [the operator's guide](docs/user/gateway.md)). When the Internet is down it serves the copies of
   users' mail placed ahead with it, queues what they send, and reports it all when the Internet is
   back; the client follows what was queued until a post office confirms it. Cut off, it hands
   mail between its own users at once, and its queue by radio to a partner gateway that reaches the
@@ -226,7 +257,8 @@ The programs say when a newer release is out and update themselves. On-air tests
 | [`docs/`](docs/) | The user's manual, the concept, the detailed design and the user guides, with their figures, and this page's pictures (`docs/images/`, from `tools/manual/screens.mjs`). |
 | [`vectors/`](vectors/README.md) | The test vectors, generated by `tools/vectors/make.py`, never edited by hand. |
 | [`core/`](core/README.md) | The Rust workspace: the core library, the modem interface, the gateway, the post office service, the conformance tester. |
-| `adapters/` | The modem adapters: Aether HF, Mercury and TCP. |
+| `adapters/` | The modem adapters: Aether HF, Mercury, VARA, ARDOP, AX.25 packet and TCP. |
+| [`forms/`](forms/README.md) | The published form templates, ICS-213 first. A changed template is a new template. |
 | [`app/`](app/client/README.md) | The client (the `radiopost` program, its panel and the desktop application) and RadioPost Gateway ([`app/gateway`](app/gateway/README.md)). |
 | [`tools/`](tools/) | The vectors' reference, the figures' generators and the documents' checker (Python, standard library only). |
 
