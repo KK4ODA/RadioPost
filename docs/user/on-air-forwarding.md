@@ -3,7 +3,8 @@
 How two gateway operators try forwarding by radio (RP-7) on the air: one gateway, cut off from
 the Internet on purpose, hands its queue to a partner gateway that reaches the Internet, and
 collects the mail the post office left there for its users. Both gateways stay on one shared
-channel, so no radio is retuned (Phase 4's first trial). Running a gateway is
+channel, so no radio is retuned (Phase 4's first trial). **This trial is deferred until
+later**: the guide is ready for when it runs. Running a gateway is
 [a guide of its own](gateway.md); so are [email through a gateway](on-air-gateway.md) and
 [station-to-station tests](on-air-tests.md).
 

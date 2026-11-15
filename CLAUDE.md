@@ -436,6 +436,8 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   accepted for proof of licence.
 - Stalwart as the post office's mail server (others possible behind JMAP/SMTP); the door answers
   its MTA hooks (D29).
+- (2026-11-15) The forwarding trial on the air (stage 5, `docs/user/on-air-forwarding.md`) is
+  deferred until later: too early in the process.
 - (2026-11-12) With more than one post office: a client's gateway list read from every post
   office its own knows, the home's record winning and a callsign listed twice elsewhere ambiguous
   (D36); copies placed ahead at gateways of other post offices, served only to the credential of
