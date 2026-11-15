@@ -119,6 +119,17 @@ fn answer(gw: &Path) -> (Arc<Monitor>, JoinHandle<()>, Receiver<String>) {
     (monitor, thread, rx)
 }
 
+/// Waits until the gateway answers on its modem: a call before that goes unanswered.
+fn listening(monitor: &Monitor, says: &Receiver<String>) {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let mut said = Vec::new();
+    while monitor.status().state != "listening" {
+        said.extend(says.try_iter());
+        assert!(Instant::now() < deadline, "not listening: {said:#?}");
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
 /// Waits until `ok` holds of the gateway's store, or says what it holds and what it said.
 fn until(gw: &Path, says: &Receiver<String>, what: &str, ok: impl Fn(&Held) -> bool) {
     let deadline = Instant::now() + Duration::from_secs(60);
@@ -153,7 +164,8 @@ fn a_cut_off_gateway_forwards_its_queue_to_a_partner() {
         &dir, "KK4ODA-2", "KK4ODA-1", at_two, &base, &running, &po_key,
     );
     let (m_one, t_one, says_one) = answer(&one);
-    let (_m_two, _t_two, says_two) = answer(&two);
+    let (m_two, _t_two, says_two) = answer(&two);
+    listening(&m_two, &says_two);
     until(&one, &says_one, "the post office's keys kept", |h| {
         h.keys.contains_key("test.example")
     });
@@ -170,6 +182,7 @@ fn a_cut_off_gateway_forwards_its_queue_to_a_partner() {
         .insert("test.example".into(), "http://127.0.0.1:1".into());
     settings.save(&one).expect("saved");
     let (m_one, _t_one, says_one) = answer(&one);
+    listening(&m_one, &says_one);
 
     // 3. WD5EMA calls it: checked offline, their message queued
     let mut user = client(
