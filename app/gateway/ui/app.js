@@ -269,7 +269,8 @@ async function refreshHeld() {
   }));
   $("queue-rows").replaceChildren(...h.queue.map((r) => {
     const tr = document.createElement("tr");
-    [when(r.started), r.operator, r.address, r.messages, r.pickups,
+    const via = r.path && r.path.length ? `, via ${r.path.slice(0, -1).join(", ")}` : "";
+    [when(r.started), r.operator + via, r.address, r.messages, r.pickups,
      r.error ? `${r.error} (${r.tries})` : r.done ? "not tried yet" : "under way"]
       .forEach((text, i) => {
         const td = document.createElement("td");
@@ -315,6 +316,48 @@ async function refreshRefused() {
     return tr;
   }));
   $("refused-rows").closest(".table-wrap").hidden = list.length === 0;
+}
+
+// partners (RP-7 §1): the queue goes to one by radio while the Internet is down
+async function refreshPartners() {
+  const list = await api("partners");
+  $("partners-count").textContent = list.length
+    ? list.map((p) => p.callsign).join(", ")
+    : "None.";
+  $("partner-rows").replaceChildren(...list.map((p) => {
+    const tr = document.createElement("tr");
+    const last = p.called ? `${when(p.called)}: ${p.said}` : "Never called";
+    const waiting = p.records
+      ? `${p.records}${p.messages ? ` (${p.messages} ${p.messages === 1 ? "message" : "messages"})` : ""}`
+      : "0";
+    [p.callsign, waiting, last].forEach((text, i) => {
+      const td = document.createElement("td");
+      td.textContent = text;
+      if (i === 0) td.className = "mono";
+      if (i === 1) td.className = "n";
+      tr.append(td);
+    });
+    const td = document.createElement("td");
+    const go = document.createElement("button");
+    go.textContent = "Forward now";
+    go.title = `Call ${p.callsign} between sessions and hand it the sessions waiting to be reported`;
+    go.disabled = !(state && state.running);
+    go.addEventListener("click", () => act("forward", {partner: p.callsign}, (a) => toast(`${a.said[0].toUpperCase()}${a.said.slice(1)}.`)));
+    const drop = document.createElement("button");
+    drop.className = "quiet";
+    drop.textContent = "Remove";
+    drop.title = `No longer forward to ${p.callsign}, nor answer its forwarding calls`;
+    drop.disabled = !!(state && state.running);
+    drop.addEventListener("click", () => act("partners", {remove: p.callsign}, () => {
+      toast(`${p.callsign} is no longer a partner.`);
+      refreshPartners();
+    }));
+    td.className = "nowrap";
+    td.append(go, " ", drop);
+    tr.append(td);
+    return tr;
+  }));
+  $("partner-rows").closest(".table-wrap").hidden = list.length === 0;
 }
 
 async function refreshSessions() {
@@ -367,6 +410,7 @@ async function tick() {
       await refreshSessions();
       await refreshHeld();
       await refreshRefused();
+      await refreshPartners();
     } else if (shownSessions < 0) {
       await refreshSessions();
     }
@@ -413,6 +457,21 @@ $("refuse-form").addEventListener("submit", (e) => {
     toast(`Refusing ${kept ? kept.caller : typed} from its next call on.`);
     f.reset();
     refreshRefused();
+  });
+});
+$("partners-open").addEventListener("click", () => {
+  $("partners-view").hidden = !$("partners-view").hidden;
+  $("partners-open").textContent = $("partners-view").hidden ? "Show" : "Hide";
+  if (!$("partners-view").hidden) refreshPartners();
+});
+$("partner-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const f = e.currentTarget;
+  const typed = f.callsign.value.trim().toUpperCase();
+  act("partners", {add: typed}, () => {
+    toast(`${typed} is a partner. Name this gateway on ${typed} too.`);
+    f.reset();
+    refreshPartners();
   });
 });
 $("held-open").addEventListener("click", () => {

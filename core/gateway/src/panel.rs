@@ -204,6 +204,41 @@ impl Panel {
         }
     }
 
+    /// Partners named and removed while the gateway is stopped, since it holds its settings while
+    /// it answers; a forward asked of the answering loop, which calls between sessions (RP-7 §2).
+    fn partners_api(&self, path: &str, body: &Value) -> Result<Value, String> {
+        let dir = self.runner.dir();
+        if path == "/api/forward" {
+            let partner = text(body, "partner");
+            if !Settings::load(dir)?.is_partner(partner) {
+                return Err(format!("{partner} is not a partner"));
+            }
+            if !self.runner.running() {
+                return Err("start the gateway first: it calls its partner on its modem".into());
+            }
+            self.runner.monitor().request_forward(partner);
+            return Ok(json!({"said": format!("calling {partner} between sessions")}));
+        }
+        self.stopped()?;
+        let mut s = Settings::load(dir)?;
+        match (text(body, "add"), text(body, "remove")) {
+            (add, "") if callsign_ok(&add.to_ascii_uppercase()) => {
+                let call = add.to_ascii_uppercase();
+                if !s.is_partner(&call) {
+                    s.partners.push(station::PartnerSettings { callsign: call });
+                }
+            }
+            ("", remove) if s.is_partner(remove) => {
+                s.partners
+                    .retain(|p| !p.callsign.eq_ignore_ascii_case(remove));
+            }
+            ("", remove) => return Err(format!("{remove} is not a partner")),
+            (add, _) => return Err(format!("{add} is not a callsign")),
+        }
+        s.save(dir)?;
+        Ok(partners(dir))
+    }
+
     fn api(&self, method: &Method, path: &str, query: &str, body: &Value) -> Result<Value, String> {
         let param = |name: &str| {
             query
@@ -243,6 +278,9 @@ impl Panel {
                 monitor.log(&said);
                 Ok(json!(crate::refused::list(dir)))
             }
+            // partners (RP-7 §1, §2)
+            (Method::Get, "/api/partners") => Ok(partners(dir)),
+            (Method::Post, "/api/partners" | "/api/forward") => self.partners_api(path, body),
             (Method::Post, "/api/setup") => {
                 self.stopped()?;
                 self.setup(body)?;
@@ -488,7 +526,7 @@ fn held(dir: &std::path::Path) -> Value {
         .map(|r| {
             json!({"operator": r.operator, "address": r.address, "started": r.started,
                    "messages": r.messages.len(), "pickups": r.pickups.len(), "domain": r.domain,
-                   "done": r.done, "tries": r.tries, "error": r.error})
+                   "done": r.done, "tries": r.tries, "error": r.error, "path": r.path})
         })
         .collect();
     let keys: Value = s
@@ -527,6 +565,30 @@ fn copies_of(v: &Value) -> Result<Option<station::CopiesSettings>, String> {
                 .into(),
         ),
     }
+}
+
+/// The partners, each with how the last call to it went and what waits for it (RP-7 §1, §3.2).
+fn partners(dir: &std::path::Path) -> Value {
+    let settings = Settings::load(dir).ok();
+    let s = crate::store::Store::load(dir);
+    let me = settings
+        .as_ref()
+        .map(|x| x.callsign.clone())
+        .unwrap_or_default();
+    let list: Vec<Value> = settings
+        .map(|x| x.partners)
+        .unwrap_or_default()
+        .iter()
+        .map(|p| {
+            let state = s.partners.get(&p.callsign).cloned().unwrap_or_default();
+            let (records, messages) = crate::forward::outbox(&s, &me, &p.callsign);
+            json!({"callsign": p.callsign, "called": state.called, "said": state.said,
+                   "online": state.online, "cursor": state.cursor,
+                   "records": records.len(), "messages": messages.len(),
+                   "forwards": s.forwards_for(&p.callsign, 0).len()})
+        })
+        .collect();
+    json!(list)
 }
 
 fn text<'a>(body: &'a Value, name: &str) -> &'a str {

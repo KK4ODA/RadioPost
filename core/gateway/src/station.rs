@@ -966,6 +966,18 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
             modem.conn.close();
             return stopped(monitor, &mut tell);
         }
+        // the operator asked for its queue to go to a partner (RP-7 §2): between sessions
+        if let Some(partner) = monitor.take_forward() {
+            tell(&format!("calling {partner} to forward the queue"));
+            monitor.begin(&partner);
+            let result = forward(&mut station, &mut modem, &partner, monitor);
+            match &result {
+                Ok(line) => tell(line),
+                Err(e) => tell(&format!("forwarding to {partner} failed: {e}")),
+            }
+            monitor.end(&result.map(|_| ()));
+            monitor.set_state("listening", None);
+        }
         let event = match modem.next() {
             Ok(Some(e)) => e,
             Ok(None) => continue,
@@ -987,18 +999,6 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
                 continue;
             }
         };
-        // the operator asked for its queue to go to a partner (RP-7 §2): between sessions
-        if let Some(partner) = monitor.take_forward() {
-            tell(&format!("calling {partner} to forward the queue"));
-            monitor.begin(&partner);
-            let result = forward(&mut station, &mut modem, &partner, monitor);
-            match &result {
-                Ok(line) => tell(line),
-                Err(e) => tell(&format!("forwarding to {partner} failed: {e}")),
-            }
-            monitor.end(&result.map(|_| ()));
-            monitor.set_state("listening", None);
-        }
         if let Event::Connected {
             direction: Direction::In,
             remote,

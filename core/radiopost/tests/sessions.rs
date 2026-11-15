@@ -1547,7 +1547,7 @@ fn a_refused_record_fails_its_messages_with_its_code() {
         [(shelter, ErrorCode::RefusedByPolicy)]
     );
     assert_eq!(records_taken(&got.caller), [facundo]);
-    assert!(delivered(&got.caller).is_empty());
+    assert_eq!(delivered(&got.caller), Vec::<ContentId>::new());
     assert!(got.notes.contains(&Note::RecordRefused {
         id: Some(refused),
         code: ErrorCode::RefusedByPolicy
@@ -1602,7 +1602,7 @@ fn a_gateway_without_partners_refuses_a_forwarding_call() {
         got.partner
             .contains(&Event::Refused(ErrorCode::RefusedByPolicy))
     );
-    assert!(got.log.opened.is_empty());
+    assert_eq!(got.log.opened, Vec::<String>::new());
 }
 
 /// RP-7 §4.3: a forward item whose placement names another gateway is listed failed

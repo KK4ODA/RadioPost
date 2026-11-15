@@ -378,6 +378,18 @@ fn a_gateway_set_up_registered_and_run_from_its_panel() {
     assert_eq!(checks[0]["domain"], "test.example", "{checks}");
     assert_eq!(checks[0]["ok"], true, "{checks}");
 
+    // partners (RP-7 §1) are named while the gateway is stopped, and a forward goes only to one
+    assert!(
+        page.post("/api/partners", &json!({"add": "KK4ODA-2"}))
+            .is_err(),
+        "the settings are held while it answers"
+    );
+    assert!(
+        page.post("/api/forward", &json!({"partner": "KK4ODA-2"}))
+            .is_err(),
+        "not a partner"
+    );
+
     // stopped: it lets the modem go, and its settings may change again
     let state = page.post("/api/stop", &json!({})).expect("stopped");
     assert_eq!(state["running"], false);
@@ -385,6 +397,21 @@ fn a_gateway_set_up_registered_and_run_from_its_panel() {
     assert!(page.log().iter().any(|l| l == "stopped answering"));
     page.post("/api/setup", &change)
         .expect("changed while stopped");
+    let list = page
+        .post("/api/partners", &json!({"add": "kk4oda-2"}))
+        .expect("named");
+    assert_eq!(list[0]["callsign"], "KK4ODA-2", "{list}");
+    assert_eq!(list[0]["records"], 0, "nothing waits for it: {list}");
+    assert_eq!(page.get("/api/partners"), list);
+    let refused = page
+        .post("/api/forward", &json!({"partner": "KK4ODA-2"}))
+        .expect_err("not answering");
+    assert!(refused.contains("start the gateway first"), "{refused}");
+    assert_eq!(
+        page.post("/api/partners", &json!({"remove": "KK4ODA-2"}))
+            .expect("removed"),
+        json!([])
+    );
 
     // the sessions are kept for the next run
     let again = Runner::new(&gw);

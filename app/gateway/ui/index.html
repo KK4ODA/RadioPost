@@ -56,7 +56,25 @@
           <p id="refused-count"></p>
           <button class="quiet" id="refused-open" title="The callers refused, and refuse another">Show</button>
         </section>
+        <section class="card" aria-label="Partners">
+          <h2 title="Gateways this one forwards its queue to by radio when it cannot reach the Internet, and the only gateways whose forwarding sessions it answers (RP-7)">Partners</h2>
+          <p id="partners-count"></p>
+          <button class="quiet" id="partners-open" title="The partners, what waits for each, and forwarding now">Show</button>
+        </section>
       </div>
+
+      <section class="card" id="partners-view" hidden aria-label="Partners">
+        <h2>Partners</h2>
+        <p class="note">A partner is another gateway, named by callsign, that this one can reach by radio. When this gateway is cut off from the Internet, Forward now calls the partner and hands it the sessions waiting to be reported, with their mail; the partner reports them, or forwards them in turn. It also brings back the mail the partner holds for this gateway's users. Name each other on both gateways: a gateway answers forwarding calls from its partners only. Stop the gateway to add or remove one.</p>
+        <form class="row" id="partner-form">
+          <input name="callsign" required placeholder="N1CALL-10" title="The partner gateway's callsign" autocomplete="off" spellcheck="false">
+          <button type="submit" title="Name this gateway as a partner">Add</button>
+        </form>
+        <div class="table-wrap"><table class="list" aria-label="Partners">
+          <thead><tr><th>Partner</th><th class="n">Sessions waiting</th><th>Last call</th><th></th></tr></thead>
+          <tbody id="partner-rows"></tbody>
+        </table></div>
+      </section>
 
       <section class="card" id="refused-view" hidden aria-label="Callers refused">
         <h2>Callers refused</h2>
