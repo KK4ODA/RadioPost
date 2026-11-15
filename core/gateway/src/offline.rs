@@ -10,6 +10,9 @@
 //! * It takes the caller's messages into its queue as a session record (RP-7 §3.1), written
 //!   before they are receipted (RP-3 §5.4), and records the copies picked up. An offer already in
 //!   the queue, or passed on in the last 30 days, is declined `already-have` (RP-7 §3.6).
+//! * Local delivery (RP-7 §4.4): a message that names a local user (a copy placed ahead here in
+//!   the last 30 days) is kept for that user too, listed to them with serial 0 and the flag
+//!   `local`, sent by content ID, and its pickup kept in their record as a local pickup.
 //! * It says why in a `NOTICE` (RP-3 §5.10), and the engine's `WELCOME` says `online` false.
 //!
 //! Everything is reported when the post office can be reached again ([`crate::upkeep`]).
@@ -33,6 +36,8 @@ pub struct Offline {
     /// The record this session builds, by its index in the store: `None` until the session opens.
     record: Option<(String, u64)>,
     address: String,
+    /// The `NOTICE` text, when not [`notice`]'s.
+    notice: Option<String>,
 }
 
 /// What the `NOTICE` of an offline session says.
@@ -45,7 +50,7 @@ pub fn notice(held: usize) -> String {
     };
     format!(
         "This gateway cannot reach your post office now: {copies}, and what you send waits in its \
-         queue until it can. Your client offers it again."
+         queue until it can, mail for its own users handed over here. Your client offers it again."
     )
 }
 
@@ -68,7 +73,15 @@ impl Offline {
             clock,
             record: None,
             address: String::new(),
+            notice: None,
         }
+    }
+
+    /// The same, saying `text` in its `NOTICE` (RP-3 §5.10) rather than [`notice`]'s words.
+    #[must_use]
+    pub fn with_notice(mut self, text: &str) -> Offline {
+        self.notice = Some(text.to_owned());
+        self
     }
 
     fn check(&self, body: &Json) -> Result<(Statement, Vec<u8>, Vec<u8>), ErrorCode> {
@@ -141,6 +154,14 @@ impl Upstream for Offline {
                         .push((stmt.address.clone(), radiopost::cbor::hex(nonce), *time));
                 }
                 let copies = s.copies_for(&stmt.address);
+                let local = s.local_for(&stmt.address);
+                // RP-3 §6.1's order, the local messages after the copies of the same priority
+                let mut waiting: Vec<(u64, u8, Json)> = copies
+                    .iter()
+                    .map(|c| (c.priority, 0, c.entry()))
+                    .chain(local.iter().map(|l| (l.priority, 1, l.entry())))
+                    .collect();
+                waiting.sort_by_key(|(priority, kind, _)| (std::cmp::Reverse(*priority), *kind));
                 let (mut accept, mut decline) = (Vec::new(), Vec::new());
                 for id in &stmt.messages {
                     if s.has(&id.text(), now) {
@@ -167,9 +188,9 @@ impl Upstream for Offline {
                 });
                 json!({
                     "session": format!("offline-{session}"),
-                    "waiting": copies.iter().map(crate::store::Copy::entry).collect::<Vec<_>>(),
+                    "waiting": waiting.into_iter().map(|(_, _, e)| e).collect::<Vec<_>>(),
                     "more": 0, "accept": accept, "decline": decline,
-                    "notice": notice(copies.len()),
+                    "notice": self.notice.clone().unwrap_or_else(|| notice(copies.len())),
                 })
             })
             .map_err(|_| ErrorCode::Internal)?;
@@ -195,6 +216,7 @@ impl Upstream for Offline {
         let Some(key) = self.record.clone() else {
             return Err(ErrorCode::Internal);
         };
+        let now = self.clock;
         // RP-3 §5.4: stored durably before the RECEIPT lists them
         self.store
             .change(|s| {
@@ -208,6 +230,45 @@ impl Upstream for Offline {
                 for (id, air) in messages {
                     if !r.messages.iter().any(|(m, _)| *m == id.text()) {
                         r.messages.push((id.text(), base64url::encode(air)));
+                    }
+                }
+                // RP-7 §4.4: kept for each local user it names as well
+                for (id, air) in messages {
+                    let Ok(message) = radiopost::message::Message::from_air(air) else {
+                        continue;
+                    };
+                    let local = radiopost::session::gateway::local_recipients(
+                        &message,
+                        &s.copies_seen,
+                        now,
+                    );
+                    for address in local {
+                        if s.local
+                            .iter()
+                            .any(|l| l.address == address && l.id == id.text())
+                        {
+                            continue;
+                        }
+                        s.local.push(crate::store::Local {
+                            address,
+                            id: id.text(),
+                            air: base64url::encode(air),
+                            from: message.from().unwrap_or("").to_owned(),
+                            subject: message
+                                .map()
+                                .get(radiopost::message::key::SUBJECT)
+                                .and_then(radiopost::cbor::Value::as_text)
+                                .unwrap_or("")
+                                .to_owned(),
+                            size: air.len() as u64,
+                            priority: message
+                                .map()
+                                .get(radiopost::message::key::PRIORITY)
+                                .and_then(radiopost::cbor::Value::as_u64)
+                                .unwrap_or(0),
+                            kept: now,
+                            picked: false,
+                        });
                     }
                 }
                 Ok(messages.iter().map(|_| Ok(())).collect())
@@ -237,6 +298,47 @@ impl Upstream for Offline {
                     for serial in serials {
                         if !r.pickups.contains(serial) {
                             r.pickups.push(*serial);
+                        }
+                    }
+                }
+            })
+            .map_err(|_| ErrorCode::Internal)
+    }
+
+    fn fetch_local(&mut self, id: &ContentId) -> Result<Vec<u8>, ErrorCode> {
+        let store = self.store.lock();
+        store
+            .local
+            .iter()
+            .find(|l| l.address.eq_ignore_ascii_case(&self.address) && l.id == id.text())
+            .and_then(|l| base64url::decode(&l.air))
+            .ok_or(ErrorCode::UnknownMessage)
+    }
+
+    fn picked_up_local(&mut self, ids: &[ContentId]) -> Result<(), ErrorCode> {
+        let Some(key) = self.record.clone() else {
+            return Err(ErrorCode::Internal);
+        };
+        let address = self.address.clone();
+        let ids: Vec<String> = ids.iter().map(ContentId::text).collect();
+        self.store
+            .change(|s| {
+                for l in s
+                    .local
+                    .iter_mut()
+                    .filter(|l| l.address.eq_ignore_ascii_case(&address) && ids.contains(&l.id))
+                {
+                    l.picked = true;
+                }
+                // the post office learns of it with the record (RP-5 §5.6 `local_pickups`)
+                if let Some(r) = s
+                    .records
+                    .iter_mut()
+                    .find(|r| (r.gateway_session.clone(), r.started) == key)
+                {
+                    for id in &ids {
+                        if !r.local_pickups.contains(id) {
+                            r.local_pickups.push(id.clone());
                         }
                     }
                 }
@@ -344,6 +446,14 @@ impl Upstream for Fallback {
 
     fn picked_up(&mut self, serials: &[u64]) -> Result<(), ErrorCode> {
         self.active().picked_up(serials)
+    }
+
+    fn fetch_local(&mut self, id: &ContentId) -> Result<Vec<u8>, ErrorCode> {
+        self.active().fetch_local(id)
+    }
+
+    fn picked_up_local(&mut self, ids: &[ContentId]) -> Result<(), ErrorCode> {
+        self.active().picked_up_local(ids)
     }
 
     fn files(&mut self, asked: &[(u64, Vec<u8>)]) -> Result<(), ErrorCode> {

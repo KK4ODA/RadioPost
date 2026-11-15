@@ -228,7 +228,8 @@ fn session_01_the_client_side() {
         station: None,
     };
     // Facundo asks for #420 and leaves the photo, #421, waiting.
-    let mut client = Client::new(cfg, Box::new(|_| vec![420])).expect("a client");
+    let mut client =
+        Client::new(cfg, radiopost::session::client::by_serials(vec![420])).expect("a client");
     let events = replay_client(&mut client, &file, "client");
     assert!(
         client.is_over() && client.transmit().is_none(),
@@ -285,7 +286,8 @@ fn asking_client(w: &World, file: &Json) -> Client {
         piece: 4096,
         station: None,
     };
-    let mut client = Client::new(cfg, Box::new(|_| vec![420])).expect("a client");
+    let mut client =
+        Client::new(cfg, radiopost::session::client::by_serials(vec![420])).expect("a client");
     client.ask_for_files(vec![(417, b"held-ref".to_vec())]);
     client
 }
@@ -367,8 +369,11 @@ fn session_02_broken_and_resumed() {
     let photo = w.messages["maria-421"].content_id();
 
     // a: the link breaks in his third piece; nothing is delivered.
-    let mut a =
-        Client::new(base(&sessions[0], "N1CALL-10"), Box::new(|_| vec![421])).expect("a client");
+    let mut a = Client::new(
+        base(&sessions[0], "N1CALL-10"),
+        radiopost::session::client::by_serials(vec![421]),
+    )
+    .expect("a client");
     let events = replay_client(&mut a, &sessions[0], "client");
     assert_eq!(
         delivered(&events),
@@ -381,8 +386,11 @@ fn session_02_broken_and_resumed() {
     );
 
     // b: the gateway holds 1 920 bytes; he sends the rest; the photo breaks after 4 800 bytes.
-    let mut b =
-        Client::new(base(&sessions[1], "N1CALL-10"), Box::new(|_| vec![421])).expect("a client");
+    let mut b = Client::new(
+        base(&sessions[1], "N1CALL-10"),
+        radiopost::session::client::by_serials(vec![421]),
+    )
+    .expect("a client");
     let events = replay_client(&mut b, &sessions[1], "client");
     assert_eq!(delivered(&events), vec![report]);
     let held: Vec<Partial> = b
@@ -412,7 +420,7 @@ fn session_02_broken_and_resumed() {
     cfg.outbox = vec![];
     cfg.partials = held;
     cfg.credential_cached = false;
-    let mut c = Client::new(cfg, Box::new(|_| vec![])).expect("a client");
+    let mut c = Client::new(cfg, radiopost::session::client::by_serials(vec![])).expect("a client");
     assert_eq!(
         c.progress().received_bytes(),
         (0, 0),
@@ -442,7 +450,7 @@ fn station_caller(w: &World, file: &Json) -> Client {
         piece: 4096,
         station: Some(w.trust.clone()),
     };
-    Client::new(cfg, Box::new(|_| vec![])).expect("a client")
+    Client::new(cfg, radiopost::session::client::by_serials(vec![])).expect("a client")
 }
 
 #[test]
@@ -781,4 +789,121 @@ fn the_caller_refuses_a_station_that_cannot_prove_itself() {
         error.get(1).and_then(Value::as_u64),
         Some(u64::from(ErrorCode::SignatureInvalid.code()))
     );
+}
+
+/// RP-7 §4.4: `session-05`, the client's side of both sessions, byte for byte. Shelter 3 hands
+/// N2CALL-5, cut off, a message for Facundo and takes Ana's copy unasked; Facundo, listing only,
+/// finds it listed with serial 0 and the flag `local`, asks for it by content ID and takes it
+/// without a serial.
+#[test]
+fn session_05_local_delivery_the_client_side() {
+    let w = world();
+    let file = vectors("session-05.json");
+    let sessions = file["sessions"].as_array().expect("sessions");
+    let to_facundo = w.messages["shelter3-to-facundo"].content_id();
+    let from_ana = w.messages["ana-to-shelter3"].content_id();
+
+    let first = turns(&sessions[0]);
+    let shelter = ClientConfig {
+        credential: w.credentials["shelter3-n3call"].clone(),
+        device: w.device("device:shelter3-n3call"),
+        called: "N2CALL-5".into(),
+        time: sessions[0]["client_clock"].as_u64().expect("clock"),
+        nonce: nonce_of(&first[0]),
+        outbox: vec![w.out("shelter3-to-facundo")],
+        cursor: 0,
+        auto: AUTO,
+        partials: vec![],
+        caps: client_caps(),
+        credential_cached: true,
+        piece: 960,
+        station: None,
+    };
+    let mut a =
+        Client::new(shelter, radiopost::session::client::by_serials(vec![])).expect("a client");
+    let events = replay_client(&mut a, &sessions[0], "client");
+    assert!(a.is_over());
+    assert_eq!(received(&events), vec![(Some(501), from_ana)]);
+    assert_eq!(delivered(&events), vec![to_facundo]);
+
+    let second = turns(&sessions[1]);
+    let facundo = ClientConfig {
+        credential: w.credentials["facundo"].clone(),
+        device: w.device("device:facundo"),
+        called: "N2CALL-5".into(),
+        time: sessions[1]["client_clock"].as_u64().expect("clock"),
+        nonce: nonce_of(&second[0]),
+        outbox: vec![],
+        cursor: 421,
+        auto: 0,
+        partials: vec![],
+        caps: client_caps(),
+        credential_cached: true,
+        piece: 960,
+        station: None,
+    };
+    // everything listed is fetched: the local message too, by its content ID
+    let mut b = Client::new(
+        facundo,
+        Box::new(|entries: &[radiopost::session::WaitingEntry]| {
+            entries.iter().map(|e| e.id).collect()
+        }),
+    )
+    .expect("a client");
+    let events = replay_client(&mut b, &sessions[1], "client");
+    assert!(b.is_over());
+    let listed: Vec<(u64, u64)> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::Listed(l) => Some(l.iter().map(|w| (w.serial, w.flags)).collect::<Vec<_>>()),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    assert_eq!(listed, vec![(0, 4)], "serial 0, flag local");
+    assert_eq!(
+        received(&events),
+        vec![(None, to_facundo)],
+        "taken without a serial"
+    );
+}
+
+/// RP-7 §4.4, `local-delivery.json`: who is a cut-off gateway's local user (a copy placed ahead
+/// there in the last 30 days), and the local recipients each case's message is kept for.
+#[test]
+fn local_users_and_the_mail_kept_for_them() {
+    use radiopost::session::gateway::{is_local, local_recipients};
+    let file = vectors("local-delivery.json");
+    let context = &file["context"];
+    let now = context["now"].as_u64().expect("now");
+    let seen: std::collections::BTreeMap<String, u64> = context["copies_seen"]
+        .as_object()
+        .expect("copies seen")
+        .iter()
+        .map(|(a, t)| (a.clone(), t.as_u64().expect("a time")))
+        .collect();
+    assert!(
+        is_local(&seen, "Ana@HamPost.org", now),
+        "29 days ago, any case"
+    );
+    assert!(!is_local(&seen, "kq4sax@radiopost.org", now), "31 days ago");
+    assert!(!is_local(&seen, "maria@example.com", now), "never");
+    let cases = file["cases"].as_array().expect("cases");
+    assert_eq!(cases.len(), 6);
+    for case in cases {
+        let message = Message::from_canonical(&unhex(case["message_hex"].as_str().expect("hex")))
+            .expect("a message");
+        let expect: Vec<String> = case["expect"]
+            .as_array()
+            .expect("expect")
+            .iter()
+            .filter_map(|a| a.as_str().map(str::to_owned))
+            .collect();
+        assert_eq!(
+            local_recipients(&message, &seen, now),
+            expect,
+            "{}",
+            case["what"]
+        );
+    }
 }

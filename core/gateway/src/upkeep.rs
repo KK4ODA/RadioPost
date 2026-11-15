@@ -521,6 +521,14 @@ fn take_answer(
                 ));
             }
         }
+        // its messages reached their post office: what was kept for local users comes back as
+        // copies placed ahead from now on (RP-7 §4.4)
+        let reported: Vec<String> = s.records[i]
+            .messages
+            .iter()
+            .map(|(m, _)| m.clone())
+            .collect();
+        s.local.retain(|l| !reported.contains(&l.id));
         s.records.remove(i);
         s.reported.push(entry);
     }

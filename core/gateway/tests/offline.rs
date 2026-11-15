@@ -285,3 +285,138 @@ fn copies_offline_sessions_reports_and_queued_mail() {
     assert!(user.outbox.is_empty() && user.queued.is_empty());
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// RP-7 §4.4 end to end (wishlist W31): two users of KK4ODA-1, each with copies placed ahead
+/// there, so both local users. While it is cut off, Jose hands it a message for WD5EMA; when
+/// WD5EMA calls, it comes at once, without a serial, though neither post office has seen it. The
+/// Internet comes back: the gateway reports both sessions, WD5EMA's with the local pickup, and
+/// the post office marks the message picked up for them, so it is not offered again.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn neighbours_exchange_mail_through_a_cut_off_gateway() {
+    let dir = scratch("local");
+    let port = TcpListener::bind("127.0.0.1:0")
+        .and_then(|l| l.local_addr())
+        .expect("a free port")
+        .port();
+    let internet = Internet::new(SocketAddr::from(([127, 0, 0, 1], port)));
+    let base = format!("http://{}", internet.at);
+    let (running, _, po_key) = post_office_at(&dir.join("po"), port, &base);
+    let (_air, at_user, at_one, _at_two) = air();
+    let (one, _one_says) = gateway(&dir, "KK4ODA-1", at_one, &base, &running, &po_key);
+    until(&one, "the post office's keys kept", |h| {
+        h.keys.contains_key("test.example")
+    });
+
+    // both name KK4ODA-1 as usual, and mail arrives for each: copied ahead, so both are local
+    let mut users = Vec::new();
+    for (home, address, call) in [
+        ("wd5ema", "club@test.example", "WD5EMA"),
+        ("kk4odb", "jose@test.example", "KK4ODB"),
+    ] {
+        let mut user = client(&dir.join(home), &running, &po_key, address, call);
+        user.post_office = Some(base.clone());
+        user.save().expect("saved");
+        radiopost_client::online::settings(&user, Some(&json!({"usual_gateways": ["KK4ODA-1"]})))
+            .expect("settings saved at the post office");
+        running
+            .email_in(
+                "maria@example.com",
+                &[address.to_owned()],
+                format!(
+                    "From: maria@example.com\r\nTo: {address}\r\nSubject: For {call}\r\n\
+                     Date: Fri, 13 Nov 2026 10:00:00 +0000\r\nMessage-ID: <{call}.1@example.com>\r\n\
+                     \r\nHello.\r\n"
+                )
+                .as_bytes(),
+            )
+            .expect("taken");
+        users.push(user);
+    }
+    until(&one, "a copy held for each", |h| {
+        h.copies_seen.contains_key("club@test.example")
+            && h.copies_seen.contains_key("jose@test.example")
+    });
+
+    internet.cut();
+
+    // Jose hands KK4ODA-1 a message for WD5EMA: queued, and kept for WD5EMA, a local user
+    let note = draft(
+        "jose@test.example",
+        "club@test.example",
+        "Generator",
+        "The shelter's generator needs a spark plug.\n",
+    );
+    let jose = &mut users[1];
+    let note_id = jose.queue(&note).expect("queued");
+    let mut said = Vec::new();
+    let report = session::call(
+        jose,
+        "KK4ODA-1",
+        Kind::Gateway,
+        &Options::new(&at_user.to_string()),
+        &mut |s| said.push(s.to_owned()),
+    )
+    .expect("called");
+    assert_eq!(report.failed, None, "{said:?}");
+    assert_eq!(report.queued, [note_id], "{said:?}");
+    until(&one, "kept for WD5EMA", |h| {
+        h.local
+            .iter()
+            .any(|l| l.address == "club@test.example" && l.id == note_id.text())
+    });
+
+    // WD5EMA calls: Jose's message comes at once, with their own copy
+    let wd5ema = &mut users[0];
+    let mut said = Vec::new();
+    let report = session::call(
+        wd5ema,
+        "KK4ODA-1",
+        Kind::Gateway,
+        &Options::new(&at_user.to_string()),
+        &mut |s| said.push(s.to_owned()),
+    )
+    .expect("called");
+    assert_eq!(report.failed, None, "{said:?}");
+    assert!(report.received.contains(&note_id), "{said:?}");
+    assert_eq!(
+        report.received.len(),
+        2,
+        "the local message and the copy: {said:?}"
+    );
+    let home = Store::open(&dir.join("wd5ema")).expect("the home");
+    assert!(
+        home.waiting_entries().is_empty(),
+        "nothing left waiting: the local message came by content ID"
+    );
+    until(&one, "the local pickup kept", |h| {
+        h.records.iter().any(|r| {
+            r.address == "club@test.example" && r.done && r.local_pickups == [note_id.text()]
+        })
+    });
+    assert!(
+        !running.office().state.had.contains(&note_id.text()),
+        "the post office has not seen it"
+    );
+
+    // the Internet comes back: both reported; the post office has the message, picked up
+    internet.restore();
+    until(&one, "both records reported", |h| h.records.is_empty());
+    let office = running.office();
+    assert!(office.state.had.contains(&note_id.text()));
+    let theirs: Vec<bool> = office.state.mailboxes["club@test.example"]
+        .iter()
+        .filter(|w| w.id == note_id.text())
+        .map(|w| w.picked)
+        .collect();
+    assert_eq!(
+        theirs,
+        [true],
+        "marked picked up for WD5EMA, not offered again"
+    );
+    drop(office);
+    until(&one, "nothing kept locally once reported", |h| {
+        h.local.is_empty()
+    });
+    let _ = std::fs::remove_dir_all(dir);
+}

@@ -51,6 +51,21 @@ pub trait Upstream {
     /// # Errors
     /// The code the post office answered with.
     fn picked_up(&mut self, serials: &[u64]) -> Result<(), ErrorCode>;
+    /// A local message's air form, by content ID (RP-7 §4.4): only a cut-off gateway holds any.
+    ///
+    /// # Errors
+    /// `unknown-message` when it holds no such message.
+    fn fetch_local(&mut self, _id: &ContentId) -> Result<Vec<u8>, ErrorCode> {
+        Err(ErrorCode::UnknownMessage)
+    }
+    /// Local messages the user picked up, by content ID (RP-7 §4.4): kept in the user's session
+    /// record as its local pickups.
+    ///
+    /// # Errors
+    /// The pickups could not be kept.
+    fn picked_up_local(&mut self, _ids: &[ContentId]) -> Result<(), ErrorCode> {
+        Ok(())
+    }
     /// Held attachments the user asked for, each by its message's serial and its `ref`
     /// (RP-5 §5.3): the post office puts them in the mailbox as new messages (RP-6 §2.5).
     ///
@@ -94,6 +109,36 @@ pub struct GatewayConfig {
     /// Callers its operator refuses: addresses, and callsigns, a callsign without an SSID
     /// refusing every SSID of it ([`refused_caller`]).
     pub refused: Vec<String>,
+}
+
+/// How long a copy placed ahead makes its user local at a cut-off gateway (RP-7 §4.4): 30 days.
+pub const LOCAL_FOR_S: u64 = 30 * 86_400;
+
+/// Whether `address` is a local user of a cut-off gateway at `now` (RP-7 §4.4): a copy placed
+/// ahead for it arrived there in the last 30 days, `seen` giving when the last one did, by
+/// address in lowercase.
+#[must_use]
+pub fn is_local(seen: &std::collections::BTreeMap<String, u64>, address: &str, now: u64) -> bool {
+    seen.get(&address.to_lowercase())
+        .is_some_and(|at| now.saturating_sub(*at) < LOCAL_FOR_S)
+}
+
+/// The local users a message handed to a cut-off gateway is kept for (RP-7 §4.4): its `to` and
+/// `cc` that are local, in that order, each once, in lowercase.
+#[must_use]
+pub fn local_recipients(
+    message: &Message,
+    seen: &std::collections::BTreeMap<String, u64>,
+    now: u64,
+) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for r in message.recipients() {
+        let r = r.to_lowercase();
+        if is_local(seen, &r, now) && !out.contains(&r) {
+            out.push(r);
+        }
+    }
+    out
 }
 
 /// The entry of `refused` that refuses a caller with this address and this callsign, if any: an
@@ -150,11 +195,13 @@ enum State {
     Over,
 }
 
-/// A message the post office listed for the caller: its serial, content ID and size.
+/// A message the post office listed for the caller: its serial and content ID, and whether it
+/// is local (RP-7 §4.4: serial 0, sent and picked up by content ID).
 #[derive(Clone, Debug)]
 struct Listed {
     serial: u64,
     id: ContentId,
+    local: bool,
 }
 
 /// The gateway's side of one session.
@@ -170,7 +217,8 @@ pub struct Gateway {
     address: String,
     caller_caps: Caps,
     listed: Vec<Listed>,
-    sent: Vec<u64>,
+    /// The content IDs of the listed messages sent.
+    sent: Vec<ContentId>,
     finished: Vec<(ContentId, Vec<u8>)>,
     receipts: Receipts,
     events: Vec<Event>,
@@ -191,13 +239,18 @@ fn entry_of(e: &Json) -> Option<(WaitingEntry, bool)> {
     if e.get("copy").and_then(Json::as_bool) == Some(true) {
         f |= flags::COPY;
     }
+    let local = e.get("local").and_then(Json::as_bool) == Some(true);
+    if local {
+        f |= flags::LOCAL;
+    }
     if third {
         f |= flags::THIRD_PARTY;
     }
     let id = ContentId::from_text(e.get("id")?.as_str()?)?;
     Some((
         WaitingEntry {
-            serial: e.get("serial")?.as_u64()?,
+            // a local message has no serial (RP-7 §4.4)
+            serial: if local { 0 } else { e.get("serial")?.as_u64()? },
             id,
             from: e.get("from")?.as_str()?.to_owned(),
             subject: super::subject40(e.get("subject").and_then(Json::as_str).unwrap_or("")),
@@ -353,9 +406,11 @@ impl Gateway {
                         _ => None,
                     })
                     .collect();
-                self.answer(&asked, &files, true);
+                // RP-3 §5.6 key 4: local messages, by content ID (RP-7 §4.4)
+                let ids = listed_ids(pdu.get(4));
+                self.answer(&asked, &ids, &files, true);
             }
-            (State::Exchange, Some(kind::DONE)) => self.answer(&[], &[], false),
+            (State::Exchange, Some(kind::DONE)) => self.answer(&[], &[], &[], false),
             (_, Some(kind::ERROR)) => {
                 let code = pdu
                     .get(1)
@@ -586,6 +641,7 @@ impl Gateway {
             self.listed.push(Listed {
                 serial: entry.serial,
                 id: entry.id,
+                local: entry.flags & flags::LOCAL != 0,
             });
             entries.push(entry);
         }
@@ -667,7 +723,7 @@ impl Gateway {
         for e in &entries {
             let resume = partials.iter().find(|(id, _)| *id == e.id).map(|(_, o)| *o);
             if e.size <= auto || resume.is_some() {
-                pdus.extend(self.message_pdus(e.serial, resume.unwrap_or(0)));
+                pdus.extend(self.message_pdus(&e.id, resume.unwrap_or(0)));
             }
         }
         pdus.push(done());
@@ -696,12 +752,21 @@ impl Gateway {
             .collect()
     }
 
-    /// A waiting message's `MSG` pieces from `offset`, fetched from the post office.
-    fn message_pdus(&mut self, serial: u64, offset: u64) -> Vec<Value> {
+    /// A listed message's `MSG` pieces from `offset`, fetched from the post office, or, for a
+    /// local message, from the gateway's own store and sent without a serial (RP-7 §4.4).
+    fn message_pdus(&mut self, id: &ContentId, offset: u64) -> Vec<Value> {
+        let Some(listed) = self.listed.iter().find(|l| l.id == *id).cloned() else {
+            return Vec::new();
+        };
         let Some(up) = self.upstream.as_mut() else {
             return Vec::new();
         };
-        let Ok(air) = up.fetch(serial) else {
+        let fetched = if listed.local {
+            up.fetch_local(id)
+        } else {
+            up.fetch(listed.serial)
+        };
+        let Ok(air) = fetched else {
             return Vec::new();
         };
         let Ok(message) = Message::from_air(&air) else {
@@ -709,9 +774,14 @@ impl Gateway {
         };
         // the post office's air form, as it made it once (RP-5 §5.3)
         let out = Outgoing { message, air };
-        self.sent.push(serial);
+        self.sent.push(*id);
         let piece = piece_for(self.caller_caps.max_pdu, self.cfg.piece);
-        msg_pdus(&out, offset, piece, Some(serial))
+        msg_pdus(
+            &out,
+            offset,
+            piece,
+            (!listed.local).then_some(listed.serial),
+        )
     }
 
     fn msg(&mut self, pdu: &Value) {
@@ -734,26 +804,43 @@ impl Gateway {
         }
     }
 
-    /// The caller's `RECEIPT`: what it picked up, reported to the post office (RP-5 §5.5).
+    /// The caller's `RECEIPT`: what it picked up, reported to the post office (RP-5 §5.5); local
+    /// messages kept as local pickups (RP-7 §4.4).
     fn picked(&mut self, pdu: &Value) {
-        let serials: Vec<u64> = listed_ids(pdu.get(1))
+        let complete = listed_ids(pdu.get(1));
+        let picked: Vec<Listed> = complete
             .iter()
             .filter_map(|id| self.listed.iter().find(|l| l.id == *id))
+            .cloned()
+            .collect();
+        let serials: Vec<u64> = picked
+            .iter()
+            .filter(|l| !l.local)
             .map(|l| l.serial)
             .collect();
-        for id in listed_ids(pdu.get(1)) {
+        let local: Vec<ContentId> = picked.iter().filter(|l| l.local).map(|l| l.id).collect();
+        for id in complete {
             self.events.push(Event::Delivered(id));
         }
-        if !serials.is_empty()
-            && let Some(up) = self.upstream.as_mut()
-        {
-            let _ = up.picked_up(&serials);
+        if let Some(up) = self.upstream.as_mut() {
+            if !serials.is_empty() {
+                let _ = up.picked_up(&serials);
+            }
+            if !local.is_empty() {
+                let _ = up.picked_up_local(&local);
+            }
         }
     }
 
     /// The caller's turn ended with `DONE` or `REQUEST`: its mail handed in and receipted, then
     /// what it asked for, a `NOTICE` saying how its held attachments were asked for, and `DONE`.
-    fn answer(&mut self, asked: &[u64], files: &[(u64, Vec<u8>)], requested: bool) {
+    fn answer(
+        &mut self,
+        asked: &[u64],
+        asked_ids: &[ContentId],
+        files: &[(u64, Vec<u8>)],
+        requested: bool,
+    ) {
         let finished = std::mem::take(&mut self.finished);
         if !finished.is_empty() {
             let results = match self.upstream.as_mut() {
@@ -785,10 +872,22 @@ impl Gateway {
         }
         let mut pdus: Vec<Value> = self.receipts.take_pdu().into_iter().collect();
         if requested {
-            for serial in asked {
-                if self.listed.iter().any(|l| l.serial == *serial) && !self.sent.contains(serial) {
-                    pdus.extend(self.message_pdus(*serial, 0));
-                }
+            // by serial what the post office listed, and by content ID what is local (§5.6)
+            let wanted: Vec<ContentId> = self
+                .listed
+                .iter()
+                .filter(|l| {
+                    if l.local {
+                        asked_ids.contains(&l.id)
+                    } else {
+                        asked.contains(&l.serial)
+                    }
+                })
+                .map(|l| l.id)
+                .filter(|id| !self.sent.contains(id))
+                .collect();
+            for id in wanted {
+                pdus.extend(self.message_pdus(&id, 0));
             }
             if !files.is_empty() {
                 let result = match self.upstream.as_mut() {

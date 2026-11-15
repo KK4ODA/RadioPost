@@ -712,7 +712,8 @@ fn remember_gateway(store: &mut Store, remote: &str, cursor: u64, stats: &Sessio
     if let Some(online) = stats.online {
         store.set_gateway_online(remote, online);
     }
-    store.listed(remote, stats.now, &stats.listed, &stats.came);
+    let came: Vec<ContentId> = stats.received.iter().map(|(id, _)| *id).collect();
+    store.listed(remote, stats.now, &stats.listed, &came);
 }
 
 /// A message the other station took: sent, or queued when a cut-off gateway took it (RP-7
@@ -995,20 +996,21 @@ pub fn call(
 }
 
 /// What the user fetches of what waits: all, what is no larger than a size, or nothing, and
-/// whatever they marked to fetch from the last call's waiting list.
+/// whatever they marked to fetch from the last call's waiting list (a local message, which has no
+/// serial, follows the choice of what to fetch: RP-7 §4.4).
 fn chooser(fetch: Fetch, marked: Vec<u64>) -> Chooser {
     Box::new(move |entries: &[WaitingEntry]| {
         entries
             .iter()
             .filter(|e| {
-                marked.contains(&e.serial)
+                (e.serial != 0 && marked.contains(&e.serial))
                     || match fetch {
                         Fetch::All => true,
                         Fetch::UpTo(n) => e.size <= n,
                         Fetch::Nothing => false,
                     }
             })
-            .map(|e| e.serial)
+            .map(|e| e.id)
             .collect()
     })
 }

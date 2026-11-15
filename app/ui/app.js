@@ -431,6 +431,12 @@ async function openWaiting() {
     box.type = "checkbox";
     box.checked = e.fetch;
     box.title = "Fetch it on the next call to a gateway";
+    // a local message, handed over by a gateway cut off from the Internet, has no serial: it comes
+    // with what you choose to fetch (RP-7 §4.4)
+    if (e.local) {
+      box.disabled = true;
+      box.title = "Handed over by the gateway while it was cut off: it comes with what you fetch";
+    }
     box.addEventListener("change", async () => {
       try {
         await api("fetch", {serial: e.serial, on: box.checked});
@@ -447,7 +453,7 @@ async function openWaiting() {
       if (i === 3) td.className = "n";
       tr.append(td);
     });
-    tr.title = `#${e.serial}${e.third_party ? " · third-party traffic" : ""}`;
+    tr.title = `${e.local ? "kept for you at the gateway" : `#${e.serial}`}${e.third_party ? " · third-party traffic" : ""}`;
     return tr;
   }));
   show("waiting-view");

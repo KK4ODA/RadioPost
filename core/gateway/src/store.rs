@@ -72,6 +72,40 @@ impl Copy {
     }
 }
 
+/// A message a user handed the gateway while it was cut off, kept for a local user it names
+/// (RP-7 §4.4): listed to that user with serial 0 and the flag `local`, and sent by content ID.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Local {
+    /// The local user it is kept for.
+    pub address: String,
+    /// Its content ID, base32.
+    pub id: String,
+    /// Its air form, base64url, as the sender handed it.
+    pub air: String,
+    /// The sender.
+    pub from: String,
+    /// The subject.
+    pub subject: String,
+    /// Its air form's size.
+    pub size: u64,
+    /// Its priority.
+    pub priority: u64,
+    /// When it was kept.
+    pub kept: u64,
+    /// Picked up here: no longer listed to this user.
+    pub picked: bool,
+}
+
+impl Local {
+    /// The entry an offline session lists (RP-3 §5.2, RP-7 §4.4): serial 0, the flag `local`.
+    #[must_use]
+    pub fn entry(&self) -> Json {
+        json!({"serial": 0, "id": self.id, "from": self.from, "subject": self.subject,
+               "size": self.size, "priority": self.priority, "local": true})
+    }
+}
+
 /// A post office the gateway polls for copies (RP-5 §5.8).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -115,6 +149,8 @@ pub struct Record {
     pub messages: Vec<(String, String)>,
     /// The serials it picked up from copies.
     pub pickups: Vec<u64>,
+    /// The content IDs of the local messages it picked up (RP-7 §4.4), base32.
+    pub local_pickups: Vec<String>,
     /// The session is over: the record is whole and may be reported.
     pub done: bool,
     /// Tries at reporting it that failed, and why the last did.
@@ -127,20 +163,24 @@ impl Record {
     /// Its entry in `POST /reports` (RP-5 §5.6).
     #[must_use]
     pub fn report(&self) -> Json {
-        json!({
+        let mut report = json!({
             "statement": self.statement, "signature": self.signature,
             "credential": self.credential, "started": self.started,
             "gateway_session": self.gateway_session, "cursor": self.cursor,
             "messages": self.messages.iter()
                 .map(|(id, air)| json!({"id": id, "air": air})).collect::<Vec<_>>(),
             "pickups": self.pickups,
-        })
+        });
+        if !self.local_pickups.is_empty() {
+            report["local_pickups"] = json!(self.local_pickups);
+        }
+        report
     }
 
     /// Nothing to report: no message and no pickup.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.messages.is_empty() && self.pickups.is_empty()
+        self.messages.is_empty() && self.pickups.is_empty() && self.local_pickups.is_empty()
     }
 }
 
@@ -200,6 +240,15 @@ pub struct Store {
     /// Post offices whose users called since the upkeep last looked: their documents fetched when
     /// not held, and asked whether they place copies here (RP-1 §7.3, RP-5 §5.8).
     pub learn: Vec<String>,
+    /// When a copy placed ahead last arrived for each address, in lowercase: who its local users
+    /// are (RP-7 §4.4).
+    pub copies_seen: BTreeMap<String, u64>,
+    /// Local messages kept for local users while cut off (RP-7 §4.4).
+    pub local: Vec<Local>,
+}
+
+fn address_of(item: &Json) -> String {
+    item["address"].as_str().unwrap_or("").to_lowercase()
 }
 
 /// Reports kept for the panel.
@@ -226,6 +275,17 @@ impl Store {
     /// applied, forward items kept; the copies of at most `users` users. Returns how many copies
     /// were kept and dropped.
     pub fn apply(&mut self, by: &str, items: &[Json], users: Option<u64>) -> (usize, usize) {
+        self.apply_at(by, items, users, crate::station::now())
+    }
+
+    /// [`Store::apply`] at `now`: a copy kept makes its user local from then (RP-7 §4.4).
+    pub fn apply_at(
+        &mut self,
+        by: &str,
+        items: &[Json],
+        users: Option<u64>,
+        now: u64,
+    ) -> (usize, usize) {
         let (mut kept, mut dropped) = (0, 0);
         for item in items {
             let address = item["address"].as_str().unwrap_or("").to_lowercase();
@@ -259,6 +319,7 @@ impl Store {
                         by: by.to_owned(),
                         picked: false,
                     });
+                    self.copies_seen.insert(address_of(item), now);
                     kept += 1;
                 }
                 Some("drop") => {
@@ -304,6 +365,11 @@ impl Store {
         });
         self.passed_on
             .retain(|_, at| now.saturating_sub(*at) < KEEP_S);
+        // a local user is one with a copy in the last 30 days; what was kept for them goes after
+        // as long as a record is kept (RP-7 §4.4)
+        self.copies_seen
+            .retain(|_, at| now.saturating_sub(*at) < radiopost::session::gateway::LOCAL_FOR_S);
+        self.local.retain(|l| now.saturating_sub(l.kept) < KEEP_S);
         self.replay
             .retain(|(_, _, t)| now.saturating_sub(*t) < REPLAY_S);
         said
@@ -316,6 +382,17 @@ impl Store {
         users.sort();
         users.dedup();
         users
+    }
+
+    /// The local messages an offline session lists for `address`: not picked up here, in the
+    /// order kept (RP-7 §4.4).
+    #[must_use]
+    pub fn local_for(&self, address: &str) -> Vec<Local> {
+        self.local
+            .iter()
+            .filter(|l| l.address.eq_ignore_ascii_case(address) && !l.picked)
+            .cloned()
+            .collect()
     }
 
     /// The copies an offline session lists for `address`: not picked up here, oldest serial

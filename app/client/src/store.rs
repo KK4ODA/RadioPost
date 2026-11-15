@@ -1084,24 +1084,26 @@ impl Store {
     }
 
     /// What a call to `gateway` at `at` found waiting (RP-5 §5.2's entries), less what came in
-    /// it: kept as the waiting list, and the serials that came no longer asked for.
+    /// it (`came`, by content ID: a local message has no serial, RP-7 §4.4): kept as the waiting
+    /// list, and the serials that came no longer asked for.
     pub fn listed(
         &mut self,
         gateway: &str,
         at: u64,
         entries: &[radiopost::session::WaitingEntry],
-        came: &[u64],
+        came: &[ContentId],
     ) {
         use radiopost::session::flags;
         let left: Vec<Value> = entries
             .iter()
-            .filter(|e| !came.contains(&e.serial))
+            .filter(|e| !came.contains(&e.id))
             .map(|e| {
                 json!({
                     "serial": e.serial, "id": e.id.text(), "from": e.from, "subject": e.subject,
                     "size": e.size, "priority": e.priority,
                     "held": e.flags & flags::HELD != 0,
                     "third_party": e.flags & flags::THIRD_PARTY != 0,
+                    "local": e.flags & flags::LOCAL != 0,
                 })
             })
             .collect();

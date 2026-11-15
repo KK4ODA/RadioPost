@@ -47,10 +47,22 @@ pub struct ClientConfig {
     pub station: Option<Trust>,
 }
 
-/// Which waiting messages to ask for, from those that will not come unasked. The client cannot
-/// stop to ask its user mid-turn, so this is the user's standing choice (for example: everything
-/// up to some size, or what the user marked in the last listing).
-pub type Chooser = Box<dyn FnMut(&[WaitingEntry]) -> Vec<u64> + Send>;
+/// Which waiting messages to ask for, from those that will not come unasked, by content ID: a
+/// local message has no serial (RP-7 §4.4). The client cannot stop to ask its user mid-turn, so
+/// this is the user's standing choice (for example: everything up to some size, or what the user
+/// marked in the last listing).
+pub type Chooser = Box<dyn FnMut(&[WaitingEntry]) -> Vec<ContentId> + Send>;
+
+/// A chooser that asks for the waiting messages with these serials.
+pub fn by_serials(serials: Vec<u64>) -> Chooser {
+    Box::new(move |entries: &[WaitingEntry]| {
+        entries
+            .iter()
+            .filter(|e| e.serial != 0 && serials.contains(&e.serial))
+            .map(|e| e.id)
+            .collect()
+    })
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum State {
@@ -85,6 +97,8 @@ pub struct Client {
     to_send: Option<Vec<(usize, u64)>>,
     peer_caps: Caps,
     requests: Vec<u64>,
+    /// Local messages asked for by content ID (RP-3 §5.6 `ids`, RP-7 §4.4).
+    request_ids: Vec<ContentId>,
     /// Held attachments to ask for (RP-3 §5.6 `files`), whether the `REQUEST` carrying them went,
     /// and whether the gateway's `DONE` answered it.
     files: Vec<(u64, Vec<u8>)>,
@@ -121,6 +135,7 @@ impl Client {
             to_send: None,
             peer_caps: Caps::from_value(None),
             requests: Vec::new(),
+            request_ids: Vec::new(),
             files: Vec::new(),
             files_asked: FilesAsked::Not,
             awaiting_done: false,
@@ -436,17 +451,22 @@ impl Client {
             .cloned()
             .collect();
         let chosen = (self.choose)(&asked);
+        // a local message, listed with serial 0, is asked for by its content ID (RP-7 §4.4)
+        let is_local = |w: &WaitingEntry| w.flags & super::flags::LOCAL != 0;
         self.requests = asked
             .iter()
+            .filter(|w| chosen.contains(&w.id) && !is_local(w))
             .map(|w| w.serial)
-            .filter(|s| chosen.contains(s))
+            .collect();
+        self.request_ids = asked
+            .iter()
+            .filter(|w| chosen.contains(&w.id) && is_local(w))
+            .map(|w| w.id)
             .collect();
         // what will come: unasked what fits `auto` and the rest of what is held in part (RP-3
         // §5.2), and what is asked for
         for w in &waiting {
-            if (w.size <= self.cfg.auto && !held.contains(&w.id))
-                || self.requests.contains(&w.serial)
-            {
+            if (w.size <= self.cfg.auto && !held.contains(&w.id)) || chosen.contains(&w.id) {
                 self.progress.will_receive(w.id, w.size, 0);
             }
         }
@@ -537,7 +557,7 @@ impl Client {
             } else {
                 Vec::new()
             };
-            if self.requests.is_empty() && files.is_empty() {
+            if self.requests.is_empty() && self.request_ids.is_empty() && files.is_empty() {
                 pdus.push(done());
                 self.sent_done = true;
             } else {
@@ -545,6 +565,14 @@ impl Client {
                 if !self.requests.is_empty() {
                     let serials = self.requests.iter().map(|s| Value::Uint(*s)).collect();
                     request.push((1, Value::Array(serials)));
+                }
+                if !self.request_ids.is_empty() {
+                    let ids = self
+                        .request_ids
+                        .iter()
+                        .map(|id| Value::bytes(id.as_bytes()))
+                        .collect();
+                    request.push((4, Value::Array(ids)));
                 }
                 if !files.is_empty() {
                     let asked = files

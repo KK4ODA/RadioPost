@@ -148,7 +148,7 @@ pub fn session_01_client(w: &World) -> Client {
         piece: 4096,
         station: None,
     };
-    Client::new(cfg, Box::new(|_| vec![420])).expect("a client")
+    Client::new(cfg, radiopost::session::client::by_serials(vec![420])).expect("a client")
 }
 
 /// Facundo calling Ana's station in session-03.
@@ -169,7 +169,7 @@ pub fn session_03_caller(w: &World) -> Client {
         piece: 4096,
         station: Some(w.trust.clone()),
     };
-    Client::new(cfg, Box::new(|_| vec![])).expect("a client")
+    Client::new(cfg, radiopost::session::client::by_serials(vec![])).expect("a client")
 }
 
 /// Ana's station in session-03, with a note for Facundo.
