@@ -220,19 +220,45 @@ here.
   went. The **Held** list shows a session that came from a partner with *via* and the partner's
   callsign.
 
+* **Your windows** (RP-7 §5). A window is when partners may call this gateway: a channel, and a
+  time that comes round every hour or every few hours. In the **Partners** view, under
+  **Windows**, give the dial in MHz (upper sideband), Aether's bandwidth, how often, when it opens
+  (UTC; every hour, only the minutes count) and for how many minutes, and **Add** (the gateway
+  stopped). A window is accepted only when Aether's signal on it lies inside one segment where
+  the rules let an unattended station start a data transmission (RP-7 §5.1; in the United States
+  §97.221(b): 80 m 3.585–3.600 MHz, 40 m 7.100–7.105, 30 m 10.140–10.150, 20 m 14.0950–14.0995 and
+  14.1005–14.1120, 17 m 18.105–18.110, 15 m 21.090–21.100, 12 m 24.925–24.930, 10 m 28.120–28.189,
+  and 6 m and up). On 40 m that leaves dials from 7.0998 to 7.1022 MHz for the 2 300 Hz signal.
+  Partners read your windows from your record at your post office: **register again** in Setup
+  after a change. During a window, leave the radio on its channel.
+* **Calling by itself.** While the gateway answers and cannot reach its own post office, it calls
+  each partner inside that partner's windows: once, then, if nobody answers, twice more a minute
+  apart, then it waits for the next window. It never calls while Aether reports the channel busy.
+  It reads its partners' windows from the gateway lists of the post offices it knows, fetched
+  every six hours while it has partners and kept for when the Internet is down; a window a
+  partner published after the last fetch is not known until the next. The Partners list shows
+  each partner's next window. It does not retune the radio: a partner's window must be on the
+  channel this gateway's radio is on.
+* **Which partner gets the queue** (RP-7 §6.2). The gateway remembers whether each partner
+  reached the Internet at its last call. In the window of a partner that did not, it hands that
+  partner its queue only if no partner that did opens a window within the hour; otherwise it
+  calls only to collect its users' mail, and keeps the queue for the better partner. A partner
+  it never called counts as neither.
+
 On the command line: `radiopost-gateway partner --add N1CALL-10` (or `--remove`),
 `radiopost-gateway partners`, and `radiopost-gateway forward --to N1CALL-10`, which opens the
-modem, calls once and closes it, for a gateway that is not answering calls.
-
-Calling a partner by itself in its window, and choosing which partner, come in a later version
-(RP-7 §5, §6).
+modem, calls once and closes it, for a gateway that is not answering calls (an operator at the
+radio may call a partner at any time). `radiopost-gateway window --dial 7.101 --bandwidth 2300
+--every 3600 --at 900 --length 600` adds a window opening at a quarter past every hour for ten
+minutes, `windows` lists them with whether each may be published, and `window --remove 1` takes
+the first off.
 
 ## 5. The rules
 
 * **Control.** A gateway left answering with nobody at the radio is under **automatic control**.
   Set Aether's control to Automatic: Aether then transmits only in the segments where automatic
   control is allowed (§97.221(b)) and refuses anywhere else, so register channels in those
-  segments. While you are at the radio, local control is yours to choose.
+  segments, and windows too (§4). While you are at the radio, local control is yours to choose.
 * **Identification.** Aether sends the gateway's Morse identifier at the end of each session.
 * **No encryption.** RadioPost signs; it never encrypts (RP-0 §5).
 * **Third-party traffic.** The post office marks mail that is third-party traffic, and the gateway

@@ -240,8 +240,29 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   never reaches the post office after registering: restarting a gateway in one process leaves its
   old poller's last long poll in flight, which the post office rightly takes as the gateway being
   back. P-06's forward items run with `--slow` (a real 15-minute wait); the post office's driver
-  has `route`. A `via` gateway polls only if it holds copies until stage 5 adds windows (RP-5
-  §5.8: copies, or `forwarding` windows in its record).
+  has `route`. A `via` gateway polls when it holds copies or publishes windows (RP-5 §5.8,
+  `Settings::polls`).
+  Windows, routes and calls by itself (W30 stage 5, RP-7 §5, §6): `radiopost::forwarding` has
+  `Window` (`next`, `is_open`), `segments(country)` (RP-7 §5.1's US table), `window_allowed`,
+  `occupied` (Aether's audio span, or an FM channel) and `records_to` (§6.2's choice), replayed
+  against `forwarding.json`'s window and partner cases. The gateway keeps its own windows in
+  `Settings.windows` (`WindowSettings::refused` says why one may not be published; the `window`
+  command and the panel's `/api/windows` refuse those) and registers the allowed ones in its
+  record's `forwarding`. Its partners' windows come from the gateway lists of the post offices
+  it trusts (`upkeep::refresh_lists`, every six hours while it has partners, kept in
+  `Store.lists`, read by `Store::record_of`). The answering loop's `calls_between_sessions` runs
+  `forward::Caller::due` every 5 s: only while cut off (`Station::cut_off`, a login at its own
+  post office, kept 60 s), in an open window, three tries a minute apart, never while the modem
+  says busy; `records_to` decides whether the call forwards the queue or only collects mail. The
+  post office publishes its routes at `GET /routes`. F-01 to F-06 are in
+  `core/tester/src/forwarding.rs`: the tester plays the partners, the test adapter reads the calls
+  a program places (`TestAdapter::calls_to`, from `rpmi::channel::Channel::placed`) and makes the
+  channel busy with two bystander stations (`TestAdapter::busy`); the gateway's driver has
+  `partner`, `window`, `register` and `forward`. F-01 (7 minutes) and F-05's calls run with
+  `--slow`. A test that stops `serve` right after a session waits for it to be stored (`stop`).
+  `plant.py` touches every file a fault names in each copy: copied files keep their times, and
+  cargo had reused an earlier fault's library. The first trial on the air has its guide,
+  `docs/user/on-air-forwarding.md`.
   The client's gateway side: `online::gateways` fetches RP-5 §4.4's list, its JWS checked with the
   keys the home trusts for the user's domain (and those its signed `info` adds, RP-1 §7.2), and
   keeps it in `state.json` for when there is no Internet; `grid.rs` ranks it by distance from the

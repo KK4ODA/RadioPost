@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.8.0 |
+| **Version** | 0.9.0 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -229,7 +229,7 @@ RP-0 §3: RP-4, the adapter's side.
 | 1 | The test adapter (and with it the loopback adapter); conformance mode; C-01 to C-08 and C-11; A-01 to A-04 against the TCP adapter. | Client, modem adapter |
 | 2 | The test post office; G-01, G-02, G-04, G-07, G-08, G-09; P-01 to P-04 and P-07 to P-10; C-12 (built: G-09 checks DNS online, the one hop of lists being for a gateway offline, Phase 3; P-08 leaves out the case of the vectors' own `max_email_bytes`). | Gateway, online; post office |
 | 3 | C-09, C-10; G-03, G-05, G-06; P-05, P-06 (built, all of them; P-06's forward items wait 15 minutes for a gateway to count as cut off, so they run with `--slow`, and need the driver's `route` command). | Offline |
-| 4 | F-01 to F-06. | Forwarding gateway |
+| 4 | F-01 to F-06 (built; F-01 and F-05's calls wait for partners' windows, so they run with `--slow`; the gateway's driver gains `partner`, `window`, `register` and `forward`). | Forwarding gateway |
 | 5 | A-05, and A-01 to A-04 for each new adapter. | More adapters |
 
 ---
@@ -257,3 +257,4 @@ RP-0 §3: RP-4, the adapter's side.
 | 0.6.0 | 2026-11-15 | Local delivery's tests built (§6, RP-7 §4.4): C-10 (a client takes local mail without a serial, one sent unasked and one asked for by content ID), G-06 (a cut-off gateway lists mail for a local user with serial 0 and the flag `local`, sends it by content ID, and reports the pickup), and P-05's local pickups (reported before the message, marked once the post office holds it). Each shown failing on a planted fault; `plant.py` takes a second fault for a test as "P-05 local". |
 | 0.7.0 | 2026-11-15 | P-05's paths (§6, RP-7 §3.4): a session forwarded to the reporting gateway by radio, its statement naming the first gateway of its path, is taken. Shown failing on a planted fault ("P-05 path"). |
 | 0.8.0 | 2026-11-15 | P-06's forward items (§6, RP-7 §4.1, §4.2), with `--slow`: a route's `via` polls with `placing` true; once the gateway under test has been silent 15 minutes, mail for its user goes to the `via` as a forward item whose placement the post office signed for it, and the gateway's next poll drops it there. The post office's driver gains `route`. |
+| 0.9.0 | 2026-11-15 | Phase 4's tests built (§6, RP-7): F-01 (calls only in a partner's window, at most three a minute apart, none on a busy channel; `--slow`), F-02 (records refused in order with their codes, a record's `PROOF` as sent, the credential by hash once held, a taken record forwarded on), F-03 (placements checked in order, the good one held as a copy, the next `cursor`), F-04 (records kept for a partner that reaches the post offices), F-05 (windows published only inside the segments; with `--slow`, a partner's window outside them never called in), F-06 (mail offered again). The test adapter has two bystander stations to make the channel busy, and reads the calls a program places. Each shown failing on a planted fault. |

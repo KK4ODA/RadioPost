@@ -86,7 +86,9 @@ Rust, each checked against the test vectors:
   desktop application of its own, RadioPost Gateway ([`app/gateway`](app/gateway/README.md),
   [the operator's guide](docs/user/gateway.md)). When the Internet is down it serves the copies of
   users' mail placed ahead with it, queues what they send, and reports it all when the Internet is
-  back; the client follows what was queued until a post office confirms it.
+  back; the client follows what was queued until a post office confirms it. Cut off, it hands
+  mail between its own users at once, and its queue by radio to a partner gateway that reaches the
+  Internet, calling it inside the partner's windows.
 * **The post office service**, beside a mail server, with ordinary email both ways
   ([running a post office](docs/user/post-office.md)). The project's own post office,
   `radiopost.org`, is live.
@@ -95,8 +97,8 @@ Rust, each checked against the test vectors:
 
 The programs say when a newer release is out and update themselves. On-air tests can begin:
 [between two stations](docs/user/on-air-tests.md), and
-[email through a gateway](docs/user/on-air-gateway.md). Still to come: mail handed between two
-users of a cut-off gateway, and forwarding by radio.
+[email through a gateway](docs/user/on-air-gateway.md), and
+[forwarding between two gateways](docs/user/on-air-forwarding.md).
 
 ## In this repository
 

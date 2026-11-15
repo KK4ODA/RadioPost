@@ -659,7 +659,11 @@ What the service does with it (RP-7 §4.1):
 * Its next poll, once its Internet is back, ends it: the items still waiting at the `--via`
   gateway are dropped.
 
-The `--via` gateway must hold copies (its operator ticks it in its Setup), so that it polls this
-post office and takes the items. Both gateways' operators name each other as partners in
+The `--via` gateway must hold copies (its operator ticks it in its Setup) or publish windows, so
+that it polls this post office and takes the items. It should publish windows (RP-7 §6.1): the
+cut-off gateway calls it inside them. Both gateways' operators name each other as partners in
 RadioPost Gateway (the gateway guide, §4). A `--via` gateway may be registered with another post
 office this one knows (§13).
+
+The service publishes its routes, signed, at `GET /routes` (RP-5 §4.5), beside its gateway list:
+anyone can read which gateway holds an area's mail when it is cut off.
