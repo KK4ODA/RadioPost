@@ -328,13 +328,21 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   Its icons come from `tools/figures/icons.py` (`--check` compares pixels, not zlib's bytes).
   Check the panel in headless Chromium (Playwright, `NODE_PATH=$(npm root -g)`); CI checks the
   script parses as a module.
-- `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`, `icons.py`. Standard
+- `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`, `icons.py`, `manual.py`. Standard
   library only; `ruff.toml` holds the lint settings.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`
   from `tools/vectors/rpref/` (deterministic CBOR, Ed25519 after RFC 8032, RadioPost's objects,
   RPMI adapters on a simulated channel in `rpmi.py`, JWS in `jws.py`, a post office in `po.py`,
   email in and out in `mail.py`, forwarding in `fwd.py`; standard library only, self-tested against RFC 8032 §7.1 and
   RFC 8949 Appendix A at every run).
+- `docs/manual/` — **the user's manual** for the client and RadioPost Gateway (`manual.md`, its
+  schematics in `fig/` from `tools/figures/manual.py`, its screenshots in `screens/` from
+  `node tools/manual/screens.mjs`: the real panels in headless Chromium, their API answered with
+  made-up data). `tools/manual/build.py` writes its contents (`toc`), checks it (`check`, CI) and
+  prints it (`html`, `pdf` through Chrome; the Release workflow attaches the PDF). Its header's
+  **Version** and change log follow `check_docs.py`'s rules; **Describes** is a `tools/release.py`
+  site. Aether HF's manual (`KK4ODA/aether-hf`, `docs/user/manual.md`) is cross-referenced, not
+  repeated.
 - `tools/check_docs.py` — headers against change logs and the index, relative links, `RP-n §x.y`
   references, SPDX lines. `.github/workflows/check.yml` runs it with ruff (pinned 0.16.9: preview
   rules), `make.py --check` and the figure generators (no diff), on Python 3.12 and 3.13, for
@@ -342,6 +350,11 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   *Checks*).
 
 ## Conventions
+- **The manual is part of the programs** (the author's rule, 2026-11-15). Any change to what a user
+  or a gateway operator sees or sets (a window, a box, a button, a setting or its default, a
+  message, a file kept) updates `docs/manual/manual.md` in the same commit: its text, its
+  Version and change log, and the screenshots of a window that changed (`screens.mjs`, looked at
+  before committing). Plain words, the screen's words in bold, the program's in italics.
 - **Living documents.** Every spec has a status, a version (`MAJOR.MINOR.PATCH`, RP-0 §8.2) and a
   change log. A change updates, in the same commit: the text, the version, the change log, the RP-0
   §9 registries if numbers are added, the test vectors, and the design document if a decision

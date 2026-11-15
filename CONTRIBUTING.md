@@ -36,9 +36,31 @@ Figures are drawn by `tools/figures/` (Python, standard library only):
 ```
 python tools/figures/concept.py     # docs/concept/fig/
 python tools/figures/design.py      # docs/design/fig/ and spec/fig/
+python tools/figures/manual.py      # docs/manual/fig/
 ```
 
 Edit the script, run it, and commit the script and the SVGs together.
+
+## The user's manual
+
+[`docs/manual/manual.md`](docs/manual/manual.md) is the manual for the RadioPost client and
+RadioPost Gateway. **It is part of the programs.** A change to anything a user or a gateway
+operator sees or sets (a window, a box, a button, a setting or its default, a message, a file
+kept) updates the manual in the same commit:
+
+1. Change the text. Keep it plain: short sentences, the words on the screen in **bold**, what the
+   program says in *italics*.
+2. Raise the manual's **Version** (the last number for a correction, the middle one for something
+   added or changed, the first for a reorganisation), set **Updated**, and add a row to its change
+   log. `check_docs.py` holds the three together.
+3. When a window changed, take its screenshots again (`node tools/manual/screens.mjs [NAME…]`,
+   Node with Playwright and its Chromium) and look at each picture before committing it. The
+   examples' data is in that script.
+4. `python tools/manual/build.py toc` when a heading changed, then
+   `python tools/manual/build.py check`: the contents, the pictures, their numbers and the links.
+
+The **Describes** row is the release version: `tools/release.py bump` moves it. Each release
+carries the manual as a PDF (`python tools/manual/build.py pdf`, which needs Chrome or Chromium).
 
 ## Test vectors
 
@@ -64,7 +86,9 @@ ruff check . && ruff format --check .
 python tools/vectors/make.py --check    # the vectors are what the reference makes
 python tools/figures/concept.py         # the figures are what their generators draw:
 python tools/figures/design.py          #   git status shows no change after these
+python tools/figures/manual.py          #   (the manual's schematics too)
 python tools/check_docs.py              # versions, change logs, the index, links, RP-n §x.y
+python tools/manual/build.py check      # the manual's contents, pictures and links
 ```
 
 and, in `core/`, with a stable Rust:

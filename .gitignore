@@ -4,3 +4,5 @@ target/
 # Tauri writes these at every build
 app/src-tauri/gen/
 app/gateway/src-tauri/gen/
+# tools/manual/build.py writes the manual's web page and PDF here
+build/

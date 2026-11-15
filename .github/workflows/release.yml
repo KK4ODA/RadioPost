@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 #
 # The installers of the two desktop applications (RadioPost, the client, and RadioPost Gateway)
-# and the command-line tools, for Windows, macOS and Linux; and the update channel that tells
-# installed programs a newer release is out.
+# and the command-line tools, for Windows, macOS and Linux; the user's manual as a PDF; and the
+# update channel that tells installed programs a newer release is out.
 #
 # A pushed tag v* makes a pre-release of that name. Started by hand with a `tag` (v0.1.0-beta.5),
 # it makes that public pre-release and the tag, on the commit it ran on; started by hand without
@@ -212,6 +212,15 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
         run: python3 tools/update_manifests.py dist --tag "$TAG" --repo "$GITHUB_REPOSITORY"
 
+      # The user's manual of this release, beside its installers. Chrome is on the runner, and
+      # Inter draws the schematics as they were drawn. A manual that fails to build holds no
+      # release back: the run says so, and the release goes out without it.
+      - name: The manual
+        continue-on-error: true
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q fonts-inter || true
+          python3 tools/manual/build.py pdf "dist/RadioPost-Manual-$(python3 tools/release.py version).pdf"
+
       - name: Checksums
         working-directory: dist
         run: sha256sum * > SHA256SUMS && cat SHA256SUMS
@@ -230,7 +239,8 @@ jobs:
           code-signed yet: Windows' SmartScreen asks once (More info, Run anyway), and on macOS open
           the app with Control-click, Open. The tools archive holds radiopost, radiopost-aether,
           radiopost-tcp, radiopost-mercury, rpmi-loopback, radiopost-issue, radiopost-tester,
-          radiopost-gateway and radiopost-po. SHA256SUMS lists every file's checksum."
+          radiopost-gateway and radiopost-po. RadioPost-Manual-<version>.pdf is the user's manual
+          for this release. SHA256SUMS lists every file's checksum."
           # $KIND holds two words for a draft
           # shellcheck disable=SC2086
           gh release create "$TAG" dist/* $KIND --target "$GITHUB_SHA" \

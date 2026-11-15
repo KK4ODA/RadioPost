@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" width="1000" height="400" role="img" aria-label="Two ways to get an account">
+<defs><marker id="ah-radio" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#c2410c"/></marker><marker id="ah-internet" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/></marker><marker id="ah-smtp" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#6d28d9"/></marker><marker id="ah-local" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/></marker><marker id="ah-fail" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b91c1c"/></marker></defs>
+<rect x="0" y="0" width="1000" height="400" fill="#ffffff"/>
+<rect x="24.0" y="20.0" width="600.0" height="168.0" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+<text xml:space="preserve" x="38.0" y="44.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#475569" text-anchor="start">With a code from the post office's operator</text>
+<circle cx="48.0" cy="66.0" r="11" fill="#1e293b" stroke="#ffffff" stroke-width="2"/>
+<text xml:space="preserve" x="48.0" y="70.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+<text xml:space="preserve" x="68.0" y="70.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1e293b" text-anchor="start">You email the operator your callsign and the</text>
+<text xml:space="preserve" x="68.0" y="88.6" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1e293b" text-anchor="start">address you want.</text>
+<circle cx="48.0" cy="112.0" r="11" fill="#1e293b" stroke="#ffffff" stroke-width="2"/>
+<text xml:space="preserve" x="48.0" y="116.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+<text xml:space="preserve" x="68.0" y="116.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1e293b" text-anchor="start">The operator checks your licence and sends a</text>
+<text xml:space="preserve" x="68.0" y="134.6" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1e293b" text-anchor="start">one-time code, good for 7 days.</text>
+<circle cx="48.0" cy="160.0" r="11" fill="#1d4ed8" stroke="#ffffff" stroke-width="2"/>
+<text xml:space="preserve" x="48.0" y="164.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+<text xml:space="preserve" x="68.0" y="164.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1e293b" text-anchor="start">In RadioPost's Setup: I have a code, then Enroll.</text>
+<rect x="24.0" y="208.0" width="600.0" height="172.0" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+<text xml:space="preserve" x="38.0" y="232.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#475569" text-anchor="start">With an application</text>
+<circle cx="48.0" cy="254.0" r="11" fill="#1d4ed8" stroke="#ffffff" stroke-width="2"/>
+<text xml:space="preserve" x="48.0" y="258.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+<text xml:space="preserve" x="68.0" y="258.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1e293b" text-anchor="start">In RadioPost's Setup: Apply for an account, then Apply.</text>
+<circle cx="48.0" cy="298.0" r="11" fill="#1e293b" stroke="#ffffff" stroke-width="2"/>
+<text xml:space="preserve" x="48.0" y="302.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+<text xml:space="preserve" x="68.0" y="302.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1e293b" text-anchor="start">The operators check your licence and decide:</text>
+<text xml:space="preserve" x="68.0" y="320.6" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1e293b" text-anchor="start">approve, decline, or send a code by post.</text>
+<circle cx="48.0" cy="346.0" r="11" fill="#1d4ed8" stroke="#ffffff" stroke-width="2"/>
+<text xml:space="preserve" x="48.0" y="350.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+<text xml:space="preserve" x="68.0" y="350.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1e293b" text-anchor="start">RadioPost asks every minute while it is open,</text>
+<text xml:space="preserve" x="68.0" y="368.6" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1e293b" text-anchor="start">and takes the credential once approved.</text>
+<rect x="700.0" y="124.0" width="276.0" height="152.0" rx="10" fill="#ecfdf5" stroke="#047857" stroke-width="1.5"/>
+<text xml:space="preserve" x="714.0" y="149.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="650" fill="#047857" text-anchor="start">You end with</text>
+<text xml:space="preserve" x="714.0" y="172.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#1e293b" text-anchor="start">A credential</text>
+<text xml:space="preserve" x="714.0" y="195.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">Your address and callsign,</text>
+<text xml:space="preserve" x="714.0" y="214.6" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">signed by your post office.</text>
+<text xml:space="preserve" x="714.0" y="234.1" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">Good for 90 days; RadioPost</text>
+<text xml:space="preserve" x="714.0" y="253.7" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">renews it in its last month.</text>
+<g fill="none" stroke="#047857" stroke-width="1.6" stroke-linecap="round"><circle cx="951" cy="145" r="4"/><path d="M 955 145 L 964 145 M 961 145 L 961 149 M 964 145 L 964 148"/></g>
+<path d="M 628.0 104.0 L 696.0 170.0" fill="none" stroke="#334155" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ah-internet)"/>
+<path d="M 628.0 294.0 L 696.0 230.0" fill="none" stroke="#334155" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ah-internet)"/>
+<text xml:space="preserve" x="700.0" y="304.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#047857" text-anchor="start">Both ways go over the Internet, once.</text>
+<text xml:space="preserve" x="700.0" y="322.1" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#047857" text-anchor="start">Blue numbers are what you do in RadioPost.</text>
+</svg>

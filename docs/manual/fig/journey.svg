@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 430" width="1000" height="430" role="img" aria-label="A message out, and the answer back">
+<defs><marker id="ah-radio" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#c2410c"/></marker><marker id="ah-internet" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/></marker><marker id="ah-smtp" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#6d28d9"/></marker><marker id="ah-local" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/></marker><marker id="ah-fail" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b91c1c"/></marker></defs>
+<rect x="0" y="0" width="1000" height="430" fill="#ffffff"/>
+<text xml:space="preserve" x="24.0" y="30.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1e293b" text-anchor="start">Sending</text>
+<rect x="24.0" y="46.0" width="210.0" height="104.0" rx="10" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.5"/>
+<text xml:space="preserve" x="38.0" y="71.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="650" fill="#1d4ed8" text-anchor="start">You</text>
+<text xml:space="preserve" x="38.0" y="94.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#1e293b" text-anchor="start">Write</text>
+<text xml:space="preserve" x="38.0" y="117.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">Put in outbox: it waits</text>
+<text xml:space="preserve" x="38.0" y="136.6" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">on this computer</text>
+<rect x="276.0" y="46.0" width="210.0" height="104.0" rx="10" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.5"/>
+<text xml:space="preserve" x="290.0" y="71.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="650" fill="#1d4ed8" text-anchor="start">You</text>
+<text xml:space="preserve" x="290.0" y="94.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#1e293b" text-anchor="start">Call a gateway</text>
+<text xml:space="preserve" x="290.0" y="117.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">The session carries</text>
+<text xml:space="preserve" x="290.0" y="136.6" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">the outbox by radio</text>
+<rect x="528.0" y="46.0" width="210.0" height="104.0" rx="10" fill="#fff7ed" stroke="#c2410c" stroke-width="1.5"/>
+<text xml:space="preserve" x="542.0" y="71.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="650" fill="#c2410c" text-anchor="start">The gateway</text>
+<text xml:space="preserve" x="542.0" y="94.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#1e293b" text-anchor="start">Passes it on</text>
+<text xml:space="preserve" x="542.0" y="117.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">to your post office,</text>
+<text xml:space="preserve" x="542.0" y="136.6" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">over the Internet</text>
+<rect x="780.0" y="46.0" width="196.0" height="104.0" rx="10" fill="#f5f3ff" stroke="#6d28d9" stroke-width="1.5"/>
+<text xml:space="preserve" x="794.0" y="71.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="650" fill="#6d28d9" text-anchor="start">The other end</text>
+<text xml:space="preserve" x="794.0" y="94.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#1e293b" text-anchor="start">Email arrives</text>
+<text xml:space="preserve" x="794.0" y="117.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">from your address,</text>
+<text xml:space="preserve" x="794.0" y="136.6" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">in a minute or so</text>
+<path d="M 238.0 98.0 L 272.0 98.0" fill="none" stroke="#64748b" stroke-width="1.8" stroke-dasharray="2 4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ah-local)"/>
+<path d="M 490.0 98.0 L 524.0 98.0" fill="none" stroke="#c2410c" stroke-width="2.2" stroke-dasharray="8 5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ah-radio)"/>
+<path d="M 742.0 98.0 L 776.0 98.0" fill="none" stroke="#334155" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ah-internet)"/>
+<text xml:space="preserve" x="24.0" y="206.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1e293b" text-anchor="start">Receiving</text>
+<rect x="24.0" y="222.0" width="210.0" height="104.0" rx="10" fill="#f5f3ff" stroke="#6d28d9" stroke-width="1.5"/>
+<text xml:space="preserve" x="38.0" y="247.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="650" fill="#6d28d9" text-anchor="start">The other end</text>
+<text xml:space="preserve" x="38.0" y="270.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#1e293b" text-anchor="start">Answers</text>
+<text xml:space="preserve" x="38.0" y="293.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">an ordinary email to</text>
+<text xml:space="preserve" x="38.0" y="312.6" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">name@radiopost.org</text>
+<rect x="276.0" y="222.0" width="210.0" height="104.0" rx="10" fill="#ecfdf5" stroke="#047857" stroke-width="1.5"/>
+<text xml:space="preserve" x="290.0" y="247.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="650" fill="#047857" text-anchor="start">Your post office</text>
+<text xml:space="preserve" x="290.0" y="270.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#1e293b" text-anchor="start">Keeps it</text>
+<text xml:space="preserve" x="290.0" y="293.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">until you call; copies</text>
+<text xml:space="preserve" x="290.0" y="312.6" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">it to usual gateways</text>
+<rect x="528.0" y="222.0" width="210.0" height="104.0" rx="10" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.5"/>
+<text xml:space="preserve" x="542.0" y="247.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="650" fill="#1d4ed8" text-anchor="start">You</text>
+<text xml:space="preserve" x="542.0" y="270.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#1e293b" text-anchor="start">Call a gateway</text>
+<text xml:space="preserve" x="542.0" y="293.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">Any gateway; the</text>
+<text xml:space="preserve" x="542.0" y="312.6" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">session fetches it</text>
+<rect x="780.0" y="222.0" width="196.0" height="104.0" rx="10" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.5"/>
+<text xml:space="preserve" x="794.0" y="247.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="650" fill="#1d4ed8" text-anchor="start">You</text>
+<text xml:space="preserve" x="794.0" y="270.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#1e293b" text-anchor="start">Inbox</text>
+<text xml:space="preserve" x="794.0" y="293.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">Read, reply,</text>
+<text xml:space="preserve" x="794.0" y="312.6" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">forward</text>
+<path d="M 238.0 274.0 L 272.0 274.0" fill="none" stroke="#6d28d9" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ah-smtp)"/>
+<path d="M 490.0 274.0 L 524.0 274.0" fill="none" stroke="#334155" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ah-internet)"/>
+<path d="M 742.0 274.0 L 776.0 274.0" fill="none" stroke="#c2410c" stroke-width="2.2" stroke-dasharray="8 5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ah-radio)"/>
+<rect x="24.0" y="350.0" width="952.0" height="40.0" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+<text xml:space="preserve" x="38.0" y="374.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#475569" text-anchor="start">One call does both</text>
+<text xml:space="preserve" x="160.0" y="374.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">Each call to a gateway sends your outbox and fetches what waits for you; Fetch, beside Call, says how much.</text>
+<path d="M 24.0 416.0 L 62.0 416.0" fill="none" stroke="#c2410c" stroke-width="2.2" stroke-dasharray="8 5" stroke-linecap="round" stroke-linejoin="round"/>
+<text xml:space="preserve" x="70.0" y="420.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">Over the air (HF or VHF)</text>
+<path d="M 269.6 416.0 L 307.6 416.0" fill="none" stroke="#334155" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/>
+<text xml:space="preserve" x="315.6" y="420.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">Gateway and post office (HTTPS)</text>
+<path d="M 563.5 416.0 L 601.5 416.0" fill="none" stroke="#6d28d9" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/>
+<text xml:space="preserve" x="609.5" y="420.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">Ordinary email (SMTP, IMAP)</text>
+</svg>
