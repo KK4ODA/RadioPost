@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.4.1 |
+| **Version** | 1.4.2 |
 | **Updated** | 2026-11-15 |
 | **Describes** | RadioPost 0.1.0-beta.21 |
 | **Licence** | CC BY 4.0 |
@@ -15,7 +15,7 @@ RadioPost gateway for others, and how a post office's operators look after it fr
 desk. It is written for licensed amateurs. You do not need to know how RadioPost works inside.
 
 The modem RadioPost uses, Aether HF, has
-[its own manual](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md). This
+[its own manual](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md). This
 manual points to it wherever Aether is the place to set something.
 
 ## Contents
@@ -191,7 +191,7 @@ to experiment and build: every protocol it uses is published.
   radio's own USB audio. It carries the sound both ways and keys the radio.
 - **A computer** with Windows, macOS (Apple Silicon) or Linux.
 - **Aether HF 0.2.0-beta.146 or later**, set up and working with your radio. Its
-  [own manual](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md#2-installing-and-first-start)
+  [own manual](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#part-1-getting-started)
   says how. Aether keys the radio, checks the band rules and sends your Morse identifier at the
   end of each session.
 - **RadioPost**, the client ([next chapter](#4-installing-radiopost)).
@@ -428,8 +428,8 @@ A call to a gateway sends your outbox and fetches what waits for you, in one ses
 
 1. In Aether, tune the radio to one of the gateway's channels, and set Aether's **Bandwidth**
    to the one listed there (500 or 2300 Hz). Aether's manual covers both: the
-   [Radio dial](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md#radio-dial)
-   and [Setup step 4](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md#step-4-modem-settings).
+   [Radio dial](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#radio-dial)
+   and [Setup step 4](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-4-modem-settings).
 2. Listen for a moment. Do not call over another station.
 3. In RadioPost, set **Fetch**:
    - **Everything waiting**: all your mail comes.
@@ -1331,12 +1331,12 @@ RadioPost is the mail program. Aether HF is the modem. Each is set up in its own
 | To do this | Use | Where |
 |---|---|---|
 | Your account, your mail, whom to call | RadioPost | This manual |
-| Sound card, keying, drive level | Aether | [Setup, step 2](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md#step-2-radio-interface) |
-| Your licence class, control and band rules | Aether | [Setup, step 1](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md#step-1-callsign-and-rules) |
-| Bandwidth (500 or 2300 Hz) | Aether | [Setup, step 4](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md#step-4-modem-settings) |
-| The frequency | Aether | [Radio dial](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md#radio-dial) |
-| Recording a session's audio | Aether | [Record](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md#record-the-radios-audio) |
-| Sending your logs to the project | Aether | [Send files](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md#9-log-and-sending-files) |
+| Sound card, keying, drive level | Aether | [Setup, step 2](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-2-radio-interface) |
+| Your licence class, control and band rules | Aether | [Setup, step 1](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-1-callsign-and-rules) |
+| Bandwidth (500 or 2300 Hz) | Aether | [Setup, step 4](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-4-modem-settings) |
+| The frequency | Aether | [Radio dial](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#radio-dial) |
+| Recording a session's audio | Aether | [Recording](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#recording-the-radios-audio) |
+| Sending your logs to the project | Aether | [Send files](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#sending-files) |
 
 **Callsigns.** RadioPost calls and answers as the callsign it was enrolled with. You never copy it
 into Aether. While a RadioPost program holds a callsign, Aether's Setup shows it greyed in place
@@ -1349,7 +1349,7 @@ calls, and *✓ RadioPost client · listening* while it listens (Aether 0.2.0-be
 **Other programs.** Aether can serve Winlink Express, VarAC or RMS Trimode beside RadioPost, on
 its host programs port. One program at a time answers for one callsign: close a program that uses
 the same callsign as RadioPost while you test. Aether's manual covers them in
-[section 12](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md#12-using-winlink-express-pat-varac-and-kiss-programs).
+[Part 4](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#part-4-aether-with-other-programs).
 
 ## 36. The rules
 
@@ -1379,7 +1379,7 @@ These notes follow the US rules (Part 97). Check your own country's.
 | *cannot reach the modem's adapter at ws://127.0.0.1:8515/v1* | Start Aether. Check the **Modem** box. |
 | The call goes out but nothing answers | Check the dial and the bandwidth against the gateway's channel. Check the gateway's hours. Try another gateway. |
 | Aether refuses RadioPost's calls | Aether is keyed by a host program. In Aether's Setup, step 2, choose CAT, serial, rigctld, FLRig, CM108 or VOX. |
-| Aether stops at start: *127.0.0.1:8515 is already in use* | Aether's host programs port was set to 8515. Put it back to 8300 ([Aether's troubleshooting](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md#14-troubleshooting)). |
+| Aether stops at start: *127.0.0.1:8515 is already in use* | Aether's host programs port was set to 8515. Put it back to 8300 ([Aether's ports](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#20-the-programs-and-their-ports)). |
 | *a session is under way: try again when it ends* | Wait for the session to end, or close the window to stop it. |
 | *renewing the credential: try again in a moment* | Wait a few seconds. |
 | Setup says the credential ran out | Ask your operator for a new code, then **Enroll again with a new code**. |
@@ -1514,7 +1514,7 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 
 | Subject | Document |
 |---|---|
-| Aether HF, the modem | [Aether HF operator's manual](https://github.com/KK4ODA/aether-hf/blob/master/docs/user/manual.md) |
+| Aether HF, the modem | [The Aether operator's manual](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md) |
 | Running a gateway, in more depth | [The gateway guide](../user/gateway.md) |
 | Running a post office | [The post office guide](../user/post-office.md) |
 | On-air tests through a gateway | [Email through a gateway](../user/on-air-gateway.md) |
@@ -1556,3 +1556,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.3.0 | 2026-11-15 | §11.2, §12: **Listen** answers calls to any of your callsigns. |
 | 1.4.0 | 2026-11-15 | Part 4, the post office desk: one chapter for each tab (applications, accounts, codes, mail out, other post offices, health, the server's jobs, backups and DKIM keys, settings), with screenshots. §15 points to it; Help becomes Part 5 (§35–§40), with the desk's troubleshooting, glossary words and an approval card. Figure 16 says **Listen** answers any of your callsigns. |
 | 1.4.1 | 2026-11-15 | §33: restoring a backup points to the server guide's chapter 11, rewritten. |
+| 1.4.2 | 2026-11-15 | Links to Aether's manual go to its new home, `docs/manual/manual.md`, and its chapters there. |

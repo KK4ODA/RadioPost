@@ -370,7 +370,7 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   made-up data). `tools/manual/build.py` writes its contents (`toc`), checks it (`check`, CI) and
   prints it (`html`, `pdf` through Chrome; the Release workflow attaches the PDF). Its header's
   **Version** and change log follow `check_docs.py`'s rules; **Describes** is a `tools/release.py`
-  site. Aether HF's manual (`KK4ODA/aether-hf`, `docs/user/manual.md`) is cross-referenced, not
+  site. Aether's manual (`KK4ODA/aether-hf`, `docs/manual/manual.md`) is cross-referenced, not
   repeated. **The server guide**, `docs/user/post-office.md` (2026-11-15, the author: in the
   manual's vein), is the second book `build.py` knows (`server`): step by step around
   `radiopost-po install`, its schematics in `docs/user/fig/` from `tools/figures/server.py`, the
