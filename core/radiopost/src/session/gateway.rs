@@ -7,6 +7,13 @@
 //! message it sends, when the caller hands mail in, and when the caller's `RECEIPT` says what it
 //! picked up. Tests give it the post office itself, in process; the gateway program gives it the
 //! post office's API over HTTPS.
+//!
+//! The same engine answers a forwarding session (RP-7 §2) once given a partner
+//! ([`Gateway::with_partner`]): a cut-off gateway calling with `HELLO` role 1. The partner's own
+//! store is then the [`Upstream`]: it checks the caller's gateway credential, lists the forward
+//! items it holds for it, gives their placements, and keeps the records the engine took
+//! ([`Upstream::take_records`]). The engine checks each `PROOF` (RP-7 §3.3) and each forwarded
+//! message against the records it took.
 
 use std::collections::HashMap;
 
@@ -18,9 +25,10 @@ use super::{
 };
 use crate::base64url;
 use crate::cbor::Value;
-use crate::credential::{self, Credential};
+use crate::credential::{self, Credential, Trust};
 use crate::crypto::ContentId;
 use crate::error::ErrorCode;
+use crate::forwarding::{self, Checked, Forwarded, Proof};
 use crate::message::Message;
 use crate::pdu::{Deframer, kind};
 use crate::statement::{Form, Statement, TIME_WINDOW_S};
@@ -79,10 +87,36 @@ pub trait Upstream {
     fn online(&self) -> bool {
         true
     }
+    /// In a forwarding session: the placement of the forward item with this forwarding serial
+    /// (RP-7 §4.3), sent with it as `MSG` key 6. An item without one is not sent.
+    fn placement(&mut self, _serial: u64) -> Option<Vec<u8>> {
+        None
+    }
+    /// In a forwarding session: the post office keys and revocation lists the partner holds, which
+    /// each `PROOF`'s credential is checked with (RP-7 §3.3).
+    fn trust(&mut self) -> Trust {
+        Trust::default()
+    }
+    /// In a forwarding session: the records taken whole, to store with the partner's callsign
+    /// added to each path and report or forward (RP-7 §3.4), before the `RECEIPT` lists them.
+    /// For each, `Ok` once it is stored, or the code that refuses it.
+    ///
+    /// # Errors
+    /// None could be stored: every record fails with this code.
+    fn take_records(
+        &mut self,
+        _records: &[Forwarded],
+    ) -> Result<Vec<Result<(), ErrorCode>>, ErrorCode> {
+        Err(ErrorCode::RefusedByPolicy)
+    }
 }
 
 /// The post office of a domain, or why there is none to reach.
 pub type Upstreams = Box<dyn FnMut(&str) -> Result<Box<dyn Upstream + Send>, ErrorCode> + Send>;
+
+/// A partner's own store for a forwarding session from the gateway with this callsign (RP-7 §2),
+/// or why it does not take one from that gateway.
+pub type Partners = Box<dyn FnMut(&str) -> Result<Box<dyn Upstream + Send>, ErrorCode> + Send>;
 
 /// Whether third-party mail may be listed for a station with this callsign (RP-6 §5.1).
 pub type ThirdParty = Box<dyn Fn(&str) -> bool + Send>;
@@ -184,6 +218,14 @@ pub enum Note {
     },
     /// The session at the post office failed: the caller was told so.
     PostOffice(ErrorCode),
+    /// A forwarding session's `PROOF` was refused (RP-7 §3.3): its record, when it decoded that
+    /// far, and the code. The caller sends it again in a later window.
+    RecordRefused {
+        /// The record's ID.
+        id: Option<[u8; 12]>,
+        /// Why.
+        code: ErrorCode,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -204,10 +246,30 @@ struct Listed {
     local: bool,
 }
 
+/// What a forwarding session keeps (RP-7 §3.2, §3.3).
+#[derive(Default)]
+struct Forwarding {
+    /// The caller's callsign, its credential's `operator`: the last of each record's path.
+    caller: String,
+    /// The messages the caller offered in `HELLO`.
+    offered: Vec<ContentId>,
+    /// The offers declined `already-have`: the partner holds them.
+    have: Vec<ContentId>,
+    /// The records whose `PROOF` passed, in order.
+    taken: Vec<Checked>,
+    /// The messages of records refused, with the code (when the statement decoded).
+    refused: Vec<(Vec<ContentId>, ErrorCode)>,
+    /// Credentials that verified in this session's `PROOF`s, found by hash after.
+    credentials: Vec<Vec<u8>>,
+}
+
 /// The gateway's side of one session.
 pub struct Gateway {
     cfg: GatewayConfig,
     upstreams: Upstreams,
+    partners: Option<Partners>,
+    /// A forwarding session (RP-7 §2): the caller is a gateway, `HELLO` role 1.
+    forwarding: Option<Forwarding>,
     third_party: ThirdParty,
     upstream: Option<Box<dyn Upstream + Send>>,
     stream: Deframer,
@@ -270,6 +332,8 @@ impl Gateway {
         Gateway {
             cfg,
             upstreams,
+            partners: None,
+            forwarding: None,
             third_party,
             upstream: None,
             stream: Deframer::new(),
@@ -286,6 +350,14 @@ impl Gateway {
             notes: Vec::new(),
             queued: Vec::new(),
         }
+    }
+
+    /// The same gateway answering forwarding sessions too (RP-7 §2): `partners` gives its own store
+    /// for a caller's callsign. Without it, `HELLO` role 1 is refused `refused-by-policy`.
+    #[must_use]
+    pub fn with_partner(mut self, partners: Partners) -> Gateway {
+        self.partners = Some(partners);
+        self
     }
 
     /// Bytes the link delivered. Returns what happened.
@@ -387,6 +459,7 @@ impl Gateway {
                 self.open(signature.as_deref(), Some(self.cfg.challenge));
             }
             (State::Exchange, Some(kind::MSG)) => self.msg(pdu),
+            (State::Exchange, Some(kind::PROOF)) if self.forwarding.is_some() => self.proof(pdu),
             (State::Exchange, Some(kind::RECEIPT)) => self.picked(pdu),
             (State::Exchange, Some(kind::REQUEST)) => {
                 let asked: Vec<u64> = pdu
@@ -437,9 +510,11 @@ impl Gateway {
         if !speaks {
             return self.fail(ErrorCode::UnsupportedVersion);
         }
-        if pdu.get(2).and_then(Value::as_u64) != Some(0) {
-            // Forwarding between gateways is RP-7's, not taken here.
-            return self.fail(ErrorCode::RefusedByPolicy);
+        match pdu.get(2).and_then(Value::as_u64) {
+            Some(0) => {}
+            // a forwarding session (RP-7 §2), answered by a gateway with partners
+            Some(1) if self.partners.is_some() => self.forwarding = Some(Forwarding::default()),
+            _ => return self.fail(ErrorCode::RefusedByPolicy),
         }
         // the operator's refusals, by what the statement says (RP-3 §5.1 keys 3 and 4)
         let said = |k| pdu.get(k).and_then(Value::as_text).unwrap_or("").to_owned();
@@ -544,7 +619,7 @@ impl Gateway {
             address: text(3),
             operator: text(4),
             gateway: text(5),
-            messages: offers,
+            messages: offers.clone(),
             form,
         };
         let partials: Vec<Json> = listed_pairs(hello.get(11))
@@ -570,7 +645,16 @@ impl Gateway {
             .rsplit_once('@')
             .map_or("", |(_, d)| d)
             .to_owned();
-        let answer = (self.upstreams)(&domain).and_then(|mut up| {
+        // a forwarding session is answered from the partner's own store (RP-7 §2)
+        let found = match (self.forwarding.as_mut(), self.partners.as_mut()) {
+            (Some(f), Some(partners)) => {
+                f.caller.clone_from(&body.operator);
+                f.offered.clone_from(&offers);
+                partners(&body.operator)
+            }
+            _ => (self.upstreams)(&domain),
+        };
+        let answer = found.and_then(|mut up| {
             let a = up.open(&request)?;
             self.upstream = Some(up);
             Ok(a)
@@ -681,9 +765,15 @@ impl Gateway {
             .flatten()
             .filter_map(|d| {
                 let id = ContentId::from_text(d.get("id")?.as_str()?)?;
+                let code = d.get("code")?.as_u64()?;
+                if code == u64::from(ErrorCode::AlreadyHave.code())
+                    && let Some(f) = self.forwarding.as_mut()
+                {
+                    f.have.push(id);
+                }
                 Some(Value::Array(vec![
                     Value::bytes(id.as_bytes()),
-                    Value::Uint(d.get("code")?.as_u64()?),
+                    Value::Uint(code),
                 ]))
             })
             .collect();
@@ -772,16 +862,172 @@ impl Gateway {
         let Ok(message) = Message::from_air(&air) else {
             return Vec::new();
         };
+        // a forward item goes with its placement, or not at all (RP-7 §4.3)
+        let placement = if self.forwarding.is_some() {
+            let Some(p) = up.placement(listed.serial) else {
+                return Vec::new();
+            };
+            Some(p)
+        } else {
+            None
+        };
         // the post office's air form, as it made it once (RP-5 §5.3)
         let out = Outgoing { message, air };
         self.sent.push(*id);
         let piece = piece_for(self.caller_caps.max_pdu, self.cfg.piece);
-        msg_pdus(
+        let pdus = msg_pdus(
             &out,
             offset,
             piece,
             (!listed.local).then_some(listed.serial),
-        )
+        );
+        match placement {
+            Some(p) => pdus
+                .into_iter()
+                .map(|m| with_key(&m, 6, Value::Bytes(p.clone())))
+                .collect(),
+            None => pdus,
+        }
+    }
+
+    /// A forwarding session's `PROOF` (RP-7 §3.3): its record taken, or refused with its code.
+    fn proof(&mut self, pdu: &Value) {
+        let trust = self
+            .upstream
+            .as_mut()
+            .map_or_else(Trust::default, |up| up.trust());
+        let Some(f) = self.forwarding.as_mut() else {
+            return;
+        };
+        let held: Vec<Vec<u8>> = self
+            .cfg
+            .credentials
+            .iter()
+            .chain(&f.credentials)
+            .cloned()
+            .collect();
+        match forwarding::check_proof(pdu, &f.caller, &self.cfg.callsign, &held, &trust) {
+            Ok(checked) => {
+                // kept, so that a later PROOF may send its hash (RP-7 §3.2)
+                if !held.contains(&checked.credential) {
+                    f.credentials.push(checked.credential.clone());
+                    self.notes
+                        .push(Note::Credential(checked.credential.clone()));
+                }
+                f.taken.push(checked);
+            }
+            Err(code) => {
+                let proof = Proof::from_value(pdu).ok();
+                let messages = proof
+                    .as_ref()
+                    .and_then(|p| Statement::decode(&p.statement))
+                    .map(|s| s.messages)
+                    .unwrap_or_default();
+                f.refused.push((messages, code));
+                self.notes.push(Note::RecordRefused {
+                    id: proof.map(|p| p.id()),
+                    code,
+                });
+            }
+        }
+    }
+
+    /// RP-7 §3.3: a forwarded message belongs to a record taken, and is from that record's
+    /// address; otherwise it fails with the refused record's code, or `not-authorized`.
+    fn forwarded_from(&self, message: &Message) -> Result<(), ErrorCode> {
+        let Some(f) = &self.forwarding else {
+            return Ok(());
+        };
+        let id = message.content_id();
+        let from = message.from().unwrap_or_default();
+        if f.taken
+            .iter()
+            .any(|r| r.statement.messages.contains(&id) && r.statement.address == from)
+        {
+            return Ok(());
+        }
+        Err(f
+            .refused
+            .iter()
+            .find(|(messages, _)| messages.contains(&id))
+            .map_or(ErrorCode::NotAuthorized, |(_, code)| *code))
+    }
+
+    /// The caller's turn is over in a forwarding session: each record taken whose messages all
+    /// came (those it offered and the partner did not already hold) is stored, then listed in
+    /// `records` with its messages `complete` (RP-7 §3.3, §3.4). A record one of whose messages
+    /// failed is not taken, and the rest of its messages are listed failed with that code: the
+    /// caller offers them again in a later window.
+    fn take_forwarded(&mut self, finished: &[(ContentId, Vec<u8>)]) {
+        let Some(f) = self.forwarding.as_mut() else {
+            return;
+        };
+        let mut whole = Vec::new();
+        for record in std::mem::take(&mut f.taken) {
+            let messages: Vec<(ContentId, Vec<u8>)> = finished
+                .iter()
+                .filter(|(id, _)| record.statement.messages.contains(id))
+                .cloned()
+                .collect();
+            let missing = record
+                .statement
+                .messages
+                .iter()
+                .find(|m| {
+                    f.offered.contains(m)
+                        && !f.have.contains(m)
+                        && !messages.iter().any(|(id, _)| id == *m)
+                })
+                .copied();
+            let Some(missing) = missing else {
+                whole.push(Forwarded { record, messages });
+                continue;
+            };
+            let code = self
+                .receipts
+                .failed
+                .iter()
+                .find(|(id, _)| *id == missing)
+                .map_or(ErrorCode::Malformed, |(_, code)| *code);
+            for (id, _) in &messages {
+                self.receipts.failed.push((*id, code));
+                self.events.push(Event::Failed { id: *id, code });
+            }
+        }
+        if whole.is_empty() {
+            return;
+        }
+        let results = match self.upstream.as_mut() {
+            Some(up) => up.take_records(&whole),
+            None => Err(ErrorCode::Internal),
+        };
+        for (i, f) in whole.iter().enumerate() {
+            let result = match &results {
+                Ok(r) => r.get(i).copied().unwrap_or(Err(ErrorCode::Internal)),
+                Err(code) => Err(*code),
+            };
+            match result {
+                Ok(()) => {
+                    self.receipts.records.push(f.record.proof.id());
+                    for (id, air) in &f.messages {
+                        self.receipts.complete.push(*id);
+                        if let Ok(message) = Message::from_air(air) {
+                            self.events.push(Event::Received {
+                                serial: None,
+                                message,
+                                air: air.clone(),
+                            });
+                        }
+                    }
+                }
+                Err(code) => {
+                    for (id, _) in &f.messages {
+                        self.receipts.failed.push((*id, code));
+                        self.events.push(Event::Failed { id: *id, code });
+                    }
+                }
+            }
+        }
     }
 
     fn msg(&mut self, pdu: &Value) {
@@ -794,6 +1040,11 @@ impl Gateway {
                     held: Vec::new(),
                     total: 0,
                 });
+                if let Err(code) = self.forwarded_from(&message) {
+                    self.receipts.failed.push((id, code));
+                    self.events.push(Event::Failed { id, code });
+                    return;
+                }
                 self.finished.push((id, air));
             }
             Some(Err((id, code))) => {
@@ -842,7 +1093,9 @@ impl Gateway {
         requested: bool,
     ) {
         let finished = std::mem::take(&mut self.finished);
-        if !finished.is_empty() {
+        if self.forwarding.is_some() {
+            self.take_forwarded(&finished);
+        } else if !finished.is_empty() {
             let results = match self.upstream.as_mut() {
                 Some(up) => up.hand_in(&finished),
                 None => Err(ErrorCode::PostOfficeUnreachable),
@@ -940,6 +1193,13 @@ pub fn files_notice(result: Result<(), ErrorCode>) -> String {
         }
         Err(code) => format!("Your attachments could not be asked for ({code})."),
     }
+}
+
+/// A map PDU with one more key.
+fn with_key(pdu: &Value, key: i64, value: Value) -> Value {
+    let mut entries = pdu.as_map().map(<[_]>::to_vec).unwrap_or_default();
+    entries.push((Value::int(key), value));
+    Value::Map(entries)
 }
 
 /// `HELLO` with the full credential in place of its hash.

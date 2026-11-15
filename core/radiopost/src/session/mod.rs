@@ -220,6 +220,22 @@ pub enum Event {
     },
     /// The waiting list, from `WELCOME`.
     Listed(Vec<WaitingEntry>),
+    /// A forward item arrived in a forwarding session and its placement checked (RP-7 §4.3):
+    /// the caller holds it as a copy placed ahead for the placement's address, with its serial and
+    /// `expires` (RP-5 §5.8). It is in the next `RECEIPT`, as [`Event::Received`] is.
+    Placed {
+        /// The forwarding serial `MSG` carried: the partner's, for `cursor` (RP-7 §2).
+        serial: Option<u64>,
+        /// The placement, checked.
+        placed: crate::forwarding::Placed,
+        /// The message.
+        message: Message,
+        /// Its air form as it arrived.
+        air: Vec<u8>,
+    },
+    /// The partner took these session records (RP-7 §3.3, `RECEIPT` key 4): the caller lets them
+    /// go (RP-7 §3.5).
+    Records(Vec<[u8; 12]>),
     /// A whole message arrived and checked (RP-2 §3), with its serial when it had one. It is in
     /// the next `RECEIPT`: the program stores it durably before that is sent (RP-3 §5.4).
     Received {
@@ -434,11 +450,13 @@ fn piece_for(max_pdu: u64, wanted: usize) -> usize {
 struct Receipts {
     complete: Vec<ContentId>,
     failed: Vec<(ContentId, ErrorCode)>,
+    /// Session records taken, in a forwarding session (RP-7 §3.3, key 4).
+    records: Vec<[u8; 12]>,
 }
 
 impl Receipts {
     fn is_empty(&self) -> bool {
-        self.complete.is_empty() && self.failed.is_empty()
+        self.complete.is_empty() && self.failed.is_empty() && self.records.is_empty()
     }
 
     fn take_pdu(&mut self) -> Option<Value> {
@@ -457,6 +475,10 @@ impl Receipts {
                 ])
             });
             entries.push((3, Value::Array(failed.collect())));
+        }
+        if !self.records.is_empty() {
+            let records = self.records.iter().map(|r| Value::bytes(r));
+            entries.push((crate::forwarding::RECORDS, Value::Array(records.collect())));
         }
         *self = Receipts::default();
         Some(Value::int_map(entries))

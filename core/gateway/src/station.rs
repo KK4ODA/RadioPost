@@ -636,7 +636,7 @@ impl Station {
                         ));
                     }
                 }
-                Note::PostOffice(_) | Note::Refused(_) => {}
+                Note::PostOffice(_) | Note::Refused(_) | Note::RecordRefused { .. } => {}
             }
         }
         self.held

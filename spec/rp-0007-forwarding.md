@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.10.0 |
-| **Updated** | 2026-11-13 |
+| **Version** | 0.10.1 |
+| **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-3, RP-5 |
@@ -102,7 +102,9 @@ a forwarding session.
 The caller offers, in `HELLO`, every message of every record it forwards that the partner has not
 yet receipted. In its third transmission it sends, before the `MSG` PDUs, one `PROOF` for each
 record whose messages it sends, and one for each record with no messages (pickups or local pickups
-only).
+only). A record whose messages the partner declined `already-have` goes as one with no messages:
+the partner holds them. A record with a message the partner declined for any other reason is not
+sent: it waits, with its messages, for a later window.
 
 The credential is about half of a `PROOF` (§9), and one user's records often travel together. A
 partner keeps each credential that verifies in a `PROOF` until it expires, as a gateway keeps a
@@ -129,6 +131,11 @@ For each `PROOF`, the partner checks, and refuses the record at the first failur
 For each `MSG`, it checks the message as RP-3 §5.4 says, and then that its content ID is in the
 statement of a `PROOF` it took and that its `from` is that statement's address. Otherwise it lists
 the message as failed: `not-authorized`, or the code of the failed record.
+
+It takes a record once its `PROOF` passed and every message of it that the caller offered has
+arrived and passed, but those it declined `already-have`. If one of them failed, it does not take
+the record, and lists the record's other messages failed with the same code: the caller offers
+them again, with the record, in a later window.
 
 The partner's `RECEIPT` (RP-3 §5.5) lists messages in `complete` as usual, and the IDs of the
 records it has taken in a further key:
@@ -473,3 +480,4 @@ online, which declines the message `already-have` because the post office alread
 | 0.8.0 | 2026-11-09 | A placement is an untagged COSE_Sign1 (RP-0 §5): its key's ID moves from the body (key 7, removed) to the protected header (§4.2, §4.3); sizes (§9). |
 | 0.9.0 | 2026-11-12 | Gateways across post offices (RP-5 0.16.0). §4.1: a gateway is cut off only after it has polled, as the reference already read it, and not since a `placing` false; it polls every post office that places items at it. §6.1: a route may name gateways registered with another post office this one knows, and `via` polls it. Test vectors (`forwarding.json`: N1CALL-10's record from hampost.org's list; `placing`). |
 | 0.10.0 | 2026-11-13 | FM channels (§5): a window on an FM channel states the channel as `occupied_hz`, carrier less and plus half its width (RP-5 0.17.0 §4.4), since a modem on an FM radio's audio cannot measure the deviation. §5.1: the United States' table gains 2 m (144.1 to 148.0 MHz), 1.25 m (222 to 225 MHz) and 70 cm (430 to 450 MHz), read from the e-CFR current to 2026-11-10; 219 to 220 MHz (§97.303(l)) and 420 to 430 MHz (§97.303(m)(1), Line A) left out, and why. Test vectors (`forwarding.json`: eight FM windows). |
+| 0.10.1 | 2026-11-15 | Found writing the gateways' engines: a record whose messages the partner declined `already-have` is sent as one with no messages, and one with a message declined otherwise waits (§3.2); the partner takes a record only when every message of it the caller offered arrived and passed, and lists the rest of a broken record's messages failed with the same code, so the caller is not left waiting for their receipt (§3.3). |

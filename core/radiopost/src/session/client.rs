@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! RP-3, the caller's side: a client calling a gateway, or another client (§10).
+//! RP-3, the caller's side: a client calling a gateway, or another client (§10); or a cut-off
+//! gateway calling a partner in a forwarding session (RP-7 §2), with [`Client::forwarding`].
 
 use std::collections::BTreeSet;
 
@@ -14,6 +15,7 @@ use crate::cbor::Value;
 use crate::credential::{self, Body, Credential, Trust, flags};
 use crate::crypto::ContentId;
 use crate::error::ErrorCode;
+use crate::forwarding;
 use crate::pdu::{Deframer, kind};
 use crate::statement::{self, Form, Freshness, Statement};
 
@@ -45,6 +47,20 @@ pub struct ClientConfig {
     pub piece: usize,
     /// Calling another client directly (RP-3 §10): the keys to check that station's proof with.
     pub station: Option<Trust>,
+}
+
+/// What a cut-off gateway brings to a forwarding session besides a client's (RP-7 §2): its own
+/// gateway credential and device key go in [`ClientConfig`], and its outbox holds the messages of
+/// the records it forwards.
+#[derive(Clone, Debug, Default)]
+pub struct Forwarding {
+    /// The session records it forwards (RP-7 §3.2), in the order to send them: those the partner
+    /// has not listed in `records`, each with its credential, or with its hash when the partner
+    /// took an earlier record with that credential. Within the transmission the engine sends a
+    /// credential whole once and its hash after.
+    pub records: Vec<forwarding::Proof>,
+    /// The post office keys it checks forward items' placements with (RP-7 §4.3).
+    pub trust: Trust,
 }
 
 /// Which waiting messages to ask for, from those that will not come unasked, by content ID: a
@@ -85,6 +101,10 @@ enum FilesAsked {
 
 /// The caller's side of a session.
 pub struct Client {
+    /// A forwarding session (RP-7 §2): the records to send and the keys to check placements.
+    forwarding: Option<Forwarding>,
+    /// The offers the other station declined in `WELCOME`, with their codes.
+    declined: Vec<(ContentId, u64)>,
     hello_proof: Option<Proof>,
     station_proof: Option<(u64, Proof)>,
     cfg: ClientConfig,
@@ -123,6 +143,8 @@ impl Client {
             .body;
         let inbound = Inbound::resume(&cfg.partials);
         Ok(Client {
+            forwarding: None,
+            declined: Vec::new(),
             hello_proof: None,
             station_proof: None,
             cfg,
@@ -146,6 +168,15 @@ impl Client {
             queued: Vec::new(),
             progress: Progress::default(),
         })
+    }
+
+    /// The same client calling as a cut-off gateway calls a partner (RP-7 §2): `HELLO` says role
+    /// 1, the third transmission carries a `PROOF` for each record before the messages, and each
+    /// forward item that comes is held only once its placement checks (RP-7 §4.3).
+    #[must_use]
+    pub fn forwarding(mut self, forwarding: Forwarding) -> Self {
+        self.forwarding = Some(forwarding);
+        self
     }
 
     fn statement(&self, form: Form) -> Statement {
@@ -176,7 +207,7 @@ impl Client {
                 1,
                 Value::Array(vec![Value::Uint(VERSION), Value::Uint(VERSION)]),
             ),
-            (2, Value::Uint(0)),
+            (2, Value::Uint(u64::from(self.forwarding.is_some()))),
             (3, Value::text(&self.me.address)),
             (4, Value::text(&self.me.operator)),
             (5, Value::text(&self.cfg.called)),
@@ -294,6 +325,9 @@ impl Client {
         match pdu.get(0).and_then(Value::as_u64) {
             Some(kind::WELCOME) if self.state == State::Welcome => self.welcome(pdu),
             Some(kind::MSG) if self.state == State::Exchange => match self.take_msg(pdu) {
+                Some(Ok((serial, message, air))) if self.forwarding.is_some() => {
+                    self.placed(pdu, serial, message, air);
+                }
                 Some(Ok((serial, message, air))) => {
                     self.progress.received(message.content_id(), true);
                     self.receipts.complete.push(message.content_id());
@@ -324,6 +358,17 @@ impl Client {
                     self.progress.answered(id, false);
                     let code = ErrorCode::from_code(code).unwrap_or(ErrorCode::Internal);
                     self.events.push(Event::NotTaken { id, code });
+                }
+                // RP-7 §3.3: the session records the partner took
+                let records: Vec<[u8; 12]> = pdu
+                    .get(forwarding::RECORDS)
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|r| r.as_bytes()?.try_into().ok())
+                    .collect();
+                if self.forwarding.is_some() && !records.is_empty() {
+                    self.events.push(Event::Records(records));
                 }
             }
             Some(kind::DONE) => {
@@ -418,7 +463,8 @@ impl Client {
         self.events.push(Event::Welcome {
             online: pdu.get(11) == Some(&Value::Bool(true)),
         });
-        for (id, code) in listed_pairs(pdu.get(6)) {
+        self.declined = listed_pairs(pdu.get(6));
+        for &(id, code) in &self.declined {
             let code = ErrorCode::from_code(code).unwrap_or(ErrorCode::Internal);
             self.events.push(Event::NotTaken { id, code });
         }
@@ -531,6 +577,75 @@ impl Client {
         Ok((body, (time, proof)))
     }
 
+    /// A forward item, whole: held when its placement checks (RP-7 §4.3), failed otherwise.
+    fn placed(
+        &mut self,
+        pdu: &Value,
+        serial: Option<u64>,
+        message: crate::message::Message,
+        air: Vec<u8>,
+    ) {
+        let id = message.content_id();
+        let placement = pdu.get(6).and_then(Value::as_bytes).unwrap_or_default();
+        let trust = self.forwarding.as_ref().map(|f| &f.trust);
+        let checked = trust.map_or(Err(ErrorCode::Malformed), |trust| {
+            forwarding::check_placement(placement, &id, &self.me.operator, self.cfg.time, trust)
+        });
+        match checked {
+            Ok(placed) => {
+                self.progress.received(id, true);
+                self.receipts.complete.push(id);
+                self.events.push(Event::Placed {
+                    serial,
+                    placed,
+                    message,
+                    air,
+                });
+            }
+            Err(code) => {
+                self.progress.received(id, false);
+                self.receipts.failed.push((id, code));
+                self.events.push(Event::Failed { id, code });
+            }
+        }
+    }
+
+    /// RP-7 §3.2: the `PROOF`s of the third transmission, in the records' order. A record waits
+    /// with its messages while the partner declined one of them for a reason other than
+    /// `already-have` (it holds that one). A credential goes whole once, then as its hash.
+    fn proof_pdus(&self) -> Vec<Value> {
+        let Some(f) = &self.forwarding else {
+            return Vec::new();
+        };
+        let have = u64::from(ErrorCode::AlreadyHave.code());
+        let mut whole: Vec<Vec<u8>> = Vec::new();
+        let mut pdus = Vec::new();
+        for record in &f.records {
+            let messages = Statement::decode(&record.statement)
+                .map(|s| s.messages)
+                .unwrap_or_default();
+            let waits = messages.iter().any(|m| {
+                self.declined
+                    .iter()
+                    .any(|(id, code)| id == m && *code != have)
+            });
+            if waits {
+                continue;
+            }
+            let mut record = record.clone();
+            if let Some(c) = record.credential.clone() {
+                if whole.contains(&c) {
+                    record.credential = None;
+                    record.credential_hash = Some(credential::hash(&c));
+                } else {
+                    whole.push(c);
+                }
+            }
+            pdus.push(record.to_value());
+        }
+        pdus
+    }
+
     /// Takes a `MSG`, counting what of it arrived first.
     fn take_msg(&mut self, pdu: &Value) -> Option<super::Taken> {
         take_counted(&mut self.inbound, &mut self.progress, pdu)
@@ -544,6 +659,8 @@ impl Client {
         }
         let mut pdus = Vec::new();
         if let Some(to_send) = self.to_send.take() {
+            // a forwarding session's records before their messages (RP-7 §3.2)
+            pdus.extend(self.proof_pdus());
             let piece = piece_for(self.peer_caps.max_pdu, self.cfg.piece);
             for (i, offset) in to_send {
                 let out = &self.cfg.outbox[i];

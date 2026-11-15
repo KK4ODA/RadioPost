@@ -964,3 +964,667 @@ fn session_records_and_the_partners_checks_of_a_proof() {
         );
     }
 }
+
+/// RP-7 §4.2–§4.3, `forwarding.json`: the placement made from its body with radiopost.org's key
+/// is the vector's byte for byte, and each placement case is answered as the cut-off gateway's
+/// checks say, in their order.
+#[test]
+fn placements_and_the_cut_off_gateways_checks() {
+    use radiopost::forwarding::{Placed, check_placement};
+    let w = world();
+    let file = vectors("forwarding.json");
+    let made = unhex(file["placement"]["placement_hex"].as_str().expect("hex"));
+    let sign1 = radiopost::crypto::Sign1::open(&made).expect("a COSE_Sign1");
+    let placed = Placed::from_value(&cbor::decode(&sign1.payload).expect("CBOR")).expect("a body");
+    let key = w
+        .seeds
+        .iter()
+        .filter(|(label, _)| label.starts_with("po:radiopost.org"))
+        .map(|(_, seed)| SigningKey::from_bytes(seed))
+        .find(|k| radiopost::crypto::kid(&k.verifying_key().to_bytes()) == sign1.kid)
+        .expect("the key that placed it");
+    assert_eq!(cbor::hex(&placed.sign(&key)), cbor::hex(&made));
+    assert_eq!(
+        cbor::hex(&sign1.payload),
+        file["placement"]["payload_hex"].as_str().expect("hex")
+    );
+    let cases = file["placement_cases"].as_array().expect("cases");
+    assert_eq!(cases.len(), 8);
+    for case in cases {
+        let id = ContentId::from_slice(&unhex(case["content_id_hex"].as_str().expect("hex")))
+            .expect("an ID");
+        let got = check_placement(
+            &unhex(case["placement_hex"].as_str().expect("hex")),
+            &id,
+            case["me"].as_str().expect("me"),
+            case["now"].as_u64().expect("now"),
+            &w.trust,
+        );
+        let said = match got {
+            Ok(p) => {
+                assert_eq!(p, placed, "{}", case["what"]);
+                "ok".to_owned()
+            }
+            Err(code) => code.name().to_owned(),
+        };
+        assert_eq!(
+            said,
+            case["expect"].as_str().expect("expect"),
+            "{}",
+            case["what"]
+        );
+    }
+}
+
+/// The two records N2CALL-5 forwards in `session-04`, Shelter 3's and Facundo's, as
+/// `forwarding.json` has their `PROOF`s.
+fn session_04_records() -> Vec<radiopost::forwarding::Proof> {
+    vectors("forwarding.json")["records"]
+        .as_array()
+        .expect("records")
+        .iter()
+        .map(|r| {
+            let bytes = unhex(r["proof"]["pdu_hex"].as_str().expect("hex"));
+            radiopost::forwarding::Proof::from_value(&cbor::decode(&bytes).expect("CBOR"))
+                .expect("a PROOF")
+        })
+        .collect()
+}
+
+/// RP-7 §2–§4.3: `session-04`, the caller's side byte for byte. N2CALL-5, cut off, calls its
+/// partner N1CALL-10 as a gateway (role 1), offering Shelter 3's message; it takes Ana's message
+/// with its placement unasked, sends both records' `PROOF`s before the message, and lets go of
+/// the records the partner lists.
+#[test]
+fn session_04_the_cut_off_gateway_calls_its_partner() {
+    use radiopost::session::client::Forwarding;
+    let w = world();
+    let file = vectors("session-04.json");
+    let first = &turns(&file)[0];
+    let cfg = ClientConfig {
+        credential: w.credentials["gateway-n2call-5"].clone(),
+        device: w.device("device:gateway-n2call-5"),
+        called: "N1CALL-10".into(),
+        time: file["context"]["caller_clock"].as_u64().expect("clock"),
+        nonce: nonce_of(first),
+        outbox: vec![w.out("shelter3-to-ana")],
+        cursor: 0,
+        auto: 65_536,
+        partials: Vec::new(),
+        caps: client_caps(),
+        credential_cached: false,
+        piece: 4096,
+        station: None,
+    };
+    let records = session_04_records();
+    let mut client = Client::new(cfg, Box::new(|_| Vec::new()))
+        .expect("a client")
+        .forwarding(Forwarding {
+            records: records.clone(),
+            trust: w.trust.clone(),
+        });
+    let events = replay_client(&mut client, &file, "caller");
+    assert!(client.is_over(), "it hangs up after transmission 4");
+    let ana = w.messages["ana-to-shelter3"].content_id();
+    let placed: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::Placed {
+                serial,
+                placed,
+                message,
+                ..
+            } => Some((*serial, placed.clone(), message.content_id())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(placed.len(), 1);
+    let (serial, placement, id) = &placed[0];
+    assert_eq!((*serial, *id), (Some(1), ana), "forwarding serial 1");
+    assert_eq!(
+        (placement.address.as_str(), placement.serial),
+        ("shelter3@radiopost.org", 501),
+        "held as #501 for Shelter 3"
+    );
+    let taken: Vec<[u8; 12]> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::Records(r) => Some(r.clone()),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    assert_eq!(
+        taken,
+        records
+            .iter()
+            .map(radiopost::forwarding::Proof::id)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        delivered(&events),
+        [w.messages["shelter3-to-ana"].content_id()]
+    );
+}
+
+/// What N1CALL-10's store did in `session-04`.
+#[derive(Default)]
+struct PartnerLog {
+    opened: Vec<String>,
+    records: Vec<radiopost::forwarding::Forwarded>,
+    picked: Vec<u64>,
+}
+
+/// N1CALL-10's own store for `session-04`, as a test's: it checks the caller as RP-1 §5 and §6.3
+/// say (a gateway credential with `send`), holds Ana's message for N2CALL-5 with its placement as
+/// forwarding serial 1, and keeps what it is given.
+struct Partner {
+    trust: Trust,
+    clock: u64,
+    item: Option<(Vec<u8>, Vec<u8>)>,
+    log: std::sync::Arc<std::sync::Mutex<PartnerLog>>,
+}
+
+impl radiopost::session::gateway::Upstream for Partner {
+    fn open(&mut self, body: &Json) -> Result<Json, ErrorCode> {
+        use radiopost::credential::{self, flags};
+        use radiopost::statement::{self, Freshness, Statement};
+        let field = |k: &str| radiopost::base64url::decode(body[k].as_str().unwrap_or(""));
+        let (Some(raw), Some(sig), Some(cred)) =
+            (field("statement"), field("signature"), field("credential"))
+        else {
+            return Err(ErrorCode::Malformed);
+        };
+        let stmt = Statement::decode(&raw).ok_or(ErrorCode::Malformed)?;
+        let cbody =
+            credential::verify(&cred, &self.trust, self.clock, flags::GATEWAY | flags::SEND)
+                .map_err(|r| r.code)?;
+        let fresh = Freshness {
+            now: self.clock,
+            seen: &[],
+            challenge: stmt.challenge(),
+            sent_nonce: None,
+        };
+        statement::verify(&stmt, &sig, &cbody, "N1CALL-10", &fresh)?;
+        self.log.lock().expect("log").opened.push(cbody.operator);
+        let waiting: Vec<Json> = self
+            .item
+            .iter()
+            .map(|(air, _)| {
+                let ana = Message::from_air(air).expect("a message");
+                serde_json::json!({
+                    "serial": 1, "id": ana.content_id().text(), "from": ana.from(),
+                    "subject": "Water truck", "size": air.len(), "priority": 0,
+                })
+            })
+            .collect();
+        Ok(serde_json::json!({
+            "session": "partner-1",
+            "waiting": waiting,
+            "more": 0,
+            "accept": stmt.messages.iter().map(|m| serde_json::json!({"id": m.text(), "offset": 0}))
+                .collect::<Vec<_>>(),
+            "decline": [],
+        }))
+    }
+
+    fn fetch(&mut self, serial: u64) -> Result<Vec<u8>, ErrorCode> {
+        self.item
+            .as_ref()
+            .filter(|_| serial == 1)
+            .map(|(air, _)| air.clone())
+            .ok_or(ErrorCode::UnknownMessage)
+    }
+
+    fn placement(&mut self, serial: u64) -> Option<Vec<u8>> {
+        self.item
+            .as_ref()
+            .filter(|_| serial == 1)
+            .map(|(_, p)| p.clone())
+    }
+
+    fn trust(&mut self) -> Trust {
+        self.trust.clone()
+    }
+
+    fn take_records(
+        &mut self,
+        records: &[radiopost::forwarding::Forwarded],
+    ) -> Result<Vec<Result<(), ErrorCode>>, ErrorCode> {
+        self.log
+            .lock()
+            .expect("log")
+            .records
+            .extend(records.iter().cloned());
+        Ok(vec![Ok(()); records.len()])
+    }
+
+    fn hand_in(
+        &mut self,
+        _messages: &[(ContentId, Vec<u8>)],
+    ) -> Result<Vec<Result<(), ErrorCode>>, ErrorCode> {
+        panic!("forwarded mail is not handed in in the caller's name (RP-7 §2)")
+    }
+
+    fn picked_up(&mut self, serials: &[u64]) -> Result<(), ErrorCode> {
+        self.log.lock().expect("log").picked.extend(serials);
+        Ok(())
+    }
+
+    fn files(&mut self, _asked: &[(u64, Vec<u8>)]) -> Result<(), ErrorCode> {
+        Ok(())
+    }
+
+    fn close(&mut self) {}
+}
+
+/// RP-7 §2–§4.3: `session-04`, the partner's side byte for byte. N1CALL-10 answers N2CALL-5's
+/// role-1 call from its own store, sends the forward item with its placement, checks both
+/// `PROOF`s and the message against Shelter 3's record, and lists both records in its `RECEIPT`.
+#[test]
+fn session_04_the_partner_answers() {
+    use radiopost::session::gateway::{Gateway, GatewayConfig};
+    let w = world();
+    let file = vectors("session-04.json");
+    let turns = turns(&file);
+    let first = &turns[1].bytes;
+    let length = usize::from(u16::from_be_bytes([first[0], first[1]]));
+    let session_id: [u8; 8] = radiopost::pdu::unframe(&first[..2 + length])
+        .expect("a WELCOME")
+        .get(2)
+        .and_then(Value::as_bytes)
+        .expect("a session ID")
+        .try_into()
+        .expect("8 bytes");
+    let clock = file["context"]["partner_clock"].as_u64().expect("clock");
+    let cfg = GatewayConfig {
+        callsign: "N1CALL-10".into(),
+        time: clock,
+        session_id,
+        challenge: [0; 16],
+        caps: Caps {
+            compression: vec![0, 1],
+            max_pdu: 4096,
+            renew: false,
+        },
+        piece: 960,
+        credentials: Vec::new(),
+        uploads: HashMap::new(),
+        refused: Vec::new(),
+    };
+    let placement = unhex(
+        vectors("forwarding.json")["placement"]["placement_hex"]
+            .as_str()
+            .expect("hex"),
+    );
+    let log = std::sync::Arc::new(std::sync::Mutex::new(PartnerLog::default()));
+    let partner = {
+        let (trust, log) = (w.trust.clone(), log.clone());
+        let item = Some((w.out("ana-to-shelter3").air, placement));
+        move |caller: &str| -> Result<Box<dyn radiopost::session::gateway::Upstream + Send>, ErrorCode> {
+            assert_eq!(caller, "N2CALL-5");
+            Ok(Box::new(Partner {
+                trust: trust.clone(),
+                clock,
+                item: item.clone(),
+                log: log.clone(),
+            }))
+        }
+    };
+    let mut gateway = Gateway::new(
+        cfg,
+        Box::new(|_| panic!("no post office is asked in the caller's name")),
+        Box::new(|_| true),
+    )
+    .with_partner(Box::new(partner));
+    for (n, t) in turns.iter().enumerate() {
+        if t.from == "caller" {
+            gateway.receive(&t.bytes);
+        } else {
+            let wrote = gateway.transmit().expect("a transmission due");
+            assert_eq!(
+                cbor::hex(&wrote),
+                cbor::hex(&t.bytes),
+                "transmission {}",
+                n + 1
+            );
+        }
+    }
+    assert_eq!(
+        gateway.transmit(),
+        None,
+        "nothing after the caller's last turn"
+    );
+    gateway.link_closed();
+    let log = log.lock().expect("log");
+    assert_eq!(log.opened, ["N2CALL-5"]);
+    assert_eq!(log.picked, [1], "the forward item, receipted");
+    let ids: Vec<[u8; 12]> = log.records.iter().map(|r| r.record.proof.id()).collect();
+    assert_eq!(
+        ids,
+        session_04_records()
+            .iter()
+            .map(radiopost::forwarding::Proof::id)
+            .collect::<Vec<_>>()
+    );
+    let shelter = w.messages["shelter3-to-ana"].content_id();
+    assert_eq!(
+        log.records[0]
+            .messages
+            .iter()
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>(),
+        [shelter],
+        "Shelter 3's record, with her message"
+    );
+    assert!(
+        log.records[1].messages.is_empty(),
+        "Facundo's, a pickup only"
+    );
+    assert_eq!(log.records[1].record.proof.pickups, [421]);
+}
+
+/// What one forwarding session, engine to engine, left on each side.
+struct Forwarded {
+    caller: Vec<Event>,
+    partner: Vec<Event>,
+    /// The caller's third transmission's PDUs.
+    third: Vec<Value>,
+    notes: Vec<radiopost::session::gateway::Note>,
+    log: PartnerLog,
+}
+
+/// N2CALL-5 forwarding `records` and `outbox` to N1CALL-10, engine to engine, at session-04's
+/// clocks; N1CALL-10 holds `item` for it (Ana's message and a placement), and answers forwarding
+/// sessions only when `partner` is true.
+fn forward(
+    w: &World,
+    records: Vec<radiopost::forwarding::Proof>,
+    outbox: Vec<Outgoing>,
+    item: Option<Vec<u8>>,
+    partner: bool,
+) -> Forwarded {
+    use radiopost::session::client::Forwarding;
+    use radiopost::session::gateway::{Gateway, GatewayConfig};
+    let file = vectors("session-04.json");
+    let cfg = ClientConfig {
+        credential: w.credentials["gateway-n2call-5"].clone(),
+        device: w.device("device:gateway-n2call-5"),
+        called: "N1CALL-10".into(),
+        time: file["context"]["caller_clock"].as_u64().expect("clock"),
+        nonce: [7; 8],
+        outbox,
+        cursor: 0,
+        auto: 65_536,
+        partials: Vec::new(),
+        caps: client_caps(),
+        credential_cached: false,
+        piece: 4096,
+        station: None,
+    };
+    let mut client = Client::new(cfg, Box::new(|_| Vec::new()))
+        .expect("a client")
+        .forwarding(Forwarding {
+            records,
+            trust: w.trust.clone(),
+        });
+    let clock = file["context"]["partner_clock"].as_u64().expect("clock");
+    let gcfg = GatewayConfig {
+        callsign: "N1CALL-10".into(),
+        time: clock,
+        session_id: [9; 8],
+        challenge: [0; 16],
+        caps: Caps {
+            compression: vec![0, 1],
+            max_pdu: 4096,
+            renew: false,
+        },
+        piece: 960,
+        credentials: Vec::new(),
+        uploads: HashMap::new(),
+        refused: Vec::new(),
+    };
+    let log = std::sync::Arc::new(std::sync::Mutex::new(PartnerLog::default()));
+    let mut gateway = Gateway::new(
+        gcfg,
+        Box::new(|_| panic!("no post office is asked in the caller's name")),
+        Box::new(|_| true),
+    );
+    if partner {
+        let (trust, shared) = (w.trust.clone(), log.clone());
+        let item = item.map(|p| (w.out("ana-to-shelter3").air, p));
+        gateway = gateway.with_partner(Box::new(move |_caller: &str| {
+            Ok(Box::new(Partner {
+                trust: trust.clone(),
+                clock,
+                item: item.clone(),
+                log: shared.clone(),
+            })
+                as Box<dyn radiopost::session::gateway::Upstream + Send>)
+        }));
+    }
+    let (mut caller, mut answered, mut third) = (Vec::new(), Vec::new(), Vec::new());
+    let mut wire = vec![client.hello()];
+    let mut turn = 1;
+    while !wire.is_empty() {
+        for bytes in std::mem::take(&mut wire) {
+            answered.extend(gateway.receive(&bytes));
+        }
+        let mut back = Vec::new();
+        while let Some(bytes) = gateway.transmit() {
+            back.push(bytes);
+        }
+        for bytes in back {
+            caller.extend(client.receive(&bytes));
+        }
+        while let Some(bytes) = client.transmit() {
+            turn += 2;
+            if turn == 3 {
+                third = pdus_of(&bytes);
+            }
+            wire.push(bytes);
+        }
+    }
+    let notes = gateway.take_notes();
+    gateway.link_closed();
+    let log = std::mem::take(&mut *log.lock().expect("log"));
+    Forwarded {
+        caller,
+        partner: answered,
+        third,
+        notes,
+        log,
+    }
+}
+
+fn not_taken(events: &[Event]) -> Vec<(ContentId, ErrorCode)> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            Event::NotTaken { id, code } => Some((*id, *code)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn records_taken(events: &[Event]) -> Vec<[u8; 12]> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            Event::Records(r) => Some(r.clone()),
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
+/// The record Shelter 3 left with N2CALL-5 at 14:35 (`local-delivery.json`), with her credential
+/// whole in place of its hash.
+fn shelter_second_record(w: &World) -> radiopost::forwarding::Proof {
+    let bytes = unhex(
+        vectors("local-delivery.json")["records"][0]["proof"]["pdu_hex"]
+            .as_str()
+            .expect("hex"),
+    );
+    let mut record = radiopost::forwarding::Proof::from_value(&cbor::decode(&bytes).expect("CBOR"))
+        .expect("a PROOF");
+    record.credential = Some(w.credentials["shelter3-n3call"].clone());
+    record.credential_hash = None;
+    record
+}
+
+/// RP-7 §3.2: two records of one user in one transmission carry her credential once, then its
+/// hash, and the partner finds it by the hash among the credentials it has just checked; it keeps
+/// the credential once, for later windows.
+#[test]
+fn a_credential_goes_once_then_by_its_hash() {
+    let w = world();
+    let first = session_04_records().remove(0);
+    let second = shelter_second_record(&w);
+    let ids = [first.id(), second.id()];
+    let got = forward(
+        &w,
+        vec![first, second],
+        vec![w.out("shelter3-to-ana"), w.out("shelter3-to-facundo")],
+        None,
+        true,
+    );
+    let proofs: Vec<&Value> = got
+        .third
+        .iter()
+        .filter(|p| p.get(0).and_then(Value::as_u64) == Some(11))
+        .collect();
+    assert_eq!(proofs.len(), 2);
+    assert!(
+        proofs[0].get(1).is_some() && proofs[0].get(9).is_none(),
+        "whole"
+    );
+    assert!(
+        proofs[1].get(1).is_none(),
+        "the second without the credential"
+    );
+    assert_eq!(
+        proofs[1].get(9).and_then(Value::as_bytes),
+        Some(&radiopost::credential::hash(&w.credentials["shelter3-n3call"])[..]),
+        "but its hash"
+    );
+    assert_eq!(records_taken(&got.caller), ids);
+    assert_eq!(
+        delivered(&got.caller),
+        [
+            w.messages["shelter3-to-ana"].content_id(),
+            w.messages["shelter3-to-facundo"].content_id()
+        ]
+    );
+    let kept: Vec<_> = got
+        .notes
+        .iter()
+        .filter(|n| {
+            **n == radiopost::session::gateway::Note::Credential(
+                w.credentials["shelter3-n3call"].clone(),
+            )
+        })
+        .collect();
+    assert_eq!(kept.len(), 1, "Shelter 3's credential, kept once");
+    assert_eq!(got.log.records.len(), 2);
+}
+
+/// RP-7 §3.3: a record whose path does not end with the caller is refused `refused-by-policy`;
+/// its message fails with that code and stays with the caller, the record is not listed, and the
+/// other record is taken.
+#[test]
+fn a_refused_record_fails_its_messages_with_its_code() {
+    use radiopost::session::gateway::Note;
+    let w = world();
+    let mut records = session_04_records();
+    records[0].path = vec!["N2CALL-5".into(), "N9ZZZ".into()];
+    let refused = records[0].id();
+    let facundo = records[1].id();
+    let got = forward(&w, records, vec![w.out("shelter3-to-ana")], None, true);
+    let shelter = w.messages["shelter3-to-ana"].content_id();
+    assert_eq!(
+        not_taken(&got.caller),
+        [(shelter, ErrorCode::RefusedByPolicy)]
+    );
+    assert_eq!(records_taken(&got.caller), [facundo]);
+    assert!(delivered(&got.caller).is_empty());
+    assert!(got.notes.contains(&Note::RecordRefused {
+        id: Some(refused),
+        code: ErrorCode::RefusedByPolicy
+    }));
+    assert_eq!(got.log.records.len(), 1, "Facundo's alone stored");
+}
+
+/// RP-7 §3.3: a message that no record taken covers is `not-authorized`; the records sent are
+/// taken all the same.
+#[test]
+fn a_message_no_record_covers_is_not_authorized() {
+    let w = world();
+    let facundo = session_04_records().remove(1);
+    let id = facundo.id();
+    let got = forward(
+        &w,
+        vec![facundo],
+        vec![w.out("shelter3-to-ana")],
+        None,
+        true,
+    );
+    assert_eq!(
+        not_taken(&got.caller),
+        [(
+            w.messages["shelter3-to-ana"].content_id(),
+            ErrorCode::NotAuthorized
+        )]
+    );
+    assert_eq!(records_taken(&got.caller), [id]);
+    assert!(got.log.records.iter().all(|r| r.messages.is_empty()));
+}
+
+/// RP-7 §2: a gateway that answers no forwarding sessions refuses `HELLO` role 1.
+#[test]
+fn a_gateway_without_partners_refuses_a_forwarding_call() {
+    let w = world();
+    let got = forward(
+        &w,
+        session_04_records(),
+        vec![w.out("shelter3-to-ana")],
+        None,
+        false,
+    );
+    assert!(got.caller.iter().any(|e| matches!(
+        e,
+        Event::Error {
+            code: ErrorCode::RefusedByPolicy,
+            ..
+        }
+    )));
+    assert!(
+        got.partner
+            .contains(&Event::Refused(ErrorCode::RefusedByPolicy))
+    );
+    assert!(got.log.opened.is_empty());
+}
+
+/// RP-7 §4.3: a forward item whose placement names another gateway is listed failed
+/// `not-authorized` and not held; the partner keeps it, since the caller did not list it
+/// `complete`.
+#[test]
+fn a_placement_for_another_gateway_is_not_held() {
+    let w = world();
+    let file = vectors("forwarding.json");
+    let other = file["placement_cases"]
+        .as_array()
+        .expect("cases")
+        .iter()
+        .find(|c| c["what"] == "for another gateway")
+        .expect("the case");
+    let placement = unhex(other["placement_hex"].as_str().expect("hex"));
+    let got = forward(&w, Vec::new(), Vec::new(), Some(placement), true);
+    let ana = w.messages["ana-to-shelter3"].content_id();
+    assert!(got.caller.contains(&Event::Failed {
+        id: ana,
+        code: ErrorCode::NotAuthorized
+    }));
+    assert!(!got.caller.iter().any(|e| matches!(e, Event::Placed { .. })));
+    assert!(got.log.picked.is_empty(), "the forward item is kept");
+}

@@ -688,7 +688,8 @@ fn apply(
             store.set_credential(&bytes)?;
             tell(say, "a renewed credential, kept for the next session");
         }
-        SessionEvent::End => {}
+        // only a gateway calling a partner hears `Placed` and `Records` (RP-7 §2), never a client
+        SessionEvent::Placed { .. } | SessionEvent::Records(_) | SessionEvent::End => {}
     }
     Ok(())
 }

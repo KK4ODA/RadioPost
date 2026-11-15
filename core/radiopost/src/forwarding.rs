@@ -8,10 +8,15 @@
 //! partner checks each `PROOF` before it takes the messages it covers ([`check_proof`]), lists
 //! the records it took in its `RECEIPT` (key 4), adds its own callsign to each record's path, and
 //! reports it, or forwards it in turn.
+//!
+//! Inward, the partner sends the cut-off gateway the mail its post offices placed for it, each
+//! item with a **placement** the post office signed ([`Placed`], [`check_placement`]).
+
+use ed25519_dalek::SigningKey;
 
 use crate::cbor::Value;
 use crate::credential::{self, Body, Trust, flags};
-use crate::crypto::{self, ContentId};
+use crate::crypto::{self, ContentId, Sign1, context};
 use crate::error::ErrorCode;
 use crate::pdu::kind;
 use crate::statement::{self, Form, Freshness, Statement, TIME_WINDOW_S};
@@ -252,4 +257,107 @@ pub fn check_proof(
         credential,
         body,
     })
+}
+
+/// A placement's body (RP-7 §4.2): which copy placed ahead the post office means a forward item
+/// to be, for which user and which cut-off gateway.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Placed {
+    /// The user the message is for.
+    pub address: String,
+    /// The message's serial in that mailbox (RP-3 §6.2).
+    pub serial: u64,
+    /// The message's content ID.
+    pub id: ContentId,
+    /// The cut-off gateway it is for.
+    pub gateway: String,
+    /// When the copy is to be dropped.
+    pub expires: u64,
+}
+
+impl Placed {
+    /// The placement body's map, `v` 1.
+    #[must_use]
+    pub fn to_value(&self) -> Value {
+        Value::int_map(vec![
+            (1, Value::Uint(1)),
+            (2, Value::text(&self.address)),
+            (3, Value::Uint(self.serial)),
+            (4, Value::bytes(self.id.as_bytes())),
+            (5, Value::text(&self.gateway)),
+            (6, Value::Uint(self.expires)),
+        ])
+    }
+
+    /// A placement body read back: `None` unless it is `v` 1 with every field of its type.
+    #[must_use]
+    pub fn from_value(v: &Value) -> Option<Placed> {
+        if v.get(1)?.as_u64()? != 1 {
+            return None;
+        }
+        Some(Placed {
+            address: v.get(2)?.as_text()?.to_owned(),
+            serial: v.get(3)?.as_u64()?,
+            id: ContentId::from_slice(v.get(4)?.as_bytes()?)?,
+            gateway: v.get(5)?.as_text()?.to_owned(),
+            expires: v.get(6)?.as_u64()?,
+        })
+    }
+
+    /// The placement, signed by the post office key `key` (RP-7 §4.2, RP-0 §5).
+    #[must_use]
+    pub fn sign(&self, key: &SigningKey) -> Vec<u8> {
+        let payload = self.to_value().encode().unwrap_or_default();
+        Sign1::sign(context::PLACEMENT, &payload, key).encode()
+    }
+}
+
+/// RP-7 §4.3: what the cut-off gateway `me` makes, at `now`, of the placement that came with the
+/// message `id`, holding the post office keys in `trust`. Checked in order.
+///
+/// # Errors
+///
+/// `malformed` when it is not a placement; `signature-invalid` when no key of the address's post
+/// office that `trust` holds signed it under its `kid`; `not-authorized` when it is for another
+/// message or another gateway; `refused-by-policy` once it has expired.
+pub fn check_placement(
+    placement: &[u8],
+    id: &ContentId,
+    me: &str,
+    now: u64,
+    trust: &Trust,
+) -> Result<Placed, ErrorCode> {
+    let sign1 = Sign1::open(placement).ok_or(ErrorCode::Malformed)?;
+    let body = crate::cbor::decode(&sign1.payload).map_err(|_| ErrorCode::Malformed)?;
+    let placed = Placed::from_value(&body).ok_or(ErrorCode::Malformed)?;
+    let domain = placed
+        .address
+        .rsplit_once('@')
+        .map_or("", |(_, d)| d)
+        .to_lowercase();
+    let signed = trust.keys.get(&domain).is_some_and(|keys| {
+        keys.iter().any(|k| {
+            crypto::kid(&k.public) == sign1.kid && sign1.verify(context::PLACEMENT, &k.public)
+        })
+    });
+    if !signed {
+        return Err(ErrorCode::SignatureInvalid);
+    }
+    if placed.id != *id || placed.gateway != me {
+        return Err(ErrorCode::NotAuthorized);
+    }
+    if now >= placed.expires {
+        return Err(ErrorCode::RefusedByPolicy);
+    }
+    Ok(placed)
+}
+
+/// A record a partner took whole in a forwarding session: what it stores (RP-7 §3.4), its own
+/// callsign still to be added to the path, with the air forms of the messages that came with it.
+#[derive(Clone, Debug)]
+pub struct Forwarded {
+    /// The record, checked.
+    pub record: Checked,
+    /// Its messages that arrived in this session, by content ID, as air forms.
+    pub messages: Vec<(ContentId, Vec<u8>)>,
 }
