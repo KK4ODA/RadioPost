@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.5.0 |
+| **Version** | 1.6.0 |
 | **Updated** | 2026-11-15 |
 | **Describes** | RadioPost 0.1.0-beta.22 |
 | **Licence** | CC BY 4.0 |
@@ -771,16 +771,32 @@ Click **Set up the gateway**. Setup has three steps.
 
 1. **Callsign**: yours with an SSID, such as `KK4ODA-1`. Callers call this.
 2. **Modem**: leave `ws://127.0.0.1:8515/v1`, where Aether listens on the same computer.
-3. **Country**: where the gateway operates, in two letters, such as `US`. It decides which
+3. **More modems**: leave it empty, unless the gateway is to answer on other modems too (see
+   *More than one modem* below).
+4. **Country**: where the gateway operates, in two letters, such as `US`. It decides which
    third-party mail the gateway may hand over.
-4. Leave **The modem does not check the band rules: I do** clear. Aether checks them.
-5. Keep **Answer calls when the app opens** ticked for a gateway left on its own.
-6. Tick **Hold copies of users' mail, for when the Internet is down** if the computer has room to
+5. Leave **The modem does not check the band rules: I do** clear. Aether checks them.
+6. Keep **Answer calls when the app opens** ticked for a gateway left on its own.
+7. Tick **Hold copies of users' mail, for when the Internet is down** if the computer has room to
    spare. Set how many **Users**, how many **Days** a copy is kept, and the **Largest message**
    kept with its text.
-7. Click **Save**. The gateway makes its key, shown under the form.
+8. Click **Save**. The gateway makes its key, shown under the form.
 
 If you change the copies setting later, register again (step 2) so your post office knows.
+
+#### More than one modem
+
+A gateway can answer on several modems: Aether and Mercury on one radio, or Aether on HF and
+packet on VHF. Each modem other than Aether runs with its adapter, a small program in RadioPost's
+tools (`radiopost-mercury`, `radiopost-vara`). Put each adapter's address in **More modems**, one a
+line, such as `127.0.0.1:8601`.
+
+* The gateway carries **one session at a time**. While it carries one, the other modems do not
+  answer. A call another modem answered just before is ended.
+* Calls to partners ([section 22](#22-partners-forwarding-by-radio)) go on the first modem.
+* On one radio, the modems must share its keying, through rigctld or FLRig: only one program can
+  hold a radio's CAT port.
+* In step 2, add a channel for each modem, with its **Modem**.
 
 ### Step 2. Registration
 
@@ -788,7 +804,9 @@ The form shows the account the RadioPost client on this computer is enrolled as.
 
 1. **RadioPost app's home**: the folder where the client keeps its key and credential. Leave it.
 2. Under **Channels**, add each dial frequency where callers will find the gateway, in MHz, upper
-   sideband, with Aether's bandwidth there (500 or 2300 Hz). **Add a channel** adds a row.
+   sideband, with the **Modem** callers use there and its **Bandwidth** (for Aether, 500 or
+   2300 Hz). On an FM radio the frequency is the channel's, and the bandwidth the channel's width.
+   **Add a channel** adds a row.
 3. **Grid** and **Place** help callers choose a gateway near them. **Hours** says when it answers:
    `always`, or in words such as `1800-0200 UTC`.
 4. Click **Register**.
@@ -818,7 +836,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 2. **What it is doing** (the table below).
 3. **Start** and **Stop**.
 4. **Setup**. Settings change only while the gateway is stopped.
-5. **Modem**: where it reaches Aether, and since when it listens.
+5. **Modem**: where it reaches Aether and any more modems, and since when it listens.
 6. **Post offices**: whether each post office let the gateway log in at the last check. It checks
    every ten minutes while it answers. **Check now** checks at once.
 7. **Registration**: the gateway's credential and when it runs out (red two weeks ahead).
@@ -1564,3 +1582,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.4.1 | 2026-11-15 | §33: restoring a backup points to the server guide's chapter 11, rewritten. |
 | 1.4.2 | 2026-11-15 | Links to Aether's manual go to its new home, `docs/manual/manual.md`, and its chapters there. |
 | 1.5.0 | 2026-11-15 | §8: the call box's **Channel**, and **Call** tuning the radio there and back when Aether can set the dial. §19: the badge **Not answering here**. §22: a gateway tunes to its partner's window and back. §39: three new messages. §40: the quick reference tunes by **Channel**. |
+| 1.6.0 | 2026-11-15 | §18: **More modems**, and *More than one modem*: a gateway answering on several modems, one session at a time. §18 step 2: each channel's **Modem**. §19: **Modem** names them all. |

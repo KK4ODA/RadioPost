@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.33 |
+| **Version** | 0.3.34 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -129,7 +129,7 @@ rules:
 | W23 | A phone version | Radio | Low | Fits today; optional addition for RPMI across devices | Planned |
 | W24 | Block a caller by address or callsign | Operation | Medium | Fits today | Implemented |
 | W25 | The gateway renews its own credential | — | — | — | Consolidated into W8 |
-| W26 | One gateway, several modems | Operation | Medium | Fits today; G11 to name Mercury | Planned |
+| W26 | One gateway, several modems | Operation | Medium | Fits today; G11 to name Mercury | Implemented |
 | W27 | Copies placed ahead | Offline | High | Fits today | Implemented |
 | W28 | The gateway's queue while offline, and its reports | Offline | High | Fits today | Implemented |
 | W29 | The sender's client follows queued mail | Offline | High | Fits today | Implemented |
@@ -615,12 +615,12 @@ HF and VHF packet, each modem on a radio of its own or sharing one.
 | Requested by | The plan: design §5.2 (*Modem host*); the county EOC of concept §2. The author (KK4ODA), 2026-11-11: Aether HF and Mercury on one gateway. Requesters: 1. |
 | Component | Gateway. |
 | Compatibility | **Fits today.** The gateway holds one RPMI connection per adapter (RP-4 §2), and its record lists every channel with its modem (RP-5 §4.4): the same dial twice, once per modem, is allowed. Two modems on one radio need no protocol either: the gateway turns `listen` off on the others while one has a call or a link (RP-4 §4), and each modem hears the other's signal as busy (RP-4 §5). Listing a Mercury channel needs a modem name RP-5 §4.4 does not have: an **optional protocol addition** (§13, G11). |
-| Existing coverage | Planned; one modem per gateway today. |
+| Existing coverage | Built (2026-11-15): `more_modems` in the gateway's settings (Setup's **More modems**, `radiopost-gateway modem --add`), each an RPMI adapter or Aether. The gateway carries one session at a time: while it carries one on a modem it turns `listen` off on the others, and a call one of them answered before it heard is aborted once the session is over; calls to partners go on the first modem; each channel in the registration names its modem. `gateway/tests/several_modems.rs` runs one gateway on two loopback channels. Two sessions at once on two radios are not built: one gateway, one session. |
 | Dependencies | W20 for Mercury; W22 for packet; W40, since Mercury checks no band rules; G11. |
 | Effort | Medium for a modem per radio. Large for two modems on one radio: shared audio and keying, the gateway holding one modem quiet while the other works, a guide, and tests with two real modems. |
 | Priority | **Medium.** A gateway that serves both modems' users doubles who can reach it; it is not needed for the pilot. |
 | Recommendation | Accept, as one capability configured per radio: modems on separate radios run side by side, and modems sharing a radio take turns, the gateway keeping the others from answering while one has a call or link. |
-| Status | Planned. |
+| Status | Implemented, one session at a time on any modem; sessions side by side on separate radios not yet. |
 | Author decision | None yet. |
 | Notes | On one radio, both modems hear the same audio, which the operating system can share; only one may transmit at a time, and the radio's keying must be shared too: through rigctld or FLRig, which Aether supports and which Mercury's Hamlib keying can reach, since only one program can hold a CAT port. Two callers at the same instant could each be answered once; the gateway aborts the later, and the two calls had already collided on the air. Aether's gate checks only Aether's transmissions. Design D19 says two modems cannot share one sound card: true for transmitting, not for listening. |
 
@@ -1123,3 +1123,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.31 | 2026-11-15 | Every gap settled before RP-0 to RP-6 became Stable at 1.0.0 (D41): G1, G4, G6, G7, G9, G17, G20 by the specifications, G11, G13 to G15 as built. |
 | 0.3.32 | 2026-11-15 | W43 implemented: the public test service, hosted over the Internet. |
 | 0.3.33 | 2026-11-15 | W20 implemented: the VARA adapter, from VARA's published commands (RP-4 1.0.1 §9.2), tried against a stand-in. |
+| 0.3.34 | 2026-11-15 | W26 implemented: one gateway answering on several modems, one session at a time; the registration's channels name their modems. |

@@ -60,6 +60,7 @@ fn gateway_checking(
     station::Settings {
         callsign: "KK4ODA-1".into(),
         modem: at_gateway.to_string(),
+        more_modems: Vec::new(),
         country: "US".into(),
         post_offices: BTreeMap::from([("test.example".into(), base.to_owned())]),
         resolver: String::new(),

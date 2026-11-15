@@ -72,6 +72,7 @@ fn a_gateway_claims_again_after_aether_restarts() {
         &Settings {
             callsign: "KK4ODA-1".into(),
             modem: aether,
+            more_modems: Vec::new(),
             country: "US".into(),
             post_offices: std::collections::BTreeMap::new(),
             resolver: "https://dns.invalid/resolve".into(),

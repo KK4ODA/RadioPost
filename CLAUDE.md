@@ -215,7 +215,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `app/gateway/ui` (port 8621; `radiopost-gateway panel` serves it headless), and the window in
   `app/gateway/src-tauri` (`radiopost-gateway-app`, its own lockfile, CI's `app · gateway` job).
   `station::run` waits for a modem that is away and stops when asked; `serve` is `run` with no one
-  to ask. A gateway's credential names the gateway as its operator (RP-5 §6.4) and lasts 90 days:
+  to ask. Several modems (W26): `Settings.more_modems` (Setup's **More modems**, `modem --add`), each
+  opened by `Others` beside the first and read between sessions with a short wait; one session at
+  a time, the other modems held (`listen` off) while one carries a session or a partner call, and a
+  link one of them brought up meanwhile aborted at release (`Modem::hold`, `release`). Partner calls
+  go on the first modem. `tests/several_modems.rs` taps two loopback channels' adapters to see the
+  `listen`s. The registration's channels name their modem (the panel's `MODEMS`). A gateway's credential names the gateway as its operator (RP-5 §6.4) and lasts 90 days:
   registering again replaces it. `tests/common` holds the gateway tests' post office and clients.
   Callers refused (W24): `refused.rs`, `refused.json` beside the settings and read at each call
   (the settings are held while it answers; a refusal is wanted at once), handed to the engine as

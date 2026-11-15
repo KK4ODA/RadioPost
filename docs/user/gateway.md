@@ -68,10 +68,19 @@ many users, how many days, and the largest message it holds with its text. Click
 gateway makes its key; it is shown under the form. Change the copies setting later, and register
 again (step 2) so that the post office knows.
 
+**More modems** (wishlist W26) lets one gateway answer on several modems: Aether and Mercury on one
+radio, or Aether on HF and packet on VHF. Give each modem's RPMI adapter (`radiopost-mercury`,
+`radiopost-vara`, from the tools archive), one a line, as `host:port`. The gateway carries one
+session at a time: while it carries one, it tells the other modems not to answer, and a call one of
+them answered before it heard is ended (`abort`) once the session is over. Calls to partners
+(RP-7 §2) go on the first **Modem**. Two modems on one radio must share its keying through rigctld
+or FLRig, since only one program can hold a CAT port; each hears the other's signal as busy.
+
 **2. Registration.** The form shows the account the RadioPost app on this computer is enrolled
 as. **RadioPost app's home** is the folder where that app keeps its key and credential
 (`.radiopost` in your user folder): leave it. Under **Channels**, give each dial frequency (MHz, upper sideband) where callers will find the
-gateway, and Aether's bandwidth there (500 or 2300 Hz). **Grid** and **Place** help callers choose
+gateway, the **Modem** callers use there (RP-0 §9.4's names), and its bandwidth (for Aether, 500
+or 2300 Hz; on an FM radio, the channel and its width, RP-5 §4.4). **Grid** and **Place** help callers choose
 a gateway near them; **Hours** says when it answers (`always`, or in words). Click **Register**.
 Your post office lists the gateway for its users and issues it a credential, valid for 90 days.
 While the gateway answers, it renews that credential by itself in its last month, with your
@@ -299,7 +308,9 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
-`radiopost-gateway serve` answers calls with no panel at all, as before. `radiopost-gateway block
+`radiopost-gateway serve` answers calls with no panel at all, as before. `radiopost-gateway modem
+--add 127.0.0.1:8601` has it answer on one more modem, `modem --remove` no longer, and `modems`
+lists them; stop the gateway first. `radiopost-gateway block
 --caller N0CALL --note "why"` refuses a caller, `unblock --caller N0CALL` carries it again, and
 `blocked` lists the callers and post offices refused; a running gateway takes the change at the
 next call. `block --domain example.org` refuses a whole post office (RP-1 §7.3) and `unblock

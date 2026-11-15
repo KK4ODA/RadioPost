@@ -39,6 +39,11 @@ pub struct Settings {
     pub callsign: String,
     /// Its modem: an RPMI adapter's `host:port`, or Aether's control API `ws://…`.
     pub modem: String,
+    /// More modems it answers on, given as `modem` is (wishlist W26): Aether and Mercury on one
+    /// radio, or HF and VHF packet on two. It carries one session at a time: while it carries one
+    /// on a modem, the others do not answer. Calls it places (RP-7 §2) go on `modem` alone.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub more_modems: Vec<String>,
     /// The country it operates in, for third-party mail (RP-6 §5.1).
     #[serde(default = "us")]
     pub country: String,
@@ -955,6 +960,37 @@ struct Modem {
 }
 
 impl Modem {
+    /// Stops answering while the gateway carries a session on another of its modems (W26).
+    fn hold(&mut self) {
+        let off = self.host.listen(false);
+        let _ = self.conn.send(&off);
+    }
+
+    /// Answers again once the gateway's session on another modem is over (W26). A call this
+    /// modem answered meanwhile, before it heard `listen` off, was never carried: it is aborted.
+    fn release(&mut self, name: &str, tell: &mut dyn FnMut(&str)) -> io::Result<()> {
+        while let Some(e) = self.next()? {
+            if let Event::Connected {
+                link,
+                remote,
+                direction: Direction::In,
+                ..
+            } = e
+            {
+                let abort = self.host.abort(Some(&link));
+                self.conn.send(&abort)?;
+                tell(&format!(
+                    "{remote} called on {name} while another session was carried: the call was ended"
+                ));
+            }
+        }
+        if self.outside.is_none() {
+            let on = self.host.listen(true);
+            self.conn.send(&on)?;
+        }
+        Ok(())
+    }
+
     fn next(&mut self) -> io::Result<Option<Event>> {
         match self.conn.read_message() {
             Ok(Some(m)) => Event::read(&m)
@@ -1096,9 +1132,9 @@ enum Unopened {
     Never(String),
 }
 
-/// Opens the modem: `hello`, the gateway's callsign, and `listen` on (RP-4 §3, §4).
-fn open(station: &Station) -> Result<Modem, Unopened> {
-    let at = adapter_for(&station.settings.modem).map_err(Unopened::Never)?;
+/// Opens the modem at `address`: `hello`, the gateway's callsign, and `listen` on (RP-4 §3, §4).
+fn open(station: &Station, address: &str) -> Result<Modem, Unopened> {
+    let at = adapter_for(address).map_err(Unopened::Never)?;
     let conn = Connection::open(at)
         .map_err(|e| Unopened::Later(format!("cannot reach the modem at {at}: {e}")))?;
     conn.set_timeout(Some(Duration::from_millis(250)))
@@ -1166,7 +1202,7 @@ fn open_when_able(
         if monitor.stopping() {
             return Ok(None);
         }
-        match open(station) {
+        match open(station, &station.settings.modem) {
             Ok(m) => return Ok(Some(m)),
             Err(Unopened::Never(e)) => return Err(e),
             Err(Unopened::Later(e)) => {
@@ -1198,6 +1234,10 @@ pub fn serve(dir: &Path, say: &mut dyn FnMut(&str)) -> Result<(), String> {
 /// # Errors
 ///
 /// The gateway is not set up, or its modem never will open as it is set.
+#[allow(
+    clippy::too_many_lines,
+    reason = "the answering loop, read in one place: each modem's events and the calls it places"
+)]
 pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(), String> {
     let mut tell = |line: &str| {
         monitor.log(line);
@@ -1208,11 +1248,9 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
     let Some(mut modem) = open_when_able(&station, monitor, &mut tell)? else {
         return stopped(monitor, &mut tell);
     };
-    let listening = format!(
-        "listening as {} on {}",
-        station.settings.callsign, station.settings.modem
-    );
+    let listening = listening_line(&station.settings);
     answering(&modem, monitor, &listening, &mut tell);
+    let mut others = Others::new(&station.settings.more_modems);
     let mut renewal = Renewal::new(dir, RENEW_EVERY, radiopost::credential::RENEW_WITHIN);
     let mut caller = crate::forward::Caller::default();
     let mut busy = false;
@@ -1229,19 +1267,26 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
             let off = modem.host.listen(false);
             let _ = modem.conn.send(&off);
             modem.conn.close();
+            others.close();
             return stopped(monitor, &mut tell);
         }
         let auto = checked.elapsed() >= Duration::from_secs(5);
         if auto {
             checked = Instant::now();
         }
+        others.open_due(&station, &mut tell);
+        let busy_now = busy || others.busy();
         calls_between_sessions(
             &mut station,
-            &mut modem,
+            (&mut modem, &mut others),
             monitor,
-            (&mut caller, busy, auto),
+            (&mut caller, busy_now, auto),
             &mut tell,
         );
+        if carried_on_another(&mut station, (&mut modem, &mut others), monitor, &mut tell) {
+            answering(&modem, monitor, &listening, &mut |_| {});
+            continue;
+        }
         let event = match modem.next() {
             Ok(Some(Event::Busy(b))) => {
                 busy = b; // RP-4 §5: no call on a busy channel
@@ -1280,23 +1325,243 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
         };
         if let Event::Connected {
             direction: Direction::In,
-            remote,
             ..
         } = &event
         {
-            tell(&format!("{remote} called"));
-            if station.reload_credential() {
-                tell("this session uses the gateway's renewed credential");
+            others.hold(None);
+            let address = station.settings.modem.clone();
+            carry_call(
+                &mut station,
+                &mut modem,
+                &event,
+                &address,
+                monitor,
+                &mut tell,
+            );
+            others.release(None, &mut tell);
+            if !others.0.is_empty() {
+                answering(&modem, monitor, &listening, &mut |_| {});
             }
-            monitor.begin(remote);
-            let result = carry(&mut station, &mut modem, &event, monitor);
-            match &result {
-                Ok(()) => tell(&format!("the session with {remote} is over")),
-                Err(e) => tell(&format!("the session with {remote} ended: {e}")),
-            }
-            monitor.end(&result);
         }
     }
+}
+
+/// A call one of the other modems answered, carried while the first modem and the rest hold their
+/// answering (W26): whether there was one.
+fn carried_on_another(
+    station: &mut Station,
+    (modem, others): (&mut Modem, &mut Others),
+    monitor: &Monitor,
+    tell: &mut dyn FnMut(&str),
+) -> bool {
+    let country = station.settings.country.clone();
+    let Some((i, event)) = others.next(&country, tell) else {
+        return false;
+    };
+    modem.hold();
+    others.hold(Some(i));
+    let address = others.0[i].address.clone();
+    if let Some(m) = others.0[i].modem.as_mut() {
+        let _ = m.conn.set_timeout(Some(SESSION_WAIT));
+        carry_call(station, m, &event, &address, monitor, tell);
+        let _ = m.conn.set_timeout(Some(OTHER_WAIT));
+    }
+    others.release(None, tell);
+    if let Err(e) = modem.release(&station.settings.modem, tell) {
+        tell(&format!("the modem's adapter: {e}"));
+    }
+    true
+}
+
+/// A call answered on the modem at `address`, carried to its end (RP-3 §9).
+fn carry_call(
+    station: &mut Station,
+    modem: &mut Modem,
+    event: &Event,
+    address: &str,
+    monitor: &Monitor,
+    tell: &mut dyn FnMut(&str),
+) {
+    let Event::Connected { remote, .. } = event else {
+        return;
+    };
+    if station.settings.more_modems.is_empty() {
+        tell(&format!("{remote} called"));
+    } else {
+        tell(&format!("{remote} called on {address}"));
+    }
+    if station.reload_credential() {
+        tell("this session uses the gateway's renewed credential");
+    }
+    monitor.begin(remote);
+    let result = carry(station, modem, event, monitor);
+    match &result {
+        Ok(()) => tell(&format!("the session with {remote} is over")),
+        Err(e) => tell(&format!("the session with {remote} ended: {e}")),
+    }
+    monitor.end(&result);
+}
+
+/// How long a read from one of the gateway's other modems waits, between sessions: each is asked
+/// in turn after the first, which waits longer.
+const OTHER_WAIT: Duration = Duration::from_millis(20);
+/// How long a read waits while a session is carried, as on the first modem.
+const SESSION_WAIT: Duration = Duration::from_millis(250);
+
+/// One of the gateway's other modems (W26).
+struct Other {
+    address: String,
+    modem: Option<Modem>,
+    /// When to try opening it again; `None` once it never will open as the gateway is set.
+    retry: Option<Instant>,
+    /// What was last said of why it is not open, so it is said once.
+    said: Option<String>,
+    busy: bool,
+}
+
+/// The gateway's other modems (W26): opened when they can be, read between sessions, and kept
+/// from answering while a session runs on another.
+struct Others(Vec<Other>);
+
+impl Others {
+    fn new(addresses: &[String]) -> Others {
+        Others(
+            addresses
+                .iter()
+                .map(|a| Other {
+                    address: a.clone(),
+                    modem: None,
+                    retry: Some(Instant::now()),
+                    said: None,
+                    busy: false,
+                })
+                .collect(),
+        )
+    }
+
+    /// Opens those whose turn to try has come.
+    fn open_due(&mut self, station: &Station, tell: &mut dyn FnMut(&str)) {
+        for o in &mut self.0 {
+            if o.modem.is_some() || o.retry.is_none_or(|r| Instant::now() < r) {
+                continue;
+            }
+            match open(station, &o.address) {
+                Ok(m) => {
+                    let _ = m.conn.set_timeout(Some(OTHER_WAIT));
+                    tell(&match &m.outside {
+                        Some(why) => format!("{}: {why}", o.address),
+                        None => format!("also listening on {}", o.address),
+                    });
+                    o.modem = Some(m);
+                    o.said = None;
+                }
+                Err(Unopened::Never(e)) => {
+                    tell(&format!("{} will not be used: {e}", o.address));
+                    o.retry = None;
+                }
+                Err(Unopened::Later(e)) => {
+                    if o.said.as_ref() != Some(&e) {
+                        tell(&format!("waiting for {}: {e}", o.address));
+                        o.said = Some(e);
+                    }
+                    o.retry = Some(Instant::now() + Duration::from_secs(5));
+                }
+            }
+        }
+    }
+
+    /// Whether any says the channel is busy (RP-4 §5).
+    fn busy(&self) -> bool {
+        self.0.iter().any(|o| o.modem.is_some() && o.busy)
+    }
+
+    /// Reads each open one's events: the first call answered, with its modem's place.
+    fn next(&mut self, country: &str, tell: &mut dyn FnMut(&str)) -> Option<(usize, Event)> {
+        for (i, o) in self.0.iter_mut().enumerate() {
+            let Some(m) = o.modem.as_mut() else {
+                continue;
+            };
+            loop {
+                match m.next() {
+                    Ok(Some(Event::Busy(b))) => o.busy = b,
+                    Ok(Some(Event::Dial { id: None, dial_hz })) => {
+                        if let Ok(Some(said)) = m.judge(dial_hz, country, false) {
+                            tell(&format!("{}: {said}", o.address));
+                        }
+                    }
+                    Ok(Some(
+                        e @ Event::Connected {
+                            direction: Direction::In,
+                            ..
+                        },
+                    )) => {
+                        return Some((i, e));
+                    }
+                    Ok(Some(_)) => {}
+                    Ok(None) => break,
+                    Err(e) => {
+                        tell(&format!(
+                            "the adapter of {} went away ({e}); opening it again",
+                            o.address
+                        ));
+                        o.modem = None;
+                        o.busy = false;
+                        o.retry = Some(Instant::now() + Duration::from_secs(5));
+                        break;
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Keeps all but `except` from answering.
+    fn hold(&mut self, except: Option<usize>) {
+        for (i, o) in self.0.iter_mut().enumerate() {
+            if Some(i) != except
+                && let Some(m) = o.modem.as_mut()
+            {
+                m.hold();
+            }
+        }
+    }
+
+    /// Lets all but `except` answer again.
+    fn release(&mut self, except: Option<usize>, tell: &mut dyn FnMut(&str)) {
+        for (i, o) in self.0.iter_mut().enumerate() {
+            if Some(i) == except {
+                continue;
+            }
+            if let Some(m) = o.modem.as_mut()
+                && let Err(e) = m.release(&o.address, tell)
+            {
+                tell(&format!("the adapter of {}: {e}", o.address));
+                o.modem = None;
+                o.retry = Some(Instant::now() + Duration::from_secs(5));
+            }
+        }
+    }
+
+    /// Lets them all go, as the gateway stops.
+    fn close(&mut self) {
+        for o in &mut self.0 {
+            if let Some(mut m) = o.modem.take() {
+                m.hold();
+                m.conn.close();
+            }
+        }
+    }
+}
+
+/// The line that says where the gateway listens.
+fn listening_line(settings: &Settings) -> String {
+    let mut modems = vec![settings.modem.as_str()];
+    modems.extend(settings.more_modems.iter().map(String::as_str));
+    format!(
+        "listening as {} on {}",
+        settings.callsign,
+        modems.join(" and ")
+    )
 }
 
 /// Says whether the gateway answers: listening, or not where the radio is (W40).
@@ -1314,7 +1579,7 @@ fn answering(modem: &Modem, monitor: &Monitor, listening: &str, tell: &mut dyn F
 /// open while this gateway is cut off; and a call the operator asked for.
 fn calls_between_sessions(
     station: &mut Station,
-    modem: &mut Modem,
+    (modem, others): (&mut Modem, &mut Others),
     monitor: &Monitor,
     (caller, busy, auto): (&mut crate::forward::Caller, bool, bool),
     tell: &mut dyn FnMut(&str),
@@ -1329,7 +1594,9 @@ fn calls_between_sessions(
         tell(&format!("calling {partner} {why}"));
         monitor.begin(partner);
         let dial = station.window_dial(partner, now());
+        others.hold(None);
         let result = forward(station, modem, partner, monitor, (records, dial));
+        others.release(None, tell);
         match &result {
             Ok(line) => tell(line),
             Err(e) => tell(&format!("the call to {partner} failed: {e}")),
@@ -1694,7 +1961,8 @@ fn e_id(e: &Event) -> Option<serde_json::Value> {
 pub fn forward_once(dir: &Path, partner: &str, say: &mut dyn FnMut(&str)) -> Result<(), String> {
     let mut station = Station::load(dir)?;
     let monitor = Monitor::new();
-    let mut modem = match open(&station) {
+    let address = station.settings.modem.clone();
+    let mut modem = match open(&station, &address) {
         Ok(m) => m,
         Err(Unopened::Later(e) | Unopened::Never(e)) => return Err(e),
     };

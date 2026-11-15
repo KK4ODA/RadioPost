@@ -113,7 +113,9 @@ function render(s) {
   $("not-ready").hidden = !missing;
   $("not-ready-text").textContent = missing;
 
-  $("modem").textContent = settings ? settings.modem : "—";
+  $("modem").textContent = settings
+    ? [settings.modem, ...(settings.more_modems || [])].join(" · ")
+    : "—";
   $("modem-state").textContent = st.problem
     || (st.state === "listening" || st.state === "session"
       ? `Listening as ${settings.callsign} since ${when(st.since)}`
@@ -188,6 +190,7 @@ function fillForms(s) {
   const settings = s.settings;
   g.callsign.value = settings ? settings.callsign : "";
   g.modem.value = settings ? settings.modem : s.aether;
+  g.more_modems.value = settings ? (settings.more_modems || []).join("\n") : "";
   g.country.value = settings ? settings.country : "US";
   g.operator_checks_rules.checked = settings ? settings.operator_checks_rules : false;
   g.answer_at_start.checked = settings ? settings.answer_at_start : true;
@@ -220,7 +223,19 @@ function renderPostOffices(s) {
   }));
 }
 
-function addChannel(mhz = "", bandwidth = 2300) {
+// RP-0 §9.4's modem names a channel may give: each one's radio mode and bandwidths (RP-5 §4.4: on
+// an FM channel, the channel's width)
+const MODEMS = [
+  {name: "aether", label: "Aether HF", mode: "USB", bandwidths: [2300, 500]},
+  {name: "mercury", label: "Mercury", mode: "USB", bandwidths: [2300, 500, 2750]},
+  {name: "vara-hf", label: "VARA HF", mode: "USB", bandwidths: [2300, 500, 2750]},
+  {name: "ardop", label: "ARDOP", mode: "USB", bandwidths: [2000, 1000, 500, 200]},
+  {name: "vara-fm", label: "VARA FM", mode: "FM", bandwidths: [12500, 25000]},
+  {name: "ax25", label: "Packet", mode: "FM", bandwidths: [12500, 25000]},
+];
+const modemNamed = (name) => MODEMS.find((m) => m.name === name) || MODEMS[0];
+
+function addChannel(mhz = "", bandwidth = 2300, modemName = "aether") {
   const tr = document.createElement("tr");
   const dial = document.createElement("input");
   dial.type = "number";
@@ -228,23 +243,42 @@ function addChannel(mhz = "", bandwidth = 2300) {
   dial.min = "1.8";
   dial.placeholder = "7.101";
   dial.value = mhz;
-  dial.title = "The dial frequency, in MHz, upper sideband";
+  const modem = document.createElement("select");
+  modem.className = "narrow";
+  for (const m of MODEMS) {
+    const o = document.createElement("option");
+    o.value = m.name;
+    o.textContent = m.label;
+    modem.append(o);
+  }
+  modem.value = modemNamed(modemName).name;
+  modem.title = "The modem callers use on this channel";
   const bw = document.createElement("select");
   bw.className = "narrow";
-  for (const hz of [2300, 500]) {
-    const o = document.createElement("option");
-    o.value = hz;
-    o.textContent = `${hz} Hz`;
-    bw.append(o);
-  }
-  bw.value = bandwidth;
-  bw.title = "Aether's bandwidth on this channel";
+  const fill = (want) => {
+    const m = modemNamed(modem.value);
+    bw.replaceChildren(...m.bandwidths.map((hz) => {
+      const o = document.createElement("option");
+      o.value = hz;
+      o.textContent = hz >= 10000 ? `${hz / 1000} kHz` : `${hz} Hz`;
+      return o;
+    }));
+    bw.value = m.bandwidths.includes(Number(want)) ? want : m.bandwidths[0];
+    bw.title = m.mode === "FM"
+      ? "The FM channel's width"
+      : `${m.label}'s bandwidth on this channel`;
+    dial.title = m.mode === "FM"
+      ? "The channel's carrier frequency, in MHz, on an FM radio"
+      : "The dial frequency, in MHz, upper sideband";
+  };
+  fill(bandwidth);
+  modem.addEventListener("change", () => fill(bw.value));
   const remove = document.createElement("button");
   remove.type = "button";
   remove.className = "quiet";
   remove.textContent = "Remove";
   remove.addEventListener("click", () => tr.remove());
-  for (const el of [dial, bw, remove]) {
+  for (const el of [dial, modem, bw, remove]) {
     const td = document.createElement("td");
     td.append(el);
     tr.append(td);
@@ -561,6 +595,7 @@ $("gateway-form").addEventListener("submit", (e) => {
   const f = e.target.elements;
   act("setup", {
     callsign: f.callsign.value, modem: f.modem.value, country: f.country.value,
+    more_modems: f.more_modems.value.split("\n").map((m) => m.trim()).filter(Boolean),
     operator_checks_rules: f.operator_checks_rules.checked,
     answer_at_start: f.answer_at_start.checked,
     copies: f.copies_on.checked
@@ -574,9 +609,9 @@ $("register-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const f = e.target.elements;
   const channels = [...$("channel-rows").children].map((tr) => {
-    const [dial, bw] = tr.querySelectorAll("input, select");
-    return {dial_hz: Math.round(Number(dial.value) * 1e6), mode: "USB", modem: "aether",
-            bandwidth_hz: Number(bw.value)};
+    const [dial, modem, bw] = tr.querySelectorAll("input, select");
+    return {dial_hz: Math.round(Number(dial.value) * 1e6), mode: modemNamed(modem.value).mode,
+            modem: modem.value, bandwidth_hz: Number(bw.value)};
   }).filter((c) => c.dial_hz > 0);
   act("register", {home: f.home.value, grid: f.grid.value, place: f.place.value,
                    hours: f.hours.value, channels},

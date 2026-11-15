@@ -389,6 +389,19 @@ impl Panel {
             "" => AETHER.to_owned(),
             m => m.to_owned(),
         };
+        // W26: more modems, one an entry, as the first is given
+        let more_modems: Vec<String> = body["more_modems"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .filter(|m| !m.is_empty())
+            .map(str::to_owned)
+            .collect();
+        if more_modems.contains(&modem) {
+            return Err("a modem is given twice: the first is not one of the others".into());
+        }
         let country = match text(body, "country").to_uppercase() {
             c if c.is_empty() => "US".to_owned(),
             c if c.len() == 2 && c.chars().all(|ch| ch.is_ascii_uppercase()) => c,
@@ -401,6 +414,7 @@ impl Panel {
             Ok(mut s) => {
                 s.callsign = callsign;
                 s.modem = modem;
+                s.more_modems = more_modems;
                 s.country = country;
                 s.operator_checks_rules = checks_rules;
                 s.answer_at_start = at_start;
@@ -412,6 +426,7 @@ impl Panel {
                 &Settings {
                     callsign,
                     modem,
+                    more_modems,
                     country,
                     post_offices: BTreeMap::new(),
                     resolver: "https://dns.google/resolve".into(),
@@ -440,19 +455,31 @@ impl Panel {
             .flatten()
             .map(|c| {
                 let hz = c["dial_hz"].as_u64().filter(|hz| *hz >= 1_800_000);
-                let bw = c["bandwidth_hz"]
-                    .as_u64()
-                    .filter(|bw| [500, 2300].contains(bw));
+                let mode = c["mode"]
+                    .as_str()
+                    .filter(|m| !m.is_empty())
+                    .unwrap_or("USB");
+                // RP-5 §4.4: a modem's bandwidth on single sideband, an FM channel's width
+                let bw = c["bandwidth_hz"].as_u64().filter(|bw| match mode {
+                    "USB" => (100..=3000).contains(bw),
+                    "FM" => [12_500, 25_000].contains(bw),
+                    _ => false,
+                });
+                // RP-0 §9.4: a modem's name is lower case, letters, digits and `-`
+                let modem = c["modem"]
+                    .as_str()
+                    .filter(|m| !m.is_empty())
+                    .unwrap_or("aether");
+                let named = modem
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
                 match (hz, bw) {
-                    (Some(hz), Some(bw)) => Ok(json!({
-                        "dial_hz": hz,
-                        "mode": c["mode"].as_str().filter(|m| !m.is_empty()).unwrap_or("USB"),
-                        "modem": c["modem"].as_str().filter(|m| !m.is_empty()).unwrap_or("aether"),
-                        "bandwidth_hz": bw,
+                    (Some(hz), Some(bw)) if named => Ok(json!({
+                        "dial_hz": hz, "mode": mode, "modem": modem, "bandwidth_hz": bw,
                     })),
                     _ => Err(
-                        "each channel has its dial frequency in hertz and a bandwidth of \
-                              500 or 2300 Hz"
+                        "each channel has its dial frequency in hertz, a modem's name, and a \
+                         bandwidth: up to 3000 Hz on USB, or an FM channel of 12500 or 25000 Hz"
                             .to_owned(),
                     ),
                 }

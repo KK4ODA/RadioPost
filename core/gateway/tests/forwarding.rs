@@ -123,6 +123,7 @@ fn gateway_holding(
     station::Settings {
         callsign: callsign.into(),
         modem: modem.to_string(),
+        more_modems: Vec::new(),
         country: "US".into(),
         post_offices: BTreeMap::from([("test.example".into(), base.to_owned())]),
         resolver: String::new(),

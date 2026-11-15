@@ -733,7 +733,7 @@ const SHOTS = {
     await reg.locator("input[name=place]").fill("Atlanta, Georgia");
     const dial = page.locator("#channel-rows input").first();
     await dial.fill("3.5915");
-    await page.locator("#channel-rows select").first().selectOption("500");
+    await page.locator("#channel-rows tr").first().locator("select").nth(1).selectOption("500");
     await page.click("#add-channel");
     await page.locator("#channel-rows input").nth(1).fill("7.101");
     await page.locator("body").click({position: {x: 1270, y: 10}});

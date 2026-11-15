@@ -20,9 +20,14 @@ usage: radiopost-gateway [--dir DIR] COMMAND
 DIR is the gateway's directory: $RADIOPOST_GATEWAY, else .radiopost-gateway in your home
 directory, as the RadioPost Gateway app has it.
 
-  init --callsign CALL --modem ADDR [--country US] [--operator-checks-rules]
+  init --callsign CALL --modem ADDR [--more-modem ADDR]... [--country US]
+       [--operator-checks-rules]
                      make a gateway: its key and settings. ADDR is an RPMI adapter's
                      host:port, or Aether's control API (ws://127.0.0.1:8515/v1)
+  modem --add ADDR | --remove ADDR
+                     answer on one more modem, or no longer on it (W26): one session at a
+                     time, the other modems not answering while one carries a session
+  modems             the modems the gateway answers on, the first first
   register --home HOME [--grid G] [--place TEXT] [--channel HZ,MODE,MODEM,BW]...
                      register the gateway with your post office (RP-5 §6.4), logged in
                      as you with your client's key and credential in HOME, and keep the
@@ -98,6 +103,7 @@ fn init(dir: &Path, a: &Args) -> Result<(), String> {
     let settings = Settings {
         callsign: a.need("--callsign")?.to_uppercase(),
         modem: a.need("--modem")?,
+        more_modems: a.all("--more-modem"),
         country: a.one("--country").unwrap_or_else(|| "US".into()),
         post_offices: BTreeMap::new(),
         resolver: "https://dns.google/resolve".into(),
@@ -261,6 +267,36 @@ fn partners(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
     s.save(dir)
 }
 
+/// `modem` and `modems`: the modems the gateway answers on (W26).
+fn modems(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
+    let mut s = Settings::load(dir)?;
+    if command == "modems" {
+        println!("{} (calls it places go on this one)", s.modem);
+        for m in &s.more_modems {
+            println!("{m}");
+        }
+        return Ok(());
+    }
+    if let Some(m) = a.one("--add") {
+        if m == s.modem || s.more_modems.contains(&m) {
+            return Err(format!("the gateway answers on {m} already"));
+        }
+        s.more_modems.push(m);
+    } else {
+        let m = a.need("--remove")?;
+        if m == s.modem {
+            return Err(format!(
+                "{m} is the gateway's first modem: `init` names it, and the gateway's settings"
+            ));
+        }
+        if !s.more_modems.contains(&m) {
+            return Err(format!("the gateway does not answer on {m}"));
+        }
+        s.more_modems.retain(|x| *x != m);
+    }
+    s.save(dir)
+}
+
 /// `window` and `windows`: when the gateway listens for its partners' calls (RP-7 §5).
 fn windows(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
     let mut s = Settings::load(dir)?;
@@ -411,6 +447,7 @@ fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
         }
         "block" | "unblock" | "blocked" => blocking(dir, a, command),
         "partner" | "partners" => partners(dir, a, command),
+        "modem" | "modems" => modems(dir, a, command),
         "window" | "windows" => windows(dir, a, command),
         "forward" => station::forward_once(dir, &a.need("--to")?, &mut |line| println!("{line}")),
         "key" => {

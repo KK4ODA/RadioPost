@@ -32,7 +32,7 @@
 
       <div class="cards">
         <section class="card" aria-label="Modem">
-          <h2 title="The modem the gateway answers on: Aether HF's control API, or an RPMI adapter">Modem</h2>
+          <h2 title="The modems the gateway answers on: Aether HF's control API, or RPMI adapters. One session at a time; calls to partners go on the first">Modem</h2>
           <p class="big mono" id="modem"></p>
           <p class="note" id="modem-state"></p>
         </section>
@@ -163,6 +163,9 @@
         <label title="Aether HF's control API on this computer (ws://127.0.0.1:8515/v1, as Aether runs it), or an RPMI adapter's address (host:port)">Modem
           <input name="modem" spellcheck="false">
         </label>
+        <label title="More modems the gateway answers on, one a line, given as the first is: Aether and Mercury on one radio, or HF and VHF packet on two. It carries one session at a time: while it carries one, the other modems do not answer. Calls to partners go on the first modem">More modems
+          <textarea name="more_modems" rows="2" spellcheck="false" placeholder="127.0.0.1:8601"></textarea>
+        </label>
         <label title="The country the gateway operates in, as two letters: it decides which third-party mail it may hand over (RP-6 §5.1)">Country
           <input name="country" maxlength="2" value="US" spellcheck="false">
         </label>
@@ -189,9 +192,9 @@
         <label title="The RadioPost app's home, where its enrollment is kept">RadioPost app's home
           <input name="home" spellcheck="false">
         </label>
-        <h2 title="Where callers find the gateway: each dial frequency and Aether's bandwidth there">Channels</h2>
+        <h2 title="Where callers find the gateway: each dial frequency, the modem callers use there, and its bandwidth">Channels</h2>
         <table class="channels" aria-label="Channels">
-          <thead><tr><th>Dial, MHz</th><th>Bandwidth</th><th></th></tr></thead>
+          <thead><tr><th>Dial, MHz</th><th>Modem</th><th>Bandwidth</th><th></th></tr></thead>
           <tbody id="channel-rows"></tbody>
         </table>
         <div class="row"><button type="button" class="quiet" id="add-channel">Add a channel</button></div>
