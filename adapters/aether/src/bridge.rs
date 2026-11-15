@@ -70,6 +70,16 @@ enum Waiting {
         rid: Option<Value>,
         aether_ref: Option<String>,
     },
+    Dial {
+        rid: Option<Value>,
+    },
+    TuneStatus {
+        rid: Option<Value>,
+        hz: u64,
+    },
+    Tune {
+        rid: Option<Value>,
+    },
     Nothing,
 }
 
@@ -117,6 +127,7 @@ pub struct Bridge {
     channel_busy: bool,
     session_on_air: bool,
     busy_told: bool,
+    dial: bool,
     log: Option<String>,
 }
 
@@ -311,6 +322,20 @@ impl Bridge {
                 self.on_broadcast(&data, reference, rid, &mut out);
             }
             Request::Status => out.push(Out::Host(self.status(rid_ref))),
+            Request::Dial | Request::Tune(_) if !self.dial => {
+                let text = "this Aether has no way to ask the radio";
+                out.push(Out::Host(error(rid_ref, "unsupported", text)));
+            }
+            Request::Dial => out.push(self.ask("status", json!({}), Waiting::Dial { rid })),
+            Request::Tune(hz) => {
+                if self.call.is_some() || self.link.is_some() || self.others {
+                    let text = "a link or a call is up on the station";
+                    out.push(Out::Host(error(rid_ref, "busy", text)));
+                } else {
+                    // another program's call is no event of Aether's: its state says so
+                    out.push(self.ask("status", json!({}), Waiting::TuneStatus { rid, hz }));
+                }
+            }
         }
         out
     }
@@ -497,6 +522,7 @@ impl Bridge {
                 self.shared = status["claims"].is_array();
                 self.channel_busy = status["channel_busy"].as_bool().unwrap_or(false);
                 self.others = status["state"].as_str().is_some_and(|s| s != "idle");
+                self.dial = status["can_tune"].as_bool() == Some(true);
                 self.hello = true;
                 let caps = Caps {
                     bandwidths: self.bandwidth_hz.into_iter().collect(),
@@ -508,6 +534,7 @@ impl Bridge {
                     regulatory: true,
                     max_queue: 65536,
                     shared: self.shared,
+                    dial: self.dial,
                 };
                 let modem = format!(
                     "Aether HF {}",
@@ -631,6 +658,36 @@ impl Bridge {
                     out.push(Out::Host(error(rid.as_ref(), rpmi, &message)));
                 }
             }
+            Waiting::Dial { rid } => match result["frequency_hz"].as_u64() {
+                Some(hz) if ok => out.push(Out::Host(answer_with(
+                    "dial",
+                    rid.as_ref(),
+                    &[("dial_hz", hz.into())],
+                ))),
+                _ if ok => {
+                    let text = "the radio has not said where its dial is";
+                    out.push(Out::Host(error(rid.as_ref(), "refused", text)));
+                }
+                _ => out.push(Out::Host(error(rid.as_ref(), "refused", &message))),
+            },
+            Waiting::TuneStatus { rid, hz } => {
+                if !ok {
+                    out.push(Out::Host(error(rid.as_ref(), "refused", &message)));
+                } else if result["state"].as_str().is_some_and(|s| s != "idle") {
+                    let text = "a link or a call is up on the station";
+                    out.push(Out::Host(error(rid.as_ref(), "busy", text)));
+                } else {
+                    let params = json!({"hz": hz});
+                    out.push(self.ask("frequency.set", params, Waiting::Tune { rid }));
+                }
+            }
+            Waiting::Tune { rid } => {
+                if ok {
+                    Self::ok(rid.as_ref(), &mut out);
+                } else {
+                    out.push(Out::Host(error(rid.as_ref(), "refused", &message)));
+                }
+            }
             Waiting::Nothing => {}
         }
         out
@@ -719,6 +776,19 @@ impl Bridge {
             "bandwidth" => {
                 if let Some(hz) = data["bandwidth_hz"].as_i64() {
                     self.bandwidth_hz = Some(hz);
+                }
+            }
+            // every change of the radio's dial, a tune or the knob, is told to every host (§4.1)
+            "dial" => {
+                if self.hello
+                    && self.dial
+                    && let Some(hz) = data["frequency_hz"].as_u64()
+                {
+                    out.push(Out::Host(answer_with(
+                        "dial",
+                        None,
+                        &[("dial_hz", hz.into())],
+                    )));
                 }
             }
             _ => {}
@@ -899,7 +969,10 @@ impl Bridge {
                 | Waiting::Connect { rid }
                 | Waiting::Send { rid, .. }
                 | Waiting::Plain { rid }
-                | Waiting::Broadcast { rid, .. } => rid,
+                | Waiting::Broadcast { rid, .. }
+                | Waiting::Dial { rid }
+                | Waiting::TuneStatus { rid, .. }
+                | Waiting::Tune { rid } => rid,
                 Waiting::Nothing => None,
             };
             if rid.is_some() {

@@ -29,6 +29,8 @@ pub struct StationConfig {
     pub prefix: String,
     /// The most bytes one `received` carries.
     pub frame_bytes: usize,
+    /// The radio's dial at the start, in hertz, when `caps.dial` says it has one (§4.1).
+    pub dial_hz: Option<u64>,
 }
 
 /// What an adapter does on a host's connection.
@@ -95,6 +97,7 @@ struct Station {
     cfg: StationConfig,
     hosts: Vec<Host>,
     links_made: u64,
+    dial_hz: Option<u64>,
 }
 
 /// One channel and the stations on it.
@@ -134,6 +137,7 @@ impl Channel {
     /// Adds a station; returns its number.
     pub fn add_station(&mut self, cfg: StationConfig) -> usize {
         self.stations.push(Station {
+            dial_hz: cfg.dial_hz,
             cfg,
             hosts: Vec::new(),
             links_made: 0,
@@ -145,6 +149,12 @@ impl Channel {
     #[must_use]
     pub fn station(&self, station: usize) -> &StationConfig {
         &self.stations[station].cfg
+    }
+
+    /// The station's radio dial, in hertz, as hosts last tuned it (§4.1).
+    #[must_use]
+    pub fn dial(&self, station: usize) -> Option<u64> {
+        self.stations[station].dial_hz
     }
 
     /// What the adapters said since the last call, in order.
@@ -253,6 +263,8 @@ impl Channel {
                 self.on_broadcast(station, h, &data, reference, id);
             }
             Request::Status => self.on_status(station, h, id),
+            Request::Dial => self.on_dial(station, host, None, id),
+            Request::Tune(hz) => self.on_dial(station, host, Some(hz), id),
         }
     }
 
@@ -725,6 +737,48 @@ impl Channel {
         self.emit(station, &name, sent);
     }
 
+    /// `dial` reads the radio's dial and `tune` sets it (§4.1). The dial is the station's, so it
+    /// moves only while no link or call is up on it (§1.1), and every host hears where it went.
+    fn on_dial(&mut self, station: usize, host: &str, tune: Option<u64>, id: Option<&Value>) {
+        if !self.stations[station].cfg.caps.dial {
+            self.emit(
+                station,
+                host,
+                error(id, "unsupported", "this modem has no dial"),
+            );
+            return;
+        }
+        let Some(hz) = tune else {
+            let read = self.stations[station].dial_hz;
+            self.emit(
+                station,
+                host,
+                answer_with("dial", id, &[("dial_hz", read.into())]),
+            );
+            return;
+        };
+        if self.ends_at(station) > 0 || self.calls.iter().any(|c| c.station == station) {
+            let text = "a link or a call is up on the station";
+            self.emit(station, host, error(id, "busy", text));
+            return;
+        }
+        self.stations[station].dial_hz = Some(hz);
+        self.ok(station, host, id);
+        let told: Vec<String> = self.stations[station]
+            .hosts
+            .iter()
+            .filter(|h| h.hello)
+            .map(|h| h.name.clone())
+            .collect();
+        for name in told {
+            self.emit(
+                station,
+                &name,
+                answer_with("dial", None, &[("dial_hz", hz.into())]),
+            );
+        }
+    }
+
     fn on_status(&mut self, station: usize, h: usize, id: Option<&Value>) {
         let host = &self.stations[station].hosts[h];
         let name = host.name.clone();
@@ -793,9 +847,11 @@ mod tests {
                 regulatory: false,
                 max_queue: 65536,
                 shared: false,
+                dial: false,
             },
             prefix: "c".into(),
             frame_bytes: 128,
+            dial_hz: None,
         });
         ch.open(s, "host");
         (ch, s)

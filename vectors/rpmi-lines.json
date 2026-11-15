@@ -117,13 +117,13 @@
     },
     {
       "what": "an op this adapter does not know",
-      "line": "{\"op\": \"tune\", \"id\": 10}",
+      "line": "{\"op\": \"rig\", \"id\": 10}",
       "answers": [
         {
           "op": "error",
           "id": 10,
           "code": "unsupported",
-          "text": "no op tune"
+          "text": "no op rig"
         }
       ]
     },

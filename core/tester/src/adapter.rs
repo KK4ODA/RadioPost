@@ -477,7 +477,7 @@ fn request_errors(near: &mut Side<'_>, plan: &Plan) -> Result<Caps, String> {
         "unsupported",
         "RP-4 §4: a bandwidth not in `caps`",
     )?;
-    near.refused(&json!({"op": "tune", "id": 9}), "unsupported", "RP-4 §2")?;
+    near.refused(&json!({"op": "rig", "id": 9}), "unsupported", "RP-4 §2")?;
     near.refused(
         &json!({"op": "send", "id": 10, "link": "no-such-link", "data": "AA=="}),
         "not-connected",

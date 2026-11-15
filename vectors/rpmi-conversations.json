@@ -5,11 +5,12 @@
     "RP-4": "§1–§7"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "Each step is one line on one station's connection between a host and its adapter: `to: adapter` from the host, `to: host` from the adapter, or a connection opening or closing. Messages compare as JSON values, not as text; `text` is for people and need not match. An adapter given the host lines answers with the adapter lines, except where the modem decides: how `received` splits the bytes (here at most 128 a line) and the time between events. A host given the adapter lines sends the host lines. Notes are for people.",
+  "rule": "Each step is one line on one station's connection between a host and its adapter: `to: adapter` from the host, `to: host` from the adapter, or a connection opening or closing. Messages compare as JSON values, not as text; `text` is for people and need not match. An adapter given the host lines answers with the adapter lines, except where the modem decides: how `received` splits the bytes (here at most 128 a line) and the time between events. A modem with `caps.dial` starts at `modem.dial_hz`. A host given the adapter lines sends the host lines. Notes are for people.",
   "modem": {
     "name": "rpref simulated modem 1",
     "received_bytes_at_most": 128,
-    "link_ids": "each adapter's own: a letter for the station and a count from 1"
+    "link_ids": "each adapter's own: a letter for the station and a count from 1",
+    "dial_hz": 7101000
   },
   "conversations": [
     {
@@ -708,7 +709,7 @@
     },
     {
       "name": "errors",
-      "story": "A client meets every error in turn: a request before `hello`; no version in common (the adapter closes, and the host connects again); `listen` and `connect` before `callsigns`; an `as` that is not its own; a bandwidth the modem lacks; an unknown op; a link that is not its; an `abort` with nothing to abort. Then two calls to a station nobody answers for, one aborted and one given up, a call that connects, two sends on it (with no `ref`, and with an integer `ref`), a second call while that link is up, and the link aborted. Last, a second program connects to the client's adapter, which is not shared: it is turned away `busy`, and the adapter closes its connection.",
+      "story": "A client meets every error in turn: a request before `hello`; no version in common (the adapter closes, and the host connects again); `listen` and `connect` before `callsigns`; an `as` that is not its own; a bandwidth the modem lacks; an op it does not know; a link that is not its; an `abort` with nothing to abort. Then two calls to a station nobody answers for, one aborted and one given up, a call that connects, two sends on it (with no `ref`, and with an integer `ref`), a second call while that link is up, and the link aborted. Last, a second program connects to the client's adapter, which is not shared: it is turned away `busy`, and the adapter closes its connection.",
       "steps": [
         {
           "station": "N1CALL-10",
@@ -1006,7 +1007,7 @@
           "host": "client",
           "to": "adapter",
           "message": {
-            "op": "tune",
+            "op": "rig",
             "id": 9
           }
         },
@@ -1018,7 +1019,7 @@
             "op": "error",
             "id": 9,
             "code": "unsupported",
-            "text": "no op tune"
+            "text": "no op rig"
           }
         },
         {
@@ -2181,6 +2182,630 @@
             "op": "broadcast-sent",
             "sent": true,
             "ref": "b1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "the dial",
+      "story": "Two adapters with `caps.dial` (RP-4 §4.1): the client reads its dial, tunes to 80 m and back (each change told back to it as a `dial` event), and is told a dial of 0 is `malformed`. It calls the gateway station N1CALL, whose modem RadioPost shares with another mail program: while the link is up the other program's `tune` is refused `busy`, since the dial is the whole station's (§1.1), and so is the client's own. Once the link is down the other program tunes the gateway station, and both its hosts hear the new dial. A third adapter has no dial: `dial` and `tune` are `unsupported`.",
+      "steps": [
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "connection": "opened"
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost gateway 0.1.0"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": true,
+              "dial": true
+            }
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "N1CALL-10"
+            ]
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "listen",
+            "id": 3,
+            "on": true
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 3
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "connection": "opened"
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "Other mail 2.3"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": true,
+              "dial": true
+            }
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "N1CALL-1"
+            ]
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "connection": "opened"
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost client 0.1.0"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": false,
+              "dial": true
+            }
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "KK4ODA"
+            ]
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "note": "The client reads its dial, tunes to 80 m and back, and once to no frequency at all."
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "dial",
+            "id": 3
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "dial",
+            "id": 3,
+            "dial_hz": 7101000
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "tune",
+            "id": 4,
+            "dial_hz": 3590000
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 4
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "dial",
+            "dial_hz": 3590000
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "tune",
+            "id": 5,
+            "dial_hz": 0
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 5,
+            "code": "malformed",
+            "text": "`dial_hz` is not of its type"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "tune",
+            "id": 6,
+            "dial_hz": 7101000
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 6
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "dial",
+            "dial_hz": 7101000
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 7,
+            "remote": "N1CALL-10"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 7
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "incoming",
+            "remote": "KK4ODA",
+            "local": "N1CALL-10"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "connected",
+            "link": "g1",
+            "remote": "KK4ODA",
+            "local": "N1CALL-10",
+            "direction": "in"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "connected",
+            "id": 7,
+            "link": "c1",
+            "remote": "N1CALL-10",
+            "local": "KK4ODA",
+            "direction": "out"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "busy",
+            "busy": true
+          }
+        },
+        {
+          "note": "A link is up at both stations: neither dial moves, for this host or another."
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "tune",
+            "id": 3,
+            "dial_hz": 7103000
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 3,
+            "code": "busy",
+            "text": "a link or a call is up on the station"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "tune",
+            "id": 8,
+            "dial_hz": 3590000
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 8,
+            "code": "busy",
+            "text": "a link or a call is up on the station"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "disconnect",
+            "id": 9,
+            "link": "c1"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 9
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "disconnected",
+            "link": "c1",
+            "reason": "local"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "disconnected",
+            "link": "g1",
+            "reason": "remote"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "busy",
+            "busy": false
+          }
+        },
+        {
+          "note": "Nothing is up: the other program tunes the gateway station; both its hosts hear it."
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "tune",
+            "id": 4,
+            "dial_hz": 7103000
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 4
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "dial",
+            "dial_hz": 7103000
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "dial",
+            "dial_hz": 7103000
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "connection": "opened"
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost client 0.1.0"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": false
+            }
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "N3CALL"
+            ]
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "dial",
+            "id": 3
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 3,
+            "code": "unsupported",
+            "text": "this modem has no dial"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "tune",
+            "id": 4,
+            "dial_hz": 7101000
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 4,
+            "code": "unsupported",
+            "text": "this modem has no dial"
           }
         }
       ]

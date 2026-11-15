@@ -88,6 +88,7 @@ pub fn loopback() -> (Server, SocketAddr, SocketAddr) {
         regulatory: false,
         max_queue: 65536,
         shared: false,
+        dial: false,
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),
@@ -95,6 +96,7 @@ pub fn loopback() -> (Server, SocketAddr, SocketAddr) {
         caps: caps.clone(),
         prefix: prefix.into(),
         frame_bytes: 128,
+        dial_hz: None,
     };
     let mut ch = Channel::new();
     let f = ch.add_station(station("KK4ODA", "c"));

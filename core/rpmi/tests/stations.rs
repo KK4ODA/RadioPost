@@ -31,6 +31,7 @@ fn caps(shared: bool) -> Caps {
         regulatory: false,
         max_queue: 65536,
         shared,
+        dial: false,
     }
 }
 
@@ -41,6 +42,7 @@ fn station(name: &str, prefix: &str, frame_bytes: usize) -> StationConfig {
         caps: caps(false),
         prefix: prefix.into(),
         frame_bytes,
+        dial_hz: None,
     }
 }
 

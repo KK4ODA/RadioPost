@@ -45,6 +45,7 @@ fn air() -> (Server, SocketAddr, SocketAddr, SocketAddr) {
         regulatory: false,
         max_queue: 65_536,
         shared: false,
+        dial: false,
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),
@@ -52,6 +53,7 @@ fn air() -> (Server, SocketAddr, SocketAddr, SocketAddr) {
         caps: caps.clone(),
         prefix: prefix.into(),
         frame_bytes: 128,
+        dial_hz: None,
     };
     let mut ch = Channel::new();
     let user = ch.add_station(station("WD5EMA", "u"));

@@ -51,10 +51,12 @@ fn main() -> ExitCode {
                     regulatory: false,
                     max_queue: 65536,
                     shared: true,
+                    dial: false,
                 },
                 // link IDs: a letter for the station and a count, as in the vectors
                 prefix: char::from(b'a' + u8::try_from(i % 26).unwrap_or(0)).to_string(),
                 frame_bytes: 128,
+                dial_hz: None,
             })
         })
         .collect();

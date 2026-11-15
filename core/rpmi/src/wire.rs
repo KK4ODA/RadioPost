@@ -156,6 +156,10 @@ pub enum Request {
     },
     /// The adapter's `status`.
     Status,
+    /// The radio's dial (§4.1).
+    Dial,
+    /// Set the radio's dial, in hertz (§4.1).
+    Tune(u64),
 }
 
 fn text(m: &Message, key: &str) -> Result<String, String> {
@@ -259,6 +263,14 @@ impl Request {
                 reference: reference(m)?,
             },
             "status" => Request::Status,
+            "dial" => Request::Dial,
+            "tune" => Request::Tune(
+                m.get("dial_hz")
+                    .ok_or("no `dial_hz`")?
+                    .as_u64()
+                    .filter(|&hz| hz > 0)
+                    .ok_or("`dial_hz` is not an integer above 0")?,
+            ),
             _ => return Ok(None),
         };
         Ok(Some(request))
@@ -313,13 +325,16 @@ pub struct Caps {
     pub max_queue: u64,
     /// Other programs may use the modem under §1.1's rules.
     pub shared: bool,
+    /// The adapter reads and sets the radio's dial (§4.1).
+    pub dial: bool,
 }
 
 impl Caps {
-    /// The `caps` member of `hello`.
+    /// The `caps` member of `hello`; `dial` only when the adapter has it, as §3 lets it be
+    /// absent.
     #[must_use]
     pub fn to_json(&self) -> Value {
-        serde_json::json!({
+        let mut caps = serde_json::json!({
             "bandwidths": self.bandwidths,
             "max_links": self.max_links,
             "delivery": self.delivery,
@@ -329,7 +344,11 @@ impl Caps {
             "regulatory": self.regulatory,
             "max_queue": self.max_queue,
             "shared": self.shared,
-        })
+        });
+        if self.dial {
+            caps["dial"] = Value::Bool(true);
+        }
+        caps
     }
 
     /// Caps from a `hello`'s `caps`, ignoring members it does not know (RP-4 §2). A member that is
@@ -355,6 +374,7 @@ impl Caps {
             regulatory: flag("regulatory"),
             max_queue: v.get("max_queue").and_then(Value::as_u64).unwrap_or(0),
             shared: flag("shared"),
+            dial: flag("dial"),
         }
     }
 }
@@ -377,7 +397,11 @@ mod tests {
                 bandwidth: Some(2300)
             }))
         );
-        assert_eq!(read(r#"{"op":"tune","id":9}"#), Ok(None));
+        assert_eq!(
+            read(r#"{"op":"tune","id":9,"dial_hz":7101000}"#),
+            Ok(Some(Request::Tune(7_101_000)))
+        );
+        assert_eq!(read(r#"{"op":"rig","id":9}"#), Ok(None));
         for bad in [
             r#"{"op":"connect","remote":"N1CALL-10"}"#,
             r#"{"op":"connect","id":1,"remote":7}"#,
@@ -392,6 +416,11 @@ mod tests {
             r#"{"op":"send","id":1,"link":"c1","data":"AQ==","ref":1.5}"#,
             r#"{"op":"disconnect","id":1}"#,
             r#"{"op":"abort","id":1,"link":false}"#,
+            r#"{"op":"tune","id":1}"#,
+            r#"{"op":"tune","id":1,"dial_hz":0}"#,
+            r#"{"op":"tune","id":1,"dial_hz":-7101000}"#,
+            r#"{"op":"tune","id":1,"dial_hz":7101000.5}"#,
+            r#"{"op":"tune","id":1,"dial_hz":"7101000"}"#,
         ] {
             assert!(read(bad).is_err(), "{bad}");
         }

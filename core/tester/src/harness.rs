@@ -504,6 +504,7 @@ impl TestAdapter {
             regulatory: false,
             max_queue: 1 << 20,
             shared: false,
+            dial: false,
         };
         let station = |name: &str, prefix: &str, frame| StationConfig {
             name: name.into(),
@@ -511,6 +512,7 @@ impl TestAdapter {
             caps: caps.clone(),
             prefix: prefix.into(),
             frame_bytes: frame,
+            dial_hz: None,
         };
         let mut ch = Channel::new();
         let stations: Vec<usize> = (0..programs.max(1))

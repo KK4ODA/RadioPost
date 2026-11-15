@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.7.0 |
-| **Updated** | 2026-11-14 |
+| **Version** | 0.8.0 |
+| **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -33,7 +33,9 @@ adapter for it, and a modem may speak RPMI itself.
   same station. §1.1 says what each host can rely on.
 
 What the host is told about the radio, and when it is told, is all in RPMI. Keying the radio,
-choosing frequencies and modulation, retransmission and turnaround are the modem's business.
+modulation, retransmission and turnaround are the modem's business. So is the dial, unless the
+adapter offers it (§4.1): then a host may read it and set it, so that a client tunes to the
+gateway it calls and a gateway to a partner's window.
 
 ### 1.1 A shared modem
 
@@ -56,6 +58,9 @@ callsign. The adapter keeps each host to its own business:
 * **Other programs' traffic reads as busy.** While the modem carries another program's link, or
   transmits for it, an adapter with `caps.busy` reports `busy` true. A `connect` made then fails
   `busy` (§7).
+* **The dial is the station's.** One radio has one dial, so a `tune` (§4.1) moves every host's
+  station. The adapter refuses it (`busy`) while any link or call is up on the station, the
+  host's or another program's, and tells every host the new dial (`dial`, §5).
 * **A host that leaves takes its callsigns, its call and its links with it.** When the host's
   connection to the adapter closes, calls to its callsigns are no longer answered for it, and the
   adapter ends its call under way and its links as `abort` would, so the station is not left in a
@@ -134,6 +139,7 @@ The adapter answers:
 | `regulatory` | The modem checks the station's band rules before every transmission (§8). |
 | `max_queue` | The most bytes the host should have queued on a link at once (§4, `send`). |
 | `shared` | Other programs may use the modem at the same time, under §1.1's rules. Absent means false: this host has the modem to itself. |
+| `dial` | The adapter reads and sets the radio's dial (§4.1). Absent means false. |
 
 If no version is in common the adapter answers `error` `unsupported-version` and closes. An adapter
 that is not shared (§1.1) answers the `hello` of a second host, while a host that has said `hello`
@@ -162,9 +168,12 @@ it is sent, such as `busy`.
 | `abort` | `link`? | Ends this host's link, or its call under way, now. Queued bytes are dropped. A call ended this way ends with `failed` `aborted`; with no call under way, `error` `not-connected`. |
 | `broadcast` | `data`, `ref`? | §6. |
 | `status` | — | The adapter answers `status` (below). |
+| `dial` | — | The adapter answers `dial` with the radio's dial (§4.1). |
+| `tune` | `dial_hz` | Sets the radio's dial (§4.1). `ok` once the radio is there. |
 
 **Types.** `version` is a list of two integers, the lowest and the highest version the host
-speaks; `callsigns` is a list of strings; `on` is true or false; `bandwidth` is an integer; `app`,
+speaks; `callsigns` is a list of strings; `on` is true or false; `bandwidth` and `dial_hz` are
+integers, `dial_hz` above 0; `app`,
 `remote`, `as` and `link` are strings. `ref`, like `id`, is a string or an integer, and the adapter
 copies it unchanged into `delivered` or `broadcast-sent`. A `connect` needs its `id`, which its
 `connected` or `failed` carries: one without is `malformed`.
@@ -191,6 +200,30 @@ reports `queued` (§5) as the queue drains. RP-3 sessions are small enough that 
  "links": [{"link": "a1", "remote": "KK4ODA", "direction": "in", "queued": 0}]}
 ```
 
+### 4.1 The dial
+
+An adapter with `caps.dial` reads and sets the radio's dial: the frequency the radio shows, in
+hertz, which on HF single sideband is the suppressed carrier's, the number a radio shows in USB.
+`dial` is answered with the dial and the request's `id`:
+
+```json
+{"op": "dial", "id": 8, "dial_hz": 7101000}
+```
+
+`tune` is answered with `ok` once the radio is there. An adapter without the dial answers both
+with `error` `unsupported`; one that cannot read the dial just now (the radio has not said)
+answers `dial` with `refused`.
+
+`tune` is refused with `busy` while any link or call is up on the station, the host's or another
+program's (§1.1), and with `refused` when the modem will not go there: a rule it checks (§8), or a
+radio that cannot be tuned now; `text` says why. After every change of the dial, whether a host
+asked or the radio's own knob was turned, the adapter sends each host that has said `hello` a
+`dial` event without an `id`.
+
+A host that moved the station from the dial its operator chose tunes back when it has finished:
+a client after its call to a gateway on another channel, a gateway after its call in a partner's
+window (RP-7 §5). Stations listening on their channel are found there.
+
 ---
 
 ## 5. Events from the adapter
@@ -207,6 +240,7 @@ reports `queued` (§5) as the queue drains. RP-3 sessions are small enough that 
 | `quality` | `link`?, `snr_db`?, `rate_bps`?, `receiving`? | What the modem knows about the path: the last SNR heard, the data rate it is using, and whether it is receiving right now (RP-3 §8 uses this to tell a slow link from a dead one). Only with `quality`. |
 | `busy` | `busy` (bool) | Whether the channel is in use by others, including other programs on a shared modem (§1.1). Only with `busy`. |
 | `heard` | `callsign`, `snr_db`?, `bandwidth`? | A station was heard (a beacon, a call to someone else). Optional. |
+| `dial` | `dial_hz`, `id`? | The radio's dial: the answer to `dial`, with its `id`, and, without one, each time the dial changes (§4.1). Only with `caps.dial`. |
 | `broadcast` | `source`, `data`, `snr_db`? | §6. |
 | `broadcast-sent` | `ref`, `sent` (bool), `text`? | §6. |
 | `error` | `id`?, `code`, `text`? | A request failed, or something went wrong. `code` is from §7. |
@@ -216,7 +250,7 @@ it loses with `disconnected`, so the host never has to guess. On a shared modem 
 another program's links to this host (§1.1).
 
 Test vectors: `vectors/rpmi-conversations.json`: session-01 (RP-3 §12) carried over RPMI on both
-stations, every error a host can meet, a shared modem, and a broadcast.
+stations, every error a host can meet, a shared modem, a broadcast, and the dial.
 
 ---
 
@@ -258,7 +292,8 @@ that program's business; this host hears of them only as `busy`.
 Whether a transmission is allowed on this band, at this time, under this kind of control, is the
 station's responsibility. When the modem checks it (`caps.regulatory`, as Aether does), a refusal
 arrives as `error` or `failed` with `refused`. When it does not, the host (the gateway program)
-MUST check it, or its operator must, before turning on `listen` or calling (RP-0 §7).
+MUST check it, or its operator must, before turning on `listen` or calling (RP-0 §7). With
+`caps.dial` the host reads the dial it judges, rather than trusting one set in its settings.
 
 ---
 
@@ -312,6 +347,8 @@ end of this section.
 | `quality` | `metrics` (`snr_db`, `throughput_bps`, `receiving`). |
 | `busy` | `metrics.channel_busy`, and true while a session whose `owner` is not the host's is up (`status.owner`, or a `metrics.link` during another's session). While the host's own link is up, `channel_busy` is mostly the other station's signal and is not reported; when that link ends, the readings taken during it are dropped and the next `metrics` says how the channel stands. |
 | `broadcast` | `datagram.send` with `frame_type` 2, Aether's unformatted datagram; the `datagram` and `datagram-sent` events. |
+| `dial` | `status.frequency_hz`, the dial Aether reads from the radio over CAT, `rigctld` or FLRig; `refused` while it is null. `caps.dial` is `status.can_tune` at `hello`. Aether's `dial` event (`frequency_hz`) is RPMI's `dial` event. |
+| `tune` | `busy` at once while the host has a call or link, or another program's session is up (its `state` events); otherwise `status`, `busy` unless `state` is `idle` (another program's call is no event of Aether's), then `frequency.set {hz}`. Aether's refusals of it (a probe or a Test under way, something queued for this dial, a radio that did not answer) are `refused`, with Aether's message. |
 | `bandwidth` (in `connect`) | Not mapped yet. How programs sharing a station choose its bandwidth is open (ADR-0106 §5). The adapter offers the bandwidth Aether runs and refuses another with `unsupported`, as §4 says. A `connect` that names that bandwidth is sent with `keep_bandwidth`, so Aether does not move for the call (its ADR-0102). Aether may move between calls (a `bandwidth` event): `caps.bandwidths` is the bandwidth at `hello`, and `connected` carries the one in use. |
 
 Aether checks the band rules before every transmission, and ends each session with the Morse
@@ -395,7 +432,7 @@ true.*
 For the Internet, amateur mesh networks (AREDN), and tests. The adapter takes calls from other
 adapters on a TCP port (**8774** by default). `remote` is `CALLSIGN@host:port`, or `host:port`
 (whoever answers there), or a name the adapter's operator maps to one of these. No callsign is
-keyed and no band rules apply: `regulatory` is false.
+keyed and no band rules apply: `regulatory` is false. There is no radio, so no `dial` (§4.1).
 
 * **On the Internet the link is TLS**, version 1.2 or later. The caller checks the certificate of
   the adapter it calls, by the usual roots of the web or by the certificate's SHA-256 fingerprint,
@@ -428,7 +465,7 @@ the session's bytes on a data port, the next one. The adapter talks to it over T
 
 | RPMI | Mercury |
 |---|---|
-| `hello` | `BUSYDETECT`, which only Mercury 1.9.23 and later answer with `BUSYDETECT ON` or `OFF`: anything else is not this modem, and the host gets `no-modem`. `caps.bandwidths` is 500, 2300 and 2750; `busy` is the answer's `ON`; `delivery` and `quality` are true; `broadcast`, `regulatory` and `shared` are false. `modem` is `Mercury`: its `VERSION` answers as VARA does. |
+| `hello` | `BUSYDETECT`, which only Mercury 1.9.23 and later answer with `BUSYDETECT ON` or `OFF`: anything else is not this modem, and the host gets `no-modem`. `caps.bandwidths` is 500, 2300 and 2750; `busy` is the answer's `ON`; `delivery` and `quality` are true; `broadcast`, `regulatory`, `shared` and `dial` are false (Mercury's commands have none for the radio's dial). `modem` is `Mercury`: its `VERSION` answers as VARA does. |
 | `callsigns` | `MYCALL <first> <more>…`. Mercury answers for five callsigns at most, of 1 to 15 characters, and its CALL carries only capitals, digits and `-`. The adapter refuses others (`refused`) rather than let Mercury drop or change them, so a callsign with `/` (RP-0 §6.1) cannot be used. An empty list keeps Mercury from answering, as `listen` off does. |
 | `listen` | `LISTEN ON` / `LISTEN OFF`, but see *Answering* below. |
 | `connect` | `CONNECT <as> <remote>`, after `MYCALL` with `as` first when it is not, and after `BW<bandwidth>` when the call names a bandwidth Mercury is not on. `ok` comes at once: the call is under way, though `CONNECT` may wait for the station to identify (below) or for a quiet second. `CONNECTED <caller> <called> <bandwidth>` gives `connected` with the bandwidth the two stations agreed on. A caller's callsign is at most 14 characters. |
@@ -520,3 +557,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 0.6.5 | 2026-11-12 | §9.6: the Mercury adapter identifies the station with `CQFRAME` after each session, and after answers that came to none; the station called first, the caller once it has heard it; a `connect` waits for it, and so its `ok` comes at once and Mercury's refusal is `failed` `refused`. |
 | 0.6.6 | 2026-11-12 | §9.6, found by running the adapter on two Mercury 1.9.23 processes: the caller waits 0.7 s after it has heard the called station's `CQFRAME`, as Mercury waits before it answers a frame; without it the caller keyed 0.13 s before the called station had unkeyed. |
 | 0.7.0 | 2026-11-14 | A host between calls (§3): a connection with `hello` alone, on a shared adapter only, so a modem that shows the programs using it shows the host when no call is up. §9.1: the adapter says `hello {app}` to a shared Aether (its ADR-0114, 0.2.0-beta.159), which names the program without a claim; asked for when Aether's header said "calls to KK4ODA-1 not answered" with the RadioPost app open and idle. |
+| 0.8.0 | 2026-11-15 | The dial (§4.1, wishlist W14, W40; gaps G3, G8): `caps.dial`, `dial` and `tune`, the `dial` event to every host, `tune` refused `busy` while any link or call is up on the station since the dial is the whole station's (§1.1), a host that moved the station tuning back, and the host's own rules check reading the dial (§8). An adapter that cannot read the dial just now answers `dial` `refused`. §9.1: Aether's `status.frequency_hz`, `can_tune`, `frequency.set` and `dial` event, the station's state checked before `frequency.set`; §9.5 and §9.6 have no dial. Test vectors: the dial conversation, and the simulated modem's starting dial (`modem.dial_hz`). |

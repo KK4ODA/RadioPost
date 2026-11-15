@@ -105,6 +105,10 @@ MEMBERS: dict[str, list[tuple[str, bool, Any]]] = {
     "abort": [("link", False, lambda v: isinstance(v, str))],
     "broadcast": [("data", True, lambda v: isinstance(v, str)), ("ref", False, is_id)],
     "status": [],
+    "dial": [],
+    "tune": [
+        ("dial_hz", True, lambda v: isinstance(v, int) and not isinstance(v, bool) and v > 0),
+    ],
 }
 
 
@@ -245,11 +249,13 @@ class Adapter:
         caps: dict[str, Any],
         prefix: str,
         frame_bytes: int,
+        dial_hz: int | None = None,
     ) -> None:
         self.world = world
         self.station = station
         self.modem = modem
         self.caps = caps
+        self.dial_hz = dial_hz  # the radio's dial, with `caps.dial` (RP-4 §4.1)
         self.prefix = prefix  # link IDs are this adapter's own: prefix and a number
         self.frame_bytes = frame_bytes  # how much a `received` carries at most
         self.hosts: dict[str, Host] = {}
@@ -310,6 +316,8 @@ class Adapter:
             "abort": self.on_abort,
             "broadcast": self.on_broadcast,
             "status": self.on_status,
+            "dial": self._dial,
+            "tune": self._dial,
         }.get(op)
         if handler is None:
             self.emit(host, error(rid, "unsupported", f"no op {op}"))
@@ -469,3 +477,22 @@ class Adapter:
                 links=links,
             ),
         )
+
+    def _dial(self, h: Host, m: Message, rid: Any) -> None:
+        """RP-4 §1.1, §4.1: `dial` reads the radio's dial; `tune` sets it. The dial is the
+        station's, so it moves only while nothing is up on it, and every host hears where it
+        went."""
+        if not self.caps.get("dial"):
+            self.emit(h.name, error(rid, "unsupported", "this modem has no dial"))
+            return
+        if m["op"] == "dial":
+            self.emit(h.name, answer("dial", rid, dial_hz=self.dial_hz))
+            return
+        if self.ends or any(c.adapter is self for c in self.world.calls):
+            self.emit(h.name, error(rid, "busy", "a link or a call is up on the station"))
+            return
+        self.dial_hz = m["dial_hz"]
+        self.ok(h, rid)
+        for other in self.hosts.values():
+            if other.hello:
+                self.emit(other.name, answer("dial", None, dial_hz=self.dial_hz))

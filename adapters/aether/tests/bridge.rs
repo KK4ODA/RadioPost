@@ -15,6 +15,12 @@ struct Aether {
     hello: bool,
     refuse: Vec<&'static str>,
     connect_error: Option<&'static str>,
+    /// The radio's dial, read over CAT; none when the keying cannot ask the radio.
+    dial: Option<u64>,
+    /// `status.state`: another program's call is no event, only a state.
+    state: &'static str,
+    /// `frequency.set` refused, as when a probe is out.
+    tune_refused: bool,
     asked: Vec<Value>,
 }
 
@@ -25,6 +31,9 @@ impl Aether {
             hello: true,
             refuse: Vec::new(),
             connect_error: None,
+            dial: None,
+            state: "idle",
+            tune_refused: false,
             asked: Vec::new(),
         }
     }
@@ -41,8 +50,10 @@ impl Aether {
         };
         match request["method"].as_str().unwrap_or("") {
             "status" => {
-                let mut status = json!({"version": "0.2.0-beta.146", "state": "idle",
-                                        "owner": null, "channel_busy": false});
+                let mut status = json!({"version": "0.2.0-beta.146", "state": self.state,
+                                        "owner": null, "channel_busy": false,
+                                        "frequency_hz": self.dial,
+                                        "can_tune": self.dial.is_some()});
                 if self.claims {
                     status["claims"] = json!([]);
                 }
@@ -79,6 +90,11 @@ impl Aether {
             "abort" => ok(json!({"orderly": false})),
             "datagram.send" => ok(json!({"accepted": 1, "queued": 1, "limit": 16})),
             "share.include" => ok(json!({"app": params["app"], "path": params["path"], "logs": 1})),
+            "frequency.set" if self.tune_refused => refused("refused"),
+            "frequency.set" => {
+                self.dial = params["hz"].as_u64();
+                ok(json!({"hz": params["hz"]}))
+            }
             "hello" if self.hello => ok(json!({"id": 7, "app": params["app"]})),
             "hello" => refused("unknown_method"),
             other => panic!("the adapter asked Aether for {other}"),
@@ -740,4 +756,96 @@ fn a_host_that_leaves_ends_its_link_and_its_call() {
     // nothing held: nothing asked
     let (mut b, _) = opened(true, true);
     assert_eq!(b.host_left().len(), 0, "nothing held, nothing asked");
+}
+
+/// RP-4 §4.1 on Aether (§9.1): `caps.dial` is `status.can_tune`, `dial` reads
+/// `status.frequency_hz`, `tune` is `frequency.set` once Aether's state says nothing is up on the
+/// station, and Aether's `dial` event is RPMI's.
+#[test]
+fn the_dial_is_read_and_set_through_aether() {
+    let mut b = Bridge::new();
+    let mut a = Aether::new(true);
+    a.dial = Some(7_101_000);
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"hello","id":1,"version":[1,1],"app":"RadioPost client 0.1.0"}"#,
+    );
+    assert_eq!(lines(&said)[0]["caps"]["dial"], true);
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"callsigns","id":2,"callsigns":["KK4ODA"]}"#,
+    );
+    let said = line(&mut b, &mut a, r#"{"op":"dial","id":3}"#);
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "dial", "id": 3, "dial_hz": 7_101_000})]
+    );
+    a.asked.clear();
+    let said = line(&mut b, &mut a, r#"{"op":"tune","id":4,"dial_hz":3590000}"#);
+    assert_eq!(lines(&said), [json!({"op": "ok", "id": 4})]);
+    let methods: Vec<&str> = a
+        .asked
+        .iter()
+        .filter_map(|r| r["method"].as_str())
+        .collect();
+    assert_eq!(methods, ["status", "frequency.set"]);
+    assert_eq!(a.asked[1]["params"], json!({"hz": 3_590_000}));
+    // the change comes back as Aether's event, and every host hears it
+    let said = event(&mut b, &mut a, "dial", &json!({"frequency_hz": 3_590_000}));
+    assert_eq!(lines(&said), [json!({"op": "dial", "dial_hz": 3_590_000})]);
+
+    // another program's call: only Aether's state says so, and the dial stays
+    a.state = "connecting";
+    a.asked.clear();
+    let said = line(&mut b, &mut a, r#"{"op":"tune","id":5,"dial_hz":7101000}"#);
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "error", "id": 5, "code": "busy"})]
+    );
+    assert!(a.asked.iter().all(|r| r["method"] != "frequency.set"));
+    a.state = "idle";
+    // Aether's own refusals (a probe out, a Test, something queued for this dial) are `refused`
+    a.tune_refused = true;
+    let said = line(&mut b, &mut a, r#"{"op":"tune","id":6,"dial_hz":7101000}"#);
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "error", "id": 6, "code": "refused"})]
+    );
+    a.tune_refused = false;
+    // the host's own session holds the dial without asking Aether
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":7,"remote":"N1CALL-10"}"#,
+    );
+    event(
+        &mut b,
+        &mut a,
+        "state",
+        &mine("connected", "N1CALL-10 (master)"),
+    );
+    a.asked.clear();
+    let said = line(&mut b, &mut a, r#"{"op":"tune","id":8,"dial_hz":7101000}"#);
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "error", "id": 8, "code": "busy"})]
+    );
+    assert!(a.asked.is_empty(), "{:?}", a.asked);
+
+    // an Aether whose keying cannot ask the radio has no dial
+    let (mut b, mut a) = opened(true, false);
+    let said = line(&mut b, &mut a, r#"{"op":"dial","id":4}"#);
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "error", "id": 4, "code": "unsupported"})]
+    );
+    let said = line(&mut b, &mut a, r#"{"op":"tune","id":5,"dial_hz":7101000}"#);
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "error", "id": 5, "code": "unsupported"})]
+    );
+    let said = event(&mut b, &mut a, "dial", &json!({"frequency_hz": 3_590_000}));
+    assert_eq!(lines(&said), Vec::<Value>::new(), "no dial to tell");
 }

@@ -393,6 +393,7 @@ impl Bridge {
             regulatory: false,
             max_queue: MAX_QUEUE,
             shared: false,
+            dial: false,
         };
         out.push(Out::Host(answer_with(
             "hello",
@@ -465,6 +466,10 @@ impl Bridge {
             Request::Abort { link } => self.on_abort(link.as_deref(), rid_ref, &mut out),
             Request::Broadcast { .. } => {
                 let text = "Mercury's broadcasts are not carried by this adapter";
+                out.push(Out::Host(error(rid_ref, "unsupported", text)));
+            }
+            Request::Dial | Request::Tune(_) => {
+                let text = "Mercury's TNC commands have no dial";
                 out.push(Out::Host(error(rid_ref, "unsupported", text)));
             }
             Request::Status => out.push(Out::Host(self.status(rid_ref))),

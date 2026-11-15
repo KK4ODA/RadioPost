@@ -1978,9 +1978,12 @@ def make_pdus() -> dict[str, Any]:
 
 RPMI_MODEM = "rpref simulated modem 1"
 RPMI_FRAME = 128  # the most bytes one `received` carries on the simulated modem
+RPMI_DIAL = 7_101_000  # where a simulated radio with `caps.dial` starts (RP-4 §4.1)
 
 
-def rpmi_adapter(world: rpmi.World, station: str, prefix: str, *, shared: bool) -> rpmi.Adapter:
+def rpmi_adapter(
+    world: rpmi.World, station: str, prefix: str, *, shared: bool, dial_hz: int | None = None
+) -> rpmi.Adapter:
     caps = {
         "bandwidths": [500, 2300],
         "max_links": 1,
@@ -1992,8 +1995,16 @@ def rpmi_adapter(world: rpmi.World, station: str, prefix: str, *, shared: bool) 
         "max_queue": 65536,
         "shared": shared,
     }
+    if dial_hz is not None:
+        caps["dial"] = True  # RP-4 §4.1: it reads and sets the radio's dial
     return rpmi.Adapter(
-        world, station, modem=RPMI_MODEM, caps=caps, prefix=prefix, frame_bytes=RPMI_FRAME
+        world,
+        station,
+        modem=RPMI_MODEM,
+        caps=caps,
+        prefix=prefix,
+        frame_bytes=RPMI_FRAME,
+        dial_hz=dial_hz,
     )
 
 
@@ -2052,7 +2063,7 @@ def rpmi_errors() -> list[dict[str, Any]]:
         {"op": "callsigns", "id": 6, "callsigns": ["KK4ODA"]},
         {"op": "connect", "id": 7, "remote": "N1CALL-10", "as": "W1AW"},
         {"op": "connect", "id": 8, "remote": "N1CALL-10", "bandwidth": 2750},
-        {"op": "tune", "id": 9},
+        {"op": "rig", "id": 9},
         {"op": "send", "id": 10, "link": "c7", "data": rpmi.encode_data(b"\x00")},
         {"op": "abort", "id": 11},
         {"op": "connect", "id": 12, "remote": "N9ZZZ"},
@@ -2138,6 +2149,39 @@ def rpmi_broadcast() -> list[dict[str, Any]]:
     return w.log
 
 
+def rpmi_dial() -> list[dict[str, Any]]:
+    """The dial (RP-4 §1.1, §4.1): read and set, refused while anything is up on the station,
+    heard by every host there; and a modem without one."""
+    w = rpmi.World()
+    gateway = rpmi_adapter(w, "N1CALL", "g", shared=True, dial_hz=RPMI_DIAL)
+    client = rpmi_adapter(w, "KK4ODA", "c", shared=False, dial_hz=RPMI_DIAL)
+    plain = rpmi_adapter(w, "N3CALL", "p", shared=False)
+    rpmi_start(gateway, "radiopost", "RadioPost gateway 0.1.0", ["N1CALL-10"], listen=True)
+    gateway.open("other")
+    gateway.request("other", {"op": "hello", "id": 1, "version": [1, 1], "app": "Other mail 2.3"})
+    gateway.request("other", {"op": "callsigns", "id": 2, "callsigns": ["N1CALL-1"]})
+    rpmi_start(client, "client", "RadioPost client 0.1.0", ["KK4ODA"], listen=False)
+    w.note("The client reads its dial, tunes to 80 m and back, and once to no frequency at all.")
+    for request in [
+        {"op": "dial", "id": 3},
+        {"op": "tune", "id": 4, "dial_hz": 3_590_000},
+        {"op": "tune", "id": 5, "dial_hz": 0},
+        {"op": "tune", "id": 6, "dial_hz": 7_101_000},
+        {"op": "connect", "id": 7, "remote": "N1CALL-10"},
+    ]:
+        client.request("client", request)
+    w.note("A link is up at both stations: neither dial moves, for this host or another.")
+    gateway.request("other", {"op": "tune", "id": 3, "dial_hz": 7_103_000})
+    client.request("client", {"op": "tune", "id": 8, "dial_hz": 3_590_000})
+    client.request("client", {"op": "disconnect", "id": 9, "link": link_of(client, "client")})
+    w.note("Nothing is up: the other program tunes the gateway station; both its hosts hear it.")
+    gateway.request("other", {"op": "tune", "id": 4, "dial_hz": 7_103_000})
+    rpmi_start(plain, "client", "RadioPost client 0.1.0", ["N3CALL"], listen=False)
+    plain.request("client", {"op": "dial", "id": 3})
+    plain.request("client", {"op": "tune", "id": 4, "dial_hz": 7_101_000})
+    return w.log
+
+
 def rpmi_answers(steps: list[dict[str, Any]]) -> dict[str, str]:
     """Each request with an `id`, and what came of it: its answer, and for a call its end."""
     out = {}
@@ -2164,7 +2208,7 @@ def rpmi_answers(steps: list[dict[str, Any]]) -> dict[str, str]:
     return out
 
 
-RPMI_ANSWERS = {"ok", "error", "hello", "status"}
+RPMI_ANSWERS = {"ok", "error", "hello", "status", "dial"}
 
 
 def make_rpmi_conversations() -> dict[str, Any]:
@@ -2175,19 +2219,21 @@ def make_rpmi_conversations() -> dict[str, Any]:
         "closing. Messages compare as JSON values, not as text; `text` is for people and need not "
         "match. An adapter given the host lines answers with the adapter lines, except where the "
         "modem decides: how `received` splits the bytes (here at most 128 a line) and the time "
-        "between events. A host given the adapter lines sends the host lines. Notes are for "
-        "people."
+        "between events. A modem with `caps.dial` starts at `modem.dial_hz`. A host given the "
+        "adapter lines sends the host lines. Notes are for people."
     )
     out["modem"] = {
         "name": RPMI_MODEM,
         "received_bytes_at_most": RPMI_FRAME,
         "link_ids": "each adapter's own: a letter for the station and a count from 1",
+        "dial_hz": RPMI_DIAL,
     }
-    session, errors, shared, broadcast = (
+    session, errors, shared, broadcast, dial = (
         rpmi_session(),
         rpmi_errors(),
         rpmi_shared(),
         rpmi_broadcast(),
+        rpmi_dial(),
     )
     gateway_start = {
         "N1CALL-10 gateway hello 1": "hello",
@@ -2214,7 +2260,7 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "KK4ODA client callsigns 6": "ok",
                 "KK4ODA client connect 7": "not-authorized",  # `as` not its own
                 "KK4ODA client connect 8": "unsupported",  # a bandwidth the modem lacks
-                "KK4ODA client tune 9": "unsupported",
+                "KK4ODA client rig 9": "unsupported",  # an op it does not know
                 "KK4ODA client send 10": "not-connected",
                 "KK4ODA client abort 11": "not-connected",  # nothing to abort
                 "KK4ODA client connect 12": "ok, then failed aborted",
@@ -2250,6 +2296,31 @@ def make_rpmi_conversations() -> dict[str, Any]:
             },
         ),
         (broadcast, gateway_start | client_start | {"KK4ODA client broadcast 3": "ok"}),
+        (
+            dial,
+            {  # RP-4 §1.1, §4.1
+                "N1CALL radiopost hello 1": "hello",
+                "N1CALL radiopost callsigns 2": "ok",
+                "N1CALL radiopost listen 3": "ok",
+                "N1CALL other hello 1": "hello",
+                "N1CALL other callsigns 2": "ok",
+                "KK4ODA client hello 1": "hello",
+                "KK4ODA client callsigns 2": "ok",
+                "KK4ODA client dial 3": "dial",
+                "KK4ODA client tune 4": "ok",
+                "KK4ODA client tune 5": "malformed",  # a dial above 0 (§4)
+                "KK4ODA client tune 6": "ok",
+                "KK4ODA client connect 7": "ok, then connected",
+                "N1CALL other tune 3": "busy",  # another host's link is up on the station
+                "KK4ODA client tune 8": "busy",  # its own link is up
+                "KK4ODA client disconnect 9": "ok",
+                "N1CALL other tune 4": "ok",
+                "N3CALL client hello 1": "hello",
+                "N3CALL client callsigns 2": "ok",
+                "N3CALL client dial 3": "unsupported",  # no `caps.dial`
+                "N3CALL client tune 4": "unsupported",
+            },
+        ),
     ]:
         got = rpmi_answers(steps)
         assert got == wanted, {
@@ -2273,6 +2344,25 @@ def make_rpmi_conversations() -> dict[str, Any]:
         True,
         [],
     ), status
+    # RP-4 §4.1: the dial read is the one the adapter has; every change is told, without an `id`,
+    # to every host on the station that has said hello, and to no other station.
+    read = next(
+        s["message"]
+        for s in dial
+        if s.get("to") == "host" and s["message"]["op"] == "dial" and "id" in s["message"]
+    )
+    assert read == {"op": "dial", "id": 3, "dial_hz": 7_101_000}, read
+    told = [
+        (s["station"], s["host"], s["message"]["dial_hz"])
+        for s in dial
+        if s.get("to") == "host" and s["message"]["op"] == "dial" and "id" not in s["message"]
+    ]
+    assert told == [
+        ("KK4ODA", "client", 3_590_000),
+        ("KK4ODA", "client", 7_101_000),
+        ("N1CALL", "radiopost", 7_103_000),
+        ("N1CALL", "other", 7_103_000),
+    ], told
     # RP-4 §4, §5: `delivered` only for a send with a `ref`, which it carries unchanged.
     reported = [
         s["message"]["ref"] for s in errors if s.get("message", {}).get("op") == "delivered"
@@ -2295,8 +2385,9 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "A client meets every error in turn: a request before `hello`; no version in "
                 "common (the adapter closes, and the host connects again); `listen` and `connect` "
                 "before `callsigns`; an `as` that is not its own; a bandwidth the modem lacks; an "
-                "unknown op; a link that is not its; an `abort` with nothing to abort. Then two "
-                "calls to a station nobody answers for, one aborted and one given up, a call that "
+                "op it does not know; a link that is not its; an `abort` with nothing to abort. "
+                "Then two calls to a station nobody answers for, one aborted and one given up, a "
+                "call that "
                 "connects, two sends on it (with no `ref`, and with an integer `ref`), a second "
                 "call while that link is up, and the link aborted. Last, a second program "
                 "connects to the client's adapter, which is not shared: it is "
@@ -2324,6 +2415,20 @@ def make_rpmi_conversations() -> dict[str, Any]:
             "story": "The client sends a broadcast; the gateway's host hears it with its source.",
             "steps": broadcast,
         },
+        {
+            "name": "the dial",
+            "story": (
+                "Two adapters with `caps.dial` (RP-4 §4.1): the client reads its dial, tunes to "
+                "80 m and back (each change told back to it as a `dial` event), and is told a dial "
+                "of 0 is `malformed`. It calls the gateway station N1CALL, whose modem RadioPost "
+                "shares with another mail program: while the link is up the other program's "
+                "`tune` is refused `busy`, since the dial is the whole station's (§1.1), and so "
+                "is the client's own. Once the link is down the other program tunes the gateway "
+                "station, and both its hosts hear the new dial. A third adapter has no dial: "
+                "`dial` and `tune` are `unsupported`."
+            ),
+            "steps": dial,
+        },
     ]
     return out
 
@@ -2338,7 +2443,7 @@ RPMI_LINES = [
     ('{"op": "status", "id": true}', "an id that is a boolean"),
     ('{"op": "send", "id": 8, "link": "c1", "data": "-_8="}', "base64url, not standard base64"),
     ('{"op": "send", "id": 9, "link": "c1", "data": "AQ"}', "base64 without its padding"),
-    ('{"op": "tune", "id": 10}', "an op this adapter does not know"),
+    ('{"op": "rig", "id": 10}', "an op this adapter does not know"),
     ('{"op": "send", "id": 11, "link": "c1", "data": "AQ=="}', "good base64, but no such link"),
     ('{"op": "callsigns", "id": 12}', "a request without a member it needs"),
     ('{"op": "listen", "id": 13, "on": "yes"}', "a member of the wrong type"),
@@ -7045,7 +7150,7 @@ def self_check(name: str, data: dict[str, Any]) -> None:
 
 def check_rpmi(data: dict[str, Any]) -> None:
     """Each request is a good line and is answered; session-01's bytes cross intact (RP-4)."""
-    answers = {"ok", "error", "hello", "status"}
+    answers = RPMI_ANSWERS
     for conversation in data["conversations"]:
         steps = conversation["steps"]
         for i, step in enumerate(steps):

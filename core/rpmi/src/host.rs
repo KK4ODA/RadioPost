@@ -120,6 +120,16 @@ impl Host {
     pub fn status(&mut self) -> Message {
         self.with_id("status", &[])
     }
+
+    /// `dial`: the radio's dial (RP-4 §4.1).
+    pub fn dial(&mut self) -> Message {
+        self.with_id("dial", &[])
+    }
+
+    /// `tune`: the radio's dial set, in hertz (RP-4 §4.1).
+    pub fn tune(&mut self, dial_hz: u64) -> Message {
+        self.with_id("tune", &[("dial_hz", dial_hz.into())])
+    }
 }
 
 /// Which station placed the call.
@@ -286,6 +296,13 @@ pub enum Event {
         /// The host's links.
         links: Vec<LinkStatus>,
     },
+    /// The radio's dial (§4.1): the answer to `dial`, or, with no `id`, a change of it.
+    Dial {
+        /// The request's `id`; none when the dial changed.
+        id: Option<Value>,
+        /// The dial, in hertz.
+        dial_hz: u64,
+    },
     /// An `op` this host does not know: ignored (RP-4 §2).
     Unknown(String),
 }
@@ -440,6 +457,13 @@ impl Event {
                 text: optional_text(m, "text"),
             },
             "status" => status(m, id)?,
+            "dial" => Event::Dial {
+                id,
+                dial_hz: m
+                    .get("dial_hz")
+                    .and_then(Value::as_u64)
+                    .ok_or("no `dial_hz`")?,
+            },
             other => Event::Unknown(other.into()),
         })
     }

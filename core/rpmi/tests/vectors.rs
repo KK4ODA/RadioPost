@@ -29,12 +29,17 @@ fn without_text(m: &Message) -> Message {
 }
 
 /// The simulated modem of the vectors (`modem` in `rpmi-conversations.json`), with the caps the
-/// station's `hello` gives and the link IDs the vector shows for it.
+/// station's `hello` gives, the link IDs the vector shows for it, and the modem's dial when the
+/// caps say it has one.
 fn station(name: &str, hello: &Message, prefix: &str, file: &Json) -> StationConfig {
+    let caps = Caps::from_json(&hello["caps"]);
     StationConfig {
         name: name.into(),
         modem: file["modem"]["name"].as_str().expect("a modem").into(),
-        caps: Caps::from_json(&hello["caps"]),
+        dial_hz: caps
+            .dial
+            .then(|| file["modem"]["dial_hz"].as_u64().expect("a dial")),
+        caps,
         prefix: prefix.into(),
         frame_bytes: usize::try_from(
             file["modem"]["received_bytes_at_most"]
@@ -185,7 +190,7 @@ fn replay_adapters(conversation: &Json, file: &Json) {
 fn every_conversation_from_the_adapters() {
     let file = vectors("rpmi-conversations.json");
     let conversations = file["conversations"].as_array().expect("conversations");
-    assert_eq!(conversations.len(), 4);
+    assert_eq!(conversations.len(), 5);
     for c in conversations {
         replay_adapters(c, &file);
     }

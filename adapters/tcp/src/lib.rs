@@ -72,6 +72,7 @@ pub fn caps() -> Caps {
         regulatory: false,
         max_queue: 1 << 20,
         shared: false,
+        dial: false,
     }
 }
 
@@ -447,6 +448,9 @@ impl Adapter {
             },
             Request::Broadcast { .. } => {
                 conn.emit(error(id, "unsupported", "no broadcasts over TCP"));
+            }
+            Request::Dial | Request::Tune(_) => {
+                conn.emit(error(id, "unsupported", "no radio over TCP"));
             }
             Request::Status => {
                 let links: Vec<Value> = conn.link.iter().map(link_status).collect();
