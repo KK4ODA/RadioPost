@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! The post office role's tests (the outline's §3.4): P-01 to P-10, P-05 and P-06 without what
-//! needs local delivery or forwarding (Phase 4). The tester
+//! The post office role's tests (the outline's §3.4): P-01 to P-10, P-06 without forward items
+//! (RP-7 §4.1, still to build). The tester
 //! starts the post office from its driver file in a fresh directory for each test, and plays its
 //! users' clients, a gateway, another post office's user, and the mail server around it: its
 //! door called as an MTA hook (the MTA Hooks draft's shape), and a stand-in submission port that
@@ -1067,10 +1067,11 @@ impl Run<'_> {
         Ok(())
     }
 
-    /// P-05: reports of sessions carried offline (RP-5 §5.6), without paths: each checked as at
-    /// `started`, not by the post office's clock; messages taken as from a session, pickups
-    /// marked; a session whose statement fails refused whole, and one whose path does not end at
-    /// the reporting gateway refused `not-authorized`; one answer each, in order. Local pickups
+    /// P-05: reports of sessions carried offline (RP-5 §5.6): each checked as at `started`, not
+    /// by the post office's clock; messages taken as from a session, pickups marked; a session
+    /// whose statement fails refused whole, one whose path does not end at the reporting gateway
+    /// refused `not-authorized`, and one forwarded to it by radio (RP-7 §3.4), its statement
+    /// naming the first gateway of its path, taken; one answer each, in order. Local pickups
     /// (RP-7 §4.4): a message one user handed a cut-off gateway for another, who took it there,
     /// reported pickup first, is marked picked up once the post office holds it, and not
     /// offered to them again.
@@ -1109,43 +1110,30 @@ impl Run<'_> {
         forged["signature"] = base64url::encode(&[7u8; 64]).into();
         let mut elsewhere = Po::session_body(&a, GATEWAY, &[], Po::time_form(), now());
         elsewhere["path"] = json!([GATEWAY, "N2CALL-5"]);
+        // carried by N2CALL-5, cut off, and forwarded to this gateway by radio (RP-7 §3.4): the
+        // statement names N2CALL-5, the first of the path
+        let carried = mail(&a.address, "maria@example.com", "Generator fuel", 40);
+        let mut forwarded = Po::session_body(&a, "N2CALL-5", &[&carried], Po::time_form(), now());
+        forwarded["messages"] = json!([{"id": carried.content_id().text(),
+                                        "air": base64url::encode(&carried.air_form(Compression::None))}]);
+        forwarded["path"] = json!(["N2CALL-5", GATEWAY]);
         let (status, answer) = po.call(
             "POST",
             "/reports",
             Some(&gw.token),
-            Some(&json!({"sessions": [ok, forged, elsewhere]})),
+            Some(&json!({"sessions": [ok, forged, elsewhere, forwarded]})),
         )?;
         if status != 200 {
             return Err(format!("a report answered {status} {answer} (RP-5 §5.6)"));
         }
         let s = answer["sessions"].as_array().cloned().unwrap_or_default();
-        if s.len() != 3 {
+        if s.len() != 4 {
             return Err(format!(
-                "{} answers for three sessions reported (RP-5 §5.6: one each, in order)",
+                "{} answers for four sessions reported (RP-5 §5.6: one each, in order)",
                 s.len()
             ));
         }
-        if s[0]["results"] != json!([{"id": out.content_id().text(), "status": "accepted"}]) {
-            return Err(format!(
-                "a session started 15 minutes ahead of the post office's clock, checked at its \
-                 `started`: {} where its message accepted was due (RP-5 §5.6, RP-1 §6.3)",
-                s[0]
-            ));
-        }
-        if s[1]["name"] != "signature-invalid" || s[1].get("results").is_some() {
-            return Err(format!(
-                "a session whose signature fails: {} where signature-invalid, nothing taken, was \
-                 due (RP-5 §5.6)",
-                s[1]
-            ));
-        }
-        if s[2]["name"] != "not-authorized" {
-            return Err(format!(
-                "a path that does not end at the reporting gateway: {} where not-authorized was \
-                 due (RP-5 §5.6)",
-                s[2]
-            ));
-        }
+        four_answers(&s, &out, &carried)?;
         // the pickup marked: not offered again
         let again = po.open(&gw, &a, &[&out])?;
         if again["waiting"]
@@ -1869,6 +1857,42 @@ fn iso(seconds: u64) -> String {
         rem % 3600 / 60,
         rem % 60
     )
+}
+
+/// P-05's four sessions reported, answered in order (RP-5 §5.6): taken as at `started`, refused
+/// for a forged signature, refused for a path that does not end at the reporter, and taken when
+/// forwarded to it by radio (RP-7 §3.4).
+fn four_answers(s: &[Json], out: &Message, carried: &Message) -> Result<(), String> {
+    if s[0]["results"] != json!([{"id": out.content_id().text(), "status": "accepted"}]) {
+        return Err(format!(
+            "a session started 15 minutes ahead of the post office's clock, checked at its \
+             `started`: {} where its message accepted was due (RP-5 §5.6, RP-1 §6.3)",
+            s[0]
+        ));
+    }
+    if s[1]["name"] != "signature-invalid" || s[1].get("results").is_some() {
+        return Err(format!(
+            "a session whose signature fails: {} where signature-invalid, nothing taken, was \
+             due (RP-5 §5.6)",
+            s[1]
+        ));
+    }
+    if s[2]["name"] != "not-authorized" {
+        return Err(format!(
+            "a path that does not end at the reporting gateway: {} where not-authorized was \
+             due (RP-5 §5.6)",
+            s[2]
+        ));
+    }
+    if s[3]["results"] != json!([{"id": carried.content_id().text(), "status": "accepted"}]) {
+        return Err(format!(
+            "a session forwarded to the reporting gateway, its statement naming the first \
+             gateway of its path: {} where its message accepted was due (RP-5 §5.6, RP-7 \
+             §3.4)",
+            s[3]
+        ));
+    }
+    Ok(())
 }
 
 /// P-05's local pickup (RP-7 §4.4): `b` handed a cut-off gateway a message for `a`, who took it

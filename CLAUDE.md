@@ -205,6 +205,27 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   mail under key 4. `session-05` replays both sides (`radiopost/tests/sessions.rs`,
   `gateway/tests/session05.rs`, the cut-off `NOTICE` text given by `Offline::with_notice`); C-10,
   G-06 and P-05's local pickups; `plant.py` takes a second fault for a test as `"P-05 local"`.
+  Forwarding between gateways (W30 stage 3, RP-7 §2 to §4.3): `radiopost::forwarding` has the
+  records (`Proof`, `record_id`, `check_proof`) and placements (`Placed`, `check_placement`,
+  replayed against `forwarding.json`'s cases). The caller is `Client::forwarding(Forwarding)`
+  (role 1, `PROOF`s before the messages, a credential whole once then by hash, `Event::Placed`
+  for a forward item whose placement checks, `Event::Records` for `RECEIPT` key 4); the partner is
+  `Gateway::with_partner(Partners)`, whose `Upstream` is the partner's own store (`placement`,
+  `trust`, `take_records`; the engine checks each `PROOF` and each message against the records
+  taken). A record one of whose messages failed is not taken, and its other messages are listed
+  failed with that code (RP-7 0.10.1), or the caller would wait for their receipt. In the gateway
+  program: `forward.rs` (`Partner`, `outbox`, `Outcome::apply`), `Settings.partners` (a gateway
+  answers forwarding calls from its partners only), `Store.partners` (cursor, the credentials a
+  partner holds, its last `online`), `Record.path` (reported with it; RP-5 §5.6 has no `cursor`,
+  so a report sends none), forwarding serials given per cut-off gateway as forward items arrive;
+  `station::forward` runs between sessions when the monitor asks (`request_forward`, the panel's
+  *Forward now*), `forward_once` for the command line. `session-04` replays byte for byte through
+  the engines (`radiopost/tests/sessions.rs`) and through each gateway's store
+  (`gateway/tests/session04.rs`, N1CALL-10's reports equal to `forwarding.json`'s);
+  `gateway/tests/forwarding.rs` is a cut-off gateway (restarted with an address that does not
+  answer, since both gateways must sign one base URL) forwarding to its online partner, which
+  reports. P-05 checks a forwarded session's path (`"P-05 path"`). Windows, routes and F-01 to
+  F-06 are stage 5; the post office's placements, stage 4.
   The client's gateway side: `online::gateways` fetches RP-5 §4.4's list, its JWS checked with the
   keys the home trusts for the user's domain (and those its signed `info` adds, RP-1 §7.2), and
   keeps it in `state.json` for when there is no Internet; `grid.rs` ranks it by distance from the

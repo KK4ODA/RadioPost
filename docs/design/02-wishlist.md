@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.21 |
+| **Version** | 0.3.22 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -133,7 +133,7 @@ rules:
 | W27 | Copies placed ahead | Offline | High | Fits today | Implemented |
 | W28 | The gateway's queue while offline, and its reports | Offline | High | Fits today | Implemented |
 | W29 | The sender's client follows queued mail | Offline | High | Fits today | Implemented |
-| W30 | Forwarding by radio | Offline | Medium | Fits today | Planned |
+| W30 | Forwarding by radio | Offline | Medium | Fits today | Stage 3 of 5 built |
 | W31 | Local delivery at a cut-off gateway | Offline | Medium | Fits today | Implemented |
 | W32 | Forms | Applications | Medium | Application layer (recommended); optional addition (RP-2 key 13) | Planned |
 | W33 | Position reports | Applications | Low | Application layer; optional addition as broadcasts | Planned |
@@ -768,12 +768,12 @@ Mail leaves an area that has lost the Internet, and comes back in, by radio betw
 | Requested by | The plan: concept §6.3; D18, D21 to D23, D26; Phase 4. Requesters: 0. |
 | Component | Gateway, post office. |
 | Compatibility | **Fits today**: RP-7, with its additions to RP-3 and RP-5 already made. |
-| Existing coverage | Specified, not built. A route through a gateway of another post office has the same gap as W27 (G14). |
+| Existing coverage | **The forwarding session built** (stage 3, 2026-11-15): both session engines, placements checked, partners named by their operators, a cut-off gateway forwarding its queue on the operator's word, the partner reporting with the path. Still to build: the post office deciding a gateway is cut off and placing forward items (stage 4), windows and routes (stage 5). A route through a gateway of another post office has the same gap as W27 (G14). |
 | Dependencies | W27, W28; W26 when a partner is on another radio; W40 for modems other than Aether; W41 outside the US. |
 | Effort | Large. |
 | Priority | **Medium**: Phase 4. |
 | Recommendation | Accept. |
-| Status | Planned. |
+| Status | Stage 3 of 5 built. |
 | Author decision | **Decided** (CLAUDE.md): after the gateway's queue. (2026-11-14) Stages 3 to 5 (design §9); its first trial on the air between two gateways on one shared channel, the dial (W14, W40) after. |
 
 ### W31. Local delivery at a cut-off gateway
@@ -1111,3 +1111,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.19 | 2026-11-14 | W24 implemented: a gateway's operator refuses a caller by address or callsign, from the panel or the command line, while it answers. |
 | 0.3.20 | 2026-11-15 | W36's second part implemented: mail sent by radio in the Sent folder, and pickups by radio marked read (RP-6 0.8.0 §2.6). |
 | 0.3.21 | 2026-11-15 | W31 implemented: local delivery at a cut-off gateway (RP-7 §4.4), with C-10, G-06 and P-05's local pickups. |
+| 0.3.22 | 2026-11-15 | W30's stage 3 built: the forwarding session between gateways, with P-05's paths. |

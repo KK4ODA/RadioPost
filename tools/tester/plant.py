@@ -133,6 +133,11 @@ FAULTS = {
     "P-05": (OFFICE, "self.picked_up(&stmt.address, &pickups, true);", ""),
     # a second fault for one test is named after it, then a word: run under the test's ID
     "P-05 local": (OFFICE, ".extend(local);", ".extend(Vec::<String>::new());"),
+    "P-05 path": (
+        OFFICE,
+        ".unwrap_or_else(|| gateway.operator.clone());",
+        ".map(|_| gateway.operator.clone()).unwrap_or_else(|| gateway.operator.clone());",
+    ),
     "P-06": (
         OFFICE,
         'items.push(json!({"kind": "drop", "address": address, "serial": serial}));',

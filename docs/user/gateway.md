@@ -4,7 +4,8 @@ How a licensed operator sets up a RadioPost gateway on the computer at their rad
 with their post office, and leaves it answering. Users call the gateway by radio; it carries each
 session to the user's own post office over the Internet (RP-3 §9, RP-5 §5). When the Internet is
 down, it goes on: it checks callers itself, hands them the copies of their mail it holds, keeps
-what they send, and reports it all when the Internet is back (§4).
+what they send, and reports it all when the Internet is back, or hands it by radio to a partner
+gateway that can reach the Internet (§4).
 
 ---
 
@@ -190,8 +191,34 @@ text), each session waiting to be reported with its last try, and the last repor
 command line: `radiopost-gateway held`, and `radiopost-gateway copies --users 50 --days 7
 --max-air-bytes 16384` (or `--off`) for the setting.
 
-Forwarding by radio to a partner gateway that can reach the Internet comes later (Phase 4,
-wishlist W30).
+**Forwarding by radio to a partner** (RP-7 §2, §3). A partner is another gateway, named by its
+callsign, that this one can reach by radio. While this gateway is cut off, it can hand its queue
+to a partner that reaches the Internet, so the mail does not wait for the Internet to come back
+here.
+
+* **Name each other.** In the **Partners** box, **Show**, type the other gateway's callsign and
+  **Add** (stop the gateway first: it holds its settings while it answers). Its operator does the
+  same with yours. A gateway answers forwarding calls from its partners only, and refuses others.
+* **Forward now.** While the gateway answers, **Forward now** beside a partner calls it between
+  sessions, on the gateway's modem and channel. Both gateways must be on the same channel: tuning
+  the radio to the partner's channel comes in a later version. The call carries every session
+  waiting to be reported, with the messages sent in it, each with its user's own signature, so
+  the partner can check it. The partner keeps each one with both callsigns on it and reports it
+  to its post office, or, cut off too, forwards it to its own partners in turn. This gateway then
+  lets the session go, and remembers its messages as passed on.
+* **Mail coming back.** The partner also hands over the mail its post office gave it for this
+  gateway's users, each signed by their post office. This gateway checks the signature and keeps
+  the message as a copy placed ahead, as if the post office had copied it here itself.
+* **What the box says.** Each partner shows how many sessions wait for it and how the last call
+  went. The **Held** list shows a session that came from a partner with *via* and the partner's
+  callsign.
+
+On the command line: `radiopost-gateway partner --add N1CALL-10` (or `--remove`),
+`radiopost-gateway partners`, and `radiopost-gateway forward --to N1CALL-10`, which opens the
+modem, calls once and closes it, for a gateway that is not answering calls.
+
+Calling a partner by itself in its window, and choosing which partner, come in a later version
+(RP-7 §5, §6).
 
 ## 5. The rules
 
@@ -253,7 +280,7 @@ another; Setup shows where):
 | `key.hex` | The gateway's key. Back it up: a new key needs a new registration. Never share it. |
 | `credential.hex` | The gateway's credential, from its registration. |
 | `held.json` | Callers' credentials seen, and pieces of uploads a broken link left (RP-3 §7). |
-| `store.json` | What it holds for when the Internet is down (§4): copies placed ahead, the sessions carried while cut off and not yet reported, what it passed on, and the post offices' keys and revocation lists. Keep it: a session in it that is lost is mail its sender's RadioPost offers again only after 30 days. |
+| `store.json` | What it holds for when the Internet is down (§4): copies placed ahead, the sessions carried while cut off and not yet reported (its own, and those a partner forwarded), what it passed on, the post offices' keys and revocation lists, and what it knows of each partner. Keep it: a session in it that is lost is mail its sender's RadioPost offers again only after 30 days. |
 | `sessions.json` | The last 200 sessions carried, as the Sessions list shows them. |
 | `refused.json` | The callers you refuse, each with your note and since when. |
 | `gateway.log` | Everything the log at the bottom of the window says, with the date and time (UTC), from 0.1.0-beta.8 on; also why the connection to Aether ended, and any program fault. Past 2 MB it is kept as `gateway.log.old` and a new one begun. From Aether 0.2.0-beta.150 and RadioPost Gateway 0.1.0-beta.9, Aether's *Send files* carries both. |
