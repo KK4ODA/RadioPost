@@ -349,8 +349,8 @@ pub struct MailServer {
 }
 
 impl MailServer {
-    /// Stalwart as the guide installs it (its §5): `RocksDB` in `/var/lib/stalwart` holds the mail,
-    /// the accounts and their passwords, the DKIM keys and what was set in its administration;
+    /// Stalwart as the server guide installs it (its chapter 5): `RocksDB` in `/var/lib/stalwart`
+    /// holds the mail, the accounts and their passwords, the DKIM keys and what was set in its administration;
     /// `/etc/stalwart` holds `config.json`, the environment file and the certificate's copy.
     /// Stalwart's own documentation (*Backup and restore*, 1.x) says a running `RocksDB` directory
     /// copied file by file is not a backup, and, without a file system snapshot, to stop it,

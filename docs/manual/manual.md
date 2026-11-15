@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.4.0 |
+| **Version** | 1.4.1 |
 | **Updated** | 2026-11-15 |
 | **Describes** | RadioPost 0.1.0-beta.21 |
 | **Licence** | CC BY 4.0 |
@@ -1256,7 +1256,7 @@ included.
 
 The line at the bottom says when a copy last left the server. Health turns amber 7 days after the
 last one and red after 30. Restoring a backup on a new server is in
-[the post office guide](../user/post-office.md#12-the-desk).
+[the server guide](../user/post-office.md#11-backups-and-restoring).
 
 ### DKIM keys
 
@@ -1555,3 +1555,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.2.0 | 2026-11-15 | §13: groups of addresses, and contact files imported. |
 | 1.3.0 | 2026-11-15 | §11.2, §12: **Listen** answers calls to any of your callsigns. |
 | 1.4.0 | 2026-11-15 | Part 4, the post office desk: one chapter for each tab (applications, accounts, codes, mail out, other post offices, health, the server's jobs, backups and DKIM keys, settings), with screenshots. §15 points to it; Help becomes Part 5 (§35–§40), with the desk's troubleshooting, glossary words and an approval card. Figure 16 says **Listen** answers any of your callsigns. |
+| 1.4.1 | 2026-11-15 | §33: restoring a backup points to the server guide's chapter 11, rewritten. |

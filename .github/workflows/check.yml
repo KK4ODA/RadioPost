@@ -2,8 +2,8 @@
 #
 # Every push to main and every pull request: the Python is linted and formatted, the test vectors
 # are what the reference makes, the figures are what their generators draw, the documents'
-# versions, links and cross-references agree, and the user's manual's contents and pictures are
-# current (standard library only: nothing is installed but
+# versions, links and cross-references agree, and the user's manual's and the server guide's
+# contents and pictures are current (standard library only: nothing is installed but
 # Python and ruff). The Rust workspace in core/ is formatted, linted and tested against the vectors,
 # and the two desktop applications (app/src-tauri, the client, and app/gateway/src-tauri, the
 # gateway; Tauri) are built, linted and tested on their own.
@@ -57,6 +57,7 @@ jobs:
           uv run --no-project --python ${{ matrix.python }} tools/figures/concept.py
           uv run --no-project --python ${{ matrix.python }} tools/figures/design.py
           uv run --no-project --python ${{ matrix.python }} tools/figures/manual.py
+          uv run --no-project --python ${{ matrix.python }} tools/figures/server.py
           uv run --no-project --python ${{ matrix.python }} tools/figures/icons.py --check
           git status --porcelain
           git diff --stat --exit-code
@@ -68,7 +69,7 @@ jobs:
       - name: One version in every program
         run: uv run --no-project --python ${{ matrix.python }} tools/release.py check
 
-      - name: The user's manual agrees with itself
+      - name: The user's manual and the server guide agree with themselves
         run: uv run --no-project --python ${{ matrix.python }} tools/manual/build.py check
 
   core:

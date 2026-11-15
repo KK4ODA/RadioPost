@@ -37,6 +37,7 @@ Figures are drawn by `tools/figures/` (Python, standard library only):
 python tools/figures/concept.py     # docs/concept/fig/
 python tools/figures/design.py      # docs/design/fig/ and spec/fig/
 python tools/figures/manual.py      # docs/manual/fig/
+python tools/figures/server.py      # docs/user/fig/ (the server guide's)
 ```
 
 Edit the script, run it, and commit the script and the SVGs together.
@@ -60,7 +61,14 @@ kept) updates the manual in the same commit:
    `python tools/manual/build.py check`: the contents, the pictures, their numbers and the links.
 
 The **Describes** row is the release version: `tools/release.py bump` moves it. Each release
-carries the manual as a PDF (`python tools/manual/build.py pdf`, which needs Chrome or Chromium).
+carries the manual as a PDF (`python tools/manual/build.py pdf manual`, which needs Chrome or
+Chromium).
+
+**The server guide**, [`docs/user/post-office.md`](docs/user/post-office.md), is held to the same
+rule for what a post office's operator sets up, types or sees on the server: an installer step, a
+command, a setting, a file, a message. It has its own **Version**, change log and **Describes**,
+its schematics come from `tools/figures/server.py`, and it shows the manual's screenshots of the
+desk. `build.py toc` and `check` cover both books; `build.py pdf server` prints it.
 
 ## Test vectors
 
@@ -87,8 +95,9 @@ python tools/vectors/make.py --check    # the vectors are what the reference mak
 python tools/figures/concept.py         # the figures are what their generators draw:
 python tools/figures/design.py          #   git status shows no change after these
 python tools/figures/manual.py          #   (the manual's schematics too)
+python tools/figures/server.py          #   (and the server guide's)
 python tools/check_docs.py              # versions, change logs, the index, links, RP-n §x.y
-python tools/manual/build.py check      # the manual's contents, pictures and links
+python tools/manual/build.py check      # the manual's and server guide's contents and links
 ```
 
 and, in `core/`, with a stable Rust:

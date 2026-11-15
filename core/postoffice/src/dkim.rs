@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! The DKIM keys rotated by hand, guided (design §9 stage 1; the post office guide §5.5).
+//! The DKIM keys rotated by hand, guided (design §9 stage 1; the server guide, chapter 12).
 //!
 //! Stalwart rotates DKIM keys by itself only when it also manages the domain's DNS, and the
-//! pilot's DNS is edited by hand (the guide §5.2: an automatic one would keep a key on the server
-//! that can change every domain of the DNS account). Stalwart's own rotation (its documentation,
-//! *DKIM key rotation*) is followed step by step, with the operator editing DNS in between and the
-//! post office checking each step in DNS before it takes the next:
+//! pilot's DNS is edited by hand (the server guide, section 5.2: an automatic one would keep a key
+//! on the server that can change every domain of the DNS account). Stalwart's own rotation
+//! (its documentation, *DKIM key rotation*) is followed step by step, with the operator editing
+//! DNS in between and the post office checking each step in DNS before it takes the next:
 //!
 //! 1. **Start**: for each algorithm signing now, a new key is made here and given to Stalwart in
 //!    the stage `pending`, which signs nothing; the desk shows the records to publish.
@@ -544,7 +544,7 @@ impl crate::serve::Running {
         if settings.mailboxes.kind != "stalwart" || settings.mailboxes.url.is_empty() {
             return Err(
                 "the DKIM keys are rotated through Stalwart: set mailboxes to Stalwart with its key \
-                 (post office guide §8)"
+                 (the desk's Settings, Mailboxes)"
                     .into(),
             );
         }

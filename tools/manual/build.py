@@ -1,20 +1,23 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
-"""The RadioPost user's manual: its contents, its checks, and its printable forms.
+"""RadioPost's books for its users: their contents, their checks, and their printable forms.
 
-    python tools/manual/build.py toc            # rewrite the contents from the headings
-    python tools/manual/build.py check          # the manual agrees with itself (CI)
-    python tools/manual/build.py html [OUT]     # one self-contained web page, to read or print
-    python tools/manual/build.py pdf [OUT]      # the PDF, through Google Chrome or Chromium
+    python tools/manual/build.py toc                    # rewrite each book's contents
+    python tools/manual/build.py check                  # each book agrees with itself (CI)
+    python tools/manual/build.py html [BOOK [OUT]]      # one self-contained web page
+    python tools/manual/build.py pdf [BOOK [OUT]]       # the PDF, through Chrome or Chromium
 
-The manual is docs/manual/manual.md, written in the plain Markdown GitHub shows. `check` fails
-when the contents are stale, a picture is missing or has no description, a figure's number is out
-of order, a link inside the manual leads nowhere, a figure or screenshot is not used, or the
-release the manual describes is not the repository's version (tools/release.py).
+The books (BOOK) are `manual`, the user's manual (docs/manual/manual.md), and `server`, the post
+office server guide (docs/user/post-office.md), both written in the plain Markdown GitHub shows.
+`check` fails when a book's contents are stale, a picture is missing or has no description, a
+figure's number is out of order, a link inside the book leads nowhere, a picture in the book's own
+folders is not used, or the release the book describes is not the repository's version
+(tools/release.py).
 
-`html` and `pdf` turn it into one page with a cover, the contents and page numbers, the pictures
-inside it, ready for Letter paper (and A4). They write build/manual/ by default. `pdf` looks for
-Chrome or Chromium on the PATH, in the usual places, or where $CHROME says. Its pictures are drawn
-in Inter when that font is installed. Standard library only, like the other tools here.
+`html` and `pdf` turn a book into one page with a cover, the contents and page numbers, the
+pictures inside it, and links to the repository's other files as links to GitHub, ready for Letter
+paper (and A4). Without BOOK they make every book, in build/manual/. `pdf` looks for Chrome or
+Chromium on the PATH, in the usual places, or where $CHROME says. The pictures are drawn in Inter
+when that font is installed. Standard library only, like the other tools here.
 """
 
 from __future__ import annotations
@@ -32,8 +35,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-MANUAL = ROOT / "docs" / "manual" / "manual.md"
 BUILD = ROOT / "build" / "manual"
+GITHUB = "https://github.com/KK4ODA/RadioPost/blob/main/"
 sys.path.insert(0, str(ROOT / "tools"))
 
 import release  # ruff: ignore[module-import-not-at-top-of-file] - after its path, above
@@ -46,6 +49,32 @@ CAPTION = re.compile(r"^\*Figure (\d+)\. ")
 LINK = re.compile(r"(?<!!)\[([^\]]+)\]\(([^)\s]+)\)")
 DESCRIBES = re.compile(r"^\| \*\*Describes\*\* \| RadioPost ([^ |]+) \|$", re.MULTILINE)
 FENCE = "```"
+
+
+@dataclass(frozen=True)
+class Book:
+    """One of the books: where it is, the folders of its own pictures, and what it is called."""
+
+    path: Path
+    folders: tuple[str, ...]
+    title: str
+    stem: str
+
+
+BOOKS = {
+    "manual": Book(
+        ROOT / "docs" / "manual" / "manual.md",
+        ("fig", "screens"),
+        "RadioPost user's manual",
+        "RadioPost-Manual",
+    ),
+    "server": Book(
+        ROOT / "docs" / "user" / "post-office.md",
+        ("fig",),
+        "RadioPost server guide",
+        "RadioPost-Server-Guide",
+    ),
+}
 
 
 # ── headings and the contents ────────────────────────────────────────────────────────────────
@@ -106,7 +135,7 @@ def with_contents(text: str) -> str:
 # ── the checks ───────────────────────────────────────────────────────────────────────────────
 
 
-def problems_in(text: str) -> list[str]:
+def problems_in(text: str, book: Book) -> list[str]:
     lines = text.split("\n")
     found: list[str] = []
     if with_contents(text) != text:
@@ -125,17 +154,18 @@ def problems_in(text: str) -> list[str]:
         used.add(src)
         if not alt.strip():
             found.append(f"line {i + 1}: {src} has no description")
-        if not (MANUAL.parent / src).exists():
+        if not (book.path.parent / src).exists():
             found.append(f"line {i + 1}: {src} does not exist")
-        nxt = next((x for x in lines[i + 1 :] if x.strip()), "")
+        # the caption under it, indented with it when the picture is in a list's step
+        nxt = next((x.strip() for x in lines[i + 1 :] if x.strip()), "")
         cap = CAPTION.match(nxt)
         if not cap:
             found.append(f"line {i + 1}: {src} has no caption *Figure N. …* under it")
         elif int(cap.group(1)) != expected:
             found.append(f"line {i + 1}: {src} is captioned Figure {cap.group(1)}, not {expected}")
         expected += 1
-    for folder in ("fig", "screens"):
-        for path in sorted((MANUAL.parent / folder).glob("*")):
+    for folder in book.folders:
+        for path in sorted((book.path.parent / folder).glob("*")):
             if f"{folder}/{path.name}" not in used:
                 found.append(f"{folder}/{path.name} is in no figure: use it or delete it")
     m = DESCRIBES.search(text)
@@ -152,7 +182,7 @@ def release_version() -> str:
     return next(iter(versions)) if len(versions) == 1 else "(the version sites disagree)"
 
 
-# ── Markdown, the manual's part of it, to HTML ───────────────────────────────────────────────
+# ── Markdown, the books' part of it, to HTML ─────────────────────────────────────────────────
 
 
 def inline(text: str) -> str:
@@ -235,7 +265,9 @@ def blocks(lines: list[str], page: Page) -> str:
 
 def table(lines: list[str], i: int, out: list[str]) -> int:
     def cells(row: str) -> list[str]:
-        return [c.strip() for c in row.strip().strip("|").split("|")]
+        # a pipe inside a cell is written \|, as GitHub reads it
+        inner = row.strip().removeprefix("|").removesuffix("|")
+        return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", inner)]
 
     head = cells(lines[i])
     j = i + 2
@@ -261,7 +293,8 @@ def listing(lines: list[str], i: int, out: list[str], page: Page) -> int:
         m = LIST_ITEM.match(lines[j])
         if m and len(m.group(1)) == indent and m.group(2)[0].isdigit() == ordered:
             width = indent + len(m.group(2)) + 1
-            item = [m.group(3)]
+            # a checklist's box, as GitHub draws it: [ ] and [x]
+            item = [re.sub(r"^\[ \] ", "\u2610 ", re.sub(r"^\[x\] ", "\u2611 ", m.group(3)))]
             j += 1
             while j < len(lines):
                 nxt = lines[j]
@@ -325,7 +358,7 @@ def starts_block(line: str) -> bool:
 STYLE = """
 @page { size: letter; margin: 0.8in 0.75in 0.85in;
   @bottom-center { content: counter(page); font: 9pt Inter, sans-serif; color: #64748b; }
-  @top-right { content: "RadioPost user's manual"; font: 8.5pt Inter, sans-serif;
+  @top-right { content: "__TITLE__"; font: 8.5pt Inter, sans-serif;
                color: #94a3b8; } }
 @page :first { @bottom-center { content: none; } @top-right { content: none; } }
 :root { --ink: #1e293b; --muted: #475569; --hair: #cbd5e1; --accent: #1d4ed8;
@@ -340,7 +373,8 @@ h3 { font-size: 12pt; margin: 1.4rem 0 0.4rem; }
 a { color: var(--accent); text-decoration: none; }
 code { font: 9pt "JetBrains Mono", Consolas, "DejaVu Sans Mono", monospace; background: #f1f5f9;
        padding: 0 0.2em; border-radius: 3px; }
-pre { background: #f1f5f9; padding: 0.6rem 0.8rem; border-radius: 6px; white-space: pre-wrap; }
+pre { background: #f1f5f9; padding: 0.6rem 0.8rem; border-radius: 6px; white-space: pre-wrap;
+      break-inside: avoid; }
 pre code { background: none; padding: 0; }
 table { border-collapse: collapse; width: 100%; margin: 0.8rem 0; font-size: 9.5pt; }
 th, td { border-bottom: 1px solid var(--hair); padding: 0.3rem 0.5rem; text-align: left;
@@ -370,18 +404,32 @@ nav.toc p { margin: 0.5rem 0 0.1rem; break-after: avoid; }
 nav.toc .columns { columns: 2; column-gap: 2rem; font-size: 9.5pt; }
 nav.toc .columns p:first-child { margin-top: 0; }
 .part { break-before: page; font-size: 26pt; margin-top: 0; }
-@media print { body { padding: 0; max-width: none; } h2 { border-top: none; } }
+@media print { body { padding: 0; max-width: none; } h2 { border-top: none; }
+               hr { display: none; } }
 @media screen { html { background: #f1f5f9; } body { background: #fff; } }
 """
 
 
-def embed(src: str) -> str:
-    """A picture of the manual as a data address, so the page carries it with it."""
-    path = (MANUAL.parent / src).resolve()
+def embed(src: str, book: Book) -> str:
+    """A picture of the book as a data address, so the page carries it with it."""
+    path = (book.path.parent / src).resolve()
     kind = {".svg": "image/svg+xml", ".png": "image/png"}.get(
         path.suffix, "application/octet-stream"
     )
     return f"data:{kind};base64,{base64.b64encode(path.read_bytes()).decode()}"
+
+
+def on_github(href: str, book: Book) -> str:
+    """A link to another file of the repository, as GitHub shows it: a printed book has no
+    folders beside it."""
+    if href.startswith(("#", "http:", "https:", "mailto:", "data:")):
+        return href
+    target, _, fragment = href.partition("#")
+    try:
+        where = (book.path.parent / target).resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        return href
+    return GITHUB + where + (f"#{fragment}" if fragment else "")
 
 
 def commit() -> str:
@@ -396,9 +444,48 @@ def commit() -> str:
         return ""
 
 
-def page_html(text: str) -> str:
+def with_pictures_and_links(part: str, book: Book) -> str:
+    """The pictures carried in the page, and the links to other files sent to GitHub."""
+    part = re.sub(
+        r'src="(?!data:|https?:)([^"]+)"',
+        lambda m: f'src="{embed(html.unescape(m.group(1)), book)}"',
+        part,
+    )
+    return re.sub(
+        r'href="([^"]+)"',
+        lambda m: f'href="{html.escape(on_github(html.unescape(m.group(1)), book))}"',
+        part,
+    )
+
+
+def cover_html(text: str, book: Book) -> str:
+    """The cover: the title, the subtitle, the book's first picture, and its versions."""
     lines = text.split("\n")
     header = dict(re.findall(r"^\| \*\*(\w+)\*\* \| ([^|]+?) \|$", text, re.MULTILINE))
+    title = next(m.group(2) for x in lines if (m := HEADING.match(x)))
+    subtitle = next((x.strip("*") for x in lines if x.startswith("**")), "")
+    first = next((m.group(2) for x in lines if (m := IMAGE.fullmatch(x.strip()))), "")
+    picture = f'<img src="{embed(first, book)}" alt="">' if first else ""
+    built = datetime.now(UTC).strftime("%Y-%m-%d")
+    made = f"{built}, commit {commit()}" if commit() else built
+    return f"""
+<section class="cover">
+  <h1>{html.escape(title)}</h1>
+  <p class="sub">{html.escape(subtitle)}</p>
+  {picture}
+  <dl>
+    <dt>Version</dt><dd>{html.escape(header.get("Version", ""))}, \
+updated {html.escape(header.get("Updated", ""))}</dd>
+    <dt>Describes</dt><dd>{html.escape(header.get("Describes", ""))}</dd>
+    <dt>Built</dt><dd>{html.escape(made)}</dd>
+    <dt>Licence</dt><dd>CC BY 4.0. github.com/KK4ODA/RadioPost</dd>
+  </dl>
+</section>"""
+
+
+def page_html(text: str, book: Book) -> str:
+    lines = text.split("\n")
+    title = next(m.group(2) for x in lines if (m := HEADING.match(x)))
     start, end = lines.index(TOC_START), lines.index(TOC_END)
     toc_html = blocks(lines[start + 1 : end], Page())
     # the words between the header and the contents go before the contents; the title and the
@@ -410,27 +497,15 @@ def page_html(text: str) -> str:
         page.anchor(h.text)
     body = blocks(lines[end + 1 :], page)
     body = body.replace("<h1 id=", '<h1 class="part" id=')
-    body = re.sub(r'src="((?:fig|screens)/[^"]+)"', lambda m: f'src="{embed(m.group(1))}"', body)
-    built = datetime.now(UTC).strftime("%Y-%m-%d")
-    made = f"{built}, commit {commit()}" if commit() else built
-    cover = f"""
-<section class="cover">
-  <h1>RadioPost user's manual</h1>
-  <p class="sub">The RadioPost client and RadioPost Gateway: email by amateur radio.</p>
-  <img src="{embed("fig/overview.svg")}" alt="How RadioPost carries your email">
-  <dl>
-    <dt>Manual version</dt><dd>{html.escape(header.get("Version", ""))}, \
-updated {html.escape(header.get("Updated", ""))}</dd>
-    <dt>Describes</dt><dd>{html.escape(header.get("Describes", ""))}</dd>
-    <dt>Built</dt><dd>{html.escape(made)}</dd>
-    <dt>Licence</dt><dd>CC BY 4.0. github.com/KK4ODA/RadioPost</dd>
-  </dl>
-</section>"""
+    intro = with_pictures_and_links(intro, book)
+    body = with_pictures_and_links(body, book)
+    style = STYLE.replace("__TITLE__", book.title.replace('"', "'"))
     return (
         '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        f"<title>RadioPost user's manual</title><style>{STYLE}</style></head><body>"
-        f'{cover}<nav class="toc">{intro}<h1>Contents</h1><div class="columns">{toc_html}</div>'
+        f"<title>{html.escape(title)}</title><style>{style}</style></head><body>"
+        f"{cover_html(text, book)}"
+        f'<nav class="toc">{intro}<h1>Contents</h1><div class="columns">{toc_html}</div>'
         f"</nav>{body}</body></html>\n"
     )
 
@@ -463,7 +538,7 @@ def chrome() -> str:
 
 def write_pdf(page: str, out: Path) -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        source = Path(tmp) / "manual.html"
+        source = Path(tmp) / "book.html"
         source.write_text(page, encoding="utf-8")
         subprocess.run(
             [
@@ -482,39 +557,51 @@ def write_pdf(page: str, out: Path) -> None:
         )
 
 
-def default_out(suffix: str) -> Path:
-    return BUILD / f"RadioPost-Manual-{release_version()}.{suffix}"
+def make(command: str, name: str, out: Path | None) -> int:
+    """One book as a web page or a PDF; 1 when it does not agree with itself."""
+    book = BOOKS[name]
+    text = book.path.read_text(encoding="utf-8")
+    found = problems_in(text, book)
+    if found:
+        print("\n".join(f"{name}: {x}" for x in found), file=sys.stderr)
+        return 1
+    out = out or BUILD / f"{book.stem}-{release_version()}.{command}"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    page = page_html(text, book)
+    if command == "html":
+        out.write_text(page, encoding="utf-8")
+    else:
+        write_pdf(page, out.resolve())
+    print(out)
+    return 0
 
 
 def main() -> int:
     args = sys.argv[1:]
-    text = MANUAL.read_text(encoding="utf-8")
     command = args[0] if args else ""
     if command == "toc":
-        MANUAL.write_text(with_contents(text), encoding="utf-8")
+        for book in BOOKS.values():
+            text = book.path.read_text(encoding="utf-8")
+            book.path.write_text(with_contents(text), encoding="utf-8")
         print("contents rewritten")
         return 0
     if command == "check":
-        found = problems_in(text)
-        for line in found:
-            print(f"docs/manual/manual.md: {line}", file=sys.stderr)
-        if not found:
-            print("the manual's contents, pictures, links and version agree")
-        return 1 if found else 0
+        bad = 0
+        for book in BOOKS.values():
+            found = problems_in(book.path.read_text(encoding="utf-8"), book)
+            for line in found:
+                print(f"{book.path.relative_to(ROOT)}: {line}", file=sys.stderr)
+            bad += len(found)
+        if not bad:
+            print("the books' contents, pictures, links and versions agree")
+        return 1 if bad else 0
     if command in {"html", "pdf"}:
-        found = problems_in(text)
-        if found:
-            print("\n".join(found), file=sys.stderr)
-            return 1
-        out = Path(args[1]) if len(args) > 1 else default_out(command)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        page = page_html(text)
-        if command == "html":
-            out.write_text(page, encoding="utf-8")
-        else:
-            write_pdf(page, out.resolve())
-        print(out)
-        return 0
+        if len(args) > 1 and args[1] not in BOOKS:
+            print(f"no book {args[1]}: {', '.join(BOOKS)}", file=sys.stderr)
+            return 2
+        names = [args[1]] if len(args) > 1 else list(BOOKS)
+        out = Path(args[2]) if len(args) > 2 else None
+        return max(make(command, name, out) for name in names)
     print(__doc__, file=sys.stderr)
     return 2
 

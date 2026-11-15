@@ -316,7 +316,7 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   the session's upload path on the host the service reaches Stalwart at) and sets `$seen` on what a
   `Message-ID` finds, waiting for mail that reaches the mail server late, giving up after two days;
   tried against a stand-in only (`tests/email_service.rs`'s `mail_server`). DKIM rotation by
-  hand (`dkim.rs`, the desk's `/office/dkim`, guide §5.5): Stalwart rotates only with automatic
+  hand (`dkim.rs`, the desk's `/office/dkim`, the server guide's chapter 12): Stalwart rotates only with automatic
   DNS, so the post office makes the keys (RSA 2048 by `rsa`, Ed25519 as RFC 8410's PKCS #8, both
   already in the tree through `mail-auth`; `num-bigint-dig` is optimized in debug builds so a
   test's RSA key takes milliseconds), gives them to Stalwart `pending` (`x:DkimSignature/set`),
@@ -357,7 +357,7 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   Its icons come from `tools/figures/icons.py` (`--check` compares pixels, not zlib's bytes).
   Check the panel in headless Chromium (Playwright, `NODE_PATH=$(npm root -g)`); CI checks the
   script parses as a module.
-- `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`, `icons.py`, `manual.py`. Standard
+- `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`, `icons.py`, `manual.py`, `server.py`. Standard
   library only; `ruff.toml` holds the lint settings.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`
   from `tools/vectors/rpref/` (deterministic CBOR, Ed25519 after RFC 8032, RadioPost's objects,
@@ -371,7 +371,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   prints it (`html`, `pdf` through Chrome; the Release workflow attaches the PDF). Its header's
   **Version** and change log follow `check_docs.py`'s rules; **Describes** is a `tools/release.py`
   site. Aether HF's manual (`KK4ODA/aether-hf`, `docs/user/manual.md`) is cross-referenced, not
-  repeated.
+  repeated. **The server guide**, `docs/user/post-office.md` (2026-11-15, the author: in the
+  manual's vein), is the second book `build.py` knows (`server`): step by step around
+  `radiopost-po install`, its schematics in `docs/user/fig/` from `tools/figures/server.py`, the
+  manual's desk screenshots, its own Version, change log and Describes; the setup by hand is its
+  chapter 17. The post office's messages name the desk's place (*Settings, Mailboxes*), not a
+  section number.
 - `tools/check_docs.py` — headers against change logs and the index, relative links, `RP-n §x.y`
   references, SPDX lines. `.github/workflows/check.yml` runs it with ruff (pinned 0.16.9: preview
   rules), `make.py --check` and the figure generators (no diff), on Python 3.12 and 3.13, for
@@ -383,7 +388,9 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   or a gateway operator sees or sets (a window, a box, a button, a setting or its default, a
   message, a file kept) updates `docs/manual/manual.md` in the same commit: its text, its
   Version and change log, and the screenshots of a window that changed (`screens.mjs`, looked at
-  before committing). Plain words, the screen's words in bold, the program's in italics.
+  before committing). Plain words, the screen's words in bold, the program's in italics. The same
+  holds for the server guide (`docs/user/post-office.md`) and what an operator does on the
+  server.
 - **Living documents.** Every spec has a status, a version (`MAJOR.MINOR.PATCH`, RP-0 §8.2) and a
   change log. A change updates, in the same commit: the text, the version, the change log, the RP-0
   §9 registries if numbers are added, the test vectors, and the design document if a decision

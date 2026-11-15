@@ -125,7 +125,7 @@ impl Running {
         if settings.kind != "stalwart" || settings.url.is_empty() {
             return Err(format!(
                 "radio_skips_read is on for {} accounts, and the post office cannot read the mail \
-                 server: set mailboxes to Stalwart with its key (post office guide §8)",
+                 server: set mailboxes to Stalwart with its key (the desk's Settings, Mailboxes)",
                 wanted.len()
             ));
         }

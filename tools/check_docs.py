@@ -5,10 +5,11 @@
 
 What it checks, and why:
 
-* Each specification, each design document and the user's manual has a status, a version and an
-  update date in its header, and a change log whose last row is that version on that date (RP-0
-  §8.2). A Draft or an Outline stays below 1.0.0, and the change log's versions only go up. (The
-  manual's own contents, pictures and links are tools/manual/build.py's `check`.)
+* Each specification, each design document, the user's manual and the server guide has a status,
+  a version and an update date in its header, and a change log whose last row is that version on
+  that date (RP-0 §8.2). A Draft or an Outline stays below 1.0.0, and the change log's versions
+  only go up. (The two books' own contents, pictures and links are tools/manual/build.py's
+  `check`.)
 * The specification index (`spec/README.md`) lists each specification's status and version as
   its header does.
 * Every relative link in a Markdown file leads to a file that exists.
@@ -136,6 +137,7 @@ def main() -> int:
     for design in sorted((ROOT / "docs" / "design").glob("[0-9][0-9]-*.md")):
         check_living(design, problems)
     check_living(ROOT / "docs" / "manual" / "manual.md", problems)
+    check_living(ROOT / "docs" / "user" / "post-office.md", problems)
     check_index(headers, problems)
     check_links_and_references(problems)
     check_spdx(problems)

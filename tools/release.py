@@ -2,9 +2,9 @@
 """RadioPost's one version number, in every place it is written.
 
 Every program of a release carries the release's version (`0.1.0-beta.5`): the core workspace, the
-two desktop applications, their lockfiles, the operator's guide's download link, and the release
-the user's manual describes (its header's **Describes** row). The apps compare it with the update
-channel's to say when a newer release is out.
+two desktop applications, their lockfiles, the server guide's download link, and the release the
+user's manual and the server guide describe (their headers' **Describes** row). The apps compare
+it with the update channel's to say when a newer release is out.
 
     python tools/release.py check [--tag v0.1.0-beta.5]   # every site agrees (and with the tag)
     python tools/release.py bump 0.1.0-beta.5             # write it everywhere
@@ -42,8 +42,9 @@ TAURI_CONFIGS = [
 ]
 GUIDE = ROOT / "docs" / "user" / "post-office.md"
 GUIDE_LINK = re.compile(r"(releases/download/v)([^/]+)(/radiopost-tools-linux-x64\.zip)")
-MANUAL = ROOT / "docs" / "manual" / "manual.md"
-MANUAL_DESCRIBES = re.compile(r"^(\| \*\*Describes\*\* \| RadioPost )([^ |]+)( \|)$", re.MULTILINE)
+# the books for users, whose header names the release they describe (tools/manual/build.py)
+BOOKS = [ROOT / "docs" / "manual" / "manual.md", GUIDE]
+DESCRIBES = re.compile(r"^(\| \*\*Describes\*\* \| RadioPost )([^ |]+)( \|)$", re.MULTILINE)
 
 # the first `version = "…"` line of a manifest is its package's (or the workspace's) own
 MANIFEST_VERSION = re.compile(r'^version = "([^"]*)"$', re.MULTILINE)
@@ -93,8 +94,9 @@ def sites() -> list[tuple[str, str | None]]:
             found.append((f"{path.relative_to(ROOT)} (has its own version)", None))
     m = GUIDE_LINK.search(GUIDE.read_text())
     found.append((f"{GUIDE.relative_to(ROOT)} (download link)", m.group(2) if m else None))
-    m = MANUAL_DESCRIBES.search(MANUAL.read_text())
-    found.append((f"{MANUAL.relative_to(ROOT)} (Describes)", m.group(2) if m else None))
+    for path in BOOKS:
+        m = DESCRIBES.search(path.read_text())
+        found.append((f"{path.relative_to(ROOT)} (Describes)", m.group(2) if m else None))
     return found
 
 
@@ -131,7 +133,8 @@ def bump(version: str) -> int:
         if config.pop("version", None) is not None:
             path.write_text(json.dumps(config, indent=2) + "\n")
     GUIDE.write_text(GUIDE_LINK.sub(rf"\g<1>{version}\g<3>", GUIDE.read_text()))
-    MANUAL.write_text(MANUAL_DESCRIBES.sub(rf"\g<1>{version}\g<3>", MANUAL.read_text()))
+    for path in BOOKS:
+        path.write_text(DESCRIBES.sub(rf"\g<1>{version}\g<3>", path.read_text()))
     return check(None)
 
 

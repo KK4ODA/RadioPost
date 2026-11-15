@@ -189,7 +189,8 @@ pub fn unit(o: &Options) -> String {
     )
 }
 
-/// The Stalwart wizard's screens and settings (the guide's §5), with this post office's values.
+/// The Stalwart wizard's screens and settings (the server guide's section 5.2), with this post
+/// office's values.
 #[must_use]
 pub fn stalwart_by_hand(o: &Options, s: &Secrets) -> String {
     let host = o.host();

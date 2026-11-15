@@ -290,7 +290,7 @@ impl Running {
         } else {
             failure = Some(
                 "mail sent and picked up by radio is not shown in mail programs: set mailboxes \
-                 to Stalwart with its key (post office guide §8)"
+                 to Stalwart with its key (the desk's Settings, Mailboxes)"
                     .to_owned(),
             );
         }
