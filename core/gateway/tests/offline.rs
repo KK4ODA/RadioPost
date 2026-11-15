@@ -95,6 +95,7 @@ fn gateway(
             max_air_bytes: 16_384,
         }),
         partners: Vec::new(),
+        windows: Vec::new(),
     }
     .save(&gw)
     .expect("saved");

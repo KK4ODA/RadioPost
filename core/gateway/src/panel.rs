@@ -382,6 +382,7 @@ impl Panel {
                     answer_at_start: at_start,
                     copies,
                     partners: Vec::new(),
+                    windows: Vec::new(),
                 },
             ),
         }

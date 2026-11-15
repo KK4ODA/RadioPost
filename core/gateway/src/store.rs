@@ -313,6 +313,11 @@ pub struct Store {
     pub partners: BTreeMap<String, PartnerState>,
     /// The last forwarding serial given to each cut-off gateway's forward items (RP-7 §4.3).
     pub forward_serials: BTreeMap<String, u64>,
+    /// The gateway lists of the post offices it knows, checked, by domain (RP-5 §4.4): where its
+    /// partners' windows are read (RP-7 §5), kept for when the Internet is down.
+    pub lists: BTreeMap<String, Vec<Json>>,
+    /// When the lists were last fetched.
+    pub lists_fetched: u64,
 }
 
 fn address_of(item: &Json) -> String {
@@ -471,6 +476,27 @@ impl Store {
             .collect();
         out.sort_by_key(|f| f["fserial"].as_u64());
         out
+    }
+
+    /// A gateway's record from the lists it holds (RP-5 §4.4): its own post office's (`own`)
+    /// first, then the others'; `None` for one no list names, or an ambiguous one.
+    #[must_use]
+    pub fn record_of(&self, own: &str, callsign: &str) -> Option<Json> {
+        let home = self.lists.get(own).cloned().unwrap_or_default();
+        let others: Vec<(String, Vec<Json>)> = self
+            .lists
+            .iter()
+            .filter(|(d, _)| d.as_str() != own)
+            .map(|(d, l)| (d.clone(), l.clone()))
+            .collect();
+        let merged = radiopost::gateway_list::merge(own, &home, &others);
+        if merged.ambiguous.iter().any(|c| c == callsign) {
+            return None;
+        }
+        merged
+            .gateways
+            .into_iter()
+            .find(|r| r["callsign"].as_str() == Some(callsign))
     }
 
     /// The users it holds copies for.

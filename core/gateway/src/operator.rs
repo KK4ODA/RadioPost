@@ -92,6 +92,20 @@ pub fn register(dir: &Path, home: &Path, mut record: Json) -> Result<String, Str
             }
         }
     }
+    // RP-7 §5: its windows, those its country's rules let it publish
+    let windows: Vec<Json> = settings
+        .windows
+        .iter()
+        .filter(|w| w.refused(&settings.country).is_none())
+        .map(station::WindowSettings::record)
+        .collect();
+    if let Some(o) = record.as_object_mut() {
+        if windows.is_empty() {
+            o.remove("forwarding");
+        } else {
+            o.insert("forwarding".into(), Json::Array(windows));
+        }
+    }
     let mut signed = settings.callsign.clone().into_bytes();
     signed.extend_from_slice(base.as_bytes());
     let signature = crypto::sign(context::API_GATEWAY, &signed, &gateway);

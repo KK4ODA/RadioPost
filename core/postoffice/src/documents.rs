@@ -94,7 +94,7 @@ impl PostOffice {
                 "issued": now,
                 "gateways": self.state.gateways.values().collect::<Vec<_>>(),
             }),
-            "/routes" => json!({"issued": now, "routes": []}),
+            "/routes" => json!({"issued": now, "routes": self.state.routes}),
             _ => return None,
         })
     }

@@ -55,6 +55,7 @@ fn gateway(
         answer_at_start: true,
         copies: None,
         partners: Vec::new(),
+        windows: Vec::new(),
     }
     .save(&gw)
     .expect("saved");

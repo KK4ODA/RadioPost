@@ -472,3 +472,22 @@ pub fn records_to(partner: &str, partners: &[(String, PartnerView)], now: u64) -
         .iter()
         .any(|(c, p)| c != partner && p.online == Some(true) && p.window.next(now) <= now + HOLD_S)
 }
+
+/// The audio Aether HF's signals occupy at each bandwidth, by the wider reading of §97.3(a)(8),
+/// hertz: measured in Aether's `core/aetherd/data/occupancy.json`.
+const AETHER_AUDIO: [(u64, (u64, u64)); 2] = [(2300, (240, 2760)), (500, (1143, 1857))];
+
+/// The lowest and highest radio frequency a channel's signal occupies (RP-7 §5): on an FM
+/// channel, the whole channel; on USB, the dial plus the audio the modem's signal occupies, known
+/// here for Aether HF. `None` when it is not known.
+#[must_use]
+pub fn occupied(dial_hz: u64, mode: &str, modem: &str, bandwidth_hz: u64) -> Option<(u64, u64)> {
+    match mode {
+        "FM" => Some((dial_hz - bandwidth_hz / 2, dial_hz + bandwidth_hz / 2)),
+        "USB" if modem == "aether" => AETHER_AUDIO
+            .iter()
+            .find(|(bw, _)| *bw == bandwidth_hz)
+            .map(|(_, (lo, hi))| (dial_hz + lo, dial_hz + hi)),
+        _ => None,
+    }
+}

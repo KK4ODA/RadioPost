@@ -163,10 +163,11 @@ fn manage(ctx: &Ctx) {
                 }
             }
             refresh_keys(ctx, &settings, &own, &credential, &mut tried_keys);
-            if settings.copies.is_some() {
+            if settings.polls() {
                 ensure_polling(ctx, &settings, &account, &own);
             }
             report_all(ctx, &settings, &account, &mut tried_report);
+            refresh_lists(ctx, &settings);
         }
         let until = Instant::now() + Duration::from_secs(2);
         while Instant::now() < until && ctx.alive() {
@@ -222,7 +223,7 @@ fn refresh_keys(
                         "{domain}'s post office: keys and revocations kept"
                     ));
                 }
-                if domain != own && settings.copies.is_some() {
+                if domain != own && settings.polls() {
                     ask(ctx, settings, &domain);
                 }
             }
@@ -236,7 +237,7 @@ fn refresh_keys(
         }
     }
     // after a session of one of its users: asked whether it places items here
-    if settings.copies.is_some() {
+    if settings.polls() {
         for domain in learn {
             if domain != own {
                 ask(ctx, settings, &domain);
@@ -244,6 +245,60 @@ fn refresh_keys(
         }
     }
     let _ = ctx.store.change(|s| s.learn.clear());
+}
+
+/// RP-5 §4.4, RP-7 §5: the gateway lists of the post offices it trusts, fetched every six hours
+/// while it has partners, each checked with that post office's keys: where the partners' windows
+/// are read, kept for when the Internet is down. A list that cannot be fetched or checked keeps
+/// the last one held.
+fn refresh_lists(ctx: &Ctx, settings: &Settings) {
+    let at = now();
+    let due = !settings.partners.is_empty()
+        && at.saturating_sub(ctx.store.lock().lists_fetched) >= keys::REFRESH_S;
+    if !due {
+        return;
+    }
+    let (trust, apis) = {
+        let s = ctx.store.lock();
+        let trust = s.trust(&settings.blocked, settings.only.as_deref());
+        let apis: Vec<(String, String)> = s
+            .keys
+            .iter()
+            .filter(|(d, k)| trust.keys.contains_key(*d) && !k.found.api.is_empty())
+            .map(|(d, k)| (d.clone(), k.found.api.clone()))
+            .collect();
+        (trust, apis)
+    };
+    let mut fetched = Vec::new();
+    for (domain, api) in apis {
+        let api = settings.post_offices.get(&domain).cloned().unwrap_or(api);
+        let keys: std::collections::HashMap<String, [u8; 32]> = trust.keys[&domain]
+            .iter()
+            .map(|k| {
+                (
+                    radiopost::cbor::hex(&radiopost::crypto::kid(&k.public)),
+                    k.public,
+                )
+            })
+            .collect();
+        let Some(list) =
+            keys::get(&api, "/gateways").and_then(|text| radiopost::jws::verify(&text, &keys).ok())
+        else {
+            continue;
+        };
+        let records = list["gateways"].as_array().cloned().unwrap_or_default();
+        fetched.push((domain, records));
+    }
+    // none fetched (no keys held yet, or no answer): tried again in five minutes
+    let next = if fetched.is_empty() {
+        at.saturating_sub(keys::REFRESH_S) + KEYS_RETRY.as_secs()
+    } else {
+        at
+    };
+    let _ = ctx.store.change(|s| {
+        s.lists_fetched = next;
+        s.lists.extend(fetched);
+    });
 }
 
 /// RP-5 §5.8: asks a post office it does not poll, with `wait=0`, at most once an hour.

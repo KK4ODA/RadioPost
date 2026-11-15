@@ -50,6 +50,13 @@ directory, as the RadioPost Gateway app has it.
                      name a partner (RP-7 §1): a gateway this one forwards its queue to when
                      it is cut off, and whose forwarding sessions it answers
   partners           the partners, and how the last call to each went
+  window --dial MHZ --bandwidth HZ --every S --at S --length S [--mode USB] [--modem aether]
+                     a window (RP-7 §5): when this gateway listens for its partners' calls,
+                     opening --at seconds into every --every seconds for --length seconds;
+                     only inside its country's segments for unattended data (RP-7 §5.1);
+                     register again to publish it
+  window --remove N  take window N off (`windows` numbers them)
+  windows            the windows, and whether each may be published
   forward --to CALL  call a partner now and forward the queue to it (RP-7 §2), when the
                      gateway is not answering calls; the app's panel does it while it is
   key                the gateway's public key
@@ -100,6 +107,7 @@ fn init(dir: &Path, a: &Args) -> Result<(), String> {
         answer_at_start: true,
         copies: None,
         partners: Vec::new(),
+        windows: Vec::new(),
     };
     station::make(dir, &settings)?;
     println!(
@@ -253,6 +261,69 @@ fn partners(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
     s.save(dir)
 }
 
+/// `window` and `windows`: when the gateway listens for its partners' calls (RP-7 §5).
+fn windows(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
+    let mut s = Settings::load(dir)?;
+    if command == "window" {
+        if let Some(n) = a.one("--remove") {
+            let i: usize = n.parse().map_err(|_| "--remove takes a window's number")?;
+            if i == 0 || i > s.windows.len() {
+                return Err(format!("there is no window {i}"));
+            }
+            s.windows.remove(i - 1);
+        } else {
+            let n = |flag: &str| -> Result<u64, String> {
+                a.need(flag)?
+                    .parse()
+                    .map_err(|_| format!("{flag} is a number"))
+            };
+            let mhz: f64 = a
+                .need("--dial")?
+                .parse()
+                .map_err(|_| "--dial is a frequency in MHz, such as 7.101")?;
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "a dial frequency in hertz"
+            )]
+            let window = station::WindowSettings {
+                dial_hz: (mhz * 1e6).round() as u64,
+                mode: a.one("--mode").unwrap_or_else(|| "USB".into()),
+                modem: a.one("--modem").unwrap_or_else(|| "aether".into()),
+                bandwidth_hz: n("--bandwidth")?,
+                every_s: n("--every")?,
+                at_s: n("--at")?,
+                length_s: n("--length")?,
+            };
+            if let Some(why) = window.refused(&s.country) {
+                return Err(format!("this window cannot be published: {why}"));
+            }
+            s.windows.push(window);
+        }
+        s.save(dir)?;
+        println!("register again to publish the windows in the gateway's record (RP-5 §4.4)");
+    }
+    for (i, w) in s.windows.iter().enumerate() {
+        let said = w.refused(&s.country).map_or_else(
+            || "published".to_owned(),
+            |why| format!("not published: {why}"),
+        );
+        #[allow(clippy::cast_precision_loss, reason = "a dial frequency shown in MHz")]
+        let mhz = w.dial_hz as f64 / 1e6;
+        println!(
+            "{}: {mhz:.4} MHz {} {} {} Hz, {} s into every {} s for {} s; {said}",
+            i + 1,
+            w.mode,
+            w.modem,
+            w.bandwidth_hz,
+            w.at_s,
+            w.every_s,
+            w.length_s
+        );
+    }
+    Ok(())
+}
+
 /// `block`, `unblock` and `blocked`: callers refused (wishlist W24), read at each call, and post
 /// offices blocked (RP-1 §7.3), a setting.
 fn blocking(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
@@ -340,6 +411,7 @@ fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
         }
         "block" | "unblock" | "blocked" => blocking(dir, a, command),
         "partner" | "partners" => partners(dir, a, command),
+        "window" | "windows" => windows(dir, a, command),
         "forward" => station::forward_once(dir, &a.need("--to")?, &mut |line| println!("{line}")),
         "key" => {
             println!(

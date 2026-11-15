@@ -108,6 +108,7 @@ fn gateway_holding(
         partners: vec![station::PartnerSettings {
             callsign: partner.into(),
         }],
+        windows: Vec::new(),
     }
     .save(&gw)
     .expect("saved");

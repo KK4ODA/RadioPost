@@ -36,7 +36,7 @@ pub struct Source<'a> {
     pub own_credential: Option<&'a [u8]>,
 }
 
-fn get(api: &str, path: &str) -> Option<String> {
+pub(crate) fn get(api: &str, path: &str) -> Option<String> {
     let http = radiopost_api::Http::anonymous(api);
     match http.send_text("GET", path, None, None) {
         Ok((200, text)) => Some(text.trim().to_owned()),

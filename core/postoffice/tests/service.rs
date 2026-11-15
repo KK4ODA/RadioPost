@@ -216,6 +216,22 @@ fn a_device_enrolls_logs_in_and_the_documents_are_signed() {
         }
     }
 
+    // a route set on the operator's port is published (RP-5 §4.5, RP-7 §6.1)
+    let (status, _) = http(
+        &admin,
+        "POST",
+        "/routes",
+        None,
+        Some(&json!({"via": "n1call-10", "users_at": ["N2CALL-5"]})),
+    );
+    assert_eq!(status, 200);
+    let (_, jws) = http(&api, "GET", "/rp/v1/routes", None, None);
+    let doc = radiopost::jws::verify(&jws, &keys).expect("signed by the post office");
+    assert_eq!(
+        doc["routes"],
+        json!([{"users_at": ["N2CALL-5"], "via": "N1CALL-10"}])
+    );
+
     // the state survives a restart: the token still works
     let running = Arc::new(Running::load(&dir, serve::system_draw()).expect("loaded again"));
     let (api2, _) = serve::serve(running, "127.0.0.1:0", "127.0.0.1:0").expect("serving");

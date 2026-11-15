@@ -441,3 +441,240 @@ impl Outcome {
         line
     }
 }
+
+/// How many times a cut-off gateway calls a partner in one window, a minute apart (RP-7 §5).
+pub const TRIES: u32 = 3;
+/// How long between tries.
+pub const TRY_EVERY_S: u64 = 60;
+
+/// A partner's windows as its record lists them (RP-7 §5): those whose signal lies inside one
+/// segment of `country`'s table, which an unattended gateway there may call in (RP-7 §5.1).
+#[must_use]
+pub fn windows_of(record: &Json, country: &str) -> Vec<radiopost::forwarding::Window> {
+    record["forwarding"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|w| {
+            let o = &w["channel"]["occupied_hz"];
+            match (o[0].as_u64(), o[1].as_u64()) {
+                (Some(low), Some(high)) => {
+                    radiopost::forwarding::window_allowed((low, high), country)
+                }
+                _ => false,
+            }
+        })
+        .filter_map(radiopost::forwarding::Window::from_json)
+        .collect()
+}
+
+/// When a cut-off gateway calls its partners by itself (RP-7 §5, §6.2): only inside a partner's
+/// window, at most [`TRIES`] times in it a minute apart, not on a busy channel, and once a call
+/// has gone through, not again in that window.
+#[derive(Debug, Default)]
+pub struct Caller {
+    /// For each partner: the window the tries count in (when it opened), the tries, the last.
+    tries: HashMap<String, (u64, u32, u64, bool)>,
+}
+
+/// A call [`Caller::due`] says is due.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Due {
+    /// The partner.
+    pub partner: String,
+    /// Whether it gets the records (RP-7 §6.2); otherwise the call only collects mail.
+    pub records: bool,
+}
+
+impl Caller {
+    /// The partner to call now, if any. `windows` gives a partner's windows (from its record,
+    /// [`windows_of`]), `online` what its last `WELCOME` said (`Store::partners`); `cut_off` says
+    /// whether this gateway is cut off, asked only when a call would be due, since it may cost a
+    /// try at the post office.
+    #[allow(clippy::too_many_arguments, reason = "what the decision rests on")]
+    pub fn due(
+        &mut self,
+        partners: &[String],
+        windows: impl Fn(&str) -> Vec<radiopost::forwarding::Window>,
+        online: impl Fn(&str) -> Option<bool>,
+        now: u64,
+        busy: bool,
+        cut_off: impl FnOnce() -> bool,
+    ) -> Option<Due> {
+        if busy {
+            return None;
+        }
+        let mut views = Vec::new();
+        let mut open = Vec::new();
+        for p in partners {
+            let ws = windows(p);
+            if let Some(first) = ws.first() {
+                views.push((
+                    p.clone(),
+                    radiopost::forwarding::PartnerView {
+                        window: *ws.iter().find(|w| w.is_open(now)).unwrap_or(first),
+                        online: online(p),
+                    },
+                ));
+            }
+            let Some(w) = ws.iter().find(|w| w.is_open(now)) else {
+                continue;
+            };
+            let start = w.next(now);
+            let entry = self.tries.entry(p.clone()).or_insert((start, 0, 0, false));
+            if entry.0 != start {
+                *entry = (start, 0, 0, false);
+            }
+            let (_, tries, last, through) = *entry;
+            if !through && tries < TRIES && (tries == 0 || now >= last + TRY_EVERY_S) {
+                open.push(p.clone());
+            }
+        }
+        let partner = open.into_iter().next()?;
+        if !cut_off() {
+            return None;
+        }
+        if let Some(entry) = self.tries.get_mut(&partner) {
+            entry.1 += 1;
+            entry.2 = now;
+        }
+        let records = radiopost::forwarding::records_to(&partner, &views, now);
+        Some(Due { partner, records })
+    }
+
+    /// How the call went: once it went through, no more calls to that partner in this window.
+    pub fn called(&mut self, partner: &str, through: bool) {
+        if let Some(entry) = self.tries.get_mut(partner) {
+            entry.3 |= through;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use radiopost::forwarding::Window;
+
+    use super::{Caller, Due};
+    use crate::store::{PartnerState, Store};
+
+    /// N1CALL-10's window of session-04: :15 past every hour for ten minutes.
+    const HOURLY: Window = Window {
+        every_s: 3600,
+        at_s: 900,
+        length_s: 600,
+    };
+    const OPENS: u64 = 1_794_492_900;
+
+    fn due(c: &mut Caller, s: &Store, now: u64, busy: bool, cut: bool) -> Option<Due> {
+        c.due(
+            &["N1CALL-10".to_owned()],
+            |_| vec![HOURLY],
+            |p| s.partners.get(p).and_then(|state| state.online),
+            now,
+            busy,
+            || cut,
+        )
+    }
+
+    /// RP-7 §5: only inside a window, at most three tries a minute apart, not on a busy
+    /// channel, not while the gateway reaches the Internet, and not again once through.
+    #[test]
+    fn a_cut_off_gateway_calls_in_its_partners_window() {
+        let s = Store::default();
+        let mut c = Caller::default();
+        assert_eq!(
+            due(&mut c, &s, OPENS - 60, false, true),
+            None,
+            "not yet open"
+        );
+        assert_eq!(due(&mut c, &s, OPENS, true, true), None, "a busy channel");
+        assert_eq!(due(&mut c, &s, OPENS, false, false), None, "not cut off");
+        let first = due(&mut c, &s, OPENS, false, true).expect("a call");
+        assert_eq!(first.partner, "N1CALL-10");
+        assert!(first.records, "a partner never called gets the records");
+        assert_eq!(
+            due(&mut c, &s, OPENS + 30, false, true),
+            None,
+            "a minute apart"
+        );
+        assert!(
+            due(&mut c, &s, OPENS + 60, false, true).is_some(),
+            "the second try"
+        );
+        assert!(
+            due(&mut c, &s, OPENS + 120, false, true).is_some(),
+            "the third"
+        );
+        assert_eq!(due(&mut c, &s, OPENS + 180, false, true), None, "no fourth");
+        assert!(
+            due(&mut c, &s, OPENS + 3600, false, true).is_some(),
+            "the next window, tries afresh"
+        );
+        c.called("N1CALL-10", true);
+        assert_eq!(
+            due(&mut c, &s, OPENS + 3660, false, true),
+            None,
+            "through: done"
+        );
+        assert_eq!(
+            due(&mut c, &s, OPENS + 3600 + 600, false, true),
+            None,
+            "closed"
+        );
+    }
+
+    /// RP-7 §6.2: a partner that said it is cut off too gets no records while another that
+    /// reaches the Internet opens a window within the hour.
+    #[test]
+    fn records_wait_for_a_partner_that_reaches_the_post_offices() {
+        let mut s = Store::default();
+        s.partners.insert(
+            "N4CALL-2".into(),
+            PartnerState {
+                online: Some(false),
+                ..PartnerState::default()
+            },
+        );
+        s.partners.insert(
+            "N1CALL-10".into(),
+            PartnerState {
+                online: Some(true),
+                ..PartnerState::default()
+            },
+        );
+        let partners = ["N4CALL-2".to_owned(), "N1CALL-10".to_owned()];
+        let later = Window {
+            every_s: 3600,
+            at_s: 2700,
+            length_s: 600,
+        };
+        // N4CALL-2's window at :45; N1CALL-10's opens at :15, 30 minutes on
+        let windows = |p: &str| {
+            if p == "N4CALL-2" {
+                vec![later]
+            } else {
+                vec![HOURLY]
+            }
+        };
+        let mut c = Caller::default();
+        let at = OPENS - 900 + 2700;
+        let d = c
+            .due(
+                &partners,
+                windows,
+                |p| s.partners.get(p).and_then(|state| state.online),
+                at,
+                false,
+                || true,
+            )
+            .expect("a call");
+        assert_eq!(
+            d,
+            Due {
+                partner: "N4CALL-2".into(),
+                records: false
+            },
+            "it only collects its mail"
+        );
+    }
+}

@@ -68,6 +68,79 @@ pub struct Settings {
     /// only gateways whose forwarding sessions it answers (RP-7 §2).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub partners: Vec<PartnerSettings>,
+    /// Its windows (RP-7 §5): when it listens for its partners' calls, published in its record.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub windows: Vec<WindowSettings>,
+}
+
+/// A window, as the operator sets it (RP-7 §5): a channel, and when it is open.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WindowSettings {
+    /// The dial frequency, hertz.
+    pub dial_hz: u64,
+    /// The radio's mode: `USB`, or `FM`.
+    pub mode: String,
+    /// The modem, by its registry name (RP-0 §9.4).
+    pub modem: String,
+    /// The modem's bandwidth, or an FM channel's width, hertz.
+    pub bandwidth_hz: u64,
+    /// How often it opens, seconds.
+    pub every_s: u64,
+    /// When in each period it opens, seconds.
+    pub at_s: u64,
+    /// How long it stays open, seconds.
+    pub length_s: u64,
+}
+
+impl WindowSettings {
+    /// Its signal's lowest and highest radio frequency (RP-7 §5), when known.
+    #[must_use]
+    pub fn occupied(&self) -> Option<(u64, u64)> {
+        radiopost::forwarding::occupied(self.dial_hz, &self.mode, &self.modem, self.bandwidth_hz)
+    }
+
+    /// Why it may not be published from `country` (RP-7 §5, §5.1), or `None` when it may.
+    #[must_use]
+    pub fn refused(&self, country: &str) -> Option<String> {
+        if self.every_s == 0 || self.length_s == 0 || self.length_s > self.every_s {
+            return Some("a window opens every so often, for a time shorter than that".into());
+        }
+        let Some(occupied) = self.occupied() else {
+            return Some(format!(
+                "the band a {} signal at {} Hz occupies on {} is not known here",
+                self.modem, self.bandwidth_hz, self.mode
+            ));
+        };
+        if !radiopost::forwarding::window_allowed(occupied, country) {
+            return Some(format!(
+                "its signal, {} to {} Hz, is not inside one segment where {country}'s rules let \
+                 an unattended station start a data transmission (RP-7 §5.1)",
+                occupied.0, occupied.1
+            ));
+        }
+        None
+    }
+
+    /// Its entry in the record's `forwarding` (RP-7 §5).
+    #[must_use]
+    pub fn record(&self) -> serde_json::Value {
+        let (low, high) = self.occupied().unwrap_or_default();
+        serde_json::json!({
+            "channel": {"dial_hz": self.dial_hz, "mode": self.mode, "modem": self.modem,
+                        "bandwidth_hz": self.bandwidth_hz, "occupied_hz": [low, high]},
+            "every_s": self.every_s, "at_s": self.at_s, "length_s": self.length_s,
+        })
+    }
+
+    /// The window's times.
+    #[must_use]
+    pub fn window(&self) -> radiopost::forwarding::Window {
+        radiopost::forwarding::Window {
+            every_s: self.every_s,
+            at_s: self.at_s,
+            length_s: self.length_s,
+        }
+    }
 }
 
 /// A partner, as the operator names it (RP-7 §1).
@@ -78,6 +151,13 @@ pub struct PartnerSettings {
 }
 
 impl Settings {
+    /// Whether it polls the post offices for items placed at it (RP-5 §5.8): when its record
+    /// holds copies, or lists windows.
+    #[must_use]
+    pub fn polls(&self) -> bool {
+        self.copies.is_some() || !self.windows.is_empty()
+    }
+
     /// Whether `callsign` is one of its partners.
     #[must_use]
     pub fn is_partner(&self, callsign: &str) -> bool {
@@ -350,6 +430,8 @@ pub struct Station {
     tokens: HashMap<String, Arc<Mutex<Option<String>>>>,
     held: Held,
     store: Shared,
+    /// Whether it last reached its own post office, and when it asked (RP-7 §1).
+    reached: Option<(Instant, bool)>,
 }
 
 fn read(path: &Path) -> Result<String, String> {
@@ -434,6 +516,7 @@ impl Station {
             tokens: HashMap::new(),
             held,
             store: Shared::open(dir),
+            reached: None,
         })
     }
 
@@ -589,6 +672,68 @@ impl Station {
                 );
                 Ok(Box::new(Fallback::new(online, offline)))
             },
+        )
+    }
+
+    /// Whether it is cut off (RP-7 §1): its own post office does not let it log in now. Asked at
+    /// most once a minute.
+    fn cut_off(&mut self) -> bool {
+        if let Some((at, reached)) = self.reached
+            && at.elapsed() < Duration::from_secs(60)
+        {
+            return !reached;
+        }
+        let reached = self
+            .credential()
+            .map(|b| b.domain())
+            .and_then(|d| crate::upkeep::api_of(&self.settings, &self.store, &d))
+            .is_some_and(|url| {
+                upstream::Http::new(&url, self.account.clone(), Arc::new(Mutex::new(None)))
+                    .login()
+                    .is_ok()
+            });
+        self.reached = Some((Instant::now(), reached));
+        !reached
+    }
+
+    /// A partner to call by itself now, if one is due (RP-7 §5, §6.2): cut off, in the partner's
+    /// window, its record's window inside this gateway's country's segments.
+    fn due_call(
+        &mut self,
+        caller: &mut crate::forward::Caller,
+        busy: bool,
+    ) -> Option<crate::forward::Due> {
+        let partners: Vec<String> = self
+            .settings
+            .partners
+            .iter()
+            .map(|p| p.callsign.clone())
+            .collect();
+        if partners.is_empty() {
+            return None;
+        }
+        let own = self.credential().map(|b| b.domain()).unwrap_or_default();
+        let (windows, online): (HashMap<String, _>, HashMap<String, Option<bool>>) = {
+            let s = self.store.lock();
+            partners
+                .iter()
+                .map(|p| {
+                    let ws = s
+                        .record_of(&own, p)
+                        .map(|r| crate::forward::windows_of(&r, &self.settings.country))
+                        .unwrap_or_default();
+                    let on = s.partners.get(p).and_then(|state| state.online);
+                    ((p.clone(), ws), (p.clone(), on))
+                })
+                .unzip()
+        };
+        caller.due(
+            &partners,
+            |p| windows.get(p).cloned().unwrap_or_default(),
+            |p| online.get(p).copied().flatten(),
+            now(),
+            busy,
+            || self.cut_off(),
         )
     }
 
@@ -952,6 +1097,9 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
     tell(&listening);
     monitor.set_state("listening", None);
     let mut renewal = Renewal::new(dir, RENEW_EVERY, radiopost::credential::RENEW_WITHIN);
+    let mut caller = crate::forward::Caller::default();
+    let mut busy = false;
+    let mut checked = Instant::now();
     // copies, the key cache and reports, beside the answering loop while it runs
     let (said, upkeep_says) = std::sync::mpsc::channel();
     let _upkeep = crate::upkeep::start(dir, station.store().clone(), said);
@@ -966,19 +1114,22 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
             modem.conn.close();
             return stopped(monitor, &mut tell);
         }
-        // the operator asked for its queue to go to a partner (RP-7 §2): between sessions
-        if let Some(partner) = monitor.take_forward() {
-            tell(&format!("calling {partner} to forward the queue"));
-            monitor.begin(&partner);
-            let result = forward(&mut station, &mut modem, &partner, monitor);
-            match &result {
-                Ok(line) => tell(line),
-                Err(e) => tell(&format!("forwarding to {partner} failed: {e}")),
-            }
-            monitor.end(&result.map(|_| ()));
-            monitor.set_state("listening", None);
+        let auto = checked.elapsed() >= Duration::from_secs(5);
+        if auto {
+            checked = Instant::now();
         }
+        calls_between_sessions(
+            &mut station,
+            &mut modem,
+            monitor,
+            (&mut caller, busy, auto),
+            &mut tell,
+        );
         let event = match modem.next() {
+            Ok(Some(Event::Busy(b))) => {
+                busy = b; // RP-4 §5: no call on a busy channel
+                continue;
+            }
             Ok(Some(e)) => e,
             Ok(None) => continue,
             Err(e) => {
@@ -1017,6 +1168,51 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
             }
             monitor.end(&result);
         }
+    }
+}
+
+/// What happens between sessions (RP-7 §2, §5): when `auto`, a call to a partner whose window is
+/// open while this gateway is cut off; and a call the operator asked for.
+fn calls_between_sessions(
+    station: &mut Station,
+    modem: &mut Modem,
+    monitor: &Monitor,
+    (caller, busy, auto): (&mut crate::forward::Caller, bool, bool),
+    tell: &mut dyn FnMut(&str),
+) {
+    let due = if auto {
+        station.due_call(caller, busy)
+    } else {
+        None
+    };
+    let asked = monitor.take_forward();
+    let mut call = |partner: &str, records: bool, why: &str, tell: &mut dyn FnMut(&str)| {
+        tell(&format!("calling {partner} {why}"));
+        monitor.begin(partner);
+        let result = forward(station, modem, partner, monitor, records);
+        match &result {
+            Ok(line) => tell(line),
+            Err(e) => tell(&format!("the call to {partner} failed: {e}")),
+        }
+        let through = result.is_ok();
+        monitor.end(&result.map(|_| ()));
+        monitor.set_state("listening", None);
+        through
+    };
+    // in a partner's window while cut off, it calls by itself (RP-7 §5, §6.2)
+    if let Some(due) = due {
+        let why = if due.records {
+            "in its window to forward the queue"
+        } else {
+            "in its window to collect the mail: it is cut off too, and a partner that reaches \
+             the Internet opens a window within the hour"
+        };
+        let through = call(&due.partner, due.records, why, tell);
+        caller.called(&due.partner, through);
+    }
+    // the operator asked for its queue to go to a partner
+    if let Some(partner) = asked {
+        call(&partner, true, "to forward the queue", tell);
     }
 }
 
@@ -1130,13 +1326,18 @@ pub const CALL_WAIT: Duration = Duration::from_secs(180);
 fn forwarding_client(
     station: &Station,
     partner: &str,
-    at: u64,
+    (at, records): (u64, bool),
     own: &str,
 ) -> Result<Client, String> {
     let me = station.settings.callsign.clone();
     let (records, outbox, state, trust) = {
         let s = station.store.lock();
-        let (records, outbox) = crate::forward::outbox(&s, &me, partner);
+        // a call that only collects mail offers nothing (RP-7 §6.2)
+        let (records, outbox) = if records {
+            crate::forward::outbox(&s, &me, partner)
+        } else {
+            (Vec::new(), Vec::new())
+        };
         let state = s.partners.get(partner).cloned().unwrap_or_default();
         let trust = s.trust(&station.settings.blocked, station.settings.only.as_deref());
         (records, outbox, state, trust)
@@ -1210,10 +1411,11 @@ fn forward(
     modem: &mut Modem,
     partner: &str,
     monitor: &Monitor,
+    records: bool,
 ) -> Result<String, String> {
     let at = now();
     let own = radiopost::cbor::hex(&radiopost::credential::hash(&station.account.credential));
-    let client = forwarding_client(station, partner, at, &own)?;
+    let client = forwarding_client(station, partner, (at, records), &own)?;
     let connected = call_up(modem, partner, monitor)?;
     let mut carrier = Carrier::new(Calling(client));
     let mut outcome = Outcome::default();
@@ -1307,7 +1509,7 @@ pub fn forward_once(dir: &Path, partner: &str, say: &mut dyn FnMut(&str)) -> Res
         Err(Unopened::Later(e) | Unopened::Never(e)) => return Err(e),
     };
     say(&format!("calling {partner} to forward the queue"));
-    let result = forward(&mut station, &mut modem, partner, &monitor);
+    let result = forward(&mut station, &mut modem, partner, &monitor, true);
     for (_, line) in monitor.log_since(0).0 {
         say(&line);
     }

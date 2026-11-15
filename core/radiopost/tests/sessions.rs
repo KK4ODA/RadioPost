@@ -1656,6 +1656,23 @@ fn windows_only_inside_a_countrys_segments() {
         .map(|s| (s[0].as_u64().expect("from"), s[1].as_u64().expect("to")))
         .collect();
     assert_eq!(radiopost::forwarding::segments("US"), table.as_slice());
+    // the window of session-04, its occupied band worked out from its channel
+    let w = &file["context"]["window"]["channel"];
+    let o = &w["occupied_hz"];
+    assert_eq!(
+        radiopost::forwarding::occupied(
+            w["dial_hz"].as_u64().expect("dial"),
+            w["mode"].as_str().expect("mode"),
+            w["modem"].as_str().expect("modem"),
+            w["bandwidth_hz"].as_u64().expect("width")
+        ),
+        Some((o[0].as_u64().expect("low"), o[1].as_u64().expect("high")))
+    );
+    assert_eq!(
+        radiopost::forwarding::occupied(145_010_000, "FM", "aether", 25_000),
+        Some((144_997_500, 145_022_500)),
+        "RP-7 §5's 2 m example"
+    );
 }
 
 /// RP-7 §6.2, `forwarding.json`'s partner cases: in a partner's window, a cut-off gateway sends it
