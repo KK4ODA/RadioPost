@@ -218,8 +218,8 @@ fn a_client_answers_a_call_to_any_of_its_callsigns() {
     let mut first = store_for(&base, "device:facundo", "facundo");
     let second = radiopost_client::callsigns::home_of(&base, 2);
     store_for(&second, "device:ana", "ana");
-    let mut caller = store_for(&dir.join("caller"), "device:facundo", "facundo");
-    caller.queue(&message("facundo-direct")).expect("queued");
+    let mut facundo = store_for(&dir.join("caller"), "device:facundo", "facundo");
+    facundo.queue(&message("facundo-direct")).expect("queued");
 
     let (_server, at_f, at_a) = loopback();
     let mut listen = Options::new(&at_a.to_string());
@@ -248,7 +248,7 @@ fn a_client_answers_a_call_to_any_of_its_callsigns() {
     );
     let mut said = Vec::new();
     let called = session::call(
-        &mut caller,
+        &mut facundo,
         "N0CALL",
         Kind::Station,
         &Options::new(&at_f.to_string()),
@@ -269,7 +269,7 @@ fn a_client_answers_a_call_to_any_of_its_callsigns() {
     let ana = Store::open(&second).expect("the second home");
     assert_eq!(ana.inbox.iter().map(|a| a.id).collect::<Vec<_>>(), [id]);
     assert_eq!(first.inbox, [], "the first callsign's folders untouched");
-    assert_eq!(caller.sent, [id]);
+    assert_eq!(facundo.sent, [id]);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
