@@ -907,3 +907,60 @@ fn local_users_and_the_mail_kept_for_them() {
         );
     }
 }
+
+/// RP-7 §3.1–§3.3, `forwarding.json`: each session record's `PROOF` encodes byte for byte with
+/// the ID its statement gives it, and each `PROOF` case is answered as the partner's checks say.
+#[test]
+fn session_records_and_the_partners_checks_of_a_proof() {
+    use radiopost::forwarding::{Proof, check_proof, record_id};
+    let w = world();
+    let file = vectors("forwarding.json");
+    let local = vectors("local-delivery.json");
+    let records = file["records"]
+        .as_array()
+        .expect("records")
+        .iter()
+        .chain(local["records"].as_array().expect("records"));
+    for r in records {
+        let bytes = unhex(r["proof"]["pdu_hex"].as_str().expect("hex"));
+        let value = cbor::decode(&bytes).expect("CBOR");
+        let proof = Proof::from_value(&value).expect("a PROOF");
+        assert_eq!(
+            cbor::hex(&proof.to_value().encode().expect("encodes")),
+            cbor::hex(&bytes)
+        );
+        assert_eq!(
+            cbor::hex(&proof.id()),
+            r["record_id_hex"].as_str().expect("an ID")
+        );
+        assert_eq!(proof.id(), record_id(&proof.statement));
+    }
+    let cases = file["proof_cases"].as_array().expect("cases");
+    assert_eq!(cases.len(), 11);
+    for case in cases {
+        let value = cbor::decode(&unhex(case["proof_hex"].as_str().expect("hex"))).expect("CBOR");
+        let held: Vec<Vec<u8>> = case["held_hex"]
+            .as_array()
+            .expect("held")
+            .iter()
+            .map(|h| unhex(h.as_str().expect("hex")))
+            .collect();
+        let got = check_proof(
+            &value,
+            case["caller"].as_str().expect("caller"),
+            case["me"].as_str().expect("me"),
+            &held,
+            &w.trust,
+        );
+        let said = match got {
+            Ok(_) => "ok".to_owned(),
+            Err(code) => code.name().to_owned(),
+        };
+        assert_eq!(
+            said,
+            case["expect"].as_str().expect("expect"),
+            "{}",
+            case["what"]
+        );
+    }
+}
