@@ -46,6 +46,12 @@ directory, as the RadioPost Gateway app has it.
   unblock --caller C | --domain D
                      carry that caller's, or that post office's, sessions again
   blocked            the callers and post offices refused
+  partner --add CALL | --remove CALL
+                     name a partner (RP-7 §1): a gateway this one forwards its queue to when
+                     it is cut off, and whose forwarding sessions it answers
+  partners           the partners, and how the last call to each went
+  forward --to CALL  call a partner now and forward the queue to it (RP-7 §2), when the
+                     gateway is not answering calls; the app's panel does it while it is
   key                the gateway's public key
   serve              answer calls and carry each session to the caller's post office
   update             replace radiopost-gateway, and the other RadioPost programs beside it, with
@@ -93,6 +99,7 @@ fn init(dir: &Path, a: &Args) -> Result<(), String> {
         operator_checks_rules: a.has("--operator-checks-rules"),
         answer_at_start: true,
         copies: None,
+        partners: Vec::new(),
     };
     station::make(dir, &settings)?;
     println!(
@@ -193,8 +200,13 @@ fn held(dir: &Path) {
         s.forwards.len()
     );
     for r in &s.records {
+        let via = if r.path.is_empty() {
+            String::new()
+        } else {
+            format!(", via {}", r.path.join(" > "))
+        };
         println!(
-            "  {} ({}) at {}: {} messages, {} pickups{}",
+            "  {} ({}) at {}{via}: {} messages, {} pickups{}",
             r.operator,
             r.address,
             r.started,
@@ -206,6 +218,39 @@ fn held(dir: &Path) {
                 .unwrap_or_default()
         );
     }
+}
+
+/// `partner` and `partners`: the gateways it forwards to and answers forwarding sessions from
+/// (RP-7 §1, §2).
+fn partners(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
+    let mut s = Settings::load(dir)?;
+    if command == "partners" {
+        let store = radiopost_gateway::store::Store::load(dir);
+        for p in &s.partners {
+            let state = store.partners.get(&p.callsign).cloned().unwrap_or_default();
+            let last = if state.called == 0 {
+                "never called".to_owned()
+            } else {
+                format!("called at {}: {}", state.called, state.said)
+            };
+            println!("{}: {last}", p.callsign);
+        }
+        return Ok(());
+    }
+    if let Some(call) = a.one("--add") {
+        let call = call.trim().to_ascii_uppercase();
+        if !s.is_partner(&call) {
+            s.partners.push(station::PartnerSettings { callsign: call });
+        }
+    } else {
+        let call = a.need("--remove")?;
+        if !s.is_partner(&call) {
+            return Err(format!("{call} is not a partner"));
+        }
+        s.partners
+            .retain(|p| !p.callsign.eq_ignore_ascii_case(&call));
+    }
+    s.save(dir)
 }
 
 /// `block`, `unblock` and `blocked`: callers refused (wishlist W24), read at each call, and post
@@ -294,6 +339,8 @@ fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
             Ok(())
         }
         "block" | "unblock" | "blocked" => blocking(dir, a, command),
+        "partner" | "partners" => partners(dir, a, command),
+        "forward" => station::forward_once(dir, &a.need("--to")?, &mut |line| println!("{line}")),
         "key" => {
             println!(
                 "{}",

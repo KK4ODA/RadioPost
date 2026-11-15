@@ -94,6 +94,7 @@ fn gateway(
             days: 7,
             max_air_bytes: 16_384,
         }),
+        partners: Vec::new(),
     }
     .save(&gw)
     .expect("saved");

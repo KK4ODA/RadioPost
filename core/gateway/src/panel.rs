@@ -343,6 +343,7 @@ impl Panel {
                     operator_checks_rules: checks_rules,
                     answer_at_start: at_start,
                     copies,
+                    partners: Vec::new(),
                 },
             ),
         }

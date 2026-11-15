@@ -10,7 +10,10 @@
 //!   reach the caller's post office, stored before its `RECEIPT` (RP-3 §5.4), until it is
 //!   reported (RP-5 §5.6); and the content IDs it passed on, for 30 days (RP-7 §3.5);
 //! * **the key cache** (RP-1 §7.3): each post office's keys and revocation list, and the replay
-//!   cache of statements checked offline (RP-1 §6.3).
+//!   cache of statements checked offline (RP-1 §6.3);
+//! * **partners** (RP-7 §1): for each, the highest forwarding serial received from it, the
+//!   credentials it holds, and what its last `WELCOME` said; and the forwarding serials given to
+//!   the cut-off gateways this one holds forward items for (RP-7 §4.3).
 //!
 //! The answering loop and the threads beside it share one [`Shared`] store; the panel reads the
 //! file.
@@ -19,7 +22,10 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use radiopost::credential::{PostOfficeKey, Revocations, Trust};
+use radiopost::base64url;
+use radiopost::credential::{self, PostOfficeKey, Revocations, Trust};
+use radiopost::crypto::ContentId;
+use radiopost::forwarding::{Proof, record_id};
 use radiopost_postoffice::known::Found;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
@@ -157,22 +163,63 @@ pub struct Record {
     pub tries: u32,
     /// Why the last try failed.
     pub error: Option<String>,
+    /// The gateways that held it, ending with this one (RP-7 §3.1), when it came from a partner
+    /// (RP-7 §3.4); empty for a session this gateway carried.
+    pub path: Vec<String>,
 }
 
 impl Record {
+    /// Its ID (RP-7 §3.1): of its statement's encoding.
+    #[must_use]
+    pub fn id(&self) -> Option<[u8; 12]> {
+        base64url::decode(&self.statement).map(|s| record_id(&s))
+    }
+
+    /// Its `PROOF` to a partner (RP-7 §3.2), from the gateway `me`: with the credential, or with
+    /// its hash alone when `hashed`. A session this gateway carried has the path `[me]`.
+    #[must_use]
+    pub fn proof(&self, me: &str, hashed: bool) -> Option<Proof> {
+        let credential = base64url::decode(&self.credential)?;
+        let session: [u8; 8] = crate::station::unhex(&self.gateway_session)?
+            .try_into()
+            .ok()?;
+        Some(Proof {
+            credential_hash: hashed.then(|| credential::hash(&credential)),
+            credential: (!hashed).then_some(credential),
+            statement: base64url::decode(&self.statement)?,
+            signature: base64url::decode(&self.signature)?,
+            started: self.started,
+            session,
+            path: if self.path.is_empty() {
+                vec![me.to_owned()]
+            } else {
+                self.path.clone()
+            },
+            pickups: self.pickups.clone(),
+            local: self
+                .local_pickups
+                .iter()
+                .filter_map(|t| ContentId::from_text(t))
+                .collect(),
+        })
+    }
+
     /// Its entry in `POST /reports` (RP-5 §5.6).
     #[must_use]
     pub fn report(&self) -> Json {
         let mut report = json!({
             "statement": self.statement, "signature": self.signature,
             "credential": self.credential, "started": self.started,
-            "gateway_session": self.gateway_session, "cursor": self.cursor,
+            "gateway_session": self.gateway_session,
             "messages": self.messages.iter()
                 .map(|(id, air)| json!({"id": id, "air": air})).collect::<Vec<_>>(),
             "pickups": self.pickups,
         });
         if !self.local_pickups.is_empty() {
             report["local_pickups"] = json!(self.local_pickups);
+        }
+        if !self.path.is_empty() {
+            report["path"] = json!(self.path);
         }
         report
     }
@@ -217,6 +264,23 @@ pub struct Reported {
     pub code: Option<String>,
 }
 
+/// A partner, as the gateway knows it from calling it (RP-7 §1, §2).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PartnerState {
+    /// The highest forwarding serial received from it (RP-7 §2 `cursor`).
+    pub cursor: u64,
+    /// The hashes of the credentials it holds, hex: those of the records it took, which later
+    /// `PROOF`s name by hash (RP-7 §3.2).
+    pub holds: Vec<String>,
+    /// What its last `WELCOME` said of reaching the Internet (RP-7 §6.2).
+    pub online: Option<bool>,
+    /// When it was last called, and how that call went.
+    pub called: u64,
+    /// What the last call came to, for the panel.
+    pub said: String,
+}
+
 /// What the gateway holds.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -245,6 +309,10 @@ pub struct Store {
     pub copies_seen: BTreeMap<String, u64>,
     /// Local messages kept for local users while cut off (RP-7 §4.4).
     pub local: Vec<Local>,
+    /// Its partners, by callsign (RP-7 §1).
+    pub partners: BTreeMap<String, PartnerState>,
+    /// The last forwarding serial given to each cut-off gateway's forward items (RP-7 §4.3).
+    pub forward_serials: BTreeMap<String, u64>,
 }
 
 fn address_of(item: &Json) -> String {
@@ -332,8 +400,23 @@ impl Store {
                             && f["serial"].as_u64() == Some(serial))
                     });
                 }
-                Some("forward") if !self.forwards.contains(item) => {
-                    self.forwards.push(item.clone());
+                Some("forward") => {
+                    // numbered with a forwarding serial of its own, per cut-off gateway (§4.3)
+                    let gateway = item["gateway"].as_str().unwrap_or("").to_owned();
+                    let id = item["id"].as_str().unwrap_or("");
+                    let held = self.forwards.iter().any(|f| {
+                        f["gateway"].as_str() == Some(gateway.as_str())
+                            && f["address"].as_str().map(str::to_lowercase).as_deref()
+                                == Some(address.as_str())
+                            && f["id"].as_str() == Some(id)
+                    });
+                    if !held {
+                        let n = self.forward_serials.entry(gateway).or_default();
+                        *n += 1;
+                        let mut item = item.clone();
+                        item["fserial"] = json!(*n);
+                        self.forwards.push(item);
+                    }
                 }
                 _ => {}
             }
@@ -373,6 +456,21 @@ impl Store {
         self.replay
             .retain(|(_, _, t)| now.saturating_sub(*t) < REPLAY_S);
         said
+    }
+
+    /// The forward items held for the cut-off gateway `gateway` with forwarding serials above
+    /// `cursor`, in order (RP-7 §4.3).
+    #[must_use]
+    pub fn forwards_for(&self, gateway: &str, cursor: u64) -> Vec<Json> {
+        let mut out: Vec<Json> = self
+            .forwards
+            .iter()
+            .filter(|f| f["gateway"].as_str() == Some(gateway))
+            .filter(|f| f["fserial"].as_u64().is_some_and(|n| n > cursor))
+            .cloned()
+            .collect();
+        out.sort_by_key(|f| f["fserial"].as_u64());
+        out
     }
 
     /// The users it holds copies for.

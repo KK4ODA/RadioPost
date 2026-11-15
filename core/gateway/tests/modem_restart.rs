@@ -80,6 +80,7 @@ fn a_gateway_claims_again_after_aether_restarts() {
             operator_checks_rules: false,
             answer_at_start: true,
             copies: None,
+            partners: Vec::new(),
         },
     )
     .expect("a gateway");

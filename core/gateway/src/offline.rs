@@ -85,45 +85,74 @@ impl Offline {
     }
 
     fn check(&self, body: &Json) -> Result<(Statement, Vec<u8>, Vec<u8>), ErrorCode> {
-        let field = |k: &str| {
-            body.get(k)
-                .and_then(Json::as_str)
-                .and_then(base64url::decode)
+        // RP-1 §6.3 step 1: `receive`, and `send` when the statement lists messages
+        let need = |stmt: &Statement| {
+            flags::RECEIVE
+                | if stmt.messages.is_empty() {
+                    0
+                } else {
+                    flags::SEND
+                }
         };
-        let (Some(raw), Some(signature), Some(cred)) =
-            (field("statement"), field("signature"), field("credential"))
-        else {
-            return Err(ErrorCode::Malformed);
-        };
-        let stmt = Statement::decode(&raw).ok_or(ErrorCode::Malformed)?;
-        // RP-1 §6.3 step 1: the credential by RP-1 §5, with the keys and revocations it holds
-        let need = flags::RECEIVE
-            | if stmt.messages.is_empty() {
-                0
-            } else {
-                flags::SEND
-            };
-        let store = self.store.lock();
-        let trust = store.trust(&self.blocked, self.only.as_deref());
-        let cbody = credential::verify(&cred, &trust, self.clock, need).map_err(|r| r.code)?;
-        // steps 2 to 6; the engine built a challenge-form statement over its own challenge
-        let seen: Vec<(String, [u8; 8])> = store
-            .replay
-            .iter()
-            .filter_map(|(a, n, _)| {
-                let bytes: [u8; 8] = crate::station::unhex(n)?.try_into().ok()?;
-                Some((a.clone(), bytes))
-            })
-            .collect();
-        let fresh = Freshness {
-            now: self.clock,
-            seen: &seen,
-            challenge: stmt.challenge(),
-            sent_nonce: None,
-        };
-        statement::verify(&stmt, &signature, &cbody, &self.callsign, &fresh)?;
+        let (stmt, raw, cred, _) = check_caller(
+            &self.store,
+            body,
+            &self.callsign,
+            (&self.blocked, self.only.as_deref()),
+            self.clock,
+            need,
+        )?;
         Ok((stmt, raw, cred))
     }
+}
+
+/// A caller's credential and statement checked as RP-1 §5 and §6.3 say, by a gateway that answers
+/// from what it holds: the gateway `me` at `clock`, with the keys and revocation lists in `store`
+/// its operator's choices (`blocked`, `only`) let it trust, its replay cache, and the flags `need`
+/// says the statement requires. The statement, its encoding, the credential and its body.
+///
+/// # Errors
+///
+/// The code RP-1 §5 or §6.3 refuses with.
+pub(crate) fn check_caller(
+    store: &Shared,
+    body: &Json,
+    me: &str,
+    (blocked, only): (&[String], Option<&[String]>),
+    clock: u64,
+    need: impl Fn(&Statement) -> u64,
+) -> Result<(Statement, Vec<u8>, Vec<u8>, radiopost::credential::Body), ErrorCode> {
+    let field = |k: &str| {
+        body.get(k)
+            .and_then(Json::as_str)
+            .and_then(base64url::decode)
+    };
+    let (Some(raw), Some(signature), Some(cred)) =
+        (field("statement"), field("signature"), field("credential"))
+    else {
+        return Err(ErrorCode::Malformed);
+    };
+    let stmt = Statement::decode(&raw).ok_or(ErrorCode::Malformed)?;
+    let store = store.lock();
+    let trust = store.trust(blocked, only);
+    let cbody = credential::verify(&cred, &trust, clock, need(&stmt)).map_err(|r| r.code)?;
+    // steps 2 to 6; the engine built a challenge-form statement over its own challenge
+    let seen: Vec<(String, [u8; 8])> = store
+        .replay
+        .iter()
+        .filter_map(|(a, n, _)| {
+            let bytes: [u8; 8] = crate::station::unhex(n)?.try_into().ok()?;
+            Some((a.clone(), bytes))
+        })
+        .collect();
+    let fresh = Freshness {
+        now: clock,
+        seen: &seen,
+        challenge: stmt.challenge(),
+        sent_nonce: None,
+    };
+    statement::verify(&stmt, &signature, &cbody, me, &fresh)?;
+    Ok((stmt, raw, cred, cbody))
 }
 
 impl Upstream for Offline {

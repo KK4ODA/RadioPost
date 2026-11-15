@@ -13,6 +13,7 @@ pub const LOG_FILE: &str = "gateway.log";
 
 pub use radiopost::logfile;
 
+pub mod forward;
 pub mod keys;
 pub mod monitor;
 pub mod offline;

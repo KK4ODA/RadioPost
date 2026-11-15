@@ -14,12 +14,14 @@ use ed25519_dalek::SigningKey;
 use radiopost::ErrorCode;
 use radiopost::base64url;
 use radiopost::crypto::ContentId;
-use radiopost::session::gateway::{Gateway, GatewayConfig, Note, Upstream, Upstreams};
-use radiopost::session::{Caps, Event as SessionEvent};
+use radiopost::session::client::{Client, ClientConfig, Forwarding};
+use radiopost::session::gateway::{Gateway, GatewayConfig, Note, Partners, Upstream, Upstreams};
+use radiopost::session::{Caps, Event as SessionEvent, WaitingEntry};
 use rpmi::host::{Carrier, Direction, Engine, Event, Host};
 use rpmi::tcp::Connection;
 use serde::{Deserialize, Serialize};
 
+use crate::forward::{Outcome, Partner};
 use crate::monitor::{Check, Monitor};
 use crate::offline::{Fallback, Offline};
 use crate::store::Shared;
@@ -62,6 +64,27 @@ pub struct Settings {
     /// holds none and polls no post office.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copies: Option<CopiesSettings>,
+    /// Its partners (RP-7 §1): the gateways it forwards its queue to when it is cut off, and the
+    /// only gateways whose forwarding sessions it answers (RP-7 §2).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub partners: Vec<PartnerSettings>,
+}
+
+/// A partner, as the operator names it (RP-7 §1).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PartnerSettings {
+    /// Its callsign, as its credential names it.
+    pub callsign: String,
+}
+
+impl Settings {
+    /// Whether `callsign` is one of its partners.
+    #[must_use]
+    pub fn is_partner(&self, callsign: &str) -> bool {
+        self.partners
+            .iter()
+            .any(|p| p.callsign.eq_ignore_ascii_case(callsign))
+    }
 }
 
 /// What a gateway that holds copies placed ahead says in its record (RP-5 §4.4).
@@ -569,6 +592,38 @@ impl Station {
         )
     }
 
+    /// The forwarding sessions it answers (RP-7 §2): its partners' alone, each from its own store.
+    /// It reaches the Internet (`WELCOME` `online`) when it can log in at its own post office now.
+    fn partners(&self, at: u64) -> Partners {
+        let settings = self.settings.clone();
+        let store = self.store.clone();
+        let account = self.account.clone();
+        let own = self.credential().map(|b| b.domain());
+        Box::new(
+            move |caller: &str| -> Result<Box<dyn Upstream + Send>, ErrorCode> {
+                if !settings.is_partner(caller) {
+                    return Err(ErrorCode::RefusedByPolicy);
+                }
+                let online = own
+                    .as_deref()
+                    .and_then(|d| crate::upkeep::api_of(&settings, &store, d))
+                    .is_some_and(|url| {
+                        upstream::Http::new(&url, account.clone(), Arc::new(Mutex::new(None)))
+                            .login()
+                            .is_ok()
+                    });
+                Ok(Box::new(Partner::new(
+                    store.clone(),
+                    &settings.callsign,
+                    caller,
+                    (settings.blocked.clone(), settings.only.clone()),
+                    at,
+                    online,
+                )))
+            },
+        )
+    }
+
     fn config(&self) -> GatewayConfig {
         let at = now();
         let uploads = self
@@ -671,6 +726,28 @@ impl Engine for Answering {
     }
     fn link_lost(&mut self) -> Vec<SessionEvent> {
         self.0.link_closed()
+    }
+}
+
+/// A cut-off gateway's engine on a link to its partner: it speaks first, and hangs up (RP-7 §2).
+struct Calling(Client);
+
+impl Engine for Calling {
+    type Event = SessionEvent;
+    fn opening(&mut self) -> Option<Vec<u8>> {
+        Some(self.0.hello())
+    }
+    fn receive(&mut self, bytes: &[u8]) -> Vec<SessionEvent> {
+        self.0.receive(bytes)
+    }
+    fn transmit(&mut self) -> Option<Vec<u8>> {
+        self.0.transmit()
+    }
+    fn is_over(&self) -> bool {
+        self.0.is_over()
+    }
+    fn link_lost(&mut self) -> Vec<SessionEvent> {
+        self.0.link_broken()
     }
 }
 
@@ -910,6 +987,18 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
                 continue;
             }
         };
+        // the operator asked for its queue to go to a partner (RP-7 §2): between sessions
+        if let Some(partner) = monitor.take_forward() {
+            tell(&format!("calling {partner} to forward the queue"));
+            monitor.begin(&partner);
+            let result = forward(&mut station, &mut modem, &partner, monitor);
+            match &result {
+                Ok(line) => tell(line),
+                Err(e) => tell(&format!("forwarding to {partner} failed: {e}")),
+            }
+            monitor.end(&result.map(|_| ()));
+            monitor.set_state("listening", None);
+        }
         if let Event::Connected {
             direction: Direction::In,
             remote,
@@ -954,7 +1043,8 @@ fn carry(
         config,
         station.upstreams(at),
         Box::new(move |call| radiopost::thirdparty::may_hand(call, &country)),
-    );
+    )
+    .with_partner(station.partners(at));
     let mut carrier = Carrier::new(Answering(engine));
     // each event is handed to the engine once: a quiet read hands it nothing
     let mut event = Some(connected.clone());
@@ -1026,4 +1116,204 @@ fn carry(
         });
     }
     result
+}
+
+/// What a forwarding session asks to come unasked: every forward item the partner holds for this
+/// gateway, up to a megabyte each (RP-7 §2 `auto`, "as large as it can take").
+pub const FORWARD_AUTO: u64 = 1 << 20;
+
+/// How long a call to a partner may take to come up.
+pub const CALL_WAIT: Duration = Duration::from_secs(180);
+
+/// The client a cut-off gateway calls `partner` with (RP-7 §2): its own credential and key, the
+/// records and messages its store holds for the partner, and the keys it checks placements with.
+fn forwarding_client(
+    station: &Station,
+    partner: &str,
+    at: u64,
+    own: &str,
+) -> Result<Client, String> {
+    let me = station.settings.callsign.clone();
+    let (records, outbox, state, trust) = {
+        let s = station.store.lock();
+        let (records, outbox) = crate::forward::outbox(&s, &me, partner);
+        let state = s.partners.get(partner).cloned().unwrap_or_default();
+        let trust = s.trust(&station.settings.blocked, station.settings.only.as_deref());
+        (records, outbox, state, trust)
+    };
+    let cfg = ClientConfig {
+        credential: station.account.credential.clone(),
+        device: station.account.key.clone(),
+        called: partner.to_owned(),
+        time: at,
+        nonce: random(),
+        outbox,
+        cursor: state.cursor,
+        auto: FORWARD_AUTO,
+        partials: Vec::new(),
+        caps: Caps {
+            compression: vec![0, 1],
+            max_pdu: 4096,
+            renew: false,
+        },
+        credential_cached: state.holds.iter().any(|h| h == own),
+        piece: 960,
+        station: None,
+    };
+    let everything = Box::new(|entries: &[WaitingEntry]| entries.iter().map(|e| e.id).collect());
+    Ok(Client::new(cfg, everything)
+        .map_err(|e| format!("cannot start a forwarding session: {e}"))?
+        .forwarding(Forwarding { records, trust }))
+}
+
+/// Calls `partner` on `modem`: its `connected`, once the link is up.
+fn call_up(modem: &mut Modem, partner: &str, monitor: &Monitor) -> Result<Event, String> {
+    let connect = modem.host.connect(partner, None, None);
+    let id = connect.get("id").cloned();
+    modem.ask(&connect)?;
+    let since = Instant::now();
+    loop {
+        if monitor.stopping() {
+            return Err("the operator stopped the gateway".into());
+        }
+        if since.elapsed() > CALL_WAIT {
+            return Err(format!(
+                "no link to {partner} in {} seconds",
+                CALL_WAIT.as_secs()
+            ));
+        }
+        match modem
+            .next()
+            .map_err(|e| format!("the modem's adapter: {e}"))?
+        {
+            Some(e @ Event::Connected { id: Some(_), .. }) if e_id(&e) == id => return Ok(e),
+            Some(Event::Failed { id: i, code, text }) if i == id => {
+                return Err(format!(
+                    "the call failed: {code}{}",
+                    text.map(|t| format!(" ({t})")).unwrap_or_default()
+                ));
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Calls the partner `partner` on `modem` and carries a forwarding session (RP-7 §2): the
+/// gateway's queue out, the forward items its partner holds for it in, each event kept in the
+/// store as it comes. Returns what it came to.
+///
+/// # Errors
+///
+/// The call failed or did not come up, the link broke, or the operator stopped the gateway.
+fn forward(
+    station: &mut Station,
+    modem: &mut Modem,
+    partner: &str,
+    monitor: &Monitor,
+) -> Result<String, String> {
+    let at = now();
+    let own = radiopost::cbor::hex(&radiopost::credential::hash(&station.account.credential));
+    let client = forwarding_client(station, partner, at, &own)?;
+    let connected = call_up(modem, partner, monitor)?;
+    let mut carrier = Carrier::new(Calling(client));
+    let mut outcome = Outcome::default();
+    let mut event = Some(connected);
+    let mut quiet_since = Instant::now();
+    let result = loop {
+        if let Some(e) = event.take() {
+            let (requests, events) = carrier.on_event(&mut modem.host, &e);
+            let _ = station.store.change(|s| {
+                for e in &events {
+                    outcome.apply(s, partner, e, at);
+                }
+            });
+            for e in &events {
+                monitor.event(e);
+            }
+            if let Some(err) = requests.iter().find_map(|r| modem.conn.send(r).err()) {
+                carrier.engine_mut().link_lost();
+                break Err(format!("the modem's adapter: {err}"));
+            }
+        }
+        if carrier.is_ended() {
+            break Ok(());
+        }
+        if monitor.stopping() {
+            if let Some(link) = carrier.link() {
+                let bye = modem.host.disconnect(link);
+                let _ = modem.conn.send(&bye);
+            }
+            carrier.engine_mut().link_lost();
+            break Err("the operator stopped the gateway".to_owned());
+        }
+        match modem.next() {
+            Ok(Some(e)) => {
+                quiet_since = Instant::now();
+                event = Some(e);
+            }
+            Ok(None) if quiet_since.elapsed() < QUIET => {}
+            Ok(None) => {
+                if let Some(link) = carrier.link() {
+                    let bye = modem.host.disconnect(link);
+                    let _ = modem.conn.send(&bye);
+                }
+                carrier.engine_mut().link_lost();
+                break Err(format!("nothing heard for {} seconds", QUIET.as_secs()));
+            }
+            Err(e) => {
+                carrier.engine_mut().link_lost();
+                break Err(format!("the modem's adapter: {e}"));
+            }
+        }
+    };
+    let summary = match &result {
+        Ok(()) => outcome.summary(partner),
+        Err(e) => format!("{}; then {e}", outcome.summary(partner)),
+    };
+    let _ = station.store.change(|s| {
+        let p = s.partners.entry(partner.to_owned()).or_default();
+        p.called = at;
+        p.said.clone_from(&summary);
+        // a partner that welcomed this gateway keeps its credential (RP-3 §5.1)
+        if outcome.online.is_some() && !p.holds.contains(&own) {
+            p.holds.push(own.clone());
+        }
+    });
+    for line in &outcome.problems {
+        monitor.log(line);
+    }
+    result.map(|()| summary)
+}
+
+/// A `connected` event's `id`, when it has one.
+fn e_id(e: &Event) -> Option<serde_json::Value> {
+    match e {
+        Event::Connected { id, .. } => id.clone(),
+        _ => None,
+    }
+}
+
+/// Opens the gateway's modem, calls `partner` once and forwards its queue (RP-7 §2), saying what
+/// happens on `say`: the command line's `forward`, for a gateway that is not answering.
+///
+/// # Errors
+///
+/// The gateway is not set up, its modem cannot be opened, or the call or the session failed.
+pub fn forward_once(dir: &Path, partner: &str, say: &mut dyn FnMut(&str)) -> Result<(), String> {
+    let mut station = Station::load(dir)?;
+    let monitor = Monitor::new();
+    let mut modem = match open(&station) {
+        Ok(m) => m,
+        Err(Unopened::Later(e) | Unopened::Never(e)) => return Err(e),
+    };
+    say(&format!("calling {partner} to forward the queue"));
+    let result = forward(&mut station, &mut modem, partner, &monitor);
+    for (_, line) in monitor.log_since(0).0 {
+        say(&line);
+    }
+    let off = modem.host.listen(false);
+    let _ = modem.conn.send(&off);
+    modem.conn.close();
+    say(&result?);
+    Ok(())
 }

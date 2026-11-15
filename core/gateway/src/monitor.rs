@@ -87,6 +87,8 @@ struct Inner {
     log: VecDeque<(u64, String)>,
     logged: usize,
     checks: Vec<Check>,
+    /// A partner the operator asked to forward to (RP-7 §2), for the answering loop.
+    forward: Option<String>,
 }
 
 /// What the gateway is doing, shared between its answering loop and its panel.
@@ -116,6 +118,7 @@ impl Monitor {
                 log: VecDeque::new(),
                 logged: 0,
                 checks: Vec::new(),
+                forward: None,
             }),
             stop: AtomicBool::new(false),
             keep: None,
@@ -283,6 +286,17 @@ impl Monitor {
     #[must_use]
     pub fn stopping(&self) -> bool {
         self.stop.load(Ordering::Relaxed)
+    }
+
+    /// Asks the answering loop to call `partner` between sessions and forward the queue to it
+    /// (RP-7 §2); a second request before then replaces the first.
+    pub fn request_forward(&self, partner: &str) {
+        self.lock().forward = Some(partner.to_owned());
+    }
+
+    /// The partner the operator asked to forward to, taken once.
+    pub fn take_forward(&self) -> Option<String> {
+        self.lock().forward.take()
     }
 
     /// Clears a stop asked for, before the loop starts again.

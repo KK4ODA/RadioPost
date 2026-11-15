@@ -54,6 +54,7 @@ fn gateway(
         operator_checks_rules: true,
         answer_at_start: true,
         copies: None,
+        partners: Vec::new(),
     }
     .save(&gw)
     .expect("saved");
