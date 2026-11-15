@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.35 |
+| **Version** | 0.3.36 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -124,7 +124,7 @@ rules:
 | W18 | Mail coming down compressed | Radio | High | Fits today | Implemented |
 | W19 | Shorter short messages: a dictionary | Radio | Low | Optional addition; breaking if made required | Planned |
 | W20 | An adapter for VARA-style modems: VARA and Mercury | Adapters | Medium | Fits today; G11 to name Mercury | Implemented |
-| W21 | An ARDOP adapter | Adapters | Low | Needs specification review | Planned |
+| W21 | An ARDOP adapter | Adapters | Low | Fits today (checked) | Implemented |
 | W22 | An AX.25 packet adapter | Adapters | Low | Fits today | Implemented |
 | W23 | A phone version | Radio | Low | Fits today; optional addition for RPMI across devices | Planned |
 | W24 | Block a caller by address or callsign | Operation | Medium | Fits today | Implemented |
@@ -899,13 +899,13 @@ Use RadioPost over ARDOP.
 |---|---|
 | Requested by | The plan: concept §7, design §5.4, Phase 5. Requesters: 0. |
 | Component | Adapter. |
-| Compatibility | **Needs specification review**: RP-4 §9.3's mapping is to be checked against ARDOP's own specification before an adapter is written (design §10). |
-| Existing coverage | Planned, Phase 5. |
-| Dependencies | That check; W40 for unattended use. |
+| Compatibility | **Fits today**: checked (2026-11-15) against ardopcf's *TCP Host Interface Commands* and its source (MIT), and RP-4 1.0.3 §9.3 rewritten from it, informative. |
+| Existing coverage | Built (2026-11-15): `adapters/ardop` (`radiopost-ardop`), on the Mercury adapter's server made generic (`TncBridge`). It passes A-01 to A-04 through two adapters on a stand-in for two ARDOP TNCs on one channel, written from that document and source. Not yet run against a real ardopcf. |
+| Dependencies | W40 for unattended use. |
 | Effort | Medium. |
 | Priority | **Low.** |
-| Recommendation | Defer until the check is done. |
-| Status | Planned. |
+| Recommendation | Accept: the check is done. |
+| Status | Implemented, tried against a stand-in. |
 | Author decision | None yet. |
 
 ### W22. An AX.25 packet adapter
@@ -1125,3 +1125,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.33 | 2026-11-15 | W20 implemented: the VARA adapter, from VARA's published commands (RP-4 1.0.1 §9.2), tried against a stand-in. |
 | 0.3.34 | 2026-11-15 | W26 implemented: one gateway answering on several modems, one session at a time; the registration's channels name their modems. |
 | 0.3.35 | 2026-11-15 | W22 implemented: the packet adapter on a TNC's AGWPE port (RP-4 1.0.2 §9.4), tried against a stand-in. |
+| 0.3.36 | 2026-11-15 | W21: RP-4 §9.3 checked against ardopcf's host interface (1.0.3), and the ARDOP adapter built, tried against a stand-in. |

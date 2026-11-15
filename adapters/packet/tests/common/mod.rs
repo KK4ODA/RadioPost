@@ -129,7 +129,10 @@ impl Inner {
             .position(|l| same(&l.local, local) && same(&l.remote, remote))
     }
 
-    #[allow(clippy::too_many_lines, reason = "one arm a kind of frame, as the API lists them")]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one arm a kind of frame, as the API lists them"
+    )]
     fn on_frame(&mut self, station: usize, client: u64, f: &Frame) {
         match f.kind {
             b'R' => {

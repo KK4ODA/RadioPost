@@ -25,6 +25,73 @@ use rpmi::wire::Message;
 
 use crate::bridge::{Bridge, Dialect, Out};
 
+/// What the server asks of a bridge between one host and a modem with a VARA-style TNC
+/// interface: commands as lines on a control port, the session's bytes on the next port. Mercury's
+/// and VARA's [`Bridge`] is one; another modem with such an interface (ARDOP's) brings its own.
+pub trait TncBridge {
+    /// The time, in milliseconds from any start.
+    fn tick(&mut self, now: u64) -> Vec<Out>;
+    /// A line the host wrote, without its LF.
+    fn host_line(&mut self, line: &str) -> Vec<Out>;
+    /// A line the modem wrote on its control port, without its CR.
+    fn modem_line(&mut self, line: &str) -> Vec<Out>;
+    /// Bytes the modem wrote on its data port.
+    fn modem_data(&mut self, bytes: &[u8]) -> Vec<Out>;
+    /// The modem's connection failed.
+    fn modem_lost(&mut self, why: &str) -> Vec<Out>;
+    /// The host has gone (RP-4 §1.1).
+    fn host_left(&mut self) -> Vec<Out>;
+    /// Nothing the last host left is on the air any more: the modem may be let go.
+    fn settled(&self) -> bool;
+}
+
+impl TncBridge for Bridge {
+    fn tick(&mut self, now: u64) -> Vec<Out> {
+        Bridge::tick(self, now)
+    }
+    fn host_line(&mut self, line: &str) -> Vec<Out> {
+        Bridge::from_host(self, line)
+    }
+    fn modem_line(&mut self, line: &str) -> Vec<Out> {
+        Bridge::from_modem(self, line)
+    }
+    fn modem_data(&mut self, bytes: &[u8]) -> Vec<Out> {
+        Bridge::from_data(self, bytes)
+    }
+    fn modem_lost(&mut self, why: &str) -> Vec<Out> {
+        Bridge::modem_lost(self, why)
+    }
+    fn host_left(&mut self) -> Vec<Out> {
+        Bridge::host_left(self)
+    }
+    fn settled(&self) -> bool {
+        Bridge::settled(self)
+    }
+}
+
+/// A kind of modem the server can reach: its name, and how it makes a bridge, with the modem
+/// reached or not.
+pub struct Kind<B> {
+    /// The modem's name, in what the adapter says.
+    pub name: &'static str,
+    /// A bridge for a host, the modem reached.
+    pub fresh: Box<dyn Fn() -> B + Send>,
+    /// A bridge for a host, the modem not reached, and why.
+    pub unreached: Box<dyn Fn(&str) -> B + Send>,
+}
+
+impl Kind<Bridge> {
+    /// Mercury, or VARA, as `dialect` says.
+    #[must_use]
+    pub fn speaking(dialect: Dialect) -> Kind<Bridge> {
+        Kind {
+            name: dialect.name(),
+            fresh: Box::new(move || Bridge::speaking(dialect)),
+            unreached: Box::new(move |why| Bridge::without_modem_speaking(dialect, why)),
+        }
+    }
+}
+
 /// Mercury's control port when none is named; its data port is the next.
 pub const DEFAULT_MERCURY: &str = "127.0.0.1:8300";
 
@@ -85,9 +152,23 @@ pub fn listen_speaking(
     dialect: Dialect,
     note: Note,
 ) -> io::Result<SocketAddr> {
+    listen_tnc(addr, modem, Kind::speaking(dialect), note)
+}
+
+/// [`listen_speaking`], for any [`Kind`] of modem with this interface.
+///
+/// # Errors
+///
+/// The address could not be taken.
+pub fn listen_tnc<B: TncBridge + 'static>(
+    addr: impl ToSocketAddrs,
+    modem: &str,
+    kind: Kind<B>,
+    note: Note,
+) -> io::Result<SocketAddr> {
     let (local, arrived) = hosts(addr)?;
-    let mercury = modem.to_owned();
-    thread::spawn(move || Station::new(&mercury, dialect, &note).run(&arrived));
+    let modem = modem.to_owned();
+    thread::spawn(move || Station::new(&modem, kind, &note).run(&arrived));
     Ok(local)
 }
 
@@ -130,7 +211,7 @@ impl Modem {
     /// What Mercury has written: the data port's bytes first, then the control port's lines. The
     /// two ports are read apart, and a session's last bytes are written before the line that
     /// says it ended.
-    fn read(&mut self, bridge: &mut Bridge, outs: &mut Vec<Out>) -> Result<(), String> {
+    fn read<B: TncBridge>(&mut self, bridge: &mut B, outs: &mut Vec<Out>) -> Result<(), String> {
         let waiting = |e: &io::Error| {
             matches!(
                 e.kind(),
@@ -159,13 +240,13 @@ impl Modem {
         loop {
             match self.data.read(&mut buf) {
                 Ok(0) => return Err(format!("{} closed its data port", self.name)),
-                Ok(n) => outs.extend(bridge.from_data(&buf[..n])),
+                Ok(n) => outs.extend(bridge.modem_data(&buf[..n])),
                 Err(e) if waiting(&e) => break,
                 Err(e) => return Err(format!("a read of its data port failed: {e}")),
             }
         }
         for line in lines {
-            outs.extend(bridge.from_modem(&line));
+            outs.extend(bridge.modem_line(&line));
         }
         Ok(())
     }
@@ -186,27 +267,28 @@ impl Modem {
 
 /// The station: one bridge, Mercury's connections while they are needed, and the host that has
 /// them.
-struct Station<'a> {
+struct Station<'a, B> {
     mercury: &'a str,
-    dialect: Dialect,
+    kind: Kind<B>,
     note: &'a Note,
     start: Instant,
     modem: Option<Modem>,
-    bridge: Bridge,
+    bridge: B,
     host: Option<Arrival>,
     /// When the last host left, while Mercury is still kept for what it left on the air.
     left: Option<Instant>,
 }
 
-impl<'a> Station<'a> {
-    fn new(mercury: &'a str, dialect: Dialect, note: &'a Note) -> Station<'a> {
+impl<'a, B: TncBridge> Station<'a, B> {
+    fn new(mercury: &'a str, kind: Kind<B>, note: &'a Note) -> Station<'a, B> {
+        let bridge = (kind.fresh)();
         Station {
             mercury,
-            dialect,
+            kind,
             note,
             start: Instant::now(),
             modem: None,
-            bridge: Bridge::speaking(dialect),
+            bridge,
             host: None,
             left: None,
         }
@@ -240,16 +322,16 @@ impl<'a> Station<'a> {
     /// still holds it, and then this host joins that bridge.
     fn take(&mut self, arrival: Arrival) {
         if self.modem.is_none() {
-            let name = self.dialect.name();
+            let name = self.kind.name;
             match Modem::open(self.mercury, name) {
                 Ok(m) => {
                     self.modem = Some(m);
-                    self.bridge = Bridge::speaking(self.dialect);
+                    self.bridge = (self.kind.fresh)();
                 }
                 Err(why) => {
                     let why = format!("{name} at {} could not be reached: {why}", self.mercury);
                     (self.note)(&why);
-                    self.bridge = Bridge::without_modem_speaking(self.dialect, &why);
+                    self.bridge = (self.kind.unreached)(&why);
                 }
             }
         }
@@ -294,8 +376,7 @@ impl<'a> Station<'a> {
         if let Some(why) = lost {
             (self.note)(&format!(
                 "the connection to {} at {} ended: {why}; the program's connection is closed",
-                self.dialect.name(),
-                self.mercury
+                self.kind.name, self.mercury
             ));
             self.modem = None;
             gone = true;
@@ -308,7 +389,7 @@ impl<'a> Station<'a> {
             if self.modem.is_none() || self.bridge.settled() || overdue {
                 // closing the control port is how another program is let have Mercury
                 self.modem = None;
-                self.bridge = Bridge::speaking(self.dialect);
+                self.bridge = (self.kind.fresh)();
             }
         }
     }
@@ -322,12 +403,12 @@ impl<'a> Station<'a> {
             match h.lines.try_recv() {
                 Ok(FromHost::Line(line)) => {
                     let text = std::str::from_utf8(&line).unwrap_or("\u{0}");
-                    outs.extend(self.bridge.from_host(text));
+                    outs.extend(self.bridge.host_line(text));
                 }
                 Ok(FromHost::TooLong) => {
                     outs.extend(
                         self.bridge
-                            .from_host("a line longer than the adapter takes"),
+                            .host_line("a line longer than the adapter takes"),
                     );
                     outs.push(Out::CloseHost);
                 }
@@ -354,7 +435,7 @@ impl<'a> Station<'a> {
         if asked.contains(&Out::Command("ABORT".into())) {
             (self.note)(&format!(
                 "the program left with a call or link up: {} asked to abort it",
-                self.dialect.name()
+                self.kind.name
             ));
         }
         for out in asked {

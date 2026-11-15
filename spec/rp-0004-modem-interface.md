@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.0.2 |
+| **Version** | 1.0.3 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -423,10 +423,37 @@ operator sets VARA up, and the adapter sends nothing for it (Mercury's adapter s
 
 ### 9.3 ARDOP
 
-ARDOP's host interface also has a command port and a data port. Calls are `ARQCALL <remote>
-<repeats>`, listening is `LISTEN TRUE|FALSE`, the bandwidth is `ARQBW`, and the data port carries
-length-prefixed blocks. *To be checked against the ARDOP specification before an adapter is
-written.*
+An ARDOP TNC (ardopcf, and the others with its host interface: ardopcf's *TCP Host Interface
+Commands*) takes commands as lines ended by CR on a command port (**8515** by default, as Aether's
+control API: one of the two moves on a computer that runs both) and the session's bytes on the next
+port. A command is answered by its echo (`MYCALL now …`, `LISTEN now TRUE`, `ARQCALL <call> <n>`,
+`DISCONNECT NOW TRUE`, `ABORT`) or by `FAULT`; other lines come of the TNC's own accord. On the data
+port the host writes blocks of a two-byte big-endian length and the data, and reads blocks of a
+two-byte length, a three-letter tag (`ARQ` for a session's bytes, `IDF`, `FEC`, `ERR`) and the data.
+
+| RPMI | ARDOP |
+|---|---|
+| `hello` | `VERSION`: anything but its echo is not this modem, and the host gets `no-modem`. Then `PROTOCOLMODE ARQ` and `LISTEN FALSE`. `modem` is `ARDOP`; `caps.bandwidths` is 200, 500, 1000 and 2000; `busy` true; `delivery`, `broadcast`, `quality`, `regulatory`, `shared` and `dial` false. |
+| `callsigns` | `MYCALL <first>`, and `MYAUX <second>,<third>…` for the others (`MYAUX -`, which ARDOP refuses and so clears the list, when there are none). A station ID is 3 to 7 capitals and digits, then `-1` to `-15` or a letter; the adapter refuses others, so a callsign with `/` (RP-0 §6.1) cannot be used. |
+| `listen` | `LISTEN TRUE` / `LISTEN FALSE`. ARDOP's `LISTEN FALSE` ends nothing under way. |
+| `connect` | `MYCALL` with `as` first when it is not, `ARQBW <bandwidth>MAX` when the call names one, then `ARQCALL <remote> 5`. `CONNECTED <remote> <bandwidth>` gives `connected`; `STATUS CONNECT TO <remote> FAILED!` or `STATUS END ARQ CALL` gives `failed` `timeout`, `REJECTEDBW` `refused` and `REJECTEDBUSY` `busy`. |
+| `incoming` | `PENDING`, `TARGET <callsign called>`, then `CONNECTED <caller> <bandwidth>` with no call of the host's to that station. A call answered for nobody is ended with `ABORT`. |
+| `send` | Blocks of 1024 bytes at most on the data port, no more than 8 KiB with the TNC unsent. `BUFFER <n>`, which ARDOP says when it takes bytes in and when asked, gives `queued`. |
+| `received` | Blocks tagged `ARQ`. |
+| `disconnect` | `DISCONNECT` once the adapter holds nothing and `BUFFER` is 0 (asked every second), or after two minutes. `DISCONNECTED` gives `disconnected` `local`. |
+| `abort` | `ABORT`. ARDOP says nothing more to the host, so the adapter reports `disconnected` `local` at once; the other station hears nothing and times out. A call under way ends `failed` `aborted`. |
+| `disconnected` | `DISCONNECTED` unasked: `remote`. |
+| `busy` | `BUSY TRUE` / `BUSY FALSE`, outside a session. |
+
+**After an end.** `DISCONNECTED` carries no session, so the adapter sends no `ARQCALL` for a second
+after `DISCONNECT` or `ABORT`.
+
+**Delivery.** Whether `BUFFER` counts what the other station has acknowledged is not published, so
+the adapter reports no `delivered`.
+
+**One program at a time.** ARDOP serves one host, with one `MYCALL` and one `LISTEN`: the adapter
+has the TNC to itself (`shared` false). ARDOP identifies the station itself (its ID frames); it
+checks no band rules (§8).
 
 ### 9.4 AX.25 packet (VHF and UHF)
 
@@ -595,3 +622,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 1.0.0 | 2026-11-15 | Stable (D41). §2: an adapter never listens beyond its own machine; a transport between machines is left for a later addition (gap G4). |
 | 1.0.1 | 2026-11-15 | §9.2 (informative), found by writing the VARA adapter: how `hello` tells VARA's interface from another (`CHAT OFF`), its caps for VARA HF and VARA FM, the published callsign grammar, `LISTEN OFF` held as Mercury's is, `BUFFER` as sent and not delivered, and that the adapter sends nothing to identify the station. Nothing for an implementation to do. |
 | 1.0.2 | 2026-11-15 | §9.4 (informative), found by writing the packet adapter against AGWPE: the frame, the mapping, callsigns registered only while the host listens, `d` only once nothing is outstanding, no `delivered`, one host at a time. Nothing for an implementation to do. |
+| 1.0.3 | 2026-11-15 | §9.3 (informative), checked against ardopcf's host interface and written from the ARDOP adapter: the echoes and `FAULT`, the data port's blocks and tags, `MYCALL` and `MYAUX`, the call's end by `STATUS`, `REJECTEDBW` and `REJECTEDBUSY`, `DISCONNECT` once `BUFFER` is 0, `ABORT` reported by the adapter, no `delivered`. Nothing for an implementation to do. |

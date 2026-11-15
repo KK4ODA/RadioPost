@@ -1396,6 +1396,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "radiopost-ardop"
+version = "0.1.0-beta.22"
+dependencies = [
+ "radiopost-mercury",
+ "radiopost-tester",
+ "rpmi",
+ "serde_json",
+]
+
+[[package]]
 name = "radiopost-client"
 version = "0.1.0-beta.22"
 dependencies = [

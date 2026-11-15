@@ -182,10 +182,10 @@ Rust, each checked against the test vectors:
 
 * **The core library and the modem interface** ([`core/`](core/README.md)): RadioPost's objects,
   RP-3's sessions, and RP-4 carrying them between two stations.
-* **Five adapters** (`adapters/`): one for [Aether HF](https://github.com/KK4ODA/aether-hf), an
+* **Six adapters** (`adapters/`): one for [Aether HF](https://github.com/KK4ODA/aether-hf), an
   open-source HF modem, one for the Mercury HF modem, one for VARA HF and VARA FM through their
-  published commands, one for AX.25 packet through a TNC's AGWPE port (Dire Wolf), and one for
-  TCP. ARDOP follows.
+  published commands, one for ARDOP (ardopcf), one for AX.25 packet through a TNC's AGWPE port
+  (Dire Wolf), and one for TCP.
 * **The client** ([`app/client`](app/client/README.md)): mail to another station or through a
   gateway, on the command line, from its panel in a browser, or as a desktop application.
 * **The gateway**: it answers users' calls and carries their sessions to their post offices, as a

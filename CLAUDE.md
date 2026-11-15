@@ -121,6 +121,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   256 bytes at most, 7 ahead, paced by `Y` every 0.5 s; `disconnect` sends `d` once `Y` is 0, since
   AGWPE's `d` drops what the TNC holds; no `delivered`), `serve`. One host at a time: the shared
   lobby is `rpmi::lobby` (Mercury and VARA use it too). `tests/common` is a stand-in for two TNCs.
+  `adapters/ardop` (`radiopost-ardop`) is RP-4 §9.3, checked against ardopcf's *TCP Host Interface
+  Commands* and source (MIT; command port 8515 by default, as Aether's): replies are echoes of the
+  command (`MYCALL now …`) or `FAULT`, matched in order; `MYAUX -` clears the aux list by a
+  `FAULT`; data blocks have a 2-byte big-endian length (and a 3-letter tag from the TNC); `ABORT`
+  says nothing more, so the bridge reports the end. Served by Mercury's `serve::listen_tnc`, generic
+  over `TncBridge` (`host_line`, `modem_line`, `modem_data`, …) with a `Kind` naming the modem.
   `adapters/tcp` (`radiopost-tcp`) is RP-4 §9.5: links to other TCP adapters opened with one line
   each way (`RPTCP 1 <as> <called>`, `OK <callsign>` or `NO <code>`), TLS on the Internet with
   rustls and ring (a self-signed certificate made on first use, pinned by SHA-256 fingerprint, or
