@@ -606,9 +606,15 @@ async function openFolder(name) {
 // the user could not see or delete what it kept.
 
 let addressBook = [];
+// W2: groups of addresses, each with its members written as To takes them (groups.json)
+let groupBook = [];
 
 async function loadAddresses() {
-  try { addressBook = (await api("addresses")).entries; } catch { /* kept as it was */ }
+  try {
+    const r = await api("addresses");
+    addressBook = r.entries;
+    groupBook = r.groups || [];
+  } catch { /* kept as it was */ }
   $("n-addresses").textContent = addressBook.length || "";
   return addressBook;
 }
@@ -621,8 +627,124 @@ function writtenAs(e) {
 async function changeAddresses(change) {
   const r = await api("addresses", change);
   addressBook = r.entries;
+  if (r.groups) groupBook = r.groups;
   $("n-addresses").textContent = addressBook.length || "";
   return r;
+}
+
+// a group's members, written as To takes them, less those already in `head`
+function groupWritten(g, head = "") {
+  const taken = head.toLowerCase();
+  return g.members.filter((m) => !taken.includes(m.address)).map(writtenAs);
+}
+
+function writeToGroup(g) {
+  const form = newComposer();
+  form.to.value = `${groupWritten(g).join(", ")}, `;
+  show("composer");
+  form.subject.focus();
+}
+
+// the group form: a new group, or the one being changed (`editingGroup`, its name)
+let editingGroup = null;
+
+function editGroup(g) {
+  const f = $("group-form");
+  editingGroup = g ? g.name : null;
+  f.name.value = g ? g.name : "";
+  f.members.value = g ? `${groupWritten(g).join(", ")}, ` : "";
+  $("group-cancel").hidden = !g;
+  $("group-save").textContent = g ? "Save changes" : "Save";
+  if (g) f.members.focus();
+}
+
+async function saveGroup(event) {
+  event.preventDefault();
+  const f = $("group-form");
+  const name = f.name.value.trim();
+  try {
+    await changeAddresses({group_save: {was: editingGroup, name, members: f.members.value}});
+    toast(editingGroup ? `${name} is changed.` : `${name} is a group now. Type its name in To.`);
+    editGroup(null);
+    renderAddresses();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function forgetGroup(g) {
+  try {
+    const r = await changeAddresses({group_remove: g.name});
+    renderAddresses();
+    toast(`The group ${g.name} is gone; its addresses stay on the list.`, false,
+      {label: "Undo", run: async () => {
+        await changeAddresses({group_put_back: {name: r.removed_group.name,
+          members: r.removed_group.members}});
+        renderAddresses();
+      }});
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function renderGroups() {
+  const find = $("address-filter").value.trim().toLowerCase();
+  const shown = groupBook.filter((g) => !find || g.name.toLowerCase().includes(find)
+    || g.members.some((m) => m.address.includes(find)
+      || (m.name || "").toLowerCase().includes(find)));
+  $("group-rows").replaceChildren(...shown.map((g) => {
+    const tr = document.createElement("tr");
+    const who = g.members.map((m) => m.name || m.address).join(", ");
+    [g.name, `${g.members.length} · ${who}`].forEach((text, i) => {
+      const td = document.createElement("td");
+      td.textContent = text;
+      if (i === 1) td.className = "date";
+      tr.append(td);
+    });
+    const acts = document.createElement("td");
+    acts.className = "acts";
+    for (const [glyph, title, run] of [
+      ["write", `Write to everyone in ${g.name}`, () => writeToGroup(g)],
+      ["people", `Change ${g.name}: its name and addresses`, () => editGroup(g)],
+      ["trash", `Take the group ${g.name} away; its addresses stay`, () => forgetGroup(g)],
+    ]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "act";
+      b.title = title;
+      b.setAttribute("aria-label", title);
+      b.append(icon(glyph));
+      b.addEventListener("click", (event) => { event.stopPropagation(); run(); });
+      acts.append(b);
+    }
+    tr.append(acts);
+    tr.title = `Write to everyone in ${g.name}`;
+    tr.addEventListener("click", () => writeToGroup(g));
+    return tr;
+  }));
+  const empty = $("groups-empty");
+  empty.hidden = shown.length > 0;
+  empty.textContent = groupBook.length
+    ? "No group has that in its name or addresses."
+    : "No groups yet. Give one a name and its addresses above.";
+}
+
+// W2: a contact file read into the list and the groups
+async function importContacts(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const r = await changeAddresses({import: text});
+    const d = r.imported;
+    const parts = [`${d.added} address${d.added === 1 ? "" : "es"} added`];
+    if (d.named) parts.push(`${d.named} named`);
+    if (d.groups) parts.push(`${d.groups} group${d.groups === 1 ? "" : "s"}`);
+    if (d.skipped.length) parts.push(`${d.skipped.length} left out, not email addresses`);
+    toast(`${file.name}: ${parts.join(", ")}.`);
+    renderAddresses();
+  } catch (e) {
+    toast(e.message, true);
+  }
 }
 
 async function forgetAddress(address, after) {
@@ -694,6 +816,7 @@ function renderAddresses() {
   empty.textContent = addressBook.length
     ? "None has that in its name or address."
     : "No addresses yet. Everyone you write to is added here.";
+  renderGroups();
 }
 
 // Suggestions under To and Cc: the address list's entries that match what is being typed after
@@ -711,7 +834,8 @@ function wireSuggestions(input) {
   const close = () => { list.hidden = true; shown = []; active = -1; };
   const pick = (e) => {
     const [head] = split();
-    input.value = `${head}${head ? " " : ""}${writtenAs(e)}, `;
+    const written = e.members ? groupWritten(e, head).join(", ") : writtenAs(e);
+    input.value = `${head}${head ? " " : ""}${written}${written ? ", " : ""}`;
     close();
     input.focus();
     input.setSelectionRange(input.value.length, input.value.length);
@@ -719,18 +843,35 @@ function wireSuggestions(input) {
   const render = () => {
     const [head, typed] = split();
     const taken = head.toLowerCase();
-    shown = !typed ? [] : addressBook
+    const groups = !typed || input.name === "members" ? [] : groupBook
+      .filter((g) => g.name.toLowerCase().startsWith(typed)
+        || g.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(typed)))
+      .slice(0, 3);
+    shown = !typed ? [] : [...groups, ...addressBook
       .filter((e) => !taken.includes(e.address))
       .filter((e) => e.address.startsWith(typed) || e.address.includes(typed)
         || (e.name || "").toLowerCase().split(/\s+/).some((w) => w.startsWith(typed)))
       .sort((a, b) => (b.uses - a.uses) || (b.used - a.used))
-      .slice(0, 6);
+      .slice(0, 6 - groups.length)];
     if (!shown.length) { close(); return; }
     active = Math.min(Math.max(active, 0), shown.length - 1);
     list.replaceChildren(...shown.map((e, i) => {
       const li = document.createElement("li");
       li.setAttribute("role", "option");
       li.setAttribute("aria-selected", String(i === active));
+      if (e.members) {
+        // a group: its name, and how many addresses it puts in
+        const name = document.createElement("span");
+        name.className = "s-name s-group";
+        name.textContent = e.name;
+        const count = document.createElement("span");
+        count.className = "s-addr";
+        count.textContent = `group · ${e.members.length} address${e.members.length === 1 ? "" : "es"}`;
+        li.append(name, count);
+        li.title = e.members.map((m) => m.address).join(", ");
+        li.addEventListener("mousedown", (event) => { event.preventDefault(); pick(e); });
+        return li;
+      }
       const name = document.createElement("span");
       name.className = "s-name";
       name.textContent = e.name || "";
@@ -1965,6 +2106,14 @@ function wire() {
     }
   };
   $("address-add").addEventListener("click", addAddress);
+  $("address-import").addEventListener("click", () => $("address-file").click());
+  $("address-file").addEventListener("change", async (e) => {
+    await importContacts(e.target.files[0]);
+    e.target.value = "";
+  });
+  wireSuggestions($("group-form").members);
+  $("group-form").addEventListener("submit", saveGroup);
+  $("group-cancel").addEventListener("click", () => editGroup(null));
   $("address-new").addEventListener("keydown", (e) => { if (e.key === "Enter") addAddress(); });
   $("cancel").addEventListener("click", () => { newComposer(); openFolder(folder); });
   $("composer").addEventListener("submit", send);

@@ -39,9 +39,14 @@ usage: radiopost [--home DIR] [--as CALLSIGN] COMMAND ...
   report                   send the station-to-station sessions waiting to the post office
                            (RP-5 §6.6)
   settings [--set JSON]    the account's settings at the post office (RP-5 §6.3)
-  addresses [--add 'NAME <ADDR>']... [--remove ADDR]...
+  addresses [--add 'NAME <ADDR>']... [--remove ADDR]... [--import FILE]...
                            the address list: whom you have written to, offered as To and Cc are
-                           typed in the panel; this computer's own, not the accept list
+                           typed in the panel; this computer's own, not the accept list. --import
+                           reads a contact file (vCard .vcf, or a CSV export from Google,
+                           Outlook or Thunderbird): its addresses, and its groups
+  groups [--name NAME --members 'NAME <ADDR>, ADDR' [--was OLD] | --remove NAME]
+                           groups of addresses, written to in one step (compose --group NAME);
+                           --was renames or changes the group of that name
   backups [on [NAME] [--folder DIR] | off | fetch | open FILE [OUT]]
                            a post office operator's computer: on, it fetches each new backup of
                            the post office by itself while the app is open, sealed to a key
@@ -49,7 +54,7 @@ usage: radiopost [--home DIR] [--as CALLSIGN] COMMAND ...
                            fetched backup holds as the zip `radiopost-po restore` takes
   accept [--add ENTRY]... [--remove ENTRY]...
                            the accept list: addresses, or @domain (RP-5 §6.5)
-  compose --to ADDR [--to ADDR] [--cc ADDR] [--subject TEXT] [--priority 0|1|2]
+  compose --to ADDR [--to ADDR] [--group NAME] [--cc ADDR] [--subject TEXT] [--priority 0|1|2]
           [--attach FILE]... [--body FILE]
           [--reply ID | --reply-all ID | --forward ID]
                            write a message into the outbox; the text from stdin without --body.
@@ -657,7 +662,15 @@ fn run(words: &[String]) -> Result<(), Error> {
                     typed_addresses(&typed)
                 }
             };
-            let to = given("--to", start.to)?;
+            let mut to = given("--to", start.to)?;
+            // a group (wishlist W2): its members in To
+            for g in args.all("--group") {
+                for m in addresses::members(&base, &g)? {
+                    if !to.iter().any(|(_, a)| *a == m.1) {
+                        to.push(m);
+                    }
+                }
+            }
             let cc = given("--cc", start.cc)?;
             let plain = |n: &[(Option<String>, String)]| -> Vec<String> {
                 n.iter().map(|(_, a)| a.clone()).collect()
@@ -809,6 +822,17 @@ fn run(words: &[String]) -> Result<(), Error> {
             println!("{}", serde_json::to_string_pretty(&now).unwrap_or_default());
         }
         "addresses" => {
+            for file in args.all("--import") {
+                let text = std::fs::read(&file).map_err(|e| format!("{file}: {e}"))?;
+                let done = addresses::import(&base, &String::from_utf8_lossy(&text))?;
+                println!(
+                    "{file}: {} added, {} named, {} groups",
+                    done.added, done.named, done.groups
+                );
+                for skipped in &done.skipped {
+                    println!("  not an email address, left out: {skipped}");
+                }
+            }
             for typed in args.all("--add") {
                 addresses::add(&base, &typed)?;
             }
@@ -827,6 +851,17 @@ fn run(words: &[String]) -> Result<(), Error> {
                     )
                 };
                 println!("{:<40} {used}", e.written());
+            }
+        }
+        "groups" => {
+            if let Some(name) = args.one("--remove") {
+                addresses::remove_group(&base, &name)?;
+            } else if let Some(name) = args.one("--name") {
+                let members = args.all("--members").join(", ");
+                addresses::save_group(&base, args.one("--was").as_deref(), &name, &members)?;
+            }
+            for g in addresses::groups(&base) {
+                println!("{} ({}): {}", g.name, g.members.len(), g.members.join(", "));
             }
         }
         "backups" => backups_command(&base, &args)?,

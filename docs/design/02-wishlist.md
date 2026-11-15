@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.25 |
+| **Version** | 0.3.26 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -105,7 +105,7 @@ rules:
 | ID | Wish | Group | Priority | Compatibility | Status |
 |---|---|---|---|---|---|
 | W1 | Reply and forward | Mail | High | Fits today | Implemented |
-| W2 | An address book and groups | Mail | Medium | Fits today | In progress |
+| W2 | An address book and groups | Mail | Medium | Fits today | Implemented |
 | W3 | Photos made small, and the time on the air shown | Mail | Medium | Fits today | Planned |
 | W4 | The full text of a trimmed message | Mail | Low | Fits today as modified; optional addition as asked | Proposed |
 | W5 | Mail kept as `.eml` files | Mail | Low | Fits today | Planned |
@@ -188,12 +188,12 @@ Pick recipients by name. Write to a group (a net, a shelter team) in one step.
 | Requested by | The plan: concept §10, first version. Requesters: 0. |
 | Component | Client. |
 | Compatibility | **Fits today.** The client's own; a group becomes addresses in `to` or `cc` (RP-2 §2). |
-| Existing coverage | The address list is built (2026-11-12, after the author asked for a way to delete addresses): everyone a message is written to is kept with the name typed before the address, counted and dated, in `addresses.json`, a file of its own beside `state.json`; To and Cc offer it as they are typed, and the browser's own memory of those fields, which nobody could see or clear, is off. The panel's Addresses view finds, adds, renames, writes to and removes them; the reader adds a sender; `radiopost addresses` does the same on the command line. Groups and importing contact files are not built. |
+| Existing coverage | The address list is built (2026-11-12, after the author asked for a way to delete addresses): everyone a message is written to is kept with the name typed before the address, counted and dated, in `addresses.json`, a file of its own beside `state.json`; To and Cc offer it as they are typed, and the browser's own memory of those fields, which nobody could see or clear, is off. The panel's Addresses view finds, adds, renames, writes to and removes them; the reader adds a sender; `radiopost addresses` does the same on the command line. **Groups and import built** (2026-11-15): groups in `groups.json`, a file of its own so an earlier client leaves them alone, each a name and its addresses; one is offered in To by its name and puts in every member; the Addresses view makes, changes, writes to and removes them, and `radiopost groups` and `compose --group` do the same. *Import contacts…* and `addresses --import` read vCard 2.1 to 4.0 and Google's, Outlook's and Thunderbird's CSV exports (`contacts.rs`): names and email addresses only, an address already listed keeping its name, the file's categories and labels made groups, what is not an address said and left out. |
 | Dependencies | None. |
 | Effort | Medium: a store, its page in the panel, and import of the usual contact files. What is left: groups, and the import. |
 | Priority | **Medium.** Everyone will want it; nothing waits on it. |
 | Recommendation | Accept, as a client feature. |
-| Status | In progress: the list is built; groups and import are not. |
+| Status | Implemented. |
 | Author decision | The address list, with deleting (2026-11-12). |
 | Notes | Every address goes on the air and onto the accept list (RP-5 §6.5). If groups grow large, a list address at the post office (one address on the air) is the cheaper way, and an application-layer wish of its own. |
 
@@ -1115,3 +1115,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.23 | 2026-11-15 | W30's stage 4 built: mail for a cut-off area goes by its route, with P-06's forward items. |
 | 0.3.24 | 2026-11-15 | W30's stage 5 built: windows, the published routes and the choice of partner, with F-01 to F-06; implemented, the trial on the air next. |
 | 0.3.25 | 2026-11-15 | W30: the trial on the air deferred by the author until later. |
+| 0.3.26 | 2026-11-15 | W2 implemented: groups of addresses, and contact files imported. |

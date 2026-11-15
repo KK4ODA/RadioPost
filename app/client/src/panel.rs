@@ -1048,15 +1048,70 @@ impl Panel {
         Ok(Value::Array(out))
     }
 
+    /// The address list and its groups, each group with its members written as To takes them.
+    fn address_book(&self) -> Value {
+        let groups: Vec<Value> = addresses::groups(&self.base)
+            .iter()
+            .map(|g| {
+                let written: Vec<Value> = addresses::members(&self.base, &g.name)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(name, address)| json!({"name": name, "address": address}))
+                    .collect();
+                json!({"name": g.name, "members": written})
+            })
+            .collect();
+        let entries: Vec<Value> = addresses::list(&self.base)
+            .iter()
+            .map(addresses::Entry::json)
+            .collect();
+        json!({"entries": entries, "groups": groups})
+    }
+
     /// The address list, the computer's for every callsign (it is a file of its own, so it
-    /// changes during a session too): `add`
-    /// typed text, `remove` an address, or `put_back` an entry removed.
+    /// changes during a session too): `add` typed text, `remove` an address, or `put_back` an
+    /// entry removed; its groups (wishlist W2): `group_save` (`was`, `name`, `members` as typed),
+    /// `group_remove` and `group_put_back`; and `import` a contact file's text.
     fn addresses(&self, method: &Method, body: &Value) -> Result<Value, Error> {
         let entries = |list: Vec<addresses::Entry>| -> Value {
             list.iter().map(addresses::Entry::json).collect()
         };
         if *method == Method::Get {
-            return Ok(json!({"entries": entries(addresses::list(&self.base))}));
+            return Ok(self.address_book());
+        }
+        if let Some(g) = body.get("group_save") {
+            addresses::save_group(
+                &self.base,
+                g["was"].as_str(),
+                g["name"].as_str().unwrap_or(""),
+                g["members"].as_str().unwrap_or(""),
+            )?;
+            return Ok(self.address_book());
+        }
+        if let Some(name) = body["group_remove"].as_str() {
+            let (gone, _) = addresses::remove_group(&self.base, name)?;
+            let mut book = self.address_book();
+            book["removed_group"] = gone.json();
+            return Ok(book);
+        }
+        if let Some(g) = body.get("group_put_back") {
+            let group = addresses::Group {
+                name: g["name"].as_str().ok_or("a group's name")?.to_owned(),
+                members: g["members"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|m| m.as_str().map(str::to_owned))
+                    .collect(),
+            };
+            addresses::put_back_group(&self.base, group)?;
+            return Ok(self.address_book());
+        }
+        if let Some(text) = body["import"].as_str() {
+            let done = addresses::import(&self.base, text)?;
+            let mut book = self.address_book();
+            book["imported"] = done.json();
+            return Ok(book);
         }
         if let Some(typed) = body["add"].as_str() {
             return Ok(json!({"entries": entries(addresses::add(&self.base, typed)?)}));

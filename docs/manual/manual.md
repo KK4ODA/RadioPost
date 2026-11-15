@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.1.0 |
+| **Version** | 1.2.0 |
 | **Updated** | 2026-11-15 |
 | **Describes** | RadioPost 0.1.0-beta.21 |
 | **Licence** | CC BY 4.0 |
@@ -629,8 +629,25 @@ before the address. To and Cc offer it as you type.
 - Type `Name <address>` in the box and click **Add** to add one by hand.
 - Click a row, or its pencil, to write to it. The trash can takes it off the list (with
   **Undo**).
+- **Import contacts…** reads a contact file: a vCard (`.vcf`) from a phone, Google Contacts,
+  Outlook or Apple Contacts, or a CSV export from Google, Outlook or Thunderbird. Its addresses
+  join the list with their names. An address already on the list keeps its name. The file's
+  groups, labels or categories become groups. RadioPost says what it added and what it left out.
 
-The address list is this computer's own. Who may email you is the accept list, in Setup.
+**Groups** put several addresses under one name, for a net or a shelter team:
+
+1. Under **Groups**, type the group's name, then its addresses with commas between them. The
+   address list is offered as you type.
+2. Click **Save**.
+3. To write to it, type its name in **To** and pick it, or click its row or its pencil. Every
+   address in it goes in To.
+
+The people button changes a group; the trash can takes it away (with **Undo**), and its addresses
+stay on the list. Every address in a group goes on the air, so a large group makes a long
+header.
+
+The address list and the groups are this computer's own. Who may email you is the accept list,
+in Setup.
 
 **Trash** holds what you deleted, and says which folder each message came from.
 
@@ -1186,3 +1203,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 |---|---|---|
 | 1.0.0 | 2026-11-15 | First edition: the client, RadioPost Gateway, and how they work with Aether HF. |
 | 1.1.0 | 2026-11-15 | §22: a gateway's own windows set in the Partners view, calls by itself in a partner's windows, the Next window column, and which partner gets the sessions. |
+| 1.2.0 | 2026-11-15 | §13: groups of addresses, and contact files imported. |

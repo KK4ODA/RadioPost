@@ -55,6 +55,8 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   (`callsigns.rs`); the panel opens the chosen home at each request and changes it only while idle,
   under the activity's lock; `--as` on the command line; one device key copied to each home added;
   the address list and the log stay in the first home; the open window renews every credential.
+  Groups (W2) are `groups.json` beside `addresses.json` (a file of its own, so an older client
+  leaves them alone); `contacts.rs` reads vCard and CSV exports for `addresses::import`.
   Separate accounts only: one account under two callsigns would split its mail between homes.
   *Listen* answers the chosen callsign alone; answering any of them waits.
   `core/issuer` (`radiopost-issue`) makes a post office key and issues credentials for on-air

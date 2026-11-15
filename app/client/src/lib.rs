@@ -31,6 +31,7 @@ pub mod addresses;
 pub mod backups;
 pub mod callsigns;
 pub mod compose;
+pub mod contacts;
 pub mod grid;
 pub use radiopost::logfile;
 pub mod online;

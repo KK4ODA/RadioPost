@@ -130,12 +130,27 @@
         <div class="row">
           <input id="address-new" class="grow" placeholder="Maria Perez &lt;maria@example.com&gt;" spellcheck="false" autocomplete="off" title="A name with the address in angle brackets, or the address alone. An address already listed takes the new name">
           <button id="address-add" title="Add it to the list">Add</button>
+          <button id="address-import" class="quiet" title="Read a contact file: a vCard (.vcf) from a phone, Google Contacts, Outlook or Apple Contacts, or a CSV export. Its addresses join the list, and its groups or labels become groups">Import contacts…</button>
+          <input id="address-file" type="file" accept=".vcf,.csv,text/vcard,text/csv" hidden>
         </div>
         <table class="list" aria-label="Addresses">
           <thead><tr><th title="The name written with it">Name</th><th title="The address">Address</th><th title="How many messages you have written to it, and the last">Written to</th><th class="acts"></th></tr></thead>
           <tbody id="address-rows"></tbody>
         </table>
         <p class="empty" id="addresses-empty" hidden></p>
+        <h2 class="section" title="Several addresses under one name: To takes them all">Groups</h2>
+        <p class="note">Write to a net or a team in one step. Type the group's name in To, or click its pencil here; the people button changes it. Every address in a group goes on the air.</p>
+        <form class="row" id="group-form">
+          <input name="name" placeholder="Shelter team" spellcheck="false" autocomplete="off" title="The group's name">
+          <span class="suggest grow"><input name="members" spellcheck="false" autocomplete="off" placeholder="ana@hampost.org, Zoe Lee &lt;zoe@example.com&gt;" title="Its addresses, with commas between them. Your address list is offered as you type" aria-autocomplete="list"><ul class="suggestions" role="listbox" hidden></ul></span>
+          <button type="submit" id="group-save" title="Save the group">Save</button>
+          <button type="button" id="group-cancel" class="quiet" title="Stop changing this group" hidden>Cancel</button>
+        </form>
+        <table class="list" aria-label="Groups">
+          <thead><tr><th title="The group's name">Group</th><th title="The addresses in it">Addresses</th><th class="acts"></th></tr></thead>
+          <tbody id="group-rows"></tbody>
+        </table>
+        <p class="empty" id="groups-empty" hidden></p>
       </section>
 
       <article id="reader" hidden aria-live="polite">
@@ -524,6 +539,7 @@
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-restore" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-write" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24"><path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM3 20a6 6 0 0 1 12 0M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.5a6 6 0 0 1 3 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-gone" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
   </svg>
 </body>

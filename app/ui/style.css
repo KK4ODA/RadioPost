@@ -191,6 +191,9 @@ input.grow { flex: 1; width: auto; min-width: 12rem; }
 button.link { height: auto; padding: 0; border: 0; background: none; color: var(--accent);
               font-size: 13px; margin-left: 6px; }
 .suggest { position: relative; display: block; }
+.suggest.grow { flex: 1; min-width: 12rem; }
+h2.section { margin-top: 24px; }
+.s-group { font-weight: 600; }
 .suggestions { position: absolute; z-index: 10; left: 0; right: 0; top: calc(100% + 4px); margin: 0;
                padding: 4px; list-style: none; background: var(--panel); border: 1px solid var(--line);
                border-radius: 8px; box-shadow: 0 8px 24px rgb(0 0 0 / .14); }
@@ -347,3 +350,4 @@ details.hint code, .note code { font-family: var(--mono); font-size: 12px; backg
                                 padding: 0 4px; border-radius: 4px; }
 #o-claude-text { font-family: var(--mono); font-size: 12px; margin-top: 8px; }
 .dkim-record p { margin: 6px 0 2px; font-size: 13px; }
+#group-form [name=name] { width: 14rem; }
