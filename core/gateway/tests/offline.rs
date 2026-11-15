@@ -142,13 +142,10 @@ fn lines(rx: &Receiver<String>) -> Vec<String> {
 fn copies_offline_sessions_reports_and_queued_mail() {
     let dir = scratch("offline");
     // the post office listens on one port and is reached through a link that can be cut
-    let port = TcpListener::bind("127.0.0.1:0")
-        .and_then(|l| l.local_addr())
-        .expect("a free port")
-        .port();
-    let internet = Internet::new(SocketAddr::from(([127, 0, 0, 1], port)));
+    let listener = TcpListener::bind("127.0.0.1:0").expect("a free port");
+    let internet = Internet::new(listener.local_addr().expect("an address"));
     let base = format!("http://{}", internet.at);
-    let (running, _, po_key) = post_office_at(&dir.join("po"), port, &base);
+    let (running, _, po_key) = post_office_at(&dir.join("po"), listener, &base);
     let (_air, at_user, at_one, at_two) = air();
     let (one, one_says) = gateway(&dir, "KK4ODA-1", at_one, &base, &running, &po_key);
     let (two, _two_says) = gateway(&dir, "KK4ODA-2", at_two, &base, &running, &po_key);
@@ -297,13 +294,10 @@ fn copies_offline_sessions_reports_and_queued_mail() {
 #[allow(clippy::too_many_lines, reason = "one story, told in order")]
 fn neighbours_exchange_mail_through_a_cut_off_gateway() {
     let dir = scratch("local");
-    let port = TcpListener::bind("127.0.0.1:0")
-        .and_then(|l| l.local_addr())
-        .expect("a free port")
-        .port();
-    let internet = Internet::new(SocketAddr::from(([127, 0, 0, 1], port)));
+    let listener = TcpListener::bind("127.0.0.1:0").expect("a free port");
+    let internet = Internet::new(listener.local_addr().expect("an address"));
     let base = format!("http://{}", internet.at);
-    let (running, _, po_key) = post_office_at(&dir.join("po"), port, &base);
+    let (running, _, po_key) = post_office_at(&dir.join("po"), listener, &base);
     let (_air, at_user, at_one, _at_two) = air();
     let (one, _one_says) = gateway(&dir, "KK4ODA-1", at_one, &base, &running, &po_key);
     until(&one, "the post office's keys kept", |h| {

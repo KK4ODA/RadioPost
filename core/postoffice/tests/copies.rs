@@ -99,19 +99,12 @@ fn login(here: &Running, base: &str, credential: &[u8], device: &SigningKey) -> 
 fn copies_go_to_a_gateway_of_another_post_office_and_only_to_its_credential() {
     let dir = scratch("two");
     // other.example, serving its documents over HTTP, with N1CALL-10 registered
-    let port = TcpListener::bind("127.0.0.1:0")
-        .and_then(|l| l.local_addr())
-        .expect("a free port")
-        .port();
-    let there_base = format!("http://127.0.0.1:{port}/rp/v1");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("a free port");
+    let at = listener.local_addr().expect("an address");
+    let there_base = format!("http://{at}/rp/v1");
     let there = Arc::new(make(
         &dir.join("there"),
-        &settings(
-            "other.example",
-            &there_base,
-            &format!("127.0.0.1:{port}"),
-            Vec::new(),
-        ),
+        &settings("other.example", &there_base, &at.to_string(), Vec::new()),
         0x31,
     ));
     let gateway_key = SigningKey::from_bytes(&[0x51; 32]);
@@ -131,7 +124,7 @@ fn copies_go_to_a_gateway_of_another_post_office_and_only_to_its_credential() {
             flags::SEND | flags::GATEWAY,
         )
     };
-    serve::serve(there.clone(), &format!("127.0.0.1:{port}"), "127.0.0.1:0").expect("serving");
+    serve::serve_on(there.clone(), listener, "127.0.0.1:0").expect("serving");
 
     // test.example knows it by a typed key, and fetches its gateway list
     let here_base = "https://po.test.example/rp/v1";

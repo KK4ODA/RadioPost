@@ -37,11 +37,9 @@ pub fn key() -> SigningKey {
 /// The post office for `test.example`, serving on a port of its own, at a base URL that is that
 /// port (what the gateway signs and the post office checks).
 pub fn post_office(dir: &Path) -> (Arc<Running>, String, SigningKey) {
-    let port = TcpListener::bind("127.0.0.1:0")
-        .and_then(|l| l.local_addr())
-        .expect("a free port")
-        .port();
-    post_office_at(dir, port, &format!("http://127.0.0.1:{port}"))
+    let listener = TcpListener::bind("127.0.0.1:0").expect("a free port");
+    let at = listener.local_addr().expect("an address");
+    post_office_at(dir, listener, &format!("http://{at}"))
 }
 
 /// A link to the Internet that can be cut: a TCP proxy to `target`, which refuses connections and
@@ -112,9 +110,14 @@ impl Internet {
     }
 }
 
-/// The post office for `test.example`, listening on `port`, at the base URL `base` (a proxy in
-/// front of it, when the tests cut the Internet).
-pub fn post_office_at(dir: &Path, port: u16, base: &str) -> (Arc<Running>, String, SigningKey) {
+/// The post office for `test.example`, listening on `listener`, at the base URL `base` (a proxy in
+/// front of it, when the tests cut the Internet). The test binds the port and keeps it: a port let
+/// go and bound again later can be taken in between by a test running alongside.
+pub fn post_office_at(
+    dir: &Path,
+    listener: TcpListener,
+    base: &str,
+) -> (Arc<Running>, String, SigningKey) {
     let base = base.to_owned();
     std::fs::create_dir_all(dir).expect("a directory");
     let files = Files::new(dir);
@@ -125,7 +128,7 @@ pub fn post_office_at(dir: &Path, port: u16, base: &str) -> (Arc<Running>, Strin
     let settings = Settings {
         domains: vec!["test.example".into()],
         base_url: base.clone(),
-        listen: format!("127.0.0.1:{port}"),
+        listen: listener.local_addr().expect("an address").to_string(),
         admin: "127.0.0.1:0".into(),
         info: Info {
             operator: "KK4ODA".into(),
@@ -160,7 +163,7 @@ pub fn post_office_at(dir: &Path, port: u16, base: &str) -> (Arc<Running>, Strin
         )
         .expect("written");
     let running = Arc::new(Running::load(dir, serve::system_draw()).expect("loaded"));
-    serve::serve(running.clone(), &settings.listen, "127.0.0.1:0").expect("serving");
+    serve::serve_on(running.clone(), listener, "127.0.0.1:0").expect("serving");
     (running, base, key)
 }
 

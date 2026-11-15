@@ -747,11 +747,29 @@ fn method_of(m: &Method) -> &'static str {
 ///
 /// An address could not be taken, or the admin address is not on the loopback interface.
 pub fn serve(running: Arc<Running>, listen: &str, admin: &str) -> Result<(String, String), String> {
+    let api = std::net::TcpListener::bind(listen).map_err(|e| format!("{listen}: {e}"))?;
+    serve_on(running, api, admin)
+}
+
+/// [`serve`], with the API on a port already taken. A caller that must name the port before the
+/// post office runs (its base URL, a proxy in front of it) binds it first and hands it over, so
+/// nothing else can take the port in between, as a test running alongside did when the port was
+/// let go and bound again.
+///
+/// # Errors
+///
+/// The admin address could not be taken or is not on the loopback interface, or `api` has no
+/// address.
+pub fn serve_on(
+    running: Arc<Running>,
+    api: std::net::TcpListener,
+    admin: &str,
+) -> Result<(String, String), String> {
     crate::lookups::start(&running);
     crate::health::start(&running);
     crate::known::start(&running);
     crate::seen::start(&running);
-    let api = Server::http(listen).map_err(|e| format!("{listen}: {e}"))?;
+    let api = Server::from_listener(api, None).map_err(|e| format!("the API's port: {e}"))?;
     let ops = Server::http(admin).map_err(|e| format!("{admin}: {e}"))?;
     let api_at = api.server_addr().to_string();
     let ops_at = ops.server_addr().to_string();
