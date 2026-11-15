@@ -242,7 +242,7 @@ pub struct PostOfficeTest {
     pub id: &'static str,
     /// What it checks.
     pub checks: &'static str,
-    run: fn(&mut postoffice::Run<'_>, &mut Vec<String>) -> harness::Outcome,
+    run: fn(&mut postoffice::Run<'_>, &mut Vec<String>, bool) -> harness::Outcome,
 }
 
 /// The post office's tests, in order (Phase 2; P-05 and P-06, Phase 3).
@@ -250,52 +250,52 @@ pub const POST_OFFICE_TESTS: &[PostOfficeTest] = &[
     PostOfficeTest {
         id: "P-01",
         checks: "Its public documents as JWS under its key, and its DNS records (RP-1 §7, RP-5 §4)",
-        run: |r, t| r.p01(t),
+        run: |r, t, _| r.p01(t),
     },
     PostOfficeTest {
         id: "P-02",
         checks: "Logging in and tokens; 401 against 403 (RP-5 §2, §3)",
-        run: |r, t| r.p02(t),
+        run: |r, t, _| r.p02(t),
     },
     PostOfficeTest {
         id: "P-03",
         checks: "Enrollment with a code, and renewal (RP-5 §6.1, §6.2)",
-        run: |r, t| r.p03(t),
+        run: |r, t, _| r.p03(t),
     },
     PostOfficeTest {
         id: "P-04",
         checks: "Sessions: the checks in order, messages taken and refused, pickups, a challenge taken once (RP-5 §5.2–§5.7)",
-        run: |r, t| r.p04(t),
+        run: |r, t, _| r.p04(t),
     },
     PostOfficeTest {
         id: "P-05",
         checks: "Reports of sessions carried offline, checked at their start, one answer each; pickups, local pickups and messages taken (RP-5 §5.6, RP-7 §4.4)",
-        run: |r, t| r.p05(t),
+        run: |r, t, _| r.p05(t),
     },
     PostOfficeTest {
         id: "P-06",
-        checks: "Copies placed ahead at a usual gateway that holds them, served once, dropped when picked up (RP-5 §5.8)",
-        run: |r, t| r.p06(t),
+        checks: "Copies placed ahead at a usual gateway that holds them, served once, dropped when picked up; and (--slow) forward items for a cut-off gateway at its route's via, with a placement, dropped when it polls again (RP-5 §5.8, RP-7 §4.1, §4.2)",
+        run: |r, t, slow| r.p06(t, slow),
     },
     PostOfficeTest {
         id: "P-07",
         checks: "Station-to-station sessions reported (RP-5 §6.6)",
-        run: |r, t| r.p07(t),
+        run: |r, t, _| r.p07(t),
     },
     PostOfficeTest {
         id: "P-08",
         checks: "The door: each refusal in order, and the accept list (RP-6 §2.1, §2.2)",
-        run: |r, t| r.p08(t),
+        run: |r, t, _| r.p08(t),
     },
     PostOfficeTest {
         id: "P-09",
         checks: "Email to message and back, Radio-Path, the part between post offices, a bounce (RP-6 §2.4, §3, §4)",
-        run: |r, t| r.p09(t),
+        run: |r, t, _| r.p09(t),
     },
     PostOfficeTest {
         id: "P-10",
         checks: "Third-party mail flagged (RP-6 §5.1, RP-5 §5.2)",
-        run: |r, t| r.p10(t),
+        run: |r, t, _| r.p10(t),
     },
 ];
 
@@ -321,7 +321,8 @@ pub fn run_post_office(
         }
         let started = Instant::now();
         let mut transcript = Vec::new();
-        let (passed, why) = match (t.run)(&mut run, &mut transcript) {
+        let slow = plan.slow || plan.only.iter().any(|o| o.eq_ignore_ascii_case(t.id));
+        let (passed, why) = match (t.run)(&mut run, &mut transcript, slow && plan.slow) {
             Ok(()) => (Some(true), String::new()),
             Err(e) => (Some(false), e),
         };

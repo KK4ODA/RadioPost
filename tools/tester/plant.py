@@ -4,8 +4,8 @@
 For each test, it copies the repository, plants one fault in the copy of the program the test is
 for (the client, the TCP adapter, the gateway or the post office), builds it, and runs the
 tester's test against it: the test must fail. Run it by hand after changing a test or those
-programs; it builds once a fault, so it takes a few minutes, and C-11 one more (its fault makes the
-client hang up after 60 s).
+programs; it builds once a fault, so it takes a few minutes, C-11 one more (its fault makes the
+client hang up after 60 s), and "P-06 slow" a quarter of an hour (it runs with --slow).
 
     python3 tools/tester/plant.py [C-01 A-02 ...]
 
@@ -138,6 +138,8 @@ FAULTS = {
         ".unwrap_or_else(|| gateway.operator.clone());",
         ".map(|_| gateway.operator.clone()).unwrap_or_else(|| gateway.operator.clone());",
     ),
+    # a fault for a test's part that runs with --slow is named after it, then `slow`
+    "P-06 slow": (OFFICE, "if self.cut_off(&callsign) {", "if false && self.cut_off(&callsign) {"),
     "P-06": (
         OFFICE,
         'items.push(json!({"kind": "drop", "address": address, "serial": serial}));',
@@ -213,7 +215,10 @@ def plant(test: str, scratch: Path) -> str:
 
 def run_test(command: list[str], test: str) -> subprocess.CompletedProcess[str]:
     only = test.split(maxsplit=1)[0]
-    return subprocess.run([*command, "--only", only], capture_output=True, text=True, check=False)
+    slow = ["--slow"] if test.endswith(" slow") else []
+    return subprocess.run(
+        [*command, "--only", only, *slow], capture_output=True, text=True, check=False
+    )
 
 
 def run_adapter(tester: str, adapter: str, test: str) -> subprocess.CompletedProcess[str]:

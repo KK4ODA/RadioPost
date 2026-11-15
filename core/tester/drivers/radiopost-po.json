@@ -5,6 +5,7 @@
   "know": ["{bin}", "--dir", "{home}", "know", "--domain", "{domain}", "--public", "{public}"],
   "dns": ["{bin}", "--dir", "{home}", "dns"],
   "code": ["{bin}", "--dir", "{home}", "code", "--address", "{address}", "--operator", "{operator}", "--name", "{name}"],
+  "route": ["{bin}", "--dir", "{home}", "route", "--via", "{via}", "--users-at", "{users_at}"],
   "serve": ["{bin}", "--dir", "{home}", "serve"],
   "door": ["http://{door}/"]
 }

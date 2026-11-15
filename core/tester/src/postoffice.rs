@@ -245,11 +245,21 @@ impl Po {
     /// RP-5 §6.4: a gateway its owner registers, its record saying it holds `copies` when that is
     /// not null (RP-5 §4.4), logged in.
     fn gateway_holding(&self, owner: &Account, copies: &Json) -> Result<Account, String> {
+        self.gateway_named(owner, GATEWAY, copies)
+    }
+
+    /// The same for the gateway `callsign`.
+    fn gateway_named(
+        &self,
+        owner: &Account,
+        callsign: &str,
+        copies: &Json,
+    ) -> Result<Account, String> {
         let key = new_key();
-        let mut signed = GATEWAY.as_bytes().to_vec();
+        let mut signed = callsign.as_bytes().to_vec();
         signed.extend_from_slice(self.base.as_bytes());
         let sig = crypto::sign(context::API_GATEWAY, &signed, &key);
-        let mut record = json!({"callsign": GATEWAY, "operator": owner.operator,
+        let mut record = json!({"callsign": callsign, "operator": owner.operator,
                                 "channels": [], "hours": "always", "internet": true});
         if !copies.is_null() {
             record["copies"] = copies.clone();
@@ -280,7 +290,7 @@ impl Po {
             })?
             .clone();
         if body.flags & flags::GATEWAY == 0
-            || body.operator != GATEWAY
+            || body.operator != callsign
             || body.address != owner.address
         {
             return Err("the gateway's credential is not the owner's account, the gateway's callsign, with the gateway flag (RP-5 §6.4)".into());
@@ -288,7 +298,7 @@ impl Po {
         let token = self.login(&credential, &key)?;
         Ok(Account {
             address: owner.address.clone(),
-            operator: GATEWAY.into(),
+            operator: callsign.into(),
             key,
             credential,
             token,
@@ -1167,16 +1177,17 @@ impl Run<'_> {
         local_pickup_reported_first(&po, &gw, &a, &b)
     }
 
-    /// P-06: copies placed ahead and their drops (RP-5 §5.8), without forward items: none while
-    /// no user names the gateway (`placing` false), a copy of mail for a user who does, with its
-    /// list entry, its air form within the record's `max_air_bytes` and its `expires`; nothing
-    /// again after an acknowledged cursor; a `drop` once the user picks the message up.
+    /// P-06: copies placed ahead and their drops (RP-5 §5.8): none while no user names the
+    /// gateway (`placing` false), a copy of mail for a user who does, with its list entry, its air
+    /// form within the record's `max_air_bytes` and its `expires`; nothing again after an
+    /// acknowledged cursor; a `drop` once the user picks the message up. With `slow`, forward
+    /// items too ([`forward_items`], a 15-minute wait).
     ///
     /// # Errors
     ///
     /// The first deviation found.
     #[allow(clippy::too_many_lines, reason = "one copy, placed, held and dropped")]
-    pub fn p06(&mut self, _t: &mut Vec<String>) -> Outcome {
+    pub fn p06(&mut self, t: &mut Vec<String>, slow: bool) -> Outcome {
         let po = self.start("P-06")?;
         let a = po.enroll(self.driver, "facundo@radiopost.org", "KK4ODA", "Facundo")?;
         let b = po.enroll(self.driver, "shelter3@radiopost.org", "N3CALL", "Shelter 3")?;
@@ -1298,7 +1309,12 @@ impl Run<'_> {
             ));
         }
         let _ = po.call("DELETE", &format!("/sessions/{sid}"), Some(&gw.token), None);
-        Ok(())
+        if !slow {
+            t.push("— forward items for a cut-off gateway wait 15 minutes: run with --slow".into());
+            return Ok(());
+        }
+        let cursor = dropped["cursor"].as_str().unwrap_or("").to_owned();
+        forward_items(&po, self.driver, (&a, &b), &gw, &cursor, t)
     }
 
     /// P-07: station-to-station sessions reported (RP-5 §6.6).
@@ -1857,6 +1873,128 @@ fn iso(seconds: u64) -> String {
         rem % 3600 / 60,
         rem % 60
     )
+}
+
+/// A gateway's poll of its items after `after`, with `wait=0` (RP-5 §5.8).
+fn poll_of(po: &Po, gateway: &Account, after: &str) -> Result<Json, String> {
+    let (status, answer) = po.call(
+        "GET",
+        &format!("/copies?after={after}&wait=0"),
+        Some(&gateway.token),
+        None,
+    )?;
+    if status != 200 {
+        return Err(format!(
+            "GET /copies answered {status} {answer} (RP-5 §5.8)"
+        ));
+    }
+    Ok(answer)
+}
+
+/// P-06's forward items (RP-7 §4.1, §4.2): the route `N4CALL-2` for the gateway under test,
+/// whose user `a` names it as usual. The `via` polls with `placing` true; the gateway, once its
+/// copies are acknowledged up to `cursor`, falls silent; 15 minutes on, mail for `a` goes to the
+/// `via` as a forward item whose placement radiopost.org signed for the gateway; the gateway's
+/// next poll ends it with a `drop` at the `via`.
+fn forward_items(
+    po: &Po,
+    driver: &crate::harness::Driver,
+    (a, b): (&Account, &Account),
+    gw: &Account,
+    cursor: &str,
+    t: &mut Vec<String>,
+) -> Outcome {
+    const VIA: &str = "N4CALL-2";
+    let via = po.gateway_named(a, VIA, &Json::Null)?;
+    let home = po.home.to_string_lossy().into_owned();
+    driver.run(
+        "route",
+        &[("home", &home), ("via", VIA), ("users_at", GATEWAY)],
+        "",
+    )?;
+    let first = poll_of(po, &via, "")?;
+    if first["placing"] != true {
+        return Err(format!(
+            "a route's via polls: `placing` {} where true was due (RP-5 §5.8, RP-7 §6.1)",
+            first["placing"]
+        ));
+    }
+    let mut at_via = first["cursor"].as_str().unwrap_or("").to_owned();
+    // the gateway polls once more, holding everything, and falls silent
+    let last = poll_of(po, gw, cursor)?;
+    let held = last["cursor"].as_str().unwrap_or(cursor).to_owned();
+    let _ = po.call(
+        "POST",
+        "/copies/ack",
+        Some(&gw.token),
+        Some(&json!({"cursor": held})),
+    );
+    t.push("— the gateway falls silent; 15 minutes on it is cut off (RP-7 §4.1)".into());
+    let until = Instant::now() + Duration::from_secs(15 * 60 + 20);
+    while Instant::now() < until {
+        std::thread::sleep(Duration::from_secs(30));
+        let p = poll_of(po, &via, &at_via)?;
+        if p["items"].as_array().is_some_and(|i| !i.is_empty()) {
+            return Err(format!(
+                "items at the via before any mail for the cut-off gateway's users: {} (RP-7 §4.1)",
+                p["items"]
+            ));
+        }
+        p["cursor"].as_str().unwrap_or("").clone_into(&mut at_via);
+    }
+    // handed in through the gateway under test's own token: a session is not a poll, and only
+    // polls count (RP-7 §4.1)
+    let water = mail(&b.address, &a.address, "Generator fuel", 40);
+    po.hand_in(gw, b, &[&water])?;
+    let placed = poll_of(po, &via, &at_via)?;
+    let items = placed["items"].as_array().cloned().unwrap_or_default();
+    let Some(item) = items.iter().find(|i| i["kind"] == "forward") else {
+        return Err(format!(
+            "mail for a user of a cut-off gateway: {items:?} at the route's via where a forward \
+             item was due (RP-7 §4.1)"
+        ));
+    };
+    if item["gateway"] != GATEWAY
+        || item["address"] != json!(a.address)
+        || item["id"] != json!(water.content_id().text())
+    {
+        return Err(format!(
+            "the forward item {item} is not the copy for {GATEWAY} (RP-5 §5.8, RP-7 §4.1)"
+        ));
+    }
+    let placement = item["placement"]
+        .as_str()
+        .and_then(base64url::decode)
+        .ok_or("the forward item carries no placement (RP-5 §5.8)")?;
+    let checked = radiopost::forwarding::check_placement(
+        &placement,
+        &water.content_id(),
+        GATEWAY,
+        now(),
+        &po.trust(),
+    )
+    .map_err(|code| format!("the placement fails RP-7 §4.3's checks: {code}"))?;
+    if json!(checked.serial) != item["serial"]
+        || json!(checked.expires) != item["expires"]
+        || checked.address != a.address
+    {
+        return Err(format!(
+            "the placement's body does not name the item's address, serial and expiry: {item} \
+             (RP-7 §4.2)"
+        ));
+    }
+    // the gateway polls again: back, and the forward item is dropped at the via
+    poll_of(po, gw, &held)?;
+    let after = placed["cursor"].as_str().unwrap_or("").to_owned();
+    let dropped = poll_of(po, &via, &after)?;
+    let drop = json!([{"kind": "drop", "address": a.address, "serial": item["serial"]}]);
+    if dropped["items"] != drop {
+        return Err(format!(
+            "after the gateway polled again: {} at the via where {drop} was due (RP-7 §4.1)",
+            dropped["items"]
+        ));
+    }
+    Ok(())
 }
 
 /// P-05's four sessions reported, answered in order (RP-5 §5.6): taken as at `started`, refused

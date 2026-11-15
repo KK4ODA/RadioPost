@@ -224,8 +224,24 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   (`gateway/tests/session04.rs`, N1CALL-10's reports equal to `forwarding.json`'s);
   `gateway/tests/forwarding.rs` is a cut-off gateway (restarted with an address that does not
   answer, since both gateways must sign one base URL) forwarding to its online partner, which
-  reports. P-05 checks a forwarded session's path (`"P-05 path"`). Windows, routes and F-01 to
-  F-06 are stage 5; the post office's placements, stage 4.
+  reports. P-05 checks a forwarded session's path (`"P-05 path"`). Windows, the published routes
+  and F-01 to F-06 are stage 5.
+  Mail for a cut-off area (W30 stage 4, RP-7 §4.1 to §4.3): the post office keeps `State.routes`
+  (`RadioRoute`, set on the operator's port by `radiopost-po route --via --users-at` and listed by
+  `routes`), `State.cut` and `State.forwarded`. `sweep()` runs before every request and every
+  arrival: a gateway counted cut off for the first time (polled with `placing` true, not for
+  `CUT_OFF_S`) has the copies it never acknowledged placed as forward items at each route's
+  `via`, signed with `forwarding::Placed::sign`; `deliver` places one for each arrival while it
+  stays cut off; its next poll drops them at the `via`. Forwarding only the unacknowledged copies
+  is RP-7 0.11.0 (the reference had forwarded only arrivals, leaving the 15 minutes before the
+  cut behind); `forwarding.json`'s placing story shows it. `postoffice/tests/vectors.rs` replays
+  `forwarding.json`'s post office and placing stories and `local-delivery.json`'s exactly.
+  `gateway/tests/forwarding.rs`'s second test carries such mail end to end. Its cut-off gateway
+  never reaches the post office after registering: restarting a gateway in one process leaves its
+  old poller's last long poll in flight, which the post office rightly takes as the gateway being
+  back. P-06's forward items run with `--slow` (a real 15-minute wait); the post office's driver
+  has `route`. A `via` gateway polls only if it holds copies until stage 5 adds windows (RP-5
+  §5.8: copies, or `forwarding` windows in its record).
   The client's gateway side: `online::gateways` fetches RP-5 §4.4's list, its JWS checked with the
   keys the home trusts for the user's domain (and those its signed `info` adds, RP-1 §7.2), and
   keeps it in `state.json` for when there is no Internet; `grid.rs` ranks it by distance from the

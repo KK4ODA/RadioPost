@@ -327,9 +327,10 @@ async function refreshPartners() {
   $("partner-rows").replaceChildren(...list.map((p) => {
     const tr = document.createElement("tr");
     const last = p.called ? `${when(p.called)}: ${p.said}` : "Never called";
-    const waiting = p.records
+    const held = p.forwards ? `; ${p.forwards} held for it` : "";
+    const waiting = (p.records
       ? `${p.records}${p.messages ? ` (${p.messages} ${p.messages === 1 ? "message" : "messages"})` : ""}`
-      : "0";
+      : "0") + held;
     [p.callsign, waiting, last].forEach((text, i) => {
       const td = document.createElement("td");
       td.textContent = text;

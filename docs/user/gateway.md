@@ -206,9 +206,16 @@ here.
   the partner can check it. The partner keeps each one with both callsigns on it and reports it
   to its post office, or, cut off too, forwards it to its own partners in turn. This gateway then
   lets the session go, and remembers its messages as passed on.
-* **Mail coming back.** The partner also hands over the mail its post office gave it for this
-  gateway's users, each signed by their post office. This gateway checks the signature and keeps
-  the message as a copy placed ahead, as if the post office had copied it here itself.
+* **Mail coming back.** When the post office has a route naming the partner for this gateway, it
+  sends the mail for this gateway's users to the partner while this gateway is cut off: the
+  copies this gateway never confirmed, and everything that arrives after (RP-7 §4.1). The partner
+  hands it over in the same call, each message signed by the post office for this gateway. This
+  gateway checks the signature and keeps the message as a copy placed ahead, as if the post
+  office had copied it here itself, and its users take it as any other.
+* **Holding mail for a partner.** The other way round, a gateway the post office names as a
+  route's *via* holds mail for its cut-off partner until the partner calls. It must hold copies
+  (Setup, step 1), so that it polls the post office for them. Once the partner's Internet is back,
+  the post office takes back what the partner did not collect.
 * **What the box says.** Each partner shows how many sessions wait for it and how the last call
   went. The **Held** list shows a session that came from a partner with *via* and the partner's
   callsign.

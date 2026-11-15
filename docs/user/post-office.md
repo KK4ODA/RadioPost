@@ -519,11 +519,11 @@ more; one in *Replace* mode needs the permissions §8 names for them.
   decided by a person, or by the postcard.
 * **A licensed user's own mail program** makes third-party mail, as mail from the Internet does
   (RP-6 §5.1, wishlist G16): it is held back from stations abroad without an arrangement.
-* **Forwarding by radio** is Phase 4, and mail handed between two users of a gateway cut off from
-  the Internet comes with it or just before (wishlist W30, W31). Copies placed ahead and a cut-off
-  gateway's reports are built: gateways that hold copies ask `GET /copies` and wait up to a minute
-  for an answer (RP-5 §5.8), so each holds one connection open through Caddy, whose defaults let
-  it.
+* **Forwarding by radio** is built but for the gateways' windows and the published list of routes
+  (wishlist W30, stage 5): the routes are set from the server (§14), and a cut-off gateway's
+  operator calls its partner by hand. Gateways that hold copies ask `GET /copies` and wait up to a
+  minute for an answer (RP-5 §5.8), so each holds one connection open through Caddy, whose
+  defaults let it.
 * **A backup mail server.** While the server is down, senders retry for days; a second mail
   server that took mail meanwhile would need the accept lists, or it would bounce to forged
   senders later (wishlist W38).
@@ -630,3 +630,36 @@ be missed.
 `config.json` holds `known` (the domains you accepted; an entry may carry an `api` and `keys` typed
 with `know --public` for a post office not in DNS yet, used until one is fetched), `blocked`, and
 `resolver` (where DNS is asked over HTTPS; Google's when unset).
+
+## 14. Routes for a cut-off area
+
+A **route** (RP-7 §6.1) says which gateway holds the mail of another gateway's users while that
+gateway is cut off from the Internet. Set one for each gateway that serves an area likely to lose
+the Internet, naming a gateway outside it, with an operator who agreed, that the cut-off gateway
+can reach by radio:
+
+```
+radiopost-po --dir /var/lib/radiopost route --via N1CALL-10 --users-at N2CALL-5,KK4ODA-1
+radiopost-po --dir /var/lib/radiopost routes
+radiopost-po --dir /var/lib/radiopost route --via N1CALL-10 --users-at ""
+```
+
+The first sets the route through N1CALL-10 (a second `route` with the same `--via` replaces it);
+the last removes it.
+
+What the service does with it (RP-7 §4.1):
+
+* A gateway in `--users-at` that has been polling `GET /copies` and stops for 15 minutes counts
+  as **cut off**.
+* From then on, the copies it never acknowledged, and every message that arrives for a user who
+  named it as usual, also go to the `--via` gateway, as **forward items** with a placement this
+  post office signs: the cut-off gateway checks the signature before it trusts one.
+* The cut-off gateway collects them when it calls the `--via` gateway by radio, and holds them for
+  its users as if they had been copied there.
+* Its next poll, once its Internet is back, ends it: the items still waiting at the `--via`
+  gateway are dropped.
+
+The `--via` gateway must hold copies (its operator ticks it in its Setup), so that it polls this
+post office and takes the items. Both gateways' operators name each other as partners in
+RadioPost Gateway (the gateway guide, §4). A `--via` gateway may be registered with another post
+office this one knows (§13).

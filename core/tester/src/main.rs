@@ -20,11 +20,13 @@ usage:
       own modem adapter and runs the post office behind it (core/tester/drivers/
       radiopost-gateway.json is radiopost-gateway's driver). G-07's 300-second wait runs with
       --slow.
-  radiopost-tester post-office --driver FILE --bin PROGRAM [--only ID,...] [--json FILE]
+  radiopost-tester post-office --driver FILE --bin PROGRAM [--only ID,...] [--slow] [--json FILE]
                                [--scratch DIR]
-      test a post office (P-01 to P-04, P-07 to P-10): the tester starts it in a fresh directory
-      for each test, and plays its users, a gateway, another post office's user and the mail
-      server around it (core/tester/drivers/radiopost-po.json is radiopost-po's driver).
+      test a post office (P-01 to P-10): the tester starts it in a fresh directory for each test,
+      and plays its users, its gateways, another post office's user and the mail server around it
+      (core/tester/drivers/radiopost-po.json is radiopost-po's driver). P-06's forward items wait
+      15 minutes for a gateway to count as cut off: they run with --slow, and need the driver's
+      `route` command.
   radiopost-tester adapter --at HOST:PORT [--far HOST:PORT] [--reach REMOTE] [--only ID,...]
                            [--json FILE]
       test a modem adapter (A-01 to A-04): the one whose hosts connect at --at, and for A-02 and
