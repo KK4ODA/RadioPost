@@ -100,7 +100,8 @@ Open an issue on [RadioPost's repository](https://github.com/KK4ODA/RadioPost/is
 
 ## 7. Not covered yet
 
-* **Tuning.** A gateway does not tune its radio to a partner's channel: both stay on one.
+* **Tuning.** This trial keeps both gateways on one channel. A gateway whose modem can set the
+  dial (RP-4 §4.1) tunes to its partner's window and back; that is for a later trial.
 * **More than two gateways.** A record may pass through up to eight gateways, each cut off
   handing it on to its own partners (RP-7 §3.4); this test uses one hop.
 * **Choosing between partners.** With two partners, a cut-off gateway keeps its queue for the one

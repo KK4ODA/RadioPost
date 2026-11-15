@@ -35,6 +35,11 @@ use common::{client, draft, key, post_office, scratch};
 
 /// The loopback adapter with the user's station and two gateways'.
 fn air() -> (Server, SocketAddr, SocketAddr, SocketAddr) {
+    air_dialled(None)
+}
+
+/// [`air`], KK4ODA-1's radio on `dial_hz` and able to tune (RP-4 §4.1) when it is given.
+fn air_dialled(dial_hz: Option<u64>) -> (Server, SocketAddr, SocketAddr, SocketAddr) {
     let caps = Caps {
         bandwidths: vec![2300],
         max_links: 1,
@@ -57,7 +62,14 @@ fn air() -> (Server, SocketAddr, SocketAddr, SocketAddr) {
     };
     let mut ch = Channel::new();
     let user = ch.add_station(station("WD5EMA", "u"));
-    let one = ch.add_station(station("KK4ODA-1", "g"));
+    let one = ch.add_station(StationConfig {
+        caps: Caps {
+            dial: dial_hz.is_some(),
+            ..caps.clone()
+        },
+        dial_hz,
+        ..station("KK4ODA-1", "g")
+    });
     let two = ch.add_station(station("KK4ODA-2", "h"));
     let server = Server::new(ch, Duration::from_secs(10));
     let at_user = server.listen(user, "127.0.0.1:0").expect("a port");
@@ -76,7 +88,16 @@ fn gateway(
     running: &Running,
     po_key: &ed25519_dalek::SigningKey,
 ) -> PathBuf {
-    gateway_holding(dir, callsign, partner, modem, base, running, po_key, None)
+    gateway_holding(
+        dir,
+        callsign,
+        partner,
+        modem,
+        base,
+        running,
+        po_key,
+        (None, Vec::new()),
+    )
 }
 
 /// The same, holding copies placed ahead when `copies` says so (RP-5 §5.8).
@@ -89,7 +110,10 @@ fn gateway_holding(
     base: &str,
     running: &Running,
     po_key: &ed25519_dalek::SigningKey,
-    copies: Option<station::CopiesSettings>,
+    (copies, windows): (
+        Option<station::CopiesSettings>,
+        Vec<station::WindowSettings>,
+    ),
 ) -> PathBuf {
     let home = dir.join(format!("{callsign}-operator"));
     let _operator = client(&home, running, po_key, "facundo@test.example", "KK4ODA");
@@ -110,7 +134,7 @@ fn gateway_holding(
         partners: vec![station::PartnerSettings {
             callsign: partner.into(),
         }],
-        windows: Vec::new(),
+        windows,
     }
     .save(&gw)
     .expect("saved");
@@ -297,6 +321,68 @@ fn a_cut_off_gateway_forwards_its_queue_to_a_partner() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// RP-7 §5 with a modem that has a dial (RP-4 §4.1, wishlist W14): a cut-off gateway calls its
+/// partner in the partner's window on the window's channel, the radio tuned there and back after.
+#[test]
+fn a_cut_off_gateway_tunes_to_its_partners_channel_and_back() {
+    let dir = scratch("tuned");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (air, _at_user, at_one, at_two) = air_dialled(Some(3_591_500));
+    // KK4ODA-2's window is always open, on 40 m's automatic segment
+    let always = station::WindowSettings {
+        dial_hz: 7_101_000,
+        mode: "USB".into(),
+        modem: "aether".into(),
+        bandwidth_hz: 2300,
+        every_s: 3600,
+        at_s: 0,
+        length_s: 3600,
+    };
+    let one = gateway(
+        &dir, "KK4ODA-1", "KK4ODA-2", at_one, &base, &running, &po_key,
+    );
+    let two = gateway_holding(
+        &dir,
+        "KK4ODA-2",
+        "KK4ODA-1",
+        at_two,
+        &base,
+        &running,
+        &po_key,
+        (None, vec![always]),
+    );
+    let (_m_two, _t_two, says_two) = answer(&two);
+    let (m_one, t_one, says_one) = answer(&one);
+    until(&one, &says_one, "KK4ODA-2's window known", |h| {
+        h.record_of("test.example", "KK4ODA-2")
+            .is_some_and(|r| r["forwarding"].as_array().is_some_and(|w| !w.is_empty()))
+    });
+    drop(says_two);
+
+    // cut off, KK4ODA-1 calls KK4ODA-2 in its window by itself, on its channel
+    let (m_one, _t_one, says_one) = reconnect(&one, "http://127.0.0.1:1", &m_one, t_one);
+    until(&one, &says_one, "the call made", |h| {
+        h.partners
+            .get("KK4ODA-2")
+            .is_some_and(|p| !p.said.is_empty())
+    });
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let logged = loop {
+        let lines: Vec<String> = m_one.log_since(0).0.into_iter().map(|(_, l)| l).collect();
+        if lines.iter().any(|l| l.starts_with("tuned the radio back")) {
+            break lines;
+        }
+        assert!(Instant::now() < deadline, "{lines:#?}");
+        thread::sleep(Duration::from_millis(200));
+    };
+    let at = |text: &str| logged.iter().position(|l| l == text);
+    let away = at("tuned the radio to 7.101 MHz, KK4ODA-2's channel").expect("tuned");
+    let back = at("tuned the radio back to 3.5915 MHz").expect("back");
+    assert!(away < back, "{logged:#?}");
+    assert_eq!(air.with_channel(|ch| ch.dial(1)), Some(3_591_500));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 /// Answers a gateway again with its post office's address as `url`: one that does not answer cuts
 /// it off from the Internet, and its own puts it back.
 fn reconnect(
@@ -339,10 +425,24 @@ fn mail_for_a_cut_off_area_reaches_it_by_radio() {
         max_air_bytes: 16_384,
     });
     let one = gateway_holding(
-        &dir, "KK4ODA-1", "KK4ODA-2", at_one, &base, &running, &po_key, copies,
+        &dir,
+        "KK4ODA-1",
+        "KK4ODA-2",
+        at_one,
+        &base,
+        &running,
+        &po_key,
+        (copies, Vec::new()),
     );
     let two = gateway_holding(
-        &dir, "KK4ODA-2", "KK4ODA-1", at_two, &base, &running, &po_key, copies,
+        &dir,
+        "KK4ODA-2",
+        "KK4ODA-1",
+        at_two,
+        &base,
+        &running,
+        &po_key,
+        (copies, Vec::new()),
     );
 
     // 1. the route, set on the post office's operator port

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.28 |
+| **Version** | 0.3.29 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -117,7 +117,7 @@ rules:
 | W11 | A trustee manages a role mailbox | Setup | Low | Fits today | Planned |
 | W12 | Email-only members | — | — | — | Consolidated into W36 |
 | W13 | A callsign alias address | Setup | Low | Fits today | Planned |
-| W14 | Choosing a gateway tunes the radio | Radio | Medium | Optional addition (RP-4) | Planned |
+| W14 | Choosing a gateway tunes the radio | Radio | Medium | Optional addition (RP-4) | Implemented |
 | W15 | Keep listening for stations | Radio | Medium | Fits today | Proposed |
 | W16 | Scheduled connections | Radio | Low | Fits today | Planned |
 | W17 | Gateways ranked by propagation | Radio | Low | Fits today; optional addition for measurements | Planned |
@@ -143,7 +143,7 @@ rules:
 | W37 | The accept list on a web page | Operation | Low | Fits today | Planned |
 | W38 | Backups and a backup mail server | Operation | Critical | Fits today | Implemented |
 | W39 | A domain served by several post offices | — | — | Breaking (RP-1, RP-3) | Deferred |
-| W40 | The gateway checks the band rules itself | Rules | Medium | Fits today; optional addition to read the dial | Planned |
+| W40 | The gateway checks the band rules itself | Rules | Medium | Fits today; optional addition to read the dial | Implemented |
 | W41 | Rules tables for other countries | Rules | Low | Optional addition (RP-6, RP-7) | Planned |
 | W42 | A monitor that decodes sessions off the air | Rules | Medium | Fits today | Planned |
 | W43 | A public test service | Adapters | Low | Fits today | Proposed |
@@ -430,12 +430,12 @@ Pick a gateway from the list, and the radio goes to its channel.
 | Requested by | The plan: concept §10, first version. Requesters: 0. |
 | Component | Client, adapters. |
 | Compatibility | **Optional protocol addition** to RP-4: a request to read and set the dial, with a `caps` member; an adapter that cannot answers `unsupported` (RP-4 §2). Aether can; VARA's published commands cannot (RP-4 §9.2). Driving Aether's own API beside RPMI works today, but only with Aether, which is what RP-4 exists to avoid. |
-| Existing coverage | Planned; not built. The panel says which channel to tune to. |
+| Existing coverage | **Implemented** (2026-11-15): RP-4 0.8.0 §4.1, `caps.dial`, `dial` and `tune`, with the dial conversation in the vectors; the Aether adapter maps them to `status.can_tune`, `status.frequency_hz` and `frequency.set`. The panel's **Choose** puts the gateway's channels in a **Channel** box; **Call** (and `radiopost call --dial`) tunes the radio there and back after. A modem without a dial is named, and the user told where to tune. A cut-off gateway tunes to its partner's window the same way. |
 | Dependencies | None. Shares its addition with W40 (§12, T1). |
 | Effort | Medium: RP-4 and its vectors, the Aether adapter, the client. |
 | Priority | **Medium.** Every call starts with tuning, and it removes a common mistake. |
 | Recommendation | Accept, with one RP-4 addition designed for W14 and W40 together. |
-| Status | Planned. |
+| Status | Implemented. |
 | Author decision | None yet. |
 | Notes | **Needs specification review** on a shared modem: RP-4 §1.1 gives each host its callsigns, answering and links, and says nothing of what belongs to the whole station, like the dial (§13, G8). |
 
@@ -958,12 +958,12 @@ automatic-control segments.
 | Requested by | The plan: design §5.2 (*Rules check*), concept §7; RP-4 §8 requires it of the host or its operator. Requesters: 0. |
 | Component | Gateway; the client too, for W16. |
 | Compatibility | **Fits today** with the dial taken from the gateway's settings or registered channels (RP-5 §4.4), judged against its country's table (RP-7 §5.1), or read by the gateway itself from the rigctld or FLRig its modems key through (W26). Reading the dial from the modem is an **optional protocol addition** to RP-4: RPMI carries no frequency (§13, G3). |
-| Existing coverage | Partly built: a setting says the operator checks ([the gateway guide](../user/gateway.md), §2); the gateway checks nothing itself. |
+| Existing coverage | **Implemented** (2026-11-15): with a modem that checks no band rules but says where its dial is (RP-4 §4.1), and an operator who has not said they check them, the gateway reads the dial at start and at each change, and answers only while the dial and the 3 kHz above it lie inside one of its country's automatic-control segments (RP-7 §5.1); outside, the panel says **Not answering here**. A modem with neither still needs the operator's word (`operator_checks_rules`). |
 | Dependencies | W14's RP-4 addition to read the dial (§12, T1); W41 outside the US. |
 | Effort | Medium. |
 | Priority | **Medium**: needed before W20 to W22 run unattended. |
 | Recommendation | Accept. |
-| Status | Planned. |
+| Status | Implemented. |
 | Author decision | None yet. |
 
 ### W41. Rules tables for other countries
@@ -1031,12 +1031,12 @@ document.
 |---|---|---|---|---|---|
 | G1 | RP-2 §6 | A client SHOULD let the user ask for a trimmed message's full text; nothing carries the request (RP-3 §5.6, RP-5 §5.3). | A SHOULD no client can meet; implementers may invent private ways. | Say instead: show the message `reply_to` names when the client holds it. | W4 |
 | G2 | RP-5 §5.3 | Which compression the post office's air form may use. It never sees the caller's `caps` (RP-2 §4 has the sender choose one both ends take). | A post office using code 2 would serve mail some clients cannot read; ours served everything uncompressed. | Code 0 or 1 only, 1 when smaller. **Settled** (2026-11-13): RP-5 0.18.0 §5.3, built with W18. | W18, W19 |
-| G3 | RP-4 | Any frequency. RP-4 §8 has the host check the band rules when the modem does not, with no way to learn the dial. | Gateways on other modems trust a configured dial; the client cannot tune. | An optional dial capability (T1). | W14, W40 |
+| G3 | RP-4 | Any frequency. RP-4 §8 has the host check the band rules when the modem does not, with no way to learn the dial. | Gateways on other modems trust a configured dial; the client cannot tune. | An optional dial capability (T1). **Settled** (2026-11-15): RP-4 0.8.0 §4.1, `caps.dial`, `dial` and `tune`. | W14, W40 |
 | G4 | RP-4 §2 | A transport off the machine: loopback or a Unix socket only, and no authentication. | No common way for a phone to drive a modem in another box. | Leave it until a phone needs it. | W23 |
 | G5 | Concept §6.2 | *Delivered to the recipient's provider* is promised; nothing reports it (RP-5, RP-6). | Users are promised what no program can show. | Drop it from the concept, or an optional client endpoint in RP-5 §6. **Settled** (2026-11-14): dropped from the concept. | W6 |
 | G6 | Design §5.1 | Says the client keeps mail as `.eml`; the client keeps the canonical encoding. | Design and program disagree. | Export `.eml`, and say so in the design. | W5 |
 | G7 | RP-2 §4 | Dictionary 1 "becomes a requirement" once adopted. | A change others cannot ignore, where a negotiated option would not be one. | Decide with the corpus's numbers, with G2. | W19 |
-| G8 | RP-4 §1.1 | What belongs to the whole station on a shared modem, such as the dial, or a whole Aether profile (RP-4 §9.1 leaves the bandwidth open in the same way). | One host can move every other host's station, even to another radio. | Refuse a station-wide change while another host's link or call is up. | W14, W44 |
+| G8 | RP-4 §1.1 | What belongs to the whole station on a shared modem, such as the dial, or a whole Aether profile (RP-4 §9.1 leaves the bandwidth open in the same way). | One host can move every other host's station, even to another radio. | Refuse a station-wide change while another host's link or call is up. **Settled for the dial** (2026-11-15): RP-4 0.8.0 §1.1 and §4.1 refuse a `tune` while any host's link or call is up, and tell every host the new dial; a whole profile stays open (W44). | W14, W44 |
 | G9 | RP-3 §8 | Whether a second session may follow on the same link. | A client with several accounts pays a call for each. | Leave it, or allow it when both sides say so. | W7 |
 | G10 | RP-1 §6.3 | Step 2 requires the statement's `operator` to equal the credential's, yet `operator` is the callsign "as on the air" (RP-1 §6.1, RP-3 §5.1), and RP-6 §5.1 and D31 read where a station is from a prefix or suffix on it (`VE3/KK4ODA`). | A user abroad who signs with the host country's prefix is refused unless enrolled again for it; one who keeps the plain callsign is taken for a station at home, and the third-party check judges the wrong country. | Compare the base callsign, and let the statement carry the prefix and suffix: a change every verifier must make, cheapest while the specifications are Drafts. | W44 |
 | G11 | RP-5 §4.4 | Its `modem` values (`aether`, `vara-hf`, `vara-fm`, `ardop`, `ax25`, `tcp`) are a list with no registry, no way to add one, and no rule for a value a client does not know. | A gateway offering Mercury has no agreed name for it, and clients may treat an unknown name differently. | A registry of modem names in RP-0 §9, `mercury` its first new entry, and a client ignoring a channel whose modem it does not know. Drafted: RP-0 0.7.0 §9.4 and RP-5 0.17.0 §4.4, with `aether-fm` beside `mercury` (D39). | W20, W26, W44 |
@@ -1118,3 +1118,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.26 | 2026-11-15 | W2 implemented: groups of addresses, and contact files imported. |
 | 0.3.27 | 2026-11-15 | W46 implemented: *Listen* answers calls to any of the client's callsigns. |
 | 0.3.28 | 2026-11-15 | W38 implemented: the backup mail server, refusing as the door does, its verdicts sealed for the post office's door. |
+| 0.3.29 | 2026-11-15 | W14 and W40 implemented: the dial in RP-4 0.8.0, a call tuned to the gateway's channel and back, a gateway tuned to its partner's window, and a gateway that judges its dial itself. G3 settled, G8 settled for the dial. |

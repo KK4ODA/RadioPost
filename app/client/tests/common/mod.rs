@@ -78,6 +78,11 @@ pub fn post_office_keys() -> Vec<(String, String, u64, u64)> {
 }
 
 pub fn loopback() -> (Server, SocketAddr, SocketAddr) {
+    loopback_dialled(None)
+}
+
+/// The loopback adapter, its radios on `dial_hz` and able to tune (RP-4 §4.1) when it is given.
+pub fn loopback_dialled(dial_hz: Option<u64>) -> (Server, SocketAddr, SocketAddr) {
     let caps = Caps {
         bandwidths: vec![500, 2300],
         max_links: 1,
@@ -88,7 +93,7 @@ pub fn loopback() -> (Server, SocketAddr, SocketAddr) {
         regulatory: false,
         max_queue: 65536,
         shared: false,
-        dial: false,
+        dial: dial_hz.is_some(),
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),
@@ -96,7 +101,7 @@ pub fn loopback() -> (Server, SocketAddr, SocketAddr) {
         caps: caps.clone(),
         prefix: prefix.into(),
         frame_bytes: 128,
-        dial_hz: None,
+        dial_hz,
     };
     let mut ch = Channel::new();
     let f = ch.add_station(station("KK4ODA", "c"));

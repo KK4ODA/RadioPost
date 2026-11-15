@@ -56,6 +56,7 @@ const STATES = {
   stopped: "Stopped",
   opening: "Waiting for the modem",
   listening: "Listening",
+  outside: "Not answering here",
   session: "Session",
 };
 

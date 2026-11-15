@@ -128,8 +128,20 @@ function kind() {
   return document.querySelector("input[name=kind]:checked").value;
 }
 
+// the gateway chosen from the list, and its channels: Call tunes the radio to the one picked (W14)
+let chosenGateway = null;
+
+function showChannels() {
+  const gw = chosenGateway;
+  const fits = gw && kind() === "gateway"
+    && $("callsign").value.trim().toUpperCase() === gw.callsign && gw.channels.length > 0;
+  $("channel-label").hidden = !fits;
+  if (!fits) $("channel").replaceChildren();
+}
+
 function showKind() {
   const gateway = kind() === "gateway";
+  showChannels();
   $("fetch-label").hidden = !gateway;
   $("gateways-open").hidden = !gateway;
   $("callsign").placeholder = gateway ? "KK4ODA-1" : "N0CALL";
@@ -480,13 +492,22 @@ async function openGateways(refreshing = false) {
         .map((c) => `${mhz(c.dial_hz)} MHz, ${c.bandwidth_hz} Hz`).join("\n");
       const choose = document.createElement("button");
       choose.textContent = "Choose";
-      choose.title = `Call ${gw.callsign}: tune Aether to one of its channels first`;
+      choose.title = `Call ${gw.callsign}: pick its channel in the call box, and Call tunes the `
+        + "radio there when the modem can";
       choose.addEventListener("click", () => {
+        chosenGateway = {callsign: gw.callsign, channels: gw.channels || []};
         $("callsign").value = gw.callsign;
         document.querySelector("input[name=kind][value=gateway]").checked = true;
         keep("kind", "gateway");
         showKind();
-        toast(`${gw.callsign} chosen. Tune Aether to ${channels.split("\n")[0]}, then Call.`);
+        $("channel").replaceChildren(...chosenGateway.channels.map((c) =>
+          el("option", {value: String(c.dial_hz),
+                        text: `${mhz(c.dial_hz)} MHz, ${c.bandwidth_hz} Hz`})));
+        showChannels();
+        toast(chosenGateway.channels.length
+          ? `${gw.callsign} chosen, on ${mhz(chosenGateway.channels[0].dial_hz)} MHz. `
+            + "Call tunes the radio there, and back after, when the modem can."
+          : `${gw.callsign} chosen. Its record names no channel.`);
       });
       const where = [gw.place, gw.grid].filter(Boolean).join(", ");
       // which post office lists it; a callsign two other post offices list is shown from each
@@ -2164,13 +2185,17 @@ function wire() {
       toast(e.message, true);
     }
   });
+  // the channels are the chosen gateway's: another callsign typed has none here
+  $("callsign").addEventListener("input", showChannels);
   $("call").addEventListener("click", () => {
     const callsign = $("callsign").value.trim();
     if (!callsign) { toast("Whom to call?", true); return; }
     const fetchRule = $("fetch").value;
+    const dial = $("channel-label").hidden ? "" : $("channel").value;
     act("call", {
       callsign, station: kind() === "station", adapter: adapter(),
       fetch: /^[0-9]+$/.test(fetchRule) ? Number(fetchRule) : fetchRule,
+      dial_hz: dial ? Number(dial) : null,
     });
   });
   $("listen").addEventListener("click", () => act("listen", {adapter: adapter()}));

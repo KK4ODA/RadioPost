@@ -58,7 +58,10 @@ the gateway**.
 **1. The gateway.** Enter its **Callsign**: yours with an SSID, such as `KK4ODA-1`. Leave
 **Modem** at `ws://127.0.0.1:8515/v1`, where Aether listens on the same computer. **Country** is
 where the gateway operates, two letters: it decides which third-party mail the gateway may hand
-over (RP-6 §5.1). Leave *The modem does not check the band rules* clear: Aether checks them. Keep
+over (RP-6 §5.1). Leave *The modem does not check the band rules* clear: Aether checks them. With
+a modem that does not, but says where the radio's dial is (RP-4 §4.1), the gateway checks the dial
+itself and answers only inside an automatic-control segment; the badge reads **Not answering
+here** while the radio is outside one. Keep
 *Answer calls when the app opens* ticked for a gateway left on its own. Tick *Hold copies of
 users' mail, for when the Internet is down* for a gateway with room to spare (§4), and say for how
 many users, how many days, and the largest message it holds with its text. Click **Save**. The
@@ -237,8 +240,10 @@ here.
   It reads its partners' windows from the gateway lists of the post offices it knows, fetched
   every six hours while it has partners and kept for when the Internet is down; a window a
   partner published after the last fetch is not known until the next. The Partners list shows
-  each partner's next window. It does not retune the radio: a partner's window must be on the
-  channel this gateway's radio is on.
+  each partner's next window. When the modem can set the radio's dial (Aether keying over CAT,
+  rigctld or FLRig), the gateway tunes the radio to the partner's window and back after the call,
+  and says so in its log. Otherwise a partner's window must be on the channel this gateway's
+  radio is on.
 * **Which partner gets the queue** (RP-7 §6.2). The gateway remembers whether each partner
   reached the Internet at its last call. In the window of a partner that did not, it hands that
   partner its queue only if no partner that did opens a window within the hour; otherwise it
@@ -328,7 +333,8 @@ another; Setup shows where):
 | Waiting for the modem: *the modem refused* | Another program holds the callsign at Aether (RMS Trimode, if it uses the same one), or Aether refused it: Aether's log says why. |
 | Aether HF stops at start: *host interface: 127.0.0.1:8515 is already in use* | Aether's host programs port was set to 8515, its control port's number. Open Aether's `station.toml` (in PowerShell, `notepad "$env:APPDATA\aether-hf\station.toml"`), write `bind = "127.0.0.1:8300"` under `[host]`, save, and start Aether again. |
 | Register: *… .radiopost holds no device key* | The RadioPost app on this computer is not enrolled: enroll it in its Setup, with a code of its own (§1). |
-| *This modem does not check the band rules* | Aether's band rules are off, as they are when a host program keys the radio. Set Aether's keying and its rules profile (Aether's Setup steps 1 and 2). |
+| *This modem neither checks the band rules nor says where the radio's dial is* | Aether's band rules are off, as they are when a host program keys the radio, and it cannot read the dial. Set Aether's keying and its rules profile (Aether's Setup steps 1 and 2). |
+| **Not answering here**: *the radio is at … MHz … outside the segments* | The modem checks no band rules, so the gateway judges the dial: turn the radio to the gateway's channel. |
 | A post office *not found* | Its DNS records are not published: name it in Setup, step 3. |
 | A post office *refused the gateway* | The credential has run out or was revoked: register again (Setup, step 2). |
 | A session ended *nothing heard for 300 seconds* | The path faded or the caller left: the caller's mail is resumed on its next call (RP-3 §7). |

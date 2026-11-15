@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.4.2 |
+| **Version** | 1.5.0 |
 | **Updated** | 2026-11-15 |
 | **Describes** | RadioPost 0.1.0-beta.21 |
 | **Licence** | CC BY 4.0 |
@@ -418,7 +418,7 @@ A call to a gateway sends your outbox and fetches what waits for you, in one ses
    nearest gateways move to the top, with their distance.
 4. Each gateway shows its **Channels** (dial frequency, upper sideband, and the bandwidth Aether
    uses there) and its **Hours**. Click **Choose** beside the one you want. Its callsign goes in
-   **Call**.
+   **Call**, and its channels in **Channel**.
 
 ![The Gateways page: three gateways with their place, distance, channels and hours](screens/client-gateways.png)
 
@@ -426,10 +426,12 @@ A call to a gateway sends your outbox and fetches what waits for you, in one ses
 
 ### 8.2 Tune and call
 
-1. In Aether, tune the radio to one of the gateway's channels, and set Aether's **Bandwidth**
-   to the one listed there (500 or 2300 Hz). Aether's manual covers both: the
-   [Radio dial](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#radio-dial)
-   and [Setup step 4](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-4-modem-settings).
+1. Pick the **Channel** to call on. When Aether can set the radio's dial (it reaches the radio
+   over CAT, rigctld or FLRig), **Call** tunes the radio there first and back after the session.
+   Otherwise the log says *tune the radio to … MHz*: tune it in Aether yourself, on its
+   [Radio dial](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#radio-dial).
+   Set Aether's **Bandwidth** to the one listed there (500 or 2300 Hz) in its
+   [Setup step 4](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-4-modem-settings).
 2. Listen for a moment. Do not call over another station.
 3. In RadioPost, set **Fetch**:
    - **Everything waiting**: all your mail comes.
@@ -834,6 +836,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 | Stopped | Not answering. |
 | Waiting for the modem | Aether is not running, is restarting (saving Aether's Setup restarts it), or cannot be reached. The gateway tries every five seconds. |
 | Listening | It holds its callsign at Aether and answers calls. |
+| Not answering here | The modem does not check the band rules, and the radio is outside the segments where an unattended station may answer. The gateway answers again once the radio is back in one. With Aether's rules on, you do not see this. |
 | Session | A user's session is under way. |
 
 While a session runs, a box shows who called, the account, since when, and the messages so far.
@@ -935,8 +938,9 @@ comes round every hour or every few hours. To set this gateway's own:
 
 While it is cut off, the gateway calls each partner by itself during that partner's windows. It
 tries once, then twice more a minute apart if nobody answers, then waits for the next window. It
-never calls while Aether says the channel is busy, and it does not tune the radio: the partner's
-window must be on the channel your radio is on. The **Next window** column shows when each
+never calls while Aether says the channel is busy. When Aether can set the radio's dial, the
+gateway tunes the radio to the partner's window and back after the call, and says so in the log.
+Otherwise the partner's window must be on the channel your radio is on. The **Next window** column shows when each
 partner's next window opens (*None published* until the gateway has read the partner's record).
 If one partner reached the Internet at its last call and opens a window within the hour, the
 gateway keeps its sessions for that partner, and calls the others only to collect its users'
@@ -1398,7 +1402,9 @@ These notes follow the US rules (Part 97). Check your own country's.
 | *Waiting for the modem: the modem refused* | Another program holds the callsign at Aether, or Aether refused it: Aether's log says why. |
 | **Start** is greyed | The gateway is not set up or not registered: follow the notice. |
 | Register: *… holds no device key* | The RadioPost client on this computer is not enrolled. Enroll it first, with its own code. |
-| *This modem does not check the band rules* | Aether's rules are off, as they are when a host program keys the radio. Set Aether's keying and rules (its Setup, steps 1 and 2). |
+| *This modem neither checks the band rules nor says where the radio's dial is* | Aether's rules are off, as they are when a host program keys the radio, and it cannot read the dial. Set Aether's keying and rules (its Setup, steps 1 and 2). |
+| *The radio is at … MHz: … outside the segments*, badge **Not answering here** | Aether's rules are off, so the gateway judges the dial itself. Turn the radio to the gateway's channel. |
+| *could not tune the radio back* | The radio stayed on the partner's or gateway's channel after a call. Tune it back in Aether. |
 | A post office *not found* | Its records are not published: name it in Setup, step 3. |
 | A post office *refused the gateway* | The credential ran out or was revoked: register again (Setup, step 2). |
 | A session ended *nothing heard for 300 seconds* | The path faded or the caller left. The caller's mail resumes on its next call. |
@@ -1474,7 +1480,7 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 
 1. **Write**, fill in **To**, **Subject** and **Text**, **Put in outbox**.
 2. **Choose a gateway**, **Choose** one.
-3. In Aether: tune to its channel, set its bandwidth.
+3. Pick its **Channel**; **Call** tunes Aether there if it can. Set Aether's bandwidth.
 4. Set **Fetch**. Listen that the frequency is clear.
 5. **Call**. Watch the card at the bottom right.
 6. Read your new mail in the **Inbox**.
@@ -1557,3 +1563,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.4.0 | 2026-11-15 | Part 4, the post office desk: one chapter for each tab (applications, accounts, codes, mail out, other post offices, health, the server's jobs, backups and DKIM keys, settings), with screenshots. §15 points to it; Help becomes Part 5 (§35–§40), with the desk's troubleshooting, glossary words and an approval card. Figure 16 says **Listen** answers any of your callsigns. |
 | 1.4.1 | 2026-11-15 | §33: restoring a backup points to the server guide's chapter 11, rewritten. |
 | 1.4.2 | 2026-11-15 | Links to Aether's manual go to its new home, `docs/manual/manual.md`, and its chapters there. |
+| 1.5.0 | 2026-11-15 | §8: the call box's **Channel**, and **Call** tuning the radio there and back when Aether can set the dial. §19: the badge **Not answering here**. §22: a gateway tunes to its partner's window and back. §39: three new messages. §40: the quick reference tunes by **Channel**. |

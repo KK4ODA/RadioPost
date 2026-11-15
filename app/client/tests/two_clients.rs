@@ -18,7 +18,8 @@ use radiopost_client::store::{Store, unhex};
 use serde_json::Value;
 
 use common::{
-    credential_hex, key_entry, loopback, message, post_office_keys, scratch, store_for, vectors,
+    credential_hex, key_entry, loopback, loopback_dialled, message, post_office_keys, scratch,
+    store_for, vectors,
 };
 
 /// Session-03's clocks and draws, as the program's replay options (the tester's §2.4).
@@ -270,6 +271,59 @@ fn a_client_answers_a_call_to_any_of_its_callsigns() {
     assert_eq!(ana.inbox.iter().map(|a| a.id).collect::<Vec<_>>(), [id]);
     assert_eq!(first.inbox, [], "the first callsign's folders untouched");
     assert_eq!(facundo.sent, [id]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A call on a chosen channel (wishlist W14): with a modem that has a dial (RP-4 §4.1) the radio
+/// goes there before the call and back to where it was after; with one that has none, the user is
+/// told where to tune.
+#[test]
+fn a_call_on_a_channel_tunes_the_radio_there_and_back() {
+    let dir = scratch("dial");
+    let mut facundo = store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    let mut ana = store_for(&dir.join("ana"), "device:ana", "ana");
+    facundo.queue(&message("facundo-direct")).expect("queued");
+    for dial in [Some(7_101_000), None] {
+        let (server, at_f, at_a) = loopback_dialled(dial);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ana_opts = Options::new(&at_a.to_string());
+        let listener = thread::spawn(move || {
+            let report = session::answer(&mut ana, &ana_opts, &mut |s: &str| {
+                if s.starts_with("listening") {
+                    let _ = tx.send(());
+                }
+            })
+            .expect("answered");
+            (ana, report)
+        });
+        rx.recv_timeout(Duration::from_secs(10))
+            .expect("Ana's station listens");
+        let mut opts = Options::new(&at_f.to_string());
+        opts.dial_hz = Some(3_591_500);
+        let mut said = Vec::new();
+        let called = session::call(&mut facundo, "N0CALL", Kind::Station, &opts, &mut |s| {
+            said.push(s.to_owned());
+        })
+        .expect("called");
+        let answered;
+        (ana, answered) = listener.join().expect("Ana's side");
+        assert_eq!((called.failed, answered.failed), (None, None), "{said:?}");
+        let at = |line: &str| said.iter().position(|s| s == line);
+        if dial.is_some() {
+            let tuned = at("tuned the radio to 3.5915 MHz").expect("tuned");
+            let calling = at("calling N0CALL").expect("called");
+            let back = at("tuned the radio back to 7.101 MHz").expect("back");
+            assert!(tuned < calling && calling < back, "{said:?}");
+            assert_eq!(server.with_channel(|ch| ch.dial(0)), Some(7_101_000));
+        } else {
+            assert_eq!(
+                said.first().map(String::as_str),
+                Some("tune the radio to 3.5915 MHz: this modem cannot"),
+                "{said:?}"
+            );
+            assert!(!said.iter().any(|s| s.starts_with("tuned")), "{said:?}");
+        }
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 

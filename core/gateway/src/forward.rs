@@ -468,6 +468,27 @@ pub fn windows_of(record: &Json, country: &str) -> Vec<radiopost::forwarding::Wi
         .collect()
 }
 
+/// The dial of the partner's window open at `now`, among those an unattended gateway in `country`
+/// may call in (RP-7 §5.1): where the radio goes for the call, with a modem that can tune it
+/// (RP-4 §4.1).
+#[must_use]
+pub fn open_window_dial(record: &Json, country: &str, now: u64) -> Option<u64> {
+    let mut windows = record["forwarding"].as_array().into_iter().flatten();
+    windows.find_map(|w| {
+        let o = &w["channel"]["occupied_hz"];
+        let allowed = match (o[0].as_u64(), o[1].as_u64()) {
+            (Some(low), Some(high)) => radiopost::forwarding::window_allowed((low, high), country),
+            _ => false,
+        };
+        let open = radiopost::forwarding::Window::from_json(w).is_some_and(|x| x.is_open(now));
+        if allowed && open {
+            w["channel"]["dial_hz"].as_u64()
+        } else {
+            None
+        }
+    })
+}
+
 /// When a cut-off gateway calls its partners by itself (RP-7 §5, §6.2): only inside a partner's
 /// window, at most [`TRIES`] times in it a minute apart, not on a busy channel, and once a call
 /// has gone through, not again in that window.

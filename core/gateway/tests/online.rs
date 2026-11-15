@@ -21,7 +21,7 @@ use radiopost_gateway::{operator, station};
 use radiopost_postoffice::serve::{self, Running};
 use serde_json::json;
 
-use common::{client, draft, key, loopback, post_office, scratch};
+use common::{client, draft, key, loopback, loopback_dialled, post_office, scratch};
 
 /// A registered gateway, KK4ODA-1, answering calls, and its directory; it says the lines it
 /// writes on `lines`.
@@ -32,6 +32,20 @@ fn gateway(
     po_key: &SigningKey,
     at_gateway: SocketAddr,
 ) -> (PathBuf, std::sync::mpsc::Receiver<String>) {
+    let (gw, rx, first) = gateway_checking(dir, running, base, po_key, at_gateway, true);
+    assert!(first.starts_with("listening as KK4ODA-1"), "{first}");
+    (gw, rx)
+}
+
+/// [`gateway`], its operator saying they check the band rules or not, and the first line it says.
+fn gateway_checking(
+    dir: &Path,
+    running: &Running,
+    base: &str,
+    po_key: &SigningKey,
+    at_gateway: SocketAddr,
+    operator_checks_rules: bool,
+) -> (PathBuf, std::sync::mpsc::Receiver<String>, String) {
     // the gateway's operator, KK4ODA, registers it from their own client's home
     let _operator = client(
         &dir.join("kk4oda"),
@@ -51,7 +65,7 @@ fn gateway(
         resolver: String::new(),
         blocked: Vec::new(),
         only: None,
-        operator_checks_rules: true,
+        operator_checks_rules,
         answer_at_start: true,
         copies: None,
         partners: Vec::new(),
@@ -79,8 +93,7 @@ fn gateway(
     let first = rx
         .recv_timeout(Duration::from_secs(10))
         .expect("the gateway says something");
-    assert!(first.starts_with("listening as KK4ODA-1"), "{first}");
-    (gw, rx)
+    (gw, rx, first)
 }
 
 /// Lines the gateway writes until a session ends.
@@ -174,6 +187,63 @@ fn a_user_calls_the_gateway_and_mail_moves_both_ways() {
     // and the gateway kept the caller's credential, to be named by hash next time (RP-3 §5.1)
     let held = std::fs::read_to_string(gw.join("held.json")).expect("held");
     assert!(held.contains("credentials"), "{held}");
+}
+
+/// RP-4 §8, wishlist W40: a modem that checks no band rules but says where the radio's dial is
+/// leaves the rules to the gateway. Outside the segments where an unattended station may answer it
+/// does not answer, and once the radio is turned into one it does.
+#[test]
+fn the_gateway_answers_only_with_its_radio_in_an_automatic_segment() {
+    let dir = scratch("rules");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (server, at_user, at_gateway) = loopback_dialled(Some(14_074_000));
+    let (_gw, rx, first) = gateway_checking(&dir, &running, &base, &po_key, at_gateway, false);
+    assert!(
+        first.starts_with("the radio is at 14.074 MHz") && first.contains("does not answer"),
+        "{first}"
+    );
+    let mut user = client(
+        &dir.join("wd5ema"),
+        &running,
+        &po_key,
+        "club@test.example",
+        "WD5EMA",
+    );
+    let call = |user: &mut Store| {
+        let mut said = Vec::new();
+        let report = session::call(
+            user,
+            "KK4ODA-1",
+            Kind::Gateway,
+            &Options::new(&at_user.to_string()),
+            &mut |s| said.push(s.to_owned()),
+        )
+        .expect("the call placed");
+        (report.failed, said)
+    };
+    let (failed, said) = call(&mut user);
+    assert!(failed.is_some(), "not answered on 20 m: {said:?}");
+
+    // another program on the station turns the radio to 40 m's segment: the gateway answers
+    let knob = server.attach(1, "operator");
+    let mut host = rpmi::host::Host::new();
+    knob.send(&host.hello("the operator"));
+    knob.send(&host.tune(7_101_000));
+    let mut heard = Vec::new();
+    while let Ok(line) = rx.recv_timeout(Duration::from_secs(10)) {
+        let inside = line.starts_with("the radio is at 7.101 MHz, inside");
+        heard.push(line);
+        if inside {
+            break;
+        }
+    }
+    assert!(
+        heard.last().is_some_and(|l| l.contains("inside")),
+        "{heard:?}"
+    );
+    let (failed, said) = call(&mut user);
+    assert_eq!(failed, None, "answered on 40 m: {said:?}");
+    drop(knob);
 }
 
 /// RP-1 §6.3 step 5, RP-3 §5.2, RP-5 §5.2: a laptop whose clock is an hour off signs the

@@ -502,7 +502,13 @@ const SHOTS = {
       log: CLIENT_LOG.slice(0, 5)});
     const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(world),
                                                  height: 900});
-    await page.fill("#callsign", "KK4ODA-1");
+    // chosen from the list, as §8 says: its callsign in Call and its channels in Channel
+    await page.click("#gateways-open");
+    await page.waitForTimeout(200);
+    await page.locator("#gateway-rows tr", {hasText: "KK4ODA-1"})
+      .getByRole("button", {name: "Choose"}).click();
+    await page.click("button[data-folder=inbox]");
+    await page.evaluate(() => { document.getElementById("toast").hidden = true; });
     await page.locator("#callsign").blur();
     await spreadLog(page, "log", T - 110, 17);
     await page.waitForTimeout(1200);

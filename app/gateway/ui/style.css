@@ -56,6 +56,7 @@ h2 { font-size: 13px; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
          white-space: nowrap; }
 .state[data-state="opening"] { color: var(--busy); border-color: var(--busy); }
 .state[data-state="listening"] { color: var(--ok); border-color: var(--ok); }
+.state[data-state="outside"] { color: var(--busy); border-color: var(--busy); }
 .state[data-state="session"] { color: var(--session); border-color: var(--session); }
 .state[data-state="problem"] { color: var(--bad); border-color: var(--bad); }
 

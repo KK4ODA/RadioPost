@@ -696,6 +696,14 @@ impl Station {
         !reached
     }
 
+    /// The dial of `partner`'s window open at `at`, from its record (RP-7 §5): where the radio goes
+    /// for the call.
+    fn window_dial(&self, partner: &str, at: u64) -> Option<u64> {
+        let own = self.credential().map(|b| b.domain()).unwrap_or_default();
+        let record = self.store.lock().record_of(&own, partner)?;
+        crate::forward::open_window_dial(&record, &self.settings.country, at)
+    }
+
     /// A partner to call by itself now, if one is due (RP-7 §5, §6.2): cut off, in the partner's
     /// window, its record's window inside this gateway's country's segments.
     fn due_call(
@@ -937,6 +945,13 @@ fn adapter_for(modem: &str) -> Result<SocketAddr, String> {
 struct Modem {
     conn: Connection,
     host: Host,
+    /// The modem reads and sets the radio's dial (RP-4 §4.1).
+    dial: bool,
+    /// The gateway judges the dial itself (RP-4 §8, wishlist W40): the modem checks no band rules
+    /// and the operator has not said they do.
+    judges: bool,
+    /// Why it does not answer with the radio where it is, when it judges the dial.
+    outside: Option<String>,
 }
 
 impl Modem {
@@ -977,11 +992,99 @@ impl Modem {
                         text.unwrap_or_default()
                     ));
                 }
-                Some(e @ (Event::Ok { .. } | Event::Hello { .. })) => return Ok(e),
+                // a request's answer, not another's: the answering loop sends `listen` unawaited
+                Some(e @ Event::Ok { .. }) if matches!(&e, Event::Ok { id: i } if Some(i) == id.as_ref()) =>
+                {
+                    return Ok(e);
+                }
+                Some(e @ Event::Hello { .. }) => return Ok(e),
+                Some(e @ Event::Dial { id: Some(_), .. }) if e_dial_id(&e) == id => return Ok(e),
                 _ => {}
             }
         }
         Err("the modem's adapter did not answer".into())
+    }
+
+    /// The radio's dial, asked of the modem (RP-4 §4.1).
+    fn read_dial(&mut self) -> Result<u64, String> {
+        let read = self.host.dial();
+        match self.ask(&read)? {
+            Event::Dial { dial_hz, .. } => Ok(dial_hz),
+            _ => Err("the modem did not say where its dial is".into()),
+        }
+    }
+
+    /// Answering turned on or off as the dial allows (W40), when the gateway judges it: `None`
+    /// when nothing changed, else what to say. `ask`s only while opening; in the answering loop
+    /// the modem's `ok` is one more event.
+    fn judge(
+        &mut self,
+        dial_hz: u64,
+        country: &str,
+        opening: bool,
+    ) -> Result<Option<String>, String> {
+        if !self.judges {
+            return Ok(None);
+        }
+        let outside = crate::rules::verdict(dial_hz, country);
+        if outside == self.outside && !opening {
+            return Ok(None);
+        }
+        let listen = self.host.listen(outside.is_none());
+        if opening {
+            self.ask(&listen)?;
+        } else {
+            self.conn.send(&listen).map_err(|e| e.to_string())?;
+        }
+        let said = outside.clone().unwrap_or_else(|| {
+            format!(
+                "the radio is at {} MHz, inside a segment where the gateway may answer",
+                crate::rules::mhz(dial_hz)
+            )
+        });
+        self.outside = outside;
+        Ok(Some(said))
+    }
+
+    /// Tunes the radio to `dial_hz` for a call (RP-4 §4.1), and gives the dial it left, to go
+    /// back to; `None` when it is there already.
+    fn tune_away(&mut self, dial_hz: u64) -> Result<Option<u64>, String> {
+        let was = self.read_dial()?;
+        if was == dial_hz {
+            return Ok(None);
+        }
+        let tune = self.host.tune(dial_hz);
+        self.ask(&tune).map_err(|e| {
+            format!(
+                "cannot tune the radio to {} MHz: {e}",
+                crate::rules::mhz(dial_hz)
+            )
+        })?;
+        Ok(Some(was))
+    }
+
+    /// Tunes the radio back after a call; the adapter may not have put the link down yet, so
+    /// `busy` is tried again for a while.
+    fn tune_back(&mut self, was: u64) -> Result<(), String> {
+        let patience = Instant::now() + Duration::from_secs(30);
+        loop {
+            let tune = self.host.tune(was);
+            match self.ask(&tune) {
+                Ok(_) => return Ok(()),
+                Err(e) if e.starts_with("the modem refused: busy") && Instant::now() < patience => {
+                    std::thread::sleep(Duration::from_millis(250));
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+}
+
+/// A `dial` answer's `id`.
+fn e_dial_id(e: &Event) -> Option<serde_json::Value> {
+    match e {
+        Event::Dial { id, .. } => id.clone(),
+        _ => None,
     }
 }
 
@@ -1003,6 +1106,9 @@ fn open(station: &Station) -> Result<Modem, Unopened> {
     let mut modem = Modem {
         conn,
         host: Host::new(),
+        dial: false,
+        judges: false,
+        outside: None,
     };
     let hello = modem
         .host
@@ -1010,17 +1116,29 @@ fn open(station: &Station) -> Result<Modem, Unopened> {
     let Event::Hello { caps, .. } = modem.ask(&hello).map_err(Unopened::Later)? else {
         return Err(Unopened::Later("the modem did not say hello".into()));
     };
-    if !caps.regulatory && !station.settings.operator_checks_rules {
+    modem.dial = caps.dial;
+    // RP-4 §8: a modem that checks no band rules leaves them to the gateway, which judges the
+    // radio's dial when the modem says where it is (W40), or to its operator, who says so
+    modem.judges = !caps.regulatory && caps.dial && !station.settings.operator_checks_rules;
+    if !caps.regulatory && !caps.dial && !station.settings.operator_checks_rules {
         return Err(Unopened::Never(
-            "this modem does not check the band rules (RP-4 §8): the gateway's operator must, \
-             and says so in the gateway's settings (`operator_checks_rules` in gateway.json)"
+            "this modem neither checks the band rules nor says where the radio's dial is (RP-4 \
+             §8): the gateway's operator must check them, and says so in the gateway's settings \
+             (`operator_checks_rules` in gateway.json)"
                 .into(),
         ));
     }
     let calls = modem.host.callsigns(&[station.settings.callsign.as_str()]);
     modem.ask(&calls).map_err(Unopened::Later)?;
-    let listen = modem.host.listen(true);
-    modem.ask(&listen).map_err(Unopened::Later)?;
+    if modem.judges {
+        let dial = modem.read_dial().map_err(Unopened::Later)?;
+        modem
+            .judge(dial, &station.settings.country, true)
+            .map_err(Unopened::Later)?;
+    } else {
+        let listen = modem.host.listen(true);
+        modem.ask(&listen).map_err(Unopened::Later)?;
+    }
     Ok(modem)
 }
 
@@ -1094,8 +1212,7 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
         "listening as {} on {}",
         station.settings.callsign, station.settings.modem
     );
-    tell(&listening);
-    monitor.set_state("listening", None);
+    answering(&modem, monitor, &listening, &mut tell);
     let mut renewal = Renewal::new(dir, RENEW_EVERY, radiopost::credential::RENEW_WITHIN);
     let mut caller = crate::forward::Caller::default();
     let mut busy = false;
@@ -1130,6 +1247,18 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
                 busy = b; // RP-4 §5: no call on a busy channel
                 continue;
             }
+            // the radio moved (W40): answering follows where it may
+            Ok(Some(Event::Dial { id: None, dial_hz })) => {
+                match modem.judge(dial_hz, &station.settings.country, false) {
+                    Ok(Some(said)) => {
+                        tell(&said);
+                        answering(&modem, monitor, &listening, &mut |_| {});
+                    }
+                    Ok(None) => {}
+                    Err(e) => tell(&format!("could not change answering: {e}")),
+                }
+                continue;
+            }
             Ok(Some(e)) => e,
             Ok(None) => continue,
             Err(e) => {
@@ -1145,8 +1274,7 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
                     Some(m) => modem = m,
                     None => return stopped(monitor, &mut tell),
                 }
-                tell(&listening);
-                monitor.set_state("listening", None);
+                answering(&modem, monitor, &listening, &mut tell);
                 continue;
             }
         };
@@ -1171,6 +1299,17 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
     }
 }
 
+/// Says whether the gateway answers: listening, or not where the radio is (W40).
+fn answering(modem: &Modem, monitor: &Monitor, listening: &str, tell: &mut dyn FnMut(&str)) {
+    if let Some(why) = &modem.outside {
+        tell(why);
+        monitor.set_state("outside", Some(why.clone()));
+    } else {
+        tell(listening);
+        monitor.set_state("listening", None);
+    }
+}
+
 /// What happens between sessions (RP-7 §2, §5): when `auto`, a call to a partner whose window is
 /// open while this gateway is cut off; and a call the operator asked for.
 fn calls_between_sessions(
@@ -1189,14 +1328,19 @@ fn calls_between_sessions(
     let mut call = |partner: &str, records: bool, why: &str, tell: &mut dyn FnMut(&str)| {
         tell(&format!("calling {partner} {why}"));
         monitor.begin(partner);
-        let result = forward(station, modem, partner, monitor, records);
+        let dial = station.window_dial(partner, now());
+        let result = forward(station, modem, partner, monitor, (records, dial));
         match &result {
             Ok(line) => tell(line),
             Err(e) => tell(&format!("the call to {partner} failed: {e}")),
         }
         let through = result.is_ok();
         monitor.end(&result.map(|_| ()));
-        monitor.set_state("listening", None);
+        if modem.outside.is_none() {
+            monitor.set_state("listening", None);
+        } else {
+            monitor.set_state("outside", modem.outside.clone());
+        }
         through
     };
     // in a partner's window while cut off, it calls by itself (RP-7 §5, §6.2)
@@ -1411,6 +1555,52 @@ fn forward(
     modem: &mut Modem,
     partner: &str,
     monitor: &Monitor,
+    (records, dial): (bool, Option<u64>),
+) -> Result<String, String> {
+    // in the partner's window the radio goes to its channel, and back after (RP-4 §4.1)
+    let back = match dial {
+        Some(hz) if modem.dial => {
+            let back = modem.tune_away(hz)?;
+            if back.is_some() {
+                monitor.log(&format!(
+                    "tuned the radio to {} MHz, {partner}'s channel",
+                    crate::rules::mhz(hz)
+                ));
+            }
+            back
+        }
+        Some(hz) => {
+            monitor.log(&format!(
+                "calling on the radio's own dial: this modem cannot tune it to {partner}'s \
+                 channel, {} MHz",
+                crate::rules::mhz(hz)
+            ));
+            None
+        }
+        None => None,
+    };
+    let result = forward_here(station, modem, partner, monitor, records);
+    if let Some(was) = back {
+        match modem.tune_back(was) {
+            Ok(()) => monitor.log(&format!(
+                "tuned the radio back to {} MHz",
+                crate::rules::mhz(was)
+            )),
+            Err(e) => monitor.log(&format!(
+                "could not tune the radio back to {} MHz: {e}",
+                crate::rules::mhz(was)
+            )),
+        }
+    }
+    result
+}
+
+/// [`forward`] with the radio where the call goes.
+fn forward_here(
+    station: &mut Station,
+    modem: &mut Modem,
+    partner: &str,
+    monitor: &Monitor,
     records: bool,
 ) -> Result<String, String> {
     let at = now();
@@ -1509,7 +1699,8 @@ pub fn forward_once(dir: &Path, partner: &str, say: &mut dyn FnMut(&str)) -> Res
         Err(Unopened::Later(e) | Unopened::Never(e)) => return Err(e),
     };
     say(&format!("calling {partner} to forward the queue"));
-    let result = forward(&mut station, &mut modem, partner, &monitor, true);
+    let dial = station.window_dial(partner, now());
+    let result = forward(&mut station, &mut modem, partner, &monitor, (true, dial));
     for (_, line) in monitor.log_since(0).0 {
         say(&line);
     }

@@ -49,6 +49,9 @@
         <label title="The callsign to call">Call
           <input id="callsign" placeholder="KK4ODA-1" autocomplete="off" spellcheck="false">
         </label>
+        <label id="channel-label" title="The chosen gateway's channel. Call tunes the radio there first and back after, when the modem can set the radio's dial (Aether with CAT, rigctld or FLRig); with another modem, tune the radio yourself" hidden>Channel
+          <select id="channel"></select>
+        </label>
         <button class="quiet" id="gateways-open" title="The gateways your post office lists, where to find them, and how far away">Choose a gateway</button>
         <label id="fetch-label" title="What to fetch of the mail waiting for you; what you mark in Waiting comes too, and small messages come anyway">Fetch
           <select id="fetch">

@@ -601,10 +601,19 @@ impl Panel {
                     Value::Number(n) => Fetch::UpTo(n.as_u64().ok_or("fetch: a size in bytes")?),
                     _ => return Err("fetch: all, none or a size in bytes".into()),
                 };
-                self.run(Some(callsign), kind, &text("adapter"), fetch)
+                // a gateway's channel, chosen from its record (W14): the radio goes there
+                let dial = match &body["dial_hz"] {
+                    Value::Null => None,
+                    v => Some(
+                        v.as_u64()
+                            .filter(|&d| d > 0)
+                            .ok_or("dial_hz: hertz above 0")?,
+                    ),
+                };
+                self.run(Some(callsign), kind, &text("adapter"), fetch, dial)
             }
             (Method::Post, "/api/listen") => {
-                self.run(None, Kind::Station, &text("adapter"), Fetch::All)
+                self.run(None, Kind::Station, &text("adapter"), Fetch::All, None)
             }
             (Method::Post, "/api/modem") => {
                 // the page's Modem box, when it loads and when it changes: the app's connection
@@ -1226,6 +1235,7 @@ impl Panel {
         kind: Kind,
         adapter: &str,
         fetch: Fetch,
+        dial_hz: Option<u64>,
     ) -> Result<Value, Error> {
         {
             let mut a = lock(&self.activity);
@@ -1249,6 +1259,7 @@ impl Panel {
         let mut opts = Options::new(&adapter);
         opts.stop = Some(Arc::clone(&self.stop));
         opts.fetch = fetch;
+        opts.dial_hz = dial_hz;
         *self.live.lock().unwrap_or_else(PoisonError::into_inner) = session::Live::default();
         opts.live = Some(Arc::clone(&self.live));
         // listening answers calls to every callsign of this client (W46)

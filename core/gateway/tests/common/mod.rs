@@ -207,6 +207,12 @@ pub fn client(
 
 /// The loopback adapter (RP-4 §9.4) with the user's station and the gateway's.
 pub fn loopback() -> (Server, SocketAddr, SocketAddr) {
+    loopback_dialled(None)
+}
+
+/// [`loopback`], the gateway's radio on `dial_hz` and able to tune (RP-4 §4.1) when it is given,
+/// and its modem shared, so that a test can turn its knob as another program.
+pub fn loopback_dialled(dial_hz: Option<u64>) -> (Server, SocketAddr, SocketAddr) {
     let caps = Caps {
         bandwidths: vec![2300],
         max_links: 1,
@@ -229,7 +235,15 @@ pub fn loopback() -> (Server, SocketAddr, SocketAddr) {
     };
     let mut ch = Channel::new();
     let user = ch.add_station(station("WD5EMA", "u"));
-    let gateway = ch.add_station(station("KK4ODA-1", "g"));
+    let gateway = ch.add_station(StationConfig {
+        caps: Caps {
+            dial: dial_hz.is_some(),
+            shared: dial_hz.is_some(),
+            ..caps.clone()
+        },
+        dial_hz,
+        ..station("KK4ODA-1", "g")
+    });
     let server = Server::new(ch, Duration::from_secs(10));
     let at_user = server.listen(user, "127.0.0.1:0").expect("a port");
     let at_gateway = server.listen(gateway, "127.0.0.1:0").expect("a port");

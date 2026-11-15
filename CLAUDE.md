@@ -32,6 +32,14 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   request missing a member, or with one of the wrong type, gets (`malformed`), and what an adapter
   that is not shared does with a second host (`busy`, closed). RP-4 §9.5's TCP adapter, whose
   links are TLS connections between machines, is not built yet.
+  The dial (RP-4 0.8.0 §4.1, W14, W40): `caps.dial`, `dial` and `tune` (refused `busy` while any
+  link or call is up on the station), a `dial` event to every host; `StationConfig.dial_hz` and
+  `Channel::dial` in the simulated channel (the vectors' modem starts at `modem.dial_hz`). The
+  client's `Options.dial_hz` (`--dial`, the panel's **Channel** after **Choose**) tunes for a call
+  and back; the gateway tunes to a partner's open window and back, and with a modem that checks
+  no rules but has a dial judges it itself (`gateway/src/rules.rs`: the dial and 3 kHz above it
+  inside an automatic segment; badge `outside`). The Aether adapter asks `status` before
+  `frequency.set`, since another program's call is no event of Aether's.
   `adapters/aether` (`radiopost-aether`, a member of the core workspace) is RP-4 §9.1: each host
   its own WebSocket to Aether's control API and its callsigns a claim there (Aether's ADR-0106);
   `bridge` is the sans-IO mapping, tested row by row against a stand-in and with `rpmi-lines`.

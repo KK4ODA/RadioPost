@@ -23,7 +23,7 @@ use radiopost::{ContentId, ErrorCode};
 use rpmi::base64;
 use rpmi::host::{Carrier, Direction, Engine, Event, Host};
 use rpmi::tcp::Connection;
-use rpmi::wire::Message as Line;
+use rpmi::wire::{Caps as ModemCaps, Message as Line};
 use serde_json::{Value, json};
 
 use crate::store::{Error, Store};
@@ -76,6 +76,9 @@ pub struct Options {
     pub auto: u64,
     /// A bandwidth to ask the modem for.
     pub bandwidth: Option<i64>,
+    /// The channel to call on (wishlist W14): with a modem that has a dial (RP-4 §4.1) the radio
+    /// is tuned there before the call and back to where it was after.
+    pub dial_hz: Option<u64>,
     /// The longest the adapter may say nothing before the session is given up (RP-3 §8).
     pub quiet: Duration,
     /// Set, it stops a station listening for a call: how a program's window says "stop".
@@ -187,6 +190,7 @@ impl Options {
             fetch: Fetch::All,
             auto: 1000,
             bandwidth: None,
+            dial_hz: None,
             quiet: QUIET,
             stop: None,
             renew_within: crate::renewal::WITHIN,
@@ -363,6 +367,8 @@ struct Modem {
     host: Host,
     /// The modem as the user named it.
     name: String,
+    /// What its `hello` said it can do.
+    caps: ModemCaps,
 }
 
 impl Modem {
@@ -390,9 +396,14 @@ impl Modem {
                 conn,
                 host: Host::new(),
                 name: opts.adapter.clone(),
+                caps: ModemCaps::from_json(&Value::Null),
             };
             let hello = modem.host.hello(&opts.app);
             match modem.ask(&hello) {
+                Ok(Event::Hello { caps, .. }) => {
+                    modem.caps = caps;
+                    break modem;
+                }
                 Ok(_) => break modem,
                 Err(why)
                     if why.starts_with("the modem refused hello: busy")
@@ -472,10 +483,80 @@ impl Modem {
                 }
                 Event::Ok { id: i } if Some(i) == id.as_ref() => return Ok(e),
                 Event::Hello { id: Some(i), .. } if Some(i) == id.as_ref() => return Ok(e),
+                Event::Dial { id: Some(i), .. } if Some(i) == id.as_ref() => return Ok(e),
                 _ => {}
             }
         }
     }
+
+    /// Tunes the radio to `dial_hz` for a call, when the modem has a dial (RP-4 §4.1), and gives
+    /// the dial it left, to go back to. A modem without one leaves the tuning to the user, who is
+    /// told where.
+    fn tune_for_call(
+        &mut self,
+        dial_hz: Option<u64>,
+        say: &mut dyn FnMut(&str),
+    ) -> Result<Option<u64>, Error> {
+        let Some(hz) = dial_hz else {
+            return Ok(None);
+        };
+        if !self.caps.dial {
+            tell(
+                say,
+                &format!("tune the radio to {} MHz: this modem cannot", mhz(hz)),
+            );
+            return Ok(None);
+        }
+        let read = self.host.dial();
+        let Event::Dial { dial_hz: was, .. } = self.ask(&read)? else {
+            return Err("the modem did not say where its dial is".into());
+        };
+        if was == hz {
+            return Ok(None);
+        }
+        let tune = self.host.tune(hz);
+        self.ask(&tune)
+            .map_err(|why| format!("cannot tune the radio to {} MHz: {why}", mhz(hz)))?;
+        tell(say, &format!("tuned the radio to {} MHz", mhz(hz)));
+        Ok(Some(was))
+    }
+
+    /// Tunes the radio back to the dial a call moved it from. The adapter may not have put the
+    /// link down yet, so `busy` is tried again for a while.
+    fn tune_back(&mut self, was: u64, say: &mut dyn FnMut(&str)) {
+        let patience = std::time::Instant::now() + TUNE_BACK_PATIENCE;
+        loop {
+            let tune = self.host.tune(was);
+            match self.ask(&tune) {
+                Ok(_) => {
+                    tell(say, &format!("tuned the radio back to {} MHz", mhz(was)));
+                    return;
+                }
+                Err(why)
+                    if why.starts_with("the modem refused tune: busy")
+                        && std::time::Instant::now() < patience =>
+                {
+                    std::thread::sleep(Duration::from_millis(250));
+                }
+                Err(why) => {
+                    let text = format!("could not tune the radio back to {} MHz: {why}", mhz(was));
+                    tell(say, &text);
+                    return;
+                }
+            }
+        }
+    }
+}
+
+/// How long a call's end waits for the adapter to let the dial go back.
+const TUNE_BACK_PATIENCE: Duration = Duration::from_secs(30);
+
+/// A dial in MHz, to the kilohertz or finer when it needs it: 7.101, 3.5915.
+#[must_use]
+pub fn mhz(hz: u64) -> String {
+    let fraction = format!("{:06}", hz % 1_000_000);
+    let fraction = fraction.trim_end_matches('0');
+    format!("{}.{fraction:0<3}", hz / 1_000_000)
 }
 
 /// Carries a session on a link that has come up, until it ends, putting what happens in the
@@ -902,6 +983,24 @@ pub fn call(
     say: &mut dyn FnMut(&str),
 ) -> Result<Report, Error> {
     let (mut modem, _) = Modem::open(store, opts, &[])?;
+    let back = modem.tune_for_call(opts.dial_hz, say)?;
+    let result = call_on(&mut modem, store, remote, kind, opts, say);
+    if let Some(was) = back {
+        modem.tune_back(was, say);
+    }
+    modem.conn.close();
+    result
+}
+
+/// [`call`] on a modem opened and tuned.
+fn call_on(
+    modem: &mut Modem,
+    store: &mut Store,
+    remote: &str,
+    kind: Kind,
+    opts: &Options,
+    say: &mut dyn FnMut(&str),
+) -> Result<Report, Error> {
     let connect = modem.host.connect(remote, None, opts.bandwidth);
     let id = connect.get("id").cloned();
     modem.ask(&connect)?;
@@ -970,7 +1069,7 @@ pub fn call(
     }
     let mut carrier = Carrier::new(Calling(client));
     let result = carry(
-        &mut modem,
+        modem,
         &mut carrier,
         &connected,
         store,
@@ -998,7 +1097,6 @@ pub fn call(
     }
     store.save()?;
     tell(say, &format!("the session with {remote} is over"));
-    modem.conn.close();
     Ok(report)
 }
 

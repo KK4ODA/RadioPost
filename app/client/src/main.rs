@@ -96,6 +96,8 @@ usage: radiopost [--home DIR] [--as CALLSIGN] COMMAND ...
 session options:
   --adapter HOST:PORT      the modem's RPMI adapter (default 127.0.0.1:8600)
   --bandwidth HZ           ask the modem for this bandwidth
+  --dial MHZ               call on this channel: a modem with a dial (RP-4 §4.1) is tuned
+                           there first and back after; with another, tune the radio yourself
   --plain                  send messages uncompressed
   --clock UNIX --nonce HEX --session-id HEX --challenge HEX
                            fix the clock and the random draws, to replay a session exactly
@@ -174,6 +176,30 @@ fn fixed<const N: usize>(args: &Args, name: &str) -> Result<Option<[u8; N]>, Err
         .transpose()
 }
 
+/// A dial typed in MHz (`7.101`, `3.5915`), in hertz: read as digits, so `7.1015` is 7 101 500
+/// exactly.
+fn dial_of(text: &str) -> Result<u64, Error> {
+    let bad = || format!("--dial is a frequency in MHz, such as 7.101, not {text}");
+    let (whole, fraction) = text.trim().split_once('.').unwrap_or((text.trim(), ""));
+    if whole.is_empty()
+        || fraction.len() > 6
+        || !whole
+            .bytes()
+            .chain(fraction.bytes())
+            .all(|b| b.is_ascii_digit())
+    {
+        return Err(bad());
+    }
+    let mhz: u64 = whole.parse().map_err(|_| bad())?;
+    let hz: u64 = format!("{fraction:0<6}").parse().map_err(|_| bad())?;
+    let dial = mhz
+        .checked_mul(1_000_000)
+        .and_then(|m| m.checked_add(hz))
+        .filter(|&d| d > 0)
+        .ok_or_else(bad)?;
+    Ok(dial)
+}
+
 fn options(args: &Args) -> Result<Options, Error> {
     let mut o = Options::new(
         &args
@@ -184,6 +210,7 @@ fn options(args: &Args) -> Result<Options, Error> {
         .one("--bandwidth")
         .map(|b| b.parse().map_err(|_| "--bandwidth is a number of Hz"))
         .transpose()?;
+    o.dial_hz = args.one("--dial").map(|d| dial_of(&d)).transpose()?;
     o.clock = args
         .one("--clock")
         .map(|c| c.parse().map_err(|_| "--clock is Unix seconds"))
@@ -1023,6 +1050,32 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("radiopost: {e}");
             ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dial_of;
+
+    #[test]
+    fn a_dial_is_read_in_megahertz_as_digits() {
+        assert_eq!(dial_of("7.101"), Ok(7_101_000));
+        assert_eq!(dial_of("3.5915"), Ok(3_591_500));
+        assert_eq!(dial_of(" 14 "), Ok(14_000_000));
+        assert_eq!(dial_of("7.1015"), Ok(7_101_500), "no rounding");
+        for bad in [
+            "",
+            "7,101",
+            "7.1234567",
+            "-7.1",
+            "0",
+            "0.000",
+            "seven",
+            "7.1e3",
+            ".5",
+        ] {
+            assert!(dial_of(bad).is_err(), "{bad}");
         }
     }
 }

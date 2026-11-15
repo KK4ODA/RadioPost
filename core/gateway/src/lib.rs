@@ -20,6 +20,7 @@ pub mod offline;
 pub mod operator;
 pub mod panel;
 pub mod refused;
+pub mod rules;
 pub mod runner;
 pub mod station;
 pub mod store;
