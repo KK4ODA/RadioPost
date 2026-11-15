@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.0.1 |
+| **Version** | 1.0.2 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -430,13 +430,36 @@ written.*
 
 ### 9.4 AX.25 packet (VHF and UHF)
 
-Connected-mode AX.25 gives the link RP-3 needs. Direwolf, and many packages that sit on a KISS TNC,
-offer it through the **AGWPE** protocol: register a callsign (`X`), connect (`C`), send connected
-data (`D`), disconnect (`d`), with `Y` reporting frames still outstanding. UI frames carry
-broadcasts. AGWPE is already built for several programs: each registers its own callsigns, and
-connections to a callsign go to the program that registered it, the model §1.1 describes. *Check
-how the TNC software handles a callsign two programs register before an adapter reports `shared`
-true.*
+Connected-mode AX.25 gives the link RP-3 needs. Dire Wolf, and many programs that sit on a KISS
+TNC, offer it through the **AGWPE** port (SV2AGW, *AGWPE TCP/IP API*; **8000** by default): frames
+of a 36-byte header (the TNC's port, a kind given as a letter, the PID, `call_from` and `call_to`
+of 10 bytes each, the data's length little-endian) and their data. RadioPost's packet adapter maps
+RPMI onto it:
+
+| RPMI | AGWPE |
+|---|---|
+| `hello` | `R`, the version: anything that answers it speaks AGWPE; then `G`, the ports, the adapter's among them, or the host gets `no-modem`. `modem` is `AX.25 packet`; `caps.bandwidths` is empty (the link's speed is the TNC's setting); `max_links` 1; `delivery`, `broadcast`, `quality`, `busy`, `regulatory`, `shared` and `dial` false. |
+| `callsigns` | Kept. An AX.25 address is 1 to 6 capitals and digits, then `-1` to `-15`; the adapter refuses others, so a callsign with `/` (RP-0 §6.1) cannot be used. |
+| `listen` | `X` registers each callsign, `x` lets it go: a TNC answers every connection to a registered callsign, so callsigns are registered only while the host listens. `ok` waits for the TNC's replies to `X`; one refused gives `refused`. |
+| `connect` | `C` from `as` to `remote`, the caller's callsign registered for the call when the host does not listen. `C` `*** CONNECTED With Station <remote>` gives `connected`; `d` `*** DISCONNECTED RETRYOUT …` gives `failed` `timeout`, any other `d` `failed` `refused`. |
+| `incoming` | `C` `*** CONNECTED To Station <caller>`, to a callsign the host holds and listens on. One the host cannot have (a link or a call already up) is ended at once with `d`. |
+| `send` | `D` frames of 256 bytes at most (AX.25's default N1), no more than 7 with the TNC at once; `Y`, the frames outstanding on the link, paces them and gives `queued`. |
+| `received` | `D` from the link's other station. |
+| `disconnect` | `d`, once `Y` says nothing is outstanding (or after two minutes): AGWPE's `d` drops what the TNC still holds. The TNC's `d` gives `disconnected` `local`. |
+| `abort` | `d` at once; a call under way ends `failed` `aborted`, and its late `C` is ended. |
+| `disconnected` | `d` unasked: `remote`, or `timeout` for `RETRYOUT`. |
+
+**Delivery.** Whether `Y` counts frames sent but not yet acknowledged differs between TNCs (Dire
+Wolf's does), so the adapter reports no `delivered`.
+
+**One host at a time.** AGWPE serves several programs, each registering its own callsigns, and a
+connection to a callsign goes to the program that registered it, the model §1.1 describes. Dire
+Wolf does not refuse a callsign registered twice, so the adapter cannot tell a host that another
+program holds it: it serves one host at a time (`shared` false), with an AGWPE connection of its
+own for it, which it closes when the host leaves, letting its callsigns go.
+
+**What it does not do.** UI frames (AGWPE's `M`) are not carried yet, so no broadcasts; the TNC
+checks no band rules (§8).
 
 ### 9.5 TCP
 
@@ -571,3 +594,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 0.8.0 | 2026-11-15 | The dial (§4.1, wishlist W14, W40; gaps G3, G8): `caps.dial`, `dial` and `tune`, the `dial` event to every host, `tune` refused `busy` while any link or call is up on the station since the dial is the whole station's (§1.1), a host that moved the station tuning back, and the host's own rules check reading the dial (§8). An adapter that cannot read the dial just now answers `dial` `refused`. §9.1: Aether's `status.frequency_hz`, `can_tune`, `frequency.set` and `dial` event, the station's state checked before `frequency.set`; §9.5 and §9.6 have no dial. Test vectors: the dial conversation, and the simulated modem's starting dial (`modem.dial_hz`). |
 | 1.0.0 | 2026-11-15 | Stable (D41). §2: an adapter never listens beyond its own machine; a transport between machines is left for a later addition (gap G4). |
 | 1.0.1 | 2026-11-15 | §9.2 (informative), found by writing the VARA adapter: how `hello` tells VARA's interface from another (`CHAT OFF`), its caps for VARA HF and VARA FM, the published callsign grammar, `LISTEN OFF` held as Mercury's is, `BUFFER` as sent and not delivered, and that the adapter sends nothing to identify the station. Nothing for an implementation to do. |
+| 1.0.2 | 2026-11-15 | §9.4 (informative), found by writing the packet adapter against AGWPE: the frame, the mapping, callsigns registered only while the host listens, `d` only once nothing is outstanding, no `delivered`, one host at a time. Nothing for an implementation to do. |

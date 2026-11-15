@@ -18,6 +18,7 @@
 pub mod base64;
 pub mod channel;
 pub mod host;
+pub mod lobby;
 pub mod polled;
 pub mod tcp;
 pub mod wire;

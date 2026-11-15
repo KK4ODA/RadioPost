@@ -115,6 +115,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   (`vara_fault`); no `delivered` (VARA's `BUFFER` counts what is not yet sent); no `CQFRAME`.
   Its tests run on Mercury's stand-in in its VARA mode (`Air::vara`, reached by `#[path]`). VARA
   is never run: only its published commands are used.
+  `adapters/packet` (`radiopost-packet`) is RP-4 §9.4 on a TNC's AGWPE port (default 8000; Dire
+  Wolf's `server.c` read for what the API leaves open): `frame` (the 36-byte header), `bridge`
+  (callsigns registered with `X` only while the host listens, or for a call's own callsign; `D`
+  256 bytes at most, 7 ahead, paced by `Y` every 0.5 s; `disconnect` sends `d` once `Y` is 0, since
+  AGWPE's `d` drops what the TNC holds; no `delivered`), `serve`. One host at a time: the shared
+  lobby is `rpmi::lobby` (Mercury and VARA use it too). `tests/common` is a stand-in for two TNCs.
   `adapters/tcp` (`radiopost-tcp`) is RP-4 §9.5: links to other TCP adapters opened with one line
   each way (`RPTCP 1 <as> <called>`, `OK <callsign>` or `NO <code>`), TLS on the Internet with
   rustls and ring (a self-signed certificate made on first use, pinned by SHA-256 fingerprint, or

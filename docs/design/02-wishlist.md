@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.34 |
+| **Version** | 0.3.35 |
 | **Updated** | 2026-11-15 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -125,7 +125,7 @@ rules:
 | W19 | Shorter short messages: a dictionary | Radio | Low | Optional addition; breaking if made required | Planned |
 | W20 | An adapter for VARA-style modems: VARA and Mercury | Adapters | Medium | Fits today; G11 to name Mercury | Implemented |
 | W21 | An ARDOP adapter | Adapters | Low | Needs specification review | Planned |
-| W22 | An AX.25 packet adapter | Adapters | Low | Fits today | Planned |
+| W22 | An AX.25 packet adapter | Adapters | Low | Fits today | Implemented |
 | W23 | A phone version | Radio | Low | Fits today; optional addition for RPMI across devices | Planned |
 | W24 | Block a caller by address or callsign | Operation | Medium | Fits today | Implemented |
 | W25 | The gateway renews its own credential | — | — | — | Consolidated into W8 |
@@ -918,12 +918,12 @@ concept (N2CALL-5).
 | Requested by | The plan: concept §2 and §7, design §5.4, Phase 5. Requesters: 0. |
 | Component | Adapter. |
 | Compatibility | **Fits today** through AGWPE (RP-4 §9.4). Whether it can be shared depends on the TNC software (RP-4 §9.4). |
-| Existing coverage | Planned, Phase 5. |
+| Existing coverage | Built (2026-11-15): `adapters/packet` (`radiopost-packet`), RPMI on a TNC's AGWPE port (Dire Wolf's and others'), RP-4 1.0.2 §9.4 written from it. It passes A-01 to A-04 through two adapters on a stand-in for two TNCs on one channel, written from SV2AGW's *AGWPE TCP/IP API* and what Dire Wolf's `server.c` answers. One host at a time; no broadcasts yet. Not yet run against a real Dire Wolf. |
 | Dependencies | W26 to run beside HF; W40 for unattended use. |
 | Effort | Medium. |
 | Priority | **Low.** |
 | Recommendation | Accept. |
-| Status | Planned. |
+| Status | Implemented, tried against a stand-in. |
 | Author decision | None yet. |
 
 ### W43. A public test service
@@ -1124,3 +1124,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.32 | 2026-11-15 | W43 implemented: the public test service, hosted over the Internet. |
 | 0.3.33 | 2026-11-15 | W20 implemented: the VARA adapter, from VARA's published commands (RP-4 1.0.1 §9.2), tried against a stand-in. |
 | 0.3.34 | 2026-11-15 | W26 implemented: one gateway answering on several modems, one session at a time; the registration's channels name their modems. |
+| 0.3.35 | 2026-11-15 | W22 implemented: the packet adapter on a TNC's AGWPE port (RP-4 1.0.2 §9.4), tried against a stand-in. |

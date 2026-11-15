@@ -12,17 +12,16 @@
 //! Mercury's two connections. It reads them through [`PolledStream`]s, never with a read timeout
 //! on their sockets: on Windows such a read can fail with os error 997 and lose what it had.
 
-use std::io::{self, BufRead, BufReader, Read, Write};
-use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
+use std::io::{self, Read, Write};
+use std::net::{Shutdown, SocketAddr, TcpStream, ToSocketAddrs};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use rpmi::lobby::{Arrival, FromHost, hosts, write_line};
 use rpmi::polled::PolledStream;
-use rpmi::tcp::MAX_LINE;
-use rpmi::wire::{Message, Request, VERSION, admit, error, line_of, parse_line, speaks};
+use rpmi::wire::Message;
 
 use crate::bridge::{Bridge, Dialect, Out};
 
@@ -48,19 +47,6 @@ pub type Note = Arc<dyn Fn(&str) + Send + Sync>;
 #[must_use]
 pub fn quiet() -> Note {
     Arc::new(|_| {})
-}
-
-/// What a host's reader thread hands the station's thread.
-enum FromHost {
-    Line(Vec<u8>),
-    TooLong,
-    Closed,
-}
-
-/// A host that has said `hello` and has the modem.
-struct Arrival {
-    stream: TcpStream,
-    lines: Receiver<FromHost>,
 }
 
 /// Listens for hosts and serves them, one at a time, through Mercury's TNC interface at
@@ -99,117 +85,10 @@ pub fn listen_speaking(
     dialect: Dialect,
     note: Note,
 ) -> io::Result<SocketAddr> {
-    let listener = TcpListener::bind(addr)?;
-    let local = listener.local_addr()?;
-    let occupied = Arc::new(AtomicBool::new(false));
-    let (arrivals, arrived) = mpsc::channel();
+    let (local, arrived) = hosts(addr)?;
     let mercury = modem.to_owned();
     thread::spawn(move || Station::new(&mercury, dialect, &note).run(&arrived));
-    thread::spawn(move || {
-        for stream in listener.incoming().flatten() {
-            let occupied = Arc::clone(&occupied);
-            let arrivals = arrivals.clone();
-            thread::spawn(move || lobby(&stream, &occupied, &arrivals));
-        }
-    });
     Ok(local)
-}
-
-fn write_line(mut stream: &TcpStream, m: &Message) -> io::Result<()> {
-    let mut line = line_of(m);
-    line.push('\n');
-    stream.write_all(line.as_bytes())
-}
-
-fn read_line(reader: &mut BufReader<TcpStream>, buf: &mut Vec<u8>) -> FromHost {
-    buf.clear();
-    match reader
-        .by_ref()
-        .take(MAX_LINE as u64 + 1)
-        .read_until(b'\n', buf)
-    {
-        Ok(0) | Err(_) => FromHost::Closed,
-        Ok(_) if buf.len() > MAX_LINE => FromHost::TooLong,
-        Ok(_) => {
-            if buf.last() == Some(&b'\n') {
-                buf.pop();
-            }
-            FromHost::Line(buf.clone())
-        }
-    }
-}
-
-/// One host's connection until its `hello` (RP-4 §3): what is not a `hello` is answered here,
-/// and a `hello` takes the modem if no host has it. From then on its lines go to the station.
-fn lobby(stream: &TcpStream, occupied: &AtomicBool, arrivals: &Sender<Arrival>) {
-    let _ = stream.set_nodelay(true);
-    let Ok(reading) = stream.try_clone() else {
-        return;
-    };
-    let mut reader = BufReader::new(reading);
-    let mut buf = Vec::new();
-    let lines = loop {
-        let line = match read_line(&mut reader, &mut buf) {
-            FromHost::Line(line) => line,
-            FromHost::TooLong => {
-                let refusal = error(None, "malformed", "a line longer than the adapter takes");
-                let _ = write_line(stream, &refusal);
-                let _ = stream.shutdown(Shutdown::Both);
-                return;
-            }
-            FromHost::Closed => return,
-        };
-        let text = std::str::from_utf8(&line).unwrap_or("\u{0}");
-        let refusal = match parse_line(text).and_then(|m| {
-            let id = m.get("id").cloned();
-            admit(&m, false).map(|request| (request, id))
-        }) {
-            Err(refusal) => refusal,
-            Ok((Request::Hello { low, high, .. }, id)) => {
-                let closing = if !speaks(low, high) {
-                    let text = format!("this adapter speaks {VERSION}");
-                    error(id.as_ref(), "unsupported-version", &text)
-                } else if occupied.swap(true, Ordering::SeqCst) {
-                    error(id.as_ref(), "busy", "another program has this modem")
-                } else {
-                    let (tx, rx) = mpsc::channel();
-                    let _ = tx.send(FromHost::Line(line));
-                    let Ok(writing) = stream.try_clone() else {
-                        occupied.store(false, Ordering::SeqCst);
-                        return;
-                    };
-                    let arrival = Arrival {
-                        stream: writing,
-                        lines: rx,
-                    };
-                    if arrivals.send(arrival).is_err() {
-                        occupied.store(false, Ordering::SeqCst);
-                        return;
-                    }
-                    break tx;
-                };
-                let _ = write_line(stream, &closing);
-                let _ = stream.shutdown(Shutdown::Both);
-                return;
-            }
-            Ok(_) => continue, // `admit` lets nothing but `hello` through before `hello`
-        };
-        if write_line(stream, &refusal).is_err() {
-            return;
-        }
-    };
-    // The modem is free once this host's connection has closed, whoever closed it: the station
-    // ends what the host left on the air before it takes the next host, who waits in `arrivals`.
-    // Freed here, not when the station next looks, so that a host that leaves and another that
-    // comes at once are not taken for two at a time (RP-4 §3).
-    loop {
-        let said = read_line(&mut reader, &mut buf);
-        let last = !matches!(said, FromHost::Line(_));
-        if lines.send(said).is_err() || last {
-            occupied.store(false, Ordering::SeqCst);
-            return;
-        }
-    }
 }
 
 /// The adapter's two connections to Mercury.
