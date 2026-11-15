@@ -1628,3 +1628,81 @@ fn a_placement_for_another_gateway_is_not_held() {
     assert!(!got.caller.iter().any(|e| matches!(e, Event::Placed { .. })));
     assert!(got.log.picked.is_empty(), "the forward item is kept");
 }
+
+/// RP-7 §5, §5.1, `forwarding.json`'s window cases: a window is allowed when its signal lies in
+/// one segment of the country's table, ends included; a country with no table allows none.
+#[test]
+fn windows_only_inside_a_countrys_segments() {
+    let file = vectors("forwarding.json");
+    let cases = file["window_cases"].as_array().expect("cases");
+    assert_eq!(cases.len(), 19);
+    for case in cases {
+        let o = &case["occupied_hz"];
+        let occupied = (o[0].as_u64().expect("low"), o[1].as_u64().expect("high"));
+        assert_eq!(
+            radiopost::forwarding::window_allowed(
+                occupied,
+                case["country"].as_str().expect("country")
+            ),
+            case["expect"].as_bool().expect("expect"),
+            "{}",
+            case["what"]
+        );
+    }
+    let table: Vec<(u64, u64)> = file["segments"]["US"]
+        .as_array()
+        .expect("segments")
+        .iter()
+        .map(|s| (s[0].as_u64().expect("from"), s[1].as_u64().expect("to")))
+        .collect();
+    assert_eq!(radiopost::forwarding::segments("US"), table.as_slice());
+}
+
+/// RP-7 §6.2, `forwarding.json`'s partner cases: in a partner's window, a cut-off gateway sends it
+/// its records unless that partner said it is cut off too and another that reaches the Internet
+/// opens a window within the hour.
+#[test]
+fn records_go_to_a_partner_that_reaches_the_post_offices() {
+    use radiopost::forwarding::{PartnerView, Window, records_to};
+    let file = vectors("forwarding.json");
+    let cases = file["partner_cases"].as_array().expect("cases");
+    assert_eq!(cases.len(), 8);
+    for case in cases {
+        let partners: Vec<(String, PartnerView)> = case["partners"]
+            .as_object()
+            .expect("partners")
+            .iter()
+            .map(|(c, p)| {
+                (
+                    c.clone(),
+                    PartnerView {
+                        window: Window::from_json(&p["window"]).expect("a window"),
+                        online: p["online"].as_bool(),
+                    },
+                )
+            })
+            .collect();
+        assert_eq!(
+            records_to(
+                case["calling"].as_str().expect("calling"),
+                &partners,
+                case["now"].as_u64().expect("now")
+            ),
+            case["expect"].as_bool().expect("expect"),
+            "{}",
+            case["what"]
+        );
+    }
+    // session-04's window: N1CALL-10's opens at :15 for ten minutes
+    let w = Window::from_json(&file["context"]["window"]).expect("a window");
+    let t = vectors("session-04.json")["context"]["caller_clock"]
+        .as_u64()
+        .expect("clock");
+    assert!(w.is_open(t), "N2CALL-5 calls inside N1CALL-10's window");
+    assert!(!w.is_open(t + 600), "ten minutes on, it has closed");
+    assert_eq!(
+        w.next(t + 600),
+        w.next(t) + 3600,
+        "and opens again an hour on"
+    );
+}

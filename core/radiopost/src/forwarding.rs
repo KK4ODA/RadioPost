@@ -361,3 +361,114 @@ pub struct Forwarded {
     /// Its messages that arrived in this session, by content ID, as air forms.
     pub messages: Vec<(ContentId, Vec<u8>)>,
 }
+
+/// How long a cut-off gateway keeps its records for a partner that reaches the post offices
+/// (RP-7 §6.2): an hour.
+pub const HOLD_S: u64 = 3600;
+
+/// A window (RP-7 §5): it opens `at_s` seconds after each multiple of `every_s` since the Unix
+/// epoch, and lasts `length_s` seconds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Window {
+    /// How often it opens.
+    pub every_s: u64,
+    /// When in each period it opens.
+    pub at_s: u64,
+    /// How long it stays open.
+    pub length_s: u64,
+}
+
+impl Window {
+    /// A window from its JSON (RP-7 §5): `None` without its three numbers, or with `every_s` 0.
+    #[must_use]
+    pub fn from_json(w: &serde_json::Value) -> Option<Window> {
+        let n = |k: &str| w.get(k).and_then(serde_json::Value::as_u64);
+        let window = Window {
+            every_s: n("every_s")?,
+            at_s: n("at_s")?,
+            length_s: n("length_s")?,
+        };
+        (window.every_s > 0).then_some(window)
+    }
+
+    /// When the window open at `now` opened, or else when the next one opens.
+    #[must_use]
+    pub fn next(&self, now: u64) -> u64 {
+        let start = now.saturating_sub(self.at_s) / self.every_s * self.every_s + self.at_s;
+        if now < start + self.length_s {
+            start
+        } else {
+            start + self.every_s
+        }
+    }
+
+    /// Whether it is open at `now`.
+    #[must_use]
+    pub fn is_open(&self, now: u64) -> bool {
+        self.next(now) <= now
+    }
+}
+
+/// Where a country's rules let a station under automatic control start a data transmission
+/// (RP-7 §5.1), hertz, ends included: none for a country with no table here.
+#[must_use]
+pub fn segments(country: &str) -> &'static [(u64, u64)] {
+    match country {
+        "US" => &[
+            (3_585_000, 3_600_000),
+            (7_100_000, 7_105_000),
+            (10_140_000, 10_150_000),
+            (14_095_000, 14_099_500),
+            (14_100_500, 14_112_000),
+            (18_105_000, 18_110_000),
+            (21_090_000, 21_100_000),
+            (24_925_000, 24_930_000),
+            (28_120_000, 28_189_000),
+            (50_100_000, 54_000_000),
+            (144_100_000, 148_000_000),
+            (222_000_000, 225_000_000),
+            (430_000_000, 450_000_000),
+        ],
+        _ => &[],
+    }
+}
+
+/// RP-7 §5: whether a signal occupying `occupied` (lowest and highest radio frequency) lies inside
+/// one segment of `country`'s table, ends included: only then may a gateway there publish a window
+/// on it, or call in one, unattended.
+#[must_use]
+pub fn window_allowed(occupied: (u64, u64), country: &str) -> bool {
+    let (low, high) = occupied;
+    low <= high
+        && segments(country)
+            .iter()
+            .any(|&(a, b)| a <= low && high <= b)
+}
+
+/// A partner as a cut-off gateway knows it (RP-7 §6.2): its window, and what its last `WELCOME`
+/// said of reaching the Internet, if it was ever called.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PartnerView {
+    /// Its window.
+    pub window: Window,
+    /// Its last `WELCOME`'s `online`; `None` when it was never called.
+    pub online: Option<bool>,
+}
+
+/// RP-7 §6.2: in the window of `partner`, whether a cut-off gateway sends it its records. Yes,
+/// unless its last `WELCOME` said `online` false and another partner whose last said `online`
+/// true opens a window within the hour (one open now counts); then it calls only to collect its
+/// mail. A partner never called counts as neither.
+#[must_use]
+pub fn records_to(partner: &str, partners: &[(String, PartnerView)], now: u64) -> bool {
+    let online = partners
+        .iter()
+        .find(|(c, _)| c == partner)
+        .and_then(|(_, p)| p.online);
+    if online != Some(false) {
+        return true;
+    }
+    !partners
+        .iter()
+        .any(|(c, p)| c != partner && p.online == Some(true) && p.window.next(now) <= now + HOLD_S)
+}
