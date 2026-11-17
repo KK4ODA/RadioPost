@@ -70,12 +70,27 @@ impl Host {
         as_call: Option<&str>,
         bandwidth: Option<i64>,
     ) -> Message {
+        self.connect_lasting(remote, as_call, bandwidth, None)
+    }
+
+    /// `connect` whose tries keep starting for at least `call_s` seconds, with `caps.call_s`
+    /// (§4): a call to a gateway that scans (RP-5 §4.4, `scan_s`).
+    pub fn connect_lasting(
+        &mut self,
+        remote: &str,
+        as_call: Option<&str>,
+        bandwidth: Option<i64>,
+        call_s: Option<u64>,
+    ) -> Message {
         let mut members = vec![("remote", Value::from(remote))];
         if let Some(a) = as_call {
             members.push(("as", a.into()));
         }
         if let Some(b) = bandwidth {
             members.push(("bandwidth", b.into()));
+        }
+        if let Some(s) = call_s {
+            members.push(("call_s", s.into()));
         }
         self.with_id("connect", &members)
     }
@@ -129,6 +144,11 @@ impl Host {
     /// `tune`: the radio's dial set, in hertz (RP-4 §4.1).
     pub fn tune(&mut self, dial_hz: u64) -> Message {
         self.with_id("tune", &[("dial_hz", dial_hz.into())])
+    }
+
+    /// `scan`: listen on each dial in turn, the first the home; none stops the scan (§4.2).
+    pub fn scan(&mut self, dials: &[u64]) -> Message {
+        self.with_id("scan", &[("dials", dials.to_vec().into())])
     }
 }
 
@@ -295,6 +315,18 @@ pub enum Event {
         busy: bool,
         /// The host's links.
         links: Vec<LinkStatus>,
+    },
+    /// The host's scan (§4.2): the answer to `scan`, or, with no `id`, its dials changed or,
+    /// with none and a `why`, its end.
+    Scan {
+        /// The request's `id`.
+        id: Option<Value>,
+        /// The dials scanned, the first the home; none once it has ended.
+        dials: Vec<u64>,
+        /// How long a call's tries must keep starting to be heard on any of them, seconds.
+        scan_s: Option<u64>,
+        /// Why it ended: `asked`, `left`, `tuned`, `knob`, `operator` or `radio`.
+        why: Option<String>,
     },
     /// The radio's dial (§4.1): the answer to `dial`, or, with no `id`, a change of it.
     Dial {
@@ -463,6 +495,16 @@ impl Event {
                     .get("dial_hz")
                     .and_then(Value::as_u64)
                     .ok_or("no `dial_hz`")?,
+            },
+            "scan" => Event::Scan {
+                id,
+                dials: m
+                    .get("dials")
+                    .and_then(Value::as_array)
+                    .and_then(|a| a.iter().map(Value::as_u64).collect::<Option<Vec<_>>>())
+                    .ok_or("no `dials`")?,
+                scan_s: m.get("scan_s").and_then(Value::as_u64),
+                why: optional_text(m, "why"),
             },
             other => Event::Unknown(other.into()),
         })

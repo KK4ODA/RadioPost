@@ -106,13 +106,15 @@
                 "dial_hz": 3590000,
                 "mode": "USB",
                 "modem": "aether",
-                "bandwidth_hz": 2300
+                "bandwidth_hz": 2300,
+                "scan_s": 14
               },
               {
                 "dial_hz": 7101000,
                 "mode": "USB",
                 "modem": "aether",
-                "bandwidth_hz": 2300
+                "bandwidth_hz": 2300,
+                "scan_s": 14
               }
             ],
             "hours": "always",
@@ -127,8 +129,8 @@
         ]
       },
       "header_b64url": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0",
-      "payload_b64url": "eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6IktLNE9EQS0xIiwib3BlcmF0b3IiOiJLSzRPREEiLCJncmlkIjoiRU03MyIsInBsYWNlIjoiQXRsYW50YSwgR0EiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwfSx7ImRpYWxfaHoiOjcxMDEwMDAsIm1vZGUiOiJVU0IiLCJtb2RlbSI6ImFldGhlciIsImJhbmR3aWR0aF9oeiI6MjMwMH1dLCJob3VycyI6ImFsd2F5cyIsImludGVybmV0Ijp0cnVlLCJjb3BpZXMiOnsidXNlcnMiOjUwLCJkYXlzIjo3LCJtYXhfYWlyX2J5dGVzIjoxNjM4NH0sInVwZGF0ZWQiOjE3OTM0OTg0MDB9XX0",
-      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6IktLNE9EQS0xIiwib3BlcmF0b3IiOiJLSzRPREEiLCJncmlkIjoiRU03MyIsInBsYWNlIjoiQXRsYW50YSwgR0EiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwfSx7ImRpYWxfaHoiOjcxMDEwMDAsIm1vZGUiOiJVU0IiLCJtb2RlbSI6ImFldGhlciIsImJhbmR3aWR0aF9oeiI6MjMwMH1dLCJob3VycyI6ImFsd2F5cyIsImludGVybmV0Ijp0cnVlLCJjb3BpZXMiOnsidXNlcnMiOjUwLCJkYXlzIjo3LCJtYXhfYWlyX2J5dGVzIjoxNjM4NH0sInVwZGF0ZWQiOjE3OTM0OTg0MDB9XX0.ODhNLwrCuzpuUSuVRgMcHeRYzTeCkL2dCy9rg88h4YQ0gPYdue7-yIeUnpiY0ZXdFUHsDrZmwnt0DwLvBF9BDw"
+      "payload_b64url": "eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6IktLNE9EQS0xIiwib3BlcmF0b3IiOiJLSzRPREEiLCJncmlkIjoiRU03MyIsInBsYWNlIjoiQXRsYW50YSwgR0EiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwLCJzY2FuX3MiOjE0fSx7ImRpYWxfaHoiOjcxMDEwMDAsIm1vZGUiOiJVU0IiLCJtb2RlbSI6ImFldGhlciIsImJhbmR3aWR0aF9oeiI6MjMwMCwic2Nhbl9zIjoxNH1dLCJob3VycyI6ImFsd2F5cyIsImludGVybmV0Ijp0cnVlLCJjb3BpZXMiOnsidXNlcnMiOjUwLCJkYXlzIjo3LCJtYXhfYWlyX2J5dGVzIjoxNjM4NH0sInVwZGF0ZWQiOjE3OTM0OTg0MDB9XX0",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6IktLNE9EQS0xIiwib3BlcmF0b3IiOiJLSzRPREEiLCJncmlkIjoiRU03MyIsInBsYWNlIjoiQXRsYW50YSwgR0EiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwLCJzY2FuX3MiOjE0fSx7ImRpYWxfaHoiOjcxMDEwMDAsIm1vZGUiOiJVU0IiLCJtb2RlbSI6ImFldGhlciIsImJhbmR3aWR0aF9oeiI6MjMwMCwic2Nhbl9zIjoxNH1dLCJob3VycyI6ImFsd2F5cyIsImludGVybmV0Ijp0cnVlLCJjb3BpZXMiOnsidXNlcnMiOjUwLCJkYXlzIjo3LCJtYXhfYWlyX2J5dGVzIjoxNjM4NH0sInVwZGF0ZWQiOjE3OTM0OTg0MDB9XX0.N5VmwbVBwSciZrhQxmilogib2X_8QX31Jneyh51DQjLYiOcDecn-X98cf5EGLb-MA6ZfgUAMQmx5pWizvbSfAw"
     }
   ],
   "verification": [
@@ -170,7 +172,7 @@
     },
     {
       "what": "gateways, `alg` none and no signature",
-      "jws": "eyJhbGciOiJub25lIiwia2lkIjoiZmJiZDVmNWMifQ.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6IktLNE9EQS0xIiwib3BlcmF0b3IiOiJLSzRPREEiLCJncmlkIjoiRU03MyIsInBsYWNlIjoiQXRsYW50YSwgR0EiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwfSx7ImRpYWxfaHoiOjcxMDEwMDAsIm1vZGUiOiJVU0IiLCJtb2RlbSI6ImFldGhlciIsImJhbmR3aWR0aF9oeiI6MjMwMH1dLCJob3VycyI6ImFsd2F5cyIsImludGVybmV0Ijp0cnVlLCJjb3BpZXMiOnsidXNlcnMiOjUwLCJkYXlzIjo3LCJtYXhfYWlyX2J5dGVzIjoxNjM4NH0sInVwZGF0ZWQiOjE3OTM0OTg0MDB9XX0.",
+      "jws": "eyJhbGciOiJub25lIiwia2lkIjoiZmJiZDVmNWMifQ.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6IktLNE9EQS0xIiwib3BlcmF0b3IiOiJLSzRPREEiLCJncmlkIjoiRU03MyIsInBsYWNlIjoiQXRsYW50YSwgR0EiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwLCJzY2FuX3MiOjE0fSx7ImRpYWxfaHoiOjcxMDEwMDAsIm1vZGUiOiJVU0IiLCJtb2RlbSI6ImFldGhlciIsImJhbmR3aWR0aF9oeiI6MjMwMCwic2Nhbl9zIjoxNH1dLCJob3VycyI6ImFsd2F5cyIsImludGVybmV0Ijp0cnVlLCJjb3BpZXMiOnsidXNlcnMiOjUwLCJkYXlzIjo3LCJtYXhfYWlyX2J5dGVzIjoxNjM4NH0sInVwZGF0ZWQiOjE3OTM0OTg0MDB9XX0.",
       "dns_kids": [
         "fbbd5f5c"
       ],

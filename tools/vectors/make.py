@@ -2162,7 +2162,13 @@ RPMI_DIAL = 7_101_000  # where a simulated radio with `caps.dial` starts (RP-4 �
 
 
 def rpmi_adapter(
-    world: rpmi.World, station: str, prefix: str, *, shared: bool, dial_hz: int | None = None
+    world: rpmi.World,
+    station: str,
+    prefix: str,
+    *,
+    shared: bool,
+    dial_hz: int | None = None,
+    scans: bool = False,
 ) -> rpmi.Adapter:
     caps = {
         "bandwidths": [500, 2300],
@@ -2177,6 +2183,9 @@ def rpmi_adapter(
     }
     if dial_hz is not None:
         caps["dial"] = True  # RP-4 §4.1: it reads and sets the radio's dial
+    if scans:
+        caps["scan"] = True  # RP-4 §4.2: it scans the radio over a list of dials
+        caps["call_s"] = True  # and keeps a call going as long as asked
     return rpmi.Adapter(
         world,
         station,
@@ -2362,6 +2371,43 @@ def rpmi_dial() -> list[dict[str, Any]]:
     return w.log
 
 
+def rpmi_scan() -> list[dict[str, Any]]:
+    """Scanning (RP-4 §1.1, §4.2): a gateway's host scans two dials of a shared station; another
+    program may not scan it too; a list with a zero is malformed; another program's `tune` ends
+    the scan and the radio stays; the host scans again, stops, and scans once more from a dial
+    off its list; its connection closes and the radio goes home. A modem that does not scan says
+    so, and a client calls asking for `call_s`."""
+    w = rpmi.World()
+    gateway = rpmi_adapter(w, "N1CALL", "g", shared=True, dial_hz=RPMI_DIAL, scans=True)
+    client = rpmi_adapter(w, "KK4ODA", "c", shared=False, dial_hz=RPMI_DIAL, scans=True)
+    plain = rpmi_adapter(w, "N3CALL", "p", shared=False, dial_hz=RPMI_DIAL)
+    rpmi_start(gateway, "radiopost", "RadioPost gateway 0.1.0", ["N1CALL-10"], listen=True)
+    gateway.open("other")
+    gateway.request("other", {"op": "hello", "id": 1, "version": [1, 1], "app": "Other mail 2.3"})
+    gateway.request("other", {"op": "callsigns", "id": 2, "callsigns": ["N1CALL-1"]})
+    w.note("The gateway scans 80 m and 40 m; the radio is on 40 m already and stays there.")
+    gateway.request("radiopost", {"op": "scan", "id": 4, "dials": [3_590_000, 7_101_000]})
+    w.note("Another program on the station may not scan it too; a dial of 0 is malformed.")
+    gateway.request("other", {"op": "scan", "id": 3, "dials": [14_105_000, 7_101_000]})
+    gateway.request("radiopost", {"op": "scan", "id": 5, "dials": [3_590_000, 0]})
+    w.note("The other program tunes the station: the scan ends, said to its host, and stays put.")
+    gateway.request("other", {"op": "tune", "id": 4, "dial_hz": 3_590_000})
+    w.note("Scanned again, then stopped: the radio is on the home dial already.")
+    gateway.request("radiopost", {"op": "scan", "id": 6, "dials": [3_590_000, 7_101_000]})
+    gateway.request("radiopost", {"op": "scan", "id": 7, "dials": []})
+    w.note("Scanned from a dial off its list: the radio goes to its first dial.")
+    gateway.request("radiopost", {"op": "scan", "id": 8, "dials": [7_101_000, 10_145_000]})
+    rpmi_start(client, "client", "RadioPost client 0.1.0", ["KK4ODA"], listen=False)
+    w.note("A client calls the gateway, which scans, for as long as its record's `scan_s` says.")
+    client.request("client", {"op": "connect", "id": 3, "remote": "N1CALL-10", "call_s": 14})
+    client.request("client", {"op": "disconnect", "id": 4, "link": link_of(client, "client")})
+    w.note("The gateway's connection closes: its scan goes with it; the radio is home already.")
+    gateway.close("radiopost")
+    rpmi_start(plain, "client", "RadioPost client 0.1.0", ["N3CALL"], listen=False)
+    plain.request("client", {"op": "scan", "id": 3, "dials": [3_590_000, 7_101_000]})
+    return w.log
+
+
 def rpmi_answers(steps: list[dict[str, Any]]) -> dict[str, str]:
     """Each request with an `id`, and what came of it: its answer, and for a call its end."""
     out = {}
@@ -2388,7 +2434,7 @@ def rpmi_answers(steps: list[dict[str, Any]]) -> dict[str, str]:
     return out
 
 
-RPMI_ANSWERS = {"ok", "error", "hello", "status", "dial"}
+RPMI_ANSWERS = {"ok", "error", "hello", "status", "dial", "scan"}
 
 
 def make_rpmi_conversations() -> dict[str, Any]:
@@ -2408,12 +2454,13 @@ def make_rpmi_conversations() -> dict[str, Any]:
         "link_ids": "each adapter's own: a letter for the station and a count from 1",
         "dial_hz": RPMI_DIAL,
     }
-    session, errors, shared, broadcast, dial = (
+    session, errors, shared, broadcast, dial, scan = (
         rpmi_session(),
         rpmi_errors(),
         rpmi_shared(),
         rpmi_broadcast(),
         rpmi_dial(),
+        rpmi_scan(),
     )
     gateway_start = {
         "N1CALL-10 gateway hello 1": "hello",
@@ -2501,6 +2548,30 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "N3CALL client tune 4": "unsupported",
             },
         ),
+        (
+            scan,
+            {  # RP-4 §1.1, §4.2
+                "N1CALL radiopost hello 1": "hello",
+                "N1CALL radiopost callsigns 2": "ok",
+                "N1CALL radiopost listen 3": "ok",
+                "N1CALL other hello 1": "hello",
+                "N1CALL other callsigns 2": "ok",
+                "N1CALL radiopost scan 4": "scan",
+                "N1CALL other scan 3": "busy",  # one host scans at a time (§1.1)
+                "N1CALL radiopost scan 5": "malformed",  # each dial above 0 (§4)
+                "N1CALL other tune 4": "ok",  # the operator wins (§4.2)
+                "N1CALL radiopost scan 6": "scan",
+                "N1CALL radiopost scan 7": "scan",  # no dials: stopped
+                "N1CALL radiopost scan 8": "scan",
+                "N3CALL client hello 1": "hello",
+                "N3CALL client callsigns 2": "ok",
+                "N3CALL client scan 3": "unsupported",  # no `caps.scan`
+                "KK4ODA client hello 1": "hello",
+                "KK4ODA client callsigns 2": "ok",
+                "KK4ODA client connect 3": "ok, then connected",
+                "KK4ODA client disconnect 4": "ok",
+            },
+        ),
     ]:
         got = rpmi_answers(steps)
         assert got == wanted, {
@@ -2543,6 +2614,29 @@ def make_rpmi_conversations() -> dict[str, Any]:
         ("N1CALL", "radiopost", 7_103_000),
         ("N1CALL", "other", 7_103_000),
     ], told
+    # RP-4 §4.2: a scan's answer says how long a call must keep trying, the dials less one times
+    # the modem's dwell; another host's tune ends it, said once to its host alone, before the dial
+    # every host hears; a stop sends nobody a dial when the radio is home already; a scan from a
+    # dial off its list puts the radio on its first; a host that leaves takes its scan with it.
+    said = [
+        (s["host"], s["message"])
+        for s in scan
+        if s.get("station") == "N1CALL"
+        and s.get("to") == "host"
+        and s["message"]["op"] in {"scan", "dial"}
+    ]
+    assert said == [
+        ("radiopost", {"op": "scan", "id": 4, "dials": [3_590_000, 7_101_000], "scan_s": 10}),
+        ("radiopost", {"op": "scan", "dials": [], "why": "tuned"}),
+        ("radiopost", {"op": "dial", "dial_hz": 3_590_000}),
+        ("other", {"op": "dial", "dial_hz": 3_590_000}),
+        ("radiopost", {"op": "scan", "id": 6, "dials": [3_590_000, 7_101_000], "scan_s": 10}),
+        ("radiopost", {"op": "scan", "id": 7, "dials": []}),
+        ("radiopost", {"op": "scan", "id": 8, "dials": [7_101_000, 10_145_000], "scan_s": 10}),
+        ("radiopost", {"op": "dial", "dial_hz": 7_101_000}),
+        ("other", {"op": "dial", "dial_hz": 7_101_000}),
+    ], said
+    # the last scan began from its first dial: the host's leaving moves nothing
     # RP-4 §4, §5: `delivered` only for a send with a `ref`, which it carries unchanged.
     reported = [
         s["message"]["ref"] for s in errors if s.get("message", {}).get("op") == "delivered"
@@ -2608,6 +2702,21 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "`dial` and `tune` are `unsupported`."
             ),
             "steps": dial,
+        },
+        {
+            "name": "scanning",
+            "story": (
+                "Adapters with `caps.scan` (RP-4 §4.2): the gateway's host on the shared station "
+                "N1CALL scans 80 m and 40 m and is told how long a call must keep trying "
+                "(`scan_s`); another program on the station may not scan it too (`busy`), and a "
+                "dial of 0 is `malformed`. The other program tunes the station: the operator "
+                "wins, the scan ends with `why` `tuned`, said to its host alone, and every host "
+                "hears the new dial. The host scans again and stops (no dials), then scans from a "
+                "dial off its list, which puts the radio on its first; its connection closes and "
+                "the scan goes with it. A modem without `caps.scan` answers `unsupported`, and a "
+                "client calls a gateway that scans with `call_s`."
+            ),
+            "steps": scan,
         },
     ]
     return out
@@ -2749,9 +2858,11 @@ GATEWAY_RECORD = {
     "operator": "KK4ODA",
     "grid": "EM73",
     "place": "Atlanta, GA",
+    # one radio scanning both dials (RP-4 §4.2): a call on either is heard if its tries keep
+    # starting for 14 s (RP-5 §4.4, `scan_s`)
     "channels": [
-        {"dial_hz": 3590000, "mode": "USB", "modem": "aether", "bandwidth_hz": 2300},
-        {"dial_hz": 7101000, "mode": "USB", "modem": "aether", "bandwidth_hz": 2300},
+        {"dial_hz": 3590000, "mode": "USB", "modem": "aether", "bandwidth_hz": 2300, "scan_s": 14},
+        {"dial_hz": 7101000, "mode": "USB", "modem": "aether", "bandwidth_hz": 2300, "scan_s": 14},
     ],
     "hours": "always",
     "internet": True,

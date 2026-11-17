@@ -83,6 +83,7 @@ fn a_gateway_claims_again_after_aether_restarts() {
             copies: None,
             partners: Vec::new(),
             windows: Vec::new(),
+            scan: Vec::new(),
         },
     )
     .expect("a gateway");

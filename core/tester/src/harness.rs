@@ -505,6 +505,8 @@ impl TestAdapter {
             max_queue: 1 << 20,
             shared: false,
             dial: false,
+            scan: false,
+            call_s: false,
         };
         let station = |name: &str, prefix: &str, frame| StationConfig {
             name: name.into(),

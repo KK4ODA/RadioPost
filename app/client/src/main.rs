@@ -101,6 +101,8 @@ session options:
   --bandwidth HZ           ask the modem for this bandwidth
   --dial MHZ               call on this channel: a modem with a dial (RP-4 §4.1) is tuned
                            there first and back after; with another, tune the radio yourself
+  --call-s S               keep the call trying at least S seconds: a gateway that scans its
+                           channels publishes how long (`scan_s` in its record, RP-5 §4.4)
   --plain                  send messages uncompressed
   --clock UNIX --nonce HEX --session-id HEX --challenge HEX
                            fix the clock and the random draws, to replay a session exactly
@@ -214,6 +216,10 @@ fn options(args: &Args) -> Result<Options, Error> {
         .map(|b| b.parse().map_err(|_| "--bandwidth is a number of Hz"))
         .transpose()?;
     o.dial_hz = args.one("--dial").map(|d| dial_of(&d)).transpose()?;
+    o.call_s = args
+        .one("--call-s")
+        .map(|s| s.parse().map_err(|_| "--call-s is a number of seconds"))
+        .transpose()?;
     o.clock = args
         .one("--clock")
         .map(|c| c.parse().map_err(|_| "--clock is Unix seconds"))

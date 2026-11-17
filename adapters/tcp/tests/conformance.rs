@@ -35,11 +35,12 @@ fn passes(near: SocketAddr, far: SocketAddr, reach: String) {
     let verdicts = run(&plan, |_| {}).expect("the tester runs");
     let failed: Vec<String> = verdicts
         .iter()
-        .filter(|v| v.passed != Some(true))
+        // A-06 is for an adapter that scans (RP-4 §4.2): this one does not
+        .filter(|v| v.passed != Some(true) && !(v.id == "A-06" && v.passed.is_none()))
         .map(|v| format!("{}: {}\n  {}", v.id, v.why, v.transcript.join("\n  ")))
         .collect();
     assert_eq!(failed, Vec::<String>::new());
-    assert_eq!(verdicts.len(), 4);
+    assert_eq!(verdicts.len(), 5);
 }
 
 #[test]

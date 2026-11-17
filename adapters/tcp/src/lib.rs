@@ -73,6 +73,8 @@ pub fn caps() -> Caps {
         max_queue: 1 << 20,
         shared: false,
         dial: false,
+        scan: false,
+        call_s: false,
     }
 }
 
@@ -392,6 +394,7 @@ impl Adapter {
                 remote,
                 as_call,
                 bandwidth,
+                call_s: _,
             } => self.connect(c, conn, &remote, as_call, bandwidth, id),
             Request::Send { link, data, .. } => match conn.link.as_mut() {
                 Some(l) if l.name == link => {
@@ -449,7 +452,7 @@ impl Adapter {
             Request::Broadcast { .. } => {
                 conn.emit(error(id, "unsupported", "no broadcasts over TCP"));
             }
-            Request::Dial | Request::Tune(_) => {
+            Request::Dial | Request::Tune(_) | Request::Scan(_) => {
                 conn.emit(error(id, "unsupported", "no radio over TCP"));
             }
             Request::Status => {

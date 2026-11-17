@@ -94,6 +94,8 @@ pub fn loopback_dialled(dial_hz: Option<u64>) -> (Server, SocketAddr, SocketAddr
         max_queue: 65536,
         shared: false,
         dial: dial_hz.is_some(),
+        scan: false,
+        call_s: false,
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),

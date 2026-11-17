@@ -55,13 +55,15 @@ fn serve_until_listen(stream: TcpStream, asked: &mpsc::Sender<String>) {
         };
         let request: Value = serde_json::from_str(&text).expect("JSON");
         let method = request["method"].as_str().unwrap_or("").to_owned();
+        // kept before the answer goes: a test that reads what was asked once it has its answer
+        // finds it there, however the threads are scheduled
+        let _ = asked.send(method.clone());
         if ws
             .send(Message::text(answer(&request).to_string()))
             .is_err()
         {
             return;
         }
-        let _ = asked.send(method.clone());
         if method == "listen" {
             return;
         }

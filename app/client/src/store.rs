@@ -994,6 +994,27 @@ impl Store {
 
     // -- gateways and what waits ---------------------------------------------------------------
 
+    /// How long a call to `gateway` must keep trying to find it (RP-5 §4.4, `scan_s`), from the
+    /// kept list: on the channel at `dial_hz` when one is named, else the longest of its channels
+    /// that it scans. `None` when it scans none of them, or is not listed.
+    #[must_use]
+    pub fn scan_s_of(&self, gateway: &str, dial_hz: Option<u64>) -> Option<u64> {
+        let list = self.gateway_list.as_ref()?;
+        let record = list["gateways"].as_array()?.iter().find(|g| {
+            g["callsign"]
+                .as_str()
+                .is_some_and(|c| c.eq_ignore_ascii_case(gateway))
+        })?;
+        let channels = record["channels"].as_array()?;
+        match dial_hz {
+            Some(hz) => channels
+                .iter()
+                .find(|c| c["dial_hz"].as_u64() == Some(hz))
+                .and_then(|c| c["scan_s"].as_u64()),
+            None => channels.iter().filter_map(|c| c["scan_s"].as_u64()).max(),
+        }
+    }
+
     /// The gateways kept from the post office's list, each with `km`, its distance from the
     /// operator's grid square when both are known, nearest first; the others after, as listed.
     #[must_use]
@@ -1293,6 +1314,21 @@ mod tests {
         );
         assert!(ranked[3]["km"].is_null());
         assert!(store.set_grid(Some("XX99")).is_err());
+        // W50: a gateway that scans says how long a call must keep trying
+        store.gateway_list = Some(
+            json!({"domain": "radiopost.org", "fetched": 1, "gateways": [
+                {"callsign": "KK4ODA-1", "channels": [
+                    {"dial_hz": 3_590_000, "scan_s": 20}, {"dial_hz": 7_101_000, "scan_s": 20},
+                    {"dial_hz": 14_105_000}]},
+                {"callsign": "W4MID-1", "channels": [{"dial_hz": 7_101_000}]},
+            ]}),
+        );
+        assert_eq!(store.scan_s_of("kk4oda-1", Some(7_101_000)), Some(20));
+        assert_eq!(store.scan_s_of("KK4ODA-1", Some(14_105_000)), None);
+        assert_eq!(store.scan_s_of("KK4ODA-1", None), Some(20));
+        assert_eq!(store.scan_s_of("W4MID-1", None), None);
+        assert_eq!(store.scan_s_of("N0NE-1", None), None);
+        store.gateway_list = None;
         let again = Store::open(&home).expect("the home");
         assert_eq!(again.grid.as_deref(), Some("EM73tt"), "kept");
         store.set_grid(None).expect("cleared");

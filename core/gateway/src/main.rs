@@ -62,6 +62,11 @@ directory, as the RadioPost Gateway app has it.
                      register again to publish it
   window --remove N  take window N off (`windows` numbers them)
   windows            the windows, and whether each may be published
+  scan --dial MHZ --dial MHZ... | scan --off | scan
+                     scan these channels on the first modem (W50): the modem moves the
+                     radio over them, a while on each, the first the home; the gateway
+                     publishes how long a call must keep trying (RP-5 §4.4) and registers
+                     again when that changes. Two to eleven dials; `scan` alone says them
   forward --to CALL  call a partner now and forward the queue to it (RP-7 §2), when the
                      gateway is not answering calls; the app's panel does it while it is
   key                the gateway's public key
@@ -114,6 +119,7 @@ fn init(dir: &Path, a: &Args) -> Result<(), String> {
         copies: None,
         partners: Vec::new(),
         windows: Vec::new(),
+        scan: Vec::new(),
     };
     station::make(dir, &settings)?;
     println!(
@@ -265,6 +271,60 @@ fn partners(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
             .retain(|p| !p.callsign.eq_ignore_ascii_case(&call));
     }
     s.save(dir)
+}
+
+/// The most channels a gateway scans (W50; Aether's ADR-0129 takes eleven at most).
+const MAX_SCAN: usize = 11;
+
+/// `scan`: the channels the first modem scans (W50, RP-4 §4.2), read at the gateway's next start.
+fn scan(dir: &Path, a: &Args) -> Result<(), String> {
+    let mut s = Settings::load(dir)?;
+    if a.has("--off") {
+        s.scan.clear();
+        s.save(dir)?;
+        println!("the radio stays on its dial from the gateway's next start");
+        return Ok(());
+    }
+    let dials = a
+        .all("--dial")
+        .iter()
+        .map(|d| {
+            d.parse::<f64>()
+                .ok()
+                .filter(|mhz| (1.8..=450.0).contains(mhz))
+                .map(|mhz| {
+                    #[allow(
+                        clippy::cast_possible_truncation,
+                        clippy::cast_sign_loss,
+                        reason = "a dial between 1.8 and 450 MHz, in hertz"
+                    )]
+                    let hz = (mhz * 1e6).round() as u64;
+                    hz
+                })
+                .ok_or_else(|| format!("{d} is not a dial in MHz"))
+        })
+        .collect::<Result<Vec<u64>, String>>()?;
+    if dials.is_empty() {
+        if s.scan.is_empty() {
+            println!("the gateway does not scan: the radio stays on its dial");
+        }
+        for (i, hz) in s.scan.iter().enumerate() {
+            #[allow(clippy::cast_precision_loss, reason = "a dial frequency shown in MHz")]
+            let mhz = *hz as f64 / 1e6;
+            println!("{mhz:.4} MHz{}", if i == 0 { " (home)" } else { "" });
+        }
+        return Ok(());
+    }
+    if dials.len() < 2 || dials.len() > MAX_SCAN {
+        return Err(format!("a scan takes 2 to {MAX_SCAN} channels"));
+    }
+    if (1..dials.len()).any(|i| dials[..i].contains(&dials[i])) {
+        return Err("a channel is given twice".into());
+    }
+    s.scan = dials;
+    s.save(dir)?;
+    println!("the first modem scans these channels from the gateway's next start");
+    Ok(())
 }
 
 /// `modem` and `modems`: the modems the gateway answers on (W26).
@@ -449,6 +509,7 @@ fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
         "partner" | "partners" => partners(dir, a, command),
         "modem" | "modems" => modems(dir, a, command),
         "window" | "windows" => windows(dir, a, command),
+        "scan" => scan(dir, a),
         "forward" => station::forward_once(dir, &a.need("--to")?, &mut |line| println!("{line}")),
         "key" => {
             println!(

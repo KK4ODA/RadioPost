@@ -488,8 +488,10 @@ async function openGateways(refreshing = false) {
       const tr = document.createElement("tr");
       // the dial in MHz to the kilohertz, or finer when it needs it: 7.101, 3.5915
       const mhz = (hz) => (hz / 1e6).toFixed(4).replace(/0$/, "");
+      // a channel with `scan_s` is one the gateway scans with others (RP-5 §4.4)
+      const scans = (c) => (c.scan_s != null ? ", scanned" : "");
       const channels = (gw.channels || [])
-        .map((c) => `${mhz(c.dial_hz)} MHz, ${c.bandwidth_hz} Hz`).join("\n");
+        .map((c) => `${mhz(c.dial_hz)} MHz, ${c.bandwidth_hz} Hz${scans(c)}`).join("\n");
       const choose = document.createElement("button");
       choose.textContent = "Choose";
       choose.title = `Call ${gw.callsign}: pick its channel in the call box, and Call tunes the `
@@ -502,11 +504,15 @@ async function openGateways(refreshing = false) {
         showKind();
         $("channel").replaceChildren(...chosenGateway.channels.map((c) =>
           el("option", {value: String(c.dial_hz),
-                        text: `${mhz(c.dial_hz)} MHz, ${c.bandwidth_hz} Hz`})));
+                        text: `${mhz(c.dial_hz)} MHz, ${c.bandwidth_hz} Hz${scans(c)}`})));
         showChannels();
+        const first = chosenGateway.channels[0];
+        const scanned = first && first.scan_s != null
+          ? ` It scans its channels: the call keeps trying for ${first.scan_s} s or more.`
+          : "";
         toast(chosenGateway.channels.length
-          ? `${gw.callsign} chosen, on ${mhz(chosenGateway.channels[0].dial_hz)} MHz. `
-            + "Call tunes the radio there, and back after, when the modem can."
+          ? `${gw.callsign} chosen, on ${mhz(first.dial_hz)} MHz. `
+            + `Call tunes the radio there, and back after, when the modem can.${scanned}`
           : `${gw.callsign} chosen. Its record names no channel.`);
       });
       const where = [gw.place, gw.grid].filter(Boolean).join(", ");
@@ -2270,10 +2276,14 @@ function wire() {
     if (!callsign) { toast("Whom to call?", true); return; }
     const fetchRule = $("fetch").value;
     const dial = $("channel-label").hidden ? "" : $("channel").value;
+    // a gateway that scans is found by a call that keeps trying as long as its record says
+    const channel = dial && chosenGateway
+      ? chosenGateway.channels.find((c) => String(c.dial_hz) === dial) : null;
     act("call", {
       callsign, station: kind() === "station", adapter: adapter(),
       fetch: /^[0-9]+$/.test(fetchRule) ? Number(fetchRule) : fetchRule,
       dial_hz: dial ? Number(dial) : null,
+      call_s: channel && channel.scan_s != null ? channel.scan_s : null,
     });
   });
   $("listen").addEventListener("click", () => act("listen", {adapter: adapter()}));

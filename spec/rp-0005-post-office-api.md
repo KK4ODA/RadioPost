@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.0.0 |
-| **Updated** | 2026-11-15 |
+| **Version** | 1.1.0 |
+| **Updated** | 2026-11-17 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-3 |
@@ -196,6 +196,12 @@ radio's: `USB` for a modem on single sideband, `FM` for one on an FM radio. On a
 25 000: a modem working on an FM radio's audio cannot measure the deviation, so the channel is what
 can be stated. A gateway that takes calls from cut-off partners lists its windows in `forwarding`
 (RP-7 §5).
+
+A channel may carry `scan_s`, an integer: the channel is one of several the gateway listens on in
+turn with one radio (RP-4 §4.2), and a call on it is heard if its tries keep starting for at least
+`scan_s` seconds. A client calling the gateway there SHOULD ask its modem to keep calling that long
+(RP-4 §4, `connect`'s `call_s`). A gateway SHOULD list only channels it listens on: the dials it
+scans, and otherwise the dial each modem's radio sits on.
 
 The post office that registered a gateway (§6.4) is its **own post office**: the domain of its
 credential's `address` (RP-1 §3, §5).
@@ -828,3 +834,4 @@ read from the home's and every post office it knows) and `vectors/api.json` (the
 | 0.18.0 | 2026-11-13 | §5.3: the post office's air form uses compression 0 or 1, 1 when it gives fewer bytes, never 2 or 3, and the sizes that decide what is held are judged on it. Nothing said which: the air form is made once for every gateway and never sees the caller's `caps`, so a post office using 2 would serve mail some clients cannot read. |
 | 0.19.0 | 2026-11-13 | §6.3: `radio_skips_read` takes mail read in a mail program as picked up, so its copies placed ahead are dropped too, learned without delaying a session; default false. It had said only that such mail is not offered, which a post office could meet by hiding it while gateways kept offering its copies. §6.5: mail the user sends from a mail program fills the accept list too, every recipient of the submission (RP-6 §2.6): concept §5.1 promises that writing to someone adds them, and §6.5 named only mail sent by radio; it now names §6.6's station-to-station mail too, which already filled it. |
 | 1.0.0 | 2026-11-15 | Stable (D41), with no change to its requirements. |
+| 1.1.0 | 2026-11-17 | §4.4: a channel's `scan_s` (a gateway that scans, RP-4 1.1.0 §4.2), a client's call that lasts that long, and a gateway that lists only the channels it listens on (wishlist W50, gap G21). MINOR, announced (RP-0 §8.4): nothing for an implementation to do. |

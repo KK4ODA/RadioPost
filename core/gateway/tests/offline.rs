@@ -46,6 +46,8 @@ fn air() -> (Server, SocketAddr, SocketAddr, SocketAddr) {
         max_queue: 65_536,
         shared: false,
         dial: false,
+        scan: false,
+        call_s: false,
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),
@@ -99,6 +101,7 @@ fn gateway(
         }),
         partners: Vec::new(),
         windows: Vec::new(),
+        scan: Vec::new(),
     }
     .save(&gw)
     .expect("saved");

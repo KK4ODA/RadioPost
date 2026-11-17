@@ -222,7 +222,8 @@ fn two_adapters_on_two_mercury_modems_pass_a01_to_a04() {
     .expect("the tester runs");
     let failed: Vec<String> = verdicts
         .iter()
-        .filter(|v| v.passed != Some(true))
+        // A-06 is for an adapter that scans (RP-4 §4.2): this one does not
+        .filter(|v| v.passed != Some(true) && !(v.id == "A-06" && v.passed.is_none()))
         .map(|v| format!("{}: {}\n  {}", v.id, v.why, v.transcript.join("\n  ")))
         .collect();
     assert_eq!(
@@ -231,7 +232,7 @@ fn two_adapters_on_two_mercury_modems_pass_a01_to_a04() {
         "Mercury's logs are in {}",
         dir.display()
     );
-    assert_eq!(verdicts.len(), 4);
+    assert_eq!(verdicts.len(), 5);
     drop((a, b));
     let _ = std::fs::remove_dir_all(&dir);
 }

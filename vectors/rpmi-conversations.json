@@ -2809,6 +2809,677 @@
           }
         }
       ]
+    },
+    {
+      "name": "scanning",
+      "story": "Adapters with `caps.scan` (RP-4 §4.2): the gateway's host on the shared station N1CALL scans 80 m and 40 m and is told how long a call must keep trying (`scan_s`); another program on the station may not scan it too (`busy`), and a dial of 0 is `malformed`. The other program tunes the station: the operator wins, the scan ends with `why` `tuned`, said to its host alone, and every host hears the new dial. The host scans again and stops (no dials), then scans from a dial off its list, which puts the radio on its first; its connection closes and the scan goes with it. A modem without `caps.scan` answers `unsupported`, and a client calls a gateway that scans with `call_s`.",
+      "steps": [
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "connection": "opened"
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost gateway 0.1.0"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": true,
+              "dial": true,
+              "scan": true,
+              "call_s": true
+            }
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "N1CALL-10"
+            ]
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "listen",
+            "id": 3,
+            "on": true
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 3
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "connection": "opened"
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "Other mail 2.3"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": true,
+              "dial": true,
+              "scan": true,
+              "call_s": true
+            }
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "N1CALL-1"
+            ]
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "note": "The gateway scans 80 m and 40 m; the radio is on 40 m already and stays there."
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "scan",
+            "id": 4,
+            "dials": [
+              3590000,
+              7101000
+            ]
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "scan",
+            "id": 4,
+            "dials": [
+              3590000,
+              7101000
+            ],
+            "scan_s": 10
+          }
+        },
+        {
+          "note": "Another program on the station may not scan it too; a dial of 0 is malformed."
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "scan",
+            "id": 3,
+            "dials": [
+              14105000,
+              7101000
+            ]
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 3,
+            "code": "busy",
+            "text": "another program is scanning this station"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "scan",
+            "id": 5,
+            "dials": [
+              3590000,
+              0
+            ]
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 5,
+            "code": "malformed",
+            "text": "`dials` is not of its type"
+          }
+        },
+        {
+          "note": "The other program tunes the station: the scan ends, said to its host, and stays put."
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "tune",
+            "id": 4,
+            "dial_hz": 3590000
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 4
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "scan",
+            "dials": [],
+            "why": "tuned"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "dial",
+            "dial_hz": 3590000
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "dial",
+            "dial_hz": 3590000
+          }
+        },
+        {
+          "note": "Scanned again, then stopped: the radio is on the home dial already."
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "scan",
+            "id": 6,
+            "dials": [
+              3590000,
+              7101000
+            ]
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "scan",
+            "id": 6,
+            "dials": [
+              3590000,
+              7101000
+            ],
+            "scan_s": 10
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "scan",
+            "id": 7,
+            "dials": []
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "scan",
+            "id": 7,
+            "dials": []
+          }
+        },
+        {
+          "note": "Scanned from a dial off its list: the radio goes to its first dial."
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "scan",
+            "id": 8,
+            "dials": [
+              7101000,
+              10145000
+            ]
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "scan",
+            "id": 8,
+            "dials": [
+              7101000,
+              10145000
+            ],
+            "scan_s": 10
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "dial",
+            "dial_hz": 7101000
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "dial",
+            "dial_hz": 7101000
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "connection": "opened"
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost client 0.1.0"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": false,
+              "dial": true,
+              "scan": true,
+              "call_s": true
+            }
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "KK4ODA"
+            ]
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "note": "A client calls the gateway, which scans, for as long as its record's `scan_s` says."
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 3,
+            "remote": "N1CALL-10",
+            "call_s": 14
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 3
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "incoming",
+            "remote": "KK4ODA",
+            "local": "N1CALL-10"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "connected",
+            "link": "g1",
+            "remote": "KK4ODA",
+            "local": "N1CALL-10",
+            "direction": "in"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "connected",
+            "id": 3,
+            "link": "c1",
+            "remote": "N1CALL-10",
+            "local": "KK4ODA",
+            "direction": "out"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "busy",
+            "busy": true
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "disconnect",
+            "id": 4,
+            "link": "c1"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 4
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "disconnected",
+            "link": "c1",
+            "reason": "local"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "disconnected",
+            "link": "g1",
+            "reason": "remote"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "busy",
+            "busy": false
+          }
+        },
+        {
+          "note": "The gateway's connection closes: its scan goes with it; the radio is home already."
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "connection": "closed"
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "connection": "opened"
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost client 0.1.0"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": false,
+              "dial": true
+            }
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "N3CALL"
+            ]
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "scan",
+            "id": 3,
+            "dials": [
+              3590000,
+              7101000
+            ]
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 3,
+            "code": "unsupported",
+            "text": "this modem does not scan"
+          }
+        }
+      ]
     }
   ]
 }

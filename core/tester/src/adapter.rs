@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! The modem adapter's tests (the outline's §3.5): A-01 to A-04, the tester playing the host of
-//! the adapter under test and, through a second instance of it, the far station's host.
+//! The modem adapter's tests (the outline's §3.5): A-01 to A-04 and A-06, the tester playing the
+//! host of the adapter under test and, through a second instance of it, the far station's host.
+//! A-06 applies only to an adapter whose caps say `scan`.
 //!
 //! Every exchange is checked against RP-4 as written: the answers' `op`, `id` and members, never
 //! their `text`, and the events an adapter may send of its own accord (`queued`, `delivered`,
@@ -60,7 +61,17 @@ const TESTS: &[AdapterTest] = &[
         needs_far: true,
         run: a04,
     },
+    AdapterTest {
+        id: "A-06",
+        checks: "A scan: answered with `scan_s`, one host's at a time, ended by another host's `tune` and by the host leaving (RP-4 §1.1, §4.2)",
+        needs_far: false,
+        run: a06,
+    },
 ];
+
+/// What a test answers when it does not apply to the adapter under test: its verdict is neither
+/// passed nor failed.
+const NOT_APPLICABLE: &str = "not applicable: ";
 
 /// Runs the adapter's tests, telling `progress` of each verdict as it comes.
 ///
@@ -80,6 +91,7 @@ pub fn run(plan: &Plan, mut progress: impl FnMut(&Verdict)) -> Result<Vec<Verdic
         } else {
             match (t.run)(plan, &mut transcript) {
                 Ok(()) => (Some(true), String::new()),
+                Err(e) if e.starts_with(NOT_APPLICABLE) => (None, e),
                 Err(e) => (Some(false), e),
             }
         };
@@ -201,6 +213,23 @@ impl<'t> Side<'t> {
                 return Ok(m);
             }
             return Err(format!("{} where {what} was due", Json::Object(m)));
+        }
+    }
+
+    /// [`Side::expect_within`], a scan's own moves aside: the `dial` events that are not `ok`'s.
+    fn expect_moving(
+        &mut self,
+        what: &str,
+        within: Duration,
+        ok: impl Fn(&Message) -> bool,
+    ) -> Result<Message, String> {
+        let deadline = Instant::now() + within;
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let m = self.expect_within(what, left, |m| ok(m) || op(m) == "dial")?;
+            if ok(&m) {
+                return Ok(m);
+            }
         }
     }
 
@@ -696,4 +725,102 @@ fn hex(s: &str) -> Option<Vec<u8>> {
         .step_by(2)
         .map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok())
         .collect()
+}
+
+/// A-06 (RP-4 §1.1, §4.2): a host scans two dials and is answered with them and a whole `scan_s`;
+/// on a shared adapter another host's scan is `busy`, its `tune` ends the first host's scan (a
+/// `scan` event, `why` `tuned`, and a `dial` event to both), and the first host's scan, asked
+/// again, ends when it leaves: the radio goes to the home dial, which the other host hears. On an
+/// adapter that is not shared the host's own `tune` ends its scan (`asked`).
+fn a06(plan: &Plan, log: &mut Vec<String>) -> Outcome {
+    const HOME: u64 = 3_590_000;
+    const AWAY: u64 = 7_101_000;
+    const WAIT: Duration = Duration::from_secs(10);
+    let mut second_log = Vec::new();
+    let result = (|| {
+        let mut first = Side::open(&plan.at, "host", log)?;
+        let caps = first.open_as(&["KK4ODA"], false)?;
+        if !caps.scan {
+            return Err(format!("{NOT_APPLICABLE}its caps do not say `scan`"));
+        }
+        if !caps.dial {
+            return Err("its caps say `scan` without `dial` (RP-4 §3)".into());
+        }
+        let scan = |id: &str| json!({"op": "scan", "id": id, "dials": [HOME, AWAY]});
+        let scanned = |m: &Message, id: &str| {
+            op(m) == "scan"
+                && m.get("id") == Some(&json!(id))
+                && m.get("dials") == Some(&json!([HOME, AWAY]))
+        };
+        first.send(&scan("s1"))?;
+        let a = first.expect_moving("`scan` answered with its dials (RP-4 §4.2)", WAIT, |m| {
+            scanned(m, "s1")
+        })?;
+        if !a.get("scan_s").is_some_and(Json::is_u64) {
+            return Err("the `scan` answer has no `scan_s` in whole seconds (RP-4 §4.2)".into());
+        }
+        let ended = |m: &Message, why: &str| {
+            op(m) == "scan"
+                && m.get("id").is_none()
+                && m.get("dials") == Some(&json!([]))
+                && m.get("why") == Some(&json!(why))
+        };
+        if !caps.shared {
+            // the host's own tune ends its scan; `ok`, the `scan` event and the `dial` event come
+            // in any order
+            first.send(&json!({"op": "tune", "id": "t1", "dial_hz": AWAY}))?;
+            let mut due = vec!["ok", "scan", "dial"];
+            while !due.is_empty() {
+                let m = first.expect_moving(
+                    "`ok`, the scan's end (`asked`) and the dial",
+                    WAIT,
+                    |m| {
+                        (op(m) == "ok" && m.get("id") == Some(&json!("t1")))
+                            || ended(m, "asked")
+                            || (op(m) == "dial" && m.get("dial_hz") == Some(&json!(AWAY)))
+                    },
+                )?;
+                due.retain(|d| *d != op(&m));
+            }
+            return Ok(());
+        }
+        let mut second = Side::open(&plan.at, "second host", &mut second_log)?;
+        second.open_as(&["KK4ODA-7"], false)?;
+        second.refused(
+            &json!({"op": "scan", "id": "s2", "dials": [14_105_000, AWAY]}),
+            "busy",
+            "RP-4 §1.1: one host scans at a time",
+        )?;
+        // the other host tunes the radio: the operator wins
+        second.send(&json!({"op": "tune", "id": "t2", "dial_hz": AWAY}))?;
+        let mut due = vec!["ok", "dial"];
+        while !due.is_empty() {
+            let m = second.expect_moving("`ok` and the dial", WAIT, |m| {
+                (op(m) == "ok" && m.get("id") == Some(&json!("t2")))
+                    || (op(m) == "dial" && m.get("dial_hz") == Some(&json!(AWAY)))
+            })?;
+            due.retain(|d| *d != op(&m));
+        }
+        let mut due = vec!["scan", "dial"];
+        while !due.is_empty() {
+            let m = first.expect_moving("the scan's end (`tuned`) and the dial", WAIT, |m| {
+                ended(m, "tuned") || (op(m) == "dial" && m.get("dial_hz") == Some(&json!(AWAY)))
+            })?;
+            due.retain(|d| *d != op(&m));
+        }
+        // scanned again from a dial on its list, then the host leaves: the radio goes home
+        first.send(&scan("s3"))?;
+        first.expect_moving("`scan` answered again (RP-4 §4.2)", WAIT, |m| {
+            scanned(m, "s3")
+        })?;
+        drop(first);
+        second.expect_moving(
+            "the radio home once the scanning host left (RP-4 §1.1, §4.2)",
+            Duration::from_secs(60),
+            |m| op(m) == "dial" && m.get("dial_hz") == Some(&json!(HOME)),
+        )?;
+        Ok(())
+    })();
+    log.extend(second_log);
+    result
 }

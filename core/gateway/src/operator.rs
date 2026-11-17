@@ -12,6 +12,7 @@ use radiopost::{ErrorCode, base64url};
 use serde_json::{Value as Json, json};
 
 use crate::station::{self, Settings};
+use crate::store::Store;
 use crate::upstream::{Account, Http};
 
 /// The user's own credential and device key, from their client's home.
@@ -55,9 +56,51 @@ pub fn enrolled_as(home: &Path) -> Result<radiopost::credential::Body, String> {
     user_of(home).map(|(_, c)| c.body)
 }
 
+/// The record as last registered, and the client's home it was registered from, in the gateway's
+/// directory.
+pub const RECORD: &str = "record.json";
+
+/// A record's channels with the scan its modem last answered (RP-4 §4.2, RP-5 §4.4): `scan_s` on
+/// each channel the radio scans, none on the others.
+pub fn with_scan(record: &mut Json, store: &Store) {
+    let Some(channels) = record.get_mut("channels").and_then(Json::as_array_mut) else {
+        return;
+    };
+    for c in channels.iter_mut().filter_map(Json::as_object_mut) {
+        let scanned = c
+            .get("dial_hz")
+            .and_then(Json::as_u64)
+            .is_some_and(|hz| store.scan_dials.contains(&hz));
+        match store.scan_s {
+            Some(s) if scanned => {
+                c.insert("scan_s".into(), s.into());
+            }
+            _ => {
+                c.remove("scan_s");
+            }
+        }
+    }
+}
+
+/// Registers the gateway in `dir` again, from the client's home it was last registered from, when
+/// the record says another scan than its modem last answered: `None` when it says the same, or
+/// the gateway was never registered from this computer.
+#[must_use]
+pub fn register_again(dir: &Path) -> Option<Result<String, String>> {
+    let kept: Json = serde_json::from_str(&std::fs::read_to_string(dir.join(RECORD)).ok()?).ok()?;
+    let home = std::path::PathBuf::from(kept["home"].as_str()?);
+    let record = kept.get("record")?.clone();
+    let mut updated = record.clone();
+    with_scan(&mut updated, &Store::load(dir));
+    (updated != record).then(|| register(dir, &home, updated))
+}
+
 /// Registers the gateway in `dir` with the post office of the user whose client's home is
 /// `home`, with `record`'s fields (channels, grid, place, hours) beside its callsign and
-/// operator, and keeps the credential the post office issues (`credential.hex`).
+/// operator, and keeps the credential the post office issues (`credential.hex`) and the record
+/// (`record.json`). A channel the gateway scans carries the `scan_s` its modem last answered
+/// (RP-5 §4.4); a gateway that scans and has not run yet gains it at its first scan, registered
+/// again from this computer.
 ///
 /// # Errors
 ///
@@ -81,6 +124,7 @@ pub fn register(dir: &Path, home: &Path, mut record: Json) -> Result<String, Str
             format!("no post office found for {domain}: name it with `post-office --domain {domain} --url URL`")
         })?;
     let base = base.trim_end_matches('/').to_owned();
+    with_scan(&mut record, &Store::load(dir));
     record["callsign"] = settings.callsign.clone().into();
     record["operator"] = credential.body.operator.clone().into();
     // RP-5 §4.4: the record says whether it holds copies placed ahead, and its limits
@@ -123,6 +167,11 @@ pub fn register(dir: &Path, home: &Path, mut record: Json) -> Result<String, Str
                 .and_then(base64url::decode)
                 .ok_or("the post office's answer held no credential")?;
             station::write(dir, "credential.hex", &radiopost::cbor::hex(&bytes))?;
+            // what was registered, and from where, so that a change of the scan registers it
+            // again as its operator did
+            let kept = json!({"home": home.to_string_lossy(), "record": record});
+            let kept = serde_json::to_string_pretty(&kept).map_err(|e| e.to_string())?;
+            station::write(dir, RECORD, &kept)?;
             Ok(format!(
                 "{} registered with {domain}'s post office ({base}) for {}",
                 settings.callsign, credential.body.address

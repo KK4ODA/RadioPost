@@ -18,13 +18,15 @@
           "dial_hz": 3590000,
           "mode": "USB",
           "modem": "aether",
-          "bandwidth_hz": 2300
+          "bandwidth_hz": 2300,
+          "scan_s": 14
         },
         {
           "dial_hz": 7101000,
           "mode": "USB",
           "modem": "aether",
-          "bandwidth_hz": 2300
+          "bandwidth_hz": 2300,
+          "scan_s": 14
         }
       ],
       "hours": "always",
@@ -169,13 +171,15 @@
                 "dial_hz": 3590000,
                 "mode": "USB",
                 "modem": "aether",
-                "bandwidth_hz": 2300
+                "bandwidth_hz": 2300,
+                "scan_s": 14
               },
               {
                 "dial_hz": 7101000,
                 "mode": "USB",
                 "modem": "aether",
-                "bandwidth_hz": 2300
+                "bandwidth_hz": 2300,
+                "scan_s": 14
               }
             ],
             "hours": "always",
@@ -243,13 +247,15 @@
                 "dial_hz": 3590000,
                 "mode": "USB",
                 "modem": "aether",
-                "bandwidth_hz": 2300
+                "bandwidth_hz": 2300,
+                "scan_s": 14
               },
               {
                 "dial_hz": 7101000,
                 "mode": "USB",
                 "modem": "aether",
-                "bandwidth_hz": 2300
+                "bandwidth_hz": 2300,
+                "scan_s": 14
               }
             ],
             "hours": "always",
@@ -423,13 +429,15 @@
                 "dial_hz": 3590000,
                 "mode": "USB",
                 "modem": "aether",
-                "bandwidth_hz": 2300
+                "bandwidth_hz": 2300,
+                "scan_s": 14
               },
               {
                 "dial_hz": 7101000,
                 "mode": "USB",
                 "modem": "aether",
-                "bandwidth_hz": 2300
+                "bandwidth_hz": 2300,
+                "scan_s": 14
               }
             ],
             "hours": "always",

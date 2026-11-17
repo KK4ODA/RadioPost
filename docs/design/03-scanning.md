@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Draft |
-| **Version** | 0.1.2 |
+| **Status** | Accepted, built |
+| **Version** | 0.2.0 |
 | **Updated** | 2026-11-17 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -234,6 +234,27 @@ All four as proposed:
 4. **The order:** Aether's scan first, judged on its harness; then RP-4 and RP-5 1.1.0 with their
    vectors; then the gateway, the client and the tests.
 
+## 9. As built (2026-11-17)
+
+* **The specifications.** RP-4 1.1.0 and RP-5 1.1.0, as §3 drafted them, with three details the
+  building settled: `scan_s` is whole seconds; the Aether adapter answers a host's empty `scan`
+  itself when the host has no scan, since Aether's `scan.stop` from a connection with no claim is
+  the operator's Stop; `caps.call_s` needs only an Aether that knows `status.scan`, `caps.scan`
+  also a radio Aether can tune. `rpmi-conversations` has the scanning conversation, and the
+  gateway record of `api-exchanges` and `gateway-lists` scans its two channels.
+* **There is no `PUT /gateways/{callsign}`** in the post office or the reference, so the gateway
+  registers again with `POST /gateways`, from the client's home it was last registered from
+  (kept with the record in `record.json`). A gateway registered before it ever scanned gains its
+  `scan_s` at its first scan this way.
+* **The gateway** keeps *Scan these channels* in `gateway.json` (`scan`), and what the modem last
+  answered in its store (`scan_dials`, `scan_s`), from which every registration fills `scan_s`.
+  Its own windows (RP-7 §5) do not take the radio yet: they are published, and a partner's call
+  in one is answered on whatever dial the radio is on.
+* **The client** takes `call_s` from its kept gateway list, on the channel it calls or, with none
+  named, the longest of the gateway's.
+* **The tester** has A-06. C-13 and G-10 need the test post office to serve a gateway list and the
+  test adapter's stations to hear each other only on the same dial (the outline, §6).
+
 ---
 
 ## Change log
@@ -243,3 +264,4 @@ All four as proposed:
 | 0.1.0 | 2026-11-17 | First draft: the author's question how the gateway should scan, as Winlink gateways do with Trimode. The modem scans (Aether's ADR-0129), the gateway says where, the client calls long enough; drafts for RP-4 (`caps.scan`, `scan`, `call_s`) and RP-5 (`scan_s`, gap G21); the gateway, the client, three tests. |
 | 0.1.1 | 2026-11-17 | §8: the author accepted it, all four answers as proposed. |
 | 0.1.2 | 2026-11-17 | §3.1: a sixth end of a scan, `operator`, as Aether built it: its panel's Stop ends any program's scan and leaves the radio where it is. |
+| 0.2.0 | 2026-11-17 | Built (§9), after Aether's scan passed its harness: RP-4 and RP-5 1.1.0 with their vectors, the simulated channel's scan, the Aether adapter, the gateway, the client and A-06. |

@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.7.0 |
-| **Updated** | 2026-11-15 |
+| **Version** | 1.8.0 |
+| **Updated** | 2026-11-17 |
 | **Describes** | RadioPost 0.1.0-beta.24 |
 | **Licence** | CC BY 4.0 |
 
@@ -433,7 +433,8 @@ A call to a gateway sends your outbox and fetches what waits for you, in one ses
 3. Type **Your grid**, your Maidenhead grid square such as `EM73`, and click **Save**. The
    nearest gateways move to the top, with their distance.
 4. Each gateway shows its **Channels** (dial frequency, upper sideband, and the bandwidth Aether
-   uses there) and its **Hours**. Click **Choose** beside the one you want. Its callsign goes in
+   uses there) and its **Hours**. A channel marked *scanned* is one of several the gateway listens
+   on in turn with one radio. Click **Choose** beside the one you want. Its callsign goes in
    **Call**, and its channels in **Channel**.
 
 ![The Gateways page: three gateways with their place, distance, channels and hours](screens/client-gateways.png)
@@ -457,6 +458,11 @@ A call to a gateway sends your outbox and fetches what waits for you, in one ses
 
    Messages of 1,000 bytes or less come anyway, whatever **Fetch** says.
 4. Click **Call**.
+
+On a *scanned* channel the gateway may be on another channel when you call. RadioPost asks Aether
+to keep calling as long as the gateway's record says it takes to come round, often a minute or
+more. An Aether before 0.2.0-beta.162 cannot be asked: the log says the call may end before the
+gateway comes round. Call again, or call on another of its channels.
 
 ### 8.3 During the session
 
@@ -823,9 +829,18 @@ The form shows the account the RadioPost client on this computer is enrolled as.
    sideband, with the **Modem** callers use there and its **Bandwidth** (for Aether, 500 or
    2300 Hz). On an FM radio the frequency is the channel's, and the bandwidth the channel's width.
    **Add a channel** adds a row.
-3. **Grid** and **Place** help callers choose a gateway near them. **Hours** says when it answers:
+3. Tick **Scan these channels** to listen on all of them with one radio. Aether moves the radio
+   over them, a while on each, the first being home. It never leaves a channel while a call is
+   arriving or a session is up. This needs Aether 0.2.0-beta.162 or later, a radio Aether can tune
+   (CAT, rigctld or FLRig), and two to eleven channels, all for the first modem. The gateway's
+   record then says how long a caller's call must keep trying to find it; the gateway adds that,
+   registering again from this computer, the first time it scans.
+4. **Grid** and **Place** help callers choose a gateway near them. **Hours** says when it answers:
    `always`, or in words such as `1800-0200 UTC`.
-4. Click **Register**.
+5. Click **Register**.
+
+List only channels the gateway listens on: the ones it scans, or the one its radio sits on. A
+caller on any other channel is never answered.
 
 Your post office lists the gateway for its users and gives it a credential for 90 days. The
 gateway renews it by itself in its last month, while it answers. If renewing keeps failing, the
@@ -852,7 +867,9 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 2. **What it is doing** (the table below).
 3. **Start** and **Stop**.
 4. **Setup**. Settings change only while the gateway is stopped.
-5. **Modem**: where it reaches Aether and any more modems, and since when it listens.
+5. **Modem**: where it reaches Aether and any more modems, and since when it listens. A gateway
+   that scans adds *Scanning 3 channels, on 7.101 MHz: a call must keep trying 40 s*, or why it is
+   not scanning.
 6. **Post offices**: whether each post office let the gateway log in at the last check. It checks
    every ten minutes while it answers. **Check now** checks at once.
 7. **Registration**: the gateway's credential and when it runs out (red two weeks ahead).
@@ -897,6 +914,14 @@ at the top right; the RadioPost client under Aether.
 **Updates.** A line at the top says when a newer release is out (it checks when it opens and every
 six hours). **Update and restart** stops the gateway, installs the update and starts it again,
 answering as before.
+
+### When a scan stops
+
+If you tune the radio yourself, in Aether, at the radio or with **Stop** on Aether's scan line, the
+scan stops and the radio stays where you put it. The gateway says so in its log and on **Modem**,
+and does not start the scan again by itself: you moved the radio for a reason. Click **Stop** and
+**Start** to scan again. A call to a partner ([section 22](#22-partners-forwarding-by-radio))
+stops the scan for the call and starts it again after.
 
 ## 20. Refusing a caller
 
@@ -1008,6 +1033,7 @@ Useful commands:
 | `radiopost-gateway partner --add N1CALL-10` | Name a partner (`--remove` to drop it). |
 | `radiopost-gateway forward --to N1CALL-10` | Call a partner once, when the gateway is not answering. |
 | `radiopost-gateway windows` | The forwarding windows, and whether each may be published. |
+| `radiopost-gateway scan --dial 3.590 --dial 7.101` | Scan these channels from the next start, the first home (`--off` to stop; `scan` alone lists them). |
 | `sudo radiopost-gateway update` | Install the newest release, then restart the service. |
 
 ## 24. What the gateway keeps
@@ -1600,3 +1626,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.5.0 | 2026-11-15 | §8: the call box's **Channel**, and **Call** tuning the radio there and back when Aether can set the dial. §19: the badge **Not answering here**. §22: a gateway tunes to its partner's window and back. §39: three new messages. §40: the quick reference tunes by **Channel**. |
 | 1.6.0 | 2026-11-15 | §18: **More modems**, and *More than one modem*: a gateway answering on several modems, one session at a time. §18 step 2: each channel's **Modem**. §19: **Modem** names them all. |
 | 1.7.0 | 2026-11-15 | §7: **Form**, and sending an ICS-213 as its values alone; a form message reads as the form. |
+| 1.8.0 | 2026-11-17 | Gateways that scan (W50): §8 a *scanned* channel and the call that keeps trying; §18 **Scan these channels**, and listing only channels the gateway listens on; §19 the scan on **Modem** and *When a scan stops*; §23 `scan`. |

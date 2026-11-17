@@ -127,6 +127,9 @@ pub enum Request {
         as_call: Option<String>,
         /// A bandwidth in Hz from `caps.bandwidths`.
         bandwidth: Option<i128>,
+        /// How long the call's tries keep starting, in seconds, with `caps.call_s` (§4): a call
+        /// to a gateway that scans.
+        call_s: Option<u64>,
     },
     /// Bytes to queue on a link.
     Send {
@@ -160,6 +163,9 @@ pub enum Request {
     Dial,
     /// Set the radio's dial, in hertz (§4.1).
     Tune(u64),
+    /// Listen on each of these dials in turn, in hertz, the first the home; none stops the
+    /// host's scan (§4.2).
+    Scan(Vec<u64>),
 }
 
 fn text(m: &Message, key: &str) -> Result<String, String> {
@@ -241,10 +247,15 @@ impl Request {
                     None => None,
                     Some(v) => Some(integer(v).ok_or("`bandwidth` is not an integer")?),
                 };
+                let call_s = match m.get("call_s") {
+                    None => None,
+                    Some(v) => Some(v.as_u64().ok_or("`call_s` is not an integer, 0 or above")?),
+                };
                 Request::Connect {
                     remote: text(m, "remote")?,
                     as_call: optional_text(m, "as")?,
                     bandwidth,
+                    call_s,
                 }
             }
             "send" => Request::Send {
@@ -271,6 +282,22 @@ impl Request {
                     .filter(|&hz| hz > 0)
                     .ok_or("`dial_hz` is not an integer above 0")?,
             ),
+            "scan" => {
+                if !m.contains_key("id") {
+                    return Err("a `scan` needs an `id`".into());
+                }
+                let dials = m
+                    .get("dials")
+                    .ok_or("no `dials`")?
+                    .as_array()
+                    .and_then(|a| {
+                        a.iter()
+                            .map(|v| v.as_u64().filter(|&hz| hz > 0))
+                            .collect::<Option<Vec<_>>>()
+                    })
+                    .ok_or("`dials` is not a list of integers above 0")?;
+                Request::Scan(dials)
+            }
             _ => return Ok(None),
         };
         Ok(Some(request))
@@ -327,11 +354,15 @@ pub struct Caps {
     pub shared: bool,
     /// The adapter reads and sets the radio's dial (§4.1).
     pub dial: bool,
+    /// The adapter scans the radio over a list of dials (§4.2).
+    pub scan: bool,
+    /// The adapter keeps a call going as long as `connect`'s `call_s` asks (§4).
+    pub call_s: bool,
 }
 
 impl Caps {
-    /// The `caps` member of `hello`; `dial` only when the adapter has it, as §3 lets it be
-    /// absent.
+    /// The `caps` member of `hello`; `dial`, `scan` and `call_s` only when the adapter has them,
+    /// as §3 lets them be absent.
     #[must_use]
     pub fn to_json(&self) -> Value {
         let mut caps = serde_json::json!({
@@ -345,8 +376,14 @@ impl Caps {
             "max_queue": self.max_queue,
             "shared": self.shared,
         });
-        if self.dial {
-            caps["dial"] = Value::Bool(true);
+        for (key, set) in [
+            ("dial", self.dial),
+            ("scan", self.scan),
+            ("call_s", self.call_s),
+        ] {
+            if set {
+                caps[key] = Value::Bool(true);
+            }
         }
         caps
     }
@@ -375,6 +412,8 @@ impl Caps {
             max_queue: v.get("max_queue").and_then(Value::as_u64).unwrap_or(0),
             shared: flag("shared"),
             dial: flag("dial"),
+            scan: flag("scan"),
+            call_s: flag("call_s"),
         }
     }
 }
@@ -394,8 +433,26 @@ mod tests {
             Ok(Some(Request::Connect {
                 remote: "N1CALL-10".into(),
                 as_call: None,
-                bandwidth: Some(2300)
+                bandwidth: Some(2300),
+                call_s: None,
             }))
+        );
+        assert_eq!(
+            read(r#"{"op":"connect","id":3,"remote":"N1CALL-10","call_s":14}"#),
+            Ok(Some(Request::Connect {
+                remote: "N1CALL-10".into(),
+                as_call: None,
+                bandwidth: None,
+                call_s: Some(14),
+            }))
+        );
+        assert_eq!(
+            read(r#"{"op":"scan","id":4,"dials":[3590000,7101000]}"#),
+            Ok(Some(Request::Scan(vec![3_590_000, 7_101_000])))
+        );
+        assert_eq!(
+            read(r#"{"op":"scan","id":7,"dials":[]}"#),
+            Ok(Some(Request::Scan(Vec::new())))
         );
         assert_eq!(
             read(r#"{"op":"tune","id":9,"dial_hz":7101000}"#),
@@ -421,6 +478,13 @@ mod tests {
             r#"{"op":"tune","id":1,"dial_hz":-7101000}"#,
             r#"{"op":"tune","id":1,"dial_hz":7101000.5}"#,
             r#"{"op":"tune","id":1,"dial_hz":"7101000"}"#,
+            r#"{"op":"connect","id":1,"remote":"X","call_s":-1}"#,
+            r#"{"op":"connect","id":1,"remote":"X","call_s":14.5}"#,
+            r#"{"op":"scan","dials":[3590000]}"#,
+            r#"{"op":"scan","id":1}"#,
+            r#"{"op":"scan","id":1,"dials":3590000}"#,
+            r#"{"op":"scan","id":1,"dials":[3590000,0]}"#,
+            r#"{"op":"scan","id":1,"dials":[3590000,"7101000"]}"#,
         ] {
             assert!(read(bad).is_err(), "{bad}");
         }

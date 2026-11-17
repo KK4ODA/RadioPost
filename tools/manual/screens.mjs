@@ -81,7 +81,8 @@ const GATEWAYS = {domain: "radiopost.org", fetched: T - 2 * DAY, others: ["hampo
   errors: {}, ambiguous: [], grid: "EM73", gateways: [
     {callsign: "KK4ODA-1", post_office: "radiopost.org", place: "Atlanta, Georgia", grid: "EM73",
      km: 14, hours: "always", copies: {users: 50, days: 7},
-     channels: [{dial_hz: 3591500, bandwidth_hz: 500}, {dial_hz: 7101000, bandwidth_hz: 2300}]},
+     channels: [{dial_hz: 3591500, bandwidth_hz: 2300, scan_s: 20},
+                {dial_hz: 7101000, bandwidth_hz: 2300, scan_s: 20}]},
     {callsign: "N2CALL-5", post_office: "radiopost.org", place: "Macon, Georgia", grid: "EM82",
      km: 128, hours: "1800-0200 UTC",
      channels: [{dial_hz: 7103500, bandwidth_hz: 500}]},
@@ -733,7 +734,10 @@ const SHOTS = {
   },
 
   async "gateway-window"(browser) {
-    const world = {state: gatewayState(), sessions: GW_SESSIONS};
+    // the gateway scans its two channels (W50)
+    const state = gatewayState();
+    state.status.scan = {dials: [3591500, 7101000], scan_s: 20, at_hz: 7101000, not: null};
+    const world = {state, sessions: GW_SESSIONS};
     const {page, context} = await open(browser, {ui: GATEWAY_UI, api: gatewayApi(world), height: 860});
     await page.waitForTimeout(600);
     await mark(page, [["#who", "1"], ["#state", "2", "before"], ["#stop", "3", "corner"],

@@ -130,6 +130,8 @@ fn channel(user: &str) -> (Server, SocketAddr, SocketAddr) {
         max_queue: 65_536,
         shared: false,
         dial: false,
+        scan: false,
+        call_s: false,
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),
@@ -209,6 +211,7 @@ fn a_gateway_answers_on_two_modems_one_session_at_a_time() {
         copies: None,
         partners: Vec::new(),
         windows: Vec::new(),
+        scan: Vec::new(),
     }
     .save(&gw)
     .expect("saved");

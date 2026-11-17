@@ -190,7 +190,7 @@ fn replay_adapters(conversation: &Json, file: &Json) {
 fn every_conversation_from_the_adapters() {
     let file = vectors("rpmi-conversations.json");
     let conversations = file["conversations"].as_array().expect("conversations");
-    assert_eq!(conversations.len(), 5);
+    assert_eq!(conversations.len(), 6);
     for c in conversations {
         replay_adapters(c, &file);
     }

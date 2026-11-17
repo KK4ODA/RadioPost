@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.0.3 |
-| **Updated** | 2026-11-15 |
+| **Version** | 1.1.0 |
+| **Updated** | 2026-11-17 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -60,7 +60,8 @@ callsign. The adapter keeps each host to its own business:
   `busy` (§7).
 * **The dial is the station's.** One radio has one dial, so a `tune` (§4.1) moves every host's
   station. The adapter refuses it (`busy`) while any link or call is up on the station, the
-  host's or another program's, and tells every host the new dial (`dial`, §5).
+  host's or another program's, and tells every host the new dial (`dial`, §5). A scan (§4.2) is
+  the host's that asked; one host scans at a time, and a `tune` from another host ends it.
 * **A host that leaves takes its callsigns, its call and its links with it.** When the host's
   connection to the adapter closes, calls to its callsigns are no longer answered for it, and the
   adapter ends its call under way and its links as `abort` would, so the station is not left in a
@@ -142,6 +143,8 @@ The adapter answers:
 | `max_queue` | The most bytes the host should have queued on a link at once (§4, `send`). |
 | `shared` | Other programs may use the modem at the same time, under §1.1's rules. Absent means false: this host has the modem to itself. |
 | `dial` | The adapter reads and sets the radio's dial (§4.1). Absent means false. |
+| `scan` | The adapter scans the radio over a list of dials (§4.2). Absent means false. Only with `dial`. |
+| `call_s` | The adapter keeps a call going as long as `connect`'s `call_s` asks (§4). Absent means false. |
 
 If no version is in common the adapter answers `error` `unsupported-version` and closes. An adapter
 that is not shared (§1.1) answers the `hello` of a second host, while a host that has said `hello`
@@ -164,7 +167,7 @@ it is sent, such as `busy`.
 | `hello` | `version`, `app` | §3. |
 | `callsigns` | `callsigns` (list) | The callsigns this host answers to and may call as; the first is the default. They replace the host's earlier list. `error` `claimed` if another program holds one (§1.1). |
 | `listen` | `on` (bool) | Whether calls to this host's callsigns are answered. Off until the host turns it on. |
-| `connect` | `remote`, `as`?, `bandwidth`?, `id` | Calls `remote` as `as`, one of this host's callsigns (default: the first). `ok` means the call is under way; `connected` or `failed` follows. |
+| `connect` | `remote`, `as`?, `bandwidth`?, `call_s`?, `id` | Calls `remote` as `as`, one of this host's callsigns (default: the first). `ok` means the call is under way; `connected` or `failed` follows. With `call_s` and `caps.call_s`, the call's tries keep starting for at least `call_s` seconds: a call to a gateway that scans (RP-5 §4.4). |
 | `send` | `link`, `data`, `ref`? | Queues bytes on one of this host's links. With `ref`, the adapter later reports `delivered` (if it can) for the last byte of this send. |
 | `disconnect` | `link` | Closes this host's link in order: what is queued goes first, then the modem disconnects. |
 | `abort` | `link`? | Ends this host's link, or its call under way, now. Queued bytes are dropped. A call ended this way ends with `failed` `aborted`; with no call under way, `error` `not-connected`. |
@@ -172,10 +175,12 @@ it is sent, such as `busy`.
 | `status` | — | The adapter answers `status` (below). |
 | `dial` | — | The adapter answers `dial` with the radio's dial (§4.1). |
 | `tune` | `dial_hz` | Sets the radio's dial (§4.1). `ok` once the radio is there. |
+| `scan` | `dials` (list), `id` | Listens on each dial in turn (§4.2); an empty list stops it. Answered with `scan`. |
 
 **Types.** `version` is a list of two integers, the lowest and the highest version the host
 speaks; `callsigns` is a list of strings; `on` is true or false; `bandwidth` and `dial_hz` are
-integers, `dial_hz` above 0; `app`,
+integers, `dial_hz` above 0; `dials` is a list of integers, each above 0; `call_s` is an
+integer, 0 or above; `app`,
 `remote`, `as` and `link` are strings. `ref`, like `id`, is a string or an integer, and the adapter
 copies it unchanged into `delivered` or `broadcast-sent`. A `connect` needs its `id`, which its
 `connected` or `failed` carries: one without is `malformed`.
@@ -226,6 +231,50 @@ A host that moved the station from the dial its operator chose tunes back when i
 a client after its call to a gateway on another channel, a gateway after its call in a partner's
 window (RP-7 §5). Stations listening on their channel are found there.
 
+### 4.2 Scanning
+
+An adapter with `caps.scan` listens on several dials with one radio, a while on each. The host
+asks:
+
+```json
+{"op": "scan", "id": 9, "dials": [3590000, 7101000, 10145000]}
+```
+
+and is answered with the scan as it runs:
+
+```json
+{"op": "scan", "id": 9, "dials": [3590000, 7101000, 10145000], "scan_s": 27}
+```
+
+The first dial is the **home** dial. `scan_s` is how long, in whole seconds, a call's tries must
+keep starting for one of them to be heard, whichever of these dials it is on. A gateway publishes
+it (RP-5 §4.4).
+
+The modem chooses how long it stays on each dial, from its own calls. It never leaves a dial while
+a frame is arriving, while an answer, a link or a call is up, or while something owed on that dial
+has not gone, such as the station's identification. Answering is still each host's `listen`:
+scanning changes nothing about it.
+
+A `scan` is refused with `unsupported` without `caps.scan`, and with `busy` while another host's
+scan runs. It is refused with `refused` when a dial is outside rules the modem checks (§8), or the
+radio cannot be tuned there; `text` names the dial.
+
+A `scan` with no dials stops the host's scan, and the radio goes to the home dial once nothing
+holds it. A scan also ends:
+
+* when the host leaves (§1.1);
+* when another host's `tune`, the radio's own knob, or the modem's own operator moves the radio or
+  stops the scan: the operator always wins, and the host does not start the scan again by itself;
+* when fewer than two of its dials are left that the radio will take.
+
+Each end is a `scan` event without an `id`, with no dials and a `why`: `asked`, `left`, `tuned`,
+`knob`, `operator` or `radio`. A dial the radio will not take is dropped from the scan; a `scan`
+event without an `id` then carries the dials left and the new `scan_s`. Every move is a `dial`
+event (§4.1) to every host.
+
+A host that judges the dial itself, because the modem checks no rules (§8), judges every dial before
+it asks. It does not change `listen` on the scan's `dial` events.
+
 ---
 
 ## 5. Events from the adapter
@@ -243,6 +292,7 @@ window (RP-7 §5). Stations listening on their channel are found there.
 | `busy` | `busy` (bool) | Whether the channel is in use by others, including other programs on a shared modem (§1.1). Only with `busy`. |
 | `heard` | `callsign`, `snr_db`?, `bandwidth`? | A station was heard (a beacon, a call to someone else). Optional. |
 | `dial` | `dial_hz`, `id`? | The radio's dial: the answer to `dial`, with its `id`, and, without one, each time the dial changes (§4.1). Only with `caps.dial`. |
+| `scan` | `dials`, `scan_s`?, `why`?, `id`? | The answer to `scan`; and, without an `id`, when the scan's dials change or it ends (no dials, and `why`). Only with `caps.scan` (§4.2). |
 | `broadcast` | `source`, `data`, `snr_db`? | §6. |
 | `broadcast-sent` | `ref`, `sent` (bool), `text`? | §6. |
 | `error` | `id`?, `code`, `text`? | A request failed, or something went wrong. `code` is from §7. |
@@ -351,6 +401,9 @@ end of this section.
 | `broadcast` | `datagram.send` with `frame_type` 2, Aether's unformatted datagram; the `datagram` and `datagram-sent` events. |
 | `dial` | `status.frequency_hz`, the dial Aether reads from the radio over CAT, `rigctld` or FLRig; `refused` while it is null. `caps.dial` is `status.can_tune` at `hello`. Aether's `dial` event (`frequency_hz`) is RPMI's `dial` event. |
 | `tune` | `busy` at once while the host has a call or link, or another program's session is up (its `state` events); otherwise `status`, `busy` unless `state` is `idle` (another program's call is no event of Aether's), then `frequency.set {hz}`. Aether's refusals of it (a probe or a Test under way, something queued for this dial, a radio that did not answer) are `refused`, with Aether's message. |
+| `scan` | `scan.start {dials}`, or `scan.stop` for no dials, on the host's own connection to Aether, which the scan belongs to (its ADR-0129). `scan_s` is the answer's, rounded up to whole seconds. `caps.call_s` is true when `status` has `scan` (Aether 0.2.0-beta.162 and later), and `caps.scan` when it also has `can_tune`. Aether's `claimed` is `busy`; its `regulatory` and `bad_params` are `refused`, its `unsupported` `unsupported`. With no scan of its own the host's empty `scan` is answered without asking Aether: a `scan.stop` from a connection that holds no claim stops another program's scan as the operator's. |
+| `scan` event | Aether's `scan` event, with its `why`: `connection closed` is `left`, `tuned by another program` is `tuned`, and `asked`, `knob`, `operator` and `radio` are themselves. |
+| `call_s` (in `connect`) | `connect {…, call_s}` with `caps.call_s`; Aether makes the fewest tries that keep starting that long, and answers how many. Without it, the call is Aether's own length. |
 | `bandwidth` (in `connect`) | Not mapped yet. How programs sharing a station choose its bandwidth is open (ADR-0106 §5). The adapter offers the bandwidth Aether runs and refuses another with `unsupported`, as §4 says. A `connect` that names that bandwidth is sent with `keep_bandwidth`, so Aether does not move for the call (its ADR-0102). Aether may move between calls (a `bandwidth` event): `caps.bandwidths` is the bandwidth at `hello`, and `connected` carries the one in use. |
 
 Aether checks the band rules before every transmission, and ends each session with the Morse
@@ -623,3 +676,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 1.0.1 | 2026-11-15 | §9.2 (informative), found by writing the VARA adapter: how `hello` tells VARA's interface from another (`CHAT OFF`), its caps for VARA HF and VARA FM, the published callsign grammar, `LISTEN OFF` held as Mercury's is, `BUFFER` as sent and not delivered, and that the adapter sends nothing to identify the station. Nothing for an implementation to do. |
 | 1.0.2 | 2026-11-15 | §9.4 (informative), found by writing the packet adapter against AGWPE: the frame, the mapping, callsigns registered only while the host listens, `d` only once nothing is outstanding, no `delivered`, one host at a time. Nothing for an implementation to do. |
 | 1.0.3 | 2026-11-15 | §9.3 (informative), checked against ardopcf's host interface and written from the ARDOP adapter: the echoes and `FAULT`, the data port's blocks and tags, `MYCALL` and `MYAUX`, the call's end by `STATUS`, `REJECTEDBW` and `REJECTEDBUSY`, `DISCONNECT` once `BUFFER` is 0, `ABORT` reported by the adapter, no `delivered`. Nothing for an implementation to do. |
+| 1.1.0 | 2026-11-17 | Scanning (§4.2, wishlist W50): `caps.scan`, the `scan` request and event, a scan the host's that asked and ended by another host's `tune` (§1.1); `connect`'s `call_s` and `caps.call_s`; §9.1, Aether's scan (its ADR-0129). MINOR, announced (RP-0 §8.4): nothing for an implementation to do. |

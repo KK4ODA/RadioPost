@@ -51,6 +51,8 @@ fn air_dialled(dial_hz: Option<u64>) -> (Server, SocketAddr, SocketAddr, SocketA
         max_queue: 65_536,
         shared: false,
         dial: false,
+        scan: false,
+        call_s: false,
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),
@@ -136,6 +138,7 @@ fn gateway_holding(
             callsign: partner.into(),
         }],
         windows,
+        scan: Vec::new(),
     }
     .save(&gw)
     .expect("saved");

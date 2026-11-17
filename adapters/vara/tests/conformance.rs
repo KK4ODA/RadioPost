@@ -36,11 +36,12 @@ fn two_adapters_on_stand_in_vara_modems_pass_a01_to_a04() {
     let verdicts = run(&plan, |_| {}).expect("the tester runs");
     let failed: Vec<String> = verdicts
         .iter()
-        .filter(|v| v.passed != Some(true))
+        // A-06 is for an adapter that scans (RP-4 §4.2): this one does not
+        .filter(|v| v.passed != Some(true) && !(v.id == "A-06" && v.passed.is_none()))
         .map(|v| format!("{}: {}\n  {}", v.id, v.why, v.transcript.join("\n  ")))
         .collect();
     assert_eq!(failed, Vec::<String>::new());
-    assert_eq!(verdicts.len(), 4);
+    assert_eq!(verdicts.len(), 5);
     // VARA identifies the station itself: the adapters sent no CQFRAME, and asked nothing of the
     // modems that VARA's published commands do not have
     assert_eq!(air.idents(), Vec::<(usize, String)>::new());

@@ -8,6 +8,11 @@
 //! has no input or output and no clock: lines go in through [`Channel::request_line`], what the
 //! adapters say comes out of [`Channel::take`], and the program that drives it decides when a
 //! call nobody answered is given up ([`Channel::give_up`]).
+//!
+//! A station whose caps have `scan` scans with no clock either (RP-4 §4.2): it keeps the scan's
+//! dials, answers how long a call must keep trying ([`SCAN_DWELL_S`] a dial), and moves the radio
+//! only when a scan starts off its dials, when it stops or when its host leaves. Every call
+//! crosses the channel whatever the dial, as the reference does.
 
 use serde_json::Value;
 
@@ -15,6 +20,11 @@ use crate::base64;
 use crate::wire::{
     Caps, Message, Request, VERSION, admit, answer, answer_with, error, parse_line, speaks,
 };
+
+/// How long the simulated modem stays on each dial of a scan (RP-4 §4.2): a modem's own choice,
+/// from its own calls, here a round figure as in the reference. A scan's `scan_s` is its dials
+/// less one, times it.
+pub const SCAN_DWELL_S: u64 = 10;
 
 /// One station's adapter and modem.
 #[derive(Clone, Debug)]
@@ -98,6 +108,8 @@ struct Station {
     hosts: Vec<Host>,
     links_made: u64,
     dial_hz: Option<u64>,
+    /// The scan under way (§4.2): the host it is for, and its dials, the first the home.
+    scanning: Option<(String, Vec<u64>)>,
 }
 
 /// One channel and the stations on it.
@@ -141,6 +153,7 @@ impl Channel {
             cfg,
             hosts: Vec::new(),
             links_made: 0,
+            scanning: None,
         });
         self.stations.len() - 1
     }
@@ -205,6 +218,22 @@ impl Channel {
         }
         self.calls
             .retain(|c| !(c.station == station && c.host == host));
+        let scanning = &mut self.stations[station].scanning;
+        if scanning.as_ref().is_some_and(|(owner, _)| owner == host)
+            && let Some((_, dials)) = scanning.take()
+        {
+            // its scan ends with it, and the radio goes home (§4.2)
+            self.go_to(station, dials[0]);
+        }
+    }
+
+    /// The dials the station is scanning, the first the home (§4.2); empty when it is not.
+    #[must_use]
+    pub fn scanning(&self, station: usize) -> &[u64] {
+        self.stations[station]
+            .scanning
+            .as_ref()
+            .map_or(&[], |(_, dials)| dials.as_slice())
     }
 
     /// A line from a host.
@@ -247,10 +276,12 @@ impl Channel {
             Request::Hello { low, high, .. } => self.on_hello(station, h, low, high, id),
             Request::Callsigns(list) => self.on_callsigns(station, h, list, id),
             Request::Listen(on) => self.on_listen(station, h, on, id),
+            // the simulated modem's calls cross at once: `call_s` changes nothing on it
             Request::Connect {
                 remote,
                 as_call,
                 bandwidth,
+                call_s: _,
             } => self.on_connect(station, h, &remote, as_call, bandwidth, id),
             Request::Send {
                 link,
@@ -265,6 +296,7 @@ impl Channel {
             Request::Status => self.on_status(station, h, id),
             Request::Dial => self.on_dial(station, host, None, id),
             Request::Tune(hz) => self.on_dial(station, host, Some(hz), id),
+            Request::Scan(dials) => self.on_scan(station, host, &dials, id),
         }
     }
 
@@ -764,6 +796,24 @@ impl Channel {
         }
         self.stations[station].dial_hz = Some(hz);
         self.ok(station, host, id);
+        if let Some((owner, _)) = self.stations[station].scanning.take() {
+            // the operator wins: a tune ends the scan, and the radio stays where it was put
+            let why = if owner == host { "asked" } else { "tuned" };
+            let ended = answer_with(
+                "scan",
+                None,
+                &[("dials", Value::Array(Vec::new())), ("why", why.into())],
+            );
+            self.emit(station, &owner, ended);
+        }
+        self.tell_dial(station);
+    }
+
+    /// Every host that has said `hello` hears where the dial went (§4.1).
+    fn tell_dial(&mut self, station: usize) {
+        let Some(hz) = self.stations[station].dial_hz else {
+            return;
+        };
         let told: Vec<String> = self.stations[station]
             .hosts
             .iter()
@@ -776,6 +826,64 @@ impl Channel {
                 &name,
                 answer_with("dial", None, &[("dial_hz", hz.into())]),
             );
+        }
+    }
+
+    /// The radio to `hz`, when nothing holds it where it is; every host told.
+    fn go_to(&mut self, station: usize, hz: u64) {
+        let held = self.ends_at(station) > 0 || self.calls.iter().any(|c| c.station == station);
+        if self.stations[station].dial_hz == Some(hz) || held {
+            return;
+        }
+        self.stations[station].dial_hz = Some(hz);
+        self.tell_dial(station);
+    }
+
+    /// `scan` (§4.2): listen on several dials in turn. One host scans at a time; no dials stops
+    /// the host's own scan and sends the radio home; a new list replaces the host's scan. With
+    /// no clock, the modem says how long a call must keep trying and puts the radio on the first
+    /// dial when it is on none of them.
+    fn on_scan(&mut self, station: usize, host: &str, dials: &[u64], id: Option<&Value>) {
+        if !self.stations[station].cfg.caps.scan {
+            let m = error(id, "unsupported", "this modem does not scan");
+            self.emit(station, host, m);
+            return;
+        }
+        if self.stations[station]
+            .scanning
+            .as_ref()
+            .is_some_and(|(owner, _)| owner != host)
+        {
+            let m = error(id, "busy", "another program is scanning this station");
+            self.emit(station, host, m);
+            return;
+        }
+        if dials.is_empty() {
+            let home = self.stations[station].scanning.take().map(|(_, d)| d[0]);
+            let m = answer_with("scan", id, &[("dials", Value::Array(Vec::new()))]);
+            self.emit(station, host, m);
+            if let Some(home) = home {
+                self.go_to(station, home);
+            }
+            return;
+        }
+        if (1..dials.len()).any(|i| dials[..i].contains(&dials[i])) {
+            self.emit(station, host, error(id, "refused", "a dial is given twice"));
+            return;
+        }
+        let scan_s = (dials.len() as u64 - 1) * SCAN_DWELL_S;
+        let m = answer_with(
+            "scan",
+            id,
+            &[("dials", dials.to_vec().into()), ("scan_s", scan_s.into())],
+        );
+        self.stations[station].scanning = Some((host.into(), dials.to_vec()));
+        self.emit(station, host, m);
+        if self.stations[station]
+            .dial_hz
+            .is_none_or(|hz| !dials.contains(&hz))
+        {
+            self.go_to(station, dials[0]);
         }
     }
 
@@ -848,6 +956,8 @@ mod tests {
                 max_queue: 65536,
                 shared: false,
                 dial: false,
+                scan: false,
+                call_s: false,
             },
             prefix: "c".into(),
             frame_bytes: 128,

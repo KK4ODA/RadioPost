@@ -120,6 +120,8 @@ function render(s) {
     || (st.state === "listening" || st.state === "session"
       ? `Listening as ${settings.callsign} since ${when(st.since)}`
       : st.state === "stopped" ? "Not answering." : "");
+  $("scan-line").hidden = !st.scan;
+  $("scan-line").textContent = scanLine(st.scan);
 
   $("checks").replaceChildren(...(st.checks.length ? st.checks : []).map((c) => {
     const li = document.createElement("li");
@@ -184,6 +186,17 @@ function render(s) {
   }
 }
 
+// the first modem's scan (W50): its channels, where the radio is, and the call's length; or why it
+// is not scanning though set to
+function scanLine(scan) {
+  if (!scan) return "";
+  if (!scan.dials.length) return scan.not || "Not scanning.";
+  const mhz = (hz) => (hz / 1e6).toFixed(3);
+  const at = scan.at_hz ? `, on ${mhz(scan.at_hz)} MHz` : "";
+  const last = scan.scan_s != null ? `: a call must keep trying ${scan.scan_s} s` : "";
+  return `Scanning ${scan.dials.length} channels${at}${last}.`;
+}
+
 function fillForms(s) {
   formsFilled = true;
   const g = $("gateway-form").elements;
@@ -201,8 +214,14 @@ function fillForms(s) {
     g.copies_days.value = copies.days;
     g.copies_kb.value = Math.round(copies.max_air_bytes / 1024);
   }
-  $("register-form").elements.home.value = s.client.home;
-  if (!$("channel-rows").children.length) addChannel(7.101, 2300);
+  const r = $("register-form").elements;
+  r.home.value = s.client.home;
+  const scan = (settings && settings.scan) || [];
+  r.scan.checked = scan.length > 0;
+  if (!$("channel-rows").children.length) {
+    if (scan.length) for (const hz of scan) addChannel(hz / 1e6, 2300);
+    else addChannel(7.101, 2300);
+  }
 }
 
 function renderPostOffices(s) {
@@ -614,7 +633,8 @@ $("register-form").addEventListener("submit", (e) => {
             modem: modem.value, bandwidth_hz: Number(bw.value)};
   }).filter((c) => c.dial_hz > 0);
   act("register", {home: f.home.value, grid: f.grid.value, place: f.place.value,
-                   hours: f.hours.value, channels},
+                   hours: f.hours.value, channels,
+                   scan: f.scan.checked ? channels.map((c) => c.dial_hz) : []},
       (a) => { render(a.state); toast(a.said); });
 });
 

@@ -85,6 +85,17 @@ def is_version(value: Any) -> bool:
     )
 
 
+def is_dial_list(value: Any) -> bool:
+    """RP-4 §4: `dials` is a list of integers, each above 0."""
+    return isinstance(value, list) and all(
+        isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in value
+    )
+
+
+SCAN_DWELL_S = 10
+"""How long the simulated modem stays on each dial of a scan (RP-4 §4.2): the modem's own choice,
+from its own calls, here a round figure. `scan_s` is the dials less one, times it."""
+
 # RP-4 §4: each request's members, those without a `?` in its table needed, with their types.
 MEMBERS: dict[str, list[tuple[str, bool, Any]]] = {
     "hello": [("version", True, is_version), ("app", True, lambda v: isinstance(v, str))],
@@ -95,6 +106,7 @@ MEMBERS: dict[str, list[tuple[str, bool, Any]]] = {
         ("remote", True, lambda v: isinstance(v, str)),
         ("as", False, lambda v: isinstance(v, str)),
         ("bandwidth", False, lambda v: isinstance(v, int) and not isinstance(v, bool)),
+        ("call_s", False, lambda v: isinstance(v, int) and not isinstance(v, bool) and v >= 0),
     ],
     "send": [
         ("link", True, lambda v: isinstance(v, str)),
@@ -109,6 +121,7 @@ MEMBERS: dict[str, list[tuple[str, bool, Any]]] = {
     "tune": [
         ("dial_hz", True, lambda v: isinstance(v, int) and not isinstance(v, bool) and v > 0),
     ],
+    "scan": [("id", True, is_id), ("dials", True, is_dial_list)],
 }
 
 
@@ -259,6 +272,8 @@ class Adapter:
         self.prefix = prefix  # link IDs are this adapter's own: prefix and a number
         self.frame_bytes = frame_bytes  # how much a `received` carries at most
         self.hosts: dict[str, Host] = {}
+        # the scan under way (RP-4 §4.2): the host it is for, and its dials, the first the home
+        self.scanning: tuple[str, list[int]] | None = None
         self.ends: list[End] = []
         self.links = 0
         world.adapters.append(self)
@@ -278,6 +293,11 @@ class Adapter:
         self.world.calls = [
             c for c in self.world.calls if not (c.adapter is self and c.host == host)
         ]
+        if self.scanning is not None and self.scanning[0] == host:
+            # its scan ends with it, and the radio goes home (RP-4 §4.2)
+            home = self.scanning[1][0]
+            self.scanning = None
+            self._go_to(home)
 
     def emit(self, host: str, message: Message) -> None:
         if host in self.hosts:
@@ -318,6 +338,7 @@ class Adapter:
             "status": self.on_status,
             "dial": self._dial,
             "tune": self._dial,
+            "scan": self._scan,
         }.get(op)
         if handler is None:
             self.emit(host, error(rid, "unsupported", f"no op {op}"))
@@ -493,6 +514,53 @@ class Adapter:
             return
         self.dial_hz = m["dial_hz"]
         self.ok(h, rid)
+        if self.scanning is not None:
+            # the operator wins: a tune ends the scan, and the radio stays where it was put
+            owner = self.scanning[0]
+            self.scanning = None
+            why = "asked" if owner == h.name else "tuned"
+            self.emit(owner, answer("scan", None, dials=[], why=why))
+        self._tell_dial()
+
+    def _tell_dial(self) -> None:
+        """RP-4 §4.1: every host that has said hello hears where the dial went."""
         for other in self.hosts.values():
             if other.hello:
                 self.emit(other.name, answer("dial", None, dial_hz=self.dial_hz))
+
+    def _go_to(self, dial_hz: int) -> None:
+        """The radio to `dial_hz`, when nothing holds it where it is; every host told."""
+        if self.dial_hz == dial_hz or self.ends:
+            return
+        if any(c.adapter is self for c in self.world.calls):
+            return
+        self.dial_hz = dial_hz
+        self._tell_dial()
+
+    def _scan(self, h: Host, m: Message, rid: Any) -> None:
+        """RP-4 §4.2: listen on several dials in turn. One host scans at a time; a list with no
+        dials stops the host's own scan and sends the radio home; a new list replaces it. The
+        simulated modem has no clock: it says how long a call must keep trying, and puts the
+        radio on the first dial when it is on none of them."""
+        if not self.caps.get("scan"):
+            self.emit(h.name, error(rid, "unsupported", "this modem does not scan"))
+            return
+        if self.scanning is not None and self.scanning[0] != h.name:
+            self.emit(h.name, error(rid, "busy", "another program is scanning this station"))
+            return
+        dials = list(m["dials"])
+        if not dials:
+            home = self.scanning[1][0] if self.scanning is not None else None
+            self.scanning = None
+            self.emit(h.name, answer("scan", rid, dials=[]))
+            if home is not None:
+                self._go_to(home)
+            return
+        if len(set(dials)) != len(dials):
+            self.emit(h.name, error(rid, "refused", "a dial is given twice"))
+            return
+        self.scanning = (h.name, dials)
+        scan_s = (len(dials) - 1) * SCAN_DWELL_S
+        self.emit(h.name, answer("scan", rid, dials=dials, scan_s=scan_s))
+        if self.dial_hz not in dials:
+            self._go_to(dials[0])

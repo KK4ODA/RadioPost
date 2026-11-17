@@ -285,6 +285,7 @@ impl Bridge {
                 remote,
                 as_call,
                 bandwidth,
+                call_s: _,
             } => self.on_connect(&remote, as_call, bandwidth, rid, &mut out),
             Request::Send { link, data, .. } => self.on_send(&link, &data, rid_ref, &mut out),
             Request::Disconnect { link } => self.on_disconnect(&link, rid_ref, &mut out),
@@ -293,7 +294,7 @@ impl Bridge {
                 let text = "ARDOP's FEC mode is not carried by this adapter";
                 out.push(Out::Host(error(rid_ref, "unsupported", text)));
             }
-            Request::Dial | Request::Tune(_) => {
+            Request::Dial | Request::Tune(_) | Request::Scan(_) => {
                 let text = "ARDOP's host commands have no dial";
                 out.push(Out::Host(error(rid_ref, "unsupported", text)));
             }
@@ -316,6 +317,8 @@ impl Bridge {
             max_queue: MAX_QUEUE,
             shared: false,
             dial: false,
+            scan: false,
+            call_s: false,
         };
         out.push(Out::Host(answer_with(
             "hello",

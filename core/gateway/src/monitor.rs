@@ -61,6 +61,20 @@ pub struct Check {
     pub at: u64,
 }
 
+/// The scan of its first modem (W50, RP-4 §4.2), as the panel shows it.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct Scanning {
+    /// The dials scanned, the first the home; none once it has ended.
+    pub dials: Vec<u64>,
+    /// How long a call must keep trying to find the gateway, as the modem answered.
+    pub scan_s: Option<u64>,
+    /// The dial the radio is on, as the modem last said.
+    pub at_hz: Option<u64>,
+    /// Why it is not scanning though it is set to: the modem cannot, or ended the scan (the
+    /// operator moved the radio), in words.
+    pub not: Option<String>,
+}
+
 /// The gateway's state, as the panel shows it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Status {
@@ -76,6 +90,8 @@ pub struct Status {
     pub logged: usize,
     /// How each post office answered the last check.
     pub checks: Vec<Check>,
+    /// Its scan, when it is set to scan.
+    pub scan: Option<Scanning>,
 }
 
 struct Inner {
@@ -87,6 +103,7 @@ struct Inner {
     log: VecDeque<(u64, String)>,
     logged: usize,
     checks: Vec<Check>,
+    scan: Option<Scanning>,
     /// A partner the operator asked to forward to (RP-7 §2), for the answering loop.
     forward: Option<String>,
 }
@@ -118,6 +135,7 @@ impl Monitor {
                 log: VecDeque::new(),
                 logged: 0,
                 checks: Vec::new(),
+                scan: None,
                 forward: None,
             }),
             stop: AtomicBool::new(false),
@@ -274,6 +292,19 @@ impl Monitor {
             session: i.session.clone(),
             logged: i.logged,
             checks: i.checks.clone(),
+            scan: i.scan.clone(),
+        }
+    }
+
+    /// The scan as it now stands; `None` when the gateway is not set to scan.
+    pub fn set_scan(&self, scan: Option<Scanning>) {
+        self.lock().scan = scan;
+    }
+
+    /// The radio is on `hz` (RP-4 §4.1), for a scan's line.
+    pub fn scan_at(&self, hz: u64) {
+        if let Some(s) = self.lock().scan.as_mut() {
+            s.at_hz = Some(hz);
         }
     }
 

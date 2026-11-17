@@ -76,6 +76,11 @@ pub struct Settings {
     /// Its windows (RP-7 §5): when it listens for its partners' calls, published in its record.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub windows: Vec<WindowSettings>,
+    /// The channels its first modem scans (W50, RP-4 §4.2), dials in hertz, the first the home:
+    /// *Scan these channels*. Empty, the radio stays where it is. Its channels in the record then
+    /// carry the `scan_s` the modem answers (RP-5 §4.4).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scan: Vec<u64>,
 }
 
 /// A window, as the operator sets it (RP-7 §5): a channel, and when it is open.
@@ -957,6 +962,10 @@ struct Modem {
     judges: bool,
     /// Why it does not answer with the radio where it is, when it judges the dial.
     outside: Option<String>,
+    /// The modem scans the radio over a list of dials (RP-4 §4.2).
+    scans: bool,
+    /// The dials it is scanning, the first the home; empty when it is not.
+    scanning: Vec<u64>,
 }
 
 impl Modem {
@@ -1035,6 +1044,7 @@ impl Modem {
                 }
                 Some(e @ Event::Hello { .. }) => return Ok(e),
                 Some(e @ Event::Dial { id: Some(_), .. }) if e_dial_id(&e) == id => return Ok(e),
+                Some(e @ Event::Scan { id: Some(_), .. }) if e_scan_id(&e) == id => return Ok(e),
                 _ => {}
             }
         }
@@ -1082,6 +1092,51 @@ impl Modem {
         Ok(Some(said))
     }
 
+    /// Starts the scan of `dials` (RP-4 §4.2): the dials and `scan_s` as the modem answers. When
+    /// the gateway judges the dial itself (W40) it judges every dial first and does not ask for a
+    /// list naming one outside the segments; the scan's moves then leave answering on.
+    fn start_scan(
+        &mut self,
+        dials: &[u64],
+        country: &str,
+    ) -> Result<(Vec<u64>, Option<u64>), String> {
+        if !self.scans {
+            return Err(
+                "the modem does not scan (RP-4 §4.2): the gateway answers on the radio's dial"
+                    .into(),
+            );
+        }
+        if self.judges
+            && let Some(outside) = dials
+                .iter()
+                .find_map(|&hz| crate::rules::verdict(hz, country))
+        {
+            return Err(format!("not scanning: {outside}"));
+        }
+        let scan = self.host.scan(dials);
+        let Event::Scan { dials, scan_s, .. } = self.ask(&scan)? else {
+            return Err("the modem did not answer the scan".into());
+        };
+        self.scanning.clone_from(&dials);
+        if self.judges && self.outside.is_some() {
+            let listen = self.host.listen(true);
+            self.ask(&listen)?;
+            self.outside = None;
+        }
+        Ok((dials, scan_s))
+    }
+
+    /// Stops the scan (RP-4 §4.2): the dials it scanned, for starting it again; none when it was
+    /// not scanning.
+    fn stop_scan(&mut self) -> Result<Vec<u64>, String> {
+        if self.scanning.is_empty() {
+            return Ok(Vec::new());
+        }
+        let stop = self.host.scan(&[]);
+        self.ask(&stop)?;
+        Ok(std::mem::take(&mut self.scanning))
+    }
+
     /// Tunes the radio to `dial_hz` for a call (RP-4 §4.1), and gives the dial it left, to go
     /// back to; `None` when it is there already.
     fn tune_away(&mut self, dial_hz: u64) -> Result<Option<u64>, String> {
@@ -1124,6 +1179,35 @@ fn e_dial_id(e: &Event) -> Option<serde_json::Value> {
     }
 }
 
+/// A `scan` answer's `id`.
+fn e_scan_id(e: &Event) -> Option<serde_json::Value> {
+    match e {
+        Event::Scan { id, .. } => id.clone(),
+        _ => None,
+    }
+}
+
+/// Why a scan ended (RP-4 §4.2), in the operator's words.
+fn scan_ended(why: Option<&str>) -> &'static str {
+    match why {
+        Some("left") => "the modem lost the gateway's connection",
+        Some("tuned") => "another program tuned the radio",
+        Some("knob") => "the radio's dial was moved at the radio",
+        Some("operator") => "the modem's operator stopped it",
+        Some("radio") => "fewer than two of its channels are left that the radio will take",
+        _ => "as the gateway asked",
+    }
+}
+
+/// A list of dials, in megahertz.
+fn dials_in_mhz(dials: &[u64]) -> String {
+    dials
+        .iter()
+        .map(|&hz| crate::rules::mhz(hz))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// Why the modem could not be opened.
 enum Unopened {
     /// It may open later: it is not running yet, or it refused for now.
@@ -1145,6 +1229,8 @@ fn open(station: &Station, address: &str) -> Result<Modem, Unopened> {
         dial: false,
         judges: false,
         outside: None,
+        scans: false,
+        scanning: Vec::new(),
     };
     let hello = modem
         .host
@@ -1153,6 +1239,7 @@ fn open(station: &Station, address: &str) -> Result<Modem, Unopened> {
         return Err(Unopened::Later("the modem did not say hello".into()));
     };
     modem.dial = caps.dial;
+    modem.scans = caps.scan;
     // RP-4 §8: a modem that checks no band rules leaves them to the gateway, which judges the
     // radio's dial when the modem says where it is (W40), or to its operator, who says so
     modem.judges = !caps.regulatory && caps.dial && !station.settings.operator_checks_rules;
@@ -1250,6 +1337,7 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
     };
     let listening = listening_line(&station.settings);
     answering(&modem, monitor, &listening, &mut tell);
+    scan_at_start(&mut station, &mut modem, monitor, &mut tell);
     let mut others = Others::new(&station.settings.more_modems);
     let mut renewal = Renewal::new(dir, RENEW_EVERY, radiopost::credential::RENEW_WITHIN);
     let mut caller = crate::forward::Caller::default();
@@ -1292,8 +1380,13 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
                 busy = b; // RP-4 §5: no call on a busy channel
                 continue;
             }
-            // the radio moved (W40): answering follows where it may
+            // the radio moved (W40): answering follows where it may, but for a scan's own moves,
+            // whose dials were judged before it started
             Ok(Some(Event::Dial { id: None, dial_hz })) => {
+                monitor.scan_at(dial_hz);
+                if modem.scanning.contains(&dial_hz) {
+                    continue;
+                }
                 match modem.judge(dial_hz, &station.settings.country, false) {
                     Ok(Some(said)) => {
                         tell(&said);
@@ -1302,6 +1395,21 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
                     Ok(None) => {}
                     Err(e) => tell(&format!("could not change answering: {e}")),
                 }
+                continue;
+            }
+            Ok(Some(Event::Scan {
+                id: None,
+                dials,
+                scan_s,
+                why,
+            })) => {
+                scan_changed(
+                    &mut station,
+                    &mut modem,
+                    (dials, scan_s, why),
+                    monitor,
+                    &mut tell,
+                );
                 continue;
             }
             Ok(Some(e)) => e,
@@ -1320,6 +1428,7 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
                     None => return stopped(monitor, &mut tell),
                 }
                 answering(&modem, monitor, &listening, &mut tell);
+                scan_at_start(&mut station, &mut modem, monitor, &mut tell);
                 continue;
             }
         };
@@ -1564,6 +1673,113 @@ fn listening_line(settings: &Settings) -> String {
     )
 }
 
+/// Starts the first modem's scan when the gateway is set to scan (W50, RP-4 §4.2), and says so.
+/// A modem that cannot scan, or a list naming a dial the gateway may not answer on (W40), leaves
+/// the radio where it is, said once and shown.
+fn scan_at_start(
+    station: &mut Station,
+    modem: &mut Modem,
+    monitor: &Monitor,
+    tell: &mut dyn FnMut(&str),
+) {
+    let dials = station.settings.scan.clone();
+    if dials.is_empty() {
+        monitor.set_scan(None);
+        // set not to scan: the record's channels lose their `scan_s` (RP-5 §4.4)
+        if !station.store().lock().scan_dials.is_empty() {
+            keep_scan(station, Vec::new(), None, tell);
+        }
+        return;
+    }
+    match modem.start_scan(&dials, &station.settings.country) {
+        Ok((dials, scan_s)) => scanning(station, dials, scan_s, monitor, tell),
+        Err(e) => {
+            tell(&e);
+            monitor.set_scan(Some(crate::monitor::Scanning {
+                not: Some(e),
+                ..crate::monitor::Scanning::default()
+            }));
+        }
+    }
+}
+
+/// The modem's scan as it now runs (RP-4 §4.2): said, shown, its `scan_s` kept, and the gateway
+/// registered again when what its record publishes changed (RP-5 §4.4).
+fn scanning(
+    station: &mut Station,
+    dials: Vec<u64>,
+    scan_s: Option<u64>,
+    monitor: &Monitor,
+    tell: &mut dyn FnMut(&str),
+) {
+    tell(&format!(
+        "scanning {} channels, {} MHz: a call must keep trying {} s to find the gateway",
+        dials.len(),
+        dials_in_mhz(&dials),
+        scan_s.map_or_else(|| "?".to_owned(), |s| s.to_string())
+    ));
+    monitor.set_scan(Some(crate::monitor::Scanning {
+        dials: dials.clone(),
+        scan_s,
+        at_hz: None,
+        not: None,
+    }));
+    keep_scan(station, dials, scan_s, tell);
+}
+
+/// Keeps the scan the modem answered, and registers the gateway again when its record no longer
+/// says it (RP-5 §4.4, §6.4), as its operator's enrollment on this computer lets it.
+fn keep_scan(
+    station: &mut Station,
+    dials: Vec<u64>,
+    scan_s: Option<u64>,
+    tell: &mut dyn FnMut(&str),
+) {
+    if let Err(e) = station.store().change(|s| {
+        s.scan_dials = dials;
+        s.scan_s = scan_s;
+    }) {
+        tell(&format!("could not keep the scan: {e}"));
+    }
+    match crate::operator::register_again(&station.dir) {
+        None => {}
+        Some(Ok(said)) => {
+            tell(&format!("registered again, since its scan changed: {said}"));
+            station.reload_credential();
+        }
+        Some(Err(e)) => tell(&format!(
+            "register the gateway again: its record does not say how long a call must keep \
+             trying to find it ({e})"
+        )),
+    }
+}
+
+/// A `scan` event (RP-4 §4.2): a dial dropped, or the scan ended. The gateway does not start an
+/// ended scan again by itself: the operator moved the radio, or the modem cannot go on.
+fn scan_changed(
+    station: &mut Station,
+    modem: &mut Modem,
+    (dials, scan_s, why): (Vec<u64>, Option<u64>, Option<String>),
+    monitor: &Monitor,
+    tell: &mut dyn FnMut(&str),
+) {
+    if dials.is_empty() {
+        modem.scanning.clear();
+        let said = format!(
+            "the scan ended: {}; the radio stays where it is",
+            scan_ended(why.as_deref())
+        );
+        tell(&said);
+        monitor.set_scan(Some(crate::monitor::Scanning {
+            not: Some(said),
+            ..crate::monitor::Scanning::default()
+        }));
+        return;
+    }
+    modem.scanning.clone_from(&dials);
+    scanning(station, dials, scan_s, monitor, tell);
+}
+
 /// Says whether the gateway answers: listening, or not where the radio is (W40).
 fn answering(modem: &Modem, monitor: &Monitor, listening: &str, tell: &mut dyn FnMut(&str)) {
     if let Some(why) = &modem.outside {
@@ -1632,6 +1848,8 @@ fn calls_between_sessions(
 fn stopped(monitor: &Monitor, tell: &mut dyn FnMut(&str)) -> Result<(), String> {
     tell("stopped answering");
     monitor.set_state("stopped", None);
+    // the scan ended with the gateway's connection to its modem (RP-4 §1.1)
+    monitor.set_scan(None);
     Ok(())
 }
 
@@ -1824,6 +2042,12 @@ fn forward(
     monitor: &Monitor,
     (records, dial): (bool, Option<u64>),
 ) -> Result<String, String> {
+    // a scan stops for the call and starts again after it, in place of tuning back (W50)
+    let scanned = if dial.is_some() {
+        modem.stop_scan()?
+    } else {
+        Vec::new()
+    };
     // in the partner's window the radio goes to its channel, and back after (RP-4 §4.1)
     let back = match dial {
         Some(hz) if modem.dial => {
@@ -1847,7 +2071,13 @@ fn forward(
         None => None,
     };
     let result = forward_here(station, modem, partner, monitor, records);
-    if let Some(was) = back {
+    if !scanned.is_empty() {
+        let country = station.settings.country.clone();
+        match modem.start_scan(&scanned, &country) {
+            Ok((dials, _)) => monitor.log(&format!("scanning again: {} MHz", dials_in_mhz(&dials))),
+            Err(e) => monitor.log(&format!("could not scan again after the call: {e}")),
+        }
+    } else if let Some(was) = back {
         match modem.tune_back(was) {
             Ok(()) => monitor.log(&format!(
                 "tuned the radio back to {} MHz",

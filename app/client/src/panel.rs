@@ -611,11 +611,26 @@ impl Panel {
                             .ok_or("dial_hz: hertz above 0")?,
                     ),
                 };
-                self.run(Some(callsign), kind, &text("adapter"), fetch, dial)
+                // on a channel a gateway scans, how long the call must keep trying (RP-5 §4.4)
+                let call_s = match &body["call_s"] {
+                    Value::Null => None,
+                    v => Some(v.as_u64().ok_or("call_s: seconds, 0 or above")?),
+                };
+                self.run(
+                    Some(callsign),
+                    kind,
+                    &text("adapter"),
+                    fetch,
+                    (dial, call_s),
+                )
             }
-            (Method::Post, "/api/listen") => {
-                self.run(None, Kind::Station, &text("adapter"), Fetch::All, None)
-            }
+            (Method::Post, "/api/listen") => self.run(
+                None,
+                Kind::Station,
+                &text("adapter"),
+                Fetch::All,
+                (None, None),
+            ),
             (Method::Post, "/api/modem") => {
                 // the page's Modem box, when it loads and when it changes: the app's connection
                 // between calls follows it (only to Aether)
@@ -1250,7 +1265,7 @@ impl Panel {
         kind: Kind,
         adapter: &str,
         fetch: Fetch,
-        dial_hz: Option<u64>,
+        (dial_hz, call_s): (Option<u64>, Option<u64>),
     ) -> Result<Value, Error> {
         {
             let mut a = lock(&self.activity);
@@ -1275,6 +1290,7 @@ impl Panel {
         opts.stop = Some(Arc::clone(&self.stop));
         opts.fetch = fetch;
         opts.dial_hz = dial_hz;
+        opts.call_s = call_s;
         *self.live.lock().unwrap_or_else(PoisonError::into_inner) = session::Live::default();
         opts.live = Some(Arc::clone(&self.live));
         // listening answers calls to every callsign of this client (W46)

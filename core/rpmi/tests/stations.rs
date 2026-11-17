@@ -32,6 +32,8 @@ fn caps(shared: bool) -> Caps {
         max_queue: 65536,
         shared,
         dial: false,
+        scan: false,
+        call_s: false,
     }
 }
 

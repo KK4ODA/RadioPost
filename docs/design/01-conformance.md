@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.10.0 |
-| **Updated** | 2026-11-15 |
+| **Version** | 0.11.0 |
+| **Updated** | 2026-11-17 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §7 |
@@ -133,6 +133,7 @@ RP-0 §3: RP-1 §4, §5, §6, RP-2, RP-3 client side.
 | C-10 | Local mail: listed with serial 0, asked for by content ID, taken without a serial (RP-3 §5.2, §5.6, RP-7 §4.4). | `session-05` |
 | C-11 | 300 seconds of nothing end the session, and the caller hangs up (RP-3 §8). | — |
 | C-12 | Station-to-station sessions reported over the Internet (RP-5 §6.6). | `direct` |
+| C-13 | A call on a channel whose record has `scan_s` asks for `call_s` when the modem has `caps.call_s`, and says the call may end too soon when it has not (RP-4 §4, RP-5 §4.4). | `gateway-lists` |
 
 ### 3.2 A gateway
 
@@ -149,6 +150,7 @@ RP-0 §3: RP-1, RP-2 §2, §3, §4, §5, RP-3 gateway side, RP-5 §5 as the call
 | G-07 | A misbehaving caller: a PDU over the limit, an unknown type, a `MSG` for an offer not accepted, a caller that never hangs up (RP-3 §2, §5.4, §8). | `pdus` |
 | G-08 | Renewal by radio (RP-3 §5.8, RP-5 §6.2). | `api-account` |
 | G-09 | Which post offices it trusts: by DNS, one hop of lists, blocked ones unknown (RP-1 §7.3). | `dns` |
+| G-10 | A gateway that scans: its record lists the dials it scans, each with the modem's `scan_s`; it stops the scan for a call in a partner's window and starts it again after; an end it did not ask for is not undone (RP-4 §4.2, RP-5 §4.4, RP-7 §5). | `rpmi-conversations` |
 
 ### 3.3 A forwarding gateway
 
@@ -191,6 +193,7 @@ RP-0 §3: RP-4, the adapter's side.
 | A-03 | A second host: turned away `busy` by an adapter that is not shared; on a shared one, its own callsigns, another's `claimed`, its own `status` (RP-4 §1.1, §3). Calls to each host of a shared modem come in Phase 5. | `rpmi-conversations` |
 | A-04 | `session-01` carried between two instances, every byte intact (RP-4 §4, §5). | `rpmi-conversations` |
 | A-05 | A transmission the rules forbid reported as `refused`, when the modem checks the rules (RP-4 §8). | — |
+| A-06 | A scan, on an adapter with `caps.scan`: answered with its dials and a whole `scan_s`; another host's scan `busy`; ended by another host's `tune` (`tuned`) and, asked again, by the host leaving, the radio going home; on an adapter that is not shared, by the host's own `tune` (`asked`). Not applicable without `caps.scan` (RP-4 §1.1, §4.2). | `rpmi-conversations` |
 
 ---
 
@@ -231,6 +234,7 @@ RP-0 §3: RP-4, the adapter's side.
 | 3 | C-09, C-10; G-03, G-05, G-06; P-05, P-06 (built, all of them; P-06's forward items wait 15 minutes for a gateway to count as cut off, so they run with `--slow`, and need the driver's `route` command). | Offline |
 | 4 | F-01 to F-06 (built; F-01 and F-05's calls wait for partners' windows, so they run with `--slow`; the gateway's driver gains `partner`, `window`, `register` and `forward`). | Forwarding gateway |
 | 5 | A-05, and A-01 to A-04 for each new adapter. | More adapters |
+| W50 | A-06 (built: run on the simulated adapter with a scanning modem, shared and not, and passed over by every adapter that does not scan). C-13 and G-10 next: the test post office serving a gateway list, and the test adapter's stations hearing each other only on the same dial. | Scanning |
 
 ---
 
@@ -263,3 +267,4 @@ RP-0 §3: RP-4, the adapter's side.
 | 0.8.0 | 2026-11-15 | P-06's forward items (§6, RP-7 §4.1, §4.2), with `--slow`: a route's `via` polls with `placing` true; once the gateway under test has been silent 15 minutes, mail for its user goes to the `via` as a forward item whose placement the post office signed for it, and the gateway's next poll drops it there. The post office's driver gains `route`. |
 | 0.9.0 | 2026-11-15 | Phase 4's tests built (§6, RP-7): F-01 (calls only in a partner's window, at most three a minute apart, none on a busy channel; `--slow`), F-02 (records refused in order with their codes, a record's `PROOF` as sent, the credential by hash once held, a taken record forwarded on), F-03 (placements checked in order, the good one held as a copy, the next `cursor`), F-04 (records kept for a partner that reaches the post offices), F-05 (windows published only inside the segments; with `--slow`, a partner's window outside them never called in), F-06 (mail offered again). The test adapter has two bystander stations to make the channel busy, and reads the calls a program places. Each shown failing on a planted fault. |
 | 0.10.0 | 2026-11-15 | §7: the public test service built (wishlist W43): what it checks, and what it leaves to this tester. |
+| 0.11.0 | 2026-11-17 | Gateways that scan (wishlist W50, RP-4 1.1.0 §4.2, RP-5 1.1.0 §4.4): A-06 built, shown failing on a planted fault; C-13 and G-10 outlined, with what the tester needs for them. |

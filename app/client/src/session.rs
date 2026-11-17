@@ -79,6 +79,9 @@ pub struct Options {
     /// The channel to call on (wishlist W14): with a modem that has a dial (RP-4 §4.1) the radio
     /// is tuned there before the call and back to where it was after.
     pub dial_hz: Option<u64>,
+    /// On a channel a gateway scans (RP-5 §4.4, `scan_s`), how long the call's tries must keep
+    /// starting to find it there: asked of a modem with `caps.call_s` (RP-4 §4).
+    pub call_s: Option<u64>,
     /// The longest the adapter may say nothing before the session is given up (RP-3 §8).
     pub quiet: Duration,
     /// Set, it stops a station listening for a call: how a program's window says "stop".
@@ -191,6 +194,7 @@ impl Options {
             auto: 1000,
             bandwidth: None,
             dial_hz: None,
+            call_s: None,
             quiet: QUIET,
             stop: None,
             renew_within: crate::renewal::WITHIN,
@@ -992,6 +996,39 @@ pub fn call(
     result
 }
 
+/// How long the call's tries must keep starting (RP-4 §4, `call_s`): a gateway that scans its
+/// channels is found by a call that keeps trying as long as its record says (RP-5 §4.4), asked for
+/// or read from the kept list. A modem without `caps.call_s` cannot be asked, and the user is told
+/// the call may end too soon.
+fn call_lasting(
+    modem: &Modem,
+    store: &Store,
+    remote: &str,
+    kind: Kind,
+    opts: &Options,
+    say: &mut dyn FnMut(&str),
+) -> Option<u64> {
+    let wanted = opts.call_s.or_else(|| {
+        (kind == Kind::Gateway)
+            .then(|| store.scan_s_of(remote, opts.dial_hz))
+            .flatten()
+    });
+    let lasting = wanted.filter(|_| modem.caps.call_s);
+    if let Some(s) = wanted
+        && lasting.is_none()
+    {
+        tell(
+            say,
+            &format!(
+                "{remote} scans its channels and is found by a call that keeps trying {s} s; this \
+                 modem cannot be asked to (RP-4 §4), so the call may end before the gateway comes \
+                 round to this channel"
+            ),
+        );
+    }
+    lasting
+}
+
 /// [`call`] on a modem opened and tuned.
 fn call_on(
     modem: &mut Modem,
@@ -1001,7 +1038,10 @@ fn call_on(
     opts: &Options,
     say: &mut dyn FnMut(&str),
 ) -> Result<Report, Error> {
-    let connect = modem.host.connect(remote, None, opts.bandwidth);
+    let lasting = call_lasting(modem, store, remote, kind, opts, say);
+    let connect = modem
+        .host
+        .connect_lasting(remote, None, opts.bandwidth, lasting);
     let id = connect.get("id").cloned();
     modem.ask(&connect)?;
     tell(say, &format!("calling {remote}"));

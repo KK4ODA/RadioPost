@@ -21,7 +21,9 @@ use radiopost_gateway::{operator, station};
 use radiopost_postoffice::serve::{self, Running};
 use serde_json::json;
 
-use common::{client, draft, key, loopback, loopback_dialled, post_office, scratch};
+use common::{
+    client, draft, key, loopback, loopback_dialled, loopback_scanning, post_office, scratch,
+};
 
 /// A registered gateway, KK4ODA-1, answering calls, and its directory; it says the lines it
 /// writes on `lines`.
@@ -71,6 +73,7 @@ fn gateway_checking(
         copies: None,
         partners: Vec::new(),
         windows: Vec::new(),
+        scan: Vec::new(),
     }
     .save(&gw)
     .expect("saved");
@@ -244,6 +247,139 @@ fn the_gateway_answers_only_with_its_radio_in_an_automatic_segment() {
     );
     let (failed, said) = call(&mut user);
     assert_eq!(failed, None, "answered on 40 m: {said:?}");
+    drop(knob);
+}
+
+/// W50, RP-4 §4.2, RP-5 §4.4: a gateway set to scan two channels asks its modem to scan them
+/// at start, judging both dials itself (W40), registers again from its operator's enrollment so
+/// that its record says how long a call must keep trying, and answers a call. Another program's
+/// tune ends the scan: the operator wins, and the gateway does not start it again by itself.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn a_gateway_that_scans_publishes_how_long_a_call_must_last() {
+    let dir = scratch("scanning");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (server, at_user, at_gateway) = loopback_scanning(14_074_000);
+    let _operator = client(
+        &dir.join("kk4oda"),
+        &running,
+        &po_key,
+        "facundo@test.example",
+        "KK4ODA",
+    );
+    let gw = dir.join("gateway");
+    std::fs::create_dir_all(&gw).expect("a directory");
+    station::write(&gw, "key.hex", &radiopost::cbor::hex(&key().to_bytes())).expect("written");
+    station::Settings {
+        callsign: "KK4ODA-1".into(),
+        modem: at_gateway.to_string(),
+        more_modems: Vec::new(),
+        country: "US".into(),
+        post_offices: BTreeMap::from([("test.example".into(), base.clone())]),
+        resolver: String::new(),
+        blocked: Vec::new(),
+        only: None,
+        operator_checks_rules: false,
+        answer_at_start: true,
+        copies: None,
+        partners: Vec::new(),
+        windows: Vec::new(),
+        scan: vec![3_590_000, 7_101_000],
+    }
+    .save(&gw)
+    .expect("saved");
+    let channel =
+        |hz: u64| json!({"dial_hz": hz, "mode": "USB", "modem": "aether", "bandwidth_hz": 2300});
+    // registered before it ever ran: its modem has not said how long a call must last
+    operator::register(
+        &gw,
+        &dir.join("kk4oda"),
+        json!({"channels": [channel(3_590_000), channel(7_101_000)], "hours": "always",
+               "internet": true}),
+    )
+    .expect("registered");
+    let published = || {
+        running.office().state.gateways["KK4ODA-1"]["channels"]
+            .as_array()
+            .expect("channels")
+            .iter()
+            .map(|c| c.get("scan_s").and_then(serde_json::Value::as_u64))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(published(), [None, None]);
+
+    // its operator registered it from this computer: the gateway registers again from there
+    let (tx, rx) = std::sync::mpsc::channel();
+    let gw_dir = gw.clone();
+    thread::spawn(move || {
+        let _ = station::serve(&gw_dir, &mut |line| {
+            let _ = tx.send(line.to_owned());
+        });
+    });
+    let mut heard = Vec::new();
+    while let Ok(line) = rx.recv_timeout(Duration::from_secs(10)) {
+        let done = line.starts_with("registered again");
+        heard.push(line);
+        if done {
+            break;
+        }
+    }
+    assert!(
+        heard.iter().any(|l| l
+            .starts_with("scanning 2 channels, 3.590, 7.101 MHz: a call must keep trying 10 s")),
+        "{heard:?}"
+    );
+    assert!(
+        heard
+            .last()
+            .is_some_and(|l| l.starts_with("registered again")),
+        "{heard:?}"
+    );
+    assert_eq!(published(), [Some(10), Some(10)]);
+    // the modem's simulated radio went to the first dial, the gateway's home
+    let scanning = |server: &rpmi::tcp::Server| server.with_channel(|c| c.scanning(1).to_vec());
+    assert_eq!(scanning(&server), [3_590_000, 7_101_000]);
+    assert_eq!(server.with_channel(|c| c.dial(1)), Some(3_590_000));
+
+    let mut user = client(
+        &dir.join("wd5ema"),
+        &running,
+        &po_key,
+        "club@test.example",
+        "WD5EMA",
+    );
+    let mut said = Vec::new();
+    let report = session::call(
+        &mut user,
+        "KK4ODA-1",
+        Kind::Gateway,
+        &Options::new(&at_user.to_string()),
+        &mut |s| said.push(s.to_owned()),
+    )
+    .expect("the call placed");
+    assert_eq!(report.failed, None, "{said:?}");
+    session_lines(&rx);
+
+    // another program on the station tunes the radio: the scan ends, and stays ended
+    let knob = server.attach(1, "operator");
+    let mut host = rpmi::host::Host::new();
+    knob.send(&host.hello("the operator"));
+    knob.send(&host.tune(7_101_000));
+    let mut heard = Vec::new();
+    while let Ok(line) = rx.recv_timeout(Duration::from_secs(10)) {
+        let ended = line.starts_with("the scan ended");
+        heard.push(line);
+        if ended {
+            break;
+        }
+    }
+    assert_eq!(
+        heard.last().map(String::as_str),
+        Some("the scan ended: another program tuned the radio; the radio stays where it is"),
+        "{heard:?}"
+    );
+    assert_eq!(scanning(&server), Vec::<u64>::new());
+    assert_eq!(server.with_channel(|c| c.dial(1)), Some(7_101_000));
     drop(knob);
 }
 

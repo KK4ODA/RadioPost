@@ -501,6 +501,8 @@ impl Bridge {
             max_queue: MAX_QUEUE,
             shared: false,
             dial: false,
+            scan: false,
+            call_s: false,
         };
         out.push(Out::Host(answer_with(
             "hello",
@@ -566,6 +568,7 @@ impl Bridge {
                 remote,
                 as_call,
                 bandwidth,
+                call_s: _,
             } => self.on_connect(&remote, as_call, bandwidth, rid, &mut out),
             Request::Send {
                 link,
@@ -581,7 +584,7 @@ impl Bridge {
                 );
                 out.push(Out::Host(error(rid_ref, "unsupported", &text)));
             }
-            Request::Dial | Request::Tune(_) => {
+            Request::Dial | Request::Tune(_) | Request::Scan(_) => {
                 let text = format!("{}'s TNC commands have no dial", self.name());
                 out.push(Out::Host(error(rid_ref, "unsupported", &text)));
             }

@@ -318,6 +318,14 @@ pub struct Store {
     pub lists: BTreeMap<String, Vec<Json>>,
     /// When the lists were last fetched.
     pub lists_fetched: u64,
+    /// The channels its first modem scans, as the modem last answered (RP-4 §4.2), the first the
+    /// home; empty when it does not scan.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub scan_dials: Vec<u64>,
+    /// How long a call's tries must keep starting to find the gateway on any of them, as the
+    /// modem last answered: what its record publishes on those channels (RP-5 §4.4).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scan_s: Option<u64>,
 }
 
 fn address_of(item: &Json) -> String {

@@ -9,6 +9,10 @@ use rpmi::wire::Message;
 use serde_json::{Value, json};
 
 /// Aether as its control API specification has it, for the methods the adapter uses.
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "what each Aether version or radio can do"
+)]
 struct Aether {
     claims: bool,
     /// It knows `hello` (0.2.0-beta.159, its ADR-0114); an earlier one answers `unknown_method`.
@@ -21,6 +25,10 @@ struct Aether {
     state: &'static str,
     /// `frequency.set` refused, as when a probe is out.
     tune_refused: bool,
+    /// `status.scan` is there (0.2.0-beta.162, its ADR-0129): it scans and takes `call_s`.
+    scans: bool,
+    /// `scan.start` refused with this code.
+    scan_refused: Option<&'static str>,
     asked: Vec<Value>,
 }
 
@@ -34,6 +42,8 @@ impl Aether {
             dial: None,
             state: "idle",
             tune_refused: false,
+            scans: false,
+            scan_refused: None,
             asked: Vec::new(),
         }
     }
@@ -56,6 +66,9 @@ impl Aether {
                                         "can_tune": self.dial.is_some()});
                 if self.claims {
                     status["claims"] = json!([]);
+                }
+                if self.scans {
+                    status["scan"] = Value::Null;
                 }
                 ok(status)
             }
@@ -95,11 +108,30 @@ impl Aether {
                 self.dial = params["hz"].as_u64();
                 ok(json!({"hz": params["hz"]}))
             }
+            "scan.start" => {
+                if let Some(code) = self.scan_refused {
+                    refused(code)
+                } else {
+                    let n = params["dials"].as_array().expect("dials").len();
+                    ok(scan_status(&params["dials"], n))
+                }
+            }
+            "scan.stop" => ok(json!({"stopped": true})),
             "hello" if self.hello => ok(json!({"id": 7, "app": params["app"]})),
             "hello" => refused("unknown_method"),
             other => panic!("the adapter asked Aether for {other}"),
         }
     }
+}
+
+/// `status.scan` as Aether has it for this connection's scan (its claim is 7): 19.6 s on each
+/// dial.
+fn scan_status(dials: &Value, n: usize) -> Value {
+    #[allow(clippy::cast_precision_loss, reason = "a few dials")]
+    let scan_s = ((n - 1) as f64 * 19.6).ceil();
+    json!({"owner": 7, "app": "RadioPost gateway 0.1.0", "dials": dials, "at_hz": dials[0],
+           "dwell_s": 19.6, "linger_s": 40.0, "scan_s": scan_s, "held": null,
+           "lingering_until_ms": null, "hops": 0, "dropped": [], "since_ms": 0})
 }
 
 /// Runs what the bridge said: Aether's requests answered at once, the host's lines collected.
@@ -848,4 +880,182 @@ fn the_dial_is_read_and_set_through_aether() {
     );
     let said = event(&mut b, &mut a, "dial", &json!({"frequency_hz": 3_590_000}));
     assert_eq!(lines(&said), Vec::<Value>::new(), "no dial to tell");
+}
+
+/// A scan is Aether's `scan.start` on the host's own connection (RP-4 §4.2, §9.1; Aether's
+/// ADR-0129): its answer carries `scan_s` in whole seconds, Aether's echo of a request is not told
+/// again, a dial dropped is told with the new `scan_s`, the scan's end is told once with RPMI's
+/// `why`, and a stop with no scan of the host's own asks Aether nothing, since a connection with
+/// no scan and no claim would stop another program's.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn a_scan_is_aethers_on_the_hosts_connection() {
+    let mut b = Bridge::new();
+    let mut a = Aether::new(true);
+    a.dial = Some(7_101_000);
+    a.scans = true;
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"hello","id":1,"version":[1,1],"app":"RadioPost gateway 0.1.0"}"#,
+    );
+    let caps = &lines(&said)[0]["caps"];
+    assert_eq!(
+        (&caps["scan"], &caps["call_s"]),
+        (&json!(true), &json!(true))
+    );
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"callsigns","id":2,"callsigns":["N1CALL-10"]}"#,
+    );
+    a.asked.clear();
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"scan","id":3,"dials":[3590000,7101000,10145000]}"#,
+    );
+    assert_eq!(
+        lines(&said),
+        [
+            json!({"op": "scan", "id": 3, "dials": [3_590_000, 7_101_000, 10_145_000],
+                "scan_s": 40})
+        ]
+    );
+    assert_eq!(a.asked[0]["method"], "scan.start");
+    assert_eq!(
+        a.asked[0]["params"],
+        json!({"dials": [3_590_000, 7_101_000, 10_145_000]})
+    );
+    // Aether's event for the scan it just started says nothing new
+    let started = json!({"scan": scan_status(&json!([3_590_000, 7_101_000, 10_145_000]), 3),
+                         "why": null});
+    assert_eq!(
+        lines(&event(&mut b, &mut a, "scan", &started)),
+        Vec::<Value>::new()
+    );
+    // a dial the radio would not take is dropped: the host hears the dials left
+    let dropped = json!({"scan": scan_status(&json!([3_590_000, 7_101_000]), 2), "why": null});
+    assert_eq!(
+        lines(&event(&mut b, &mut a, "scan", &dropped)),
+        [json!({"op": "scan", "dials": [3_590_000, 7_101_000], "scan_s": 20})]
+    );
+    // another program tunes the radio: the operator wins, said once, in RPMI's words
+    let ended = json!({"scan": null, "why": "tuned by another program"});
+    assert_eq!(
+        lines(&event(&mut b, &mut a, "scan", &ended)),
+        [json!({"op": "scan", "dials": [], "why": "tuned"})]
+    );
+    assert_eq!(
+        lines(&event(&mut b, &mut a, "scan", &ended)),
+        Vec::<Value>::new()
+    );
+    // scanned again, then stopped: the stop's own end is not told again
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"scan","id":4,"dials":[3590000,7101000]}"#,
+    );
+    a.asked.clear();
+    let said = line(&mut b, &mut a, r#"{"op":"scan","id":5,"dials":[]}"#);
+    assert_eq!(lines(&said), [json!({"op": "scan", "id": 5, "dials": []})]);
+    assert_eq!(a.asked[0]["method"], "scan.stop");
+    let stopped = json!({"scan": null, "why": "asked"});
+    assert_eq!(
+        lines(&event(&mut b, &mut a, "scan", &stopped)),
+        Vec::<Value>::new()
+    );
+    // nothing to stop: answered here, and Aether is not asked
+    a.asked.clear();
+    let said = line(&mut b, &mut a, r#"{"op":"scan","id":6,"dials":[]}"#);
+    assert_eq!(lines(&said), [json!({"op": "scan", "id": 6, "dials": []})]);
+    assert!(a.asked.is_empty(), "{:?}", a.asked);
+    // another program's scan is not this host's business
+    let theirs = json!({"scan": {"owner": 9, "dials": [14_105_000, 7_101_000], "scan_s": 19.6},
+                        "why": null});
+    assert_eq!(
+        lines(&event(&mut b, &mut a, "scan", &theirs)),
+        Vec::<Value>::new()
+    );
+    // Aether's refusals
+    for (aether, rpmi) in [
+        ("claimed", "busy"),
+        ("regulatory", "refused"),
+        ("bad_params", "refused"),
+        ("unsupported", "unsupported"),
+    ] {
+        a.scan_refused = Some(aether);
+        let said = line(
+            &mut b,
+            &mut a,
+            r#"{"op":"scan","id":7,"dials":[3590000,7101000]}"#,
+        );
+        assert_eq!(
+            lines(&said),
+            [json!({"op": "error", "id": 7, "code": rpmi})],
+            "{aether}"
+        );
+    }
+    // a call to a gateway that scans keeps trying as long as asked
+    a.asked.clear();
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":8,"remote":"KK4ODA-1","call_s":40}"#,
+    );
+    assert_eq!(a.asked[0]["method"], "connect");
+    assert_eq!(a.asked[0]["params"]["call_s"], 40);
+
+    // an Aether before 0.2.0-beta.162 neither scans nor takes `call_s`
+    let mut b = Bridge::new();
+    let mut a = Aether::new(true);
+    a.dial = Some(7_101_000);
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"hello","id":1,"version":[1,1],"app":"RadioPost client 0.1.0"}"#,
+    );
+    let caps = &lines(&said)[0]["caps"];
+    assert!(
+        caps.get("scan").is_none() && caps.get("call_s").is_none(),
+        "{caps}"
+    );
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"callsigns","id":2,"callsigns":["KK4ODA"]}"#,
+    );
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"scan","id":3,"dials":[3590000,7101000]}"#,
+    );
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "error", "id": 3, "code": "unsupported"})]
+    );
+    a.asked.clear();
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":4,"remote":"KK4ODA-1","call_s":40}"#,
+    );
+    assert!(
+        a.asked[0]["params"].get("call_s").is_none(),
+        "{:?}",
+        a.asked
+    );
+
+    // one that cannot set the dial takes `call_s` but does not scan
+    let mut b = Bridge::new();
+    let mut a = Aether::new(true);
+    a.scans = true;
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"hello","id":1,"version":[1,1],"app":"RadioPost client 0.1.0"}"#,
+    );
+    let caps = &lines(&said)[0]["caps"];
+    assert!(caps.get("scan").is_none(), "{caps}");
+    assert_eq!(caps["call_s"], true);
 }

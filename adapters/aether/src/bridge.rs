@@ -14,6 +14,10 @@
 //! The host's `hello` names it to Aether too (`hello {app}`, Aether's ADR-0114), claiming nothing:
 //! a host that holds its connection open between calls, with no callsigns, is named on Aether's
 //! panel all the same.
+//!
+//! A host's scan is Aether's `scan.start` on this connection, so it is the host's and ends with
+//! the connection (Aether's ADR-0129): the bridge tells the host when Aether ends it for another
+//! reason, and passes `connect`'s `call_s` on.
 
 use std::collections::HashMap;
 
@@ -80,6 +84,12 @@ enum Waiting {
     Tune {
         rid: Option<Value>,
     },
+    Scan {
+        rid: Option<Value>,
+    },
+    ScanStop {
+        rid: Option<Value>,
+    },
     Nothing,
 }
 
@@ -128,7 +138,49 @@ pub struct Bridge {
     session_on_air: bool,
     busy_told: bool,
     dial: bool,
+    /// Aether scans (`caps.scan`) and keeps a call going as long as asked (`caps.call_s`).
+    scans: bool,
+    lasts: bool,
+    /// The host's scan as it was told it (§4.2), and Aether's `owner` for it: this connection.
+    scan: Option<Vec<u64>>,
+    scan_owner: Option<u64>,
+    /// Scan requests not yet answered: Aether's `scan` events meanwhile are their own echo.
+    scan_asking: u32,
     log: Option<String>,
+}
+
+/// RP-4 §9.1: why Aether ended a scan, in RPMI's words.
+#[must_use]
+pub fn scan_end(aether: &str) -> &'static str {
+    match aether {
+        "connection closed" => "left",
+        "tuned by another program" => "tuned",
+        "knob" => "knob",
+        "operator" => "operator",
+        "radio" => "radio",
+        _ => "asked",
+    }
+}
+
+/// A scan's `scan_s` as RPMI carries it: whole seconds, rounded up, so a call that keeps trying
+/// that long is heard.
+fn whole_seconds(s: &Value) -> Value {
+    s.as_f64().map_or(Value::Null, |s| {
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a scan's few minutes, above 0"
+        )]
+        let whole = s.max(0.0).ceil() as u64;
+        whole.into()
+    })
+}
+
+fn dials_of(scan: &Value) -> Vec<u64> {
+    scan["dials"]
+        .as_array()
+        .map(|a| a.iter().filter_map(Value::as_u64).collect())
+        .unwrap_or_default()
 }
 
 /// RP-4 §9.1: how a session that came up ends, in RPMI's words.
@@ -303,7 +355,8 @@ impl Bridge {
                 remote,
                 as_call,
                 bandwidth,
-            } => self.on_connect(&remote, as_call, bandwidth, rid, &mut out),
+                call_s,
+            } => self.on_connect(&remote, as_call, bandwidth, call_s, rid, &mut out),
             Request::Send {
                 link,
                 data,
@@ -322,6 +375,18 @@ impl Bridge {
                 self.on_broadcast(&data, reference, rid, &mut out);
             }
             Request::Status => out.push(Out::Host(self.status(rid_ref))),
+            radio @ (Request::Dial | Request::Tune(_) | Request::Scan(_)) => {
+                self.on_radio(radio, rid, &mut out);
+            }
+        }
+        out
+    }
+
+    /// RP-4 §4.1, §4.2: the radio's dial, read and set through Aether, and its scan.
+    fn on_radio(&mut self, request: Request, rid: Option<Value>, out: &mut Vec<Out>) {
+        let rid_ref = rid.as_ref();
+        match request {
+            Request::Scan(dials) => self.on_scan_request(&dials, rid, out),
             Request::Dial | Request::Tune(_) if !self.dial => {
                 let text = "this Aether has no way to ask the radio";
                 out.push(Out::Host(error(rid_ref, "unsupported", text)));
@@ -336,8 +401,33 @@ impl Bridge {
                     out.push(self.ask("status", json!({}), Waiting::TuneStatus { rid, hz }));
                 }
             }
+            _ => {}
         }
-        out
+    }
+
+    /// RP-4 §4.2: a scan is Aether's `scan.start` on this connection, and no dials its
+    /// `scan.stop`.
+    fn on_scan_request(&mut self, dials: &[u64], rid: Option<Value>, out: &mut Vec<Out>) {
+        if !self.scans {
+            let text = "this Aether does not scan: it cannot set the radio's dial, or is older \
+                        than 0.2.0-beta.162";
+            out.push(Out::Host(error(rid.as_ref(), "unsupported", text)));
+        } else if !dials.is_empty() {
+            self.scan_asking += 1;
+            out.push(self.ask("scan.start", json!({"dials": dials}), Waiting::Scan { rid }));
+        } else if self.scan.take().is_some() {
+            self.scan_asking += 1;
+            out.push(self.ask("scan.stop", json!({}), Waiting::ScanStop { rid }));
+        } else {
+            // a scan.stop from a connection with no scan of its own and no claim would stop
+            // another program's scan as the operator's: nothing to stop is said here
+            let none: Vec<Value> = Vec::new();
+            out.push(Out::Host(answer_with(
+                "scan",
+                rid.as_ref(),
+                &[("dials", none.into())],
+            )));
+        }
     }
 
     fn on_send(
@@ -442,6 +532,7 @@ impl Bridge {
         remote: &str,
         as_call: Option<String>,
         bandwidth: Option<i128>,
+        call_s: Option<u64>,
         rid: Option<Value>,
         out: &mut Vec<Out>,
     ) {
@@ -471,8 +562,12 @@ impl Bridge {
             id: rid.clone(),
             aborted: false,
         });
-        let params = json!({"remote": remote, "callsign": local,
-                            "keep_bandwidth": bandwidth.is_some()});
+        let mut params = json!({"remote": remote, "callsign": local,
+                                "keep_bandwidth": bandwidth.is_some()});
+        // without `caps.call_s` the call is the modem's own length (§4)
+        if let Some(s) = call_s.filter(|_| self.lasts) {
+            params["call_s"] = s.into();
+        }
         out.push(self.ask("connect", params, Waiting::Connect { rid }));
     }
 
@@ -523,6 +618,9 @@ impl Bridge {
                 self.channel_busy = status["channel_busy"].as_bool().unwrap_or(false);
                 self.others = status["state"].as_str().is_some_and(|s| s != "idle");
                 self.dial = status["can_tune"].as_bool() == Some(true);
+                // `status.scan` is there, null or not, from 0.2.0-beta.162 (its ADR-0129)
+                self.lasts = status.as_object().is_some_and(|s| s.contains_key("scan"));
+                self.scans = self.lasts && self.dial;
                 self.hello = true;
                 let caps = Caps {
                     bandwidths: self.bandwidth_hz.into_iter().collect(),
@@ -535,6 +633,8 @@ impl Bridge {
                     max_queue: 65536,
                     shared: self.shared,
                     dial: self.dial,
+                    scan: self.scans,
+                    call_s: self.lasts,
                 };
                 let modem = format!(
                     "Aether HF {}",
@@ -688,6 +788,39 @@ impl Bridge {
                     out.push(Out::Host(error(rid.as_ref(), "refused", &message)));
                 }
             }
+            Waiting::Scan { rid } => {
+                self.scan_asking = self.scan_asking.saturating_sub(1);
+                if ok {
+                    let dials = dials_of(result);
+                    self.scan = Some(dials.clone());
+                    self.scan_owner = result["owner"].as_u64();
+                    out.push(Out::Host(answer_with(
+                        "scan",
+                        rid.as_ref(),
+                        &[
+                            ("dials", dials.into()),
+                            ("scan_s", whole_seconds(&result["scan_s"])),
+                        ],
+                    )));
+                } else {
+                    let rpmi = match code.as_str() {
+                        "claimed" => "busy",
+                        "unsupported" => "unsupported",
+                        _ => "refused",
+                    };
+                    out.push(Out::Host(error(rid.as_ref(), rpmi, &message)));
+                }
+            }
+            Waiting::ScanStop { rid } => {
+                self.scan_asking = self.scan_asking.saturating_sub(1);
+                // stopped, or ended already: either way the host has no scan now
+                let none: Vec<Value> = Vec::new();
+                out.push(Out::Host(answer_with(
+                    "scan",
+                    rid.as_ref(),
+                    &[("dials", none.into())],
+                )));
+            }
             Waiting::Nothing => {}
         }
         out
@@ -778,6 +911,7 @@ impl Bridge {
                     self.bandwidth_hz = Some(hz);
                 }
             }
+            "scan" => self.on_scan(data, &mut out),
             // every change of the radio's dial, a tune or the knob, is told to every host (§4.1)
             "dial" => {
                 if self.hello
@@ -794,6 +928,39 @@ impl Bridge {
             _ => {}
         }
         out
+    }
+
+    /// Aether's `scan` event (§4.2): the host hears that its scan ended, and why, or that a dial
+    /// the radio would not take was dropped from it. Another program's scan is not its business,
+    /// and while a scan request of its own is unanswered the event is that request's echo.
+    fn on_scan(&mut self, data: &Value, out: &mut Vec<Out>) {
+        if self.scan_asking > 0 || self.scan.is_none() {
+            return;
+        }
+        let scan = &data["scan"];
+        if scan.is_null() {
+            self.scan = None;
+            let why = scan_end(data["why"].as_str().unwrap_or(""));
+            let none: Vec<Value> = Vec::new();
+            out.push(Out::Host(answer_with(
+                "scan",
+                None,
+                &[("dials", none.into()), ("why", why.into())],
+            )));
+            return;
+        }
+        let dials = dials_of(scan);
+        if scan["owner"].as_u64() == self.scan_owner && self.scan.as_ref() != Some(&dials) {
+            self.scan = Some(dials.clone());
+            out.push(Out::Host(answer_with(
+                "scan",
+                None,
+                &[
+                    ("dials", dials.into()),
+                    ("scan_s", whole_seconds(&scan["scan_s"])),
+                ],
+            )));
+        }
     }
 
     fn on_state(&mut self, data: &Value, out: &mut Vec<Out>) {
@@ -972,7 +1139,9 @@ impl Bridge {
                 | Waiting::Broadcast { rid, .. }
                 | Waiting::Dial { rid }
                 | Waiting::TuneStatus { rid, .. }
-                | Waiting::Tune { rid } => rid,
+                | Waiting::Tune { rid }
+                | Waiting::Scan { rid }
+                | Waiting::ScanStop { rid } => rid,
                 Waiting::Nothing => None,
             };
             if rid.is_some() {

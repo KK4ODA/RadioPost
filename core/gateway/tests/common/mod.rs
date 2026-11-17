@@ -213,6 +213,16 @@ pub fn loopback() -> (Server, SocketAddr, SocketAddr) {
 /// [`loopback`], the gateway's radio on `dial_hz` and able to tune (RP-4 §4.1) when it is given,
 /// and its modem shared, so that a test can turn its knob as another program.
 pub fn loopback_dialled(dial_hz: Option<u64>) -> (Server, SocketAddr, SocketAddr) {
+    loopback_with(dial_hz, false)
+}
+
+/// [`loopback_dialled`], the gateway's modem able to scan (RP-4 §4.2) and both modems to keep a
+/// call going as long as asked.
+pub fn loopback_scanning(dial_hz: u64) -> (Server, SocketAddr, SocketAddr) {
+    loopback_with(Some(dial_hz), true)
+}
+
+fn loopback_with(dial_hz: Option<u64>, scans: bool) -> (Server, SocketAddr, SocketAddr) {
     let caps = Caps {
         bandwidths: vec![2300],
         max_links: 1,
@@ -224,6 +234,8 @@ pub fn loopback_dialled(dial_hz: Option<u64>) -> (Server, SocketAddr, SocketAddr
         max_queue: 65_536,
         shared: false,
         dial: false,
+        scan: false,
+        call_s: scans,
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),
@@ -239,6 +251,7 @@ pub fn loopback_dialled(dial_hz: Option<u64>) -> (Server, SocketAddr, SocketAddr
         caps: Caps {
             dial: dial_hz.is_some(),
             shared: dial_hz.is_some(),
+            scan: scans,
             ..caps.clone()
         },
         dial_hz,
