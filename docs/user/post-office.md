@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.0.0 |
-| **Updated** | 2026-11-15 |
+| **Version** | 1.0.1 |
+| **Updated** | 2026-11-17 |
 | **Describes** | RadioPost 0.1.0-beta.23 |
 | **Licence** | CC BY 4.0 |
 
@@ -1006,6 +1006,7 @@ All are `radiopost-po --dir /var/lib/radiopost COMMAND`, but `install` and `upda
 | The post office's log says the mail server cannot be read | **Mailboxes** is not set to Stalwart with its API key (chapter 6). |
 | Mail through the backup is refused at the post office for DMARC | The post office's Stalwart does not skip DMARC for the backup's address (chapter 16, step 6). |
 | The backup holds every message back with `451` | Its door has no copy of the accounts yet: check its log, and that it reaches `https://po.radiopost.org`. |
+| The FCC copy never comes: *the fetch failed … http status: 403* | Update to 0.1.0-beta.24 or later (chapter 10): the FCC's site refused the requests of earlier releases. If it still fails, fetch the file on the server with `curl -o /tmp/l_amat.zip https://data.fcc.gov/download/pub/uls/complete/l_amat.zip` and build the copy from it: `sudo -u radiopost radiopost-po --dir /var/lib/radiopost licences --from /tmp/l_amat.zip`. |
 
 ## 22. What is not built yet
 
@@ -1063,3 +1064,4 @@ drawn by `tools/figures/server.py`; its screenshots of the desk are the user's m
 | Version | Date | Changes |
 |---|---|---|
 | 1.0.0 | 2026-11-15 | Rewritten in the manual's style: step by step around the installer, with schematics and screenshots, a contents, troubleshooting and a glossary. The previous guide's content is kept: the setup by hand is now chapter 18, and the backup mail server chapter 16. |
+| 1.0.1 | 2026-11-17 | Troubleshooting: the FCC copy that never comes (the FCC's site refused releases before 0.1.0-beta.24), and building it from a file fetched by hand. |

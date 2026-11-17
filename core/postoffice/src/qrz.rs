@@ -115,7 +115,11 @@ impl Qrz {
             .build()
             .into();
         let url = format!("{}?{query}", self.url);
-        let mut r = agent.get(&url).call().map_err(|e| format!("QRZ: {e}"))?;
+        let mut r = agent
+            .get(&url)
+            .header("User-Agent", crate::licences::USER_AGENT)
+            .call()
+            .map_err(|e| format!("QRZ: {e}"))?;
         r.body_mut()
             .read_to_string()
             .map_err(|e| format!("QRZ: {e}"))

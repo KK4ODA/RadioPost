@@ -22,6 +22,18 @@ use serde::Serialize;
 pub const FCC_URL: &str = "https://data.fcc.gov/download/pub/uls/complete/l_amat.zip";
 /// How old the copy may be before the service fetches the next week's.
 pub const FCC_EVERY_S: u64 = 7 * 86_400;
+/// How the post office names itself to the FCC's site and to QRZ: the program, its version and
+/// where to read about it.
+///
+/// The FCC's download site is behind Akamai, which refused every request that named itself by
+/// the HTTP library alone (`ureq/3.5.1`) and offered to take gzip, as the library does by
+/// default: `403 Forbidden`, every time, on 2026-11-17. A name that says what the program is and
+/// where it lives was let through, with or without gzip.
+pub const USER_AGENT: &str = concat!(
+    "radiopost-po/",
+    env!("CARGO_PKG_VERSION"),
+    " (+https://github.com/KK4ODA/RadioPost)"
+);
 
 /// One callsign's licence, as the FCC's file has it.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
@@ -408,7 +420,19 @@ pub fn update(dir: &Path, url: &str) -> Result<usize, String> {
         .timeout_global(Some(std::time::Duration::from_secs(1800)))
         .build()
         .into();
-    let mut response = agent.get(url).call().map_err(|e| format!("{url}: {e}"))?;
+    // the file is a zip: gzip on top of it gains nothing, and the FCC's Akamai front refused
+    // the library's default request, which asked for it (see [`USER_AGENT`])
+    let mut response = agent
+        .get(url)
+        .header("User-Agent", USER_AGENT)
+        .header("Accept-Encoding", "identity")
+        .call()
+        .map_err(|e| {
+            format!(
+                "{url}: {e}. If this goes on, download the file with a browser and build the \
+                 copy from it: radiopost-po licences --from l_amat.zip"
+            )
+        })?;
     let mut body = response.body_mut().with_config().limit(1 << 31).reader();
     let mut file = BufWriter::new(File::create(&zip).map_err(|e| e.to_string())?);
     std::io::copy(&mut body, &mut file).map_err(|e| format!("{url}: {e}"))?;
@@ -636,5 +660,40 @@ mod tests {
         }
         assert_eq!(base_of("VE3/KK4ODA/P-2"), "KK4ODA");
         assert_eq!(base_of("w4/g4abc"), "G4ABC");
+    }
+
+    /// The FCC's Akamai front refused the library's default request (403): the fetch names the
+    /// program and asks for the file as it is, and says what to do if the FCC still refuses.
+    #[test]
+    fn the_fetch_names_the_program_and_takes_the_zip_as_it_is() {
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").expect("a port");
+        let at = listener.local_addr().expect("its address");
+        let seen = std::thread::spawn(move || {
+            let (mut c, _) = listener.accept().expect("the fetch");
+            let mut got = Vec::new();
+            let mut buf = [0u8; 1024];
+            while !got.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = c.read(&mut buf).expect("its request");
+                if n == 0 {
+                    break;
+                }
+                got.extend_from_slice(&buf[..n]);
+            }
+            let _ = c.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
+            String::from_utf8_lossy(&got).to_lowercase()
+        });
+        let dir = std::env::temp_dir().join(format!("radiopost-fcc-ua-{}", std::process::id()));
+        let said = update(&dir, &format!("http://{at}/l_amat.zip")).expect_err("refused");
+        assert!(said.contains("licences --from"), "{said}");
+        let request = seen.join().expect("the listener");
+        let ua = format!("user-agent: {}\r\n", USER_AGENT.to_lowercase());
+        assert!(request.contains(&ua), "{request}");
+        assert!(
+            request.contains("accept-encoding: identity\r\n"),
+            "{request}"
+        );
+        assert!(USER_AGENT.starts_with("radiopost-po/0."), "{USER_AGENT}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
