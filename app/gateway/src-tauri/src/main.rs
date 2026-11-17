@@ -270,6 +270,7 @@ mod tests {
             session: None,
             logged: 0,
             checks: Vec::new(),
+            scan: None,
         };
         let call = Some("N1CALL-10");
         assert_eq!(interrupts(true, &at("stopped"), call), None);
