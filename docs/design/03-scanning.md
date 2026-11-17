@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.0 |
+| **Version** | 0.1.2 |
 | **Updated** | 2026-11-17 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -11,8 +11,8 @@
 
 A gateway with one radio could listen on several channels, a while on each, as many Winlink
 gateways do with RMS Trimode, and a client could find it on any of them. This document proposes
-how. Nothing in it is built, and no specification changes until the author accepts it. Then RP-4
-and RP-5, both Stable, change by RP-0 §8.4: announced MINOR changes, each with its test vectors.
+how. The author accepted it on 2026-11-17 (§8). RP-4 and RP-5, both Stable, change by RP-0 §8.4:
+announced MINOR changes, each with its test vectors, once Aether's scan has passed its harness.
 
 ---
 
@@ -109,12 +109,13 @@ about 91 s, not about 42.
 > holds it. A scan also ends:
 >
 > * when the host leaves (§1.1);
-> * when another host's `tune` or the radio's own knob moves the radio: the operator always wins,
->   and the host does not start the scan again by itself;
+> * when another host's `tune`, the radio's own knob, or the modem's own operator moves the radio
+>   or stops the scan: the operator always wins, and the host does not start the scan again by
+>   itself;
 > * when fewer than two of its dials are left that the radio will take.
 >
 > Each end is a `scan` event without an `id`, with no dials and a `why`: `asked`, `left`, `tuned`,
-> `knob` or `radio`. A dial the radio will not take is dropped from the scan. A `scan` event
+> `knob`, `operator` or `radio`. A dial the radio will not take is dropped from the scan. A `scan` event
 > without an `id` then carries the dials left and the new `scan_s`. Every move is a `dial` event
 > (§4.1) to every host.
 >
@@ -132,7 +133,7 @@ about 91 s, not about 42.
 > | RPMI | Aether |
 > |---|---|
 > | `scan` | `scan.start {dials}`, or `scan.stop` for no dials. `scan_s` is the answer's. `caps.scan` and `caps.call_s` are true when `status` has `scan` (a version with Aether's ADR-0129) and `can_tune`. Aether's `claimed` is `busy`, and its `regulatory` and `unsupported` are `refused` and `unsupported`. |
-> | `scan` event | Aether's `scan` event, with its `why` (`connection closed` is `left`; `tuned by another program` is `tuned`). |
+> | `scan` event | Aether's `scan` event, with its `why` (`connection closed` is `left`; `tuned by another program` is `tuned`; `operator`, the panel's Stop, is `operator`). |
 > | `connect` | … `call_s` is passed on as Aether's `connect {call_s}`. |
 
 **The change log:**
@@ -220,10 +221,13 @@ The test adapter needs stations that hear each other only on the same dial.
 * **It adds no setting to the gateway** but **Scan these channels**. The modem computes the time on
   each dial, and the client takes the call's length from the record.
 
-## 8. For the author
+## 8. The author's answers (2026-11-17)
+
+All four as proposed:
+
 
 1. **The split:** the modem scans, the gateway says where, the client calls long enough.
-2. **G21 as a SHOULD**, so that the change stays MINOR. As a MUST it would be a change a gateway
+2. **G21 is a SHOULD**, so that the change stays MINOR. As a MUST it would be a change a gateway
    cannot ignore, and so a new protocol version (RP-0 §8.3).
 3. **The operator wins:** another host's `tune`, or the knob, ends a scan. This is the same
    question as Aether's ADR-0129 §7.
@@ -237,3 +241,5 @@ The test adapter needs stations that hear each other only on the same dial.
 | Version | Date | Change |
 |---|---|---|
 | 0.1.0 | 2026-11-17 | First draft: the author's question how the gateway should scan, as Winlink gateways do with Trimode. The modem scans (Aether's ADR-0129), the gateway says where, the client calls long enough; drafts for RP-4 (`caps.scan`, `scan`, `call_s`) and RP-5 (`scan_s`, gap G21); the gateway, the client, three tests. |
+| 0.1.1 | 2026-11-17 | §8: the author accepted it, all four answers as proposed. |
+| 0.1.2 | 2026-11-17 | §3.1: a sixth end of a scan, `operator`, as Aether built it: its panel's Stop ends any program's scan and leaves the radio where it is. |

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.38 |
+| **Version** | 0.3.39 |
 | **Updated** | 2026-11-17 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -153,7 +153,7 @@ rules:
 | W47 | Deleting messages, and a trash | Mail | High | Fits today | Implemented |
 | W48 | What a session has carried, and what is left | Radio | Medium | Fits today | Implemented |
 | W49 | The post office run from the client, and set up by its program | Operation | High | Optional addition (RP-5 §6.7, §7) | Implemented |
-| W50 | A gateway that scans its channels | Operation | Medium | Optional addition (RP-4, RP-5 §4.4); G21 | Proposed |
+| W50 | A gateway that scans its channels | Operation | Medium | Optional addition (RP-4, RP-5 §4.4); G21 | In progress |
 
 Groups: *Mail* (§4), *Setup* (§5), *Radio* (§6), *Operation* (§7), *Offline* (§8),
 *Applications* (§9), *Adapters* (§10), *Rules* (§11). Consolidated and deferred wishes are in §14.
@@ -714,8 +714,8 @@ with RMS Trimode, and a client finds it on any of them.
 | Effort | Large: Aether's scan and the harness work to judge it, RP-4 and RP-5 1.1.0 with their vectors, the gateway, the client, three conformance tests. |
 | Priority | **Medium.** A gateway serving a region wants more than one band. The pilot does not need it. |
 | Recommendation | Accept, as [the scanning proposal](03-scanning.md) designs it: the modem scans, never leaving a dial while a frame is arriving or anything is owed there; the gateway says where; the client calls for as long as the gateway's record says. Not Trimode's way, a program outside the modem cycling `listen` and `tune`: that rebuilds the races Aether has fixed five times for Trimode. |
-| Status | Proposed. |
-| Author decision | None yet. |
+| Status | In progress: Aether's scan first, judged on its harness. |
+| Author decision | Accepted as proposed, 2026-11-17: the operator wins over a scan, G21 a SHOULD, Aether's harness before the air. |
 | Notes | Aether's timing model: a call of *n* + 2 tries finds a gateway scanning *n* channels every time on a good path; Aether's default two tries find it 26–63 % of the time. At four channels a call nobody answers lasts about 91 s. Channels on one band inside one passband could be heard at once without scanning (Aether's ADR-0129 §4); not proposed now. |
 
 ---
@@ -1149,3 +1149,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.36 | 2026-11-15 | W21: RP-4 §9.3 checked against ardopcf's host interface (1.0.3), and the ARDOP adapter built, tried against a stand-in. |
 | 0.3.37 | 2026-11-15 | W32 implemented: forms as their values alone (RP-2 1.1.0 §8, RP-6 1.1.0), ICS-213 published, measured against text and a form file. |
 | 0.3.38 | 2026-11-17 | The author's wish: W50, a gateway that scans its channels, proposed in [the scanning proposal](03-scanning.md) with drafts for RP-4 and RP-5. Gap G21: a gateway's record can list channels it never listens on. |
+| 0.3.39 | 2026-11-17 | W50 accepted by the author and in progress. |
