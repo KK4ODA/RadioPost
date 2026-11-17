@@ -254,6 +254,11 @@ All four as proposed:
   named, the longest of the gateway's.
 * **The tester** has A-06. C-13 and G-10 need the test post office to serve a gateway list and the
   test adapter's stations to hear each other only on the same dial (the outline, §6).
+* **Aether's scan was amended before any of this reached `main`** (its ADR-0129 §11): its first
+  design sat a caller's whole gap (about 20 s) on every dial and lost weak calls a fixed gateway
+  took (11 of 20 against 19 of 20). The author's design: about 4 s on a dial where nothing is heard,
+  and the caller's gap only where a call is heard under way, measured first on the detector. Aether
+  scans at most four dials, and the gateway takes four at most.
 
 ---
 

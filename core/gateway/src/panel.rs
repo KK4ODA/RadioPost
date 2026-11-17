@@ -496,8 +496,8 @@ impl Panel {
         // *Scan these channels* (W50): the first modem scans them from the next start
         if let Some(dials) = body["scan"].as_array() {
             let dials: Vec<u64> = dials.iter().filter_map(Value::as_u64).collect();
-            if !dials.is_empty() && !(2..=11).contains(&dials.len()) {
-                return Err("a scan takes two to eleven channels".into());
+            if !dials.is_empty() && !(2..=4).contains(&dials.len()) {
+                return Err("a scan takes two to four channels".into());
             }
             if (1..dials.len()).any(|i| dials[..i].contains(&dials[i])) {
                 return Err("a channel is given twice".into());

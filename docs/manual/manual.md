@@ -832,7 +832,7 @@ The form shows the account the RadioPost client on this computer is enrolled as.
 3. Tick **Scan these channels** to listen on all of them with one radio. Aether moves the radio
    over them, a while on each, the first being home. It never leaves a channel while a call is
    arriving or a session is up. This needs Aether 0.2.0-beta.162 or later, a radio Aether can tune
-   (CAT, rigctld or FLRig), and two to eleven channels, all for the first modem. The gateway's
+   (CAT, rigctld or FLRig), and two to four channels, all for the first modem. The gateway's
    record then says how long a caller's call must keep trying to find it; the gateway adds that,
    registering again from this computer, the first time it scans.
 4. **Grid** and **Place** help callers choose a gateway near them. **Hours** says when it answers:

@@ -66,7 +66,7 @@ directory, as the RadioPost Gateway app has it.
                      scan these channels on the first modem (W50): the modem moves the
                      radio over them, a while on each, the first the home; the gateway
                      publishes how long a call must keep trying (RP-5 §4.4) and registers
-                     again when that changes. Two to eleven dials; `scan` alone says them
+                     again when that changes. Two to four dials; `scan` alone says them
   forward --to CALL  call a partner now and forward the queue to it (RP-7 §2), when the
                      gateway is not answering calls; the app's panel does it while it is
   key                the gateway's public key
@@ -273,8 +273,9 @@ fn partners(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
     s.save(dir)
 }
 
-/// The most channels a gateway scans (W50; Aether's ADR-0129 takes eleven at most).
-const MAX_SCAN: usize = 11;
+/// The most channels a gateway scans (W50): four, as Aether caps its scan (its ADR-0129 §11, where
+/// more channels left weak callers unread).
+const MAX_SCAN: usize = 4;
 
 /// `scan`: the channels the first modem scans (W50, RP-4 §4.2), read at the gateway's next start.
 fn scan(dir: &Path, a: &Args) -> Result<(), String> {

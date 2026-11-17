@@ -83,7 +83,7 @@ gateway, the **Modem** callers use there (RP-0 §9.4's names), and its bandwidth
 or 2300 Hz; on an FM radio, the channel and its width, RP-5 §4.4). Tick **Scan these channels** to listen on all of them with one radio
 (wishlist W50, RP-4 §4.2): Aether 0.2.0-beta.162 or later moves the radio over them, a while on
 each, the first being home, and never leaves one while a call is arriving or anything is owed there.
-Two to eleven channels, all for the first **Modem**, on a radio Aether can tune. The record then
+Two to four channels, all for the first **Modem**, on a radio Aether can tune. The record then
 carries each scanned channel's `scan_s` (RP-5 §4.4), how long a caller's call must keep trying; the
 gateway registers again by itself, from the same app's home, whenever its modem says another. List
 only channels the gateway listens on. Tuning the radio yourself ends the scan, and the gateway does
