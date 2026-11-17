@@ -275,6 +275,10 @@ pub enum Event {
         /// Its text, if any.
         text: Option<String>,
     },
+    /// The station called for station-to-station mail answered with a gateway's `WELCOME`, which
+    /// carries no credential (RP-3 §5.2, §10): the caller ends the session, as for any station
+    /// that does not prove itself ([`Event::Refused`] follows), and can say why in plain words.
+    NotAStation,
     /// This station ended the session with `ERROR`: what the other station sent was refused.
     Refused(ErrorCode),
     /// A renewed credential, to use from the next session (RP-3 §5.8).

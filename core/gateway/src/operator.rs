@@ -57,15 +57,21 @@ pub fn enrolled_as(home: &Path) -> Result<radiopost::credential::Body, String> {
 }
 
 /// The record as last registered, and the client's home it was registered from, in the gateway's
-/// directory.
+/// directory: `record` with all the operator's channels, `sent` as the post office has it.
 pub const RECORD: &str = "record.json";
 
 /// A record's channels with the scan its modem last answered (RP-4 §4.2, RP-5 §4.4): `scan_s` on
-/// each channel the radio scans, none on the others.
+/// each channel the radio scans, none on the others, and the channels it is set to scan but no
+/// longer listens on left out, since a gateway lists only the channels it listens on.
 pub fn with_scan(record: &mut Json, store: &Store) {
     let Some(channels) = record.get_mut("channels").and_then(Json::as_array_mut) else {
         return;
     };
+    channels.retain(|c| {
+        !c.get("dial_hz")
+            .and_then(Json::as_u64)
+            .is_some_and(|hz| store.scan_left.contains(&hz))
+    });
     for c in channels.iter_mut().filter_map(Json::as_object_mut) {
         let scanned = c
             .get("dial_hz")
@@ -83,16 +89,18 @@ pub fn with_scan(record: &mut Json, store: &Store) {
 }
 
 /// Registers the gateway in `dir` again, from the client's home it was last registered from, when
-/// the record says another scan than its modem last answered: `None` when it says the same, or
-/// the gateway was never registered from this computer.
+/// the record would say another scan, or other channels, than the post office has: `None` when it
+/// says the same, or the gateway was never registered from this computer.
 #[must_use]
 pub fn register_again(dir: &Path) -> Option<Result<String, String>> {
     let kept: Json = serde_json::from_str(&std::fs::read_to_string(dir.join(RECORD)).ok()?).ok()?;
     let home = std::path::PathBuf::from(kept["home"].as_str()?);
     let record = kept.get("record")?.clone();
+    // a record.json written before `sent` was kept holds what was sent, all its channels
+    let sent = kept.get("sent").unwrap_or(&record);
     let mut updated = record.clone();
     with_scan(&mut updated, &Store::load(dir));
-    (updated != record).then(|| register(dir, &home, updated))
+    (&updated != sent).then(|| register(dir, &home, record))
 }
 
 /// Registers the gateway in `dir` with the post office of the user whose client's home is
@@ -124,7 +132,6 @@ pub fn register(dir: &Path, home: &Path, mut record: Json) -> Result<String, Str
             format!("no post office found for {domain}: name it with `post-office --domain {domain} --url URL`")
         })?;
     let base = base.trim_end_matches('/').to_owned();
-    with_scan(&mut record, &Store::load(dir));
     record["callsign"] = settings.callsign.clone().into();
     record["operator"] = credential.body.operator.clone().into();
     // RP-5 §4.4: the record says whether it holds copies placed ahead, and its limits
@@ -150,6 +157,17 @@ pub fn register(dir: &Path, home: &Path, mut record: Json) -> Result<String, Str
             o.insert("forwarding".into(), Json::Array(windows));
         }
     }
+    // all the operator's channels are kept, to publish again when a scan of them runs again
+    let all = record.clone();
+    with_scan(&mut record, &Store::load(dir));
+    let none = |r: &Json| r["channels"].as_array().is_none_or(Vec::is_empty);
+    if none(&record) && !none(&all) {
+        return Err(
+            "the radio is on none of the gateway's channels now: register it with the channel \
+             it listens on"
+                .into(),
+        );
+    }
     let mut signed = settings.callsign.clone().into_bytes();
     signed.extend_from_slice(base.as_bytes());
     let signature = crypto::sign(context::API_GATEWAY, &signed, &gateway);
@@ -169,7 +187,7 @@ pub fn register(dir: &Path, home: &Path, mut record: Json) -> Result<String, Str
             station::write(dir, "credential.hex", &radiopost::cbor::hex(&bytes))?;
             // what was registered, and from where, so that a change of the scan registers it
             // again as its operator did
-            let kept = json!({"home": home.to_string_lossy(), "record": record});
+            let kept = json!({"home": home.to_string_lossy(), "record": all, "sent": record});
             let kept = serde_json::to_string_pretty(&kept).map_err(|e| e.to_string())?;
             station::write(dir, RECORD, &kept)?;
             Ok(format!(

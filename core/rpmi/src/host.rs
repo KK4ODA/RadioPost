@@ -150,6 +150,11 @@ impl Host {
     pub fn scan(&mut self, dials: &[u64]) -> Message {
         self.with_id("scan", &[("dials", dials.to_vec().into())])
     }
+
+    /// `tone`: a steady tone for an antenna tuner, `seconds` long; 0 stops one (§4.3).
+    pub fn tone(&mut self, seconds: u64) -> Message {
+        self.with_id("tone", &[("seconds", seconds.into())])
+    }
 }
 
 /// Which station placed the call.

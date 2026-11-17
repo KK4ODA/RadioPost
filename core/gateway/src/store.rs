@@ -326,6 +326,11 @@ pub struct Store {
     /// modem last answered: what its record publishes on those channels (RP-5 §4.4).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scan_s: Option<u64>,
+    /// The channels it is set to scan that it no longer listens on: dials the modem dropped from
+    /// the scan, or, once the scan ended, all but the one the radio stays on. Its record leaves
+    /// them out (RP-5 §4.4) until a scan of them runs again.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub scan_left: Vec<u64>,
 }
 
 fn address_of(item: &Json) -> String {

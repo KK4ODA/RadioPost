@@ -18,6 +18,10 @@
 //! A host's scan is Aether's `scan.start` on this connection, so it is the host's and ends with
 //! the connection (Aether's ADR-0129): the bridge tells the host when Aether ends it for another
 //! reason, and passes `connect`'s `call_s` on.
+//!
+//! A call in a bandwidth the station is not running moves the station there first
+//! (`bandwidth.set`) and back once the call or its link has ended, or the host has left: the
+//! bandwidth, like the dial, is the whole station's (RP-4 §1.1). A tuner tone is Aether's `tune`.
 
 use std::collections::HashMap;
 
@@ -90,6 +94,20 @@ enum Waiting {
     ScanStop {
         rid: Option<Value>,
     },
+    /// A call in another bandwidth: the station's state and bandwidth first, then the move.
+    BandwidthStatus {
+        rid: Option<Value>,
+        hz: i64,
+        params: Value,
+    },
+    BandwidthSet {
+        rid: Option<Value>,
+        params: Value,
+        before: Value,
+    },
+    Tone {
+        rid: Option<Value>,
+    },
     Nothing,
 }
 
@@ -122,6 +140,11 @@ pub struct Bridge {
     shared: bool,
     app: String,
     bandwidth_hz: Option<i64>,
+    /// The bandwidths Aether runs (`capabilities.bandwidths_hz`): what a call may ask for.
+    bandwidths: Vec<i64>,
+    /// The bandwidth a host program had asked of the station (`status.bandwidth.host_hz`, null
+    /// for none) before this host's call moved it: set back once the call or its link ends.
+    restore_bandwidth: Option<Value>,
     asked: u64,
     waiting: HashMap<String, Waiting>,
     callsigns: Vec<String>,
@@ -378,6 +401,7 @@ impl Bridge {
             radio @ (Request::Dial | Request::Tune(_) | Request::Scan(_)) => {
                 self.on_radio(radio, rid, &mut out);
             }
+            Request::Tone(seconds) => self.on_tone(seconds, rid, &mut out),
         }
         out
     }
@@ -402,6 +426,30 @@ impl Bridge {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// RP-4 §4.3: a tuner tone is Aether's `tune`, `duration_s` the seconds, 0 to stop it. It is
+    /// the station's transmitter, so it is refused while a link or a call is up on the station;
+    /// a stop is always passed on.
+    fn on_tone(&mut self, seconds: u64, rid: Option<Value>, out: &mut Vec<Out>) {
+        if seconds > 0 && (self.call.is_some() || self.link.is_some() || self.others) {
+            let text = "a link or a call is up on the station";
+            out.push(Out::Host(error(rid.as_ref(), "busy", text)));
+            return;
+        }
+        out.push(self.ask(
+            "tune",
+            json!({"duration_s": seconds}),
+            Waiting::Tone { rid },
+        ));
+    }
+
+    /// The bandwidth this host's call moved the station from is set back (RP-4 §1.1): withdrawing
+    /// the request always succeeds, and Aether goes back once it is idle.
+    fn restore_bandwidth(&mut self, out: &mut Vec<Out>) {
+        if let Some(before) = self.restore_bandwidth.take() {
+            out.push(self.ask("bandwidth.set", json!({"hz": before}), Waiting::Nothing));
         }
     }
 
@@ -463,7 +511,17 @@ impl Bridge {
                 true
             }),
         };
-        if under_way {
+        let moving = link.is_none()
+            && self.waiting.values().any(|w| {
+                matches!(
+                    w,
+                    Waiting::BandwidthStatus { .. } | Waiting::BandwidthSet { .. }
+                )
+            });
+        if under_way && moving {
+            // nothing is out at Aether yet: the call ends once the station has moved
+            Self::ok(rid.as_ref(), out);
+        } else if under_way {
             out.push(self.ask("abort", json!({}), Waiting::Plain { rid }));
         } else {
             let text = if link.is_some() {
@@ -547,15 +605,24 @@ impl Bridge {
             out.push(Out::Host(error(rid_ref, "not-authorized", &text)));
             return;
         }
-        if let Some(bw) = bandwidth
-            && self.bandwidth_hz.map(i128::from) != Some(bw)
-        {
-            let text = format!("no {bw} Hz on this modem now");
-            out.push(Out::Host(error(rid_ref, "unsupported", &text)));
-            return;
-        }
+        let bandwidth = match bandwidth.map(i64::try_from) {
+            None => None,
+            Some(Ok(bw)) if self.bandwidths.contains(&bw) => Some(bw),
+            Some(_) => {
+                let text = "Aether does not run that bandwidth";
+                out.push(Out::Host(error(rid_ref, "unsupported", text)));
+                return;
+            }
+        };
         if self.call.is_some() || self.link.is_some() {
             out.push(Out::Host(error(rid_ref, "busy", "a link or a call is up")));
+            return;
+        }
+        // the station's bandwidth is the whole station's, as its dial is (RP-4 §1.1)
+        let moving = bandwidth.filter(|&bw| Some(bw) != self.bandwidth_hz);
+        if moving.is_some() && self.others {
+            let text = "another program's session is up on the station";
+            out.push(Out::Host(error(rid_ref, "busy", text)));
             return;
         }
         self.call = Some(Call {
@@ -567,6 +634,89 @@ impl Bridge {
         // without `caps.call_s` the call is the modem's own length (§4)
         if let Some(s) = call_s.filter(|_| self.lasts) {
             params["call_s"] = s.into();
+        }
+        match moving {
+            // another program's call is no event of Aether's: its state says so, and what a host
+            // program asked of the bandwidth is what goes back after
+            Some(hz) => out.push(self.ask(
+                "status",
+                json!({}),
+                Waiting::BandwidthStatus { rid, hz, params },
+            )),
+            None => out.push(self.ask("connect", params, Waiting::Connect { rid })),
+        }
+    }
+
+    /// The station's state, read before a call in another bandwidth moves it: idle, it moves.
+    fn on_bandwidth_status(
+        &mut self,
+        (rid, hz, params): (Option<Value>, i64, Value),
+        (ok, result, message): (bool, &Value, &str),
+        out: &mut Vec<Out>,
+    ) {
+        let refusal = if !ok {
+            Some(("refused", message.to_owned()))
+        } else if result["state"].as_str().is_some_and(|s| s != "idle") {
+            Some((
+                "busy",
+                "a call or a session is up on the station".to_owned(),
+            ))
+        } else {
+            None
+        };
+        if let Some((code, text)) = refusal {
+            self.call = None;
+            out.push(Out::Host(error(rid.as_ref(), code, &text)));
+            return;
+        }
+        if self.call.as_ref().is_some_and(|c| c.aborted) {
+            // the host's `abort` came first: nothing moves, and the call ends here
+            self.call = None;
+            Self::ok(rid.as_ref(), out);
+            out.push(Out::Host(answer_with(
+                "failed",
+                rid.as_ref(),
+                &[("code", "aborted".into()), ("text", "aborted".into())],
+            )));
+            return;
+        }
+        let before = result["bandwidth"]["host_hz"].clone();
+        out.push(self.ask(
+            "bandwidth.set",
+            json!({"hz": hz}),
+            Waiting::BandwidthSet {
+                rid,
+                params,
+                before,
+            },
+        ));
+    }
+
+    /// The station moved for the call, or would not: the call goes out, or is refused `busy`.
+    fn on_bandwidth_set(
+        &mut self,
+        (rid, params, before): (Option<Value>, Value, Value),
+        (ok, message): (bool, &str),
+        out: &mut Vec<Out>,
+    ) {
+        if !ok {
+            // Aether stays where it is while anything is under way on the air
+            self.call = None;
+            out.push(Out::Host(error(rid.as_ref(), "busy", message)));
+            return;
+        }
+        self.restore_bandwidth = Some(before);
+        if self.call.as_ref().is_some_and(|c| c.aborted) {
+            // the host's `abort` came while the station moved: the call ends before it went out
+            self.call = None;
+            Self::ok(rid.as_ref(), out);
+            out.push(Out::Host(answer_with(
+                "failed",
+                rid.as_ref(),
+                &[("code", "aborted".into()), ("text", "aborted".into())],
+            )));
+            self.restore_bandwidth(out);
+            return;
         }
         out.push(self.ask("connect", params, Waiting::Connect { rid }));
     }
@@ -614,6 +764,16 @@ impl Bridge {
                     return out;
                 }
                 self.bandwidth_hz = result["bandwidth_hz"].as_i64();
+                // every bandwidth Aether runs: a call in another moves the station for it
+                self.bandwidths = result["bandwidths_hz"]
+                    .as_array()
+                    .map(|a| a.iter().filter_map(Value::as_i64).collect())
+                    .unwrap_or_default();
+                if self.bandwidths.is_empty() {
+                    self.bandwidths.extend(self.bandwidth_hz);
+                }
+                self.bandwidths.sort_unstable();
+                self.bandwidths.dedup();
                 self.shared = status["claims"].is_array();
                 self.channel_busy = status["channel_busy"].as_bool().unwrap_or(false);
                 self.others = status["state"].as_str().is_some_and(|s| s != "idle");
@@ -623,7 +783,7 @@ impl Bridge {
                 self.scans = self.lasts && self.dial;
                 self.hello = true;
                 let caps = Caps {
-                    bandwidths: self.bandwidth_hz.into_iter().collect(),
+                    bandwidths: self.bandwidths.clone(),
                     max_links: 1,
                     delivery: true,
                     broadcast: true,
@@ -635,6 +795,7 @@ impl Bridge {
                     dial: self.dial,
                     scan: self.scans,
                     call_s: self.lasts,
+                    tone: true,
                 };
                 let modem = format!(
                     "Aether HF {}",
@@ -716,8 +877,17 @@ impl Bridge {
                         connect_code(&code),
                         &message,
                     )));
+                    self.restore_bandwidth(&mut out);
                 }
             }
+            Waiting::BandwidthStatus { rid, hz, params } => {
+                self.on_bandwidth_status((rid, hz, params), (ok, result, &message), &mut out);
+            }
+            Waiting::BandwidthSet {
+                rid,
+                params,
+                before,
+            } => self.on_bandwidth_set((rid, params, before), (ok, &message), &mut out),
             Waiting::Send { rid, aether_ref } => {
                 if ok {
                     Self::ok(rid.as_ref(), &mut out);
@@ -781,7 +951,8 @@ impl Bridge {
                     out.push(self.ask("frequency.set", params, Waiting::Tune { rid }));
                 }
             }
-            Waiting::Tune { rid } => {
+            // the dial set, or the tuner tone keyed or stopped
+            Waiting::Tune { rid } | Waiting::Tone { rid } => {
                 if ok {
                     Self::ok(rid.as_ref(), &mut out);
                 } else {
@@ -1036,6 +1207,7 @@ impl Bridge {
                         ],
                     )));
                     self.update_busy(out);
+                    self.restore_bandwidth(out);
                 } else if let Some(call) = self.call.take() {
                     out.push(Out::Host(answer_with(
                         "failed",
@@ -1045,6 +1217,7 @@ impl Bridge {
                             ("text", detail.into()),
                         ],
                     )));
+                    self.restore_bandwidth(out);
                 }
             }
             _ => {}
@@ -1089,11 +1262,16 @@ impl Bridge {
     pub fn host_left(&mut self) -> Vec<Out> {
         let link = self.link.take().is_some();
         let call = self.call.take().is_some();
-        if (link || call) && !self.modem_lost {
-            vec![self.ask("abort", json!({}), Waiting::Nothing)]
-        } else {
-            Vec::new()
+        let mut out = Vec::new();
+        if self.modem_lost {
+            return out;
         }
+        if link || call {
+            out.push(self.ask("abort", json!({}), Waiting::Nothing));
+        }
+        // a call it moved the station for: the station goes back once the abort has ended it
+        self.restore_bandwidth(&mut out);
+        out
     }
 
     /// Whether a request to Aether is still unanswered.
@@ -1108,6 +1286,8 @@ impl Bridge {
         let text = format!("Aether went away: {why}");
         let mut out = Vec::new();
         self.modem_lost = true;
+        // an Aether that comes back starts from its own settings
+        self.restore_bandwidth = None;
         if let Some(l) = self.link.take() {
             out.push(Out::Host(answer_with(
                 "disconnected",
@@ -1141,7 +1321,10 @@ impl Bridge {
                 | Waiting::TuneStatus { rid, .. }
                 | Waiting::Tune { rid }
                 | Waiting::Scan { rid }
-                | Waiting::ScanStop { rid } => rid,
+                | Waiting::ScanStop { rid }
+                | Waiting::BandwidthStatus { rid, .. }
+                | Waiting::BandwidthSet { rid, .. }
+                | Waiting::Tone { rid } => rid,
                 Waiting::Nothing => None,
             };
             if rid.is_some() {

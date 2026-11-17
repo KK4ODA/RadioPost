@@ -108,8 +108,18 @@ says *Listening*.
 
 1. Click **Write**, address the message to A's address (`ana@test.radiopost.org`), give it a
    subject and a few lines, and click **Put in outbox**.
-2. In *Station*, choose **Another client's station**, enter A's callsign under *Call*, and
-   click **Call**.
+2. In *Station*, choose **Another client's station** and enter A's callsign under *Call*.
+3. Type the agreed frequency in **Dial, MHz** (`7.103`) and choose the agreed **Bandwidth**.
+   RadioPost tunes the radio at once when Aether can set its dial (CAT, rigctld or FLRig);
+   otherwise the line under it says which dial to set yourself. **Tuner tone** keys ten seconds of
+   carrier for an antenna tuner.
+4. Click **Call**. Aether moves the station to the bandwidth chosen for the call, and back after.
+
+**A station that also runs RadioPost Gateway** answers its gateway's callsign (`KK4ODA-1`) as a
+gateway. Call the operator's own callsign (`KK4ODA`) instead, while their RadioPost client listens
+under it beside the gateway; the gateway need not close. A call to the gateway's callsign is
+ended at once, and RadioPost says so: *KK4ODA-1 is a gateway: for P2P, call the other operator's
+own callsign while their client listens*.
 
 The log at the bottom of each window says what happens: the call, each station proving who it is,
 each message delivered or received, and the end. A session of a few short messages takes a minute

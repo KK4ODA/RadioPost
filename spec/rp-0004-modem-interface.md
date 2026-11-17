@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.1.0 |
+| **Version** | 1.2.0 |
 | **Updated** | 2026-11-17 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -35,7 +35,8 @@ adapter for it, and a modem may speak RPMI itself.
 What the host is told about the radio, and when it is told, is all in RPMI. Keying the radio,
 modulation, retransmission and turnaround are the modem's business. So is the dial, unless the
 adapter offers it (§4.1): then a host may read it and set it, so that a client tunes to the
-gateway it calls and a gateway to a partner's window.
+gateway it calls and a gateway to a partner's window. An adapter may also key a steady tone for an
+antenna tuner on the host's word (§4.3).
 
 ### 1.1 A shared modem
 
@@ -62,6 +63,10 @@ callsign. The adapter keeps each host to its own business:
   station. The adapter refuses it (`busy`) while any link or call is up on the station, the
   host's or another program's, and tells every host the new dial (`dial`, §5). A scan (§4.2) is
   the host's that asked; one host scans at a time, and a `tune` from another host ends it.
+* **So are the bandwidth and the transmitter.** A `connect` in a bandwidth the modem is not running
+  moves the whole station for that call, and back once it has ended; the adapter refuses it `busy`
+  while another program's link or call is up. A tuner tone (§4.3) keys the station's transmitter,
+  so it too is refused `busy` while any link or call is up on the station.
 * **A host that leaves takes its callsigns, its call and its links with it.** When the host's
   connection to the adapter closes, calls to its callsigns are no longer answered for it, and the
   adapter ends its call under way and its links as `abort` would, so the station is not left in a
@@ -145,6 +150,7 @@ The adapter answers:
 | `dial` | The adapter reads and sets the radio's dial (§4.1). Absent means false. |
 | `scan` | The adapter scans the radio over a list of dials (§4.2). Absent means false. Only with `dial`. |
 | `call_s` | The adapter keeps a call going as long as `connect`'s `call_s` asks (§4). Absent means false. |
+| `tone` | The adapter keys a tuner tone (§4.3). Absent means false. |
 
 If no version is in common the adapter answers `error` `unsupported-version` and closes. An adapter
 that is not shared (§1.1) answers the `hello` of a second host, while a host that has said `hello`
@@ -176,11 +182,12 @@ it is sent, such as `busy`.
 | `dial` | — | The adapter answers `dial` with the radio's dial (§4.1). |
 | `tune` | `dial_hz` | Sets the radio's dial (§4.1). `ok` once the radio is there. |
 | `scan` | `dials` (list), `id` | Listens on each dial in turn (§4.2); an empty list stops it. Answered with `scan`. |
+| `tone` | `seconds` | Keys a steady tone for an antenna tuner for `seconds`; 0 stops it (§4.3). |
 
 **Types.** `version` is a list of two integers, the lowest and the highest version the host
 speaks; `callsigns` is a list of strings; `on` is true or false; `bandwidth` and `dial_hz` are
 integers, `dial_hz` above 0; `dials` is a list of integers, each above 0; `call_s` is an
-integer, 0 or above; `app`,
+integer, 0 or above; `seconds` is an integer from 0 to 10; `app`,
 `remote`, `as` and `link` are strings. `ref`, like `id`, is a string or an integer, and the adapter
 copies it unchanged into `delivered` or `broadcast-sent`. A `connect` needs its `id`, which its
 `connected` or `failed` carries: one without is `malformed`.
@@ -229,7 +236,9 @@ asked or the radio's own knob was turned, the adapter sends each host that has s
 
 A host that moved the station from the dial its operator chose tunes back when it has finished:
 a client after its call to a gateway on another channel, a gateway after its call in a partner's
-window (RP-7 §5). Stations listening on their channel are found there.
+window (RP-7 §5). Stations listening on their channel are found there. A channel the operator
+picks in the host, tuned as it is picked, is the operator's own choice: the host leaves the radio
+there.
 
 ### 4.2 Scanning
 
@@ -276,6 +285,23 @@ event (§4.1) to every host.
 A host that judges the dial itself, because the modem checks no rules (§8), judges every dial before
 it asks. It does not change `listen` on the scan's `dial` events.
 
+### 4.3 The tuner tone
+
+An adapter with `caps.tone` keys the radio with a steady tone, at the level the modem transmits,
+so that its operator can set an antenna tuner on the channel picked before a call. The host asks:
+
+```json
+{"op": "tone", "id": 10, "seconds": 10}
+```
+
+and is answered `ok` once the tone is on, or `error`. The tone ends by itself after `seconds`; a
+`tone` with `seconds` 0 stops one under way, and is answered `ok` whether a tone was on or not. A
+host need not keep its connection open while the tone sounds, and its leaving does not stop it.
+
+A tone is refused with `unsupported` without `caps.tone`, with `busy` while any link or call is up
+on the station (§1.1), and with `refused` when the modem will not key now (the channel in use, a
+rule it checks, §8); `text` says why. A stop is never refused for being busy.
+
 ---
 
 ## 5. Events from the adapter
@@ -303,7 +329,7 @@ it loses with `disconnected`, so the host never has to guess. On a shared modem 
 another program's links to this host (§1.1).
 
 Test vectors: `vectors/rpmi-conversations.json`: session-01 (RP-3 §12) carried over RPMI on both
-stations, every error a host can meet, a shared modem, a broadcast, and the dial.
+stations, every error a host can meet, a shared modem, a broadcast, the dial and the tuner tone.
 
 ---
 
@@ -338,8 +364,8 @@ Adapters use RP-0 §9.3's codes where one fits, and these words in `code` otherw
 ## 8. The rules on the air
 
 An adapter MUST NOT make the modem transmit except to carry out its host's requests (calls,
-answers when `listen` is on, data, disconnects, broadcasts) and what the modem itself needs for
-them (acknowledgements, identification). On a shared modem, another program's transmissions are
+answers when `listen` is on, data, disconnects, broadcasts, a tuner tone) and what the modem itself
+needs for them (acknowledgements, identification). On a shared modem, another program's transmissions are
 that program's business; this host hears of them only as `busy`.
 
 Whether a transmission is allowed on this band, at this time, under this kind of control, is the
@@ -386,7 +412,7 @@ end of this section.
 
 | RPMI | Aether control API |
 |---|---|
-| `hello` | `status` and `capabilities`: `caps.shared` is true when `status.claims` is present, and `caps.bandwidths` is the one Aether runs (`capabilities.bandwidth_hz`). `delivery`, `broadcast`, `quality`, `busy` and `regulatory` are true, and `max_links` is 1. `modem` is `Aether HF` and `status.version`. Then, when shared, `hello {app}` with the host's `app` (below, *A host between calls*). |
+| `hello` | `status` and `capabilities`: `caps.shared` is true when `status.claims` is present, and `caps.bandwidths` are the ones Aether runs (`capabilities.bandwidths_hz`, or `bandwidth_hz` alone where an Aether lists none). `delivery`, `broadcast`, `quality`, `busy`, `regulatory` and `tone` are true, and `max_links` is 1. `modem` is `Aether HF` and `status.version`. Then, when shared, `hello {app}` with the host's `app` (below, *A host between calls*). |
 | `callsigns` | `claim {callsigns, app}`, with the host's `app`. Aether takes the callsigns it can and lists each one another program holds in `refused`. RPMI keeps the host's list whole, so on a refusal the adapter claims the host's earlier list again and answers `error` `claimed` naming the refused callsigns. |
 | `listen` | `listen {enabled}` on that claim. A claim starts with it off, as RPMI's does. |
 | `connect` | `connect {remote, callsign}`, with `callsign` set to `as`. The call and its session are the host's. Aether's `claimed`, and `bad_params` for a callsign the claim does not hold, are RPMI's `not-authorized`. `already_connected` is `busy`. `refused` (an answer-only station) and `regulatory` are `refused`. |
@@ -405,7 +431,8 @@ end of this section.
 | `scan` | `scan.start {dials}`, or `scan.stop` for no dials, on the host's own connection to Aether, which the scan belongs to (its ADR-0129). Aether scans two to four dials (its ADR-0129 §11): about 4 s on a dial where it hears nothing, and a caller's gap between tries where it hears a call under way. `scan_s` is the answer's, rounded up to whole seconds. `caps.call_s` is true when `status` has `scan` (Aether 0.2.0-beta.162 and later), and `caps.scan` when it also has `can_tune`. Aether's `claimed` is `busy`; its `regulatory` and `bad_params` are `refused`, its `unsupported` `unsupported`. With no scan of its own the host's empty `scan` is answered without asking Aether: a `scan.stop` from a connection that holds no claim stops another program's scan as the operator's. |
 | `scan` event | Aether's `scan` event, with its `why`: `connection closed` is `left`, `tuned by another program` is `tuned`, and `asked`, `knob`, `operator` and `radio` are themselves. |
 | `call_s` (in `connect`) | `connect {…, call_s}` with `caps.call_s`; Aether makes the fewest tries that keep starting that long, and answers how many. Without it, the call is Aether's own length. |
-| `bandwidth` (in `connect`) | Not mapped yet. How programs sharing a station choose its bandwidth is open (ADR-0106 §5). The adapter offers the bandwidth Aether runs and refuses another with `unsupported`, as §4 says. A `connect` that names that bandwidth is sent with `keep_bandwidth`, so Aether does not move for the call (its ADR-0102). Aether may move between calls (a `bandwidth` event): `caps.bandwidths` is the bandwidth at `hello`, and `connected` carries the one in use. |
+| `bandwidth` (in `connect`) | A `connect` that names a bandwidth is sent with `keep_bandwidth`, so Aether does not move for the call by itself (its ADR-0102). One that names a bandwidth Aether runs but is not running now moves the station first, as §1.1 says: `status` (`busy` unless `state` is `idle`; `bandwidth.host_hz` is kept), then `bandwidth.set {hz}` (Aether's refusal, something under way on the air, is `busy`), then `connect`. When the call fails, its link ends or the host leaves, `bandwidth.set` puts back the `host_hz` kept, `null` for the station's own; withdrawing always succeeds, and Aether goes back once it is idle. Aether may move between calls (a `bandwidth` event): `connected` carries the bandwidth in use. |
+| `tone` | `tune {duration_s}`, the seconds as `duration_s`, 0 to stop it: `busy` at once while the host has a call or link, or another program's session is up, unless it stops one; Aether's refusals (the channel busy, the rules, a radio keyed by a host program with none attached) are `refused`, with Aether's message. |
 
 Aether checks the band rules before every transmission, and ends each session with the Morse
 identifier itself. A future Aether may speak RPMI natively.
@@ -678,3 +705,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 1.0.2 | 2026-11-15 | §9.4 (informative), found by writing the packet adapter against AGWPE: the frame, the mapping, callsigns registered only while the host listens, `d` only once nothing is outstanding, no `delivered`, one host at a time. Nothing for an implementation to do. |
 | 1.0.3 | 2026-11-15 | §9.3 (informative), checked against ardopcf's host interface and written from the ARDOP adapter: the echoes and `FAULT`, the data port's blocks and tags, `MYCALL` and `MYAUX`, the call's end by `STATUS`, `REJECTEDBW` and `REJECTEDBUSY`, `DISCONNECT` once `BUFFER` is 0, `ABORT` reported by the adapter, no `delivered`. Nothing for an implementation to do. |
 | 1.1.0 | 2026-11-17 | Scanning (§4.2, wishlist W50): `caps.scan`, the `scan` request and event, a scan the host's that asked and ended by another host's `tune` (§1.1); `connect`'s `call_s` and `caps.call_s`; §9.1, Aether's scan (its ADR-0129). MINOR, announced (RP-0 §8.4): nothing for an implementation to do. |
+| 1.2.0 | 2026-11-17 | The tuner tone (§4.3): `caps.tone` and the `tone` request, refused `busy` while any link or call is up on the station, a stop always taken (§1.1, §8). §1.1: a `connect` in another bandwidth moves the whole station for the call and back, refused `busy` while another program's is up. §4.1: a channel the operator picks in the host is the operator's choice, and the radio stays. §9.1: Aether's bandwidths and a call's move (`bandwidth.set`), and the tone as Aether's `tune`. From the RadioPost mail of 2026-11-17, whose mobile could not be told to set its tuner before a call. Test vectors: the tone in the dial conversation and in `rpmi-lines.json`. MINOR, announced (RP-0 §8.4): nothing for an implementation to do. |

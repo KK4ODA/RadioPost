@@ -318,7 +318,7 @@ fn a_call_on_a_channel_tunes_the_radio_there_and_back() {
         } else {
             assert_eq!(
                 said.first().map(String::as_str),
-                Some("tune the radio to 3.5915 MHz: this modem cannot"),
+                Some("set the radio's dial to 3.5915 MHz (USB) yourself: the modem cannot set it"),
                 "{said:?}"
             );
             assert!(!said.iter().any(|s| s.starts_with("tuned")), "{said:?}");

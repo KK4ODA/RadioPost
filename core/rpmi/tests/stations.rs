@@ -34,6 +34,7 @@ fn caps(shared: bool) -> Caps {
         dial: false,
         scan: false,
         call_s: false,
+        tone: false,
     }
 }
 

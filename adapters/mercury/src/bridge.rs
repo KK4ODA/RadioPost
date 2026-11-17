@@ -503,6 +503,7 @@ impl Bridge {
             dial: false,
             scan: false,
             call_s: false,
+            tone: false,
         };
         out.push(Out::Host(answer_with(
             "hello",
@@ -586,6 +587,10 @@ impl Bridge {
             }
             Request::Dial | Request::Tune(_) | Request::Scan(_) => {
                 let text = format!("{}'s TNC commands have no dial", self.name());
+                out.push(Out::Host(error(rid_ref, "unsupported", &text)));
+            }
+            Request::Tone(_) => {
+                let text = format!("{}'s TNC commands have no tuner tone", self.name());
                 out.push(Out::Host(error(rid_ref, "unsupported", &text)));
             }
             Request::Status => out.push(Out::Host(self.status(rid_ref))),

@@ -267,6 +267,10 @@ impl Bridge {
                 let text = "AGWPE has no dial";
                 out.push(Out::Host(error(rid_ref, "unsupported", text)));
             }
+            Request::Tone(_) => {
+                let text = "AGWPE has no tuner tone";
+                out.push(Out::Host(error(rid_ref, "unsupported", text)));
+            }
             Request::Status => out.push(Out::Host(self.status(rid_ref))),
         }
         out
@@ -288,6 +292,7 @@ impl Bridge {
             dial: false,
             scan: false,
             call_s: false,
+            tone: false,
         };
         out.push(Out::Host(answer_with(
             "hello",

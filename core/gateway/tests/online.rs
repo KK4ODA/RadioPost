@@ -48,6 +48,36 @@ fn gateway_checking(
     at_gateway: SocketAddr,
     operator_checks_rules: bool,
 ) -> (PathBuf, std::sync::mpsc::Receiver<String>, String) {
+    let gw = set_up_gateway(
+        dir,
+        running,
+        base,
+        po_key,
+        at_gateway,
+        operator_checks_rules,
+    );
+    let (tx, rx) = std::sync::mpsc::channel();
+    let gw_dir = gw.clone();
+    thread::spawn(move || {
+        let _ = station::serve(&gw_dir, &mut |line| {
+            let _ = tx.send(line.to_owned());
+        });
+    });
+    let first = rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("the gateway says something");
+    (gw, rx, first)
+}
+
+/// The gateway KK4ODA-1 set up and registered by its operator, not yet running: its directory.
+fn set_up_gateway(
+    dir: &Path,
+    running: &Running,
+    base: &str,
+    po_key: &SigningKey,
+    at_gateway: SocketAddr,
+    operator_checks_rules: bool,
+) -> PathBuf {
     // the gateway's operator, KK4ODA, registers it from their own client's home
     let _operator = client(
         &dir.join("kk4oda"),
@@ -86,18 +116,7 @@ fn gateway_checking(
     .expect("registered");
     assert!(said.starts_with("KK4ODA-1 registered"), "{said}");
     assert!(running.office().state.gateways.contains_key("KK4ODA-1"));
-
-    let (tx, rx) = std::sync::mpsc::channel();
-    let gw_dir = gw.clone();
-    thread::spawn(move || {
-        let _ = station::serve(&gw_dir, &mut |line| {
-            let _ = tx.send(line.to_owned());
-        });
-    });
-    let first = rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("the gateway says something");
-    (gw, rx, first)
+    gw
 }
 
 /// Lines the gateway writes until a session ends.
@@ -253,7 +272,10 @@ fn the_gateway_answers_only_with_its_radio_in_an_automatic_segment() {
 /// W50, RP-4 §4.2, RP-5 §4.4: a gateway set to scan two channels asks its modem to scan them
 /// at start, judging both dials itself (W40), registers again from its operator's enrollment so
 /// that its record says how long a call must keep trying, and answers a call. Another program's
-/// tune ends the scan: the operator wins, and the gateway does not start it again by itself.
+/// tune ends the scan: the operator wins, and the gateway does not start it again by itself. It
+/// registers again with the one channel it now listens on, the radio's, with no `scan_s`: on
+/// 2026-11-17 Aether ended a gateway's scan and the post office went on offering both channels
+/// and a 49 s call. Started again, it scans both, and its record lists both again.
 #[test]
 #[allow(clippy::too_many_lines, reason = "one story, told in order")]
 fn a_gateway_that_scans_publishes_how_long_a_call_must_last() {
@@ -309,13 +331,7 @@ fn a_gateway_that_scans_publishes_how_long_a_call_must_last() {
     assert_eq!(published(), [None, None]);
 
     // its operator registered it from this computer: the gateway registers again from there
-    let (tx, rx) = std::sync::mpsc::channel();
-    let gw_dir = gw.clone();
-    thread::spawn(move || {
-        let _ = station::serve(&gw_dir, &mut |line| {
-            let _ = tx.send(line.to_owned());
-        });
-    });
+    let (monitor, running_gw, rx) = answering(&gw);
     let mut heard = Vec::new();
     while let Ok(line) = rx.recv_timeout(Duration::from_secs(10)) {
         let done = line.starts_with("registered again");
@@ -380,7 +396,145 @@ fn a_gateway_that_scans_publishes_how_long_a_call_must_last() {
     );
     assert_eq!(scanning(&server), Vec::<u64>::new());
     assert_eq!(server.with_channel(|c| c.dial(1)), Some(7_101_000));
+    let mut heard = Vec::new();
+    while let Ok(line) = rx.recv_timeout(Duration::from_secs(10)) {
+        let done = line.starts_with("registered again");
+        heard.push(line);
+        if done {
+            break;
+        }
+    }
+    assert_eq!(
+        heard.first().map(String::as_str),
+        Some("listening on 7.101 MHz only, until the scan runs again"),
+        "{heard:?}"
+    );
+    assert!(
+        heard
+            .last()
+            .is_some_and(|l| l.starts_with("registered again, since what it listens on changed")),
+        "{heard:?}"
+    );
+    let listed = || {
+        running.office().state.gateways["KK4ODA-1"]["channels"]
+            .as_array()
+            .expect("channels")
+            .iter()
+            .map(|c| {
+                (
+                    c["dial_hz"].as_u64().expect("a dial"),
+                    c.get("scan_s").and_then(serde_json::Value::as_u64),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(listed(), [(7_101_000, None)], "only where it listens now");
     drop(knob);
+
+    // started again, it scans both channels again, and its record lists both
+    monitor.stop();
+    running_gw
+        .join()
+        .expect("the answering loop")
+        .expect("stopped");
+    let (monitor, running_gw, rx) = answering(&gw);
+    let mut heard = Vec::new();
+    while let Ok(line) = rx.recv_timeout(Duration::from_secs(10)) {
+        let done = line.starts_with("registered again");
+        heard.push(line);
+        if done {
+            break;
+        }
+    }
+    assert!(
+        heard
+            .last()
+            .is_some_and(|l| l.starts_with("registered again")),
+        "{heard:?}"
+    );
+    assert_eq!(listed(), [(3_590_000, Some(10)), (7_101_000, Some(10))]);
+    monitor.stop();
+    running_gw
+        .join()
+        .expect("the answering loop")
+        .expect("stopped");
+}
+
+/// RP-3 §10 (2026-11-17, the mobile's P2P calls to the home station): a client that calls a
+/// gateway's callsign for station-to-station mail reaches the gateway, whose welcome carries no
+/// client's proof. The client hangs up and says so in plain words; the gateway's log says why the
+/// client left, from the `ERROR` it sent.
+#[test]
+fn a_station_call_that_meets_a_gateway_is_said_plainly_at_both_ends() {
+    let dir = scratch("p2p-gateway");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (_server, at_user, at_gateway) = loopback();
+    let gw = set_up_gateway(&dir, &running, &base, &po_key, at_gateway, true);
+    let (monitor, running_gw, rx) = answering(&gw);
+    let first = rx.recv_timeout(Duration::from_secs(10)).expect("a line");
+    assert!(first.starts_with("listening as KK4ODA-1"), "{first}");
+    let mut user = client(
+        &dir.join("wd5ema"),
+        &running,
+        &po_key,
+        "club@test.example",
+        "WD5EMA",
+    );
+    let mut said = Vec::new();
+    let report = session::call(
+        &mut user,
+        "KK4ODA-1",
+        Kind::Station,
+        &Options::new(&at_user.to_string()),
+        &mut |s| said.push(s.to_owned()),
+    )
+    .expect("the call placed");
+    let plain = "KK4ODA-1 is a gateway: for P2P, call the other operator's own callsign while \
+                 their client listens";
+    assert_eq!(report.failed.as_deref(), Some(plain), "{said:?}");
+    assert!(said.iter().any(|l| l == plain), "{said:?}");
+    assert!(
+        !said
+            .iter()
+            .any(|l| l.starts_with("refused the other station")),
+        "said once, plainly: {said:?}"
+    );
+    session_lines(&rx);
+    // the gateway's own log, as its panel shows it
+    let (logged, _) = monitor.log_since(0);
+    assert!(
+        logged.iter().any(|(_, l)| l
+            == "WD5EMA sent ERROR not-authorized: called for station-to-station mail, and a \
+                gateway answered: the client hung up"),
+        "{logged:?}"
+    );
+    monitor.stop();
+    running_gw
+        .join()
+        .expect("the answering loop")
+        .expect("stopped");
+}
+
+/// The gateway in `dir` answering on a thread, with a monitor to stop it, and what it says.
+fn answering(
+    dir: &Path,
+) -> (
+    std::sync::Arc<radiopost_gateway::monitor::Monitor>,
+    thread::JoinHandle<Result<(), String>>,
+    std::sync::mpsc::Receiver<String>,
+) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let monitor = std::sync::Arc::new(radiopost_gateway::monitor::Monitor::new());
+    let running = {
+        let monitor = std::sync::Arc::clone(&monitor);
+        let dir = dir.to_owned();
+        thread::spawn(move || {
+            station::run(&dir, &monitor, &mut |line| {
+                let _ = tx.send(line.to_owned());
+            })
+        })
+    };
+    (monitor, running, rx)
 }
 
 /// RP-1 §6.3 step 5, RP-3 §5.2, RP-5 §5.2: a laptop whose clock is an hour off signs the

@@ -166,7 +166,13 @@ pub enum Request {
     /// Listen on each of these dials in turn, in hertz, the first the home; none stops the
     /// host's scan (§4.2).
     Scan(Vec<u64>),
+    /// Key a steady tone for an antenna tuner for this many seconds, 1 to [`TONE_MAX_S`]; 0 stops
+    /// one (§4.3).
+    Tone(u64),
 }
+
+/// The longest tuner tone a host may ask for, in seconds (RP-4 §4.3).
+pub const TONE_MAX_S: u64 = 10;
 
 fn text(m: &Message, key: &str) -> Result<String, String> {
     match m.get(key) {
@@ -195,6 +201,44 @@ fn reference(m: &Message) -> Result<Option<Value>, String> {
         Some(v) if is_id(v) => Ok(Some(v.clone())),
         Some(_) => Err("`ref` is neither a string nor an integer".into()),
     }
+}
+
+/// The radio's requests of RP-4 §4.1 to §4.3, read member by member: the dial, a scan, the tone.
+fn radio(m: &Message) -> Result<Request, String> {
+    Ok(match op_of(m) {
+        "dial" => Request::Dial,
+        "tune" => Request::Tune(
+            m.get("dial_hz")
+                .ok_or("no `dial_hz`")?
+                .as_u64()
+                .filter(|&hz| hz > 0)
+                .ok_or("`dial_hz` is not an integer above 0")?,
+        ),
+        "scan" => {
+            if !m.contains_key("id") {
+                return Err("a `scan` needs an `id`".into());
+            }
+            let dials = m
+                .get("dials")
+                .ok_or("no `dials`")?
+                .as_array()
+                .and_then(|a| {
+                    a.iter()
+                        .map(|v| v.as_u64().filter(|&hz| hz > 0))
+                        .collect::<Option<Vec<_>>>()
+                })
+                .ok_or("`dials` is not a list of integers above 0")?;
+            Request::Scan(dials)
+        }
+        "tone" => Request::Tone(
+            m.get("seconds")
+                .ok_or("no `seconds`")?
+                .as_u64()
+                .filter(|&s| s <= TONE_MAX_S)
+                .ok_or("`seconds` is not an integer from 0 to 10")?,
+        ),
+        _ => return Err(format!("no op {}", op_of(m))),
+    })
 }
 
 impl Request {
@@ -274,30 +318,7 @@ impl Request {
                 reference: reference(m)?,
             },
             "status" => Request::Status,
-            "dial" => Request::Dial,
-            "tune" => Request::Tune(
-                m.get("dial_hz")
-                    .ok_or("no `dial_hz`")?
-                    .as_u64()
-                    .filter(|&hz| hz > 0)
-                    .ok_or("`dial_hz` is not an integer above 0")?,
-            ),
-            "scan" => {
-                if !m.contains_key("id") {
-                    return Err("a `scan` needs an `id`".into());
-                }
-                let dials = m
-                    .get("dials")
-                    .ok_or("no `dials`")?
-                    .as_array()
-                    .and_then(|a| {
-                        a.iter()
-                            .map(|v| v.as_u64().filter(|&hz| hz > 0))
-                            .collect::<Option<Vec<_>>>()
-                    })
-                    .ok_or("`dials` is not a list of integers above 0")?;
-                Request::Scan(dials)
-            }
+            "dial" | "tune" | "scan" | "tone" => radio(m)?,
             _ => return Ok(None),
         };
         Ok(Some(request))
@@ -358,11 +379,13 @@ pub struct Caps {
     pub scan: bool,
     /// The adapter keeps a call going as long as `connect`'s `call_s` asks (§4).
     pub call_s: bool,
+    /// The adapter keys a tuner tone (§4.3).
+    pub tone: bool,
 }
 
 impl Caps {
-    /// The `caps` member of `hello`; `dial`, `scan` and `call_s` only when the adapter has them,
-    /// as §3 lets them be absent.
+    /// The `caps` member of `hello`; `dial`, `scan`, `call_s` and `tone` only when the adapter
+    /// has them, as §3 lets them be absent.
     #[must_use]
     pub fn to_json(&self) -> Value {
         let mut caps = serde_json::json!({
@@ -380,6 +403,7 @@ impl Caps {
             ("dial", self.dial),
             ("scan", self.scan),
             ("call_s", self.call_s),
+            ("tone", self.tone),
         ] {
             if set {
                 caps[key] = Value::Bool(true);
@@ -414,6 +438,7 @@ impl Caps {
             dial: flag("dial"),
             scan: flag("scan"),
             call_s: flag("call_s"),
+            tone: flag("tone"),
         }
     }
 }
@@ -458,6 +483,14 @@ mod tests {
             read(r#"{"op":"tune","id":9,"dial_hz":7101000}"#),
             Ok(Some(Request::Tune(7_101_000)))
         );
+        assert_eq!(
+            read(r#"{"op":"tone","id":9,"seconds":10}"#),
+            Ok(Some(Request::Tone(10)))
+        );
+        assert_eq!(
+            read(r#"{"op":"tone","seconds":0}"#),
+            Ok(Some(Request::Tone(0)))
+        );
         assert_eq!(read(r#"{"op":"rig","id":9}"#), Ok(None));
         for bad in [
             r#"{"op":"connect","remote":"N1CALL-10"}"#,
@@ -485,6 +518,11 @@ mod tests {
             r#"{"op":"scan","id":1,"dials":3590000}"#,
             r#"{"op":"scan","id":1,"dials":[3590000,0]}"#,
             r#"{"op":"scan","id":1,"dials":[3590000,"7101000"]}"#,
+            r#"{"op":"tone","id":1}"#,
+            r#"{"op":"tone","id":1,"seconds":11}"#,
+            r#"{"op":"tone","id":1,"seconds":-1}"#,
+            r#"{"op":"tone","id":1,"seconds":2.5}"#,
+            r#"{"op":"tone","id":1,"seconds":"10"}"#,
         ] {
             assert!(read(bad).is_err(), "{bad}");
         }

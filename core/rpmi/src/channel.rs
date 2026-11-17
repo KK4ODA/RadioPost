@@ -297,6 +297,7 @@ impl Channel {
             Request::Dial => self.on_dial(station, host, None, id),
             Request::Tune(hz) => self.on_dial(station, host, Some(hz), id),
             Request::Scan(dials) => self.on_scan(station, host, &dials, id),
+            Request::Tone(seconds) => self.on_tone(station, host, seconds, id),
         }
     }
 
@@ -887,6 +888,24 @@ impl Channel {
         }
     }
 
+    /// `tone` keys a steady tone for an antenna tuner (§4.3): only with `caps.tone`, and not while
+    /// a link or a call is up on the station (§1.1), since it is the station's transmitter; a
+    /// tone's stop is always taken. The simulated modem has no radio to key, so it only says `ok`.
+    fn on_tone(&mut self, station: usize, host: &str, seconds: u64, id: Option<&Value>) {
+        if !self.stations[station].cfg.caps.tone {
+            let m = error(id, "unsupported", "this modem keys no tuner tone");
+            self.emit(station, host, m);
+            return;
+        }
+        let held = self.ends_at(station) > 0 || self.calls.iter().any(|c| c.station == station);
+        if seconds > 0 && held {
+            let text = "a link or a call is up on the station";
+            self.emit(station, host, error(id, "busy", text));
+            return;
+        }
+        self.ok(station, host, id);
+    }
+
     fn on_status(&mut self, station: usize, h: usize, id: Option<&Value>) {
         let host = &self.stations[station].hosts[h];
         let name = host.name.clone();
@@ -958,6 +977,7 @@ mod tests {
                 dial: false,
                 scan: false,
                 call_s: false,
+                tone: false,
             },
             prefix: "c".into(),
             frame_bytes: 128,

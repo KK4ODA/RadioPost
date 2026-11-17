@@ -21,6 +21,10 @@ gateway that can reach the Internet (§4).
     callsign, and from Aether 0.2.0-beta.149 its Setup shows it in place of its own, greyed:
     *KK4ODA-1 · RadioPost Gateway*.
   * When the gateway stops, Aether's own callsign comes back.
+  * For station-to-station mail with you, other operators call your own callsign, not the
+    gateway's, while your RadioPost client listens under it (**Listen**) beside the gateway: one
+    Aether serves both. A client that calls the gateway's callsign for station-to-station mail is
+    welcomed as by any gateway, hangs up, and the gateway's log says why.
 * **Aether keying the radio itself**: in Aether's Setup step 2, CAT, serial, rigctld, FLRig,
   CM108 or VOX, not *Host*. Keyed by a host program, Aether transmits only through that program,
   and RadioPost's sessions do not reach the air. On a computer that also runs RMS Trimode with
@@ -88,7 +92,10 @@ carries each scanned channel's `scan_s` (RP-5 §4.4), how long a caller's call m
 gateway registers again by itself, from the same app's home, whenever its modem says another. List
 only channels the gateway listens on. Tuning the radio yourself ends the scan, and the gateway does
 not start it again until it is stopped and started; a call to a partner stops it for the call and
-starts it again after. **Grid** and **Place** help callers choose
+starts it again after. When the scan ends, or Aether drops a channel the radio will not take, the
+gateway registers again with what it still listens on: once the scan has ended, the channel the
+radio stays on alone, with no `scan_s`. When the scan runs again, it registers all its channels
+again. **Grid** and **Place** help callers choose
 a gateway near them; **Hours** says when it answers (`always`, or in words). Click **Register**.
 Your post office lists the gateway for its users and issues it a credential, valid for 90 days.
 While the gateway answers, it renews that credential by itself in its last month, with your

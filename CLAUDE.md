@@ -57,6 +57,20 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   no rules but has a dial judges it itself (`gateway/src/rules.rs`: the dial and 3 kHz above it
   inside an automatic segment; badge `outside`). The Aether adapter asks `status` before
   `frequency.set`, since another program's call is no event of Aether's.
+  The tuner tone and a call's bandwidth (RP-4 1.2.0 §4.3, §1.1; from the 40 m mail of 2026-11-17):
+  `caps.tone` and `tone {seconds}` (0 stops; Aether's `tune {duration_s}`); the Aether adapter's
+  `caps.bandwidths` is `capabilities.bandwidths_hz`, and a call in a bandwidth not running moves
+  the whole station (`status`, `bandwidth.set`, `connect` with `keep_bandwidth`), putting back the
+  `host_hz` it kept when the call or link ends or the host leaves. The panel tunes as the operator
+  picks a channel (`/api/tune`, `session::tune` over a connection with `hello` alone,
+  `Modem::reach`), keys the tone (`/api/tone`), and leaves the radio there after the call
+  (`Options::tune_back` false; the command line's `--dial` still goes back); a station call
+  carries its **Dial, MHz** and **Bandwidth**. A station call a gateway answers (no key 13 or 15 in
+  `WELCOME`) is `Event::NotAStation`, said in plain words, its `ERROR` carrying `NOT_A_STATION`;
+  the gateway's monitor logs a caller's `ERROR`. A gateway whose scan ends asks where the radio
+  stays (`Modem::stay_asked`: RP-4 says the end before the dial) and registers again with only
+  what it listens on (`Store::scan_left`; `record.json` keeps all the operator's channels in
+  `record` and what was sent in `sent`).
   `adapters/aether` (`radiopost-aether`, a member of the core workspace) is RP-4 §9.1: each host
   its own WebSocket to Aether's control API and its callsigns a claim there (Aether's ADR-0106);
   `bridge` is the sans-IO mapping, tested row by row against a stand-in and with `rpmi-lines`.

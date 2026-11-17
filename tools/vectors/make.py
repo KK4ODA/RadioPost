@@ -2169,6 +2169,7 @@ def rpmi_adapter(
     shared: bool,
     dial_hz: int | None = None,
     scans: bool = False,
+    tone: bool = False,
 ) -> rpmi.Adapter:
     caps = {
         "bandwidths": [500, 2300],
@@ -2186,6 +2187,8 @@ def rpmi_adapter(
     if scans:
         caps["scan"] = True  # RP-4 §4.2: it scans the radio over a list of dials
         caps["call_s"] = True  # and keeps a call going as long as asked
+    if tone:
+        caps["tone"] = True  # RP-4 §4.3: it keys a tuner tone
     return rpmi.Adapter(
         world,
         station,
@@ -2340,10 +2343,11 @@ def rpmi_broadcast() -> list[dict[str, Any]]:
 
 def rpmi_dial() -> list[dict[str, Any]]:
     """The dial (RP-4 §1.1, §4.1): read and set, refused while anything is up on the station,
-    heard by every host there; and a modem without one."""
+    heard by every host there; and a modem without one. The tuner tone (§4.3) beside it: keyed
+    while nothing is up, a stop always taken."""
     w = rpmi.World()
-    gateway = rpmi_adapter(w, "N1CALL", "g", shared=True, dial_hz=RPMI_DIAL)
-    client = rpmi_adapter(w, "KK4ODA", "c", shared=False, dial_hz=RPMI_DIAL)
+    gateway = rpmi_adapter(w, "N1CALL", "g", shared=True, dial_hz=RPMI_DIAL, tone=True)
+    client = rpmi_adapter(w, "KK4ODA", "c", shared=False, dial_hz=RPMI_DIAL, tone=True)
     plain = rpmi_adapter(w, "N3CALL", "p", shared=False)
     rpmi_start(gateway, "radiopost", "RadioPost gateway 0.1.0", ["N1CALL-10"], listen=True)
     gateway.open("other")
@@ -2362,12 +2366,20 @@ def rpmi_dial() -> list[dict[str, Any]]:
     w.note("A link is up at both stations: neither dial moves, for this host or another.")
     gateway.request("other", {"op": "tune", "id": 3, "dial_hz": 7_103_000})
     client.request("client", {"op": "tune", "id": 8, "dial_hz": 3_590_000})
+    w.note("Nor does a tuner tone key, though a stop is taken.")
+    gateway.request("other", {"op": "tone", "id": 5, "seconds": 10})
+    gateway.request("other", {"op": "tone", "id": 6, "seconds": 0})
     client.request("client", {"op": "disconnect", "id": 9, "link": link_of(client, "client")})
     w.note("Nothing is up: the other program tunes the gateway station; both its hosts hear it.")
     gateway.request("other", {"op": "tune", "id": 4, "dial_hz": 7_103_000})
+    w.note("The client keys a tuner tone, stops it, and asks for one longer than ten seconds.")
+    client.request("client", {"op": "tone", "id": 10, "seconds": 10})
+    client.request("client", {"op": "tone", "id": 11, "seconds": 0})
+    client.request("client", {"op": "tone", "id": 12, "seconds": 11})
     rpmi_start(plain, "client", "RadioPost client 0.1.0", ["N3CALL"], listen=False)
     plain.request("client", {"op": "dial", "id": 3})
     plain.request("client", {"op": "tune", "id": 4, "dial_hz": 7_101_000})
+    plain.request("client", {"op": "tone", "id": 5, "seconds": 10})
     return w.log
 
 
@@ -2540,12 +2552,18 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "KK4ODA client connect 7": "ok, then connected",
                 "N1CALL other tune 3": "busy",  # another host's link is up on the station
                 "KK4ODA client tune 8": "busy",  # its own link is up
+                "N1CALL other tone 5": "busy",  # a link is up on the station (§4.3)
+                "N1CALL other tone 6": "ok",  # a stop is always taken
                 "KK4ODA client disconnect 9": "ok",
                 "N1CALL other tune 4": "ok",
+                "KK4ODA client tone 10": "ok",
+                "KK4ODA client tone 11": "ok",
+                "KK4ODA client tone 12": "malformed",  # ten seconds at most (§4)
                 "N3CALL client hello 1": "hello",
                 "N3CALL client callsigns 2": "ok",
                 "N3CALL client dial 3": "unsupported",  # no `caps.dial`
                 "N3CALL client tune 4": "unsupported",
+                "N3CALL client tone 5": "unsupported",  # no `caps.tone`
             },
         ),
         (
@@ -2774,6 +2792,8 @@ RPMI_LINES = [
         '{"op": "broadcast", "id": 36, "data": "AQ==", "ref": {}}',
         "a broadcast's ref that is an object",
     ),
+    ('{"op": "tone", "id": 37}', "a tone without its seconds"),
+    ('{"op": "tone", "id": 38, "seconds": 11}', "a tone longer than ten seconds"),
 ]
 
 
@@ -2826,6 +2846,8 @@ def make_rpmi_lines() -> dict[str, Any]:
             "an abort's link that is true": ("error", "malformed", 34),
             "broadcast without data": ("error", "malformed", 35),
             "a broadcast's ref that is an object": ("error", "malformed", 36),
+            "a tone without its seconds": ("error", "malformed", 37),  # §4.3
+            "a tone longer than ten seconds": ("error", "malformed", 38),
         },
         lambda c: (c["answers"][0]["op"], c["answers"][0].get("code"), c["answers"][0].get("id")),
     )

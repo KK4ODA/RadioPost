@@ -53,6 +53,7 @@ fn air_dialled(dial_hz: Option<u64>) -> (Server, SocketAddr, SocketAddr, SocketA
         dial: false,
         scan: false,
         call_s: false,
+        tone: false,
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),

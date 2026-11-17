@@ -434,6 +434,60 @@ fn session_02_broken_and_resumed() {
     assert_eq!(c.progress().received_bytes(), (rest, rest));
 }
 
+/// RP-3 §5.2, §10: a call for station-to-station mail that a gateway answers (here session-01's
+/// gateway, whose `ready` WELCOME carries no credential, as every gateway's) is ended as for any
+/// station that does not prove itself, and the client says why: a gateway answered. The `ERROR` it
+/// sends tells the gateway's operator the same.
+#[test]
+fn a_station_call_a_gateway_answers_is_ended_and_said() {
+    let w = world();
+    let file = vectors("session-01.json");
+    let sent = turns(&file);
+    let cfg = ClientConfig {
+        credential: w.credentials["facundo"].clone(),
+        device: w.device("device:facundo"),
+        called: "N1CALL-10".into(),
+        time: file["context"]["client_clock"].as_u64().expect("clock"),
+        nonce: nonce_of(&sent[0]),
+        outbox: vec![w.out("facundo-reply")],
+        cursor: 0,
+        auto: AUTO,
+        partials: vec![],
+        caps: client_caps(),
+        credential_cached: true,
+        piece: 4096,
+        station: Some(w.trust.clone()),
+    };
+    let mut client =
+        Client::new(cfg, radiopost::session::client::by_serials(vec![])).expect("a client");
+    client.hello();
+    let events = client.receive(&sent[1].bytes);
+    assert_eq!(
+        events,
+        [
+            Event::NotAStation,
+            Event::Refused(ErrorCode::NotAuthorized),
+            Event::End
+        ],
+        "nothing taken, nothing sent"
+    );
+    assert!(client.is_over());
+    let error = client.transmit().expect("the ERROR");
+    let pdu = radiopost::pdu::unframe(&error).expect("one PDU");
+    assert_eq!(
+        pdu.get(0).and_then(Value::as_u64),
+        Some(radiopost::pdu::kind::ERROR)
+    );
+    assert_eq!(
+        pdu.get(1).and_then(Value::as_u64),
+        Some(u64::from(ErrorCode::NotAuthorized.code()))
+    );
+    assert_eq!(
+        pdu.get(2).and_then(Value::as_text),
+        Some(radiopost::session::client::NOT_A_STATION)
+    );
+}
+
 fn station_caller(w: &World, file: &Json) -> Client {
     station_caller_to(w, file, "N0CALL")
 }

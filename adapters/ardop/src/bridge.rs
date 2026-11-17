@@ -298,6 +298,10 @@ impl Bridge {
                 let text = "ARDOP's host commands have no dial";
                 out.push(Out::Host(error(rid_ref, "unsupported", text)));
             }
+            Request::Tone(_) => {
+                let text = "ARDOP's host commands have no tuner tone";
+                out.push(Out::Host(error(rid_ref, "unsupported", text)));
+            }
             Request::Status => out.push(Out::Host(self.status(rid_ref))),
         }
         self.advance_call(&mut out);
@@ -319,6 +323,7 @@ impl Bridge {
             dial: false,
             scan: false,
             call_s: false,
+            tone: false,
         };
         out.push(Out::Host(answer_with(
             "hello",

@@ -585,52 +585,22 @@ impl Panel {
             (Method::Post, "/api/key" | "/api/credential" | "/api/trust") => {
                 self.identity(path, body)
             }
-            (Method::Post, "/api/call") => {
-                let callsign = text("callsign").to_ascii_uppercase();
-                if callsign.is_empty() {
-                    return Err("whom to call".into());
-                }
-                let kind = if body["station"].as_bool().unwrap_or(true) {
-                    Kind::Station
-                } else {
-                    Kind::Gateway
-                };
-                let fetch = match &body["fetch"] {
-                    Value::Null => Fetch::All,
-                    Value::String(f) if f == "all" => Fetch::All,
-                    Value::String(f) if f == "none" => Fetch::Nothing,
-                    Value::Number(n) => Fetch::UpTo(n.as_u64().ok_or("fetch: a size in bytes")?),
-                    _ => return Err("fetch: all, none or a size in bytes".into()),
-                };
-                // a gateway's channel, chosen from its record (W14): the radio goes there
-                let dial = match &body["dial_hz"] {
-                    Value::Null => None,
-                    v => Some(
-                        v.as_u64()
-                            .filter(|&d| d > 0)
-                            .ok_or("dial_hz: hertz above 0")?,
-                    ),
-                };
-                // on a channel a gateway scans, how long the call must keep trying (RP-5 §4.4)
-                let call_s = match &body["call_s"] {
-                    Value::Null => None,
-                    v => Some(v.as_u64().ok_or("call_s: seconds, 0 or above")?),
-                };
-                self.run(
-                    Some(callsign),
-                    kind,
-                    &text("adapter"),
-                    fetch,
-                    (dial, call_s),
-                )
-            }
+            (Method::Post, "/api/call") => self.call(body),
             (Method::Post, "/api/listen") => self.run(
                 None,
                 Kind::Station,
                 &text("adapter"),
                 Fetch::All,
-                (None, None),
+                (None, None, None),
             ),
+            (Method::Post, "/api/tune") => {
+                let dial = dial_of(&body["dial_hz"])?.ok_or("dial_hz: which dial")?;
+                self.tune(&text("adapter"), dial)
+            }
+            (Method::Post, "/api/tone") => {
+                let on = body["on"].as_bool().ok_or("on: true or false")?;
+                self.tone(&text("adapter"), on)
+            }
             (Method::Post, "/api/modem") => {
                 // the page's Modem box, when it loads and when it changes: the app's connection
                 // between calls follows it (only to Aether)
@@ -655,6 +625,52 @@ impl Panel {
             }
             _ => Err(format!("no {method} {path}")),
         }
+    }
+
+    /// A call from the page: whom, a gateway or a station, what to fetch, and the channel, how
+    /// long its tries must last and the bandwidth.
+    fn call(&self, body: &Value) -> Result<Value, Error> {
+        let text = |name: &str| body[name].as_str().unwrap_or("").trim().to_owned();
+        let callsign = text("callsign").to_ascii_uppercase();
+        if callsign.is_empty() {
+            return Err("whom to call".into());
+        }
+        let kind = if body["station"].as_bool().unwrap_or(true) {
+            Kind::Station
+        } else {
+            Kind::Gateway
+        };
+        let fetch = match &body["fetch"] {
+            Value::Null => Fetch::All,
+            Value::String(f) if f == "all" => Fetch::All,
+            Value::String(f) if f == "none" => Fetch::Nothing,
+            Value::Number(n) => Fetch::UpTo(n.as_u64().ok_or("fetch: a size in bytes")?),
+            _ => return Err("fetch: all, none or a size in bytes".into()),
+        };
+        // a gateway's channel, chosen from its record, or a station call's dial (W14): the
+        // radio goes there if it is not there already
+        let dial = dial_of(&body["dial_hz"])?;
+        // on a channel a gateway scans, how long the call must keep trying (RP-5 §4.4)
+        let call_s = match &body["call_s"] {
+            Value::Null => None,
+            v => Some(v.as_u64().ok_or("call_s: seconds, 0 or above")?),
+        };
+        // a station call's bandwidth, as the two operators agreed (RP-4 §4 `bandwidth`)
+        let bandwidth = match &body["bandwidth"] {
+            Value::Null => None,
+            v => Some(
+                v.as_i64()
+                    .filter(|b| [500, 2300].contains(b))
+                    .ok_or("bandwidth: 500 or 2300 Hz")?,
+            ),
+        };
+        self.run(
+            Some(callsign),
+            kind,
+            &text("adapter"),
+            fetch,
+            (dial, call_s, bandwidth),
+        )
     }
 
     /// Setup's device key (made once), a credential imported by hand, and a post office trusted:
@@ -1259,13 +1275,60 @@ impl Panel {
         }))
     }
 
+    /// The modem as the page names it, for a request outside a session: settings with the
+    /// program's own clock, and the app's connection between calls following it.
+    fn modem_options(&self, adapter: &str) -> Options {
+        let adapter = modem_or_default(adapter);
+        self.presence.set_modem(&adapter);
+        Options::new(&adapter)
+    }
+
+    /// Says `line` in the panel's log, as a session's lines are.
+    fn note(&self, line: &str) {
+        lock(&self.activity).log.push(line.to_owned());
+    }
+
+    /// The operator picked a channel (W14): the radio is tuned there now, between sessions, so
+    /// that it and the antenna tuner are set before the call (RP-4 §4.1). What the page shows:
+    /// where the radio is (`there`, `moved`, or `by_hand` when the modem cannot set its dial), the
+    /// line said, and whether the modem keys a tuner tone.
+    fn tune(&self, adapter: &str, dial_hz: u64) -> Result<Value, Error> {
+        self.busy()?;
+        let opts = self.modem_options(adapter);
+        let store = Store::open(&self.home())?;
+        let result = session::tune(&store, &opts, dial_hz, &mut |line| self.note(line));
+        let picked = result.inspect_err(|why| self.note(why))?;
+        let tuned = match picked.tuned {
+            session::Tuned::There => "there",
+            session::Tuned::Moved(_) => "moved",
+            session::Tuned::ByHand => "by_hand",
+        };
+        Ok(
+            json!({"tuned": tuned, "dial_hz": dial_hz, "said": picked.said,
+                  "tone": picked.tone}),
+        )
+    }
+
+    /// The tuner tone (RP-4 §4.3): on for ten seconds, or off.
+    fn tone(&self, adapter: &str, on: bool) -> Result<Value, Error> {
+        if on {
+            self.busy()?;
+        }
+        let opts = self.modem_options(adapter);
+        let store = Store::open(&self.home())?;
+        let seconds = if on { rpmi::wire::TONE_MAX_S } else { 0 };
+        session::tone(&store, &opts, seconds, &mut |line| self.note(line))
+            .inspect_err(|why| self.note(&format!("tuner tone: {why}")))?;
+        Ok(json!({"on": on, "seconds": seconds}))
+    }
+
     fn run(
         &self,
         remote: Option<String>,
         kind: Kind,
         adapter: &str,
         fetch: Fetch,
-        (dial_hz, call_s): (Option<u64>, Option<u64>),
+        (dial_hz, call_s, bandwidth): (Option<u64>, Option<u64>, Option<i64>),
     ) -> Result<Value, Error> {
         {
             let mut a = lock(&self.activity);
@@ -1290,7 +1353,10 @@ impl Panel {
         opts.stop = Some(Arc::clone(&self.stop));
         opts.fetch = fetch;
         opts.dial_hz = dial_hz;
+        // the channel was tuned when the operator picked it: the radio stays where it was put
+        opts.tune_back = false;
         opts.call_s = call_s;
+        opts.bandwidth = bandwidth;
         *self.live.lock().unwrap_or_else(PoisonError::into_inner) = session::Live::default();
         opts.live = Some(Arc::clone(&self.live));
         // listening answers calls to every callsign of this client (W46)
@@ -1329,6 +1395,18 @@ impl Panel {
             a.state = "idle";
         });
         Ok(json!({}))
+    }
+}
+
+/// A dial from the page, in hertz above 0; `null` for none.
+fn dial_of(v: &Value) -> Result<Option<u64>, Error> {
+    match v {
+        Value::Null => Ok(None),
+        v => v
+            .as_u64()
+            .filter(|&d| d > 0)
+            .map(Some)
+            .ok_or_else(|| "dial_hz: hertz above 0".into()),
     }
 }
 

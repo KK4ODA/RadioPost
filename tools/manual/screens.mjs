@@ -243,6 +243,17 @@ function clientApi(world) {
       case "addresses": return {entries: ADDRESSES};
       case "forms": return FORMS;
       case "modem": return {};
+      // a channel picked is tuned at once (W14): moved there, or, for a radio Aether keys with no
+      // CAT, the dial to set by hand
+      case "tune": {
+        const mhz = (body.dial_hz / 1e6).toFixed(4).replace(/0$/, "");
+        return world.byHand
+          ? {tuned: "by_hand", dial_hz: body.dial_hz, tone: true,
+             said: `set the radio's dial to ${mhz} MHz (USB) yourself: the modem cannot set it`}
+          : {tuned: "moved", dial_hz: body.dial_hz, tone: true,
+             said: `tuned the radio to ${mhz} MHz`};
+      }
+      case "tone": return {on: body.on, seconds: body.on ? 10 : 0};
       case "backups": return {on: true, computer: "shack-pc", folder: "D:\\RadioPost backups",
         key: "k1", key_file: "C:\\Users\\you\\.radiopost\\backup.key",
         fetched: {at: T - 9 * DAY, name: "radiopost.org-2026-11-05.rpbackup", bytes: 40100000,
@@ -436,7 +447,7 @@ const GATEWAY_UI = join(ROOT, "app", "gateway", "ui");
 
 function clientWorld(over = {}) {
   return {state: clientState(over.state || {}), log: over.log || CLIENT_LOG,
-          operator: over.operator || false};
+          operator: over.operator || false, byHand: over.byHand || false};
 }
 
 // the desk on one tab, as KK4ODA, an operator of radiopost.org
@@ -522,6 +533,40 @@ const SHOTS = {
                       ["[data-folder=inbox]", "4"], [".station h2", "5"],
                       ["#list-view h1", "6"], ["#setup-open", "7"], ["#log", "8", "inside"]]);
     await shot(page, "client-window");
+    await context.close();
+  },
+
+  // the call box with KK4ODA-1 chosen: its first channel tuned at once, the tuner tone, Call
+  async "client-call"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+                                                 height: 1100});
+    await spreadLog(page, "log", T - 1300, 19);
+    await page.click("#gateways-open");
+    await page.waitForTimeout(200);
+    await page.locator("#gateway-rows tr", {hasText: "KK4ODA-1"})
+      .getByRole("button", {name: "Choose"}).click();
+    await page.click("button[data-folder=inbox]");
+    await page.waitForTimeout(300);
+    await page.evaluate(() => { document.getElementById("toast").hidden = true; });
+    await shot(page, "client-call", ".station");
+    await context.close();
+  },
+
+  // a station call: its dial and bandwidth, on a radio whose dial the modem cannot set
+  async "client-call-station"(browser) {
+    const world = clientWorld({byHand: true});
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(world),
+                                                 height: 900});
+    await spreadLog(page, "log", T - 1300, 19);
+    await page.check("input[name=kind][value=station]");
+    await page.fill("#callsign", "N0CALL");
+    await page.fill("#dial", "7.103");
+    await page.selectOption("#bandwidth", "500");
+    await page.locator("#dial").dispatchEvent("change");
+    await page.locator("#dial").blur();
+    await page.waitForTimeout(300);
+    await page.evaluate(() => { document.getElementById("toast").hidden = true; });
+    await shot(page, "client-call-station", ".station");
     await context.close();
   },
 

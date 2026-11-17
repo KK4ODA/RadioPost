@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.8.0 |
+| **Version** | 1.9.0 |
 | **Updated** | 2026-11-17 |
 | **Describes** | RadioPost 0.1.0-beta.25 |
 | **Licence** | CC BY 4.0 |
@@ -355,9 +355,9 @@ again with a new code**.
    - **Waiting**: what waited at your post office at your last call to a gateway.
    - **Trash**: messages you deleted.
    - **Addresses**: your address list.
-5. **Station**: whom to call, and the **Call** and **Listen** buttons. **Modem** is where
-   RadioPost finds Aether, `ws://127.0.0.1:8515/v1`. Change it only if Aether's control port is
-   not the usual one.
+5. **Station**: whom to call, on which channel, and the **Call** and **Listen** buttons. **Call**
+   is the green one: it puts the station on the air. **Modem** is where RadioPost finds Aether,
+   `ws://127.0.0.1:8515/v1`. Change it only if Aether's control port is not the usual one.
 6. **The folder or message you are looking at.** Click a row to read it.
 7. **Setup**: your account, post office, accept list, usual gateways and keys.
 8. **The log**: what RadioPost did, line by line, with the time.
@@ -435,7 +435,8 @@ A call to a gateway sends your outbox and fetches what waits for you, in one ses
 4. Each gateway shows its **Channels** (dial frequency, upper sideband, and the bandwidth Aether
    uses there) and its **Hours**. A channel marked *scanned* is one of several the gateway listens
    on in turn with one radio. Click **Choose** beside the one you want. Its callsign goes in
-   **Call**, and its channels in **Channel**.
+   **Call**, its channels in **Channel**, and the radio is tuned to the first channel at once
+   ([8.2](#82-tune-and-call)).
 
 ![The Gateways page: three gateways with their place, distance, channels and hours](screens/client-gateways.png)
 
@@ -443,21 +444,34 @@ A call to a gateway sends your outbox and fetches what waits for you, in one ses
 
 ### 8.2 Tune and call
 
-1. Pick the **Channel** to call on. When Aether can set the radio's dial (it reaches the radio
-   over CAT, rigctld or FLRig), **Call** tunes the radio there first and back after the session.
-   Otherwise the log says *tune the radio to … MHz*: tune it in Aether yourself, on its
-   [Radio dial](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#radio-dial).
+1. Pick the **Channel** to call on. RadioPost tunes the radio there at once, before you call, so
+   you can set the radio and the antenna tuner for it. The line under it says what happened:
+   - *✓ Tuned the radio to 7.101 MHz.* Aether set the radio's dial (it reaches the radio over
+     CAT, rigctld or FLRig).
+   - *Set the radio's dial to 7.101 MHz (USB) yourself: the modem cannot set it.* Aether keys
+     this radio without CAT, so it cannot set the dial. Turn the radio to that dial yourself.
+     Aether's own manual says how to let it set the dial: CAT keying in its
+     [Setup step 2](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-2-radio-interface).
+
    Set Aether's **Bandwidth** to the one listed there (500 or 2300 Hz) in its
    [Setup step 4](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-4-modem-settings).
-2. Listen for a moment. Do not call over another station.
-3. In RadioPost, set **Fetch**:
+2. If your antenna needs a tuner for this channel, click **Tuner tone**. Aether keys ten seconds of
+   steady carrier at its transmit level. Set the tuner while it sounds. Click **Stop tone** to stop
+   it sooner. Aether keys no tone while it hears the channel in use.
+3. Listen for a moment. Do not call over another station.
+4. In RadioPost, set **Fetch**:
    - **Everything waiting**: all your mail comes.
    - **Up to 10 kB each** or **Up to 50 kB each**: only messages up to that size come. The rest
      wait for a later call.
    - **Only the list of what waits**: nothing comes but the list. Use it on a weak path.
 
    Messages of 1,000 bytes or less come anyway, whatever **Fetch** says.
-4. Click **Call**.
+5. Click **Call**. If the radio is not on the channel any more, RadioPost tunes it there first.
+   After the session the radio stays on the channel: you chose it.
+
+![The Station box with KK4ODA-1 chosen: its channel, the radio tuned, Tuner tone and the green Call](screens/client-call.png)
+
+*Figure 13. The radio tuned to the channel picked.*
 
 On a *scanned* channel the gateway may be on another channel when you call. RadioPost asks Aether
 to keep calling as long as the gateway's record says it takes to come round, often a minute or
@@ -477,7 +491,7 @@ A message counts as sent once Aether has put it on the air, not when RadioPost h
 
 ![The window during a session: 49% carried, with the transfer card at the bottom right](screens/client-session.png)
 
-*Figure 13. A session under way.*
+*Figure 14. A session under way.*
 
 The log says what happens: the call, each message delivered or received, what waits, and the end.
 A few short messages take a minute or two at 2300 Hz on a fair path, longer on a weak one. Your
@@ -492,7 +506,7 @@ Click a message in the **Inbox** to read it.
 
 ![A message open in the reader, with an attachment held at the post office](screens/client-reader.png)
 
-*Figure 14. Reading a message.*
+*Figure 15. Reading a message.*
 
 - **Reply** answers the sender. The other end's mail program keeps the thread. RadioPost does not
   quote the message you answer, because every byte goes on the air: it shows the original under
@@ -516,7 +530,7 @@ kept for you has no tick box: it comes with what you fetch.
 
 ![The Waiting folder with three messages and one ticked to fetch](screens/client-waiting.png)
 
-*Figure 15. Choosing what to fetch next.*
+*Figure 16. Choosing what to fetch next.*
 
 ## 10. Station to station
 
@@ -526,25 +540,44 @@ credential.
 
 ![Station A calls, station B listens, mail crosses both ways, and each post office is told later](fig/direct.svg)
 
-*Figure 16. Station to station.*
+*Figure 17. Station to station.*
 
-Agree on a frequency and a bandwidth first. Both stations tune Aether to them.
+Agree on a frequency and a bandwidth first.
 
 **The station that answers:**
 
-1. Click **Listen**. The state reads *Listening*. RadioPost answers one call, to the callsign at
+1. Tune the radio to the frequency, and set Aether's bandwidth. At 2300 Hz Aether also answers a
+   call at 500 Hz.
+2. Click **Listen**. The state reads *Listening*. RadioPost answers one call, to the callsign at
    the top of the window or to any other of yours.
-2. To stop waiting, click **Stop**.
+3. To stop waiting, click **Stop**.
 
 **The station that calls:**
 
 1. Under **Station**, choose **Another client's station**.
 2. In **Call**, type the other station's callsign.
-3. Click **Call**.
+3. In **Dial, MHz**, type the frequency you agreed, such as `7.103`. RadioPost tunes the radio
+   there at once, or says which dial to set yourself, as in [8.2](#82-tune-and-call).
+   **Tuner tone** keys ten seconds of carrier for your antenna tuner.
+4. Choose the **Bandwidth** you agreed: **2300 Hz** or **500 Hz**. For the call, Aether moves the
+   whole station to it, and back after.
+5. Click **Call**.
+
+![The Station box for a station call: the callsign, the dial and the bandwidth, and the dial to set by hand](screens/client-call-station.png)
+
+*Figure 18. A station call on a radio whose dial Aether cannot set.*
 
 Mail addressed to the other station's address crosses. Each side keeps a record of the session.
 When you next have the Internet, a line under the Station box says how many sessions wait to be
 reported: click **Send reports**. Your post office then marks your sent mail as delivered.
+
+**A station that also runs a gateway.** RadioPost Gateway holds the gateway's own callsign, such
+as `KK4ODA-1`. A station call to that callsign reaches the gateway, not its operator, and
+RadioPost hangs up and says *KK4ODA-1 is a gateway: for P2P, call the other operator's own
+callsign while their client listens*. To work that operator station to station, call their own
+callsign (`KK4ODA`). Their RadioPost client must be listening (**Listen**) under it, beside the
+gateway on the same Aether. The gateway need not close: Aether serves both programs, each for its
+own callsigns.
 
 ## 11. Working several callsigns
 
@@ -553,7 +586,7 @@ its own account, its own address and its own mail.
 
 ![One computer with three callsigns, each its own account, and a shared key, address list and log](fig/callsigns.svg)
 
-*Figure 17. Several callsigns on one computer.*
+*Figure 19. Several callsigns on one computer.*
 
 ### 11.1 Add a callsign
 
@@ -615,7 +648,7 @@ Click **Setup** at the bottom of the left-hand column.
 
 ![The Setup page: enrollment, post office, accept list and usual gateways](screens/client-setup.png)
 
-*Figure 18. Setup.*
+*Figure 20. Setup.*
 
 ### Enroll with your post office
 
@@ -703,7 +736,7 @@ RadioPost keeps working when the Internet fails at a gateway.
 
 ![Before: the post office copies your mail to your usual gateway. During: the gateway serves the copies and keeps what you send. After: it reports](fig/cutoff.svg)
 
-*Figure 19. When the Internet is down.*
+*Figure 21. When the Internet is down.*
 
 **Before.** Name your usual gateways in Setup ([section 12](#usual-gateways)). Your post office
 then copies each new message for you to them as it arrives.
@@ -746,7 +779,7 @@ licensed operator can run one.
 
 ![Two users call the gateway by radio; the gateway's computer runs RadioPost Gateway and Aether HF and reaches each caller's post office](fig/gateway.svg)
 
-*Figure 20. A gateway station.*
+*Figure 22. A gateway station.*
 
 A gateway is usually left answering with nobody at the radio. It is then under **automatic
 control**, and the rules for that apply ([The rules](#36-the-rules)).
@@ -781,13 +814,13 @@ Open RadioPost Gateway. Until it is set up and registered, it says what is missi
 
 ![A new RadioPost Gateway: the notice says it is not set up, with Set up the gateway](screens/gateway-first.png)
 
-*Figure 21. RadioPost Gateway before setup.*
+*Figure 23. RadioPost Gateway before setup.*
 
 Click **Set up the gateway**. Setup has three steps.
 
 ![The gateway's Setup page: the gateway, its registration with two channels, and post offices](screens/gateway-setup.png)
 
-*Figure 22. Setting up the gateway.*
+*Figure 24. Setting up the gateway.*
 
 ### Step 1. The gateway
 
@@ -861,7 +894,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 ![The RadioPost Gateway window with numbered marks on its parts](screens/gateway-window.png)
 
-*Figure 23. The RadioPost Gateway window.*
+*Figure 25. The RadioPost Gateway window.*
 
 1. **The gateway's callsign**, and the account it is registered under.
 2. **What it is doing** (the table below).
@@ -894,7 +927,7 @@ While a session runs, a box shows who called, the account, since when, and the m
 
 ![The window during a session, with the Session under way box](screens/gateway-session.png)
 
-*Figure 24. A session at the gateway.*
+*Figure 26. A session at the gateway.*
 
 **Stopping and closing.** **Stop** ends a session under way and lets Aether go. Closing the
 window stops the gateway too. If it is answering, it asks first and says what closing stops.
@@ -918,10 +951,17 @@ answering as before.
 ### When a scan stops
 
 If you tune the radio yourself, in Aether, at the radio or with **Stop** on Aether's scan line, the
-scan stops and the radio stays where you put it. The gateway says so in its log and on **Modem**,
-and does not start the scan again by itself: you moved the radio for a reason. Click **Stop** and
+scan stops and the radio stays where you put it. Aether also ends a scan when fewer than two of its
+channels are left that the radio will take. The gateway says so in its log and on **Modem**, and
+does not start the scan again by itself: you moved the radio for a reason. Click **Stop** and
 **Start** to scan again. A call to a partner ([section 22](#22-partners-forwarding-by-radio))
 stops the scan for the call and starts it again after.
+
+When a scan ends, the gateway registers again with the one channel the radio stays on, so your
+post office stops offering callers the others and a call that waits for a scan. Its log says
+*listening on 7.101 MHz only, until the scan runs again*, then *registered again*. When the scan
+runs again, it registers all its channels again. If the radio is on none of them, the log asks
+you to register the gateway with the channel it listens on.
 
 ## 20. Refusing a caller
 
@@ -965,7 +1005,7 @@ text), each session waiting to be reported with its last try, and the last repor
 
 ![The Partners, Callers refused and Copies placed ahead panels, opened](screens/gateway-held.png)
 
-*Figure 25. What the gateway holds, its partners and the callers it refuses.*
+*Figure 27. What the gateway holds, its partners and the callers it refuses.*
 
 ## 22. Partners: forwarding by radio
 
@@ -1096,7 +1136,7 @@ on this tab.
 
 ![The Applications tab: one application waiting with its licence check, and the Decided list](screens/desk-applications.png)
 
-*Figure 26. Applications.*
+*Figure 28. Applications.*
 
 Each application shows the person's name, callsign and when they asked, the **Address** they
 want, their **Email now**, and what the post office found of the callsign:
@@ -1134,7 +1174,7 @@ the mailbox was made (*mailbox*, or *no mailbox* in red) and the applicant email
 
 ![The Accounts tab: five accounts with their names, devices and mail waiting](screens/desk-accounts.png)
 
-*Figure 27. Accounts.*
+*Figure 29. Accounts.*
 
 Every account, one a row:
 
@@ -1161,7 +1201,7 @@ that exists. Use it for someone you know holds the callsign.
 
 ![The New code tab: an address, a callsign and a name filled in, the licence checked, and the code made](screens/desk-code.png)
 
-*Figure 28. Making a code.*
+*Figure 30. Making a code.*
 
 1. Open **New code**.
 2. Fill in:
@@ -1205,7 +1245,7 @@ Know only post offices whose operators you trust to check callsigns. At first no
 
 ![The Post offices tab: one post office known, one seen, none blocked](screens/desk-others.png)
 
-*Figure 29. Other post offices.*
+*Figure 31. Other post offices.*
 
 - **Known**: the post offices you know, who runs each, when its records were last fetched, and
   whether DNSSEC signed them. They are fetched again every six hours. **Forget** stops knowing one;
@@ -1226,7 +1266,7 @@ when a check turns red, and again when all pass.
 
 ![The Health tab: eleven checks passed and one amber line about backups](screens/desk-health.png)
 
-*Figure 30. Health.*
+*Figure 32. Health.*
 
 Each line is one check:
 
@@ -1253,7 +1293,7 @@ The **Server** tab lets you look after the server without logging in to it.
 
 ![The Server tab: the jobs, one with its output open, and When you need more](screens/desk-server.png)
 
-*Figure 31. Jobs and a terminal.*
+*Figure 33. Jobs and a terminal.*
 
 **Jobs** are a fixed list of tasks the server's administrator account runs for you:
 
@@ -1288,7 +1328,7 @@ says the one command to run on the server, once.
 
 ![The Backups and DKIM keys boxes on the Server tab](screens/desk-backups.png)
 
-*Figure 32. Backups and DKIM keys.*
+*Figure 34. Backups and DKIM keys.*
 
 ### Backups
 
@@ -1345,7 +1385,7 @@ when they are older than 180 days.
 
 ![The Settings tab: applications, licence lookups, mailboxes and this post office](screens/desk-settings.png)
 
-*Figure 33. Settings.*
+*Figure 35. Settings.*
 
 ### Applications
 
@@ -1397,8 +1437,8 @@ RadioPost is the mail program. Aether HF is the modem. Each is set up in its own
 | Your account, your mail, whom to call | RadioPost | This manual |
 | Sound card, keying, drive level | Aether | [Setup, step 2](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-2-radio-interface) |
 | Your licence class, control and band rules | Aether | [Setup, step 1](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-1-callsign-and-rules) |
-| Bandwidth (500 or 2300 Hz) | Aether | [Setup, step 4](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-4-modem-settings) |
-| The frequency | Aether | [Radio dial](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#radio-dial) |
+| Bandwidth (500 or 2300 Hz) | Aether; RadioPost's **Bandwidth** for a station call | [Setup, step 4](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-4-modem-settings) |
+| The frequency | RadioPost's **Channel** or **Dial, MHz**, which tune Aether when it can set the dial; otherwise Aether or the radio | [Radio dial](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#radio-dial) |
 | Recording a session's audio | Aether | [Recording](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#recording-the-radios-audio) |
 | Sending your logs to the project | Aether | [Send files](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#sending-files) |
 
@@ -1452,6 +1492,10 @@ These notes follow the US rules (Part 97). Check your own country's.
 | A message tagged *queued at …* | A gateway took it while cut off. It is offered again until a gateway that reaches the Internet confirms it. |
 | A message tagged *may have been dropped* | Queued for 30 days with no word. It is still offered on each call. |
 | *the other station sent ERROR …* | The other station refused something. The text says what. |
+| *Set the radio's dial to … MHz (USB) yourself: the modem cannot set it* | Aether keys this radio without CAT and cannot set its dial. Turn the radio to that dial. To let Aether set it, key the radio by CAT in Aether's Setup, step 2. |
+| *Not tuned: … busy …* | A session is up on the station, yours or another program's. Pick the channel again when it has ended. |
+| **Tuner tone** refused | Aether keys no tone while the channel is in use, or while its rules forbid it there. Wait, or check the dial. |
+| *… is a gateway: for P2P, call the other operator's own callsign while their client listens* | You called a gateway's callsign as **Another client's station**. Call its operator's own callsign, and ask them to click **Listen** ([section 10](#10-station-to-station)). |
 | An application refused | See [section 5.3](#53-if-the-post-office-refuses). |
 
 ### The gateway
@@ -1465,6 +1509,8 @@ These notes follow the US rules (Part 97). Check your own country's.
 | *This modem neither checks the band rules nor says where the radio's dial is* | Aether's rules are off, as they are when a host program keys the radio, and it cannot read the dial. Set Aether's keying and rules (its Setup, steps 1 and 2). |
 | *The radio is at … MHz: … outside the segments*, badge **Not answering here** | Aether's rules are off, so the gateway judges the dial itself. Turn the radio to the gateway's channel. |
 | *could not tune the radio back* | The radio stayed on the partner's or gateway's channel after a call. Tune it back in Aether. |
+| *listening on … MHz only, until the scan runs again* | The scan ended ([When a scan stops](#when-a-scan-stops)); the gateway registered again with that channel alone. Click **Stop** and **Start** to scan again. |
+| *… sent ERROR not-authorized: called for station-to-station mail, and a gateway answered* | A RadioPost client called the gateway's callsign for station-to-station mail. Nothing to do. To work you station to station, it calls your own callsign while your client listens. |
 | A post office *not found* | Its records are not published: name it in Setup, step 3. |
 | A post office *refused the gateway* | The credential ran out or was revoked: register again (Setup, step 2). |
 | A session ended *nothing heard for 300 seconds* | The path faded or the caller left. The caller's mail resumes on its next call. |
@@ -1510,7 +1556,7 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 | Aether HF | The open-source HF modem RadioPost uses. It has its own program and manual. |
 | Automatic control | Operating with nobody at the radio, as a gateway left answering does. |
 | Bandwidth | How wide Aether's signal is: 500 or 2300 Hz. Both stations of a session use the same. |
-| Channel | A gateway's dial frequency, with the bandwidth it uses there. |
+| Channel | A gateway's dial frequency, with the bandwidth it uses there. Picking one tunes the radio. |
 | Client | RadioPost, the program you send and read mail with. |
 | Credential | A signed file that proves your address and callsign belong together. Lasts 90 days and renews itself. |
 | Cut off | A gateway that cannot reach the Internet. It goes on answering. |
@@ -1530,7 +1576,8 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 | Queued | Sent through a cut-off gateway and not yet confirmed by your post office. |
 | Role mailbox | An account several licensed operators share, such as a club's. |
 | Session | One radio contact between two stations. |
-| Station to station | Mail sent directly between two RadioPost stations, with no gateway. |
+| Station to station | Mail sent directly between two RadioPost stations, with no gateway. Also called P2P. |
+| Tuner tone | Ten seconds of steady carrier, for setting an antenna tuner on the channel picked. |
 | Usual gateway | A gateway you named in Setup, which gets copies of your mail ahead of time. |
 | Waiting | What waited at your post office at your last call to a gateway. |
 
@@ -1540,16 +1587,18 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 
 1. **Write**, fill in **To**, **Subject** and **Text**, **Put in outbox**.
 2. **Choose a gateway**, **Choose** one.
-3. Pick its **Channel**; **Call** tunes Aether there if it can. Set Aether's bandwidth.
+3. Pick its **Channel**: the radio is tuned there at once if Aether can. **Tuner tone** if needed.
+   Set Aether's bandwidth.
 4. Set **Fetch**. Listen that the frequency is clear.
 5. **Call**. Watch the card at the bottom right.
 6. Read your new mail in the **Inbox**.
 
 **Station to station**
 
-1. Agree on a frequency and bandwidth. Both tune Aether.
-2. One clicks **Listen**.
-3. The other chooses **Another client's station**, types the callsign, **Call**.
+1. Agree on a frequency and bandwidth. The one who answers tunes to them and clicks **Listen**.
+2. The other chooses **Another client's station**, types the callsign, the **Dial, MHz** and the
+   **Bandwidth**, then **Call**.
+3. With a station that runs a gateway, call its operator's own callsign, not the gateway's.
 4. Later, with the Internet: **Send reports**.
 
 **Add a callsign**
@@ -1627,3 +1676,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.6.0 | 2026-11-15 | §18: **More modems**, and *More than one modem*: a gateway answering on several modems, one session at a time. §18 step 2: each channel's **Modem**. §19: **Modem** names them all. |
 | 1.7.0 | 2026-11-15 | §7: **Form**, and sending an ICS-213 as its values alone; a form message reads as the form. |
 | 1.8.0 | 2026-11-17 | Gateways that scan (W50): §8 a *scanned* channel and the call that keeps trying; §18 **Scan these channels**, and listing only channels the gateway listens on; §19 the scan on **Modem** and *When a scan stops*; §23 `scan`. |
+| 1.9.0 | 2026-11-17 | From the 40 m RadioPost mail of 2026-11-17. §6, §8: **Call** is green; a channel is tuned as it is picked, the line under it says where the radio is or which dial to set by hand, **Tuner tone**, and the radio stays on the channel after the call (new Figure 13). §10: a station call's **Dial, MHz** and **Bandwidth** (new Figure 18), and P2P with a station that also runs a gateway. §19: a gateway whose scan ends registers again with the channel it stays on. §35, §37, §39, §40 to match. |

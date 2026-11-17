@@ -2231,7 +2231,8 @@
               "regulatory": false,
               "max_queue": 65536,
               "shared": true,
-              "dial": true
+              "dial": true,
+              "tone": true
             }
           }
         },
@@ -2316,7 +2317,8 @@
               "regulatory": false,
               "max_queue": 65536,
               "shared": true,
-              "dial": true
+              "dial": true,
+              "tone": true
             }
           }
         },
@@ -2382,7 +2384,8 @@
               "regulatory": false,
               "max_queue": 65536,
               "shared": false,
-              "dial": true
+              "dial": true,
+              "tone": true
             }
           }
         },
@@ -2615,6 +2618,49 @@
           }
         },
         {
+          "note": "Nor does a tuner tone key, though a stop is taken."
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "tone",
+            "id": 5,
+            "seconds": 10
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 5,
+            "code": "busy",
+            "text": "a link or a call is up on the station"
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "adapter",
+          "message": {
+            "op": "tone",
+            "id": 6,
+            "seconds": 0
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 6
+          }
+        },
+        {
           "station": "KK4ODA",
           "host": "client",
           "to": "adapter",
@@ -2700,6 +2746,68 @@
           "message": {
             "op": "dial",
             "dial_hz": 7103000
+          }
+        },
+        {
+          "note": "The client keys a tuner tone, stops it, and asks for one longer than ten seconds."
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "tone",
+            "id": 10,
+            "seconds": 10
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 10
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "tone",
+            "id": 11,
+            "seconds": 0
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 11
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "tone",
+            "id": 12,
+            "seconds": 11
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 12,
+            "code": "malformed",
+            "text": "`seconds` is not of its type"
           }
         },
         {
@@ -2806,6 +2914,27 @@
             "id": 4,
             "code": "unsupported",
             "text": "this modem has no dial"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "tone",
+            "id": 5,
+            "seconds": 10
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 5,
+            "code": "unsupported",
+            "text": "this modem keys no tuner tone"
           }
         }
       ]

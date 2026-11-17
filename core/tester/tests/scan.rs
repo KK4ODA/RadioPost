@@ -27,6 +27,7 @@ fn scanning(shared: bool) -> (Server, String) {
             dial: true,
             scan: true,
             call_s: true,
+            tone: false,
         },
         prefix: "g".into(),
         frame_bytes: 128,

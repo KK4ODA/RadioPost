@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.40 |
+| **Version** | 0.3.41 |
 | **Updated** | 2026-11-17 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -431,7 +431,7 @@ Pick a gateway from the list, and the radio goes to its channel.
 | Requested by | The plan: concept §10, first version. Requesters: 0. |
 | Component | Client, adapters. |
 | Compatibility | **Optional protocol addition** to RP-4: a request to read and set the dial, with a `caps` member; an adapter that cannot answers `unsupported` (RP-4 §2). Aether can; VARA's published commands cannot (RP-4 §9.2). Driving Aether's own API beside RPMI works today, but only with Aether, which is what RP-4 exists to avoid. |
-| Existing coverage | **Implemented** (2026-11-15): RP-4 0.8.0 §4.1, `caps.dial`, `dial` and `tune`, with the dial conversation in the vectors; the Aether adapter maps them to `status.can_tune`, `status.frequency_hz` and `frequency.set`. The panel's **Choose** puts the gateway's channels in a **Channel** box; **Call** (and `radiopost call --dial`) tunes the radio there and back after. A modem without a dial is named, and the user told where to tune. A cut-off gateway tunes to its partner's window the same way. |
+| Existing coverage | **Implemented** (2026-11-15): RP-4 0.8.0 §4.1, `caps.dial`, `dial` and `tune`, with the dial conversation in the vectors; the Aether adapter maps them to `status.can_tune`, `status.frequency_hz` and `frequency.set`. The panel's **Choose** puts the gateway's channels in a **Channel** box; **Call** (and `radiopost call --dial`) tunes the radio there and back after. A modem without a dial is named, and the user told where to tune. A cut-off gateway tunes to its partner's window the same way. **Tuned as it is picked** (2026-11-17, the author's notes from the 40 m RadioPost mail): picking a channel, a gateway's or a station call's **Dial**, tunes the radio at once, so the radio and the antenna tuner can be set first; **Tuner tone** keys a ten-second carrier (RP-4 1.2.0 §4.3, Aether's `tune`); **Call** finds the radio there and leaves it there, the pick being the operator's choice. A modem that cannot set the dial is said plainly, with the dial to set by hand. A station call also carries a bandwidth (500 or 2300 Hz), for which Aether moves the whole station and back (RP-4 §1.1, §9.1). |
 | Dependencies | None. Shares its addition with W40 (§12, T1). |
 | Effort | Medium: RP-4 and its vectors, the Aether adapter, the client. |
 | Priority | **Medium.** Every call starts with tuning, and it removes a common mistake. |
@@ -1151,3 +1151,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.38 | 2026-11-17 | The author's wish: W50, a gateway that scans its channels, proposed in [the scanning proposal](03-scanning.md) with drafts for RP-4 and RP-5. Gap G21: a gateway's record can list channels it never listens on. |
 | 0.3.39 | 2026-11-17 | W50 accepted by the author and in progress. |
 | 0.3.40 | 2026-11-17 | W50 built; G21 settled by RP-5 1.1.0's SHOULD. |
+| 0.3.41 | 2026-11-17 | W14: a channel is tuned as it is picked, with a tuner tone (RP-4 1.2.0 §4.3), and a station call carries a dial and a bandwidth. |

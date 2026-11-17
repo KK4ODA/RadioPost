@@ -77,8 +77,12 @@ pub struct Options {
     /// A bandwidth to ask the modem for.
     pub bandwidth: Option<i64>,
     /// The channel to call on (wishlist W14): with a modem that has a dial (RP-4 §4.1) the radio
-    /// is tuned there before the call and back to where it was after.
+    /// is tuned there before the call when it is not there already.
     pub dial_hz: Option<u64>,
+    /// Whether a call that had to tune the radio tunes it back after (RP-4 §4.1). The panel tunes
+    /// the radio when its operator picks the channel, so that channel is the operator's own
+    /// choice, and the radio stays there; the command line's `--dial` goes back.
+    pub tune_back: bool,
     /// On a channel a gateway scans (RP-5 §4.4, `scan_s`), how long the call's tries must keep
     /// starting to find it there: asked of a modem with `caps.call_s` (RP-4 §4).
     pub call_s: Option<u64>,
@@ -194,6 +198,7 @@ impl Options {
             auto: 1000,
             bandwidth: None,
             dial_hz: None,
+            tune_back: true,
             call_s: None,
             quiet: QUIET,
             stop: None,
@@ -378,6 +383,17 @@ struct Modem {
 impl Modem {
     fn open(store: &Store, opts: &Options, extra: &[String]) -> Result<(Modem, String), Error> {
         let me = store.me()?;
+        let mut modem = Modem::reach(store, opts)?;
+        let mut claimed = vec![me.operator.as_str()];
+        claimed.extend(extra.iter().map(String::as_str));
+        let callsigns = modem.host.callsigns(&claimed);
+        modem.ask(&callsigns)?;
+        Ok((modem, me.operator))
+    }
+
+    /// The adapter, after `hello` and nothing more (RP-4 §3): no callsigns, so the station answers
+    /// and calls nothing for it. Enough for the dial and the tuner tone (§4.1, §4.3).
+    fn reach(store: &Store, opts: &Options) -> Result<Modem, Error> {
         if let Some(test) = store.conformance()
             && opts.adapter != test
         {
@@ -390,7 +406,7 @@ impl Modem {
         // an adapter that serves one program at a time may not yet have seen this program's last
         // connection close, so `busy` is tried again for a moment before it is believed
         let patience = std::time::Instant::now() + BUSY_PATIENCE;
-        let mut modem = loop {
+        let modem = loop {
             let conn = Connection::open(adapter.as_str()).map_err(|e| {
                 format!("cannot reach the modem's adapter at {}: {e}", opts.adapter)
             })?;
@@ -418,11 +434,7 @@ impl Modem {
                 Err(why) => return Err(why),
             }
         };
-        let mut claimed = vec![me.operator.as_str()];
-        claimed.extend(extra.iter().map(String::as_str));
-        let callsigns = modem.host.callsigns(&claimed);
-        modem.ask(&callsigns)?;
-        Ok((modem, me.operator))
+        Ok(modem)
     }
 
     fn send(&mut self, m: &Line) -> Result<(), Error> {
@@ -505,10 +517,7 @@ impl Modem {
             return Ok(None);
         };
         if !self.caps.dial {
-            tell(
-                say,
-                &format!("tune the radio to {} MHz: this modem cannot", mhz(hz)),
-            );
+            tell(say, &by_hand(hz));
             return Ok(None);
         }
         let read = self.host.dial();
@@ -554,6 +563,127 @@ impl Modem {
 
 /// How long a call's end waits for the adapter to let the dial go back.
 const TUNE_BACK_PATIENCE: Duration = Duration::from_secs(30);
+
+/// What the operator is told when the modem cannot set the radio's dial (RP-4 §4.1): which dial
+/// to set, by hand. The mobile of 2026-11-17, keyed by RTS with no CAT, was such a radio.
+fn by_hand(hz: u64) -> String {
+    format!(
+        "set the radio's dial to {} MHz (USB) yourself: the modem cannot set it",
+        mhz(hz)
+    )
+}
+
+/// Where the radio is once its operator picked a channel ([`tune`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tuned {
+    /// The radio was there already.
+    There,
+    /// The modem moved the radio there from this dial.
+    Moved(u64),
+    /// The modem cannot set the dial: the operator sets it by hand.
+    ByHand,
+}
+
+/// What a channel picked did: where the radio is, what was said, and whether the modem keys a
+/// tuner tone (RP-4 §4.3), so the panel offers one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Picked {
+    /// Where the radio is.
+    pub tuned: Tuned,
+    /// What the operator is told.
+    pub said: String,
+    /// The modem keys a tuner tone.
+    pub tone: bool,
+}
+
+/// Tunes the radio to `dial_hz` now, as its operator picks the channel (a gateway's, or the dial
+/// of a station call), so that the radio and the antenna tuner can be set before the call; the
+/// call then finds the radio there (wishlist W14, RP-4 §4.1). The radio stays: the channel is the
+/// operator's choice. A modem that cannot set the dial is said so, with the dial to set by hand.
+///
+/// # Errors
+///
+/// The adapter cannot be reached, or the modem refused the dial: something is up on the station,
+/// or the rules or the radio would not have it.
+pub fn tune(
+    store: &Store,
+    opts: &Options,
+    dial_hz: u64,
+    say: &mut dyn FnMut(&str),
+) -> Result<Picked, Error> {
+    let mut modem = Modem::reach(store, opts)?;
+    let result = modem.tune_to(dial_hz);
+    modem.conn.close();
+    let picked = result?;
+    tell(say, &picked.said);
+    Ok(picked)
+}
+
+impl Modem {
+    fn tune_to(&mut self, hz: u64) -> Result<Picked, Error> {
+        let keys_tone = self.caps.tone;
+        if !self.caps.dial {
+            return Ok(Picked {
+                tuned: Tuned::ByHand,
+                said: by_hand(hz),
+                tone: keys_tone,
+            });
+        }
+        let read = self.host.dial();
+        let Event::Dial { dial_hz: was, .. } = self.ask(&read)? else {
+            return Err("the modem did not say where its dial is".into());
+        };
+        if was == hz {
+            return Ok(Picked {
+                tuned: Tuned::There,
+                said: format!("the radio is on {} MHz", mhz(hz)),
+                tone: keys_tone,
+            });
+        }
+        let tune = self.host.tune(hz);
+        self.ask(&tune)
+            .map_err(|why| format!("cannot tune the radio to {} MHz: {why}", mhz(hz)))?;
+        Ok(Picked {
+            tuned: Tuned::Moved(was),
+            said: format!("tuned the radio to {} MHz", mhz(hz)),
+            tone: keys_tone,
+        })
+    }
+}
+
+/// The tuner tone (RP-4 §4.3): a steady carrier for `seconds` (at most ten), for an antenna tuner
+/// on the channel picked; 0 stops it. The modem keys it; RadioPost holds no connection while it
+/// sounds, so a second press asks again with 0.
+///
+/// # Errors
+///
+/// The adapter cannot be reached, the modem keys no tuner tone, or it refused: something is up on
+/// the station, the channel is busy, or the rules would not have it.
+pub fn tone(
+    store: &Store,
+    opts: &Options,
+    seconds: u64,
+    say: &mut dyn FnMut(&str),
+) -> Result<(), Error> {
+    let mut modem = Modem::reach(store, opts)?;
+    let result = if modem.caps.tone {
+        let tone = modem.host.tone(seconds.min(rpmi::wire::TONE_MAX_S));
+        modem.ask(&tone).map(|_| ())
+    } else {
+        Err("this modem cannot key a tuner tone: use the radio's own tune button".into())
+    };
+    modem.conn.close();
+    result?;
+    tell(
+        say,
+        &if seconds == 0 {
+            "tuner tone stopped".to_owned()
+        } else {
+            format!("tuner tone on for {seconds} s")
+        },
+    );
+    Ok(())
+}
 
 /// A dial in MHz, to the kilohertz or finer when it needs it: 7.101, 3.5915.
 #[must_use]
@@ -636,6 +766,9 @@ struct SessionStats {
     welcomed: bool,
     /// The station called is a gateway (not a station, RP-3 §10).
     gateway: bool,
+    /// Called for station-to-station mail, a gateway answered (RP-3 §10): said once, in plain
+    /// words, in place of the refusal that follows.
+    not_a_station: bool,
     /// What its `WELCOME` said of the post office (RP-3 §5.2 `online`).
     online: Option<bool>,
     top_serial: Option<u64>,
@@ -770,11 +903,7 @@ fn apply(
             tell(say, &why);
             report.failed = Some(why);
         }
-        SessionEvent::Refused(code) => {
-            let why = format!("refused the other station: {code}");
-            tell(say, &why);
-            report.failed = Some(why);
-        }
+        SessionEvent::NotAStation | SessionEvent::Refused(_) => refused(&e, report, stats, say),
         SessionEvent::NewCredential(bytes) => {
             store.set_credential(&bytes)?;
             tell(say, "a renewed credential, kept for the next session");
@@ -783,6 +912,31 @@ fn apply(
         SessionEvent::Placed { .. } | SessionEvent::Records(_) | SessionEvent::End => {}
     }
     Ok(())
+}
+
+/// This side ended the session: the other station's answer was refused. A station called for P2P
+/// that turned out a gateway (RP-3 §10) is said once, in plain words, in place of the refusal.
+fn refused(
+    e: &SessionEvent,
+    report: &mut Report,
+    stats: &mut SessionStats,
+    say: &mut dyn FnMut(&str),
+) {
+    let why = match e {
+        SessionEvent::NotAStation => {
+            stats.not_a_station = true;
+            format!(
+                "{} is a gateway: for P2P, call the other operator's own callsign while their \
+                 client listens",
+                report.remote
+            )
+        }
+        SessionEvent::Refused(_) if stats.not_a_station => return,
+        SessionEvent::Refused(code) => format!("refused the other station: {code}"),
+        _ => return,
+    };
+    tell(say, &why);
+    report.failed = Some(why);
 }
 
 /// The station called is ready: whether it is a gateway that reaches the post office now.
@@ -987,7 +1141,9 @@ pub fn call(
     say: &mut dyn FnMut(&str),
 ) -> Result<Report, Error> {
     let (mut modem, _) = Modem::open(store, opts, &[])?;
-    let back = modem.tune_for_call(opts.dial_hz, say)?;
+    let back = modem
+        .tune_for_call(opts.dial_hz, say)?
+        .filter(|_| opts.tune_back);
     let result = call_on(&mut modem, store, remote, kind, opts, say);
     if let Some(was) = back {
         modem.tune_back(was, say);
@@ -1029,6 +1185,53 @@ fn call_lasting(
     lasting
 }
 
+/// Places the call (RP-4 §4, `connect`) at `bandwidth` with tries lasting `call_s`, and waits for
+/// its link: `None` when it failed, said and put in `report`.
+fn place(
+    modem: &mut Modem,
+    remote: &str,
+    (bandwidth, call_s): (Option<i64>, Option<u64>),
+    report: &mut Report,
+    say: &mut dyn FnMut(&str),
+) -> Result<Option<Event>, Error> {
+    let connect = modem.host.connect_lasting(remote, None, bandwidth, call_s);
+    let id = connect.get("id").cloned();
+    modem.ask(&connect)?;
+    say_at(say, &format!("calling {remote}"), bandwidth);
+    loop {
+        let e = modem.next()?;
+        match &e {
+            Event::Connected {
+                id: i, bandwidth, ..
+            } if *i == id => {
+                // the bandwidth the modem says the link runs at: what was asked, or its own
+                say_at(say, &format!("connected to {remote}"), *bandwidth);
+                return Ok(Some(e));
+            }
+            Event::Failed { id: i, code, text } if *i == id => {
+                let why = format!(
+                    "the call failed: {code}{}",
+                    text.as_deref()
+                        .map(|t| format!(" ({t})"))
+                        .unwrap_or_default()
+                );
+                report.failed = Some(why.clone());
+                tell(say, &why);
+                return Ok(None);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Says `line`, and at what bandwidth when one is known.
+fn say_at(say: &mut dyn FnMut(&str), line: &str, hz: Option<i64>) {
+    match hz {
+        Some(hz) => tell(say, &format!("{line} at {hz} Hz")),
+        None => tell(say, line),
+    }
+}
+
 /// [`call`] on a modem opened and tuned.
 fn call_on(
     modem: &mut Modem,
@@ -1039,35 +1242,13 @@ fn call_on(
     say: &mut dyn FnMut(&str),
 ) -> Result<Report, Error> {
     let lasting = call_lasting(modem, store, remote, kind, opts, say);
-    let connect = modem
-        .host
-        .connect_lasting(remote, None, opts.bandwidth, lasting);
-    let id = connect.get("id").cloned();
-    modem.ask(&connect)?;
-    tell(say, &format!("calling {remote}"));
     let mut report = Report {
         remote: remote.to_owned(),
         ..Report::default()
     };
-    let connected = loop {
-        let e = modem.next()?;
-        match &e {
-            Event::Connected { id: i, .. } if *i == id => break e,
-            Event::Failed { id: i, code, text } if *i == id => {
-                let why = format!(
-                    "the call failed: {code}{}",
-                    text.as_deref()
-                        .map(|t| format!(" ({t})"))
-                        .unwrap_or_default()
-                );
-                report.failed = Some(why.clone());
-                tell(say, &why);
-                return Ok(report);
-            }
-            _ => {}
-        }
+    let Some(connected) = place(modem, remote, (opts.bandwidth, lasting), &mut report, say)? else {
+        return Ok(report);
     };
-    tell(say, &format!("connected to {remote}"));
     let now = opts.now();
     let (cursor, cached) = match kind {
         Kind::Gateway => store.gateway(remote),

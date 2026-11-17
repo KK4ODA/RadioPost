@@ -13,7 +13,7 @@ use radiopost_client::panel::Panel;
 use radiopost_client::session::{self, Options};
 use serde_json::{Value, json};
 
-use common::{loopback, scratch, store_for};
+use common::{loopback, loopback_dialled, scratch, store_for};
 
 /// One HTTP exchange: the status and the body.
 fn http(
@@ -253,6 +253,132 @@ fn a_message_written_and_carried_from_the_panel() {
     );
     let ana = ana_runs.join().expect("Ana's side");
     assert_eq!(ana.inbox.len(), 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// W14, RP-4 §4.1, §4.3 (the author's notes of 2026-11-17): a channel picked is tuned at once, so
+/// the radio and the antenna tuner can be set before the call; the tuner tone keys and stops; a
+/// station call carries its dial and bandwidth, finds the radio there and leaves it there. A modem
+/// with no dial says plainly which dial to set by hand.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn a_channel_picked_is_tuned_at_once_and_a_station_call_keeps_it() {
+    let dir = scratch("panel-tune");
+    store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    let mut ana = store_for(&dir.join("ana"), "device:ana", "ana");
+    let c = Client {
+        at: Panel::new(&dir.join("facundo"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let (server, at_f, at_a) = loopback_dialled(Some(7_101_000));
+    let modem = at_f.to_string();
+    let picked = c
+        .post(
+            "/api/tune",
+            &json!({"adapter": modem, "dial_hz": 3_591_500}),
+        )
+        .expect("tuned");
+    assert_eq!(
+        picked,
+        json!({"tuned": "moved", "dial_hz": 3_591_500,
+               "said": "tuned the radio to 3.5915 MHz", "tone": true})
+    );
+    assert_eq!(server.with_channel(|ch| ch.dial(0)), Some(3_591_500));
+    let again = c
+        .post(
+            "/api/tune",
+            &json!({"adapter": modem, "dial_hz": 3_591_500}),
+        )
+        .expect("there");
+    assert_eq!(again["tuned"], "there");
+    assert_eq!(
+        c.post("/api/tone", &json!({"adapter": modem, "on": true})),
+        Ok(json!({"on": true, "seconds": 10}))
+    );
+    assert_eq!(
+        c.post("/api/tone", &json!({"adapter": modem, "on": false})),
+        Ok(json!({"on": false, "seconds": 0}))
+    );
+
+    // a station call on that dial, at 500 Hz: the radio is there already, and stays
+    let (tx, rx) = std::sync::mpsc::channel();
+    let ana_runs = thread::spawn(move || {
+        let mut say = |s: &str| {
+            if s.starts_with("listening") {
+                let _ = tx.send(());
+            }
+        };
+        session::answer(&mut ana, &Options::new(&at_a.to_string()), &mut say).expect("answered");
+    });
+    rx.recv_timeout(Duration::from_secs(10))
+        .expect("Ana listens");
+    let from = c.get("/api/log?since=0")["next"].as_u64().expect("next");
+    assert_eq!(
+        c.post(
+            "/api/call",
+            &json!({"callsign": "n0call", "station": true, "adapter": modem,
+                    "dial_hz": 3_591_500, "bandwidth": 500}),
+        ),
+        Ok(json!({}))
+    );
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while c.get("/api/state")["activity"]["state"] != "idle" {
+        assert!(Instant::now() < deadline, "the session never ended");
+        thread::sleep(Duration::from_millis(50));
+    }
+    ana_runs.join().expect("Ana's side");
+    let state = c.get("/api/state");
+    assert_eq!(state["activity"]["failed"], Value::Null, "{state}");
+    let log: Vec<String> = c.get(&format!("/api/log?since={from}"))["lines"]
+        .as_array()
+        .expect("lines")
+        .iter()
+        .filter_map(|l| l.as_str().map(str::to_owned))
+        .collect();
+    assert!(
+        log.iter().any(|l| l == "calling N0CALL at 500 Hz"),
+        "{log:?}"
+    );
+    assert!(
+        log.iter().any(|l| l == "connected to N0CALL at 500 Hz"),
+        "{log:?}"
+    );
+    assert!(
+        !log.iter().any(|l| l.starts_with("tuned")),
+        "not tuned again, nor back: {log:?}"
+    );
+    assert_eq!(server.with_channel(|ch| ch.dial(0)), Some(3_591_500));
+    assert!(
+        c.post(
+            "/api/call",
+            &json!({"callsign": "n0call", "station": true, "adapter": modem, "bandwidth": 1800}),
+        )
+        .is_err_and(|e| e.contains("500 or 2300")),
+        "a bandwidth no one runs"
+    );
+
+    // a modem with no dial: the operator is told which dial to set, by hand
+    let (_plain, at_plain, _) = loopback();
+    let picked = c
+        .post(
+            "/api/tune",
+            &json!({"adapter": at_plain.to_string(), "dial_hz": 7_101_000}),
+        )
+        .expect("said");
+    assert_eq!(
+        picked,
+        json!({"tuned": "by_hand", "dial_hz": 7_101_000,
+               "said": "set the radio's dial to 7.101 MHz (USB) yourself: the modem cannot set it",
+               "tone": false})
+    );
+    let refused = c
+        .post(
+            "/api/tone",
+            &json!({"adapter": at_plain.to_string(), "on": true}),
+        )
+        .expect_err("no tone");
+    assert!(refused.contains("cannot key a tuner tone"), "{refused}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

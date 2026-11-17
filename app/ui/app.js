@@ -128,7 +128,7 @@ function kind() {
   return document.querySelector("input[name=kind]:checked").value;
 }
 
-// the gateway chosen from the list, and its channels: Call tunes the radio to the one picked (W14)
+// the gateway chosen from the list, and its channels: picking one tunes the radio there (W14)
 let chosenGateway = null;
 
 function showChannels() {
@@ -137,6 +137,7 @@ function showChannels() {
     && $("callsign").value.trim().toUpperCase() === gw.callsign && gw.channels.length > 0;
   $("channel-label").hidden = !fits;
   if (!fits) $("channel").replaceChildren();
+  showTuning();
 }
 
 function showKind() {
@@ -144,7 +145,96 @@ function showKind() {
   showChannels();
   $("fetch-label").hidden = !gateway;
   $("gateways-open").hidden = !gateway;
+  $("station-dial").hidden = gateway;
   $("callsign").placeholder = gateway ? "KK4ODA-1" : "N0CALL";
+  showTuning();
+}
+
+// ── the channel picked, tuned at once (W14, RP-4 §4.1) ─────────────────────────────────────────
+// Picking a channel (a gateway's, or a station call's dial) tunes the radio there now, so the
+// operator can set the radio and the antenna tuner before Call; Call finds the radio there. A
+// modem that cannot set the dial says so, with the dial to set by hand. The tuner tone (RP-4 §4.3)
+// keys a carrier for ten seconds; a second press stops it.
+
+// the dial in MHz to the kilohertz, or finer when it needs it: 7.101, 3.5915
+const mhzOf = (hz) => (hz / 1e6).toFixed(4).replace(/0$/, "");
+
+// a dial typed in MHz, in hertz, read as digits (7.1015 is 7 101 500, no rounding); null if not one
+function hzOf(text) {
+  const m = /^\s*(\d{1,3})(?:\.(\d{1,6}))?\s*$/.exec(text);
+  if (!m) return null;
+  const hz = Number(m[1]) * 1e6 + Number((m[2] || "").padEnd(6, "0"));
+  return hz > 0 ? hz : null;
+}
+
+// the dial of the call box as it stands: the gateway's channel, or the station call's dial
+function currentDial() {
+  if (kind() === "gateway") {
+    return $("channel-label").hidden ? null : Number($("channel").value) || null;
+  }
+  return hzOf($("dial").value);
+}
+
+let picked = null;  // the last pick: {kind, dial_hz, tuned, said, tone}
+let pickSerial = 0;
+let modemTone = true;  // whether the modem keys a tuner tone, as the last pick said
+
+const sentence = (text) => text.charAt(0).toUpperCase() + text.slice(1) + ".";
+
+function showTuning() {
+  const dial = currentDial();
+  $("tuning").hidden = !dial;
+  const p = picked && picked.kind === kind() && picked.dial_hz === dial ? picked : null;
+  const at = $("radio-at");
+  const how = !p ? "" : {by_hand: "by-hand", error: "bad", there: "ok", moved: "ok"}[p.tuned] || "";
+  at.className = `radio-at ${how}`.trim();
+  at.textContent = p ? p.said : "";
+  $("tone").hidden = !modemTone;
+}
+
+async function pickChannel() {
+  const dial = currentDial();
+  showTuning();
+  if (!dial) return;
+  const mine = ++pickSerial;
+  const here = {kind: kind(), dial_hz: dial};
+  picked = {...here, tuned: "asking", said: `Tuning the radio to ${mhzOf(dial)} MHz…`};
+  showTuning();
+  try {
+    const r = await api("tune", {adapter: adapter(), dial_hz: dial});
+    if (mine !== pickSerial) return;
+    modemTone = r.tone !== false;
+    picked = {...here, tuned: r.tuned, said: sentence(r.said), tone: r.tone};
+    if (r.tuned === "by_hand") toast(sentence(r.said));
+  } catch (e) {
+    if (mine !== pickSerial) return;
+    picked = {...here, tuned: "error", said: `Not tuned: ${e.message}`};
+    toast(e.message, true);
+  }
+  showTuning();
+}
+
+let toneTimer = null;
+
+function toneOff() {
+  clearTimeout(toneTimer);
+  toneTimer = null;
+  delete $("tone").dataset.on;
+  $("tone").textContent = "Tuner tone";
+}
+
+async function toggleTone() {
+  const on = !$("tone").dataset.on;
+  try {
+    await api("tone", {adapter: adapter(), on});
+    if (!on) { toneOff(); return; }
+    $("tone").dataset.on = "1";
+    $("tone").textContent = "Stop tone";
+    toneTimer = setTimeout(toneOff, 10000);
+  } catch (e) {
+    toneOff();
+    toast(e.message, true);
+  }
 }
 
 // a newer release: said at the top, with the update or the download
@@ -487,15 +577,15 @@ async function openGateways(refreshing = false) {
     $("gateway-rows").replaceChildren(...g.gateways.map((gw) => {
       const tr = document.createElement("tr");
       // the dial in MHz to the kilohertz, or finer when it needs it: 7.101, 3.5915
-      const mhz = (hz) => (hz / 1e6).toFixed(4).replace(/0$/, "");
+      const mhz = mhzOf;
       // a channel with `scan_s` is one the gateway scans with others (RP-5 §4.4)
       const scans = (c) => (c.scan_s != null ? ", scanned" : "");
       const channels = (gw.channels || [])
         .map((c) => `${mhz(c.dial_hz)} MHz, ${c.bandwidth_hz} Hz${scans(c)}`).join("\n");
       const choose = document.createElement("button");
       choose.textContent = "Choose";
-      choose.title = `Call ${gw.callsign}: pick its channel in the call box, and Call tunes the `
-        + "radio there when the modem can";
+      choose.title = `Call ${gw.callsign}: its channel goes in the call box, and the radio is `
+        + "tuned there at once when the modem can";
       choose.addEventListener("click", () => {
         chosenGateway = {callsign: gw.callsign, channels: gw.channels || []};
         $("callsign").value = gw.callsign;
@@ -510,10 +600,12 @@ async function openGateways(refreshing = false) {
         const scanned = first && first.scan_s != null
           ? ` It scans its channels: the call keeps trying for ${first.scan_s} s or more.`
           : "";
-        toast(chosenGateway.channels.length
-          ? `${gw.callsign} chosen, on ${mhz(first.dial_hz)} MHz. `
-            + `Call tunes the radio there, and back after, when the modem can.${scanned}`
-          : `${gw.callsign} chosen. Its record names no channel.`);
+        if (!chosenGateway.channels.length) {
+          toast(`${gw.callsign} chosen. Its record names no channel.`);
+        } else {
+          toast(`${gw.callsign} chosen, on ${mhz(first.dial_hz)} MHz.${scanned}`);
+          pickChannel();
+        }
       });
       const where = [gw.place, gw.grid].filter(Boolean).join(", ");
       // which post office lists it; a callsign two other post offices list is shown from each
@@ -2271,19 +2363,40 @@ function wire() {
   });
   // the channels are the chosen gateway's: another callsign typed has none here
   $("callsign").addEventListener("input", showChannels);
+  // a channel picked, or a station call's dial typed, is tuned at once (W14)
+  $("channel").addEventListener("change", pickChannel);
+  $("dial").value = kept("dial", "");
+  $("dial").addEventListener("input", showTuning);
+  $("dial").addEventListener("change", () => {
+    const text = $("dial").value.trim();
+    if (text && !hzOf(text)) { toast("The dial is a frequency in MHz, such as 7.101.", true); return; }
+    keep("dial", text);
+    pickChannel();
+  });
+  $("bandwidth").value = kept("bandwidth", "2300");
+  $("bandwidth").addEventListener("change", () => keep("bandwidth", $("bandwidth").value));
+  $("tone").addEventListener("click", toggleTone);
+  showTuning();
   $("call").addEventListener("click", () => {
     const callsign = $("callsign").value.trim();
     if (!callsign) { toast("Whom to call?", true); return; }
+    const station = kind() === "station";
+    if (station && $("dial").value.trim() && !hzOf($("dial").value)) {
+      toast("The dial is a frequency in MHz, such as 7.101.", true);
+      return;
+    }
     const fetchRule = $("fetch").value;
-    const dial = $("channel-label").hidden ? "" : $("channel").value;
+    const dial = currentDial();
     // a gateway that scans is found by a call that keeps trying as long as its record says
-    const channel = dial && chosenGateway
-      ? chosenGateway.channels.find((c) => String(c.dial_hz) === dial) : null;
+    const channel = !station && dial && chosenGateway
+      ? chosenGateway.channels.find((c) => c.dial_hz === dial) : null;
     act("call", {
-      callsign, station: kind() === "station", adapter: adapter(),
+      callsign, station, adapter: adapter(),
       fetch: /^[0-9]+$/.test(fetchRule) ? Number(fetchRule) : fetchRule,
-      dial_hz: dial ? Number(dial) : null,
+      dial_hz: dial || null,
       call_s: channel && channel.scan_s != null ? channel.scan_s : null,
+      // a station call's bandwidth, as the two operators agreed; a gateway call names none
+      bandwidth: station ? Number($("bandwidth").value) : null,
     });
   });
   $("listen").addEventListener("click", () => act("listen", {adapter: adapter()}));

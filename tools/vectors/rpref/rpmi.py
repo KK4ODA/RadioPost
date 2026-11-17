@@ -92,6 +92,9 @@ def is_dial_list(value: Any) -> bool:
     )
 
 
+TONE_MAX_S = 10
+"""The longest tuner tone a host may ask for, in seconds (RP-4 §4.3)."""
+
 SCAN_DWELL_S = 10
 """How long the simulated modem stays on each dial of a scan (RP-4 §4.2): the modem's own choice,
 from its own calls, here a round figure. `scan_s` is the dials less one, times it."""
@@ -122,6 +125,13 @@ MEMBERS: dict[str, list[tuple[str, bool, Any]]] = {
         ("dial_hz", True, lambda v: isinstance(v, int) and not isinstance(v, bool) and v > 0),
     ],
     "scan": [("id", True, is_id), ("dials", True, is_dial_list)],
+    "tone": [
+        (
+            "seconds",
+            True,
+            lambda v: isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= TONE_MAX_S,
+        ),
+    ],
 }
 
 
@@ -339,6 +349,7 @@ class Adapter:
             "dial": self._dial,
             "tune": self._dial,
             "scan": self._scan,
+            "tone": self._tone,
         }.get(op)
         if handler is None:
             self.emit(host, error(rid, "unsupported", f"no op {op}"))
@@ -521,6 +532,18 @@ class Adapter:
             why = "asked" if owner == h.name else "tuned"
             self.emit(owner, answer("scan", None, dials=[], why=why))
         self._tell_dial()
+
+    def _tone(self, h: Host, m: Message, rid: Any) -> None:
+        """RP-4 §1.1, §4.3: a steady tone for an antenna tuner. It keys the station's transmitter,
+        so it starts only while nothing is up on the station; a stop is always taken. The
+        simulated modem has no radio to key: it says `ok`."""
+        if not self.caps.get("tone"):
+            self.emit(h.name, error(rid, "unsupported", "this modem keys no tuner tone"))
+            return
+        if m["seconds"] > 0 and (self.ends or any(c.adapter is self for c in self.world.calls)):
+            self.emit(h.name, error(rid, "busy", "a link or a call is up on the station"))
+            return
+        self.ok(h, rid)
 
     def _tell_dial(self) -> None:
         """RP-4 §4.1: every host that has said hello hears where the dial went."""

@@ -49,9 +49,24 @@
         <label title="The callsign to call">Call
           <input id="callsign" placeholder="KK4ODA-1" autocomplete="off" spellcheck="false">
         </label>
-        <label id="channel-label" title="The chosen gateway's channel. Call tunes the radio there first and back after, when the modem can set the radio's dial (Aether with CAT, rigctld or FLRig); with another modem, tune the radio yourself" hidden>Channel
+        <label id="channel-label" title="The chosen gateway's channel. Picking it tunes the radio there at once, when the modem can set the radio's dial (Aether with CAT, rigctld or FLRig), so you can set the antenna tuner before you call; with another modem, set the dial yourself" hidden>Channel
           <select id="channel"></select>
         </label>
+        <div class="pair" id="station-dial" hidden>
+          <label title="The dial frequency the two of you agreed on, in MHz, upper sideband: 7.101 or 3.5915. Typing it tunes the radio there at once, when the modem can set the radio's dial">Dial, MHz
+            <input id="dial" inputmode="decimal" placeholder="7.101" autocomplete="off" spellcheck="false">
+          </label>
+          <label title="The bandwidth the two of you agreed on. Aether moves the station to it for the call, and back after">Bandwidth
+            <select id="bandwidth">
+              <option value="2300">2300 Hz</option>
+              <option value="500">500 Hz</option>
+            </select>
+          </label>
+        </div>
+        <div class="tuning" id="tuning" hidden>
+          <p class="radio-at" id="radio-at" role="status" title="Where the radio is: the channel picked, or the dial to set by hand when the modem cannot set it"></p>
+          <button class="quiet needs-idle" id="tone" title="A steady carrier for ten seconds on the channel picked, for the antenna tuner. Press again to stop it">Tuner tone</button>
+        </div>
         <button class="quiet" id="gateways-open" title="The gateways your post office lists, where to find them, and how far away">Choose a gateway</button>
         <label id="fetch-label" title="What to fetch of the mail waiting for you; what you mark in Waiting comes too, and small messages come anyway">Fetch
           <select id="fetch">
@@ -62,7 +77,7 @@
           </select>
         </label>
         <div class="row">
-          <button id="call" title="Call the station and carry a session">Call</button>
+          <button class="go" id="call" title="Call the station on the channel picked and carry a session. The radio is tuned there first if it is not there already">Call</button>
           <button id="listen" title="Answer one station's call">Listen</button>
           <button id="stop" class="quiet" title="Stop listening" hidden>Stop</button>
         </div>

@@ -75,6 +75,7 @@ pub fn caps() -> Caps {
         dial: false,
         scan: false,
         call_s: false,
+        tone: false,
     }
 }
 
@@ -452,7 +453,7 @@ impl Adapter {
             Request::Broadcast { .. } => {
                 conn.emit(error(id, "unsupported", "no broadcasts over TCP"));
             }
-            Request::Dial | Request::Tune(_) | Request::Scan(_) => {
+            Request::Dial | Request::Tune(_) | Request::Scan(_) | Request::Tone(_) => {
                 conn.emit(error(id, "unsupported", "no radio over TCP"));
             }
             Request::Status => {

@@ -468,3 +468,97 @@ fn two_hosts_share_one_aether_station() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Waits for a line of `op` from the adapter, past others, and returns it.
+fn wait_for(conn: &mut Connection, op: &str) -> Message {
+    loop {
+        let m = conn
+            .read_message()
+            .expect("a line in time")
+            .expect("the adapter stays");
+        if m.get("op") == Some(&op.into()) {
+            return m;
+        }
+    }
+}
+
+/// Aether's bandwidth now, and what a host program asked of it.
+fn bandwidth_of(control: &str) -> (Json, Json) {
+    let b = aether_status(control)["bandwidth"].clone();
+    (b["bandwidth_hz"].clone(), b["host_hz"].clone())
+}
+
+/// RP-4 §1.1, §4.3 and §9.1 on real stations: the tuner tone is Aether's `tune`, keyed and
+/// stopped; a call at 500 Hz from a 2300 Hz station moves the whole station there for the call
+/// (`bandwidth.set`, `connect` with `keep_bandwidth`), the station called answers it at 500 Hz,
+/// and once the link has ended the caller's station goes back to its own.
+#[test]
+#[ignore = "needs AETHERD, an aetherd binary of 0.2.0-beta.146 or later"]
+fn a_call_at_500_hz_moves_the_station_and_the_tone_keys() {
+    let binary = std::env::var("AETHERD").expect("AETHERD names an aetherd binary");
+    let dir = std::env::temp_dir().join(format!("radiopost-bw500-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a directory");
+    let mut ana_modem = Daemon::start(&binary, &dir, "a", "N0CALL-9", "listen = \"127.0.0.1:0\"");
+    let channel = ana_modem.logged("simulated channel (listening on ", ")");
+    let mut facundo_modem = Daemon::start(
+        &binary,
+        &dir,
+        "b",
+        "KK4ODA-9",
+        &format!("connect = \"{channel}\""),
+    );
+    let ana_control = ana_modem.control();
+    let facundo_control = facundo_modem.control();
+    let open = |control: &str| {
+        let adapter = radiopost_aether::serve::listen("127.0.0.1:0", control).expect("a port");
+        let c = Connection::open(adapter).expect("the adapter");
+        c.set_timeout(Some(Duration::from_secs(120)))
+            .expect("a timeout");
+        c
+    };
+    let (mut ana, mut ha) = (open(&ana_control), Host::new());
+    ask(&mut ana, &ha.hello("RadioPost client 0.1.0"));
+    assert_eq!(code_of(&ask(&mut ana, &ha.callsigns(&["N0CALL"]))), "ok");
+    assert_eq!(code_of(&ask(&mut ana, &ha.listen(true))), "ok");
+    let (mut facundo, mut hf) = (open(&facundo_control), Host::new());
+    let hello = ask(&mut facundo, &hf.hello("RadioPost client 0.1.0"));
+    assert_eq!(
+        (&hello["caps"]["bandwidths"], &hello["caps"]["tone"]),
+        (&serde_json::json!([500, 2300]), &Json::Bool(true)),
+        "{hello:?}"
+    );
+    assert_eq!(
+        code_of(&ask(&mut facundo, &hf.callsigns(&["KK4ODA"]))),
+        "ok"
+    );
+
+    // the tuner tone: keyed, then stopped by a second press
+    assert_eq!(code_of(&ask(&mut facundo, &hf.tone(10))), "ok");
+    assert_eq!(code_of(&ask(&mut facundo, &hf.tone(0))), "ok");
+
+    // a call at 500 Hz from a 2300 Hz station
+    assert_eq!(bandwidth_of(&facundo_control).0, 2300);
+    let call = hf.connect("N0CALL", None, Some(500));
+    assert_eq!(code_of(&ask(&mut facundo, &call)), "ok");
+    let up = wait_for(&mut facundo, "connected");
+    assert_eq!(up["bandwidth"], 500, "{up:?}");
+    assert_eq!(
+        bandwidth_of(&facundo_control),
+        (Json::from(500), Json::from(500)),
+        "the station moved for the call"
+    );
+    let link = up["link"].as_str().expect("a link").to_owned();
+    assert_eq!(code_of(&ask(&mut facundo, &hf.disconnect(&link))), "ok");
+    wait_for(&mut facundo, "disconnected");
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let now = bandwidth_of(&facundo_control);
+        if now == (Json::from(2300), Json::Null) {
+            break;
+        }
+        assert!(Instant::now() < deadline, "never went back: {now:?}");
+        thread::sleep(Duration::from_millis(250));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

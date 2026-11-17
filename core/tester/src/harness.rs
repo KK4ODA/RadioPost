@@ -507,6 +507,7 @@ impl TestAdapter {
             dial: false,
             scan: false,
             call_s: false,
+            tone: false,
         };
         let station = |name: &str, prefix: &str, frame| StationConfig {
             name: name.into(),

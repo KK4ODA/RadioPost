@@ -68,7 +68,11 @@ chosen.
 
 `call` and `listen` take `--adapter MODEM` and `--bandwidth HZ`. The modem is Aether HF's control
 API, `ws://127.0.0.1:8515/v1` as Aether runs it, for which the client runs the Aether adapter (RP-4
-§9.1) itself; or an RPMI adapter's `HOST:PORT` (`127.0.0.1:8600` by default, as RP-4 §2 has it). `--plain` sends messages uncompressed; `--clock`, `--nonce`,
+§9.1) itself; or an RPMI adapter's `HOST:PORT` (`127.0.0.1:8600` by default, as RP-4 §2 has it).
+On Aether a call's `--bandwidth` (500 or 2300) moves the whole station there for the call and back
+after (RP-4 §1.1). `call --dial MHZ` tunes the radio there for the call and back after; the panel
+tunes when its operator picks the channel, keys a ten-second **Tuner tone** (RP-4 §4.3), and leaves
+the radio on the channel picked. `--plain` sends messages uncompressed; `--clock`, `--nonce`,
 `--session-id` and `--challenge` fix the clock and the random draws, so that a session can be
 replayed exactly (the conformance tester's §2.4).
 

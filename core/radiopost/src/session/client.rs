@@ -8,8 +8,8 @@ use ed25519_dalek::SigningKey;
 
 use super::{
     Caps, Event, Inbound, Outgoing, Partial, Progress, Proof, Proofs, Receipts, VERSION,
-    WaitingEntry, done, error_pdu, listed_ids, listed_pairs, msg_pdus, piece_for, take_counted,
-    transmission,
+    WaitingEntry, done, error_pdu, error_pdu_saying, listed_ids, listed_pairs, msg_pdus, piece_for,
+    take_counted, transmission,
 };
 use crate::cbor::Value;
 use crate::credential::{self, Body, Credential, Trust, flags};
@@ -18,6 +18,11 @@ use crate::error::ErrorCode;
 use crate::forwarding;
 use crate::pdu::{Deframer, kind};
 use crate::statement::{self, Form, Freshness, Statement};
+
+/// The `ERROR` text a caller sends a gateway that answered its call for station-to-station mail
+/// (RP-3 §10): the gateway's operator reads why the client left.
+pub const NOT_A_STATION: &str =
+    "called for station-to-station mail, and a gateway answered: the client hung up";
 
 /// What a client brings to a session.
 pub struct ClientConfig {
@@ -321,6 +326,14 @@ impl Client {
         self.end();
     }
 
+    /// [`Client::fail`], with a text for the other station's operator (RP-3 §5.9).
+    fn fail_saying(&mut self, code: ErrorCode, text: &str) {
+        self.queued
+            .push(transmission(&[error_pdu_saying(code, text)]));
+        self.events.push(Event::Refused(code));
+        self.end();
+    }
+
     fn handle(&mut self, pdu: &Value) {
         match pdu.get(0).and_then(Value::as_u64) {
             Some(kind::WELCOME) if self.state == State::Welcome => self.welcome(pdu),
@@ -450,6 +463,11 @@ impl Client {
             .collect();
         let mut peer_account = None;
         if let Some(trust) = &self.cfg.station {
+            // RP-3 §5.2: keys 13 and 15 are absent from a gateway's WELCOME, and only from it
+            if pdu.get(13).is_none() && pdu.get(15).is_none() {
+                self.events.push(Event::NotAStation);
+                return self.fail_saying(ErrorCode::NotAuthorized, NOT_A_STATION);
+            }
             match self.check_station(pdu, &waiting, trust) {
                 Ok((body, proof)) => {
                     self.station_proof = Some(proof);

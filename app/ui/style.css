@@ -3,7 +3,7 @@
   --bg: #f6f7f8; --panel: #ffffff; --line: #d9dde1; --text: #1b1f23; --muted: #5d6670;
   --key: #1b1f23; --key-text: #ffffff; --accent: #1d5fa8;
   --ok: #1f7a3d; --busy: #9a6400; --bad: #b3261e; --session: #1d5fa8;
-  --tx: #e0662f; --rx: #13896f;
+  --tx: #e0662f; --rx: #13896f; --go: #1f7a3d; --go-text: #ffffff;
   --mono: ui-monospace, "SF Mono", Consolas, "Liberation Mono", monospace;
   --face: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --control-h: 32px;
@@ -13,7 +13,7 @@
     --bg: #16181b; --panel: #1e2125; --line: #33383e; --text: #e3e6e9; --muted: #9aa3ad;
     --key: #dde0e3; --key-text: #16181b; --accent: #7fb2ec;
     --ok: #5cc17f; --busy: #e0a83a; --bad: #ef6f66; --session: #7fb2ec;
-    --tx: #ff9b66; --rx: #4fd1a8;
+    --tx: #ff9b66; --rx: #4fd1a8; --go: #5cc17f; --go-text: #0f1a12;
   }
 }
 * { box-sizing: border-box; }
@@ -27,6 +27,9 @@ button { height: var(--control-h); padding: 0 14px; border: 1px solid var(--line
 button:hover { border-color: var(--muted); }
 button.primary { background: var(--key); color: var(--key-text); border-color: var(--key); }
 button.quiet { background: transparent; }
+/* the one button that puts the station on the air: green, and as wide as its row allows */
+button.go { background: var(--go); color: var(--go-text); border-color: var(--go); font-weight: 600; }
+button.go:hover:not(:disabled) { border-color: var(--go); filter: brightness(1.08); }
 button:disabled { opacity: .5; cursor: default; }
 input, select, textarea { width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px;
                           background: var(--panel); }
@@ -121,6 +124,19 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 .kinds { display: flex; flex-direction: column; gap: 2px; margin: 0 0 10px; }
 .kinds label.check { margin: 0; color: var(--text); font-size: 14px; }
 #gateways-open { margin: -4px 0 10px; padding: 0; height: auto; border: 0; color: var(--accent); }
+/* the call box: a station call's dial and bandwidth side by side, where the radio is, the tone */
+.station .row #call { flex: 1; }
+.pair { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.pair select { width: auto; }
+.tuning { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: -2px 0 10px; }
+.radio-at { margin: 0; font-size: 13px; color: var(--muted); }
+.radio-at:empty { display: none; }
+.radio-at.ok { color: var(--ok); }
+.radio-at.ok::before { content: "\2713  "; }
+.radio-at.by-hand { color: var(--busy); font-weight: 600; }
+.radio-at.bad { color: var(--bad); }
+#tone { height: 28px; padding: 0 10px; font-size: 13px; }
+#tone[data-on] { border-color: var(--tx); color: var(--tx); }
 label.inline { display: flex; align-items: center; gap: 6px; margin: 0; }
 label.inline input { width: 7em; margin: 0; }
 .list .n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }

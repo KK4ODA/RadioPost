@@ -209,8 +209,22 @@ impl Monitor {
         i.since = now();
     }
 
-    /// What the session's engine said.
+    /// What the session's engine said. An `ERROR` from the caller is logged with its text (RP-3
+    /// §5.9), so the operator reads why a caller left: a client that called for station-to-station
+    /// mail, say, which the gateway answered.
     pub fn event(&self, event: &Event) {
+        if let Event::Error { code, text } = event {
+            let who = self.lock().session.as_ref().map(|s| s.remote.clone());
+            let text: String = text
+                .as_deref()
+                .map(|t| format!(": {}", t.chars().take(200).collect::<String>()))
+                .unwrap_or_default();
+            self.log(&format!(
+                "{} sent ERROR {}{text}",
+                who.as_deref().unwrap_or("the caller"),
+                code.name()
+            ));
+        }
         let mut i = self.lock();
         let Some(s) = i.session.as_mut() else {
             return;

@@ -441,6 +441,30 @@
           "text": "`ref` is not of its type"
         }
       ]
+    },
+    {
+      "what": "a tone without its seconds",
+      "line": "{\"op\": \"tone\", \"id\": 37}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 37,
+          "code": "malformed",
+          "text": "no `seconds`"
+        }
+      ]
+    },
+    {
+      "what": "a tone longer than ten seconds",
+      "line": "{\"op\": \"tone\", \"id\": 38, \"seconds\": 11}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 38,
+          "code": "malformed",
+          "text": "`seconds` is not of its type"
+        }
+      ]
     }
   ]
 }

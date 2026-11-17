@@ -29,6 +29,13 @@ struct Aether {
     scans: bool,
     /// `scan.start` refused with this code.
     scan_refused: Option<&'static str>,
+    /// The bandwidth the station runs, and what a host program asked of it (`host_hz`).
+    bandwidth_hz: u64,
+    host_hz: Value,
+    /// `bandwidth.set` refused, as when something is under way on the air.
+    bandwidth_refused: bool,
+    /// `tune` (the tuner tone) refused, as when the channel is busy.
+    tone_refused: bool,
     asked: Vec<Value>,
 }
 
@@ -44,6 +51,10 @@ impl Aether {
             tune_refused: false,
             scans: false,
             scan_refused: None,
+            bandwidth_hz: 2300,
+            host_hz: Value::Null,
+            bandwidth_refused: false,
+            tone_refused: false,
             asked: Vec::new(),
         }
     }
@@ -63,7 +74,10 @@ impl Aether {
                 let mut status = json!({"version": "0.2.0-beta.146", "state": self.state,
                                         "owner": null, "channel_busy": false,
                                         "frequency_hz": self.dial,
-                                        "can_tune": self.dial.is_some()});
+                                        "can_tune": self.dial.is_some(),
+                                        "bandwidth": {"bandwidth_hz": self.bandwidth_hz,
+                                                      "home_hz": 2300,
+                                                      "host_hz": self.host_hz}});
                 if self.claims {
                     status["claims"] = json!([]);
                 }
@@ -117,6 +131,17 @@ impl Aether {
                 }
             }
             "scan.stop" => ok(json!({"stopped": true})),
+            "bandwidth.set" if self.bandwidth_refused && !params["hz"].is_null() => {
+                refused("refused")
+            }
+            "bandwidth.set" => {
+                self.host_hz = params["hz"].clone();
+                self.bandwidth_hz = params["hz"].as_u64().unwrap_or(2300);
+                ok(json!({"bandwidth_hz": self.bandwidth_hz, "host_hz": self.host_hz}))
+            }
+            "tune" if self.tone_refused => refused("refused"),
+            "tune" if params["duration_s"] == 0 => ok(json!({"stopped": true})),
+            "tune" => ok(json!({"accepted": true, "duration_s": params["duration_s"]})),
             "hello" if self.hello => ok(json!({"id": 7, "app": params["app"]})),
             "hello" => refused("unknown_method"),
             other => panic!("the adapter asked Aether for {other}"),
@@ -216,9 +241,9 @@ fn hello_is_status_and_capabilities() {
         lines(&said),
         [
             json!({"op": "hello", "id": 1, "version": 1, "modem": "Aether HF 0.2.0-beta.146",
-                "caps": {"bandwidths": [2300], "max_links": 1, "delivery": true,
+                "caps": {"bandwidths": [500, 2300], "max_links": 1, "delivery": true,
                          "broadcast": true, "quality": true, "busy": true, "regulatory": true,
-                         "max_queue": 65536, "shared": true}})
+                         "max_queue": 65536, "shared": true, "tone": true}})
         ]
     );
     let methods: Vec<&str> = a
@@ -661,7 +686,7 @@ fn checks_made_before_aether_is_asked() {
             "not-authorized",
         ),
         (
-            r#"{"op":"connect","id":3,"remote":"X","bandwidth":500}"#,
+            r#"{"op":"connect","id":3,"remote":"X","bandwidth":1800}"#,
             "unsupported",
         ),
         (
@@ -1058,4 +1083,236 @@ fn a_scan_is_aethers_on_the_hosts_connection() {
     let caps = &lines(&said)[0]["caps"];
     assert!(caps.get("scan").is_none(), "{caps}");
     assert_eq!(caps["call_s"], true);
+}
+
+/// The methods asked of Aether since `from`.
+fn asked_since(a: &Aether, from: usize) -> Vec<(String, Value)> {
+    a.asked[from..]
+        .iter()
+        .map(|r| {
+            (
+                r["method"].as_str().unwrap_or("").to_owned(),
+                r["params"].clone(),
+            )
+        })
+        .collect()
+}
+
+/// RP-4 §1.1, §9.1: a call in a bandwidth Aether runs but is not running now moves the whole
+/// station there first (`bandwidth.set`, once its state says nothing is up), calls keeping it, and
+/// sets back what a host program had asked of it once the call's link has ended.
+#[test]
+fn a_call_in_another_bandwidth_moves_the_station_and_back() {
+    let (mut b, mut a) = opened(true, false);
+    let from = a.asked.len();
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":3,"remote":"WD5EMA","bandwidth":500}"#,
+    );
+    assert_eq!(lines(&said), [json!({"op": "ok", "id": 3})]);
+    assert_eq!(
+        asked_since(&a, from),
+        [
+            ("status".to_owned(), json!({})),
+            ("bandwidth.set".to_owned(), json!({"hz": 500})),
+            (
+                "connect".to_owned(),
+                json!({"remote": "WD5EMA", "callsign": "KK4ODA", "keep_bandwidth": true})
+            ),
+        ]
+    );
+    // Aether says where it went, and the link carries it
+    event(&mut b, &mut a, "bandwidth", &json!({"bandwidth_hz": 500}));
+    let mut up = mine("connected", "WD5EMA (master)");
+    up["remote"] = json!("WD5EMA");
+    let said = event(&mut b, &mut a, "state", &up);
+    assert_eq!(
+        lines(&said),
+        [
+            json!({"op": "connected", "id": 3, "link": "a1", "remote": "WD5EMA",
+                   "local": "KK4ODA", "direction": "out", "bandwidth": 500})
+        ]
+    );
+    let from = a.asked.len();
+    let said = event(&mut b, &mut a, "state", &mine("disconnected", "closed"));
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "disconnected", "link": "a1", "reason": "local"})]
+    );
+    assert_eq!(
+        asked_since(&a, from),
+        [("bandwidth.set".to_owned(), json!({"hz": null}))],
+        "the station goes back to its own"
+    );
+
+    // a call that fails sets it back too, and a call in the bandwidth running moves nothing
+    event(&mut b, &mut a, "bandwidth", &json!({"bandwidth_hz": 2300}));
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":4,"remote":"WD5EMA","bandwidth":500}"#,
+    );
+    let from = a.asked.len();
+    let said = event(&mut b, &mut a, "state", &mine("disconnected", "no answer"));
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "failed", "id": 4, "code": "timeout"})]
+    );
+    assert_eq!(
+        asked_since(&a, from),
+        [("bandwidth.set".to_owned(), json!({"hz": null}))]
+    );
+    event(&mut b, &mut a, "bandwidth", &json!({"bandwidth_hz": 2300}));
+    let from = a.asked.len();
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":5,"remote":"WD5EMA","bandwidth":2300}"#,
+    );
+    let methods: Vec<String> = asked_since(&a, from).into_iter().map(|(m, _)| m).collect();
+    assert_eq!(methods, ["connect"]);
+}
+
+/// A bandwidth a host program asked for (VARA's `BW500` on Aether's other port) is what goes back,
+/// not the station's own: this host's call borrowed the station, and returns it as it was.
+#[test]
+fn a_bandwidth_another_program_asked_for_is_what_goes_back() {
+    let (mut b, mut a) = opened(true, false);
+    a.host_hz = json!(2300);
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":3,"remote":"WD5EMA","bandwidth":500}"#,
+    );
+    let from = a.asked.len();
+    event(&mut b, &mut a, "state", &mine("disconnected", "no answer"));
+    assert_eq!(
+        asked_since(&a, from),
+        [("bandwidth.set".to_owned(), json!({"hz": 2300}))]
+    );
+}
+
+/// RP-4 §1.1: the station cannot move while anything is under way on it. Another program's
+/// session, Aether's state not idle, or Aether's own refusal is `busy`, and no call goes out.
+#[test]
+fn a_station_that_cannot_move_is_busy() {
+    // Aether will not move: something is on the air
+    let (mut b, mut a) = opened(true, false);
+    a.bandwidth_refused = true;
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":3,"remote":"WD5EMA","bandwidth":500}"#,
+    );
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "error", "id": 3, "code": "busy"})]
+    );
+    assert!(a.asked.iter().all(|r| r["method"] != "connect"));
+    // another program's call, no event of Aether's: its state says so
+    let (mut b, mut a) = opened(true, false);
+    a.state = "connecting";
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":3,"remote":"WD5EMA","bandwidth":500}"#,
+    );
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "error", "id": 3, "code": "busy"})]
+    );
+    assert!(
+        a.asked
+            .iter()
+            .all(|r| r["method"] != "connect" && r["method"] != "bandwidth.set")
+    );
+    // another program's session, told: refused before Aether is asked
+    let (mut b, mut a) = opened(true, false);
+    let mut theirs = mine("connected", "N3CALL (slave)");
+    theirs["owner"] = json!(9);
+    event(&mut b, &mut a, "state", &theirs);
+    let before = a.asked.len();
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":3,"remote":"WD5EMA","bandwidth":500}"#,
+    );
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "error", "id": 3, "code": "busy"})]
+    );
+    assert_eq!(a.asked.len(), before);
+}
+
+/// RP-4 §1.1: a host that leaves during a call it moved the station for takes the call with it,
+/// and the station goes back.
+#[test]
+fn a_host_that_leaves_puts_the_bandwidth_back() {
+    let (mut b, mut a) = opened(true, false);
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":3,"remote":"WD5EMA","bandwidth":500}"#,
+    );
+    let from = a.asked.len();
+    let outs = b.host_left();
+    settle(&mut b, &mut a, outs);
+    assert_eq!(
+        asked_since(&a, from),
+        [
+            ("abort".to_owned(), json!({})),
+            ("bandwidth.set".to_owned(), json!({"hz": null}))
+        ]
+    );
+}
+
+/// RP-4 §4.3 on Aether (§9.1): the tuner tone is Aether's `tune`, `seconds` its `duration_s`, 0
+/// to stop it; refused `busy` while a link or a call is up, except to stop; Aether's refusal (a
+/// busy channel, the rules) is `refused`.
+#[test]
+fn the_tuner_tone_is_aethers_tune() {
+    let (mut b, mut a) = opened(true, false);
+    let from = a.asked.len();
+    let said = line(&mut b, &mut a, r#"{"op":"tone","id":3,"seconds":10}"#);
+    assert_eq!(lines(&said), [json!({"op": "ok", "id": 3})]);
+    let said = line(&mut b, &mut a, r#"{"op":"tone","id":4,"seconds":0}"#);
+    assert_eq!(lines(&said), [json!({"op": "ok", "id": 4})]);
+    assert_eq!(
+        asked_since(&a, from),
+        [
+            ("tune".to_owned(), json!({"duration_s": 10})),
+            ("tune".to_owned(), json!({"duration_s": 0}))
+        ]
+    );
+    let said = line(&mut b, &mut a, r#"{"op":"tone","id":5,"seconds":11}"#);
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "error", "id": 5, "code": "malformed"})]
+    );
+    a.tone_refused = true;
+    let said = line(&mut b, &mut a, r#"{"op":"tone","id":6,"seconds":10}"#);
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "error", "id": 6, "code": "refused"})]
+    );
+    a.tone_refused = false;
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":7,"remote":"N1CALL-10"}"#,
+    );
+    let before = a.asked.len();
+    let said = line(&mut b, &mut a, r#"{"op":"tone","id":8,"seconds":10}"#);
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "error", "id": 8, "code": "busy"})]
+    );
+    assert_eq!(a.asked.len(), before, "Aether not asked");
+    let said = line(&mut b, &mut a, r#"{"op":"tone","id":9,"seconds":0}"#);
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "ok", "id": 9})],
+        "a stop is taken"
+    );
 }
