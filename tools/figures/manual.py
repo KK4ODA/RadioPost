@@ -381,7 +381,7 @@ def fig_direct() -> None:
         "client",
         tag="Station A calls",
         title="facundo@radiopost.org",
-        rows=["Another client's station,", "N0CALL, then Call"],
+        rows=["P2P (another client's station),", "N0CALL, then Call"],
         icon="person",
         title_size=14.5,
     )
@@ -393,7 +393,7 @@ def fig_direct() -> None:
         "client",
         tag="Station B listens",
         title="ana@hampost.org",
-        rows=["Listen: it answers", "one station's call"],
+        rows=["Listen for P2P: it answers", "one call, then stops"],
         icon="person",
         title_size=14.5,
     )
@@ -469,7 +469,7 @@ def fig_callsigns() -> None:
         48,
         258,
         [
-            "A call goes out as the callsign chosen. Listen answers calls to any of them.",
+            "A call goes out as the callsign chosen. Listen for P2P answers calls to any of them.",
             "Change it between sessions. Every credential renews while RadioPost is open.",
         ],
     )

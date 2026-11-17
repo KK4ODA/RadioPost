@@ -31,6 +31,6 @@
 <text xml:space="preserve" x="774.0" y="166.5" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#1e293b" text-anchor="start">This computer's</text>
 <text xml:space="preserve" x="774.0" y="189.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">device key, address</text>
 <text xml:space="preserve" x="774.0" y="208.6" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="start">list and log</text>
-<text xml:space="preserve" x="48.0" y="258.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">A call goes out as the callsign chosen. Listen answers calls to any of them.</text>
+<text xml:space="preserve" x="48.0" y="258.0" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">A call goes out as the callsign chosen. Listen for P2P answers calls to any of them.</text>
 <text xml:space="preserve" x="48.0" y="276.1" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">Change it between sessions. Every credential renews while RadioPost is open.</text>
 </svg>

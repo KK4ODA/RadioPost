@@ -287,6 +287,7 @@ async function refresh() {
   document.body.dataset.busy = String(busy);
   $("call").disabled = busy || !s.me;
   $("listen").disabled = busy || !s.me;
+  $("listen").title = listenTitle(s);
   $("stop").hidden = a.state !== "listening";
   $("write").disabled = busy || !s.me;
   $("device").textContent = s.device || "No key yet.";
@@ -305,6 +306,20 @@ async function refresh() {
   if (lastState !== "idle" && lastState !== "renewing" && a.state === "idle") await openFolder(folder);
   lastState = a.state;
   return s;
+}
+
+// Listen for P2P's tooltip: the callsigns it answers as (every callsign of this computer, the one
+// chosen first, W46), one call, and that a gateway on the station is not this client's to answer
+function listenTitle(s) {
+  const mine = s.me ? [s.me.operator] : [];
+  for (const c of s.callsigns || []) {
+    if (c.operator && !mine.includes(c.operator)) mine.push(c.operator);
+  }
+  const names = mine.length > 1
+    ? `${mine.slice(0, -1).join(", ")} or ${mine[mine.length - 1]}`
+    : mine[0] || "your callsign";
+  return `Answer one P2P call to ${names}, then stop. `
+    + "A gateway on this station keeps answering calls to its own callsign";
 }
 
 // ── the callsigns this computer works (wishlist W46, W7) ───────────────────────────────────────

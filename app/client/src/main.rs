@@ -82,14 +82,14 @@ usage: radiopost [--home DIR] [--as CALLSIGN] COMMAND ...
   conformance --adapter HOST:PORT | conformance off
                            conformance mode: reach only the conformance tester's test adapter
   call CALLSIGN [--station] [--fetch all|none|BYTES] [SESSION OPTIONS]
-                           call a gateway, or with --station another client's station (RP-3 §10)
+                           call a gateway, or with --station P2P: another client's station (RP-3 §10)
   gateways [--refresh]     the gateways your post office lists (RP-5 §4.4), nearest first when
                            your grid is set; --refresh fetches the list over the Internet
   grid [SQUARE | --clear]  your Maidenhead grid square (EM73 or EM73tt), to rank gateways
   waiting                  what waited at your post office at the last call to a gateway
   fetch SERIAL... [--not]  fetch these waiting messages on the next call to a gateway, whatever
                            --fetch says; --not stops asking for them
-  listen [SESSION OPTIONS] answer one station's call (RP-3 §10)
+  listen [SESSION OPTIONS] answer one P2P call, station to station (RP-3 §10), then stop
   panel [--port N] [--ui DIR]
                            serve the client's panel on this computer (port 8620) and say where
   update                   replace radiopost, and the other RadioPost programs beside it, with the

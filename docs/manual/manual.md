@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.9.0 |
+| **Version** | 1.10.0 |
 | **Updated** | 2026-11-17 |
 | **Describes** | RadioPost 0.1.0-beta.25 |
 | **Licence** | CC BY 4.0 |
@@ -355,8 +355,9 @@ again with a new code**.
    - **Waiting**: what waited at your post office at your last call to a gateway.
    - **Trash**: messages you deleted.
    - **Addresses**: your address list.
-5. **Station**: whom to call, on which channel, and the **Call** and **Listen** buttons. **Call**
-   is the green one: it puts the station on the air. **Modem** is where RadioPost finds Aether,
+5. **Station**: whom to call, on which channel, and the **Call** and **Listen for P2P** buttons.
+   **Call** is the green one: it puts the station on the air. **Listen for P2P** answers one
+   station-to-station call to your callsign, then stops. **Modem** is where RadioPost finds Aether,
    `ws://127.0.0.1:8515/v1`. Change it only if Aether's control port is not the usual one.
 6. **The folder or message you are looking at.** Click a row to read it.
 7. **Setup**: your account, post office, accept list, usual gateways and keys.
@@ -548,13 +549,14 @@ Agree on a frequency and a bandwidth first.
 
 1. Tune the radio to the frequency, and set Aether's bandwidth. At 2300 Hz Aether also answers a
    call at 500 Hz.
-2. Click **Listen**. The state reads *Listening*. RadioPost answers one call, to the callsign at
-   the top of the window or to any other of yours.
+2. Click **Listen for P2P**. The state reads *Listening*. RadioPost answers one P2P call, to the
+   callsign at the top of the window or to any other of yours, then stops. Rest the mouse on the
+   button to see the callsigns it answers as.
 3. To stop waiting, click **Stop**.
 
 **The station that calls:**
 
-1. Under **Station**, choose **Another client's station**.
+1. Under **Station**, choose **P2P (another client's station)**.
 2. In **Call**, type the other station's callsign.
 3. In **Dial, MHz**, type the frequency you agreed, such as `7.103`. RadioPost tunes the radio
    there at once, or says which dial to set yourself, as in [8.2](#82-tune-and-call).
@@ -575,7 +577,7 @@ reported: click **Send reports**. Your post office then marks your sent mail as 
 as `KK4ODA-1`. A station call to that callsign reaches the gateway, not its operator, and
 RadioPost hangs up and says *KK4ODA-1 is a gateway: for P2P, call the other operator's own
 callsign while their client listens*. To work that operator station to station, call their own
-callsign (`KK4ODA`). Their RadioPost client must be listening (**Listen**) under it, beside the
+callsign (`KK4ODA`). Their RadioPost client must be listening (**Listen for P2P**) under it, beside the
 gateway on the same Aether. The gateway need not close: Aether serves both programs, each for its
 own callsigns.
 
@@ -616,7 +618,7 @@ Steps:
 ### 11.2 Use it
 
 - **Choose a callsign before each session**, from the list at the top of the window. A call goes
-  out as the callsign shown there. **Listen** answers calls to any of your callsigns. A call
+  out as the callsign shown there. **Listen for P2P** answers calls to any of your callsigns. A call
   to another than the one shown is carried by that callsign: its mail goes to that callsign's
   folders, and the log says *answering as …*.
 - You can change it only while the station is idle.
@@ -1479,7 +1481,7 @@ These notes follow the US rules (Part 97). Check your own country's.
 
 | You see | Do |
 |---|---|
-| **Call** and **Listen** are greyed | This callsign has no credential yet: enroll it ([section 5](#5-getting-an-account)). |
+| **Call** and **Listen for P2P** are greyed | This callsign has no credential yet: enroll it ([section 5](#5-getting-an-account)). |
 | *cannot reach the modem's adapter at ws://127.0.0.1:8515/v1* | Start Aether. Check the **Modem** box. |
 | The call goes out but nothing answers | Check the dial and the bandwidth against the gateway's channel. Check the gateway's hours. Try another gateway. |
 | Aether refuses RadioPost's calls | Aether is keyed by a host program. In Aether's Setup, step 2, choose CAT, serial, rigctld, FLRig, CM108 or VOX. |
@@ -1495,7 +1497,7 @@ These notes follow the US rules (Part 97). Check your own country's.
 | *Set the radio's dial to … MHz (USB) yourself: the modem cannot set it* | Aether keys this radio without CAT and cannot set its dial. Turn the radio to that dial. To let Aether set it, key the radio by CAT in Aether's Setup, step 2. |
 | *Not tuned: … busy …* | A session is up on the station, yours or another program's. Pick the channel again when it has ended. |
 | **Tuner tone** refused | Aether keys no tone while the channel is in use, or while its rules forbid it there. Wait, or check the dial. |
-| *… is a gateway: for P2P, call the other operator's own callsign while their client listens* | You called a gateway's callsign as **Another client's station**. Call its operator's own callsign, and ask them to click **Listen** ([section 10](#10-station-to-station)). |
+| *… is a gateway: for P2P, call the other operator's own callsign while their client listens* | You called a gateway's callsign as **P2P (another client's station)**. Call its operator's own callsign, and ask them to click **Listen for P2P** ([section 10](#10-station-to-station)). |
 | An application refused | See [section 5.3](#53-if-the-post-office-refuses). |
 
 ### The gateway
@@ -1569,7 +1571,7 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 | Held attachment | A file too large for the radio, kept at your post office until you ask for it. |
 | Job | A task on the post office's server that the desk asks for, from a fixed list. |
 | Known post office | Another post office whose word your post office takes that its users are licensed. |
-| Listen | Wait for one station to call you directly. |
+| Listen for P2P | Wait for one other client to call you directly, station to station, then stop. A gateway on your station goes on answering its own callsign. |
 | Operator (of a post office) | Someone who runs a post office: approves accounts and gives codes. |
 | Partner | Another gateway this one forwards mail to by radio when cut off. |
 | Post office | The server that keeps your mailbox and exchanges email with the world. |
@@ -1595,8 +1597,9 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 
 **Station to station**
 
-1. Agree on a frequency and bandwidth. The one who answers tunes to them and clicks **Listen**.
-2. The other chooses **Another client's station**, types the callsign, the **Dial, MHz** and the
+1. Agree on a frequency and bandwidth. The one who answers tunes to them and clicks
+   **Listen for P2P**.
+2. The other chooses **P2P (another client's station)**, types the callsign, the **Dial, MHz** and the
    **Bandwidth**, then **Call**.
 3. With a station that runs a gateway, call its operator's own callsign, not the gateway's.
 4. Later, with the Internet: **Send reports**.
@@ -1677,3 +1680,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.7.0 | 2026-11-15 | §7: **Form**, and sending an ICS-213 as its values alone; a form message reads as the form. |
 | 1.8.0 | 2026-11-17 | Gateways that scan (W50): §8 a *scanned* channel and the call that keeps trying; §18 **Scan these channels**, and listing only channels the gateway listens on; §19 the scan on **Modem** and *When a scan stops*; §23 `scan`. |
 | 1.9.0 | 2026-11-17 | From the 40 m RadioPost mail of 2026-11-17. §6, §8: **Call** is green; a channel is tuned as it is picked, the line under it says where the radio is or which dial to set by hand, **Tuner tone**, and the radio stays on the channel after the call (new Figure 13). §10: a station call's **Dial, MHz** and **Bandwidth** (new Figure 18), and P2P with a station that also runs a gateway. §19: a gateway whose scan ends registers again with the channel it stays on. §35, §37, §39, §40 to match. |
+| 1.10.0 | 2026-11-17 | P2P named plainly in the call box: **Listen** is **Listen for P2P**, whose tooltip names the callsigns it answers as, and **Another client's station** is **P2P (another client's station)** (§6, §10, §11.2, §37, §39, §40; the client's screenshots retaken). |

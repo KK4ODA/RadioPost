@@ -22,7 +22,7 @@ gateway that can reach the Internet (§4).
     *KK4ODA-1 · RadioPost Gateway*.
   * When the gateway stops, Aether's own callsign comes back.
   * For station-to-station mail with you, other operators call your own callsign, not the
-    gateway's, while your RadioPost client listens under it (**Listen**) beside the gateway: one
+    gateway's, while your RadioPost client listens under it (**Listen for P2P**) beside the gateway: one
     Aether serves both. A client that calls the gateway's callsign for station-to-station mail is
     welcomed as by any gateway, hangs up, and the gateway's log says why.
 * **Aether keying the radio itself**: in Aether's Setup step 2, CAT, serial, rigctld, FLRig,

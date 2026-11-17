@@ -80,10 +80,10 @@ archive, and puts its address, `127.0.0.1:8600`, in RadioPost's **Modem** box.
 
 **Station A** (it answers): `radiopost-tcp --listen 0.0.0.0:8774`. The first time, it makes a
 certificate for itself and prints its fingerprint (`SHA-256 5c0e…`): send that to B. A's router
-must pass TCP port 8774 to this computer. In RadioPost, click **Listen**.
+must pass TCP port 8774 to this computer. In RadioPost, click **Listen for P2P**.
 
 **Station B** (it calls): `radiopost-tcp --trust <A's fingerprint> --peer <A's callsign>=<A's
-address>:8774`, then chooses **Another client's station** and **Call**s A's callsign.
+address>:8774`, then chooses **P2P (another client's station)** and **Call**s A's callsign.
 
 The link is TLS: encryption is allowed on the Internet, which is not the air. Put
 `ws://127.0.0.1:8515/v1` back in the **Modem** box afterwards. (On an amateur mesh network such as
@@ -101,14 +101,14 @@ RadioPost 0.1.0-beta.15, Aether's header shows *✓ RadioPost client* while Radi
 *✓ RadioPost client · listening* while it listens. Open but idle, RadioPost holds no callsign, so
 Aether answers as it would without it.
 
-**Station A** (it answers): in RadioPost's *Station* area, click **Listen**. The badge at the top
+**Station A** (it answers): in RadioPost's *Station* area, click **Listen for P2P**. The badge at the top
 says *Listening*.
 
 **Station B** (it calls):
 
 1. Click **Write**, address the message to A's address (`ana@test.radiopost.org`), give it a
    subject and a few lines, and click **Put in outbox**.
-2. In *Station*, choose **Another client's station** and enter A's callsign under *Call*.
+2. In *Station*, choose **P2P (another client's station)** and enter A's callsign under *Call*.
 3. Type the agreed frequency in **Dial, MHz** (`7.103`) and choose the agreed **Bandwidth**.
    RadioPost tunes the radio at once when Aether can set its dial (CAT, rigctld or FLRig);
    otherwise the line under it says which dial to set yourself. **Tuner tone** keys ten seconds of
@@ -128,7 +128,7 @@ the identifier at the end.
 
 Then look: A's **Inbox** has B's message, and B's **Sent** has it. Swap roles; send a message each
 way in one session (each writes one to the other before the call); attach a small file (a few
-hundred bytes: every byte goes on the air). After each session, click **Listen** again to answer
+hundred bytes: every byte goes on the air). After each session, click **Listen for P2P** again to answer
 the next call.
 
 Closing RadioPost while it listens or a session is under way asks first: closing ends the
@@ -171,4 +171,4 @@ with:
   copy to anyone else (a `Cc`, an email address) goes on. Email through a gateway has
   [a guide of its own](on-air-gateway.md).
 * **Renewal.** A credential lasts 90 days; the operator issues a new one after that.
-* **One session at a time.** **Listen** answers one call, then stops.
+* **One session at a time.** **Listen for P2P** answers one call, then stops.

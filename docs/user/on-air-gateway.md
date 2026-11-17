@@ -57,7 +57,7 @@ says why once if it could not. **Renew credential** in Setup does it at once.
 office for an account and a code for that callsign. In Setup, click **Add another callsign**, then
 enroll it as above with its address, callsign and code. Each callsign keeps its own mail. A list
 at the top of the window now names both: choose the one to work as before you call or listen. A
-call goes out as the callsign chosen, and *Listen* answers that callsign only. Both credentials
+call goes out as the callsign chosen, and **Listen for P2P** answers P2P calls to either. Both credentials
 renew while the window is open. The address list is shared. **Remove this callsign** in Setup
 takes one off this computer once its folders and trash are empty.
 

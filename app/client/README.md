@@ -61,7 +61,7 @@ chosen.
 | `grid [SQUARE \| --clear]` | Your Maidenhead grid square (`EM73`, `EM73tt`), to rank gateways by distance. |
 | `waiting` | What waited at your post office at the last call to a gateway: every message not yet picked up (RP-3 §6.2), and mail a gateway cut off from the Internet kept for you from its other users, listed with serial 0 (RP-7 §4.4): that comes with what `--fetch` takes, asked for by its content ID. |
 | `fetch SERIAL… [--not]` | Fetch these waiting messages on the next call to a gateway, whatever `--fetch` says; `--not` stops asking. |
-| `listen` | Answers one station's call. |
+| `listen` | Answers one P2P call, station to station (RP-3 §10), then stops: the panel's **Listen for P2P**. A gateway on the same station answers its own callsign. |
 | `panel [--port N] [--ui DIR]` | Serves the panel on this computer (port 8620) and says where to open it. |
 | `update` | Replaces `radiopost`, and the other RadioPost programs beside it, with the newest release's, once it checks that the project's update key signed them. The desktop application updates itself from its window. |
 | `conformance --adapter HOST:PORT`, `conformance off` | Conformance mode (below). |
