@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.37 |
-| **Updated** | 2026-11-15 |
+| **Version** | 0.3.38 |
+| **Updated** | 2026-11-17 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §9 and §10 |
@@ -153,6 +153,7 @@ rules:
 | W47 | Deleting messages, and a trash | Mail | High | Fits today | Implemented |
 | W48 | What a session has carried, and what is left | Radio | Medium | Fits today | Implemented |
 | W49 | The post office run from the client, and set up by its program | Operation | High | Optional addition (RP-5 §6.7, §7) | Implemented |
+| W50 | A gateway that scans its channels | Operation | Medium | Optional addition (RP-4, RP-5 §4.4); G21 | Proposed |
 
 Groups: *Mail* (§4), *Setup* (§5), *Radio* (§6), *Operation* (§7), *Offline* (§8),
 *Applications* (§9), *Adapters* (§10), *Rules* (§11). Consolidated and deferred wishes are in §14.
@@ -698,6 +699,25 @@ server up with one program instead of a page of commands.
 | Author decision | Build it, all of it (2026-11-12). |
 | Notes | The FCC's public licence data carries no email addresses (none in 1.7 million records of 2026-11-08), so D33's "code sent to the address the licence record holds" can only be the postal address: the postcard. |
 
+### W50. A gateway that scans its channels
+
+A gateway with one radio listens on several channels, a while on each, as many Winlink gateways do
+with RMS Trimode, and a client finds it on any of them.
+
+| | |
+|---|---|
+| Requested by | The author (KK4ODA), 2026-11-17: most Winlink gateways scan several channels with Trimode; what would be the most robust way for RadioPost Gateway? Requesters: 1. |
+| Component | Gateway, client, adapters (Aether). |
+| Compatibility | **Optional protocol addition** to RP-4 (`caps.scan`, the `scan` request and event, `connect`'s `call_s` with `caps.call_s`) and RP-5 §4.4 (a channel's `scan_s`). Adapters, gateways and clients that ignore them keep working (RP-4 §2). A gateway listing only the channels it listens on (G21) is a SHOULD, so that it stays MINOR (RP-0 §8.3). |
+| Existing coverage | New. The gateway listens on one dial, and tunes away only for its own calls (RP-4 §4.1, RP-7 §5). Its record can list channels it never sits on (G21). |
+| Dependencies | W14 (the dial); Aether's scan (its ADR-0129, proposed). W26 is the alternative: a second radio needs no scan. |
+| Effort | Large: Aether's scan and the harness work to judge it, RP-4 and RP-5 1.1.0 with their vectors, the gateway, the client, three conformance tests. |
+| Priority | **Medium.** A gateway serving a region wants more than one band. The pilot does not need it. |
+| Recommendation | Accept, as [the scanning proposal](03-scanning.md) designs it: the modem scans, never leaving a dial while a frame is arriving or anything is owed there; the gateway says where; the client calls for as long as the gateway's record says. Not Trimode's way, a program outside the modem cycling `listen` and `tune`: that rebuilds the races Aether has fixed five times for Trimode. |
+| Status | Proposed. |
+| Author decision | None yet. |
+| Notes | Aether's timing model: a call of *n* + 2 tries finds a gateway scanning *n* channels every time on a good path; Aether's default two tries find it 26–63 % of the time. At four channels a call nobody answers lasts about 91 s. Channels on one band inside one passband could be heard at once without scanning (Aether's ADR-0129 §4); not proposed now. |
+
 ---
 
 ## 8. Offline and disconnected operation
@@ -1049,6 +1069,7 @@ document.
 | G18 | RP-6 §2 | What becomes of mail a user sends from a mail program, signed in, to another user of the same post office: whether the door judges it, whether it becomes a radio message and is third-party, and whether mail sent by radio to a user here reaches the mail server. | Such mail never reached the radio, and mail sent by radio never reached the mail program. | RP-6 0.7.0 §2.6, with RP-5 0.19.0 §6.5. **Settled and built** (2026-11-13). | W36 |
 | G19 | RP-5 §6.3 | `radio_skips_read` said mail read in a mail program is not offered by radio, not whether it is picked up (its copies dropped) or only hidden. | A post office hiding it leaves gateways offering copies of mail already read while offline. | Taken as picked up, learned without delaying a session: RP-5 0.19.0 §6.3. **Settled and built** (2026-11-13). | W36 |
 | G20 | RP-1 §7.3 | Which keys a gateway trusts, offline, for a post office its operator names by URL because its DNS records are not published (the gateway's settings, design §5.2): §7.3 trusts only post offices found in DNS and one hop of their lists. | Such a gateway could check no caller offline. | For the gateway's own post office, the key that signed the gateway's own credential (fetched over HTTPS at registration), and those an info document signed by it adds, as §7.2 does from DNS; built that way (2026-11-13), not yet in RP-1. **Settled** (2026-11-15, D41): RP-1 1.0.0 §7.3. | W28 |
+| G21 | RP-5 §4.4 | Nothing says a gateway listens on the channels it lists. Ours registers what its operator enters and listens on one dial. | A client that calls a listed channel the gateway is not on is never answered, and cannot tell why. | A gateway SHOULD list only channels it listens on: the dials it scans, and otherwise the dial each modem's radio sits on (drafted in [the scanning proposal](03-scanning.md), §3.2). | W50 |
 
 ---
 
@@ -1127,3 +1148,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.35 | 2026-11-15 | W22 implemented: the packet adapter on a TNC's AGWPE port (RP-4 1.0.2 §9.4), tried against a stand-in. |
 | 0.3.36 | 2026-11-15 | W21: RP-4 §9.3 checked against ardopcf's host interface (1.0.3), and the ARDOP adapter built, tried against a stand-in. |
 | 0.3.37 | 2026-11-15 | W32 implemented: forms as their values alone (RP-2 1.1.0 §8, RP-6 1.1.0), ICS-213 published, measured against text and a form file. |
+| 0.3.38 | 2026-11-17 | The author's wish: W50, a gateway that scans its channels, proposed in [the scanning proposal](03-scanning.md) with drafts for RP-4 and RP-5. Gap G21: a gateway's record can list channels it never listens on. |

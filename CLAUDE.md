@@ -14,7 +14,10 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   work, the open questions; `01-conformance.md`: the conformance tester's outline (its tests by
   role, conformance mode, the test adapter, what each phase adds); `02-wishlist.md`: the wishlist
   (every wish for the programs, grouped and prioritized, each checked against the specifications;
-  the gaps found in them; what is set aside and why).
+  the gaps found in them; what is set aside and why); `03-scanning.md`: the proposal for gateways
+  that scan their channels (W50, gap G21; 2026-11-17, awaiting the author). The modem scans (Aether's
+  ADR-0129) and the gateway says where; it drafts RP-4 (`caps.scan`, `scan`, `connect`'s `call_s`)
+  and RP-5 (a channel's `scan_s`), which are not in the specs until accepted.
 - **Code** (Phase 1 on, D27, D28): Rust throughout, in this repository — `core/`, a Cargo
   workspace (the core library, the gateway, the service), `app/` (the Tauri client) and `adapters/`.
   Forms (W32, RP-2 1.1.0 §8): a form travels as its template's fingerprint (8 bytes of SHA-256 of
