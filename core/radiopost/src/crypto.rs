@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! RP-0 §5 and §6.3: hashes, key IDs, content IDs, signatures with a context, and COSE_Sign1.
+//! RP-0 §5 and §6.3: hashes, key IDs, content IDs, signatures with a context, COSE_Sign1, and the
+//! HMAC tags and keyword keys of RP-8's circles.
 
 use ed25519_dalek::{Signature, Signer as _, SigningKey, VerifyingKey};
 use sha2::{Digest as _, Sha256};
@@ -22,6 +23,12 @@ pub mod context {
     pub const API_APPLY: &str = "RadioPost-api-apply-v1";
     /// A post office's placement, as COSE external data (RP-7 §4.2).
     pub const PLACEMENT: &str = "RadioPost-placement-v1";
+    /// Not signed: the salt of a circle's key, made from its keyword (RP-8 §2).
+    pub const CIRCLE: &str = "RadioPost-circle-v1";
+    /// A circle's ID, a tag under its key (RP-8 §2).
+    pub const CIRCLE_ID: &str = "RadioPost-circle-id-v1";
+    /// An alert's tag, under its circle's key (RP-8 §3).
+    pub const ALERT: &str = "RadioPost-alert-v1";
 }
 
 /// SHA-256.
@@ -116,6 +123,59 @@ pub fn signed_input(context: &str, data: &[u8]) -> Vec<u8> {
     out.extend_from_slice(context.as_bytes());
     out.push(0);
     out.extend_from_slice(data);
+    out
+}
+
+/// HMAC-SHA256's inner and outer hashes with `key` taken in (RFC 2104), so a key used many times
+/// (PBKDF2's iterations) is padded once.
+fn hmac_keyed(key: &[u8]) -> (Sha256, Sha256) {
+    let mut block = [0u8; 64];
+    if key.len() > block.len() {
+        block[..32].copy_from_slice(&sha256(key));
+    } else {
+        block[..key.len()].copy_from_slice(key);
+    }
+    let mut inner = Sha256::new();
+    inner.update(block.map(|b| b ^ 0x36));
+    let mut outer = Sha256::new();
+    outer.update(block.map(|b| b ^ 0x5c));
+    (inner, outer)
+}
+
+fn hmac_finish((inner, outer): &(Sha256, Sha256), data: &[u8]) -> [u8; 32] {
+    let mut i = inner.clone();
+    i.update(data);
+    let mut o = outer.clone();
+    o.update(i.finalize());
+    o.finalize().into()
+}
+
+/// HMAC-SHA256 (RFC 2104).
+#[must_use]
+pub fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
+    hmac_finish(&hmac_keyed(key), data)
+}
+
+/// RP-0 §5: a tag, HMAC-SHA256 under a shared key over the context, a zero byte and the data.
+#[must_use]
+pub fn mac(key: &[u8], context: &str, data: &[u8]) -> [u8; 32] {
+    hmac_sha256(key, &signed_input(context, data))
+}
+
+/// PBKDF2 with HMAC-SHA256 (RFC 8018 §5.2), one block: 32 bytes of key.
+#[must_use]
+pub fn pbkdf2_sha256(password: &[u8], salt: &[u8], iterations: u32) -> [u8; 32] {
+    let keyed = hmac_keyed(password);
+    let mut first = salt.to_vec();
+    first.extend_from_slice(&1u32.to_be_bytes());
+    let mut u = hmac_finish(&keyed, &first);
+    let mut out = u;
+    for _ in 1..iterations {
+        u = hmac_finish(&keyed, &u);
+        for (o, b) in out.iter_mut().zip(u) {
+            *o ^= b;
+        }
+    }
     out
 }
 
@@ -237,5 +297,38 @@ impl Sign1 {
             &self.signature,
             public,
         )
+    }
+}
+
+#[cfg(test)]
+mod hmac_tests {
+    use super::{hmac_sha256, pbkdf2_sha256};
+    use crate::cbor::hex as hex_of;
+
+    #[test]
+    fn hmac_matches_rfc_4231() {
+        // test case 2, and test case 6: a key longer than the block, hashed first
+        assert_eq!(
+            hex_of(&hmac_sha256(b"Jefe", b"what do ya want for nothing?")),
+            "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+        );
+        let data = b"Test Using Larger Than Block-Size Key - Hash Key First";
+        assert_eq!(
+            hex_of(&hmac_sha256(&[0xaa; 131], data)),
+            "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"
+        );
+    }
+
+    #[test]
+    fn pbkdf2_matches_rfc_7914() {
+        // RFC 7914 §11's PBKDF2-HMAC-SHA256 vectors, their first 32 bytes
+        assert_eq!(
+            hex_of(&pbkdf2_sha256(b"passwd", b"salt", 1)),
+            "55ac046e56e3089fec1691c22544b605f94185216dde0465e68b9d57c20dacbc"
+        );
+        assert_eq!(
+            hex_of(&pbkdf2_sha256(b"Password", b"NaCl", 80_000)),
+            "4ddcd8f60b98be21830cee5ef22701f9641a4418d04c0414aeff08876b34ab56"
+        );
     }
 }

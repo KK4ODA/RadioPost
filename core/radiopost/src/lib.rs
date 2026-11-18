@@ -2,11 +2,12 @@
 //! RadioPost's objects, as the specifications define them: deterministic CBOR (RP-0 §4.1),
 //! signatures, key IDs and content IDs (RP-0 §5, §6.3), messages and their air forms (RP-2),
 //! credentials (RP-1 §4, §5), session statements (RP-1 §6), PDU framing (RP-3 §2, §4), the
-//! session protocol's engines (RP-3), and the programs' log file (`logfile`).
+//! session protocol's engines (RP-3), alerts (RP-8), and the programs' log file (`logfile`).
 //!
 //! Every type here is checked against the test vectors in `vectors/` (`tests/vectors.rs`). Where
 //! this library and a specification disagree, the specification is right.
 
+pub mod alert;
 pub mod base64url;
 pub mod callsign;
 pub mod cbor;

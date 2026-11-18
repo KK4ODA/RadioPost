@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.54 |
-| **Updated** | 2026-11-15 |
+| **Version** | 0.1.55 |
+| **Updated** | 2026-11-18 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The concept](../concept/00-concept.md) |
@@ -114,6 +114,7 @@ reasoning; the specifications hold the result.
 | D39 | **Modem names are a registry, and an unknown one is ignored** (RP-0 §9.4, RP-5 §4.4): the names in gateway records and forwarding windows are kept in RP-0's registries, each one modem's air interface; a reader skips a channel whose modem it does not know. An FM channel states its carrier and its width. | A new modem (Mercury, Aether FM) must be listable without a new version of every client, and a client must not offer a channel it cannot call. A modem behind an FM radio's audio cannot measure its deviation, so the channel is the one thing it can state. | The six names fixed in RP-5's text (no way to add one); any string, unregistered (two programs name one modem differently); a name per adapter (one air interface listed twice); the occupied band measured, as on HF (impossible through FM audio). |
 | D40 | **Callsigns are compared by their base** (RP-0 §6.1, RP-1 §6.3): a statement's `operator` passes when it shares its base with the credential's, so a station on the air portable or under an SSID (`VE3/KK4ODA/P`, `KK4ODA-7`) proves itself with its one credential; a client called checks the callsign called by its base, so it answers under any SSID of its callsign; a gateway called still checks its own callsign exactly, since callers choose it by that name. The base is the longest part between the `/`, the SSID off, of two as long the last, as Aether reads it. (The author, 2026-11-15, before RP-0 to RP-6 are frozen at 1.0; gaps G10, G12.) | A licensee on the air portable, mobile or as a second station is the same licensee; a credential for each form would be a credential for each trip. An older verifier refuses such a statement, so nothing is taken that should not be. | Exact comparison, each on-air form its own credential. |
 | D41 | **RP-0 to RP-6 are Stable at 1.0.0** (RP-0 §8): radiopost.org's pilot runs them; a change an implementation cannot ignore comes only with a new protocol version, and every change to them is announced. The open gaps were settled first: G1 (a trimmed message points to the one it answers), G4 (no transport between machines), G7 (dictionary 1 an option, never a requirement), G9 (one session a link), G10 and G12 (D40), G17 (a reply's thread from the email sent), G20 (a gateway's own post office named by URL). RP-7 stays a Draft. (The author, 2026-11-15.) | Implementers need a target that holds still; each settled gap was cheapest to change before it. | Waiting for a second implementation first (Candidate, RP-0 §8.1): none is in sight, and the pilot already runs them. |
+| D42 | **Alerts are tagged by a circle's shared keyword, sent as broadcasts** (RP-8, wishlist W52): the keyword makes a key (PBKDF2-HMAC-SHA256), every alert and answer carries an 8-byte HMAC tag under it, and the text stays plain; an alert goes as an RP-4 broadcast, answered by `heard`, `seen` and a reply. (The author, 2026-11-18.) | Two operators can share a keyword by voice in a minute, in an outage, with no credential exchanged; a tag of 8 bytes against Ed25519's 64 keeps an alert to three tone frames on Aether (16 s). A broadcast needs no call, so it reaches a path too weak for a session, and a whole circle at once. Signing hides nothing (§97.113(a)(4)). | Per-person Ed25519 signatures (they prove who sent it, but 56 bytes more make the alert five tone frames, 26.8 s, and the receiver must hold the sender's credential beforehand); the keyword sent in the alert (anyone listening learns it); a session for each alert (11–40 s to connect, and none on a weak path); encryption (not allowed). |
 
 ---
 
@@ -404,3 +405,4 @@ Collected from the specifications and the concept, each to be settled in the doc
 | 0.1.52 | 2026-11-15 | §5.4, §9: the packet adapter (W22, RP-4 1.0.2 §9.4). |
 | 0.1.53 | 2026-11-15 | §5.4, §9: the ARDOP adapter (W21, RP-4 1.0.3 §9.3); §10: ARDOP's host interface checked, no longer open. |
 | 0.1.54 | 2026-11-15 | §9: forms (W32), RP-2 1.1.0 §8; Phase 5 built but for the phone. |
+| 0.1.55 | 2026-11-18 | D42: alerts tagged by a circle's keyword, sent as broadcasts (RP-8, W52). |

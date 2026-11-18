@@ -616,3 +616,145 @@ fn gateway_lists_are_read_from_every_post_office_the_home_knows() {
         );
     }
 }
+
+/// RP-8 §2: each circle's key, ID and check from its keyword, and each keyword normalised, kept
+/// or refused.
+#[test]
+fn alert_circles() {
+    use radiopost::alert;
+    let file = vectors("alerts.json");
+    let circles = alert_circles_of(&file);
+    for c in file["circles"].as_array().expect("circles") {
+        let made = &circles[text(c, "name")];
+        assert_eq!(
+            alert::normalise_keyword(text(c, "keyword")),
+            text(c, "normalised")
+        );
+        assert_eq!(hex(&made.key), text(c, "key_hex"), "{}", text(c, "name"));
+        assert_eq!(hex(&made.id), text(c, "id_hex"), "{}", text(c, "name"));
+        assert_eq!(made.check(), text(c, "check"));
+    }
+    for k in file["keywords"].as_array().expect("keywords") {
+        let typed = text(k, "keyword");
+        assert_eq!(
+            alert::normalise_keyword(typed),
+            text(k, "normalised"),
+            "{typed:?}"
+        );
+        let got = alert::keyword_problem(typed).unwrap_or_else(|| "kept".into());
+        assert_eq!(got, text(k, "expect"), "{}", text(k, "what"));
+    }
+}
+
+fn alert_circles_of(file: &Json) -> HashMap<String, radiopost::alert::Circle> {
+    file["circles"]
+        .as_array()
+        .expect("circles")
+        .iter()
+        .map(|c| {
+            let made =
+                radiopost::alert::Circle::from_keyword(text(c, "keyword")).expect("a keyword kept");
+            (text(c, "name").to_owned(), made)
+        })
+        .collect()
+}
+
+/// RP-8 §3, §5: each frame decodes, and made again from what it says gives the same bytes.
+#[test]
+fn alert_frames() {
+    use radiopost::alert::{self, Draft, Heard, Kind};
+    use std::collections::HashSet;
+    let file = vectors("alerts.json");
+    let circles = alert_circles_of(&file);
+    let mut alerts: Vec<alert::Frame> = Vec::new();
+    for f in file["frames"].as_array().expect("frames") {
+        let raw = bytes(f, "hex");
+        let circle = &circles[text(f, "circle")];
+        let at_epoch = alert::hear(&raw, &[], std::slice::from_ref(circle), 0, &HashSet::new());
+        // a station with no callsign, at the epoch: the tag checks before the time and the address
+        assert_eq!(at_epoch.verdict(), "out of time", "{}", text(f, "name"));
+        let sent_at = cbor::decode(&raw)
+            .expect("CBOR")
+            .get(4)
+            .and_then(radiopost::Value::as_u64)
+            .expect("time");
+        let mine = ["N0CALL".to_owned(), "KK4ODA".to_owned()];
+        let got = alert::hear(
+            &raw,
+            &mine,
+            std::slice::from_ref(circle),
+            sent_at,
+            &HashSet::new(),
+        );
+        let Heard::New(frame) = got else {
+            panic!("{}: heard as {got:?}", text(f, "name"));
+        };
+        assert_eq!(hex(&frame.tag), text(f, "tag_hex"));
+        let again = match frame.re {
+            Some(re) => {
+                let answered = alerts.iter().find(|a| a.tag == re).expect("its alert");
+                alert::answer(
+                    circle,
+                    answered,
+                    frame.kind,
+                    &frame.from,
+                    frame.time,
+                    frame.text.as_deref(),
+                )
+            }
+            None => alert::make(
+                circle,
+                &Draft {
+                    kind: Kind::Alert,
+                    from: &frame.from,
+                    to: frame.to.as_deref(),
+                    time: frame.time,
+                    text: frame.text.as_deref(),
+                    re: None,
+                },
+            ),
+        };
+        assert_eq!(
+            hex(&again.expect("made")),
+            text(f, "hex"),
+            "{}",
+            text(f, "name")
+        );
+        if frame.kind == Kind::Alert {
+            alerts.push(frame);
+        }
+    }
+}
+
+/// RP-8 §4: what each station makes of each broadcast.
+#[test]
+fn alert_hearing() {
+    use radiopost::alert::{self, Circle};
+    use std::collections::HashSet;
+    let file = vectors("alerts.json");
+    let circles = alert_circles_of(&file);
+    for h in file["hearing"].as_array().expect("hearing") {
+        let what = text(h, "what");
+        let mine: Vec<String> = h["station"]
+            .as_array()
+            .expect("callsigns")
+            .iter()
+            .map(|c| c.as_str().expect("a callsign").to_owned())
+            .collect();
+        let known: Vec<Circle> = h["circles"]
+            .as_array()
+            .expect("circles")
+            .iter()
+            .map(|n| circles[n.as_str().expect("a name")].clone())
+            .collect();
+        let heard: HashSet<[u8; 8]> = h["heard"]
+            .as_array()
+            .expect("tags")
+            .iter()
+            .map(|t| array(&unhex(t.as_str().expect("hex"))))
+            .collect();
+        let now = h["now"].as_u64().expect("now");
+        let got = alert::hear(&bytes(h, "hex"), &mine, &known, now, &heard);
+        assert_eq!(got.verdict(), text(h, "expect"), "{what}");
+    }
+}

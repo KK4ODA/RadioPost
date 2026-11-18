@@ -26,7 +26,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from rpref import cbor, ed25519, forms, fwd, jws, mail, po, rp, rpmi
+from rpref import alert, cbor, ed25519, forms, fwd, jws, mail, po, rp, rpmi
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "vectors"
@@ -44,6 +44,7 @@ T_ACCOUNT = T_SESSION + 2 * DAY  # api-account.json: renewal and the accept list
 T_OFFICE = T_SESSION + 3 * DAY  # api-office.json: applications and the operator endpoints
 T_WINDOW = 1794492900  # session-04: N1CALL-10's window opens, 2026-11-12T14:15:00Z (:15 hourly)
 T_CUT = T_WINDOW - 6 * 3600  # Atlanta loses the Internet
+T_ALERT = T_SESSION + 5 * DAY  # alerts.json: Facundo alerts Ana, 2026-11-14T14:40:00Z
 
 PO_RADIOPOST = "https://po.radiopost.org/rp/v1"
 PO_HAMPOST = "https://po.hampost.org/rp/v1"
@@ -7454,11 +7455,348 @@ def make_forms() -> dict[str, Any]:
     return out
 
 
+# -- RP-8: alerts --------------------------------------------------------------------------------
+
+ALERT_CIRCLES = {
+    # the keyword Facundo's family shares: four words, as Make one suggests them (RP-8 §2)
+    "family": "kimo dali sune pato",
+    # Shelter 3's team
+    "shelter": "Shelter 3 water before noon",
+}
+
+
+def alert_frames() -> dict[str, tuple[str, bytes]]:
+    """RP-8 §3 and §5: Facundo (KK4ODA) alerts Ana (N0CALL); her station hears it, she sees it and
+    replies; and Facundo alerts the whole family circle. Each frame with its circle's name."""
+    family = alert.circle_key(ALERT_CIRCLES["family"])
+    cid = alert.circle_id(family)
+    to_ana = alert.frame_map(
+        alert.ALERT, cid, "KK4ODA", T_ALERT, to="N0CALL", text="Please call me on 146.52 now"
+    )
+    raw = alert.make(family, to_ana)
+    sent = cbor.decode(raw)
+    everyone = alert.frame_map(
+        alert.ALERT, cid, "KK4ODA", T_ALERT + 300, text="Family net in 10 minutes on 3.590 MHz"
+    )
+    return {
+        "Facundo alerts Ana": ("family", raw),
+        "Ana's station has heard it": (
+            "family",
+            alert.answer(family, sent, alert.HEARD, "N0CALL", T_ALERT + 14),
+        ),
+        "Ana has seen it": (
+            "family",
+            alert.answer(family, sent, alert.SEEN, "N0CALL", T_ALERT + 41),
+        ),
+        "Ana replies": (
+            "family",
+            alert.answer(
+                family, sent, alert.REPLY, "N0CALL", T_ALERT + 58, text="On my way, 5 min"
+            ),
+        ),
+        "Facundo alerts the family circle": ("family", alert.make(family, everyone)),
+    }
+
+
+def make_alerts() -> dict[str, Any]:
+    """RP-8: circles' keys, alerts and their answers, and what a station makes of what it hears."""
+    keys = {name: alert.circle_key(k) for name, k in ALERT_CIRCLES.items()}
+    ids = {name: alert.circle_id(k) for name, k in keys.items()}
+    circles = [
+        {
+            "name": name,
+            "keyword": keyword,
+            "normalised": alert.normalise_keyword(keyword),
+            "key_hex": keys[name].hex(),
+            "id_hex": ids[name].hex(),
+            "check": alert.check_text(ids[name]),
+        }
+        for name, keyword in ALERT_CIRCLES.items()
+    ]
+    typed = [
+        ("the family's keyword as typed", ALERT_CIRCLES["family"]),
+        ("in capitals, with extra spaces and a tab", "  KIMO  Dali\tsune pato "),
+        ("a word too short to keep", "eagle"),
+        ("short once the spaces go", "  Aa   Bb  C "),
+        ("a non-ASCII capital is kept as it is", "Ñandú corre lejos"),
+    ]
+    keywords = [
+        {
+            "what": what,
+            "keyword": keyword,
+            "normalised": alert.normalise_keyword(keyword),
+            "expect": alert.keyword_problem(keyword) or "kept",
+        }
+        for what, keyword in typed
+    ]
+    confirm(  # RP-8 §2, as written
+        keywords,
+        {
+            "the family's keyword as typed": "kept",
+            "in capitals, with extra spaces and a tab": "kept",
+            "a word too short to keep": "shorter than 8 characters",
+            "short once the spaces go": "shorter than 8 characters",
+            "a non-ASCII capital is kept as it is": "kept",
+        },
+    )
+    assert keywords[1]["normalised"] == keywords[0]["normalised"]
+    assert keywords[4]["normalised"] == "Ñandú corre lejos"
+
+    made = alert_frames()
+    frames = []
+    for name, (circle, raw) in made.items():
+        m = cbor.decode(raw)
+        frames.append(
+            {
+                "name": name,
+                "circle": circle,
+                "diagnostic": cbor.diagnostic(m),
+                "hex": raw.hex(),
+                "bytes": len(raw),
+                "tag_hex": m[alert.K_TAG].hex(),
+            }
+        )
+    to_ana = made["Facundo alerts Ana"][1]
+    tag1 = cbor.decode(to_ana)[alert.K_TAG]
+    family, shelter = keys["family"], keys["shelter"]
+
+    def remade(changes: dict[int, Any], drop: tuple[int, ...] = (), key: bytes = family) -> bytes:
+        """Facundo's alert to Ana with its keys changed, tagged again with `key`."""
+        m = {k: v for k, v in cbor.decode(to_ana).items() if k != alert.K_TAG and k not in drop}
+        return alert.make(key, {**m, **changes})
+
+    altered = bytearray(to_ana)
+    at = altered.index(b"146.52")
+    altered[at] = ord("2")  # one character of the text changed on the way: 246.52
+    guessed = alert.circle_key("eagle eagle")
+    stranger = alert.frame_map(
+        alert.ALERT, alert.circle_id(guessed), "N9XYZ", T_ALERT, to="N0CALL", text="Call me now"
+    )
+    unsorted = bytes([0xA2, 0x02, 0x01, 0x00, 0x01])  # {2: 1, 0: 1}: keys out of order
+    ana, n3 = ["N0CALL"], ["N3CALL"]
+    cases_in: list[tuple[str, list[str], list[str], int, list[bytes], bytes]] = [
+        ("Ana hears Facundo's alert", ana, ["family"], T_ALERT + 12, [], to_ana),
+        ("at another SSID of hers", ["N0CALL-7"], ["family"], T_ALERT + 12, [], to_ana),
+        ("at the edge of the window", ana, ["family"], T_ALERT + 600, [], to_ana),
+        ("eleven minutes late", ana, ["family"], T_ALERT + 601, [], to_ana),
+        ("from a clock ten minutes fast", ana, ["family"], T_ALERT - 601, [], to_ana),
+        ("heard a second time", ana, ["family"], T_ALERT + 70, [tag1], to_ana),
+        ("by a station of the circle it is not for", n3, ["family"], T_ALERT + 12, [], to_ana),
+        ("by a station outside the circle", n3, ["shelter"], T_ALERT + 12, [], to_ana),
+        (
+            "the alert to the circle",
+            n3,
+            ["family", "shelter"],
+            T_ALERT + 310,
+            [],
+            made["Facundo alerts the family circle"][1],
+        ),
+        (
+            "Facundo hears that it was heard",
+            ["KK4ODA"],
+            ["family"],
+            T_ALERT + 16,
+            [],
+            made["Ana's station has heard it"][1],
+        ),
+        ("that it was seen", ["KK4ODA"], ["family"], T_ALERT + 43, [], made["Ana has seen it"][1]),
+        ("Ana's reply", ["KK4ODA"], ["family"], T_ALERT + 60, [], made["Ana replies"][1]),
+        (
+            "Ana's reply heard by Ana's other station",
+            ["N0CALL-7"],
+            ["family"],
+            T_ALERT + 60,
+            [],
+            made["Ana replies"][1],
+        ),
+        ("one character changed on the way", ana, ["family"], T_ALERT + 12, [], bytes(altered)),
+        (
+            "tagged with another circle's key",
+            ana,
+            ["family"],
+            T_ALERT + 12,
+            [],
+            remade({}, key=shelter),
+        ),
+        (
+            "from a guessed keyword",
+            ana,
+            ["family"],
+            T_ALERT + 12,
+            [],
+            alert.make(guessed, stranger),
+        ),
+        (
+            "someone else's broadcast",
+            ana,
+            ["family"],
+            T_ALERT,
+            [],
+            b"KK4ODA: on the road near Austin, all well",
+        ),
+        ("a broadcast type not yet defined", ana, ["family"], T_ALERT, [], cbor.encode({0: 9})),
+        ("CBOR not in deterministic form", ana, ["family"], T_ALERT, [], unsorted),
+        (
+            "an alert that answers another",
+            ana,
+            ["family"],
+            T_ALERT + 12,
+            [],
+            remade({alert.K_RE: tag1}),
+        ),
+        (
+            "a receipt that names nobody",
+            ["KK4ODA"],
+            ["family"],
+            T_ALERT + 16,
+            [],
+            alert.make(
+                family,
+                {
+                    k: v
+                    for k, v in cbor.decode(made["Ana's station has heard it"][1]).items()
+                    if k not in (alert.K_TAG, alert.K_TO)
+                },
+            ),
+        ),
+        (
+            "a receipt with text",
+            ["KK4ODA"],
+            ["family"],
+            T_ALERT + 16,
+            [],
+            alert.make(
+                family,
+                {
+                    **{
+                        k: v
+                        for k, v in cbor.decode(made["Ana's station has heard it"][1]).items()
+                        if k != alert.K_TAG
+                    },
+                    alert.K_TEXT: "ok",
+                },
+            ),
+        ),
+        ("text of 101 bytes", ana, ["family"], T_ALERT + 12, [], remade({alert.K_TEXT: "x" * 101})),
+        ("text of 100 bytes", ana, ["family"], T_ALERT + 12, [], remade({alert.K_TEXT: "x" * 100})),
+        (
+            "text on two lines",
+            ana,
+            ["family"],
+            T_ALERT + 12,
+            [],
+            remade({alert.K_TEXT: "Call me\non 146.52"}),
+        ),
+        (
+            "text not in NFC",
+            ana,
+            ["family"],
+            T_ALERT + 12,
+            [],
+            remade({alert.K_TEXT: "Café at noon"}),
+        ),
+        (
+            "a callsign in lower case",
+            ana,
+            ["family"],
+            T_ALERT + 12,
+            [],
+            remade({alert.K_FROM: "kk4oda"}),
+        ),
+        ("no text", ana, ["family"], T_ALERT + 12, [], remade({}, drop=(alert.K_TEXT,))),
+        (
+            "a circle of three bytes",
+            ana,
+            ["family"],
+            T_ALERT + 12,
+            [],
+            remade({alert.K_CIRCLE: ids["family"][:3]}),
+        ),
+        (
+            "a key the specification does not know",
+            ana,
+            ["family"],
+            T_ALERT + 12,
+            [],
+            remade({64: "an experiment"}),
+        ),
+    ]
+    hearing = []
+    for what, mine, known, now, heard, data in cases_in:
+        verdict, _ = alert.hear(data, mine, {ids[c]: keys[c] for c in known}, now, set(heard))
+        hearing.append(
+            {
+                "what": what,
+                "station": mine,
+                "circles": known,
+                "now": now,
+                "heard": [t.hex() for t in heard],
+                "hex": data.hex(),
+                "expect": verdict,
+            }
+        )
+    confirm(  # RP-8 §4, as written: the checks in its order, the first that fails decides
+        hearing,
+        {
+            "Ana hears Facundo's alert": "an alert for this station",
+            "at another SSID of hers": "an alert for this station",
+            "at the edge of the window": "an alert for this station",
+            "eleven minutes late": "out of time",
+            "from a clock ten minutes fast": "out of time",
+            "heard a second time": "heard again",
+            "by a station of the circle it is not for": "for another station",
+            "by a station outside the circle": "unknown circle",
+            "the alert to the circle": "an alert for the circle",
+            "Facundo hears that it was heard": "heard",
+            "that it was seen": "seen",
+            "Ana's reply": "reply",
+            "Ana's reply heard by Ana's other station": "for another station",
+            "one character changed on the way": "the tag does not check",
+            "tagged with another circle's key": "the tag does not check",
+            "from a guessed keyword": "unknown circle",
+            "someone else's broadcast": "not an alert",
+            "a broadcast type not yet defined": "not an alert",
+            "CBOR not in deterministic form": "not an alert",
+            "an alert that answers another": "malformed",
+            "a receipt that names nobody": "malformed",
+            "a receipt with text": "malformed",
+            "text of 101 bytes": "malformed",
+            "text of 100 bytes": "an alert for this station",
+            "text on two lines": "malformed",
+            "text not in NFC": "malformed",
+            "a callsign in lower case": "malformed",
+            "no text": "malformed",
+            "a circle of three bytes": "malformed",
+            "a key the specification does not know": "an alert for this station",
+        },
+    )
+    out = header(
+        "Alerts: circles' keys, alert frames and their answers, and what a station makes of them",
+        {"RP-8": "§2–§5", "RP-0": "§5, §9.2, §9.5"},
+    )
+    out["rule"] = (
+        "Each circle's `keyword` normalises to `normalised` and gives `key_hex` "
+        f"(PBKDF2-HMAC-SHA256, {alert.ITERATIONS} iterations, salt `{alert.CTX_CIRCLE}`), whose "
+        "ID is `id_hex`, shown "
+        "as `check` (RP-8 §2). Each keyword normalises as shown and is kept or refused (`expect`). "
+        "Each frame is exactly `hex`, tagged with its circle's key; its answers are made from it "
+        "(§5). Each hearing case is a station with the callsigns `station` and the circles named, "
+        "at `now`, having heard the tags in `heard`, given the broadcast data `hex`: it decides "
+        "`expect` (§4)."
+    )
+    out["circles"] = circles
+    out["keywords"] = keywords
+    out["frames"] = frames
+    out["hearing"] = hearing
+    return out
+
+
 FILES = {
     "keys.json": make_keys,
     "cbor.json": make_cbor,
     "messages.json": make_messages,
     "forms.json": make_forms,
+    "alerts.json": make_alerts,
     "credentials.json": make_credentials,
     "statements.json": make_statements,
     "pdus.json": make_pdus,
@@ -7519,6 +7857,14 @@ def self_check(name: str, data: dict[str, Any]) -> None:
             canonical = bytes.fromhex(t["canonical_hex"])
             assert cbor.encode(cbor.decode(canonical)) == canonical
             assert hashlib.sha256(canonical).digest()[:8].hex() == t["fingerprint_hex"]
+    if name == "alerts.json":
+        keys = {c["name"]: bytes.fromhex(c["key_hex"]) for c in data["circles"]}
+        for f in data["frames"]:
+            raw = bytes.fromhex(f["hex"])
+            m = cbor.decode(raw)
+            assert cbor.encode(m) == raw
+            untagged = {k: v for k, v in m.items() if k != alert.K_TAG}
+            assert alert.tag_of(keys[f["circle"]], untagged).hex() == f["tag_hex"]
     if name == "messages.json":
         for m in data["messages"]:
             for air in m["air"]:

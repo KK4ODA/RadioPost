@@ -1,0 +1,497 @@
+{
+  "radiopost_vectors": "Alerts: circles' keys, alert frames and their answers, and what a station makes of them",
+  "format": 1,
+  "specs": {
+    "RP-8": "§2–§5",
+    "RP-0": "§5, §9.2, §9.5"
+  },
+  "made_by": "tools/vectors/make.py",
+  "rule": "Each circle's `keyword` normalises to `normalised` and gives `key_hex` (PBKDF2-HMAC-SHA256, 600000 iterations, salt `RadioPost-circle-v1`), whose ID is `id_hex`, shown as `check` (RP-8 §2). Each keyword normalises as shown and is kept or refused (`expect`). Each frame is exactly `hex`, tagged with its circle's key; its answers are made from it (§5). Each hearing case is a station with the callsigns `station` and the circles named, at `now`, having heard the tags in `heard`, given the broadcast data `hex`: it decides `expect` (§4).",
+  "circles": [
+    {
+      "name": "family",
+      "keyword": "kimo dali sune pato",
+      "normalised": "kimo dali sune pato",
+      "key_hex": "4bb193abfb7ca0fc5df5ee8a3667d6c6cec18d535878a3eed7a944613449e99e",
+      "id_hex": "98537abf",
+      "check": "9853 7abf"
+    },
+    {
+      "name": "shelter",
+      "keyword": "Shelter 3 water before noon",
+      "normalised": "shelter 3 water before noon",
+      "key_hex": "b9984d2fb9c80ccab1e1db1b00879ce1b00d8d57d408904607e1287284b1d28e",
+      "id_hex": "8aec0d0e",
+      "check": "8aec 0d0e"
+    }
+  ],
+  "keywords": [
+    {
+      "what": "the family's keyword as typed",
+      "keyword": "kimo dali sune pato",
+      "normalised": "kimo dali sune pato",
+      "expect": "kept"
+    },
+    {
+      "what": "in capitals, with extra spaces and a tab",
+      "keyword": "  KIMO  Dali\tsune pato ",
+      "normalised": "kimo dali sune pato",
+      "expect": "kept"
+    },
+    {
+      "what": "a word too short to keep",
+      "keyword": "eagle",
+      "normalised": "eagle",
+      "expect": "shorter than 8 characters"
+    },
+    {
+      "what": "short once the spaces go",
+      "keyword": "  Aa   Bb  C ",
+      "normalised": "aa bb c",
+      "expect": "shorter than 8 characters"
+    },
+    {
+      "what": "a non-ASCII capital is kept as it is",
+      "keyword": "Ñandú corre lejos",
+      "normalised": "Ñandú corre lejos",
+      "expect": "kept"
+    }
+  ],
+  "frames": [
+    {
+      "name": "Facundo alerts Ana",
+      "circle": "family",
+      "diagnostic": "{0: 1, 1: h'98537abf', 2: \"KK4ODA\", 3: \"N0CALL\", 4: 1794667200, 5: \"Please call me on 146.52 now\", 7: h'775a35a77a50842a'}",
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f770748775a35a77a50842a",
+      "bytes": 72,
+      "tag_hex": "775a35a77a50842a"
+    },
+    {
+      "name": "Ana's station has heard it",
+      "circle": "family",
+      "diagnostic": "{0: 2, 1: h'98537abf', 2: \"N0CALL\", 3: \"KK4ODA\", 4: 1794667214, 6: h'775a35a77a50842a', 7: h'55e5755012a5e48c'}",
+      "hex": "a70002014498537abf02664e3043414c4c03664b4b344f4441041a6af872ce0648775a35a77a50842a074855e5755012a5e48c",
+      "bytes": 51,
+      "tag_hex": "55e5755012a5e48c"
+    },
+    {
+      "name": "Ana has seen it",
+      "circle": "family",
+      "diagnostic": "{0: 3, 1: h'98537abf', 2: \"N0CALL\", 3: \"KK4ODA\", 4: 1794667241, 6: h'775a35a77a50842a', 7: h'7728a42523b881cf'}",
+      "hex": "a70003014498537abf02664e3043414c4c03664b4b344f4441041a6af872e90648775a35a77a50842a07487728a42523b881cf",
+      "bytes": 51,
+      "tag_hex": "7728a42523b881cf"
+    },
+    {
+      "name": "Ana replies",
+      "circle": "family",
+      "diagnostic": "{0: 4, 1: h'98537abf', 2: \"N0CALL\", 3: \"KK4ODA\", 4: 1794667258, 5: \"On my way, 5 min\", 6: h'775a35a77a50842a', 7: h'963e022c1c28ab68'}",
+      "hex": "a80004014498537abf02664e3043414c4c03664b4b344f4441041a6af872fa05704f6e206d79207761792c2035206d696e0648775a35a77a50842a0748963e022c1c28ab68",
+      "bytes": 69,
+      "tag_hex": "963e022c1c28ab68"
+    },
+    {
+      "name": "Facundo alerts the family circle",
+      "circle": "family",
+      "diagnostic": "{0: 1, 1: h'98537abf', 2: \"KK4ODA\", 4: 1794667500, 5: \"Family net in 10 minutes on 3.590 MHz\", 7: h'722d9cf1fdaebb68'}",
+      "hex": "a60001014498537abf02664b4b344f4441041a6af873ec05782546616d696c79206e657420696e203130206d696e75746573206f6e20332e353930204d487a0748722d9cf1fdaebb68",
+      "bytes": 73,
+      "tag_hex": "722d9cf1fdaebb68"
+    }
+  ],
+  "hearing": [
+    {
+      "what": "Ana hears Facundo's alert",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f770748775a35a77a50842a",
+      "expect": "an alert for this station"
+    },
+    {
+      "what": "at another SSID of hers",
+      "station": [
+        "N0CALL-7"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f770748775a35a77a50842a",
+      "expect": "an alert for this station"
+    },
+    {
+      "what": "at the edge of the window",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667800,
+      "heard": [],
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f770748775a35a77a50842a",
+      "expect": "an alert for this station"
+    },
+    {
+      "what": "eleven minutes late",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667801,
+      "heard": [],
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f770748775a35a77a50842a",
+      "expect": "out of time"
+    },
+    {
+      "what": "from a clock ten minutes fast",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794666599,
+      "heard": [],
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f770748775a35a77a50842a",
+      "expect": "out of time"
+    },
+    {
+      "what": "heard a second time",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667270,
+      "heard": [
+        "775a35a77a50842a"
+      ],
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f770748775a35a77a50842a",
+      "expect": "heard again"
+    },
+    {
+      "what": "by a station of the circle it is not for",
+      "station": [
+        "N3CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f770748775a35a77a50842a",
+      "expect": "for another station"
+    },
+    {
+      "what": "by a station outside the circle",
+      "station": [
+        "N3CALL"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f770748775a35a77a50842a",
+      "expect": "unknown circle"
+    },
+    {
+      "what": "the alert to the circle",
+      "station": [
+        "N3CALL"
+      ],
+      "circles": [
+        "family",
+        "shelter"
+      ],
+      "now": 1794667510,
+      "heard": [],
+      "hex": "a60001014498537abf02664b4b344f4441041a6af873ec05782546616d696c79206e657420696e203130206d696e75746573206f6e20332e353930204d487a0748722d9cf1fdaebb68",
+      "expect": "an alert for the circle"
+    },
+    {
+      "what": "Facundo hears that it was heard",
+      "station": [
+        "KK4ODA"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667216,
+      "heard": [],
+      "hex": "a70002014498537abf02664e3043414c4c03664b4b344f4441041a6af872ce0648775a35a77a50842a074855e5755012a5e48c",
+      "expect": "heard"
+    },
+    {
+      "what": "that it was seen",
+      "station": [
+        "KK4ODA"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667243,
+      "heard": [],
+      "hex": "a70003014498537abf02664e3043414c4c03664b4b344f4441041a6af872e90648775a35a77a50842a07487728a42523b881cf",
+      "expect": "seen"
+    },
+    {
+      "what": "Ana's reply",
+      "station": [
+        "KK4ODA"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667260,
+      "heard": [],
+      "hex": "a80004014498537abf02664e3043414c4c03664b4b344f4441041a6af872fa05704f6e206d79207761792c2035206d696e0648775a35a77a50842a0748963e022c1c28ab68",
+      "expect": "reply"
+    },
+    {
+      "what": "Ana's reply heard by Ana's other station",
+      "station": [
+        "N0CALL-7"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667260,
+      "heard": [],
+      "hex": "a80004014498537abf02664e3043414c4c03664b4b344f4441041a6af872fa05704f6e206d79207761792c2035206d696e0648775a35a77a50842a0748963e022c1c28ab68",
+      "expect": "for another station"
+    },
+    {
+      "what": "one character changed on the way",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203234362e3532206e6f770748775a35a77a50842a",
+      "expect": "the tag does not check"
+    },
+    {
+      "what": "tagged with another circle's key",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f7707483406ed6b7c0158d7",
+      "expect": "the tag does not check"
+    },
+    {
+      "what": "from a guessed keyword",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a7000101442bad0ad102654e3958595a03664e3043414c4c041a6af872c0056b43616c6c206d65206e6f77074818930e1bb01dccd1",
+      "expect": "unknown circle"
+    },
+    {
+      "what": "someone else's broadcast",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667200,
+      "heard": [],
+      "hex": "4b4b344f44413a206f6e2074686520726f6164206e6561722041757374696e2c20616c6c2077656c6c",
+      "expect": "not an alert"
+    },
+    {
+      "what": "a broadcast type not yet defined",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667200,
+      "heard": [],
+      "hex": "a10009",
+      "expect": "not an alert"
+    },
+    {
+      "what": "CBOR not in deterministic form",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667200,
+      "heard": [],
+      "hex": "a202010001",
+      "expect": "not an alert"
+    },
+    {
+      "what": "an alert that answers another",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a80001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f770648775a35a77a50842a07482a79c5714625b8a5",
+      "expect": "malformed"
+    },
+    {
+      "what": "a receipt that names nobody",
+      "station": [
+        "KK4ODA"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667216,
+      "heard": [],
+      "hex": "a60002014498537abf02664e3043414c4c041a6af872ce0648775a35a77a50842a0748dc89874721acc375",
+      "expect": "malformed"
+    },
+    {
+      "what": "a receipt with text",
+      "station": [
+        "KK4ODA"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667216,
+      "heard": [],
+      "hex": "a80002014498537abf02664e3043414c4c03664b4b344f4441041a6af872ce05626f6b0648775a35a77a50842a074804ffb6df002206b0",
+      "expect": "malformed"
+    },
+    {
+      "what": "text of 101 bytes",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005786578787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878780748993518dc131ad163",
+      "expect": "malformed"
+    },
+    {
+      "what": "text of 100 bytes",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005786478787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878074875355a741c1aa6cc",
+      "expect": "an alert for this station"
+    },
+    {
+      "what": "text on two lines",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c0057143616c6c206d650a6f6e203134362e353207480aa17dd3760aef5a",
+      "expect": "malformed"
+    },
+    {
+      "what": "text not in NFC",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a70001014498537abf02664b4b344f444103664e3043414c4c041a6af872c0056e43616665cc81206174206e6f6f6e07486eb63d9aa8455497",
+      "expect": "malformed"
+    },
+    {
+      "what": "a callsign in lower case",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a70001014498537abf02666b6b346f646103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f77074844d6b8b9cfde809e",
+      "expect": "malformed"
+    },
+    {
+      "what": "no text",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a60001014498537abf02664b4b344f444103664e3043414c4c041a6af872c0074870bb0da6aa259cab",
+      "expect": "malformed"
+    },
+    {
+      "what": "a circle of three bytes",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a70001014398537a02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f770748497db9c309a94922",
+      "expect": "malformed"
+    },
+    {
+      "what": "a key the specification does not know",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a80001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f7707487ee2a7f1aa90bc4c18406d616e206578706572696d656e74",
+      "expect": "an alert for this station"
+    }
+  ]
+}

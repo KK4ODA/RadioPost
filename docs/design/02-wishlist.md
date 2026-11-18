@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.41 |
-| **Updated** | 2026-11-17 |
+| **Version** | 0.3.42 |
+| **Updated** | 2026-11-18 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §9 and §10 |
@@ -154,6 +154,8 @@ rules:
 | W48 | What a session has carried, and what is left | Radio | Medium | Fits today | Implemented |
 | W49 | The post office run from the client, and set up by its program | Operation | High | Optional addition (RP-5 §6.7, §7) | Implemented |
 | W50 | A gateway that scans its channels | Operation | Medium | Optional addition (RP-4, RP-5 §4.4); G21 | Built |
+| W51 | Sounds, and mail that arrives by its sender | Mail | Medium | Fits today | Implemented |
+| W52 | Time-sensitive alerts between stations that share a keyword | Applications | Medium | Optional addition: RP-8 (Draft), RP-0 1.1.0, RP-4 1.3.0; G22 | Implemented |
 
 Groups: *Mail* (§4), *Setup* (§5), *Radio* (§6), *Operation* (§7), *Offline* (§8),
 *Applications* (§9), *Adapters* (§10), *Rules* (§11). Consolidated and deferred wishes are in §14.
@@ -285,6 +287,25 @@ Delete a message from any folder, change your mind, and empty the trash when you
 | Status | Implemented. |
 | Author decision | Build it (2026-11-12). |
 | Notes | While a session runs the panel changes nothing in the home, so deleting waits for it to end. Deleting a message at the post office as well (from another device's view of the mailbox) is another wish, with W6. |
+
+### W51. Sounds, and mail that arrives by its sender
+
+A sound for each thing that happens, and four levels for how mail arrives, set for each address or
+group: silent, a soft sound, a banner, or an alarm until it is opened.
+
+| | |
+|---|---|
+| Requested by | The author (KK4ODA), 2026-11-18: "sounds to the various events in the client, and a few levels of notifications for messages arriving from specific addresses". Requesters: 1. |
+| Component | Client. |
+| Compatibility | **Fits today**: what a program shows of mail it holds. Nothing on the air or at the post office changes. |
+| Existing coverage | New. The client showed new mail by its counts only. |
+| Dependencies | W2 (addresses and groups carry the levels). Shares its levels and sounds with W52. |
+| Effort | Small. |
+| Priority | **Medium.** An operator with the window behind another misses mail that matters. |
+| Recommendation | Accept, with three rules: Emergency raises mail to Important; only a level the operator sets reaches Time-sensitive, since anyone can choose Emergency; quiet hours let only Time-sensitive sound. And a warning: sounds played on the radio's sound card go on the air, and with VOX key the radio, so the panel chooses its speakers (Web Audio's `setSinkId`) and says so. |
+| Status | Implemented (2026-11-18): Setup's *Sounds and notifications*, the **Notify** column in Addresses (`notify.json`). |
+| Author decision | Asked for, 2026-11-18, with W52. |
+| Notes | Sounds are synthesized, so no sound files ship. A window plays nothing before its first click, so the desktop window also comes forward for an alarm. |
 
 ---
 
@@ -888,6 +909,25 @@ Write to an address for a catalogue, a weather report or a blank form, and get t
 | Author decision | None yet. |
 | Notes | An answer arriving as ordinary email is third-party mail (RP-6 §5.1), held back from stations in countries without an arrangement. |
 
+### W52. Time-sensitive alerts between stations that share a keyword
+
+One station calls another for attention: an alarm and the window coming forward at the other end,
+until its operator acknowledges or replies. Only stations that share a keyword can do it.
+
+| | |
+|---|---|
+| Requested by | The author (KK4ODA), 2026-11-18: "one station calling another and that triggering an on-screen alert and a sound, with a reply button … only if the two clients share a given key word, user setable". Requesters: 1. |
+| Component | Client; the spec RP-8; RP-0's registries; RP-4 §6. |
+| Compatibility | **Optional protocol addition**: a new specification, RP-8 (Draft), carried as RP-4 broadcasts, which programs that do not know it drop (RP-0 §9.5). RP-0 1.1.0 registers its contexts and the broadcast types; RP-4 1.3.0 says every host hears a broadcast (G22). Nothing else changes. |
+| Existing coverage | New. RP-4 §6 reserved broadcasts; the Aether adapter already carried them as datagrams. |
+| Dependencies | A modem with broadcasts: Aether only, today. T4 (one broadcast format with W33, W34). W51 (levels and sounds). |
+| Effort | Medium: RP-8 and its vectors, the core's `alert`, the client's `alerts`, the panel, the manual. |
+| Priority | **Medium.** A net or a family on the air wants it; the pilot does not need it. |
+| Recommendation | Accept, improved: the keyword never goes on the air, it makes a key (PBKDF2, 600 000 iterations) and every alert carries an 8-byte HMAC tag, so the text stays plain (§97.113(a)(4)); circles, not one keyword, each with a check the operators read to each other; a broadcast, not a call, so it reaches a path too weak to connect (16 s on Aether); `heard`, `seen` and a reply, signed the same way; the sender tries once more; a time window and the tags kept stop replays; five alarms from one callsign in ten minutes, then quiet. Not per-person signatures (D42). |
+| Status | Implemented (2026-11-18): RP-8 0.1.0, `vectors/alerts.json`, `radiopost::alert`, the client's Alerts view, its alarm and its answers, carried between calls and while listening. |
+| Author decision | Asked for, 2026-11-18; "write it up and implement it" with the editor's defaults: shared keyword circles, broadcast only, only circles and named addresses time-sensitive. |
+| Notes | `heard` goes with nobody at the radio: an automatic transmission, which a circle can turn off (RP-8 §8). A gateway program neither alerts nor answers. VARA, ARDOP, Mercury and packet carry no broadcasts; a session fallback for them would cost a call each way and is not built. |
+
 ---
 
 ## 10. Adapters and interoperability
@@ -1034,7 +1074,7 @@ Where wishes share a need, building it once serves them all. None of these is a 
 | T8 | Modem names | W20, W26, W44 | One registry of modem names, and what a client does with one it does not know (G11): gateway lists, the filter by modem, a new adapter. |
 | T2 | Credentials that never lapse unattended | W8 | One renewal rule for clients and gateways, by any open path. |
 | T3 | The post office's air forms | W18, W19 | One rule for which compressions a post office uses (G2), settled before the dictionary: RP-5 0.18.0 §5.3. |
-| T4 | Broadcasts | W33, W34 | One broadcast format, only if one of them shows a need mail cannot meet. |
+| T4 | Broadcasts | W33, W34, W52 | One broadcast format: a CBOR map whose key 0 is its kind (RP-0 §9.5), alerts first (RP-8). Position reports and bulletins take the next kinds if one of them shows a need mail cannot meet. |
 | T5 | Unattended operation | W15, W16, W27, W28, W30 | The rules check (W40) for every modem but Aether, and an honest note of what the rules allow (§1). |
 | T6 | One mailbox | W36 | Absorbs W12, and most of W37 once mail sent from a mail program fills the accept list. |
 | T7 | The rate the modem reports | W3, W44 | One estimate of time on the air (RP-4 §5, `quality`), used both to show how long the outbox will take and to choose what to fetch. |
@@ -1070,6 +1110,7 @@ document.
 | G19 | RP-5 §6.3 | `radio_skips_read` said mail read in a mail program is not offered by radio, not whether it is picked up (its copies dropped) or only hidden. | A post office hiding it leaves gateways offering copies of mail already read while offline. | Taken as picked up, learned without delaying a session: RP-5 0.19.0 §6.3. **Settled and built** (2026-11-13). | W36 |
 | G20 | RP-1 §7.3 | Which keys a gateway trusts, offline, for a post office its operator names by URL because its DNS records are not published (the gateway's settings, design §5.2): §7.3 trusts only post offices found in DNS and one hop of their lists. | Such a gateway could check no caller offline. | For the gateway's own post office, the key that signed the gateway's own credential (fetched over HTTPS at registration), and those an info document signed by it adds, as §7.2 does from DNS; built that way (2026-11-13), not yet in RP-1. **Settled** (2026-11-15, D41): RP-1 1.0.0 §7.3. | W28 |
 | G21 | RP-5 §4.4 | Nothing says a gateway listens on the channels it lists. Ours registers what its operator enters and listens on one dial. | A client that calls a listed channel the gateway is not on is never answered, and cannot tell why. | A gateway SHOULD list only channels it listens on: the dials it scans, and otherwise the dial each modem's radio sits on (drafted in [the scanning proposal](03-scanning.md), §3.2). **Settled** (2026-11-17): RP-5 1.1.0 §4.4. | W50 |
+| G22 | RP-4 §6 | Who hears a broadcast was not said: every host, or only those with callsigns, or only the program whose callsign it names. | A program listening for alerts between calls, with no callsign claimed, might hear none. | Every host that has said `hello`, callsigns or none; sending needs callsigns. **Settled** (2026-11-18): RP-4 1.3.0 §6, as the reference and the Aether adapter already did. | W52 |
 
 ---
 
@@ -1152,3 +1193,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.39 | 2026-11-17 | W50 accepted by the author and in progress. |
 | 0.3.40 | 2026-11-17 | W50 built; G21 settled by RP-5 1.1.0's SHOULD. |
 | 0.3.41 | 2026-11-17 | W14: a channel is tuned as it is picked, with a tuner tone (RP-4 1.2.0 §4.3), and a station call carries a dial and a bandwidth. |
+| 0.3.42 | 2026-11-18 | The author's wishes W51 (sounds, and mail by its sender's level) and W52 (alerts between stations that share a keyword), both implemented; RP-8 drafted for W52; T4 is its broadcast format; gap G22 settled by RP-4 1.3.0. |

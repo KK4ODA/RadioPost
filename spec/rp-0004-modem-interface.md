@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.2.0 |
-| **Updated** | 2026-11-17 |
+| **Version** | 1.3.0 |
+| **Updated** | 2026-11-18 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -200,7 +200,7 @@ callsigns yet (`refused`); an `as` that is not one of the host's callsigns (`not
 request with no `id` carries no `id`.
 
 **Callsigns first.** A host has no callsigns until it sends `callsigns`. Until then nothing is
-answered for it, and the adapter answers its `listen` and `connect` with `error` `refused`. On a
+answered for it, and the adapter answers its `listen`, `connect` and `broadcast` with `error` `refused`. On a
 shared modem the adapter cannot lend the host the station's callsign, because another program may
 hold it.
 
@@ -339,8 +339,14 @@ A modem that can send a frame to everyone listening (Aether's datagrams, AX.25 U
 `broadcast`. The host sends `{"op": "broadcast", "data": "…", "ref": "b7"}`; the adapter answers
 `broadcast-sent` when the frame has gone out or will not. Broadcasts heard arrive as `broadcast`.
 
-RadioPost does not use broadcasts yet. They are reserved for bulletins and position reports in a
-later specification.
+An adapter sends each broadcast heard to every host that has said `hello`, whether or not the host
+has callsigns, and on a shared modem whichever program's callsigns it names: a broadcast is for
+everyone listening. Sending one needs callsigns, as a call does (§4). `source` is the callsign the
+modem heard the sender's station by, which on a shared modem may be the station's own rather than
+the sending host's.
+
+RadioPost's broadcasts are CBOR maps whose key 0 says their kind (RP-0 §9.5): alerts first (RP-8).
+Bulletins and position reports would follow in later specifications.
 
 ---
 
@@ -706,3 +712,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 1.0.3 | 2026-11-15 | §9.3 (informative), checked against ardopcf's host interface and written from the ARDOP adapter: the echoes and `FAULT`, the data port's blocks and tags, `MYCALL` and `MYAUX`, the call's end by `STATUS`, `REJECTEDBW` and `REJECTEDBUSY`, `DISCONNECT` once `BUFFER` is 0, `ABORT` reported by the adapter, no `delivered`. Nothing for an implementation to do. |
 | 1.1.0 | 2026-11-17 | Scanning (§4.2, wishlist W50): `caps.scan`, the `scan` request and event, a scan the host's that asked and ended by another host's `tune` (§1.1); `connect`'s `call_s` and `caps.call_s`; §9.1, Aether's scan (its ADR-0129). MINOR, announced (RP-0 §8.4): nothing for an implementation to do. |
 | 1.2.0 | 2026-11-17 | The tuner tone (§4.3): `caps.tone` and the `tone` request, refused `busy` while any link or call is up on the station, a stop always taken (§1.1, §8). §1.1: a `connect` in another bandwidth moves the whole station for the call and back, refused `busy` while another program's is up. §4.1: a channel the operator picks in the host is the operator's choice, and the radio stays. §9.1: Aether's bandwidths and a call's move (`bandwidth.set`), and the tone as Aether's `tune`. From the RadioPost mail of 2026-11-17, whose mobile could not be told to set its tuner before a call. Test vectors: the tone in the dial conversation and in `rpmi-lines.json`. MINOR, announced (RP-0 §8.4): nothing for an implementation to do. |
+| 1.3.0 | 2026-11-18 | §6: every host that has said `hello` hears each broadcast, callsigns or none; sending one needs callsigns; what `source` names; RadioPost's broadcasts are RP-8's alerts. MINOR, announced (RP-0 §8.4): nothing for an implementation to do, since the reference's simulated modem and the Aether adapter already pass broadcasts to every host. |

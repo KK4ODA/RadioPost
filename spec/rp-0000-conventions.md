@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.0.0 |
-| **Updated** | 2026-11-15 |
+| **Version** | 1.1.0 |
+| **Updated** | 2026-11-18 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
@@ -36,6 +36,7 @@ Sections marked *informative* explain and give examples; they set no requirement
 | RP-5 | Post office API | HTTPS between gateways or clients and a post office. |
 | RP-6 | Email interoperation | How a post office meets ordinary email in both directions. |
 | RP-7 | Forwarding | Store-and-forward between gateways by radio. |
+| RP-8 | Alerts | One station alerting another, or a circle, by broadcast. |
 
 ---
 
@@ -105,6 +106,8 @@ RadioPost **signs; it never encrypts** anything sent over the air (§7).
 |---|---|
 | Signatures | **Ed25519** (RFC 8032), pure, no prehash. Public keys 32 bytes, signatures 64 bytes. |
 | Hashes | **SHA-256** (FIPS 180-4). |
+| Tags of a shared key (RP-8) | **HMAC-SHA256** (RFC 2104), cut to the length the specification says. |
+| A key from a keyword (RP-8) | **PBKDF2** with HMAC-SHA256 (RFC 8018 §5.2). |
 | Signed CBOR objects | **COSE_Sign1** (RFC 9052), untagged, with `alg` Ed25519 (-19, RFC 9864). |
 | Signed JSON documents | **JWS** compact serialisation (RFC 7515) with `alg` `EdDSA` (RFC 8037). |
 | Transport over the Internet | **TLS** 1.2 or later (HTTPS). |
@@ -118,6 +121,10 @@ signed_input = context || 0x00 || bytes
 
 The contexts are registered in §9.2. A signature made for one purpose can then never be accepted
 for another.
+
+A **tag** (RP-8 §3) is made the same way: HMAC-SHA256 under a shared key over the context, one
+zero byte, then the bytes. Its contexts are registered in §9.2 with the signatures', so no tag
+can be taken for another, nor for a signature.
 
 **Signed CBOR objects** (a credential, RP-1 §4; a placement, RP-7 §4.2) are COSE_Sign1 structures
 (RFC 9052 §4.2), untagged:
@@ -271,7 +278,7 @@ RadioPost repository is under the MIT licence or the Apache License 2.0, at the 
 
 ### 8.6 Test vectors
 
-The files in `vectors/` hold exact inputs and outputs for RP-1 to RP-7, made from published
+The files in `vectors/` hold exact inputs and outputs for RP-1 to RP-8, made from published
 test keys by a reference written for the purpose
 (`tools/vectors/`, standard library only). Every implementation SHOULD check itself against
 them. A change that alters any vector updates the files in the same pull request, and
@@ -300,6 +307,9 @@ As in §2. Numbers are never reused.
 | `RadioPost-api-gateway-v1` | A gateway's registration | RP-5 §6.4 |
 | `RadioPost-api-apply-v1` | An application for an account, from a new device | RP-5 §6.7 |
 | `RadioPost-placement-v1` | A post office's placement of mail for a cut-off gateway, as COSE external data | RP-7 §4.2 |
+| `RadioPost-circle-v1` | Not signed: the salt of a circle's key, made from its keyword | RP-8 §2 |
+| `RadioPost-circle-id-v1` | A circle's ID, a tag under its key | RP-8 §2 |
+| `RadioPost-alert-v1` | An alert's tag, under its circle's key | RP-8 §3 |
 
 ### 9.3 Error codes
 
@@ -348,6 +358,21 @@ heard there: one modem's air interface, whatever adapter drives it (RP-4 §9).
 A name is lower case: letters, digits and `-`. A program that meets a name it does not know
 ignores what carries it (RP-5 §4.4): a modem added after the program was written is not an error.
 
+### 9.5 Broadcast types
+
+A RadioPost broadcast (RP-4 §6) is a CBOR map whose key 0 says what kind it is. A program drops a
+broadcast whose key 0 it does not know, without a word: it may be another program's, or a kind
+added after it was written.
+
+| Key 0 | Kind | Defined in |
+|---|---|---|
+| 1 | An alert | RP-8 §3 |
+| 2 | An alert heard | RP-8 §5 |
+| 3 | An alert seen | RP-8 §5 |
+| 4 | A reply to an alert | RP-8 §5 |
+
+Position reports and bulletins (wishlist W33, W34) would take the next numbers.
+
 ---
 
 ## Change log
@@ -368,3 +393,4 @@ ignores what carries it (RP-5 §4.4): a modem added after the program was writte
 | 0.7.0 | 2026-11-13 | Modem names (§9.4): the six RP-5 §4.4 listed with no registry, and `mercury` and `aether-fm` added; a program ignores a name it does not know. |
 | 0.8.0 | 2026-11-15 | A callsign's base (§6.1), for RP-1 §6.3's checks (gaps G10, G12). |
 | 1.0.0 | 2026-11-15 | Stable, with RP-1 to RP-6 (D41): §8.2 says how a Stable document's version moves, §8.4 that its changes are announced. |
+| 1.1.0 | 2026-11-18 | RP-8, alerts (§2): HMAC-SHA256 tags and PBKDF2 keys (§5); the contexts `RadioPost-circle-v1`, `RadioPost-circle-id-v1` and `RadioPost-alert-v1` (§9.2); broadcast types (§9.5); §8.6: the vectors cover RP-8. MINOR, announced (§8.4): nothing for an implementation to do. |
