@@ -369,3 +369,41 @@ details.hint code, .note code { font-family: var(--mono); font-size: 12px; backg
 #o-claude-text { font-family: var(--mono); font-size: 12px; margin-top: 8px; }
 .dkim-record p { margin: 6px 0 2px; font-size: 13px; }
 #group-form [name=name] { width: 14rem; }
+
+/* alerts (RP-8): the view, the alarm over everything, and the banner for what is not an alarm */
+#alerts-view { max-width: 980px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+.note.warn { color: var(--busy); }
+#alert-rows td { cursor: default; vertical-align: top; }
+#alert-rows .way { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+#alert-rows td.answers { font-size: 13px; color: var(--muted); width: 32%; white-space: normal; }
+#alert-rows td.text { min-width: 14rem; }
+#alert-rows tr.alarming td:first-child { border-left: 3px solid var(--bad); }
+#alert-rows tr.quiet td { color: var(--muted); }
+.tag.ok { color: var(--ok); border-color: var(--ok); }
+.tag.busy { color: var(--busy); border-color: var(--busy); }
+#circle-rows td { cursor: default; }
+#circle-rows .check-text { font-family: var(--mono); font-size: 14px; letter-spacing: .04em; }
+#circle-rows select { width: auto; }
+.list td select.level { width: auto; height: 28px; font-size: 13px; padding: 2px 6px; }
+.list td.level-cell { cursor: default; }
+.alarm { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center;
+         background: color-mix(in srgb, var(--bad) 28%, rgba(0, 0, 0, .55)); }
+.alarm-box { background: var(--panel); border: 3px solid var(--bad); border-radius: 12px;
+             padding: 22px 24px 16px; width: min(560px, calc(100vw - 32px));
+             box-shadow: 0 12px 40px rgba(0, 0, 0, .35); }
+.alarm-head { margin: 0 0 6px; font-weight: 700; color: var(--bad); font-size: 15px; }
+.alarm-text { margin: 0 0 6px; font-size: 22px; line-height: 1.3; overflow-wrap: anywhere; }
+.alarm .row { margin: 12px 0 0; }
+.alarm .quick button { flex: 1; }
+.alarm form.row { flex-wrap: nowrap; }
+.banner { display: flex; align-items: center; gap: 10px; margin: -6px 0 14px; padding: 8px 12px;
+          border: 1px solid var(--busy); border-left-width: 4px; border-radius: 6px; background: var(--panel); }
+.banner span { flex: 1; }
+.banner.alert { border-color: var(--bad); }
+.list.sounds td { cursor: default; padding: 4px 8px; }
+.list.sounds select { width: auto; height: 28px; font-size: 13px; padding: 2px 6px; }
+.quiet-hours { align-items: center; }
+.quiet-hours label.check { margin: 0; color: var(--text); font-size: 14px; }
+.quiet-hours input[type=time] { width: 8rem; }
+#snd-volume { padding: 0; }

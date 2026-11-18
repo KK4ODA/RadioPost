@@ -13,7 +13,9 @@
 //! `renewing`.
 //!
 //! While it runs and its modem is Aether, it holds a connection that says who it is and nothing
-//! more ([`crate::presence`]), so Aether names the app between calls too. The page says which
+//! more ([`crate::presence`]), so Aether names the app between calls too. That connection, and a
+//! station listening, carry alerts (RP-8, [`crate::alerts`]): the panel lends them its alerts and
+//! its activity, which is `alerting` while one goes out, so no call starts meanwhile. The page says which
 //! modem (`POST /api/modem`, from its Modem box), as each call and listening does.
 //!
 //! Only this machine's own pages reach it: a request must name the panel's own host (so a page
@@ -38,10 +40,11 @@ use tiny_http::{Header, Method, Request, Response, Server};
 use radiopost_update::{Product, Watch};
 
 use crate::addresses;
+use crate::alerts::{self, Alerts, Level};
 use crate::callsigns;
 use crate::compose::{self, Answer, Draft, File, media_type};
 use crate::online;
-use crate::presence::Presence;
+use crate::presence::{Carrier, Presence};
 use crate::session::{self, Fetch, Kind, Options};
 use crate::store::{Error, Folder, Store, unhex};
 
@@ -85,7 +88,8 @@ const ONLINE: [&str; 9] = [
 /// What the station is doing, for the panel.
 #[derive(Debug, Default)]
 struct Activity {
-    /// `idle`, `calling`, `listening`, `session`, or `renewing` the credential.
+    /// `idle`, `calling`, `listening`, `session`, `renewing` the credential, or `alerting`: an
+    /// alert going out (RP-8), the station taken between calls for it.
     state: &'static str,
     remote: Option<String>,
     /// How the last session ended, when it failed.
@@ -111,6 +115,8 @@ pub struct Panel {
     office_token: Arc<Mutex<Option<String>>>,
     /// The app's connection to Aether between calls.
     presence: Presence,
+    /// Alerts between stations that share a keyword (RP-8).
+    alerts: Alerts,
     /// Set, the thread that fetches the post office's backups looks now, not at its hour.
     backups_now: Arc<AtomicBool>,
     /// How often that thread looks: [`crate::backups::EVERY`], shorter in tests.
@@ -209,6 +215,7 @@ impl Panel {
             live: Arc::default(),
             office_token: Arc::default(),
             presence: Presence::new(home),
+            alerts: Alerts::open(home),
             backups_now: Arc::new(AtomicBool::new(true)),
             backups_every: crate::backups::EVERY,
         }
@@ -259,6 +266,96 @@ impl Panel {
         self
     }
 
+    /// A heard alert sounds and waits to be acknowledged (RP-8): the window comes forward. A clone
+    /// of the panel kept before [`Panel::start`] reads the running panel's alerts.
+    #[must_use]
+    pub fn alarming(&self) -> bool {
+        self.alerts.alarming()
+    }
+
+    /// What the connections holding the modem need to carry alerts: the alerts, the station's
+    /// callsigns, and the activity, which they take as `alerting` while one goes out.
+    fn carrier(&self) -> Carrier {
+        let activity = Arc::clone(&self.activity);
+        let gate = move |take: bool| {
+            let mut a = lock(&activity);
+            match (take, a.state) {
+                (true, "idle") => {
+                    a.state = "alerting";
+                    true
+                }
+                (true, _) => false,
+                (false, "alerting") => {
+                    a.state = "idle";
+                    true
+                }
+                (false, _) => true,
+            }
+        };
+        let activity = Arc::clone(&self.activity);
+        let say = move |line: &str| {
+            radiopost::logfile::line(line);
+            lock(&activity).log.push(line.to_owned());
+        };
+        Carrier {
+            alerts: self.alerts.clone(),
+            base: self.base.clone(),
+            gate: Arc::new(gate),
+            say: Arc::new(say),
+        }
+    }
+
+    /// `/api/alerts`: send an alert, acknowledge one heard (or all), or reply to one (RP-8).
+    fn alert_request(&self, body: &Value) -> Result<Value, Error> {
+        let now = now();
+        if let Some(send) = body.get("send") {
+            let store = Store::open(&self.home())?;
+            let me = store
+                .me()
+                .map_err(|_| "no credential yet: enroll in Setup first")?;
+            let circle = send["circle"].as_str().unwrap_or("");
+            let to = send["to"].as_str().filter(|t| !t.trim().is_empty());
+            let text = send["text"].as_str().unwrap_or("");
+            self.alerts.send(circle, to, text, &me.operator, now)?;
+        } else if let Some(tag) = body["ack"].as_str() {
+            self.alerts.acknowledge(tag, now)?;
+        } else if body["ack_all"] == true {
+            self.alerts.acknowledge_all(now);
+        } else if let Some(reply) = body.get("reply") {
+            let tag = reply["tag"].as_str().unwrap_or("");
+            self.alerts
+                .reply(tag, reply["text"].as_str().unwrap_or(""), now)?;
+        } else {
+            return Err("send, ack, ack_all or reply".into());
+        }
+        Ok(self.alerts.json())
+    }
+
+    /// `/api/circles`: add a circle from its keyword, change how it arrives, or forget it.
+    fn circle_request(&self, body: &Value) -> Result<Value, Error> {
+        let level = |v: &Value| match v.as_str() {
+            None => Ok(None),
+            Some(name) => Level::named(name).map(Some).ok_or_else(|| {
+                format!("level: silent, normal, important or time-sensitive, not {name}")
+            }),
+        };
+        if let Some(add) = body.get("add") {
+            let name = add["name"].as_str().unwrap_or("");
+            let keyword = add["keyword"].as_str().unwrap_or("");
+            let level = level(&add["level"])?.unwrap_or(Level::TimeSensitive);
+            self.alerts.add_circle(name, keyword, level)?;
+        } else if let Some(set) = body.get("set") {
+            let name = set["name"].as_str().unwrap_or("");
+            self.alerts
+                .set_circle(name, level(&set["level"])?, set["answer"].as_bool())?;
+        } else if let Some(name) = body["remove"].as_str() {
+            self.alerts.remove_circle(name)?;
+        } else {
+            return Err("add, set or remove a circle".into());
+        }
+        Ok(self.alerts.json())
+    }
+
     /// The program is ending: the connection between calls closes, so Aether says the app has
     /// gone, rather than learning it from a connection cut at the exit. A clone of the panel kept
     /// before [`Panel::start`] ends the running panel's.
@@ -281,6 +378,7 @@ impl Panel {
             return Err("the panel listens only on the loopback interface".into());
         }
         self.addr = local;
+        self.presence.carry(self.carrier());
         self.presence.start();
         let renewing = self.clone();
         thread::spawn(move || renewing.keep_renewed());
@@ -511,6 +609,7 @@ impl Panel {
         match lock(&self.activity).state {
             "idle" => Ok(()),
             "renewing" => Err("renewing the credential: try again in a moment".into()),
+            "alerting" => Err("an alert is going out: try again in a moment".into()),
             _ => Err("a session is under way: try again when it ends".into()),
         }
     }
@@ -532,6 +631,7 @@ impl Panel {
             match a.state {
                 "idle" => {}
                 "renewing" => return Err("renewing a credential: try again in a moment".into()),
+                "alerting" => return Err("an alert is going out: try again in a moment".into()),
                 _ => return Err("a session is under way: change callsign when it ends".into()),
             }
             if !body["choose"].is_null() {
@@ -619,6 +719,14 @@ impl Panel {
                 Ok(json!({"opened": crate::terminal::open(target)?}))
             }
             (Method::Post, "/api/update") => self.update(),
+            (Method::Get, "/api/alerts") => Ok(self.alerts.json()),
+            (Method::Post, "/api/alerts") => self.alert_request(body),
+            (Method::Post, "/api/circles") => self.circle_request(body),
+            (Method::Get, "/api/notify") => Ok(alerts::notify_settings(&self.base)),
+            (Method::Post, "/api/notify") => {
+                alerts::set_notify_settings(&self.base, body)?;
+                Ok(alerts::notify_settings(&self.base))
+            }
             (Method::Post, "/api/stop") => {
                 self.stop.store(true, Ordering::Relaxed);
                 Ok(json!({}))
@@ -1055,6 +1163,7 @@ impl Panel {
                        "reports": store.reports.len(),
                        "files": store.files.len(), "waiting": store.waiting_entries().len()},
             "activity": {"state": a.state, "remote": a.remote, "failed": a.failed},
+            "alerts": self.alerts.summary(),
             "progress": self.live.lock().unwrap_or_else(PoisonError::into_inner).summary(),
             "update": self.updates.status(),
             "log": a.log.len(),
@@ -1335,6 +1444,7 @@ impl Panel {
             match a.state {
                 "idle" => {}
                 "renewing" => return Err("renewing the credential: try again in a moment".into()),
+                "alerting" => return Err("an alert is going out: try again in a moment".into()),
                 _ => return Err("a session is under way".into()),
             }
             a.state = if remote.is_some() {
@@ -1360,6 +1470,7 @@ impl Panel {
         *self.live.lock().unwrap_or_else(PoisonError::into_inner) = session::Live::default();
         opts.live = Some(Arc::clone(&self.live));
         // listening answers calls to every callsign of this client (W46)
+        opts.alerts = Some(self.carrier());
         opts.also = callsigns::list(&self.base)
             .into_iter()
             .map(|c| c.home)

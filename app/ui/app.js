@@ -108,8 +108,8 @@ function when(seconds) {
 }
 
 function show(view) {
-  for (const id of ["list-view", "waiting-view", "gateways-view", "addresses-view", "reader",
-                    "composer", "setup", "office"]) {
+  for (const id of ["list-view", "waiting-view", "gateways-view", "addresses-view", "alerts-view",
+                    "reader", "composer", "setup", "office"]) {
     $(id).hidden = id !== view;
   }
   // the usual gateways are read afresh each time, for the callsign in use now
@@ -257,6 +257,24 @@ function showUpdate(u, name) {
     : `Open ${u.offer.page} in your browser`;
 }
 
+// what the station's state says to the ear: a session up or ended, a call failed, a message
+// delivered, mail arrived (checked by its senders' levels)
+let lastCounts = null;
+function soundsOfState(s, a) {
+  const was = lastCounts;
+  lastCounts = {inbox: s.counts.inbox, sent: s.counts.sent};
+  if (a.state === "session" && lastState !== "session") play("session-up");
+  if (a.state === "idle" && lastState === "session") play(a.failed ? "failed" : "session-down");
+  if (a.state === "idle" && lastState === "calling" && a.failed) play("failed");
+  if (!was) return;
+  if (s.counts.sent > was.sent) play("delivered");
+  if (s.counts.inbox !== was.inbox) {
+    const fromSession = ["session", "calling", "listening"].includes(a.state)
+      || ["session", "calling", "listening"].includes(lastState);
+    checkMail(fromSession).catch(() => {});
+  }
+}
+
 async function refresh() {
   const s = await api("state");
   showUpdate(s.update, "RadioPost");
@@ -278,7 +296,7 @@ async function refresh() {
   const a = s.activity;
   const label = {idle: "Idle", calling: `Calling ${a.remote || ""}`, listening: "Listening",
                  session: `In session with ${a.remote || ""}`,
-                 renewing: "Renewing credential"}[a.state];
+                 renewing: "Renewing credential", alerting: "Sending an alert"}[a.state];
   const state = $("state");
   state.dataset.state = a.state === "idle" && a.failed ? "failed" : a.state;
   state.textContent = a.state === "idle" && a.failed ? "Last session failed" : label;
@@ -301,10 +319,13 @@ async function refresh() {
     : "No credential yet.";
   $("trusted").textContent = s.trusted.length ? s.trusted.join(", ") : "None yet.";
   if (s.log !== logNext) await readLog();
-  // a session that ends shows what it brought; a renewal changes no folder, and must not close
-  // a message being written
-  if (lastState !== "idle" && lastState !== "renewing" && a.state === "idle") await openFolder(folder);
+  soundsOfState(s, a);
+  // a session that ends shows what it brought; a renewal or an alert changes no folder, and must
+  // not close a message being written
+  if (lastState !== "idle" && lastState !== "renewing" && lastState !== "alerting"
+      && a.state === "idle") await openFolder(folder);
   lastState = a.state;
+  if (s.alerts) await syncAlerts(s.alerts);
   return s;
 }
 
@@ -686,6 +707,7 @@ function rowActions(m, name) {
 async function openFolder(name) {
   if (name === "waiting") return openWaiting();
   if (name === "addresses") return openAddresses();
+  if (name === "alerts") return openAlerts();
   folder = name;
   markFolder(name);
   const trash = name === "trash";
@@ -835,6 +857,7 @@ function renderGroups() {
       if (i === 1) td.className = "date";
       tr.append(td);
     });
+    tr.append(levelSelect(`group:${g.name}`, `How mail from anyone in ${g.name} arrives`));
     const acts = document.createElement("td");
     acts.className = "acts";
     for (const [glyph, title, run] of [
@@ -925,6 +948,7 @@ function renderAddresses() {
       if (i === 2) td.className = "date";
       tr.append(td);
     });
+    tr.append(levelSelect(`address:${e.address}`, `How mail from ${e.address} arrives`));
     const acts = document.createElement("td");
     acts.className = "acts";
     for (const [glyph, title, run] of [
@@ -2287,6 +2311,626 @@ async function renderOfficeSettings() {
   $("o-facts").replaceChildren(...facts.flatMap(([k, v]) => [el("dt", {text: k}), el("dd", {class: "mono", text: v || ""})]));
 }
 
+// ── alerts between stations (RP-8, W52) and how things sound (W51) ──────────────────────────────
+// Sounds are made here, by Web Audio, on the output chosen in Setup. Their settings are the
+// panel's (notify.json), so they hold whatever port the panel runs on. A heard alert sounds every
+// 20 seconds until it is acknowledged; mail sounds by its sender's level.
+
+const LEVELS = ["silent", "normal", "important", "time-sensitive"];
+const LEVEL_NAMES = {silent: "Silent", normal: "Normal", important: "Important",
+                     "time-sensitive": "Time-sensitive"};
+const rank = (level) => Math.max(0, LEVELS.indexOf(level));
+const higher = (a, b) => (rank(a) >= rank(b) ? a : b);
+
+// each sound: its notes, [hertz, start s, length s, wave]
+const TONES = {
+  soft: [[880, 0, 0.16, "sine"]],
+  chime: [[660, 0, 0.24, "sine"], [880, 0.16, 0.3, "sine"]],
+  falling: [[660, 0, 0.24, "sine"], [440, 0.16, 0.3, "sine"]],
+  bell: [[1320, 0, 0.9, "sine"], [2640, 0, 0.45, "sine"], [1980, 0.02, 0.4, "triangle"]],
+  triple: [[784, 0, 0.12, "sine"], [988, 0.12, 0.12, "sine"], [1175, 0.24, 0.22, "sine"]],
+  alarm: [[960, 0, 0.17, "square"], [720, 0.2, 0.17, "square"], [960, 0.4, 0.17, "square"],
+          [720, 0.6, 0.17, "square"], [960, 0.8, 0.17, "square"], [720, 1.0, 0.17, "square"]],
+  low: [[330, 0, 0.35, "triangle"], [262, 0.3, 0.45, "triangle"]],
+  none: [],
+};
+const TONE_NAMES = {soft: "Soft note", chime: "Chime", falling: "Falling", bell: "Bell",
+                    triple: "Three notes", alarm: "Alarm", low: "Low", none: "None"};
+// what sounds, in Setup's order, with its sound unless the operator chose another
+const SOUND_EVENTS = [
+  ["alert", "An alert for you, time-sensitive", "alarm"],
+  ["alert-quiet", "An alert at another level", "bell"],
+  ["answered", "Your alert heard, seen or answered", "triple"],
+  ["mail", "Mail", "soft"],
+  ["mail-important", "Important mail", "bell"],
+  ["mail-urgent", "Time-sensitive mail", "alarm"],
+  ["session-up", "A session starts", "chime"],
+  ["session-down", "A session ends", "falling"],
+  ["failed", "A call or an alert fails", "low"],
+  ["delivered", "A message delivered", "soft"],
+];
+const ALARM_EVERY_MS = 20000;
+
+let notifySettings = {};
+let audio = null;
+
+function sounds() {
+  notifySettings.sounds = notifySettings.sounds || {};
+  return notifySettings.sounds;
+}
+
+function soundOf(event) {
+  const chosen = (sounds().events || {})[event];
+  return chosen in TONES ? chosen : (SOUND_EVENTS.find(([e]) => e === event) || [])[2] || "none";
+}
+
+// the browser plays nothing before the operator's first click or key, so the context is made, or
+// woken, then; a sound before it is lost, which the window coming forward makes up for
+function wakeAudio() {
+  try {
+    if (!audio) {
+      audio = new (window.AudioContext || window.webkitAudioContext)();
+      routeAudio();
+    }
+    if (audio.state === "suspended") audio.resume().catch(() => {});
+  } catch { audio = null; }
+}
+
+function canRoute() {
+  return typeof AudioContext !== "undefined" && "setSinkId" in AudioContext.prototype;
+}
+
+function routeAudio() {
+  if (!audio || !canRoute()) return;
+  const id = (sounds().device || {}).id || "";
+  audio.setSinkId(id).catch(() => audio.setSinkId("").catch(() => {}));
+}
+
+function quietNow() {
+  const q = notifySettings.quiet || {};
+  if (!q.on || !q.from || !q.to) return false;
+  const minutes = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+  const d = new Date();
+  const now = d.getHours() * 60 + d.getMinutes();
+  const from = minutes(q.from), to = minutes(q.to);
+  return from <= to ? now >= from && now < to : now >= from || now < to;
+}
+
+// plays an event's sound; in quiet hours only what is time-sensitive, and a test always
+function play(event, {level = "normal", test = false} = {}) {
+  const s = sounds();
+  if (!test && (s.on === false || (quietNow() && level !== "time-sensitive"))) return;
+  const notes = TONES[soundOf(event)] || [];
+  if (!notes.length) return;
+  wakeAudio();
+  if (!audio) return;
+  const volume = (s.volume ?? 60) / 100;
+  const t0 = audio.currentTime + 0.03;
+  for (const [hz, at, length, wave] of notes) {
+    const osc = audio.createOscillator();
+    const gain = audio.createGain();
+    osc.type = wave;
+    osc.frequency.value = hz;
+    const peak = Math.max(0.3 * volume * (wave === "square" ? 0.35 : 1), 0.0002);
+    gain.gain.setValueAtTime(0.0001, t0 + at);
+    gain.gain.exponentialRampToValueAtTime(peak, t0 + at + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + at + length);
+    osc.connect(gain).connect(audio.destination);
+    osc.start(t0 + at);
+    osc.stop(t0 + at + length + 0.05);
+  }
+}
+
+// the system's own notification, when the window is behind others and the operator asked
+function notifySystem(title, body) {
+  if (!notifySettings.notify || !document.hidden || !("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  try { new Notification(title, {body, tag: "radiopost"}); } catch { /* not shown */ }
+}
+
+let bannerAct = null;
+function showBanner(text, open, alarm = false) {
+  $("banner-text").textContent = text;
+  $("banner").classList.toggle("alert", alarm);
+  bannerAct = open;
+  $("banner-open").hidden = !open;
+  $("banner").hidden = false;
+}
+
+async function saveNotify() {
+  try {
+    notifySettings = await api("notify", notifySettings);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── how mail arrives: its sender's level ───────────────────────────────────────────────────────
+
+function addressOf(from) {
+  const m = /<([^>]+)>/.exec(from || "");
+  return (m ? m[1] : from || "").trim().toLowerCase();
+}
+
+function mailLevels() {
+  notifySettings.mail = notifySettings.mail || {};
+  notifySettings.mail.levels = notifySettings.mail.levels || {};
+  return notifySettings.mail.levels;
+}
+
+// an address's own level, else the highest of its groups', else the default; Emergency brings it
+// up to Important; only a level set by the operator reaches Time-sensitive
+function mailLevel(from, priority) {
+  const address = addressOf(from);
+  const levels = mailLevels();
+  let set = levels[`address:${address}`] || null;
+  for (const g of groupBook) {
+    const l = levels[`group:${g.name}`];
+    if (l && g.members.some((m) => m.address === address)) set = set ? higher(set, l) : l;
+  }
+  let level = set || notifySettings.mail.default || "normal";
+  if (!set && level === "time-sensitive") level = "important";
+  if (priority >= 2) level = higher(level, "important");
+  return level;
+}
+
+// a select of the four levels, with Default first, for an address or a group in Addresses
+function levelSelect(key, title) {
+  const levels = mailLevels();
+  const select = el("select", {class: "level", title, "aria-label": title});
+  select.append(new Option("Default", ""), ...LEVELS.map((l) => new Option(LEVEL_NAMES[l], l)));
+  select.value = levels[key] || "";
+  select.addEventListener("click", (event) => event.stopPropagation());
+  select.addEventListener("change", async () => {
+    if (select.value) levels[key] = select.value;
+    else delete levels[key];
+    await saveNotify();
+  });
+  const td = el("td", {class: "level-cell"}, select);
+  td.addEventListener("click", (event) => event.stopPropagation());
+  return td;
+}
+
+let inboxSeen = null;  // every inbox ID this page has seen
+let urgentMail = null;  // a time-sensitive message not yet opened: it sounds as an alarm does
+
+// new mail after a session: its sound, toast, banner or alarm, by the highest level among it. The
+// inbox also grows when a message comes back from the trash: then the IDs are only noted.
+async function checkMail(fromSession) {
+  const rows = await api("folder?name=inbox");
+  const first = inboxSeen === null;
+  inboxSeen = inboxSeen || new Set();
+  const fresh = rows.filter((m) => !inboxSeen.has(m.id));
+  for (const m of rows) inboxSeen.add(m.id);
+  if (first || !fromSession || !fresh.length) return;
+  let top = null;
+  for (const m of fresh) {
+    const level = mailLevel(m.from, m.priority);
+    if (!top || rank(level) > rank(top.level)) top = {level, m};
+  }
+  const {level, m} = top;
+  const text = fresh.length === 1
+    ? `Mail from ${m.from}: ${m.subject || "(no subject)"}`
+    : `${fresh.length} new messages, one from ${m.from}: ${m.subject || "(no subject)"}`;
+  const open = () => { $("banner").hidden = true; urgentMail = null; openMessage(m.id, {folder: "inbox"}); };
+  if (level === "silent") return;
+  notifySystem(fresh.length === 1 ? `Mail from ${m.from}` : `${fresh.length} new messages`,
+               m.subject || "");
+  if (level === "normal") {
+    play("mail");
+    toast(text);
+  } else if (level === "important") {
+    play("mail-important", {level});
+    showBanner(text, open);
+  } else {
+    urgentMail = m;
+    play("mail-urgent", {level});
+    showBanner(text, open, true);
+    keepAlarming();
+  }
+}
+
+// ── the alerts kept by the panel ───────────────────────────────────────────────────────────────
+
+let alertsSeq = -1;
+let alertsKnown = null;  // each alert's state and answers when last read, to tell what is new
+let alertsLog = [];
+let alertCircles = [];
+
+const OUT_STATES = {waiting: "waiting for the modem", sent: "on the air", heard: "heard",
+                    seen: "seen", replied: "answered", "not heard": "not heard",
+                    failed: "not sent"};
+
+async function syncAlerts(summary, force = false) {
+  if (!force && summary && summary.seq === alertsSeq && alertsKnown) return;
+  const data = await api("alerts");
+  alertsSeq = data.seq;
+  alertCircles = data.circles;
+  alertsLog = data.log;
+  const before = alertsKnown;
+  alertsKnown = new Map(data.log.map((e) => [e.tag, {state: e.state, answers: e.answers.length}]));
+  if (before) {
+    for (const e of data.log) told(e, before.get(e.tag));
+  }
+  $("n-alerts").textContent = data.log.filter((e) => !e.out && e.state === "new").length || "";
+  showAlarm();
+  if (!$("alerts-view").hidden) renderAlerts();
+}
+
+// what changed in one alert since it was last read, said once
+function told(e, was) {
+  if (!e.out && !was) {
+    if (e.alarm) {
+      play("alert", {level: "time-sensitive"});
+      notifySystem(`Alert from ${e.from}`, e.text);
+    } else if (!e.quiet && e.level !== "silent") {
+      play("alert-quiet", {level: e.level});
+      showBanner(`Alert from ${e.from} in ${e.circle}: ${e.text}`, () => openAlerts(), true);
+      notifySystem(`Alert from ${e.from}`, e.text);
+    }
+    return;
+  }
+  if (!e.out || !was) return;
+  if (e.answers.length > was.answers) {
+    const last = e.answers[e.answers.length - 1];
+    play("answered");
+    const said = last.kind === "reply"
+      ? `${last.from} answered your alert: ${last.text}`
+      : `${last.from} has ${last.kind} your alert`;
+    toast(said);
+    if (last.kind === "reply") notifySystem(`${last.from} answered`, last.text || "");
+  }
+  if (was.state !== e.state && (e.state === "not heard" || e.state === "failed")) {
+    play("failed");
+    toast(e.state === "failed"
+      ? `Your alert to ${e.to || "the circle"} was not sent: ${e.why || ""}`
+      : `Your alert to ${e.to || "the circle"} was not heard`, true);
+  }
+}
+
+function alarmsWaiting() {
+  // the oldest first: it was heard first
+  return alertsLog.filter((e) => e.alarm).reverse();
+}
+
+let alarmTimer = null;
+function keepAlarming() {
+  if (alarmTimer) return;
+  alarmTimer = setInterval(() => {
+    if (alarmsWaiting().length) play("alert", {level: "time-sensitive"});
+    else if (urgentMail && !$("banner").hidden) play("mail-urgent", {level: "time-sensitive"});
+    else { clearInterval(alarmTimer); alarmTimer = null; }
+  }, ALARM_EVERY_MS);
+}
+
+let alarmShown = null;
+function showAlarm() {
+  const waiting = alarmsWaiting();
+  const box = $("alarm");
+  if (!waiting.length) {
+    box.hidden = true;
+    alarmShown = null;
+    return;
+  }
+  const e = waiting[0];
+  const fresh = !alarmShown || alarmShown.tag !== e.tag;
+  alarmShown = e;
+  $("alarm-head").textContent = `Alert from ${e.from} · ${e.circle}`;
+  $("alarm-text").textContent = e.text;
+  $("alarm-when").textContent = `${e.to ? `To ${e.to}` : "To everyone in the circle"} · `
+    + `sent ${new Date(e.time * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}`;
+  $("alarm-more").textContent = waiting.length > 1 ? `${waiting.length - 1} more waiting after this one` : "";
+  box.hidden = false;
+  if (fresh) {
+    $("alarm-line").value = "";
+    $("alarm-ack").focus();
+  }
+  keepAlarming();
+}
+
+async function alertDo(body, said) {
+  try {
+    await api("alerts", body);
+    if (said) toast(said);
+  } catch (e) {
+    toast(e.message, true);
+  }
+  await syncAlerts(null, true);
+}
+
+async function openAlerts() {
+  folder = "alerts";
+  markFolder("alerts");
+  await syncAlerts(null, true);
+  renderAlerts();
+  show("alerts-view");
+}
+
+function stateTag(e) {
+  if (e.out) {
+    const bad = e.state === "failed" || e.state === "not heard";
+    const good = ["heard", "seen", "replied"].includes(e.state);
+    return el("span", {class: bad ? "tag bad" : good ? "tag ok" : "tag busy",
+                       text: OUT_STATES[e.state] || e.state, title: e.why || ""});
+  }
+  if (e.state === "new") {
+    return el("span", {class: e.alarm ? "tag bad" : "tag busy",
+                       text: e.alarm ? "sounding" : "not answered"});
+  }
+  return el("span", {class: "tag ok", text: e.state === "replied" ? "answered" : "seen"});
+}
+
+function answersOf(e) {
+  const at = (t) => new Date(t * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+  if (!e.out) return e.reply ? `You: ${e.reply}` : "";
+  return e.answers.map((a) => (a.kind === "reply"
+    ? `${a.from} ${at(a.time)}: ${a.text}`
+    : `${a.from} ${a.kind} ${at(a.time)}`)).join(" · ");
+}
+
+function renderAlerts() {
+  const circleSelect = $("alert-circle");
+  const chosen = circleSelect.value || kept("alertCircle", "");
+  circleSelect.replaceChildren(...alertCircles.map((c) => new Option(c.name, c.name)));
+  if (alertCircles.some((c) => c.name === chosen)) circleSelect.value = chosen;
+  const none = !alertCircles.length;
+  for (const id of ["alert-circle", "alert-to", "alert-text", "alert-send"]) $(id).disabled = none;
+  $("alert-left").textContent = none ? "Add a circle below first." : alertLeft();
+  const modem = adapter();
+  $("alerts-modem").textContent = modem.startsWith("ws://")
+    ? ""
+    : `Alerts go only through a modem that carries broadcasts, as Aether does. ${modem || "The modem"} is used for calls; VARA, ARDOP, Mercury and packet carry no alerts.`;
+  $("alerts-modem").hidden = modem.startsWith("ws://");
+  $("alert-rows").replaceChildren(...alertsLog.map((e) => {
+    const tr = el("tr", {class: e.alarm ? "alarming" : e.quiet ? "quiet" : ""});
+    tr.append(el("td", {class: "date", text: when(e.at), title: new Date(e.at * 1000).toLocaleString()}));
+    tr.append(el("td", {class: "way", text: `${e.out ? "You" : e.from} → ${e.to || "everyone"}`}));
+    tr.append(el("td", {class: "text", text: e.text}));
+    tr.append(el("td", {text: e.circle}));
+    const cell = el("td", {class: "answers"}, stateTag(e), answersOf(e));
+    if (!e.out && e.state === "new") {
+      cell.append(" ", el("button", {type: "button", class: "quiet", text: "Acknowledge",
+        title: "The other station hears that you have seen it",
+        onclick: () => alertDo({ack: e.tag})}));
+    }
+    tr.append(cell);
+    return tr;
+  }));
+  $("alerts-empty").textContent = "No alerts yet.";
+  $("alerts-empty").hidden = alertsLog.length > 0;
+  $("circle-rows").replaceChildren(...alertCircles.map((c) => {
+    const level = el("select", {title: `How ${c.name}'s alerts arrive here`});
+    level.append(...LEVELS.map((l) => new Option(LEVEL_NAMES[l], l)));
+    level.value = c.level;
+    level.addEventListener("change", () => api("circles", {set: {name: c.name, level: level.value}})
+      .then(() => syncAlerts(null, true)).catch((e) => toast(e.message, true)));
+    const answer = el("input", {type: "checkbox", title: "Say heard by itself when an alert for this station arrives"});
+    answer.checked = c.answer;
+    answer.addEventListener("change", () => api("circles", {set: {name: c.name, answer: answer.checked}})
+      .then(() => syncAlerts(null, true)).catch((e) => toast(e.message, true)));
+    const forget = el("button", {type: "button", class: "act danger",
+      title: `Forget ${c.name}: its alerts are no longer heard here`,
+      "aria-label": `Forget ${c.name}`});
+    forget.append(icon("trash"));
+    forget.addEventListener("click", () => armed(forget, "Forget?", async () => {
+      try { await api("circles", {remove: c.name}); } catch (e) { toast(e.message, true); }
+      await syncAlerts(null, true);
+    }));
+    return el("tr", {},
+      el("td", {text: c.name}),
+      el("td", {class: "check-text", text: c.check}),
+      el("td", {}, level),
+      el("td", {}, answer),
+      el("td", {class: "acts"}, forget));
+  }));
+  $("circles-empty").textContent = "No circle yet. Add one with a keyword the others type too.";
+  $("circles-empty").hidden = alertCircles.length > 0;
+}
+
+function alertLeft() {
+  const used = new TextEncoder().encode($("alert-text").value.trim()).length;
+  return `${100 - used} bytes left`;
+}
+
+async function sendAlert(event) {
+  event.preventDefault();
+  const circle = $("alert-circle").value;
+  const to = $("alert-to").value.trim().toUpperCase();
+  const text = $("alert-text").value.trim();
+  if (!text) { toast("A line to send", true); return; }
+  keep("alertCircle", circle);
+  try {
+    await api("alerts", {send: {circle, to, text}});
+    $("alert-text").value = "";
+    toast(`Alert to ${to || `everyone in ${circle}`} waiting for the modem`);
+  } catch (e) {
+    toast(e.message, true);
+  }
+  await syncAlerts(null, true);
+}
+
+// a keyword nobody would guess, easy to say: four words of two syllables, about 50 bits
+function makeKeyword() {
+  const consonants = "bdfghjklmnprstvz", vowels = "aeiou";
+  const draws = new Uint32Array(8);
+  crypto.getRandomValues(draws);
+  const syllable = (n) => consonants[n % 16] + vowels[Math.floor(n / 16) % 5];
+  const words = [];
+  for (let i = 0; i < 4; i++) words.push(syllable(draws[2 * i]) + syllable(draws[2 * i + 1]));
+  return words.join(" ");
+}
+
+// the keyword as the circle's key will take it (RP-8 §2), for the length the panel checks
+function normalisedKeyword(text) {
+  return text.normalize("NFC").replace(/[A-Z]/g, (c) => c.toLowerCase())
+    .replace(/[ \t]+/g, " ").replace(/^ | $/g, "");
+}
+
+function keywordStrength() {
+  const k = normalisedKeyword($("circle-keyword").value);
+  const note = $("circle-strength");
+  if (!k) note.textContent = "";
+  else if ([...k].length < 8) note.textContent = "Too short: at least 8 characters.";
+  else if (k.split(" ").length < 4 && [...k].length < 20) {
+    note.textContent = "Short keywords can be guessed from one alert heard on the air. Use Make one, or four words or more.";
+  } else note.textContent = "";
+}
+
+async function addCircle(event) {
+  event.preventDefault();
+  const name = $("circle-name").value.trim();
+  const keyword = $("circle-keyword").value;
+  const add = $("circle-add");
+  add.disabled = true;
+  try {
+    await api("circles", {add: {name, keyword, level: $("circle-level").value}});
+    $("circle-name").value = "";
+    $("circle-keyword").value = "";
+    keywordStrength();
+    toast(`${name} kept: read its check to the others`);
+  } catch (e) {
+    toast(e.message, true);
+  }
+  add.disabled = false;
+  await syncAlerts(null, true);
+}
+
+// ── Setup's Sounds and notifications ───────────────────────────────────────────────────────────
+
+async function fillDevices() {
+  const select = $("snd-device");
+  let outputs = [];
+  try {
+    outputs = (await navigator.mediaDevices.enumerateDevices())
+      .filter((d) => d.kind === "audiooutput" && d.deviceId && d.deviceId !== "default");
+  } catch { outputs = []; }
+  const chosen = sounds().device || {};
+  select.replaceChildren(new Option("The system's default output", ""),
+    ...outputs.map((d, i) => new Option(d.label || `Output ${i + 1}`, d.deviceId)));
+  // a device's ID differs from one panel's port to another's: its name is kept too
+  const match = outputs.find((d) => d.deviceId === chosen.id)
+    || outputs.find((d) => d.label && d.label === chosen.label);
+  select.value = match ? match.deviceId : "";
+  if (match && match.deviceId !== chosen.id) {
+    chosen.id = match.deviceId;
+    routeAudio();
+  }
+  select.disabled = !canRoute();
+  select.title = canRoute()
+    ? "Where the sounds play"
+    : "This window cannot choose: the sounds play on the system's default output";
+  $("snd-names").hidden = !canRoute() || outputs.some((d) => d.label);
+}
+
+function renderSounds() {
+  const s = sounds();
+  $("snd-on").checked = s.on !== false;
+  $("snd-volume").value = s.volume ?? 60;
+  $("snd-rows").replaceChildren(...SOUND_EVENTS.map(([event, words]) => {
+    const select = el("select", {title: `The sound for: ${words}`, "aria-label": words});
+    select.append(...Object.keys(TONES).map((t) => new Option(TONE_NAMES[t], t)));
+    select.value = soundOf(event);
+    select.addEventListener("change", () => {
+      s.events = s.events || {};
+      s.events[event] = select.value;
+      play(event, {test: true});
+      saveNotify();
+    });
+    const test = el("button", {type: "button", class: "quiet", text: "Play",
+      title: "Play it now, at the volume set", onclick: () => play(event, {test: true})});
+    return el("tr", {}, el("td", {text: words}), el("td", {}, select), el("td", {class: "acts"}, test));
+  }));
+  const q = notifySettings.quiet || {};
+  $("quiet-on").checked = Boolean(q.on);
+  $("quiet-from").value = q.from || "22:00";
+  $("quiet-to").value = q.to || "07:00";
+  $("mail-default").value = (notifySettings.mail || {}).default || "normal";
+  $("snd-notify").checked = Boolean(notifySettings.notify);
+  fillDevices();
+}
+
+function wireAlerts() {
+  for (const kind of ["pointerdown", "keydown"]) document.addEventListener(kind, wakeAudio);
+  $("alert-form").addEventListener("submit", sendAlert);
+  $("alert-text").addEventListener("input", () => { $("alert-left").textContent = alertLeft(); });
+  $("circle-form").addEventListener("submit", addCircle);
+  $("circle-keyword").addEventListener("input", keywordStrength);
+  $("circle-make").addEventListener("click", () => {
+    $("circle-keyword").value = makeKeyword();
+    $("circle-keyword").type = "text";
+    $("circle-show").checked = true;
+    keywordStrength();
+  });
+  $("circle-show").addEventListener("change", () => {
+    $("circle-keyword").type = $("circle-show").checked ? "text" : "password";
+  });
+  $("alarm-ack").addEventListener("click", () => {
+    if (alarmShown) alertDo({ack: alarmShown.tag});
+  });
+  $("alarm-call").addEventListener("click", async () => {
+    if (!alarmShown) return;
+    const who = alarmShown.from;
+    await alertDo({ack: alarmShown.tag});
+    document.querySelector("input[name=kind][value=station]").checked = true;
+    showKind();
+    $("callsign").value = who;
+    toast(`Press Call to call ${who}`);
+  });
+  for (const b of document.querySelectorAll("#alarm-quick [data-reply]")) {
+    b.addEventListener("click", () => {
+      if (alarmShown) alertDo({reply: {tag: alarmShown.tag, text: b.dataset.reply}}, "Answer waiting for the modem");
+    });
+  }
+  $("alarm-reply").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const text = $("alarm-line").value.trim();
+    if (alarmShown && text) alertDo({reply: {tag: alarmShown.tag, text}}, "Answer waiting for the modem");
+  });
+  $("banner-open").addEventListener("click", () => { if (bannerAct) bannerAct(); });
+  $("banner-close").addEventListener("click", () => { $("banner").hidden = true; urgentMail = null; });
+  $("snd-on").addEventListener("change", () => { sounds().on = $("snd-on").checked; saveNotify(); });
+  $("snd-volume").addEventListener("change", () => {
+    sounds().volume = Number($("snd-volume").value);
+    play("mail", {test: true});
+    saveNotify();
+  });
+  $("snd-device").addEventListener("change", () => {
+    const option = $("snd-device").selectedOptions[0];
+    sounds().device = $("snd-device").value ? {id: $("snd-device").value, label: option.text} : {};
+    routeAudio();
+    play("mail", {test: true});
+    saveNotify();
+  });
+  $("snd-names").addEventListener("click", async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+      for (const t of stream.getTracks()) t.stop();
+    } catch { toast("This window was not allowed to list the devices by name", true); }
+    fillDevices();
+  });
+  const quiet = () => {
+    notifySettings.quiet = {on: $("quiet-on").checked, from: $("quiet-from").value,
+                            to: $("quiet-to").value};
+    saveNotify();
+  };
+  for (const id of ["quiet-on", "quiet-from", "quiet-to"]) $(id).addEventListener("change", quiet);
+  $("mail-default").addEventListener("change", () => {
+    notifySettings.mail = notifySettings.mail || {};
+    notifySettings.mail.default = $("mail-default").value;
+    saveNotify();
+  });
+  $("snd-notify").addEventListener("change", async () => {
+    notifySettings.notify = $("snd-notify").checked;
+    if (notifySettings.notify && "Notification" in window && Notification.permission === "default") {
+      try { await Notification.requestPermission(); } catch { /* asked */ }
+    }
+    if (notifySettings.notify && (!("Notification" in window) || Notification.permission === "denied")) {
+      toast("This window may not show notifications: the alarm and the window coming forward still tell you", true);
+    }
+    saveNotify();
+  });
+}
+
 function wire() {
   try {
     const kept = localStorage.getItem("radiopost.adapter");
@@ -2602,8 +3246,12 @@ function wire() {
 
 async function start() {
   wire();
+  wireAlerts();
+  try { notifySettings = await api("notify"); } catch { notifySettings = {}; }
+  renderSounds();
   await loadAddresses();
   await loadForms();
+  checkMail(false).catch(() => {});
   const s = await refresh();
   if (!s.device || !s.me) show("setup");
   else await openFolder("inbox");

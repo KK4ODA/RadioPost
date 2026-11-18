@@ -34,6 +34,7 @@
         <li><button data-folder="waiting" title="What waited at your post office at the last call to a gateway: mark what to fetch on the next call">Waiting <span class="count" id="n-waiting"></span></button></li>
         <li><button data-folder="trash" title="Messages you deleted: put them back, or delete them for good. Deleting is on this computer only: your post office and other stations keep what they hold">Trash <span class="count" id="n-trash"></span></button></li>
         <li class="sep"><button data-folder="addresses" title="Whom you have written to, and addresses you add: offered as you type in To and Cc">Addresses <span class="count" id="n-addresses"></span></button></li>
+        <li><button data-folder="alerts" title="Alerts to and from the stations that share a keyword with you: sent at once, heard as an alarm, answered with a line">Alerts <span class="count" id="n-alerts"></span></button></li>
       </ul>
 
       <section class="station" aria-label="Station">
@@ -93,6 +94,11 @@
     </nav>
 
     <main>
+      <div class="banner" id="banner" role="status" hidden>
+        <span id="banner-text"></span>
+        <button id="banner-open" title="Open it">Open</button>
+        <button class="quiet" id="banner-close" title="Put the banner away">Dismiss</button>
+      </div>
       <section id="list-view">
         <div class="head">
           <h1 id="folder-title">Inbox</h1>
@@ -139,6 +145,66 @@
         </table></div>
       </section>
 
+      <section id="alerts-view" hidden>
+        <div class="head"><h1>Alerts</h1></div>
+        <p class="note">An alert reaches the stations that share a circle's keyword at once, as a broadcast: no call, no session. There it sounds until its operator answers. Anyone listening can read it; only the circle can make one. About 16 seconds on the air with Aether.</p>
+        <p class="note trouble" id="alerts-modem" hidden></p>
+        <form class="card" id="alert-form">
+          <h2>Send an alert</h2>
+          <div class="grid2">
+            <label title="The circle it goes to: only stations that typed its keyword hear it as an alert">Circle
+              <select id="alert-circle"></select>
+            </label>
+            <label title="The station to alert, by callsign; left empty, every station in the circle">To
+              <input id="alert-to" placeholder="Everyone in the circle" spellcheck="false" autocomplete="off">
+            </label>
+          </div>
+          <label title="One line, up to 100 bytes. Plain text: anyone listening can read it">Message
+            <input id="alert-text" maxlength="100" placeholder="Please call me on 146.52 now" autocomplete="off">
+          </label>
+          <div class="row">
+            <button class="primary" type="submit" id="alert-send" title="Send it now, between calls">Send alert</button>
+            <span class="note" id="alert-left"></span>
+          </div>
+        </form>
+        <table class="list" aria-label="Alerts">
+          <thead><tr><th title="When it was sent or heard">When</th><th title="Who sent it, and to whom">From, to</th><th title="Its line">Message</th><th title="The circle it went in">Circle</th><th title="Sent alerts: heard, seen or replied by the other station. Heard alerts: what you answered">Answers</th></tr></thead>
+          <tbody id="alert-rows"></tbody>
+        </table>
+        <p class="empty" id="alerts-empty" hidden></p>
+        <h2 class="section" title="Each circle is a keyword the stations in it typed">Circles</h2>
+        <p class="note">A circle is the stations whose operators typed the same keyword. Tell the keyword to the others by voice or in person, never on the air, and read your checks to each other: the same check means the same keyword.</p>
+        <form class="card" id="circle-form">
+          <div class="grid2">
+            <label title="What you call it here; the others may call it something else">Name
+              <input id="circle-name" placeholder="Family" spellcheck="false" autocomplete="off">
+            </label>
+            <label title="How its alerts arrive here">When an alert arrives
+              <select id="circle-level">
+            <option value="silent">Silent</option>
+            <option value="normal">Normal</option>
+            <option value="important">Important</option>
+            <option value="time-sensitive" selected>Time-sensitive</option>
+              </select>
+            </label>
+          </div>
+          <label title="Four words or more. The same keyword, typed at each station, makes the same circle; capitals and extra spaces do not count">Keyword
+            <span class="pair">
+              <input id="circle-keyword" type="password" spellcheck="false" autocomplete="off" placeholder="Four words or more">
+              <button type="button" class="quiet" id="circle-make" title="Make a keyword nobody would guess, to tell the others">Make one</button>
+            </span>
+          </label>
+          <label class="check"><input type="checkbox" id="circle-show"> Show the keyword</label>
+          <p class="note" id="circle-strength"></p>
+          <div class="row"><button type="submit" id="circle-add" title="Keep the circle: its key is kept, never the keyword">Add the circle</button></div>
+        </form>
+        <table class="list" aria-label="Circles">
+          <thead><tr><th title="Its name here">Circle</th><th title="Read it to the others: the same check means the same keyword">Check</th><th title="How its alerts arrive here">When an alert arrives</th><th title="This station says heard by itself when an alert for it arrives: an automatic transmission">Answer by itself</th><th class="acts"></th></tr></thead>
+          <tbody id="circle-rows"></tbody>
+        </table>
+        <p class="empty" id="circles-empty" hidden></p>
+      </section>
+
       <section id="addresses-view" hidden>
         <div class="head">
           <h1>Addresses</h1>
@@ -152,7 +218,7 @@
           <input id="address-file" type="file" accept=".vcf,.csv,text/vcard,text/csv" hidden>
         </div>
         <table class="list" aria-label="Addresses">
-          <thead><tr><th title="The name written with it">Name</th><th title="The address">Address</th><th title="How many messages you have written to it, and the last">Written to</th><th class="acts"></th></tr></thead>
+          <thead><tr><th title="The name written with it">Name</th><th title="The address">Address</th><th title="How many messages you have written to it, and the last">Written to</th><th title="How mail from it arrives: a sound, a banner, or an alarm. Default is the level set in Setup, Sounds">Notify</th><th class="acts"></th></tr></thead>
           <tbody id="address-rows"></tbody>
         </table>
         <p class="empty" id="addresses-empty" hidden></p>
@@ -165,7 +231,7 @@
           <button type="button" id="group-cancel" class="quiet" title="Stop changing this group" hidden>Cancel</button>
         </form>
         <table class="list" aria-label="Groups">
-          <thead><tr><th title="The group's name">Group</th><th title="The addresses in it">Addresses</th><th class="acts"></th></tr></thead>
+          <thead><tr><th title="The group's name">Group</th><th title="The addresses in it">Addresses</th><th title="How mail from anyone in it arrives">Notify</th><th class="acts"></th></tr></thead>
           <tbody id="group-rows"></tbody>
         </table>
         <p class="empty" id="groups-empty" hidden></p>
@@ -520,6 +586,40 @@
             <button class="quiet" id="usual-load" title="Read your settings from your post office, and the gateways from the list kept here">Read</button>
           </div>
         </div>
+        <div class="card" id="sounds-card">
+          <h2>Sounds and notifications</h2>
+          <p class="note warn">If this computer's sound goes to the radio's sound card (a SignaLink, or the radio's own USB audio), these sounds go on the air, and with VOX they key the radio. Choose your speakers below, or turn sounds off.</p>
+          <label class="check"><input type="checkbox" id="snd-on"> Play sounds</label>
+          <label title="Where the sounds play. The names show once this window may list the devices">Play them on
+            <span class="pair">
+              <select id="snd-device"></select>
+              <button type="button" class="quiet" id="snd-names" title="Ask to list the sound devices by name; the microphone is opened for a moment and closed">Name the devices</button>
+            </span>
+          </label>
+          <label title="How loud, for every sound">Volume <input type="range" id="snd-volume" min="0" max="100" step="5"></label>
+          <table class="list sounds" aria-label="Sounds">
+            <thead><tr><th title="What happened">When</th><th title="Its sound">Sound</th><th class="acts"></th></tr></thead>
+            <tbody id="snd-rows"></tbody>
+          </table>
+          <h3>Quiet hours</h3>
+          <div class="row quiet-hours">
+            <label class="check"><input type="checkbox" id="quiet-on"> From</label>
+            <input type="time" id="quiet-from" class="short" title="When quiet hours start">
+            <span>to</span>
+            <input type="time" id="quiet-to" class="short" title="When they end">
+          </div>
+          <p class="note">In quiet hours only time-sensitive alerts and mail sound; the rest is shown quietly.</p>
+          <h3>Mail</h3>
+          <label title="How mail arrives from an address with no level of its own (set one in Addresses)">Mail from anyone else
+            <select id="mail-default" class="narrow">
+              <option value="silent">Silent</option>
+              <option value="normal">Normal</option>
+              <option value="important">Important</option>
+            </select>
+          </label>
+          <p class="note">Emergency mail arrives at least as Important. Only an address or group you set can reach Time-sensitive: anyone can choose Emergency.</p>
+          <label class="check" title="A notification from the system when this window is in the background"><input type="checkbox" id="snd-notify"> Notify me when this window is in the background</label>
+        </div>
         <div class="card">
           <h2>This device's key</h2>
           <p class="mono" id="device" title="Give this public key to your post office when you enroll"></p>
@@ -554,6 +654,27 @@
       <p class="t-line out" id="t-out" title="Your messages going out: how many the other station holds whole, and the bytes on their way"></p>
       <p class="t-line in" id="t-in" title="Messages coming in: how many are here whole, and the bytes arrived"></p>
       <p class="t-left" id="t-left"></p>
+    </div>
+  </div>
+  <div class="alarm" id="alarm" role="alertdialog" aria-modal="true" aria-labelledby="alarm-head" aria-describedby="alarm-text" hidden>
+    <div class="alarm-box">
+      <p class="alarm-head" id="alarm-head"></p>
+      <p class="alarm-text" id="alarm-text"></p>
+      <p class="note" id="alarm-when"></p>
+      <div class="row">
+        <button class="primary" id="alarm-ack" title="Stop the alarm; the other station hears that you have seen it">Acknowledge</button>
+        <button id="alarm-call" title="Put the sender's callsign in Call, as another client's station">Call back</button>
+      </div>
+      <div class="row quick" id="alarm-quick">
+        <button data-reply="Received" title="Answer with this line">Received</button>
+        <button data-reply="Calling you now" title="Answer with this line">Calling you now</button>
+        <button data-reply="Can't now" title="Answer with this line">Can't now</button>
+      </div>
+      <form class="row" id="alarm-reply">
+        <input id="alarm-line" class="grow" maxlength="100" placeholder="Or a line of your own" autocomplete="off">
+        <button type="submit" title="Answer with your line">Reply</button>
+      </form>
+      <p class="note" id="alarm-more"></p>
     </div>
   </div>
   <div class="toast" id="toast" role="status" hidden><span id="toast-text"></span><button id="toast-act" hidden></button></div>

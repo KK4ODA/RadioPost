@@ -15,6 +15,9 @@
 //!
 //! The window opens where the operator left it, at the size they left it (`WINDOW_KEPT`), so
 //! RadioPost arranged once beside Aether and the gateway's window opens that way again.
+//!
+//! When an alert starts sounding (RP-8), the window comes forward, out of the taskbar if it was
+//! minimized, and asks for attention: the operator may be in another program (`bring_forward`).
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -42,6 +45,28 @@ const WINDOW_KEPT: StateFlags = StateFlags::SIZE
     .union(StateFlags::POSITION)
     .union(StateFlags::MAXIMIZED);
 
+/// How often the window looks for an alert that has started sounding.
+const ALARM_LOOK: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// Brings the window forward each time an alert starts sounding (RP-8 §7): out of the taskbar,
+/// in front, and asking for attention, which flashes its taskbar button on Windows.
+fn bring_forward(panel: Panel, window: tauri::WebviewWindow) {
+    std::thread::spawn(move || {
+        let mut sounding = false;
+        loop {
+            let now = panel.alarming();
+            if now && !sounding {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+                let _ = window.request_user_attention(Some(tauri::UserAttentionType::Critical));
+            }
+            sounding = now;
+            std::thread::sleep(ALARM_LOOK);
+        }
+    });
+}
+
 /// Starts the panel's server for the home at `home`: where it is, and a handle on its state.
 fn start_panel(home: &Path) -> Result<(SocketAddr, Panel), String> {
     let updates = Watch::new(
@@ -63,6 +88,7 @@ fn interrupts(activity: &str) -> Option<&'static str> {
         "calling" => Some("A call is going out."),
         "listening" => Some("The station is listening for a call."),
         "session" => Some("A session is under way: closing ends it, and the other station waits."),
+        "alerting" => Some("An alert is going out."),
         _ => None,
     }
 }
@@ -113,6 +139,7 @@ fn main() {
     let url = format!("http://{at}/");
     let updates = Arc::clone(panel.updates());
     let leaving = panel.clone();
+    let watching = panel.clone();
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -136,6 +163,7 @@ fn main() {
                 .inner_size(1100.0, 760.0)
                 .min_inner_size(380.0, 480.0)
                 .build()?;
+            bring_forward(watching, window.clone());
             let asking = window.clone();
             window.on_window_event(move |event| {
                 if let WindowEvent::CloseRequested { api, .. } = event

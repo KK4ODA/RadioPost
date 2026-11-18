@@ -7,6 +7,8 @@
 //! * [`callsigns`]: the callsigns this computer works, each a home of its own, and the one chosen.
 //! * [`compose`]: writing a message (RP-2).
 //! * [`addresses`]: the address list, offered as To and Cc are typed.
+//! * [`alerts`]: alerts between stations that share a keyword (RP-8), and the page's sound and
+//!   notification settings.
 //! * [`backups`]: the post office's backups, fetched by its operator's computer by itself.
 //! * [`session`]: calling a gateway or a station, or answering a station, over RPMI.
 //! * [`online`]: the post office over the Internet: enrollment, renewal, settings, the accept
@@ -28,6 +30,7 @@
 pub const LOG_FILE: &str = "radiopost.log";
 
 pub mod addresses;
+pub mod alerts;
 pub mod backups;
 pub mod callsigns;
 pub mod compose;

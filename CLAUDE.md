@@ -415,6 +415,25 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   by the gateway and the client; the client's `online` module uses it (enroll, renew, settings —
   `PUT` replaces them whole, so the client merges —, accept list, `report`). `app/src-tauri` has its
   own lockfile: a new dependency of the client changes it (`cargo metadata` there refreshes it).
+  Alerts (W52, RP-8 Draft, D42; the author's ask of 2026-11-18) and sounds (W51):
+  `radiopost::alert` is RP-8 sans clock (a circle's key by PBKDF2-HMAC-SHA256, 600 000
+  iterations, its ID and check, the frame and its 8-byte HMAC tag, `hear` in RP-8 §4's order,
+  `answer`); HMAC and PBKDF2 are hand-built on `sha2` in `crypto` (RFC 4231 and RFC 7914 tests),
+  and `[profile.dev.package.sha2]` is optimized so tests that make a key take a second, not
+  ten. `rpref/alert.py` and `vectors/alerts.json` are its reference. The client's `alerts` keeps
+  `circles.json` (keys, never keywords), `alerts.json` (the log) and `notify.json` (the page's
+  sound and level settings) in the first home; every connection that holds the modem hands it
+  broadcasts (`presence::Carrier::heard`): the connection between calls (`presence`, which now also
+  holds a shared non-Aether adapter while circles are kept, and lets go of one that is not
+  shared), and a station listening (`session::wait_for_call`, which also sends what waits). To
+  send between calls `presence` takes the station from the panel (activity `alerting`, the
+  carrier's `gate`), claims the chosen callsign, broadcasts, and reconnects with `hello` alone.
+  The panel's `/api/alerts`, `/api/circles`, `/api/notify`; the page plays synthesized sounds by
+  Web Audio on the output chosen (`setSinkId`: the radio's sound card would put them on the air),
+  and decides mail's level from `notify.json`; the Tauri shell brings the window forward when
+  `Panel::alarming` turns true. `tests/alerts.rs` runs two clients' connections over a shared
+  loopback. On Windows `online.rs`'s renewal test fails: a closed local port takes ~2 s to refuse
+  there, past its 1.5 s; CI is Linux.
   `app/ui` is the client's panel (no build step), served with a JSON API by `radiopost panel`
   (`panel.rs`: loopback only, the `Host` checked, changes need `X-RadioPost: 1`; a session on its
   own thread, the home unchanged by the panel while it runs). `app/src-tauri` (`radiopost-app`, its

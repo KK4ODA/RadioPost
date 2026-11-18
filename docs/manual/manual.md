@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.10.0 |
-| **Updated** | 2026-11-17 |
+| **Version** | 1.11.0 |
+| **Updated** | 2026-11-18 |
 | **Describes** | RadioPost 0.1.0-beta.26 |
 | **Licence** | CC BY 4.0 |
 
@@ -581,6 +581,89 @@ callsign (`KK4ODA`). Their RadioPost client must be listening (**Listen for P2P*
 gateway on the same Aether. The gateway need not close: Aether serves both programs, each for its
 own callsigns.
 
+### 10.1 Alerts
+
+An alert tells another station, or a group of stations, that you need them now. It is one line
+of text, such as *Please call me on 146.52 now*. At the other station it sounds an alarm and
+brings RadioPost's window to the front until the operator answers it.
+
+An alert needs no call and no session. Aether sends it once, to everyone listening, as a short
+broadcast: about 16 seconds on the air, and 11 for each answer. It gets through on a path too weak
+for a session, and it can reach a whole group at once.
+
+Only stations that share a **keyword** can alert each other. Stations that typed the same keyword
+make a **circle**: a family, a net, a team. Every alert carries a short check that only that
+keyword can make, so RadioPost sounds only for alerts from your circles. Anyone listening can
+still read every alert: nothing is encrypted.
+
+You need:
+
+- Aether as your modem. VARA, ARDOP, Mercury and packet carry no alerts.
+- RadioPost open. Alerts arrive only while its window is open (or `radiopost panel` runs).
+- A clock right to a few minutes. An alert more than ten minutes from your clock is not taken.
+
+![The Alerts view: an alert sent and answered, one heard, and two circles with their checks](screens/client-alerts.png)
+
+*Figure 19. Alerts.*
+
+### 10.2 Set up a circle
+
+Agree on a keyword with the others first, by voice or in person, never on the air. Four words or
+more. RadioPost can make one for you.
+
+1. Click **Alerts** in the left-hand column.
+2. Under **Circles**, type a **Name** for it, such as `Family`. The others may name it otherwise.
+3. Type the **Keyword**, or click **Make one** and tell the others the words it shows. Capitals and
+   extra spaces do not count.
+4. Choose **When an alert arrives**: **Time-sensitive** sounds the alarm. The others are quieter
+   (see [Sounds and notifications](#sounds-and-notifications)).
+5. Click **Add the circle**.
+6. Read the circle's **Check**, such as `9853 7abf`, to the others. The same check at every station
+   means the same keyword. A different check means a typing mistake: forget it and add it again.
+
+RadioPost keeps the circle's key, not the keyword. Short keywords can be guessed from one alert
+heard on the air, so RadioPost refuses one under 8 characters and warns under four words.
+
+**Answer by itself**, ticked, sends *heard* as soon as an alert for you arrives, even when nobody
+is at the radio. That is an automatic transmission: untick it where your rules allow those only in
+some segments ([section 36](#36-the-rules)). The trash can forgets a circle.
+
+### 10.3 Send an alert
+
+1. Under **Send an alert**, choose the **Circle**.
+2. In **To**, type the callsign of the station to alert. Leave it empty to alert everyone in the
+   circle.
+3. Type the **Message**: one line, up to 100 bytes. Plain words: anyone can read it.
+4. Click **Send alert**. While it goes out the state reads *Sending an alert*; a call cannot start
+   meanwhile.
+
+The list shows what each alert became:
+
+- *on the air*, then *heard* when the other station's RadioPost has it, *seen* when its operator
+  has answered the alarm, and *answered* with their line;
+- *not heard* when no *heard* came: RadioPost sent it a second time after a minute, then gave up;
+- *not sent* when it could not go out, with the reason: the station was busy with a session for
+  five minutes, or the modem carries no alerts.
+
+### 10.4 When an alert arrives
+
+For a time-sensitive circle, an alarm sounds every 20 seconds, RadioPost's window comes to the
+front, and a red box shows the alert.
+
+![An alert from KK4ODA in the circle Family, with Acknowledge, Call back, three quick replies and a line of your own](screens/client-alarm.png)
+
+*Figure 20. An alert arriving.*
+
+- **Acknowledge** stops the alarm. The other station sees *seen*.
+- **Received**, **Calling you now** and **Can't now** answer with that line, and stop the alarm.
+- Type a line of your own and click **Reply** to answer with it.
+- **Call back** stops the alarm and puts the sender's callsign in **Call**, as a P2P call. Check
+  the **Dial, MHz** and click **Call** ([section 10](#10-station-to-station)).
+
+If several alerts wait, the oldest shows first. An alert from a circle at another level shows as
+a banner instead, with its own sound. If one callsign sends more than five alerts in ten minutes,
+the rest are shown quietly.
+
 ## 11. Working several callsigns
 
 One RadioPost can work several callsigns, such as your own and a club callsign. Each callsign has
@@ -588,7 +671,7 @@ its own account, its own address and its own mail.
 
 ![One computer with three callsigns, each its own account, and a shared key, address list and log](fig/callsigns.svg)
 
-*Figure 19. Several callsigns on one computer.*
+*Figure 21. Several callsigns on one computer.*
 
 ### 11.1 Add a callsign
 
@@ -650,7 +733,7 @@ Click **Setup** at the bottom of the left-hand column.
 
 ![The Setup page: enrollment, post office, accept list and usual gateways](screens/client-setup.png)
 
-*Figure 20. Setup.*
+*Figure 22. Setup.*
 
 ### Enroll with your post office
 
@@ -683,6 +766,43 @@ there while the Internet or your post office is down
 3. Click **Save**. Your post office keeps the setting. **Read** fetches it again.
 
 The list needs the Internet and a gateway list ([section 8.1](#81-choose-a-gateway)).
+
+### Sounds and notifications
+
+RadioPost plays a sound when something happens, and tells you about new mail by its sender.
+
+![Setup's Sounds and notifications: speakers chosen, a sound for each event, quiet hours, and how mail arrives](screens/client-sounds.png)
+
+*Figure 23. Sounds and notifications.*
+
+**Mind the radio's sound card.** If this computer's sound goes to the radio's sound card (a
+SignaLink, or the radio's own USB audio), these sounds go on the air, and with VOX they key the
+radio. Choose your speakers in **Play them on**, or untick **Play sounds**.
+
+- **Play sounds** turns every sound on or off.
+- **Play them on** chooses the speakers. If the list shows no names, click **Name the devices**:
+  the window opens the microphone for a moment to read them. Where the window cannot choose,
+  sounds play on the system's default output.
+- **Volume** sets every sound's loudness.
+- The table gives each event its sound. **Play** plays it.
+- **Quiet hours**: tick **From** and set the times. Then only time-sensitive alerts and mail
+  sound; the rest is shown quietly.
+- **Mail from anyone else** says how mail arrives from an address with no level of its own.
+- **Notify me when this window is in the background** also shows the system's notification.
+
+Every arrival has one of four **levels**:
+
+| Level | What happens |
+|---|---|
+| **Silent** | Counted in its folder. No sound. |
+| **Normal** | A soft sound and a note at the bottom right. |
+| **Important** | Its own sound, and a banner at the top until you open it or dismiss it. |
+| **Time-sensitive** | An alarm every 20 seconds until you answer it, through quiet hours too. |
+
+A circle has its level ([section 10.2](#102-set-up-a-circle)). Mail takes its sender's level, set
+in Addresses ([section 13](#13-addresses-and-the-trash)). Emergency mail arrives at least as
+Important. Only an address or a group you set can reach Time-sensitive: anyone can choose
+Emergency.
 
 ### This device's key, Credential, Post offices trusted
 
@@ -720,6 +840,11 @@ The people button changes a group; the trash can takes it away (with **Undo**), 
 stay on the list. Every address in a group goes on the air, so a large group makes a long
 header.
 
+**Notify** says how mail from an address, or from anyone in a group, arrives: **Silent**,
+**Normal**, **Important** or **Time-sensitive** ([Sounds and
+notifications](#sounds-and-notifications)). **Default** follows Setup. An address in several
+groups takes the highest of their levels, and its own if it has one.
+
 The address list and the groups are this computer's own. Who may email you is the accept list,
 in Setup.
 
@@ -738,7 +863,7 @@ RadioPost keeps working when the Internet fails at a gateway.
 
 ![Before: the post office copies your mail to your usual gateway. During: the gateway serves the copies and keeps what you send. After: it reports](fig/cutoff.svg)
 
-*Figure 21. When the Internet is down.*
+*Figure 24. When the Internet is down.*
 
 **Before.** Name your usual gateways in Setup ([section 12](#usual-gateways)). Your post office
 then copies each new message for you to them as it arrives.
@@ -781,7 +906,7 @@ licensed operator can run one.
 
 ![Two users call the gateway by radio; the gateway's computer runs RadioPost Gateway and Aether HF and reaches each caller's post office](fig/gateway.svg)
 
-*Figure 22. A gateway station.*
+*Figure 25. A gateway station.*
 
 A gateway is usually left answering with nobody at the radio. It is then under **automatic
 control**, and the rules for that apply ([The rules](#36-the-rules)).
@@ -816,13 +941,13 @@ Open RadioPost Gateway. Until it is set up and registered, it says what is missi
 
 ![A new RadioPost Gateway: the notice says it is not set up, with Set up the gateway](screens/gateway-first.png)
 
-*Figure 23. RadioPost Gateway before setup.*
+*Figure 26. RadioPost Gateway before setup.*
 
 Click **Set up the gateway**. Setup has three steps.
 
 ![The gateway's Setup page: the gateway, its registration with two channels, and post offices](screens/gateway-setup.png)
 
-*Figure 24. Setting up the gateway.*
+*Figure 27. Setting up the gateway.*
 
 ### Step 1. The gateway
 
@@ -896,7 +1021,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 ![The RadioPost Gateway window with numbered marks on its parts](screens/gateway-window.png)
 
-*Figure 25. The RadioPost Gateway window.*
+*Figure 28. The RadioPost Gateway window.*
 
 1. **The gateway's callsign**, and the account it is registered under.
 2. **What it is doing** (the table below).
@@ -929,7 +1054,7 @@ While a session runs, a box shows who called, the account, since when, and the m
 
 ![The window during a session, with the Session under way box](screens/gateway-session.png)
 
-*Figure 26. A session at the gateway.*
+*Figure 29. A session at the gateway.*
 
 **Stopping and closing.** **Stop** ends a session under way and lets Aether go. Closing the
 window stops the gateway too. If it is answering, it asks first and says what closing stops.
@@ -1007,7 +1132,7 @@ text), each session waiting to be reported with its last try, and the last repor
 
 ![The Partners, Callers refused and Copies placed ahead panels, opened](screens/gateway-held.png)
 
-*Figure 27. What the gateway holds, its partners and the callers it refuses.*
+*Figure 30. What the gateway holds, its partners and the callers it refuses.*
 
 ## 22. Partners: forwarding by radio
 
@@ -1138,7 +1263,7 @@ on this tab.
 
 ![The Applications tab: one application waiting with its licence check, and the Decided list](screens/desk-applications.png)
 
-*Figure 28. Applications.*
+*Figure 31. Applications.*
 
 Each application shows the person's name, callsign and when they asked, the **Address** they
 want, their **Email now**, and what the post office found of the callsign:
@@ -1176,7 +1301,7 @@ the mailbox was made (*mailbox*, or *no mailbox* in red) and the applicant email
 
 ![The Accounts tab: five accounts with their names, devices and mail waiting](screens/desk-accounts.png)
 
-*Figure 29. Accounts.*
+*Figure 32. Accounts.*
 
 Every account, one a row:
 
@@ -1203,7 +1328,7 @@ that exists. Use it for someone you know holds the callsign.
 
 ![The New code tab: an address, a callsign and a name filled in, the licence checked, and the code made](screens/desk-code.png)
 
-*Figure 30. Making a code.*
+*Figure 33. Making a code.*
 
 1. Open **New code**.
 2. Fill in:
@@ -1247,7 +1372,7 @@ Know only post offices whose operators you trust to check callsigns. At first no
 
 ![The Post offices tab: one post office known, one seen, none blocked](screens/desk-others.png)
 
-*Figure 31. Other post offices.*
+*Figure 34. Other post offices.*
 
 - **Known**: the post offices you know, who runs each, when its records were last fetched, and
   whether DNSSEC signed them. They are fetched again every six hours. **Forget** stops knowing one;
@@ -1268,7 +1393,7 @@ when a check turns red, and again when all pass.
 
 ![The Health tab: eleven checks passed and one amber line about backups](screens/desk-health.png)
 
-*Figure 32. Health.*
+*Figure 35. Health.*
 
 Each line is one check:
 
@@ -1295,7 +1420,7 @@ The **Server** tab lets you look after the server without logging in to it.
 
 ![The Server tab: the jobs, one with its output open, and When you need more](screens/desk-server.png)
 
-*Figure 33. Jobs and a terminal.*
+*Figure 36. Jobs and a terminal.*
 
 **Jobs** are a fixed list of tasks the server's administrator account runs for you:
 
@@ -1330,7 +1455,7 @@ says the one command to run on the server, once.
 
 ![The Backups and DKIM keys boxes on the Server tab](screens/desk-backups.png)
 
-*Figure 34. Backups and DKIM keys.*
+*Figure 37. Backups and DKIM keys.*
 
 ### Backups
 
@@ -1387,7 +1512,7 @@ when they are older than 180 days.
 
 ![The Settings tab: applications, licence lookups, mailboxes and this post office](screens/desk-settings.png)
 
-*Figure 35. Settings.*
+*Figure 38. Settings.*
 
 ### Applications
 
@@ -1469,7 +1594,10 @@ These notes follow the US rules (Part 97). Check your own country's.
   and nothing in Morse during it. The rules ask for your callsign at least every ten minutes, so
   keep each session under ten minutes.
 - **No encryption.** RadioPost signs messages to prove who sent them. It never encrypts them.
-  Anyone can read every message.
+  Anyone can read every message. An alert's check proves it came from your circle; its text stays
+  plain, and the keyword never goes on the air.
+- **Alerts answered by themselves.** **Answer by itself** sends *heard* with nobody at the radio:
+  automatic control. Untick it where the rules allow that only in some segments.
 - **Third-party traffic.** Email between you and someone who is not a licensed amateur is
   third-party traffic. In the United States it may go between US stations. The post office marks
   such mail, and a gateway hands it over only where its country allows.
@@ -1499,6 +1627,11 @@ These notes follow the US rules (Part 97). Check your own country's.
 | **Tuner tone** refused | Aether keys no tone while the channel is in use, or while its rules forbid it there. Wait, or check the dial. |
 | *… is a gateway: for P2P, call the other operator's own callsign while their client listens* | You called a gateway's callsign as **P2P (another client's station)**. Call its operator's own callsign, and ask them to click **Listen for P2P** ([section 10](#10-station-to-station)). |
 | An application refused | See [section 5.3](#53-if-the-post-office-refuses). |
+| An alert stays *not heard* | The other station's RadioPost was closed, its circle's check differs from yours, its clock is more than ten minutes off, or the path failed. Read your checks to each other. |
+| An alert is *not sent* | The station was in a session for five minutes, or the **Modem** is not Aether. |
+| *an alert is going out: try again in a moment* | Wait for the alert to go out: about 16 seconds once the channel is clear. |
+| No sound | Click anywhere in the window once after it opens: windows play nothing before. Check **Play sounds**, the volume, **Play them on** and quiet hours. |
+| A sound keyed the radio | The sounds play on the radio's sound card. Choose your speakers in **Play them on**, or set the computer's default output to them. |
 
 ### The gateway
 
@@ -1554,11 +1687,14 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 | Word | Means |
 |---|---|
 | Accept list | The addresses and domains allowed to email you. Writing to someone adds them. |
+| Alert | One line that sounds an alarm at another station in your circle until its operator answers. |
 | Account | Your mailbox at a post office, with one address. |
 | Aether HF | The open-source HF modem RadioPost uses. It has its own program and manual. |
 | Automatic control | Operating with nobody at the radio, as a gateway left answering does. |
 | Bandwidth | How wide Aether's signal is: 500 or 2300 Hz. Both stations of a session use the same. |
 | Channel | A gateway's dial frequency, with the bandwidth it uses there. Picking one tunes the radio. |
+| Check (of a circle) | Eight characters made from a circle's keyword. The same check means the same keyword. |
+| Circle | The stations whose operators typed the same keyword, and so can alert each other. |
 | Client | RadioPost, the program you send and read mail with. |
 | Credential | A signed file that proves your address and callsign belong together. Lasts 90 days and renews itself. |
 | Cut off | A gateway that cannot reach the Internet. It goes on answering. |
@@ -1570,6 +1706,7 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 | Gateway | A station that passes sessions between radio and post offices. |
 | Held attachment | A file too large for the radio, kept at your post office until you ask for it. |
 | Job | A task on the post office's server that the desk asks for, from a fixed list. |
+| Level | How something arrives: Silent, Normal, Important or Time-sensitive. |
 | Known post office | Another post office whose word your post office takes that its users are licensed. |
 | Listen for P2P | Wait for one other client to call you directly, station to station, then stop. A gateway on your station goes on answering its own callsign. |
 | Operator (of a post office) | Someone who runs a post office: approves accounts and gives codes. |
@@ -1603,6 +1740,13 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
    **Bandwidth**, then **Call**.
 3. With a station that runs a gateway, call its operator's own callsign, not the gateway's.
 4. Later, with the Internet: **Send reports**.
+
+**Alert a station**
+
+1. Once: **Alerts**, add a circle with the keyword you agreed, and read your checks to each other.
+2. **Send an alert**: the **Circle**, the callsign in **To** (empty for everyone), one line,
+   **Send alert**.
+3. Watch it become *heard*, *seen* and *answered*.
 
 **Add a callsign**
 
@@ -1681,3 +1825,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.8.0 | 2026-11-17 | Gateways that scan (W50): §8 a *scanned* channel and the call that keeps trying; §18 **Scan these channels**, and listing only channels the gateway listens on; §19 the scan on **Modem** and *When a scan stops*; §23 `scan`. |
 | 1.9.0 | 2026-11-17 | From the 40 m RadioPost mail of 2026-11-17. §6, §8: **Call** is green; a channel is tuned as it is picked, the line under it says where the radio is or which dial to set by hand, **Tuner tone**, and the radio stays on the channel after the call (new Figure 13). §10: a station call's **Dial, MHz** and **Bandwidth** (new Figure 18), and P2P with a station that also runs a gateway. §19: a gateway whose scan ends registers again with the channel it stays on. §35, §37, §39, §40 to match. |
 | 1.10.0 | 2026-11-17 | P2P named plainly in the call box: **Listen** is **Listen for P2P**, whose tooltip names the callsigns it answers as, and **Another client's station** is **P2P (another client's station)** (§6, §10, §11.2, §37, §39, §40; the client's screenshots retaken). |
+| 1.11.0 | 2026-11-18 | Alerts and sounds (wishlist W51, W52; RP-8). §10.1 to §10.4: alerts between stations that share a keyword, circles and their checks, sending one and what it becomes, the alarm and its answers (new Figures 19 and 20). §12: *Sounds and notifications*, the levels, quiet hours, and the radio's sound card (new Figure 23). §13: **Notify** for addresses and groups. §36, §37, §39, §40 to match; the client's screenshots retaken with **Alerts** in the left-hand column. |

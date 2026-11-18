@@ -20,6 +20,14 @@
 //!   why; the panel says nothing.
 //! * **Gone with the app.** [`Presence::stop`] closes it, and the process's end does too: Aether
 //!   then says the program has gone.
+//! * **Alerts** (RP-8, wishlist W52). Every host that has said `hello` hears every broadcast (RP-4
+//!   §6), so this connection hears alerts between calls and hands them to [`crate::alerts`]. To send
+//!   one it needs a callsign (RP-4 §4): while the station is idle it takes the station from the
+//!   panel (its activity `alerting`, so no call or listening starts meanwhile), claims the chosen
+//!   callsign, sends what waits, and closes, so the next connection is a `hello` alone again.
+//!   While the station listens, the listening connection sends them instead. With circles kept
+//!   it also holds a connection to another adapter that says it is shared, never to one that is
+//!   not: it would turn the app's own call away (RP-4 §3).
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -29,8 +37,52 @@ use std::time::{Duration, Instant};
 
 use rpmi::host::{Event, Host};
 use rpmi::tcp::Connection;
+use serde_json::Value;
 
+use crate::alerts::{self, Alerts};
 use crate::{callsigns, session, store};
+
+/// How long an alert's `broadcast` may take to go out, its `broadcast-sent` awaited (an Aether
+/// datagram waits for a clear channel, then sends for 11 to 27 s).
+const SENDING: Duration = Duration::from_secs(120);
+
+/// What the panel lends the connections that hold its modem, so they carry alerts (RP-8).
+#[derive(Clone)]
+pub struct Carrier {
+    /// The alerts kept.
+    pub alerts: Alerts,
+    /// The first callsign's home, whose credentials say the station's callsigns.
+    pub base: PathBuf,
+    /// Takes the station for sending (`true`: it was idle, and is now the panel's `alerting`), or
+    /// gives it back (`false`).
+    pub gate: Arc<dyn Fn(bool) -> bool + Send + Sync>,
+    /// A line for the panel's log.
+    pub say: Arc<dyn Fn(&str) + Send + Sync>,
+}
+
+impl std::fmt::Debug for Carrier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Carrier")
+    }
+}
+
+impl Carrier {
+    /// A broadcast heard on any connection: checked, kept, answered (RP-8 §4, §5).
+    pub fn heard(&self, data: &[u8]) {
+        let mine = alerts::callsigns_of(&self.base);
+        if let Some(line) = self.alerts.heard(data, &mine, unix_now()) {
+            (self.say)(&line);
+        }
+    }
+}
+
+/// Unix seconds now.
+#[must_use]
+pub fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
 
 /// How long after a try that failed, or a connection lost, the modem is tried again.
 pub const RETRY: Duration = Duration::from_secs(5);
@@ -70,6 +122,11 @@ struct Shared {
     holding: AtomicBool,
     /// The thread has ended, holding no connection.
     ended: AtomicBool,
+    /// The alerts it carries, once the panel lends them.
+    carrier: Mutex<Option<Carrier>>,
+    /// An adapter other than Aether's found not shared: no connection is held to it again until
+    /// the modem changes.
+    unshared_modem: Mutex<Option<String>>,
 }
 
 /// Why a connection ended.
@@ -105,6 +162,8 @@ impl Presence {
                 stop: AtomicBool::new(false),
                 holding: AtomicBool::new(false),
                 ended: AtomicBool::new(false),
+                carrier: Mutex::new(None),
+                unshared_modem: Mutex::new(None),
             }),
             retry: RETRY,
         }
@@ -115,6 +174,16 @@ impl Presence {
     pub fn retrying_every(mut self, retry: Duration) -> Presence {
         self.retry = retry;
         self
+    }
+
+    /// Lends it the alerts to carry (RP-8): broadcasts heard go to them, and what they queue goes
+    /// out while the station is idle.
+    pub fn carry(&self, carrier: Carrier) {
+        *self
+            .shared
+            .carrier
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(carrier);
     }
 
     /// Starts its thread, once: it holds the connection whenever the modem is Aether.
@@ -161,6 +230,20 @@ impl Presence {
 }
 
 impl Shared {
+    /// An adapter other than Aether's that serves one program at a time: let go at once, and not
+    /// held again until the modem changes, or it would turn the app's own call away (RP-4 §3).
+    fn not_shared(&self, modem: &str) -> Ended {
+        *self
+            .unshared_modem
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(modem.to_owned());
+        radiopost::logfile::line(&format!(
+            "the modem at {modem} serves one program at a time: alerts are heard there only \
+             while the station listens"
+        ));
+        Ended::Changed
+    }
+
     fn stopping(&self) -> bool {
         self.stop.load(Ordering::SeqCst)
     }
@@ -177,11 +260,28 @@ impl Shared {
         store::conformance_at(&callsigns::chosen(&self.base)).is_some()
     }
 
-    /// The Aether to hold a connection to, if any.
+    fn carrier(&self) -> Option<Carrier> {
+        self.carrier
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// The modem to hold a connection to, if any: Aether; or, with circles kept, another adapter
+    /// not yet found unshared.
     fn wanted(&self) -> Option<String> {
-        self.modem()
-            .filter(|m| m.starts_with("ws://"))
-            .filter(|_| !self.testing())
+        let modem = self.modem().filter(|_| !self.testing())?;
+        if modem.starts_with("ws://") {
+            return Some(modem);
+        }
+        let alerting = self.carrier().is_some_and(|c| c.alerts.any_circle());
+        let refused = self
+            .unshared_modem
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_deref()
+            == Some(modem.as_str());
+        (alerting && !refused).then_some(modem)
     }
 
     /// Waits up to `d`, less when stopping or when the modem is no longer `modem`.
@@ -268,13 +368,18 @@ fn hold(shared: &Shared, modem: &str, retry: Duration, said: &mut Said) -> Ended
         return lost(format!("the adapter's connection failed: {e}"));
     }
     let asked = Instant::now();
-    loop {
+    let aether = modem.starts_with("ws://");
+    let broadcasts = loop {
         if shared.stopping() {
             conn.close();
             return Ended::Stopped;
         }
         match next(&mut conn) {
-            Ok(Some(Event::Hello { caps, .. })) if caps.shared => break,
+            Ok(Some(Event::Hello { caps, .. })) if caps.shared => break caps.broadcast,
+            Ok(Some(Event::Hello { .. })) if !aether => {
+                conn.close();
+                return shared.not_shared(modem);
+            }
             Ok(Some(Event::Hello { .. })) => {
                 conn.close();
                 return Ended::Lost {
@@ -298,12 +403,14 @@ fn hold(shared: &Shared, modem: &str, retry: Duration, said: &mut Said) -> Ended
             }
             Err(why) => return lost(why),
         }
+    };
+    if aether {
+        say(
+            said,
+            Said::Named(modem.to_owned()),
+            &format!("Aether at {modem} names this app among the programs using the station"),
+        );
     }
-    say(
-        said,
-        Said::Named(modem.to_owned()),
-        &format!("Aether at {modem} names this app among the programs using the station"),
-    );
     let mut checked = Instant::now();
     loop {
         if shared.stopping() {
@@ -321,10 +428,125 @@ fn hold(shared: &Shared, modem: &str, retry: Duration, said: &mut Said) -> Ended
                 return Ended::Changed;
             }
         }
-        // the adapter's events (`busy`, mostly) are read and let go: nothing here acts on them,
-        // and a connection that stopped reading them would fill and stall the adapter
-        if let Err(why) = next(&mut conn) {
-            return lost(why);
+        // the adapter's events (`busy`, mostly) are read and let go, but for broadcasts, which
+        // may be alerts; a connection that stopped reading would fill and stall the adapter
+        let carrier = shared.carrier();
+        match next(&mut conn) {
+            Ok(Some(Event::Broadcast { data, .. })) => {
+                if let Some(c) = &carrier {
+                    c.heard(&data);
+                }
+            }
+            Ok(_) => {}
+            Err(why) => return lost(why),
+        }
+        if let Some(c) = carrier.filter(|_| broadcasts)
+            && let Some(sent) = alerts_due(&mut conn, &c)
+        {
+            // a fresh connection with `hello` alone: the callsign claimed to send is let go
+            conn.close();
+            return sent.map_or_else(lost, |()| Ended::Changed);
         }
     }
+}
+
+/// Sends the alerts due, when the station is idle (RP-8 §6): `None` when nothing went, else
+/// `Some`, an error when the connection failed. The caller then closes the connection, which
+/// claimed a callsign to send.
+fn alerts_due(conn: &mut Connection, c: &Carrier) -> Option<Result<(), String>> {
+    c.alerts.tick(unix_now());
+    if !c.alerts.wants(unix_now()) || !(c.gate)(true) {
+        return None;
+    }
+    let sent = send_alerts(conn, c);
+    (c.gate)(false);
+    Some(sent)
+}
+
+/// Waits for an event that `done` takes, handing on broadcasts heard meanwhile; `false` when the
+/// time runs out first.
+fn wait_for(
+    conn: &mut Connection,
+    c: &Carrier,
+    within: Duration,
+    mut done: impl FnMut(&Event) -> bool,
+) -> Result<bool, String> {
+    let until = Instant::now() + within;
+    while Instant::now() < until {
+        match next(conn)? {
+            Some(Event::Broadcast { data, .. }) => c.heard(&data),
+            Some(e) if done(&e) => return Ok(true),
+            _ => {}
+        }
+    }
+    Ok(false)
+}
+
+/// Claims the chosen callsign (RP-4 §4: a broadcast needs one) and sends what waits, each frame
+/// awaited to its `broadcast-sent`. A claim refused fails what waits, with the modem's words.
+fn send_alerts(conn: &mut Connection, c: &Carrier) -> Result<(), String> {
+    let write_line = |conn: &mut Connection, m: &rpmi::wire::Message| {
+        conn.send(m)
+            .map_err(|e| format!("the adapter's connection failed: {e}"))
+    };
+    let fail_all = |why: &str| {
+        while let Some((r, _)) = c.alerts.due(unix_now()) {
+            c.alerts.went(&r, false, Some(why), unix_now());
+        }
+    };
+    let Some(me) = alerts::callsigns_of(&c.base).into_iter().next() else {
+        fail_all("no callsign yet: enroll in Setup first");
+        return Ok(());
+    };
+    let mut host = Host::new();
+    let claim = host.callsigns(&[me.as_str()]);
+    let id = claim.get("id").cloned().unwrap_or(Value::Null);
+    write_line(conn, &claim)?;
+    let mut refused = None;
+    let answered = wait_for(conn, c, ANSWER, |e| match e {
+        Event::Ok { id: i } => *i == id,
+        Event::Error {
+            id: Some(i),
+            code,
+            text,
+        } if *i == id => {
+            refused = Some(text.clone().unwrap_or_else(|| code.clone()));
+            true
+        }
+        _ => false,
+    })?;
+    if let Some(why) = refused.or_else(|| (!answered).then(|| "the modem did not answer".into())) {
+        fail_all(&format!("{me} could not be claimed: {why}"));
+        return Ok(());
+    }
+    while let Some((reference, frame)) = c.alerts.due(unix_now()) {
+        let request = host.broadcast(&frame, Some(&reference));
+        let id = request.get("id").cloned().unwrap_or(Value::Null);
+        write_line(conn, &request)?;
+        let mut outcome: Option<(bool, Option<String>)> = None;
+        let ended = wait_for(conn, c, SENDING, |e| match e {
+            Event::Error {
+                id: Some(i),
+                code,
+                text,
+            } if *i == id => {
+                outcome = Some((false, Some(text.clone().unwrap_or_else(|| code.clone()))));
+                true
+            }
+            Event::BroadcastSent {
+                reference: Some(r),
+                sent,
+                text,
+            } if r.as_str() == Some(reference.as_str()) => {
+                outcome = Some((*sent, text.clone()));
+                true
+            }
+            _ => false,
+        })?;
+        let (sent, text) = outcome
+            .filter(|_| ended)
+            .unwrap_or((false, Some("the modem never said it went out".into())));
+        c.alerts.went(&reference, sent, text.as_deref(), unix_now());
+    }
+    Ok(())
 }

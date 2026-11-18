@@ -96,6 +96,9 @@ pub struct Options {
     /// Kept up to date while the session runs: how far its messages have crossed, for a window
     /// to show.
     pub live: Option<Arc<Mutex<Live>>>,
+    /// Alerts (RP-8): while listening for a call, the station hears broadcasts and sends what
+    /// waits, on the connection that holds its callsigns.
+    pub alerts: Option<crate::presence::Carrier>,
     /// The client's other homes, one a callsign (wishlist W46): listening, it answers calls to
     /// their callsigns too, each session carried by the home whose callsign was called.
     pub also: Vec<std::path::PathBuf>,
@@ -204,6 +207,7 @@ impl Options {
             stop: None,
             renew_within: crate::renewal::WITHIN,
             live: None,
+            alerts: None,
             also: Vec::new(),
         }
     }
@@ -1367,6 +1371,8 @@ fn wait_for_call(
         .conn
         .set_timeout(Some(Duration::from_millis(250)))
         .map_err(|e| e.to_string())?;
+    // alerts sent on this connection, by their requests' `id`, to their references (RP-8 §6)
+    let mut alerting: HashMap<String, String> = HashMap::new();
     let called = loop {
         if opts
             .stop
@@ -1375,9 +1381,46 @@ fn wait_for_call(
         {
             return Ok(None);
         }
+        if let Some(c) = opts.alerts.as_ref().filter(|_| modem.caps.broadcast) {
+            let now = crate::presence::unix_now();
+            c.alerts.tick(now);
+            while let Some((reference, frame)) = c.alerts.due(now) {
+                let request = modem.host.broadcast(&frame, Some(&reference));
+                if let Some(id) = request.get("id") {
+                    alerting.insert(id.to_string(), reference);
+                }
+                modem.send(&request)?;
+            }
+        }
         let Some(e) = modem.poll()? else {
             continue;
         };
+        if let Some(c) = &opts.alerts {
+            let now = crate::presence::unix_now();
+            match &e {
+                Event::Broadcast { data, .. } => c.heard(data),
+                Event::BroadcastSent {
+                    reference: Some(r),
+                    sent,
+                    text,
+                } => {
+                    if let Some(r) = r.as_str() {
+                        c.alerts.went(r, *sent, text.as_deref(), now);
+                    }
+                }
+                Event::Error {
+                    id: Some(i),
+                    code,
+                    text,
+                } => {
+                    if let Some(r) = alerting.remove(&i.to_string()) {
+                        let why = text.clone().unwrap_or_else(|| code.clone());
+                        c.alerts.went(&r, false, Some(&why), now);
+                    }
+                }
+                _ => {}
+            }
+        }
         if let Event::Connected {
             direction: Direction::In,
             remote,
