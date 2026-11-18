@@ -23,8 +23,10 @@
 //! * **Alerts** (RP-8, wishlist W52). Every host that has said `hello` hears every broadcast (RP-4
 //!   §6), so this connection hears alerts between calls and hands them to [`crate::alerts`]. To send
 //!   one it needs a callsign (RP-4 §4): while the station is idle it takes the station from the
-//!   panel (its activity `alerting`, so no call or listening starts meanwhile), claims the chosen
-//!   callsign, sends what waits, and closes, so the next connection is a `hello` alone again.
+//!   panel (its activity `alerting`, so no call or listening starts meanwhile) and opens a second,
+//!   short connection that claims the chosen callsign, sends what waits, and closes. This one
+//!   stays open throughout: closed and opened again to let the claim go, it missed a `heard` that
+//!   came in the gap (found by CI's run of `tests/alerts.rs` on Linux).
 //!   While the station listens, the listening connection sends them instead. With circles kept
 //!   it also holds a connection to another adapter that says it is shared, never to one that is
 //!   not: it would turn the app's own call away (RP-4 §3).
@@ -440,43 +442,78 @@ fn hold(shared: &Shared, modem: &str, retry: Duration, said: &mut Said) -> Ended
             Ok(_) => {}
             Err(why) => return lost(why),
         }
-        if let Some(c) = carrier.filter(|_| broadcasts)
-            && let Some(sent) = alerts_due(&mut conn, &c)
-        {
-            // a fresh connection with `hello` alone: the callsign claimed to send is let go
-            conn.close();
-            return sent.map_or_else(lost, |()| Ended::Changed);
+        if let Some(c) = carrier.filter(|_| broadcasts) {
+            alerts_due(&adapter, &shared.app, &c);
         }
     }
 }
 
-/// Sends the alerts due, when the station is idle (RP-8 §6): `None` when nothing went, else
-/// `Some`, an error when the connection failed. The caller then closes the connection, which
-/// claimed a callsign to send.
-fn alerts_due(conn: &mut Connection, c: &Carrier) -> Option<Result<(), String>> {
+/// Sends the alerts due, when the station is idle (RP-8 §6), on a connection of their own to the
+/// adapter at `adapter`: it claims a callsign to send, and closes when they have gone, so the
+/// claim goes with it. What could not go fails with why; nothing is tried again for it.
+fn alerts_due(adapter: &str, app: &str, c: &Carrier) {
     c.alerts.tick(unix_now());
     if !c.alerts.wants(unix_now()) || !(c.gate)(true) {
-        return None;
+        return;
     }
-    let sent = send_alerts(conn, c);
+    let sent = Connection::open(adapter)
+        .map_err(|e| format!("cannot reach the modem's adapter: {e}"))
+        .and_then(|mut conn| {
+            let result = conn
+                .set_timeout(Some(TICK))
+                .map_err(|e| e.to_string())
+                .and_then(|()| greet(&mut conn, app))
+                .and_then(|()| send_alerts(&mut conn, c));
+            conn.close();
+            result
+        });
+    if let Err(why) = sent {
+        while let Some((r, _)) = c.alerts.due(unix_now()) {
+            c.alerts.went(&r, false, Some(&why), unix_now());
+        }
+        (c.say)(&format!("alerts: not sent: {why}"));
+    }
     (c.gate)(false);
-    Some(sent)
 }
 
-/// Waits for an event that `done` takes, handing on broadcasts heard meanwhile; `false` when the
-/// time runs out first.
+/// `hello` on the connection that sends alerts, and its answer.
+fn greet(conn: &mut Connection, app: &str) -> Result<(), String> {
+    let hello = Host::new().hello(app);
+    conn.send(&hello)
+        .map_err(|e| format!("the adapter's connection failed: {e}"))?;
+    let mut refused = None;
+    let answered = wait_for(conn, ANSWER, |e| match e {
+        Event::Hello { .. } => true,
+        Event::Error {
+            id: Some(_),
+            code,
+            text,
+        } => {
+            refused = Some(text.clone().unwrap_or_else(|| code.clone()));
+            true
+        }
+        _ => false,
+    })?;
+    match refused {
+        Some(why) => Err(format!("the adapter answered hello {why}")),
+        None if answered => Ok(()),
+        None => Err("the adapter did not answer hello".into()),
+    }
+}
+
+/// Waits for an event that `done` takes; `false` when the time runs out first. Broadcasts heard on
+/// the sending connection are let go: the connection between calls hears them too.
 fn wait_for(
     conn: &mut Connection,
-    c: &Carrier,
     within: Duration,
     mut done: impl FnMut(&Event) -> bool,
 ) -> Result<bool, String> {
     let until = Instant::now() + within;
     while Instant::now() < until {
-        match next(conn)? {
-            Some(Event::Broadcast { data, .. }) => c.heard(&data),
-            Some(e) if done(&e) => return Ok(true),
-            _ => {}
+        if let Some(e) = next(conn)?
+            && done(&e)
+        {
+            return Ok(true);
         }
     }
     Ok(false)
@@ -503,7 +540,7 @@ fn send_alerts(conn: &mut Connection, c: &Carrier) -> Result<(), String> {
     let id = claim.get("id").cloned().unwrap_or(Value::Null);
     write_line(conn, &claim)?;
     let mut refused = None;
-    let answered = wait_for(conn, c, ANSWER, |e| match e {
+    let answered = wait_for(conn, ANSWER, |e| match e {
         Event::Ok { id: i } => *i == id,
         Event::Error {
             id: Some(i),
@@ -524,7 +561,7 @@ fn send_alerts(conn: &mut Connection, c: &Carrier) -> Result<(), String> {
         let id = request.get("id").cloned().unwrap_or(Value::Null);
         write_line(conn, &request)?;
         let mut outcome: Option<(bool, Option<String>)> = None;
-        let ended = wait_for(conn, c, SENDING, |e| match e {
+        let ended = wait_for(conn, SENDING, |e| match e {
             Event::Error {
                 id: Some(i),
                 code,

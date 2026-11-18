@@ -427,7 +427,9 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   holds a shared non-Aether adapter while circles are kept, and lets go of one that is not
   shared), and a station listening (`session::wait_for_call`, which also sends what waits). To
   send between calls `presence` takes the station from the panel (activity `alerting`, the
-  carrier's `gate`), claims the chosen callsign, broadcasts, and reconnects with `hello` alone.
+  carrier's `gate`) and opens a second, short connection that claims the chosen callsign and
+  broadcasts; the listening one stays open (closing it to drop the claim lost a `heard` that came
+  in the gap, found by CI on Linux).
   The panel's `/api/alerts`, `/api/circles`, `/api/notify`; the page plays synthesized sounds by
   Web Audio on the output chosen (`setSinkId`: the radio's sound card would put them on the air),
   and decides mail's level from `notify.json`; the Tauri shell brings the window forward when
