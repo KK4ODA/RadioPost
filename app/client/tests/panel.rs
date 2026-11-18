@@ -256,6 +256,116 @@ fn a_message_written_and_carried_from_the_panel() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// RP-2 §8 (the 40 m sessions of 2026-11-18): an ICS-213 with a file, sent P2P from the panel,
+/// reaches the station called as a form. Its panel gives the form's name and each field filled in,
+/// label and value, in the template's order, the subject, date and time the message's own; the
+/// sender's note stays the message's text. The station called had shown the form's text in the
+/// message's text box, the labels typed out like any other words.
+#[test]
+fn a_form_sent_p2p_reads_as_the_form() {
+    let dir = scratch("panel-form-p2p");
+    store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    let mut ana = store_for(&dir.join("ana"), "device:ana", "ana");
+    let c = Client {
+        at: Panel::new(&dir.join("facundo"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let ics213 = c.get("/api/forms")[0].clone();
+    assert_eq!(ics213["name"], "ICS-213 General Message");
+    let id = c
+        .post(
+            "/api/compose",
+            &json!({"to": "ana@hampost.org", "subject": "Cots and water", "priority": 1,
+                    "body": "Sent from the mobile.",
+                    "files": [{"name": "grid.txt", "data": "RU03Mw=="}],
+                    "form": {"template": ics213["template"],
+                             "values": {"1": "Shelter 3", "2": "Ana Lopez, EOC",
+                                        "3": "Facundo, net control",
+                                        "7": "Forty cots by 18:00.\nWater for 120.",
+                                        "8": "J. Ortega"}}}),
+        )
+        .expect("composed")["id"]
+        .as_str()
+        .expect("an ID")
+        .to_owned();
+
+    let (_server, at_f, at_a) = loopback();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let ana_runs = thread::spawn(move || {
+        let mut say = |s: &str| {
+            if s.starts_with("listening") {
+                let _ = tx.send(());
+            }
+        };
+        session::answer(&mut ana, &Options::new(&at_a.to_string()), &mut say).expect("answered");
+        ana
+    });
+    rx.recv_timeout(Duration::from_secs(10))
+        .expect("Ana listens");
+    c.post(
+        "/api/call",
+        &json!({"callsign": "n0call", "station": true, "adapter": at_f.to_string()}),
+    )
+    .expect("calling");
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while c.get("/api/state")["activity"]["state"] != "idle" {
+        assert!(Instant::now() < deadline, "the session never ended");
+        thread::sleep(Duration::from_millis(50));
+    }
+    assert_eq!(c.get("/api/folder?name=sent")[0]["id"], id.as_str());
+    let ana = ana_runs.join().expect("Ana's side");
+    assert_eq!(ana.inbox.len(), 1);
+    drop(ana);
+
+    // Ana's panel, after the session: the message received P2P is the one sent, form and all
+    let a = Client {
+        at: Panel::new(&dir.join("ana"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    assert_eq!(a.get("/api/folder?name=inbox")[0]["id"], id.as_str());
+    let m = a.get(&format!("/api/message?id={}", &id[..6]));
+    assert_eq!(m["subject"], "Cots and water", "{m}");
+    assert_eq!(
+        m["files"],
+        json!([{"name": "grid.txt", "type": "text/plain", "size": 4}])
+    );
+    let form = &m["form"];
+    assert_eq!(form["template"], ics213["template"], "{m}");
+    assert_eq!(form["name"], "ICS-213 General Message", "{m}");
+    assert_eq!(form["title"], "ICS-213 General Message", "{m}");
+    assert_eq!(form["filled"], true, "{m}");
+    // the date and time are the message's own, as the sender's panel stamped them, written as the
+    // form's text writes them (RP-2 §8.4)
+    let minutes = m["date"].as_u64().expect("a date") % 86_400 / 60;
+    let time = format!("{:02}:{:02} UTC", minutes / 60, minutes % 60);
+    let text = form["text"].as_str().expect("the form's text");
+    let date = text
+        .lines()
+        .find_map(|l| l.strip_prefix("Date: "))
+        .unwrap_or_else(|| panic!("no date in {text}"));
+    assert_eq!(date.len(), "2026-11-18".len(), "{text}");
+    assert!(text.contains(&format!("\nTime: {time}\n")), "{text}");
+    assert_eq!(
+        form["rows"],
+        json!([
+            {"label": "Incident name", "value": "Shelter 3", "lines": false},
+            {"label": "To (name and position)", "value": "Ana Lopez, EOC", "lines": false},
+            {"label": "From (name and position)", "value": "Facundo, net control", "lines": false},
+            {"label": "Subject", "value": "Cots and water", "lines": false},
+            {"label": "Date", "value": date, "lines": false},
+            {"label": "Time", "value": time, "lines": false},
+            {"label": "Message", "value": "Forty cots by 18:00.\nWater for 120.", "lines": true},
+            {"label": "Approved by (name and position)", "value": "J. Ortega", "lines": false},
+        ]),
+        "{m}"
+    );
+    // the note the sender added below the form is the message's text, apart from the form
+    assert_eq!(m["body"], "Sent from the mobile.", "{m}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// W14, RP-4 §4.1, §4.3 (the author's notes of 2026-11-17): a channel picked is tuned at once, so
 /// the radio and the antenna tuner can be set before the call; the tuner tone keys and stops; a
 /// station call carries its dial and bandwidth, finds the radio there and leaves it there. A modem

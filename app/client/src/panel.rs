@@ -1001,17 +1001,27 @@ impl Panel {
             .and_then(Cbor::as_text)
             .unwrap_or("")
             .into();
-        // a form shows as its text, made from the template this client holds (RP-2 §8.4)
+        // a form shows as the form: its rows, label and value, made from the template this client
+        // holds (RP-2 §8.4), which the page lays out; its text too, as an email would have it
         if let Some(form) = radiopost::forms::Form::of(&m) {
             let templates = radiopost::forms::Template::published();
             let name = templates
                 .iter()
                 .find(|t| t.fingerprint() == form.template)
                 .map(|t| t.name.clone());
+            let shown = radiopost::forms::shown_as(&m, &templates);
+            let rows: Vec<Value> = shown
+                .iter()
+                .flat_map(|s| &s.rows)
+                .map(|r| json!({"label": r.label, "value": r.value, "lines": r.lines}))
+                .collect();
             v["form"] = json!({
                 "template": radiopost::cbor::hex(&form.template),
                 "name": name,
-                "text": radiopost::forms::shown(&m, &templates),
+                "title": shown.as_ref().map(|s| s.title.clone()),
+                "filled": shown.as_ref().is_some_and(|s| s.filled),
+                "rows": rows,
+                "text": shown.map(|s| s.text(&m)),
             });
         }
         v["files"] = map

@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.14.0 |
+| **Version** | 1.15.0 |
 | **Updated** | 2026-11-18 |
 | **Describes** | RadioPost 0.1.0-beta.27 |
 | **Licence** | CC BY 4.0 |
@@ -402,7 +402,8 @@ the form; it is usually empty.
 
 Only what you type goes on the air. The form's wording stays on each computer, so a form takes less
 time than the same text typed out (about a fifth less for a short ICS-213). The station that
-receives it shows the whole form. Someone reading it by email gets it as text, with the labels.
+receives it shows the whole form, by gateway or P2P ([9](#9-reading-your-mail)). Someone reading
+it by email gets it as text, with the labels.
 
 If a field is missing or too long, RadioPost says which, and keeps what you wrote. A form that
 reaches a program without that form shows its values by field number.
@@ -538,6 +539,12 @@ Click a message in the **Inbox** to read it.
 - **Edit**, on a message in the **Outbox**, changes it before it goes
   ([section 7](#7-writing-a-message)).
 - **Add to addresses**, beside the sender, puts the sender on your address list.
+
+**A form** shows as the form, in a box under the attachments: its name, then each field filled
+in, its label beside its value, in the form's order. The **Subject**, **Date** and **Time** are
+the message's own. The sender's note, if any, follows in a box of its own. A form your computer
+does not hold shows as *Form* and a number, its values by field number: ask the sender which form
+it is.
 
 **Attachments held at the post office.** A file too large for the radio does not come with its
 message. Under it you see *held at the post office* and the button **Ask on the next call**.
@@ -1876,3 +1883,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.12.0 | 2026-11-18 | Every account gets its mailbox. §26: a postcard's mailbox and welcome come when its code is used. §27: the **Mailbox** column and **Make mailbox**, its password shown once and given off the air. §28: a code for a new address makes the mailbox and shows its password under the code. §31: Health checks that every account has its mailbox. §34, §37 to match; the desk's Accounts and New code screenshots retaken. |
 | 1.13.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18. §7 *Changing a message*: a message in the outbox is changed with its pencil or **Edit**, and saved in the old one's place with **Save in outbox**; what cannot be changed, and why (Figure 11 retaken with a row's pencil and trash can). §9 **Edit**; §37 its two refusals. |
 | 1.14.0 | 2026-11-18 | §26: what turns an application red: a club callsign asked for by someone who is neither the club nor its trustee (the trustee is looked up too), and an **Email now** at a domain kept for examples. |
+| 1.15.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18. §9: a form received, by gateway or P2P, shows as the form, each label beside its value, the sender's note below it; it had shown as its text. §7 to match. |

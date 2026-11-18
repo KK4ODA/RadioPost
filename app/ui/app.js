@@ -1355,9 +1355,18 @@ async function openMessage(id, from = {folder}) {
     li.append(ask);
     return li;
   }));
-  // a form shows as its text, made by the panel from the template this computer holds
-  $("r-body").textContent = m.form ? m.form.text : m.body;
-  $("r-body").classList.toggle("form-text", !!m.form);
+  // a form shows as the form: its name, then each field filled in, its label beside its value, in
+  // the template's order (RP-2 §8.4), made by the panel from the template this computer holds;
+  // what the sender added below it is the message's text
+  const f = m.form;
+  $("r-form").hidden = !f;
+  $("r-form-title").textContent = f ? f.title : "";
+  $("r-form-title").title = f && !f.filled
+    ? "This computer does not hold this form: its fields show by number" : "";
+  $("r-form-rows").replaceChildren(...(f?.rows ?? []).flatMap((r) =>
+    [el("dt", {text: r.label}), el("dd", {class: r.lines ? "lines" : "", text: r.value})]));
+  $("r-body").textContent = m.body;
+  $("r-body").hidden = !!f && !m.body;
   show("reader");
 }
 

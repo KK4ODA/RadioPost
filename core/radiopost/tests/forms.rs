@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 
 use radiopost::cbor::Value;
-use radiopost::forms::{Form, Template, shown};
+use radiopost::forms::{Form, Template, shown, shown_as};
 use radiopost::message::Message;
 use serde_json::Value as Json;
 
@@ -72,7 +72,10 @@ fn a_form_message_shows_as_rp2_8_4_says() {
         let form = Form::of(&m).expect("a form");
         assert_eq!(form.template, t.fingerprint());
         assert_eq!(Message::from_map(&rebuilt(&m, &form)).expect("rebuilt"), m);
-        assert_eq!(shown(&m, &[t]).as_deref(), s["text"].as_str());
+        assert_eq!(
+            shown(&m, std::slice::from_ref(&t)).as_deref(),
+            s["text"].as_str()
+        );
         assert_eq!(
             shown(&m, &[]).as_deref(),
             s["text_without_template"].as_str()
@@ -81,6 +84,21 @@ fn a_form_message_shows_as_rp2_8_4_says() {
             form.text_without(&m),
             s["text_without_template"].as_str().expect("text")
         );
+        // the rows a program lays out as the form are the text's lines, each label with its value
+        let with = shown_as(&m, std::slice::from_ref(&t)).expect("a form");
+        assert_eq!((with.title.as_str(), with.filled), (t.name.as_str(), true));
+        let text = s["text"].as_str().expect("text");
+        for r in &with.rows {
+            let line = if r.lines {
+                format!("\n{}:\n{}\n", r.label, r.value)
+            } else {
+                format!("\n{}: {}\n", r.label, r.value)
+            };
+            assert!(text.contains(&line), "{line:?} in {text:?}");
+        }
+        let without = shown_as(&m, &[]).expect("a form");
+        assert!(!without.filled);
+        assert_eq!(without.rows.len(), form.values.len());
     }
 }
 

@@ -5,7 +5,8 @@
 //! * [`Template`]: a template read from its JSON (`forms/*.json`), its CBOR map and fingerprint,
 //!   whether values fill it ([`Template::problem`]), and the text a form message shows as.
 //! * [`Form`]: key 13 of a message.
-//! * [`shown`]: the text a message's form shows as, with the templates a station holds.
+//! * [`shown`]: the text a message's form shows as, with the templates a station holds;
+//!   [`shown_as`]: the same as rows, label and value, for a program to lay out as the form.
 
 use serde_json::Value as Json;
 
@@ -323,25 +324,77 @@ impl Template {
     /// The text a form message shows as with this template (RP-2 §8.4).
     #[must_use]
     pub fn text(&self, message: &Message, form: &Form) -> String {
+        self.shown(message, form).text(message)
+    }
+
+    /// The form as it shows with this template (RP-2 §8.4): its name, and a row for each field in
+    /// the template's order that has a value, a bound field the message's.
+    #[must_use]
+    pub fn shown(&self, message: &Message, form: &Form) -> Shown {
         let map = message.map();
         let subject = map.get(key::SUBJECT).and_then(Value::as_text).unwrap_or("");
         let date = map.get(key::DATE).and_then(Value::as_u64).unwrap_or(0);
-        let mut lines = vec![self.name.clone(), String::new()];
-        for f in &self.fields {
-            let shown = match f.bound {
-                Some(Bound::Subject) => (!subject.is_empty()).then(|| subject.to_owned()),
-                Some(Bound::Date) => Some(ymd(date / 86_400)),
-                Some(Bound::Time) => Some(hm((date % 86_400) / 60)),
-                None => form.value(f.n).map(|v| shown_value(f, v)),
-            };
-            let Some(shown) = shown else {
-                continue;
-            };
-            if f.kind == Kind::Text {
-                lines.push(format!("{}:", f.label));
-                lines.extend(shown.split('\n').map(str::to_owned));
+        let rows = self
+            .fields
+            .iter()
+            .filter_map(|f| {
+                let value = match f.bound {
+                    Some(Bound::Subject) => (!subject.is_empty()).then(|| subject.to_owned()),
+                    Some(Bound::Date) => Some(ymd(date / 86_400)),
+                    Some(Bound::Time) => Some(hm((date % 86_400) / 60)),
+                    None => form.value(f.n).map(|v| shown_value(f, v)),
+                }?;
+                Some(Row {
+                    label: f.label.clone(),
+                    value,
+                    lines: f.kind == Kind::Text,
+                })
+            })
+            .collect();
+        Shown {
+            title: self.name.clone(),
+            filled: true,
+            rows,
+        }
+    }
+}
+
+/// A form as a station shows it (RP-2 §8.4): the lines of its text, which a program may also lay
+/// out as a form, each label beside its value.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Shown {
+    /// The template's name; `Form <the fingerprint in hex>` without the template.
+    pub title: String,
+    /// The template is held and the values fill it, so each label is the template's own.
+    pub filled: bool,
+    /// One for each field with a value: in the template's order, or by number without it.
+    pub rows: Vec<Row>,
+}
+
+/// One field of a form as it shows (RP-2 §8.4).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Row {
+    /// The field's label, or `Field <n>` without the template.
+    pub label: String,
+    /// Its value as text: a date `YYYY-MM-DD`, a time `HH:MM UTC`, a choice its text, a check
+    /// `Yes` or `No`.
+    pub value: String,
+    /// The label stands alone and the value follows on the lines after it: a `text` field, or a
+    /// value with a line break when the template is not held.
+    pub lines: bool,
+}
+
+impl Shown {
+    /// Its text (RP-2 §8.4), the message's `body` after it when there is one.
+    #[must_use]
+    pub fn text(&self, message: &Message) -> String {
+        let mut lines = vec![self.title.clone(), String::new()];
+        for r in &self.rows {
+            if r.lines {
+                lines.push(format!("{}:", r.label));
+                lines.extend(r.value.split('\n').map(str::to_owned));
             } else {
-                lines.push(format!("{}: {shown}", f.label));
+                lines.push(format!("{}: {}", r.label, r.value));
             }
         }
         finish(&lines, message)
@@ -397,26 +450,35 @@ impl Form {
     /// The text it shows as without its template (RP-2 §8.4).
     #[must_use]
     pub fn text_without(&self, message: &Message) -> String {
-        let mut lines = vec![
-            format!("Form {}", crate::cbor::hex(&self.template)),
-            String::new(),
-        ];
-        for (n, v) in &self.values {
-            let shown = match v {
-                Value::Text(t) => t.clone(),
-                Value::Bool(b) => yes_no(*b).to_owned(),
-                Value::Uint(u) => u.to_string(),
-                Value::Nint(m) => format!("-{}", u128::from(*m) + 1),
-                other => other.diagnostic(),
-            };
-            if shown.contains('\n') {
-                lines.push(format!("Field {n}:"));
-                lines.extend(shown.split('\n').map(str::to_owned));
-            } else {
-                lines.push(format!("Field {n}: {shown}"));
-            }
+        self.shown_without().text(message)
+    }
+
+    /// The form as it shows without its template (RP-2 §8.4): its values by number.
+    #[must_use]
+    pub fn shown_without(&self) -> Shown {
+        let rows = self
+            .values
+            .iter()
+            .map(|(n, v)| {
+                let value = match v {
+                    Value::Text(t) => t.clone(),
+                    Value::Bool(b) => yes_no(*b).to_owned(),
+                    Value::Uint(u) => u.to_string(),
+                    Value::Nint(m) => format!("-{}", u128::from(*m) + 1),
+                    other => other.diagnostic(),
+                };
+                Row {
+                    label: format!("Field {n}"),
+                    lines: value.contains('\n'),
+                    value,
+                }
+            })
+            .collect();
+        Shown {
+            title: format!("Form {}", crate::cbor::hex(&self.template)),
+            filled: false,
+            rows,
         }
-        finish(&lines, message)
     }
 }
 
@@ -424,14 +486,22 @@ impl Form {
 /// it and the values fill it, else by number. `None` for a message with no form.
 #[must_use]
 pub fn shown(message: &Message, templates: &[Template]) -> Option<String> {
+    shown_as(message, templates).map(|s| s.text(message))
+}
+
+/// A message's form as it shows (RP-2 §8.4), its rows for a program to lay out as a form: with its
+/// template when one of `templates` is it and the values fill it, else by number. `None` for a
+/// message with no form.
+#[must_use]
+pub fn shown_as(message: &Message, templates: &[Template]) -> Option<Shown> {
     let form = Form::of(message)?;
     let template = templates
         .iter()
         .find(|t| t.fingerprint() == form.template)
         .filter(|t| t.problem(&form.values).is_none());
     Some(match template {
-        Some(t) => t.text(message, &form),
-        None => form.text_without(message),
+        Some(t) => t.shown(message, &form),
+        None => form.shown_without(),
     })
 }
 
