@@ -82,6 +82,7 @@ impl Running {
                         | "/office/lookup"
                         | "/office/licences"
                         | "/office/mailboxes/check"
+                        | "/office/mailbox"
                 )
                 | ("GET" | "PUT", "/office/settings")
                 | ("GET" | "POST", "/office/post-offices")
@@ -143,6 +144,16 @@ impl Running {
             }
             ("GET", "/office/settings") => ok(&self.desk_settings()),
             ("POST", "/office/mailboxes/check") => ok(&self.check_mailboxes()),
+            ("POST", "/office/mailbox") => match self.mailbox_for(&text("address")) {
+                Some(made) => {
+                    eprintln!(
+                        "radiopost-po: {who} asked for the mailbox of {}",
+                        text("address")
+                    );
+                    ok(&made)
+                }
+                None => refused(ErrorCode::UnknownMessage, 404),
+            },
             ("GET", "/office/post-offices") => ok(&self.post_offices_view()),
             ("POST", "/office/post-offices") => match self.post_office_decision(body) {
                 Ok(said) => {
@@ -164,7 +175,8 @@ impl Running {
     }
 
     /// The operator's port's share of the desk, taken before it locks the post office:
-    /// `GET`/`PUT /settings`, `GET /lookup?call=…&name=…`, `POST /licences` (fetch the copy).
+    /// `GET`/`PUT /settings`, `GET /lookup?call=…&name=…`, `POST /licences` (fetch the copy),
+    /// `POST /mailbox` (an account's mailbox, made now).
     pub(crate) fn admin_desk(
         &self,
         method: &str,
@@ -194,6 +206,16 @@ impl Running {
                     .to_string(),
             ),
             ("POST", "/mailboxes/check") => (200, self.check_mailboxes().to_string()),
+            ("POST", "/mailbox") => {
+                let address = body["address"].as_str().unwrap_or("");
+                match self.mailbox_for(address) {
+                    Some(made) => (200, made.to_string()),
+                    None => (
+                        400,
+                        json!({"error": format!("{address} is no account here")}).to_string(),
+                    ),
+                }
+            }
             ("GET", "/post-offices") => (200, self.post_offices_view().to_string()),
             ("POST", "/post-offices") => match self.post_office_decision(body) {
                 Ok(said) => {
@@ -614,6 +636,23 @@ impl Running {
             eprintln!("radiopost-po: {who} asked for the job {name}");
         }
         Ok(asked)
+    }
+
+    /// Each account of `/office/accounts` (RP-5 §7.4) with `mailbox`: whether the mail server has
+    /// one for it, when the mail server can be asked. The desk offers to make a missing one.
+    pub(crate) fn mark_mailboxes(&self, answer: &mut Json) {
+        let have = match crate::mailboxes::addresses(&self.settings().mailboxes) {
+            Ok(Some(have)) => have,
+            Ok(None) => return,
+            Err(e) => {
+                eprintln!("radiopost-po: the mail server's mailboxes could not be listed: {e}");
+                return;
+            }
+        };
+        for a in answer["accounts"].as_array_mut().into_iter().flatten() {
+            let address = a["address"].as_str().unwrap_or("").to_lowercase();
+            a["mailbox"] = json!(have.contains(&address));
+        }
     }
 
     /// The members `/office/status` gains from the service (RP-5 §7.2 allows them).

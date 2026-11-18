@@ -42,7 +42,11 @@ usage: radiopost-po --dir DIR COMMAND
                      the post offices known, seen (met, and not known) and blocked; block one,
                      unblock it, forget one known, or fetch the known ones again
   code --address A --operator CALL [--send] [--receive] [--role] [--name NAME]
-                     a one-time enrollment code (RP-5 §6.1), good for a week
+                     a one-time enrollment code (RP-5 §6.1), good for a week; for a new
+                     account, its mailbox is made too and its password shown once
+  mailbox --address A
+                     make an account's mailbox in the mail server now, for one that has none;
+                     its password is shown once: give it on off the air
   name --address A --name NAME
                      the display name of the account's email (RP-6 §3.1)
   deliver --to ADDR --from ADDR --subject TEXT --air FILE [--licensed]
@@ -56,7 +60,7 @@ usage: radiopost-po --dir DIR COMMAND
   qrz --username U --password P
                      look callsigns up in QRZ.com's callbook too, with your account (empty clears)
   mailboxes [--stalwart URL --key KEY | --command PROGRAM | --off] [--check]
-                     make each approved account's mailbox in the mail server: by Stalwart's API,
+                     make each new account's mailbox in the mail server: by Stalwart's API,
                      or by your program (given the address and name; the password in
                      RADIOPOST_PASSWORD); --check asks without making one
   lookup CALL [--name NAME]
@@ -217,6 +221,55 @@ fn init(files: &Files, a: &Args) -> Result<(), String> {
         );
     }
     Ok(())
+}
+
+/// `code`: a one-time enrollment code (RP-5 §6.1), and for a new account its mailbox.
+fn code(files: &Files, a: &Args) -> Result<(), String> {
+    let mut flags = Vec::new();
+    for f in ["send", "receive", "role"] {
+        if a.has(&format!("--{f}")) {
+            flags.push(f);
+        }
+    }
+    if flags.is_empty() {
+        flags = vec!["send", "receive"];
+    }
+    let body = json!({"address": a.need("--address")?, "operator": a.need("--operator")?,
+                      "flags": flags, "name": a.one("--name").unwrap_or_default()});
+    let answer = admin(files, "POST", "/code", &body)?;
+    println!(
+        "{}  for {} ({}), good for a week",
+        answer["code"].as_str().unwrap_or(""),
+        answer["address"].as_str().unwrap_or(""),
+        answer["operator"].as_str().unwrap_or("")
+    );
+    if answer["operates"] == json!(true) {
+        println!(
+            "{} operates this post office: whoever enrolls with this code can use the desk",
+            answer["operator"].as_str().unwrap_or("")
+        );
+    }
+    if answer["mailbox"].is_object() {
+        say_mailbox(&answer["mailbox"]);
+    }
+    Ok(())
+}
+
+/// What became of an account's mailbox (`crate::aftercare`): made, with its password, which is
+/// never kept, or why not.
+fn say_mailbox(mailbox: &Json) {
+    match (mailbox["password"].as_str(), mailbox["error"].as_str()) {
+        (Some(pw), _) => println!(
+            "mailbox made for {}: its password for mail programs is {pw}\n\
+             it is not kept: give it to them off the air, never in a message by radio",
+            mailbox["address"].as_str().unwrap_or("the account")
+        ),
+        (None, Some(e)) => println!(
+            "no mailbox made: {e}\n\
+             email from outside is refused for the account until it has one"
+        ),
+        (None, None) => {}
+    }
 }
 
 /// One of the operator's commands, sent to the running post office's own port.
@@ -909,31 +962,10 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
         }
         "know" => know(&files, a),
         "post-offices" => post_offices(&files, a),
-        "code" => {
-            let mut flags = Vec::new();
-            for f in ["send", "receive", "role"] {
-                if a.has(&format!("--{f}")) {
-                    flags.push(f);
-                }
-            }
-            if flags.is_empty() {
-                flags = vec!["send", "receive"];
-            }
-            let body = json!({"address": a.need("--address")?, "operator": a.need("--operator")?,
-                              "flags": flags, "name": a.one("--name").unwrap_or_default()});
-            let answer = admin(&files, "POST", "/code", &body)?;
-            println!(
-                "{}  for {} ({}), good for a week",
-                answer["code"].as_str().unwrap_or(""),
-                answer["address"].as_str().unwrap_or(""),
-                answer["operator"].as_str().unwrap_or("")
-            );
-            if answer["operates"] == json!(true) {
-                println!(
-                    "{} operates this post office: whoever enrolls with this code can use the desk",
-                    answer["operator"].as_str().unwrap_or("")
-                );
-            }
+        "code" => code(&files, a),
+        "mailbox" => {
+            let body = json!({"address": a.need("--address")?});
+            say_mailbox(&admin(&files, "POST", "/mailbox", &body)?);
             Ok(())
         }
         "name" => {

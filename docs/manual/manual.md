@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.11.0 |
+| **Version** | 1.12.0 |
 | **Updated** | 2026-11-18 |
 | **Describes** | RadioPost 0.1.0-beta.27 |
 | **Licence** | CC BY 4.0 |
@@ -1287,7 +1287,8 @@ That is evidence, not proof: anyone can read who holds a callsign. To decide:
      applicant lives there.
 
 When you approve, the post office can also make the person's mailbox and email them a welcome with
-their first password ([Settings](#mailboxes)).
+their first password ([Settings](#mailboxes)). For a postcard it does both when the person enrolls
+with the card's code, once the licence is proved.
 
 **Decided** lists the applications decided in the last week: the decision, and after it whether
 the mailbox was made (*mailbox*, or *no mailbox* in red) and the applicant emailed (*emailed* or
@@ -1311,8 +1312,16 @@ Every account, one a row:
 - **Devices**: each computer enrolled for the account, with its callsign and until when its
   credential runs. *this computer* marks the one you are using. A revoked one is crossed out.
 - **Waiting**: messages waiting for the account's next call to a gateway.
+- **Mailbox**: *Yes* when the mail server has the account's mailbox, *none* in red when it does
+  not. Without one, email from outside is refused for the account. Empty when the post office
+  cannot ask the mail server ([Settings](#mailboxes)).
 
 **Find** shows the accounts whose address, name or callsign contains what you type.
+
+**A missing mailbox.** Click **Make mailbox** beside *none*. The post office makes it and shows its
+password for mail programs once, with **Copy**. It keeps no copy. Give it to the person off the
+air, by email, by phone or in person, never in a message by radio: nothing on the air is
+encrypted.
 
 **A lost or stolen computer.** Click **Revoke** beside its device, then again to confirm. Every
 credential of that device stops working: it can no longer log in or call a gateway. Gateways
@@ -1343,6 +1352,12 @@ that exists. Use it for someone you know holds the callsign.
 The code shows in large letters, with whom it is for and until when. **Copy** copies it. Give it
 to the person by email, by phone or on paper. It works once, for a week. They enroll with it in
 their RadioPost's Setup ([section 5.1](#51-with-a-code-from-the-operator)).
+
+For a new address, the post office also makes the account's mailbox, and shows its password for
+mail programs under the code, once, with its own **Copy**. Give it with the code, off the air,
+never in a message by radio. If the mailbox could not be made, a red line says why: make it from
+**Accounts** ([section 27](#27-accounts-and-devices)) before mail from outside can arrive. A code
+for a new device of an existing account makes no mailbox.
 
 > **Note.** A code naming one of the post office's operator callsigns, for someone else's address,
 > would give its holder this desk. The desk stops first with a red box, *This person will be able
@@ -1406,8 +1421,9 @@ Each line is one check:
 
 It checks the post office's DNS records, its certificate and its API from outside, the door
 where mail comes in, the mail server, free disk space, mail stuck going out, last night's backups,
-when a backup last left the server, whether the jobs runner is installed, the DKIM keys' age and a
-key rotation waiting on you, and each known post office's records.
+whether every account has its mailbox at the mail server, when a backup last left the server,
+whether the jobs runner is installed, the DKIM keys' age and a key rotation waiting on you, and
+each known post office's records.
 
 - **Check now** runs every check at once (a few seconds).
 - **DKIM selectors**: give the names of your DKIM keys once, as your mail server names them
@@ -1534,13 +1550,16 @@ What the post office finds of each callsign shows beside each application and co
 
 ### Mailboxes
 
-The mail server refuses email for an account with no mailbox, so each approved account needs one.
-Under **Make each mailbox**, choose:
+The mail server refuses email for an account with no mailbox, so each account needs one. Under
+**Make each mailbox**, choose:
 
 - **By hand, in the mail server**: you make each one yourself.
 - **In Stalwart, by its API**: give **Stalwart's address** as the server reaches it (such as
   `http://127.0.0.1:8080`) and an **API key** made in Stalwart's administration. The post office
-  makes the mailbox when you approve, and emails the new user their first password.
+  makes the mailbox wherever an account begins: when you approve (it emails the new user their
+  first password), with a code for a new address (the password shows under the code), and when a
+  postcard's code is used (the welcome brings it). **Accounts** and **Health** show any account
+  without one.
 - **By a program on the server**: name the program; it is given the address and the name.
 
 Click **Save**, then **Check**: it asks the mail server without making anything. The line under
@@ -1658,7 +1677,7 @@ These notes follow the US rules (Part 97). Check your own country's.
 |---|---|
 | No **Post office** button | The callsign chosen at the top is not one of the post office's operators: choose yours. The desk also needs the Internet. |
 | Applicants are told *it takes no applications* | Tick **Take applications for accounts** in **Settings**. |
-| *no mailbox* beside an approved account | The mail server did not make it. Make it in the mail server by hand, and check **Settings**, **Mailboxes**, with **Check**. |
+| *no mailbox* beside an approved account, or *none* under **Mailbox** in **Accounts** | The mail server has no mailbox for it, so email from outside is refused (the sender gets *Mailbox does not exist*). Click **Make mailbox** in **Accounts**; if it fails, check **Settings**, **Mailboxes**, with **Check**, or make it in the mail server by hand. |
 | *not emailed* beside a decision | The email to the applicant did not go. **Settings**, **Mailboxes** says whether the post office can send email. |
 | A red line in **Health** | Fix what it says. You are emailed when a line turns red, and again when all pass. |
 | Mail waits in **Mail out** | The mail server is not taking it: run the **mail-log** job and read it. |
@@ -1826,3 +1845,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.9.0 | 2026-11-17 | From the 40 m RadioPost mail of 2026-11-17. §6, §8: **Call** is green; a channel is tuned as it is picked, the line under it says where the radio is or which dial to set by hand, **Tuner tone**, and the radio stays on the channel after the call (new Figure 13). §10: a station call's **Dial, MHz** and **Bandwidth** (new Figure 18), and P2P with a station that also runs a gateway. §19: a gateway whose scan ends registers again with the channel it stays on. §35, §37, §39, §40 to match. |
 | 1.10.0 | 2026-11-17 | P2P named plainly in the call box: **Listen** is **Listen for P2P**, whose tooltip names the callsigns it answers as, and **Another client's station** is **P2P (another client's station)** (§6, §10, §11.2, §37, §39, §40; the client's screenshots retaken). |
 | 1.11.0 | 2026-11-18 | Alerts and sounds (wishlist W51, W52; RP-8). §10.1 to §10.4: alerts between stations that share a keyword, circles and their checks, sending one and what it becomes, the alarm and its answers (new Figures 19 and 20). §12: *Sounds and notifications*, the levels, quiet hours, and the radio's sound card (new Figure 23). §13: **Notify** for addresses and groups. §36, §37, §39, §40 to match; the client's screenshots retaken with **Alerts** in the left-hand column. |
+| 1.12.0 | 2026-11-18 | Every account gets its mailbox. §26: a postcard's mailbox and welcome come when its code is used. §27: the **Mailbox** column and **Make mailbox**, its password shown once and given off the air. §28: a code for a new address makes the mailbox and shows its password under the code. §31: Health checks that every account has its mailbox. §34, §37 to match; the desk's Accounts and New code screenshots retaken. |

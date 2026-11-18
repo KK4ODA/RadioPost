@@ -328,6 +328,9 @@ h2.section { margin-top: 24px; }
 .operates strong { color: var(--bad); }
 .operates .row { margin: 8px 0 0; }
 .made .code { font-family: var(--mono); font-size: 26px; letter-spacing: .08em; margin: 0 0 4px; }
+#o-made-mailbox { margin-top: 10px; }
+#o-made-mailbox .note, #o-account-rows .note { margin-bottom: 4px; }
+.note.bad { color: var(--bad); }
 .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
 .pill.approved { color: var(--ok); border-color: var(--ok); }
 .pill.declined { color: var(--bad); border-color: var(--bad); }

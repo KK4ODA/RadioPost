@@ -22,7 +22,7 @@ use crate::auth::Checker;
 use crate::documents::Info;
 use crate::lookups::{LookupSettings, Lookups};
 use crate::mailboxes::MailboxSettings;
-use crate::office::{Config, Draw, PostOffice, Request, State};
+use crate::office::{Config, Draw, PostOffice, Request, Response, State};
 
 /// A post office's settings, as `config.json` holds them.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -499,6 +499,13 @@ impl Running {
         };
         let waits = long_poll(method, path);
         let mut office = self.office();
+        // RP-5 §7.5's code for an address that is no account yet begins one: its mailbox is made
+        // once the code is (`crate::aftercare`), outside the lock and the replayed answer
+        let begins = ((method, path) == ("POST", "/office/codes"))
+            .then(|| request.body.as_ref().and_then(|b| b["address"].as_str()))
+            .flatten()
+            .filter(|a| !office.state.accounts.contains(&a.to_lowercase()))
+            .map(str::to_owned);
         let mut answer = office.handle(at, &request);
         // RP-5 §5.8: a poll with nothing to give waits, up to `wait` seconds, for items to come
         let until = std::time::Instant::now() + std::time::Duration::from_secs(waits);
@@ -526,31 +533,50 @@ impl Running {
         } else {
             "application/json"
         };
-        if (method, path) == ("POST", "/applications")
-            && answer.status == 202
-            && let Some(id) = answer.body.as_ref().and_then(|b| b["application"].as_str())
-        {
-            self.queue_lookup(id, true);
-        }
-        if method == "POST"
-            && path.starts_with("/office/applications/")
-            && answer.status == 200
-            && let Some(id) = answer.body.as_ref().and_then(|b| b["application"].as_str())
-        {
-            self.after_decision(id);
-        }
-        let mut body = answer.body;
-        if path == "/office/status"
-            && answer.status == 200
-            && let Some(b) = body.as_mut()
-        {
-            self.status_extras(b);
-        }
+        self.follow_up(&request, &mut answer, begins);
         (
             answer.status,
             kind,
-            body.map(|b| b.to_string()).unwrap_or_default(),
+            answer.body.map(|b| b.to_string()).unwrap_or_default(),
         )
+    }
+
+    /// What the service does once [`PostOffice::handle`] has answered, outside its lock and its
+    /// replayed answer: lookups and aftercare (`crate::aftercare`), and the members the desk's
+    /// answers gain from the service. `begins` is the address a code began an account for.
+    fn follow_up(&self, request: &Request, answer: &mut Response, begins: Option<String>) {
+        let (method, path) = (request.method.as_str(), request.path.as_str());
+        let named = |k: &str| answer.body.as_ref().and_then(|b| b[k].as_str());
+        match (method, answer.status) {
+            ("POST", 202) if path == "/applications" => {
+                if let Some(id) = named("application") {
+                    self.queue_lookup(id, true);
+                }
+            }
+            ("POST", 200) if path.starts_with("/office/applications/") => {
+                if let Some(id) = named("application") {
+                    self.after_decision(id);
+                }
+            }
+            ("POST", 200) if path == "/enroll" => {
+                if let Some(address) = request.body.as_ref().and_then(|b| b["address"].as_str()) {
+                    self.after_enrollment(address);
+                }
+            }
+            _ => {}
+        }
+        let Some(body) = answer.body.as_mut().filter(|_| answer.status == 200) else {
+            return;
+        };
+        if path == "/office/status" {
+            self.status_extras(body);
+        }
+        if let Some(address) = begins {
+            body["mailbox"] = self.mailbox_for(&address).unwrap_or(Json::Null);
+        }
+        if (method, path) == ("GET", "/office/accounts") {
+            self.mark_mailboxes(body);
+        }
     }
 
     /// Replaces the settings the service runs with (the caller has written `config.json`).
@@ -597,10 +623,18 @@ impl Running {
             return answer;
         }
         let mut decided = Vec::new();
+        let mut begins = None;
         let mut office = self.office();
         office.at(now());
-        let answer = match (method, path) {
+        let mut answer = match (method, path) {
             ("POST", "/code") => {
+                if !office
+                    .state
+                    .accounts
+                    .contains(&text("address").to_lowercase())
+                {
+                    begins = Some(text("address")); // its mailbox is made once the lock is let go
+                }
                 let f = flags_named(&body);
                 let code = office.new_code();
                 office.add_code(&code, &text("address"), &text("operator"), f);
@@ -655,7 +689,7 @@ impl Running {
             ("GET", "/status") => Ok(json!({
                 "version": env!("CARGO_PKG_VERSION"),
                 "update": self.updates.get().map(|w| w.status()),
-                "accounts": office.state.mailboxes.len(),
+                "accounts": office.state.accounts.len(),
                 "gateways": office.state.gateways.keys().collect::<Vec<_>>(),
                 "codes": office.state.codes.len(),
                 "outgoing": office.state.outgoing.len(),
@@ -668,6 +702,9 @@ impl Running {
         drop(office);
         for id in decided {
             self.after_decision(&id);
+        }
+        if let (Some(address), Ok(made)) = (begins, answer.as_mut()) {
+            made["mailbox"] = self.mailbox_for(&address).unwrap_or(Json::Null);
         }
         match answer {
             Ok(j) => (200, j.to_string()),

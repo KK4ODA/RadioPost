@@ -376,9 +376,17 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `l_amat.zip` (HD, EN, AM joined; the real file of 2026-11-08: 1,606,615 callsigns in 21 s,
   170 MB, no email addresses in it) found by binary search on disk; `qrz.rs` is QRZ's XML
   interface; `evidence.rs` judges good/warn/bad; `lookups.rs` looks each new application up on a
-  worker thread. `mailboxes.rs` makes the mailbox at approval (Stalwart's JMAP `x:Domain/get` and
-  `x:Account/set`, tried only against a stand-in; or a named program); `notices.rs` and
-  `aftercare.rs` send the emails. One mailbox's second part (W36, RP-6 0.8.0 §2.6): `send_on` and
+  worker thread. `mailboxes.rs` makes the mailbox (Stalwart's JMAP `x:Domain/get` and
+  `x:Account/set`, tried only against a stand-in; or a named program) wherever an account begins
+  (`aftercare.rs`): at an approval (the welcome brings its password), with a code for an address
+  that is no account yet (`/office/codes` and the operator's `/code` answer `mailbox` with the
+  password, shown once), and at a postcard's enrollment (`after_enrollment`: the welcome then).
+  A password never goes on the air and is never kept. `mailboxes::addresses` lists Stalwart's
+  (`x:Account/get`): the desk's accounts gain `mailbox`, Health's `accounts_line` fails for an
+  account without one, and **Make mailbox** (`POST /office/mailbox`, `radiopost-po mailbox`)
+  makes it. Until 2026-11-18 a code made no mailbox, so Stalwart refused every email from
+  outside for such an account (*550 5.1.1 Mailbox does not exist*, before the door is asked).
+  `notices.rs` and `aftercare.rs` send the emails. One mailbox's second part (W36, RP-6 0.8.0 §2.6): `send_on` and
   `picked_up(…, by_radio)` queue `State::to_mailboxes` (`MailboxTask`), and `mirror.rs`, run with
   `seen.rs` every minute, imports §3.1's email into the sender's `sent`-role mailbox (uploaded to
   the session's upload path on the host the service reaches Stalwart at) and sets `$seen` on what a

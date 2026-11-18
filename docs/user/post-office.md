@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.0.1 |
-| **Updated** | 2026-11-17 |
+| **Version** | 1.1.0 |
+| **Updated** | 2026-11-18 |
 | **Describes** | RadioPost 0.1.0-beta.27 |
 | **Licence** | CC BY 4.0 |
 
@@ -293,13 +293,14 @@ keeps closed to the Internet. You reach it through your SSH connection:
    | 6 | **Directory, Accounts** | An account `radiopost`, with the password the installer printed. | The post office sends users' mail out through it. |
    | 7 | **AUTH Stage, Must Match Sender** | `false` if `authenticated_as == 'radiopost' \|\| authenticated_as == 'radiopost@radiopost.org'`, otherwise `true`. | Lets the post office send as each user's address. Name both forms: Stalwart may give either. |
    | 8 | **MTA Hooks** | URL `http://127.0.0.1:8772/`; stages *rcpt* and *data*; Bearer, with the token the installer printed; timeout 30000 ms; keep *temporary failure on error*; enabled for every session (`true`). | This is the door: Stalwart asks the post office before it takes each email. |
-   | 9 | **Directory, API keys** | A key with the right to create accounts. Keep it: you give it to the desk in [chapter 6](#6-your-own-radiopost-and-the-desk). | Approving an application makes the user's mailbox; the post office fills Sent folders and marks mail read. |
+   | 9 | **Directory, API keys** | A key with the right to create accounts. Keep it: you give it to the desk in [chapter 6](#6-your-own-radiopost-and-the-desk). | Each new account's mailbox is made by the post office; it fills Sent folders and marks mail read. |
 
    > **Note.** The API key of setting 9 needs these rights. A key in *Inherit* mode on an
    > administrator's account has them all. A key in *Replace* mode needs `authenticate`,
-   > `impersonate`, `sysAccountGet`, `sysAccountQuery`, `jmapEmailQuery` and `jmapEmailGet` (to make
-   > mailboxes and see what users read), `jmapEmailUpdate`, `jmapEmailImport`, `jmapMailboxQuery`,
-   > `jmapMailboxGet` and `jmapBlobUpload` (for Sent folders and read marks), and `sysDomainGet`,
+   > `impersonate`, `sysDomainGet`, `sysAccountCreate`, `sysAccountGet`, `sysAccountQuery`,
+   > `jmapEmailQuery` and `jmapEmailGet` (to make mailboxes, check that each account has one, and
+   > see what users read), `jmapEmailUpdate`, `jmapEmailImport`, `jmapMailboxQuery`,
+   > `jmapMailboxGet` and `jmapBlobUpload` (for Sent folders and read marks), and
    > `sysDkimSignatureGet`, `sysDkimSignatureQuery`, `sysDkimSignatureCreate`,
    > `sysDkimSignatureUpdate` and `sysDkimSignatureDestroy` (for rotating the DKIM keys). The post
    > office never keeps a user's password.
@@ -459,7 +460,8 @@ what the post office found of the callsign. **Approve** makes the account and it
 emails the new user their first password and where mail programs connect. **Decline…** sends a
 reason. **Send a postcard** makes a code for 30 days and a card to post to the address on the
 licence: the FCC's public data has no email addresses, so the post is the address that can be
-checked.
+checked. When the applicant enrolls with the card's code, the post office makes the mailbox and
+emails the welcome with its password, as for an approval.
 
 **Codes.** For someone you know holds the callsign: the desk's **New code**, or on the server:
 
@@ -467,9 +469,20 @@ checked.
 radiopost-po --dir /var/lib/radiopost code --address ana@radiopost.org --operator N0CALL --name "Ana Lopez"
 ```
 
-**Mailboxes.** Each account needs a mailbox at Stalwart, or Stalwart refuses mail for it. With
-**Mailboxes** set to Stalwart (chapter 6), approving makes it. Otherwise make it in Stalwart's
-administration (**Directory**, **Accounts**) with the same address.
+A code for a new address makes the account's mailbox too, and shows its password once, beside the
+code. The post office keeps no copy. Give both to the user together, off the air: by email, by
+phone or in person, never in a message by radio, since nothing on the air is encrypted. A code
+for an account that already exists (a new device) makes no mailbox.
+
+**Mailboxes.** Each account needs a mailbox at Stalwart, or Stalwart refuses email from outside
+for it before the post office is asked: the sender gets *550 5.1.1 Mailbox does not exist*. With
+**Mailboxes** set to Stalwart (chapter 6), the post office makes it whenever an account begins:
+at an approval, with a code for a new address, and at a postcard's enrollment. Health checks every
+account each hour and turns red for one that has none. The desk's **Accounts** tab shows each
+account's mailbox; **Make mailbox** makes a missing one and shows its password once. On the
+server: `radiopost-po --dir /var/lib/radiopost mailbox --address ana@radiopost.org`. Without
+**Mailboxes** set, make each one in Stalwart's administration (**Directory**, **Accounts**) with
+the same address.
 
 **Who runs the post office.** The desk goes by callsign: whoever holds a credential naming one of
 the post office's operator callsigns can use it. Nobody becomes an operator by applying: an
@@ -478,7 +491,7 @@ someone else's address shows a red warning first.
 
 **From the server**, the same: `applications --open` or `--close`, `applications`, `approve ID`,
 `decline ID --text TEXT`, `postcard ID`, `licences --on`, `qrz --username U --password P`,
-`lookup CALL --name NAME`, `mailboxes --stalwart URL --key KEY --check`
+`lookup CALL --name NAME`, `mailboxes --stalwart URL --key KEY --check`, `mailbox --address A`
 ([chapter 20](#20-commands)).
 
 ## 10. Updating
@@ -974,13 +987,14 @@ All are `radiopost-po --dir /var/lib/radiopost COMMAND`, but `install` and `upda
 | `dns` | The `_radiopost` DNS records to publish. |
 | `check [--dkim S1,S2]` | The post office checked from outside (section 5.4). |
 | `health` | The hourly check, now. |
-| `status` | Accounts, gateways, codes, sessions. |
-| `code --address A --operator CALL [--role] [--name NAME]` | A one-time code, good for a week. |
+| `status` | How many accounts and codes; the gateways; sessions. |
+| `code --address A --operator CALL [--role] [--name NAME]` | A one-time code, good for a week. For a new address, its mailbox too, its password shown once (chapter 9). |
+| `mailbox --address A` | Make an account's missing mailbox in Stalwart now; its password is shown once (chapter 9). |
 | `name --address A --name NAME` | The name on an account's email. |
 | `revoke --device KEY` | Revoke every credential of a lost device. |
 | `applications [--open \| --close]`, `approve ID [--role]`, `decline ID --text TEXT`, `postcard ID` | Applications for accounts. |
 | `licences [--on \| --off \| --fetch \| --from ZIP]`, `qrz --username U --password P`, `lookup CALL [--name NAME]` | Licence lookups. |
-| `mailboxes [--stalwart URL --key KEY \| --command PROGRAM \| --off] [--check]` | How approved accounts' mailboxes are made. |
+| `mailboxes [--stalwart URL --key KEY \| --command PROGRAM \| --off] [--check]` | How new accounts' mailboxes are made. |
 | `outgoing` | Mail waiting to go out by email. |
 | `know --domain D`, `post-offices [--block D \| --unblock D \| --forget D \| --refresh]` | Other post offices (chapter 13). |
 | `route --via CALL --users-at CALL,…`, `routes` | Routes for a cut-off area (chapter 14). |
@@ -1000,7 +1014,7 @@ All are `radiopost-po --dir /var/lib/radiopost COMMAND`, but `install` and `upda
 | Users' mail out is refused: *501 5.5.4 You are not allowed to send from this address* | Stalwart's **Must Match Sender** rule names only one form of the `radiopost` account. Name both (section 5.2, setting 7) and restart Stalwart. |
 | Stalwart refuses the post office's login as `radiopost` | Give the full address in `config.json`'s `smtp`, written `radiopost%40radiopost.org`. |
 | Every email for users is let in without checks, or none arrives | The door is not called. Restart Stalwart after its settings (section 5.2), then test the door (section 18.4). |
-| Email for a user is refused right after `RCPT TO` | The user has no mailbox at Stalwart. Set **Mailboxes** (chapter 6) or make it by hand. |
+| Email for a user is refused right after `RCPT TO`: *550 5.1.1 Mailbox does not exist* | The user has no mailbox at Stalwart. With **Mailboxes** set (chapter 6), **Make mailbox** on the desk's Accounts tab, or `radiopost-po mailbox --address A`; otherwise make it by hand (chapter 9). Accounts made by a code before 0.1.0-beta.28 have none: Health names them. |
 | The desk's jobs stay *asked for, waiting for the runner* | `sudo radiopost-po --dir /var/lib/radiopost jobs --install`, once. |
 | Health is red | Do what the line says. You are emailed again when all pass. |
 | The post office's log says the mail server cannot be read | **Mailboxes** is not set to Stalwart with its API key (chapter 6). |
@@ -1065,3 +1079,4 @@ drawn by `tools/figures/server.py`; its screenshots of the desk are the user's m
 |---|---|---|
 | 1.0.0 | 2026-11-15 | Rewritten in the manual's style: step by step around the installer, with schematics and screenshots, a contents, troubleshooting and a glossary. The previous guide's content is kept: the setup by hand is now chapter 18, and the backup mail server chapter 16. |
 | 1.0.1 | 2026-11-17 | Troubleshooting: the FCC copy that never comes (the FCC's site refused releases before 0.1.0-beta.24), and building it from a file fetched by hand. |
+| 1.1.0 | 2026-11-18 | Every account gets its mailbox: a code for a new address makes it and shows its password once, a postcard's enrollment makes it and emails the welcome, Health names an account without one, and **Make mailbox** (the Accounts tab, `radiopost-po mailbox`) makes a missing one. The API key's rights gain `sysAccountCreate`. Accounts made by a code had no mailbox, so email from outside was refused for them. |

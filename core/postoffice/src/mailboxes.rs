@@ -3,8 +3,8 @@
 //!
 //! The mail server refuses a recipient it has no mailbox for, before the door is asked (RP-6
 //! §2.1), so an account with no mailbox receives no email at all. Making it was a page of the
-//! mail server's administration per user; now the post office makes it when an application is
-//! approved, one of two ways:
+//! mail server's administration per user; now the post office makes it wherever an account
+//! begins (`crate::aftercare`), one of two ways:
 //!
 //! * `stalwart`: Stalwart's own JMAP methods (`x:Domain/get`, then `x:Account/set` creating a
 //!   `User` with a password), with an API key or an administrator's login;
@@ -18,6 +18,7 @@
 //! The same key reads which messages users have read in their mail programs, for
 //! `radio_skips_read` (`seen`).
 
+use std::collections::BTreeSet;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -190,6 +191,42 @@ pub fn stalwart_domain(settings: &MailboxSettings, domain: &str) -> Result<Strin
         })
         .and_then(|d| d["id"].as_str().map(str::to_owned))
         .ok_or_else(|| format!("Stalwart has no domain {domain}: add it there first"))
+}
+
+/// The addresses the mail server has a mailbox for, in lowercase; `Ok(None)` when it cannot be
+/// asked (mailboxes made by a command, or by hand).
+///
+/// # Errors
+///
+/// Stalwart could not be asked, or listed accounts with no address among them: a list that says
+/// nothing would make every account look as if it had no mailbox.
+pub fn addresses(settings: &MailboxSettings) -> Result<Option<BTreeSet<String>>, String> {
+    if settings.kind != "stalwart" {
+        return Ok(None);
+    }
+    let responses = jmap(
+        settings,
+        &json!([["x:Account/get", {"ids": null, "properties": ["emailAddress"]}, "a"]]),
+    )?;
+    let list: Vec<Json> = responses
+        .iter()
+        .filter(|r| r[0] == "x:Account/get")
+        .flat_map(|r| r[1]["list"].as_array().cloned().unwrap_or_default())
+        .collect();
+    let found: BTreeSet<String> = list
+        .iter()
+        .filter_map(|a| a["emailAddress"].as_str().map(str::to_lowercase))
+        .collect();
+    if found.is_empty() && !list.is_empty() {
+        return Err("Stalwart listed its accounts with no addresses".to_owned());
+    }
+    Ok(Some(found))
+}
+
+/// The accounts in `accounts` (lowercase) that `have` (the mail server's addresses) lacks.
+#[must_use]
+pub fn missing(accounts: &BTreeSet<String>, have: &BTreeSet<String>) -> Vec<String> {
+    accounts.difference(have).cloned().collect()
 }
 
 fn stalwart(

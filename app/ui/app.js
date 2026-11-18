@@ -1886,9 +1886,45 @@ function drawAccounts() {
             () => revoke(c))}));
     }));
     if (!a.credentials.length) devices.append(el("span", {class: "note", text: "No device yet"}));
+    const mailbox = el("td", {});
+    if (a.mailbox === true) mailbox.append(el("span", {text: "Yes", title: "The mail server has its mailbox"}));
+    if (a.mailbox === false) {
+      mailbox.append(el("span", {class: "pill declined", text: "none",
+          title: "The mail server has no mailbox for it, so email from outside is refused"}),
+        el("button", {class: "link", type: "button", text: "Make mailbox",
+          title: "Make its mailbox in the mail server now; its password is shown once",
+          onclick: () => makeMailbox(a, mailbox)}));
+    }
     return el("tr", {}, el("td", {class: "mono", text: a.address}), name, devices,
-      el("td", {class: "n", text: String(a.waiting || 0)}));
+      el("td", {class: "n", text: String(a.waiting || 0)}), mailbox);
   }));
+}
+
+// what became of a mailbox made for an account: its password, shown once (the post office keeps
+// none) and never to go by radio, or why none was made
+function mailboxSaid(m) {
+  if (!m) return [];
+  if (!m.password) {
+    return [el("p", {class: "note bad", text: `No mailbox made: ${m.error || "the mail server did not say why"}. Email from outside is refused for ${m.address} until it has one.`})];
+  }
+  const pw = el("span", {class: "mono", text: m.password});
+  return [el("p", {class: "note"}, `Mailbox made for ${m.address}. Its password for mail programs: `, pw, " ",
+    el("button", {class: "quiet", type: "button", text: "Copy", title: "Copy the password",
+      onclick: async () => {
+        try { await navigator.clipboard.writeText(m.password); toast("Copied."); }
+        catch { toast("Select the password and copy it.", true); }
+      }})),
+    el("p", {class: "note", text: "It is not kept, and it is shown only now. Give it to them off the air, never in a message by radio."})];
+}
+
+async function makeMailbox(a, cell) {
+  try {
+    const m = await desk("POST", "/office/mailbox", {address: a.address});
+    if (m.password) a.mailbox = true;
+    cell.replaceChildren(...mailboxSaid(m));
+  } catch (e) {
+    toast(e.message, true);
+  }
 }
 
 function rename(a, cell) {
@@ -1934,6 +1970,7 @@ async function sendCode(body) {
     $("o-made-code").textContent = r.code;
     $("o-made-for").textContent = `For ${r.address} (${r.operator}), good until ${new Date(r.expires * 1000).toLocaleString()}.`
       + (r.operates ? ` ${r.operator} operates this post office: whoever enrolls with this code can use this desk.` : "");
+    $("o-made-mailbox").replaceChildren(...mailboxSaid(r.mailbox));
     form.reset();
   } catch (e) {
     if (e.body && e.body.operates && !body.operates) {

@@ -5,7 +5,8 @@
 //! The emails leave through the mail server's submission port, as the mail users send by radio
 //! does (RP-6 §3), from the post office's contact address. An applicant is written to at the
 //! address they gave to be reached at, which no one has checked, so nothing in these emails is
-//! a secret but the new mailbox's first password, which only an approved applicant is sent.
+//! a secret but the new mailbox's first password, which only an applicant who proved the licence
+//! is sent: approved, or enrolled with the code a postcard brought.
 
 use std::fmt::Write as _;
 
@@ -102,6 +103,43 @@ pub struct MailPrograms {
     pub host: Option<String>,
 }
 
+/// The welcome to a new account, with the mailbox's first password when one was made: sent at an
+/// approval, and when an account approved by postcard enrolls with the card's code.
+#[must_use]
+pub fn welcome(
+    a: &Application,
+    contact: &str,
+    password: Option<&str>,
+    programs: &MailPrograms,
+) -> (String, String) {
+    let mut text = format!(
+        "{},\n\nYour RadioPost account {} is ready, for {}. Your RadioPost client took its \
+         credential when it last asked: it is enrolled, and calls gateways now.\n\n\
+         Email reaches you only from the addresses on your accept list, and writing to \
+         someone adds them. Add others in the client's Setup.\n",
+        a.name, a.address, a.operator
+    );
+    if let Some(pw) = password {
+        let _ = write!(
+            text,
+            "\nYour mailbox works in an ordinary mail program too, when you have the \
+             Internet:\n  user name  {}\n  password   {pw}\n",
+            a.address
+        );
+        if let Some(imap) = &programs.imap {
+            let _ = writeln!(text, "  IMAP       {imap} (TLS)");
+        }
+        if let Some(host) = &programs.host {
+            let _ = writeln!(text, "  SMTP       {host}:465 (TLS)");
+        }
+        text.push_str(
+            "Change the password in the mail server's web page when you first sign in.\n",
+        );
+    }
+    let _ = write!(text, "\nQuestions: {contact}\n\n73\n");
+    (format!("Welcome to RadioPost: {}", a.address), text)
+}
+
 /// The applicant's email about the decision: approved (with the mailbox's first password when
 /// one was made), declined with the reason, or a code coming by post.
 #[must_use]
@@ -114,34 +152,7 @@ pub fn decided(
     let hello = format!("{},\n\n", a.name);
     let questions = format!("\nQuestions: {contact}\n\n73\n");
     match a.status.as_str() {
-        "approved" => {
-            let mut text = format!(
-                "{hello}Your RadioPost account {} is ready, for {}. Your RadioPost client took its \
-                 credential when it last asked: it is enrolled, and calls gateways now.\n\n\
-                 Email reaches you only from the addresses on your accept list, and writing to \
-                 someone adds them. Add others in the client's Setup.\n",
-                a.address, a.operator
-            );
-            if let Some(pw) = password {
-                let _ = write!(
-                    text,
-                    "\nYour mailbox works in an ordinary mail program too, when you have the \
-                     Internet:\n  user name  {}\n  password   {pw}\n",
-                    a.address
-                );
-                if let Some(imap) = &programs.imap {
-                    let _ = writeln!(text, "  IMAP       {imap} (TLS)");
-                }
-                if let Some(host) = &programs.host {
-                    let _ = writeln!(text, "  SMTP       {host}:465 (TLS)");
-                }
-                text.push_str(
-                    "Change the password in the mail server's web page when you first sign in.\n",
-                );
-            }
-            text.push_str(&questions);
-            Some((format!("Welcome to RadioPost: {}", a.address), text))
-        }
+        "approved" => Some(welcome(a, contact, password, programs)),
         "declined" => Some((
             "Your RadioPost application".into(),
             format!(
@@ -156,7 +167,8 @@ pub fn decided(
                 "{hello}To be sure the licence for {} is yours, a postcard with a one-time code \
                  goes to the address on your licence. When it comes, choose \"I have a code\" in \
                  the RadioPost client's Setup, and enroll with your address, your callsign and \
-                 the code. It is good for 30 days.\n{questions}",
+                 the code. It is good for 30 days. Once you enroll, your welcome comes here, with \
+                 the password for your mailbox.\n{questions}",
                 a.operator
             ),
         )),

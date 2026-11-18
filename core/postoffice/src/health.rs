@@ -163,6 +163,7 @@ impl Running {
             )),
         }
         out.push(mailboxes_line(backups::mail_list(&dir).first(), at));
+        out.extend(self.accounts_line());
         out.push(offsite_line(&backups::offsite(&dir, at), at));
         out.extend(self.known_lines(at));
         if !jobs::runner_installed() {
@@ -182,6 +183,43 @@ impl Running {
             ));
         }
         out
+    }
+
+    /// Every account with its mailbox at the mail server, which refuses email from outside for an
+    /// address it has none for (RP-6 §2.1): asked of Stalwart, so nothing when mailboxes are made
+    /// by a command or by hand.
+    #[must_use]
+    pub fn accounts_line(&self) -> Option<Line> {
+        let have = match crate::mailboxes::addresses(&self.settings().mailboxes) {
+            Ok(Some(have)) => have,
+            Ok(None) => return None,
+            Err(e) => {
+                return Some(line(
+                    Verdict::Warn,
+                    format!("accounts: the mail server's mailboxes could not be listed: {e}"),
+                ));
+            }
+        };
+        let missing = crate::mailboxes::missing(&self.office().state.accounts, &have);
+        Some(if missing.is_empty() {
+            line(
+                Verdict::Ok,
+                "accounts: each has its mailbox at the mail server".into(),
+            )
+        } else {
+            let named = match missing.len() {
+                1 => format!("{} has", missing[0]),
+                n if n <= 5 => format!("{} have", missing.join(", ")),
+                n => format!("{} and {} more have", missing[..5].join(", "), n - 5),
+            };
+            line(
+                Verdict::Fail,
+                format!(
+                    "accounts: {named} no mailbox at the mail server, so email from outside is \
+                     refused: Make mailbox, on the Accounts tab"
+                ),
+            )
+        })
     }
 
     /// The other post offices it knows (RP-1 §7.5): one fetched before and not for a day fails,

@@ -174,16 +174,17 @@ const DESK_GET = {
      mailbox: {made: "lee@radiopost.org"}},
   ]},
   "/office/accounts": {accounts: [
-    {address: "ana@radiopost.org", name: "Ana Lopez", waiting: 3,
+    {address: "ana@radiopost.org", name: "Ana Lopez", waiting: 3, mailbox: true,
      credentials: [cred("N0CALL", 1204, 71, "Qm9hcmRtYW4tbGFwdG9wLWtleS1leGFtcGxl")]},
-    {address: "club@radiopost.org", name: "Riverside Radio Club", waiting: 0,
+    {address: "club@radiopost.org", name: "Riverside Radio Club", waiting: 0, mailbox: true,
      credentials: [cred("N1CALL", 1220, 88, "Q2x1Yi1zdGF0aW9uLWtleS1leGFtcGxlLTEy")]},
-    {address: "facundo@radiopost.org", name: "Facundo", waiting: 0,
+    {address: "facundo@radiopost.org", name: "Facundo", waiting: 0, mailbox: true,
      credentials: [cred("KK4ODA", 1187, 63, MY_DEVICE),
                    cred("KK4ODA", 1011, 12, "TW9iaWxlLWxhcHRvcC1rZXktZXhhbXBsZS0w", true)]},
-    {address: "lee@radiopost.org", name: "Lee Chen", waiting: 1,
+    {address: "lee@radiopost.org", name: "Lee Chen", waiting: 1, mailbox: true,
      credentials: [cred("N3CALL", 1215, 86, "TGVlLWNoZW4tZGV2aWNlLWtleS1leGFtcGxl")]},
-    {address: "shelter3@radiopost.org", name: "Shelter 3", waiting: 0, credentials: []},
+    {address: "shelter3@radiopost.org", name: "Shelter 3", waiting: 0, mailbox: false,
+     credentials: []},
   ]},
   "/office/outgoing": {outgoing: []},
   "/office/post-offices": {
@@ -241,7 +242,9 @@ const DESK_GET = {
 function deskAnswer(method, path, body) {
   if (method === "POST" && path === "/office/codes") {
     return {code: "H7KQ-2MXD", address: body.address, operator: body.operator,
-            expires: T + 7 * DAY};
+            expires: T + 7 * DAY,
+            mailbox: {address: body.address, made: `mailbox ${body.address} made in Stalwart`,
+                      password: "Fq7Rk2mWzX9pTa4NcY3e"}};
   }
   if (path.startsWith("/office/lookup/")) {
     return {verdict: "good", lines: [
@@ -791,7 +794,7 @@ const SHOTS = {
   },
 
   async "desk-code"(browser) {
-    const page = await openDesk(browser, "code");
+    const page = await openDesk(browser, "code", 1000);
     const form = page.locator("#o-code");
     await form.locator("input[name=address]").fill("sam@radiopost.org");
     await form.locator("input[name=operator]").fill("N4CALL");
