@@ -575,6 +575,230 @@ fn messages_go_to_the_trash_and_back() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// An outbox message edited from the panel (the author's notes of 2026-11-18): the composer is
+/// filled in with everything it holds, the ICS-213's values with it; the message saved takes the
+/// old one's place, and the old one is gone. An edit is refused, saying why, while listening,
+/// while a call may be carrying the message, and once it is queued at a gateway or sent.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn an_outbox_message_is_edited_in_its_place() {
+    let dir = scratch("panel-edit");
+    store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    let mut ana = store_for(&dir.join("ana"), "device:ana", "ana");
+    let c = Client {
+        at: Panel::new(&dir.join("facundo"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let ics = c.get("/api/forms")[0]["template"]
+        .as_str()
+        .expect("ICS-213")
+        .to_owned();
+    let id_of = |v: Value| v["id"].as_str().expect("an id").to_owned();
+    let first = id_of(
+        c.post(
+            "/api/compose",
+            &json!({"to": "maria@example.com", "subject": "first", "body": "1"}),
+        )
+        .expect("composed"),
+    );
+    let old = id_of(
+        c.post(
+            "/api/compose",
+            &json!({"to": "Ana <ana@hampost.org>", "cc": "jim@hampost.org",
+                    "subject": "Shelter count", "priority": 1, "body": "",
+                    "files": [{"name": "a.txt", "data": "QQ=="}, {"name": "b.txt", "data": "Qg=="}],
+                    "form": {"template": ics, "values": {"2": "EOC", "3": "Shelter 4",
+                                                          "7": "40 cots."}}}),
+        )
+        .expect("composed"),
+    );
+    let last = id_of(
+        c.post(
+            "/api/compose",
+            &json!({"to": "maria@example.com", "subject": "last", "body": "3"}),
+        )
+        .expect("composed"),
+    );
+
+    // the composer is filled in with what the message holds
+    let e = c.get(&format!("/api/edit?id={old}"));
+    assert_eq!(e["to"], json!(["ana@hampost.org"]), "{e}");
+    assert_eq!(e["cc"], json!(["jim@hampost.org"]));
+    assert_eq!(
+        (&e["subject"], &e["priority"]),
+        (&json!("Shelter count"), &json!(1))
+    );
+    assert_eq!(
+        e["files"],
+        json!([{"name": "a.txt", "type": "text/plain", "size": 1},
+               {"name": "b.txt", "type": "text/plain", "size": 1}])
+    );
+    assert_eq!(e["form"]["template"], ics.as_str());
+    assert_eq!(
+        e["form"]["values"],
+        json!({"2": "EOC", "3": "Shelter 4", "7": "40 cots."})
+    );
+    assert_eq!(e["reply_to"], Value::Null);
+
+    // changed everywhere: addressees, subject, text, a file left out and one added, the form
+    let saved = c
+        .post(
+            "/api/compose",
+            &json!({"edit": old, "to": "eoc@radiopost.org", "cc": "", "subject": "Shelter count, corrected",
+                    "priority": 0, "body": "Updated at noon.", "carry": [1],
+                    "files": [{"name": "c.txt", "data": "Qw=="}],
+                    "form": {"template": ics, "values": {"2": "EOC", "3": "Shelter 4",
+                                                          "7": "42 cots."}}}),
+        )
+        .expect("saved");
+    let mut new = id_of(saved.clone());
+    assert_eq!(saved["replaced"], old.as_str());
+    assert_ne!(new, old);
+    let outbox: Vec<String> = c
+        .get("/api/folder?name=outbox")
+        .as_array()
+        .expect("a list")
+        .iter()
+        .map(|m| m["id"].as_str().unwrap_or("").to_owned())
+        .collect();
+    assert_eq!(
+        outbox,
+        [first.clone(), new.clone(), last.clone()],
+        "in its place, once"
+    );
+    assert_eq!(c.get("/api/state")["counts"]["outbox"], 3);
+    let (status, said) = http(
+        c.at,
+        "GET",
+        &format!("/api/message?id={old}"),
+        &c.host(),
+        false,
+        &Value::Null,
+    );
+    assert_eq!(status, 400, "the old message is gone: {said}");
+    let m = c.get(&format!("/api/message?id={new}"));
+    assert_eq!(m["to"], json!(["eoc@radiopost.org"]), "{m}");
+    assert_eq!((&m["cc"], &m["priority"]), (&json!([]), &json!(0)));
+    assert_eq!(m["subject"], "Shelter count, corrected");
+    assert_eq!(m["body"], "Updated at noon.");
+    let files: Vec<&str> = m["files"]
+        .as_array()
+        .expect("files")
+        .iter()
+        .filter_map(|f| f["name"].as_str())
+        .collect();
+    assert_eq!(files, ["b.txt", "c.txt"]);
+    assert!(
+        m["form"]["text"]
+            .as_str()
+            .is_some_and(|t| t.contains("42 cots.")),
+        "{m}"
+    );
+    let e = c.get(&format!("/api/edit?id={new}"));
+    assert_eq!(e["form"]["values"]["7"], "42 cots.");
+    assert!(
+        c.post("/api/compose", &json!({"edit": old, "to": "x@example.com"}))
+            .expect_err("gone")
+            .contains("no message"),
+        "the old one cannot be saved again"
+    );
+
+    // queued at a cut-off gateway, it is that gateway's to pass on
+    let mut store = radiopost_client::store::Store::open(&dir.join("facundo")).expect("the home");
+    let first_id = radiopost::ContentId::from_text(&first).expect("an id");
+    store.queued_at(&first_id, "N1CALL-10", 1);
+    store.save().expect("saved");
+    let why = c
+        .post(
+            "/api/compose",
+            &json!({"edit": first, "to": "x@example.com"}),
+        )
+        .expect_err("queued");
+    assert!(why.contains("queued at N1CALL-10"), "{why}");
+    let (status, why) = http(
+        c.at,
+        "GET",
+        &format!("/api/edit?id={first}"),
+        &c.host(),
+        false,
+        &Value::Null,
+    );
+    assert_eq!(status, 400);
+    assert!(why.contains("queued at N1CALL-10"), "{why}");
+
+    // listening, a station that calls may take it
+    let (_quiet, at_l, _) = loopback();
+    c.post("/api/listen", &json!({"adapter": at_l.to_string()}))
+        .expect("listening");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while c.get("/api/state")["activity"]["state"] != "listening" {
+        assert!(Instant::now() < deadline, "never listened");
+        thread::sleep(Duration::from_millis(20));
+    }
+    let why = c
+        .post(
+            "/api/compose",
+            &json!({"edit": last, "to": "x@example.com"}),
+        )
+        .expect_err("listening");
+    assert!(why.contains("while listening"), "{why}");
+    c.post("/api/stop", &json!({})).expect("stopped");
+    while c.get("/api/state")["activity"]["state"] != "idle" {
+        assert!(Instant::now() < deadline, "never stopped");
+        thread::sleep(Duration::from_millis(20));
+    }
+
+    // a call carries the edited message to Ana: meanwhile it may be going out, and after, it is
+    // sent; either way it is not changed
+    let (_server, at_f, at_a) = loopback();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let ana_runs = thread::spawn(move || {
+        let mut say = |s: &str| {
+            if s.starts_with("listening") {
+                let _ = tx.send(());
+            }
+        };
+        session::answer(&mut ana, &Options::new(&at_a.to_string()), &mut say).expect("answered");
+        ana
+    });
+    rx.recv_timeout(Duration::from_secs(10))
+        .expect("Ana listens");
+    new = id_of(
+        c.post(
+            "/api/compose",
+            &json!({"edit": new, "to": "ana@hampost.org", "subject": "for Ana", "body": "73"}),
+        )
+        .expect("saved"),
+    );
+    c.post(
+        "/api/call",
+        &json!({"callsign": "n0call", "station": true, "adapter": at_f.to_string()}),
+    )
+    .expect("calling");
+    let why = c
+        .post("/api/compose", &json!({"edit": new, "to": "x@example.com"}))
+        .expect_err("not while it may be going out");
+    assert!(
+        why.contains("while a session is under way") || why.contains("has been sent"),
+        "{why}"
+    );
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while c.get("/api/state")["activity"]["state"] != "idle" {
+        assert!(Instant::now() < deadline, "the session never ended");
+        thread::sleep(Duration::from_millis(50));
+    }
+    assert_eq!(c.get("/api/folder?name=sent")[0]["id"], new.as_str());
+    let why = c
+        .post("/api/compose", &json!({"edit": new, "to": "x@example.com"}))
+        .expect_err("sent");
+    assert!(why.contains("has been sent"), "{why}");
+    let ana = ana_runs.join().expect("Ana's side");
+    assert_eq!(ana.inbox.len(), 1);
+    assert_eq!(ana.inbox[0].id.text(), new);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// RP-3 §5.6: a received message's held attachments are shown, and one is asked for on the next
 /// call to a gateway.
 #[test]

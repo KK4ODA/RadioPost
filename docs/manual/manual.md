@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.12.0 |
+| **Version** | 1.13.0 |
 | **Updated** | 2026-11-18 |
 | **Describes** | RadioPost 0.1.0-beta.27 |
 | **Licence** | CC BY 4.0 |
@@ -415,9 +415,28 @@ Setup ([Accept list](#accept-list)).
 it could not reach the Internet carries a tag: *queued at* that gateway
 ([When the Internet is down](#14-when-the-internet-is-down)).
 
-![The Outbox with two messages, one tagged queued at N1CALL-10](screens/client-outbox.png)
+![The Outbox with two messages, one tagged queued at N1CALL-10; the pointer on the first shows its pencil and trash can](screens/client-outbox.png)
 
 *Figure 11. The outbox.*
+
+**Changing a message.** Until it leaves your computer, a message in the outbox can be changed, all
+of it.
+
+1. Point at its row and click the pencil, or open it and click **Edit**.
+2. **Edit message** holds what you wrote: **To**, **Cc**, **Subject**, **Priority**, the text, and
+   the form with its fields if it has one. Its files are listed, ticked: untick one to leave it
+   out. **Attach** adds others.
+3. Click **Save in outbox**. The changed message takes the old one's place in the outbox, and the
+   old one is gone. **Cancel** leaves it as it was.
+
+RadioPost does not change a message that has left, or may be leaving, and says why:
+
+- a message tagged *queued at* a gateway: that gateway passes it on as it is;
+- a message in **Sent**;
+- any message while a session is under way, or while you **Listen for P2P**: it may be going out.
+  Edit it when the session ends, or click **Stop** first.
+
+To correct a message that has left, write a new one.
 
 **Changed your mind?** The trash can at the end of a row moves the message to the **Trash**.
 The note that follows has **Undo**.
@@ -516,6 +535,8 @@ Click a message in the **Inbox** to read it.
 - **Forward** passes the message on, with its text and files. You can untick files you do not
   want to carry.
 - **Delete** moves it to the Trash (or press the Delete key).
+- **Edit**, on a message in the **Outbox**, changes it before it goes
+  ([section 7](#7-writing-a-message)).
 - **Add to addresses**, beside the sender, puts the sender on your address list.
 
 **Attachments held at the post office.** A file too large for the radio does not come with its
@@ -1635,6 +1656,8 @@ These notes follow the US rules (Part 97). Check your own country's.
 | Aether stops at start: *127.0.0.1:8515 is already in use* | Aether's host programs port was set to 8515. Put it back to 8300 ([Aether's ports](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#20-the-programs-and-their-ports)). |
 | *a session is under way: try again when it ends* | Wait for the session to end, or close the window to stop it. |
 | *renewing the credential: try again in a moment* | Wait a few seconds. |
+| *this message cannot be changed while a session is under way* (or *while listening*) | It may be going out. Edit it when the session ends, or click **Stop** first. |
+| *it is queued at …, which will pass it on as it is, so it can no longer be changed* | That gateway holds it. Write a new message to correct it. |
 | Setup says the credential ran out | Ask your operator for a new code, then **Enroll again with a new code**. |
 | *Your settings could not be read* | Usual gateways need the Internet. Try **Read** again when you have it. |
 | *No gateway list yet* | Open **Choose a gateway** and **Refresh over the Internet** while you have the Internet. |
@@ -1846,3 +1869,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.10.0 | 2026-11-17 | P2P named plainly in the call box: **Listen** is **Listen for P2P**, whose tooltip names the callsigns it answers as, and **Another client's station** is **P2P (another client's station)** (§6, §10, §11.2, §37, §39, §40; the client's screenshots retaken). |
 | 1.11.0 | 2026-11-18 | Alerts and sounds (wishlist W51, W52; RP-8). §10.1 to §10.4: alerts between stations that share a keyword, circles and their checks, sending one and what it becomes, the alarm and its answers (new Figures 19 and 20). §12: *Sounds and notifications*, the levels, quiet hours, and the radio's sound card (new Figure 23). §13: **Notify** for addresses and groups. §36, §37, §39, §40 to match; the client's screenshots retaken with **Alerts** in the left-hand column. |
 | 1.12.0 | 2026-11-18 | Every account gets its mailbox. §26: a postcard's mailbox and welcome come when its code is used. §27: the **Mailbox** column and **Make mailbox**, its password shown once and given off the air. §28: a code for a new address makes the mailbox and shows its password under the code. §31: Health checks that every account has its mailbox. §34, §37 to match; the desk's Accounts and New code screenshots retaken. |
+| 1.13.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18. §7 *Changing a message*: a message in the outbox is changed with its pencil or **Edit**, and saved in the old one's place with **Save in outbox**; what cannot be changed, and why (Figure 11 retaken with a row's pencil and trash can). §9 **Edit**; §37 its two refusals. |

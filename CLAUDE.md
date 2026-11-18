@@ -446,7 +446,11 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   there, past its 1.5 s; CI is Linux.
   `app/ui` is the client's panel (no build step), served with a JSON API by `radiopost panel`
   (`panel.rs`: loopback only, the `Host` checked, changes need `X-RadioPost: 1`; a session on its
-  own thread, the home unchanged by the panel while it runs). `app/src-tauri` (`radiopost-app`, its
+  own thread, the home unchanged by the panel while it runs). An outbox message is edited in place
+  (2026-11-18): `GET /api/edit` fills the composer, `/api/compose` with `edit` saves it through
+  `Store::replace` (the old one's serial and place, the old message gone); `Store::edit_refusal`
+  refuses one queued at a gateway or sent, `Panel::busy_editing` any while a session runs or the
+  station listens. Nothing on the air changes: the edited message is a new content ID. `app/src-tauri` (`radiopost-app`, its
   own package and lockfile, outside the core workspace; CI's `app · desktop` job) is the Tauri
   window around it: the panel's server in-process on 8620 or a free port, the window on it, no IPC.
   It needs `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev

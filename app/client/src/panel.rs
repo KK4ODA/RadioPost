@@ -614,6 +614,25 @@ impl Panel {
         }
     }
 
+    /// [`Panel::busy`] for an edit of an outbox message, saying why the message may be going
+    /// out now: a session holds the outbox until it ends, and sends from it.
+    fn busy_editing(&self) -> Result<(), Error> {
+        let state = lock(&self.activity).state;
+        match state {
+            "calling" | "session" => Err(
+                "this message cannot be changed while a session is under way: it may be going \
+                 out now. Edit it when the session ends"
+                    .into(),
+            ),
+            "listening" => Err(
+                "this message cannot be changed while listening: a station that calls may take \
+                 it at any moment. Stop listening, then edit it"
+                    .into(),
+            ),
+            _ => self.busy(),
+        }
+    }
+
     /// The header's list of callsigns: `choose` one by its `id`, `add` a home for another (chosen,
     /// to be enrolled from Setup), or `remove` one that holds no mail. Only while the station is
     /// idle, decided under the activity's lock, so no call or listening starts on one callsign
@@ -670,6 +689,7 @@ impl Panel {
             (Method::Get, "/api/folder") => self.folder(&param("name")),
             (Method::Get, "/api/message") => self.message(&param("id")),
             (Method::Get, "/api/answer") => self.answer(&param("id"), &param("how")),
+            (Method::Get, "/api/edit") => self.edit(&param("id")),
             (Method::Get, "/api/log") => {
                 let since: usize = param("since").parse().unwrap_or(0);
                 let a = lock(&self.activity);
@@ -1084,25 +1104,100 @@ impl Panel {
         }))
     }
 
+    /// What editing the outbox message `prefix` names starts with, for the composer: its fields
+    /// and text, its files, the message it answers, and its form's template and values as the
+    /// composer gives them. Refused, saying why, for a message that cannot be changed now: one a
+    /// session may be sending, or one handed over ([`Store::edit_refusal`]).
+    fn edit(&self, prefix: &str) -> Result<Value, Error> {
+        self.busy_editing()?;
+        let store = Store::open(&self.home())?;
+        let id = store.find(prefix)?;
+        if let Some(why) = store.edit_refusal(&id) {
+            return Err(why);
+        }
+        let m = store.message(&id)?;
+        let map = m.map();
+        let mut v = summary(&m);
+        v["body"] = map
+            .get(key::BODY)
+            .and_then(Cbor::as_text)
+            .unwrap_or("")
+            .into();
+        v["files"] = compose::files_of(&m)
+            .iter()
+            .map(|f| json!({"name": f.name, "type": f.media_type, "size": f.data.len()}))
+            .collect();
+        v["reply_to"] = map
+            .get(key::REPLY_TO)
+            .and_then(Cbor::as_bytes)
+            .and_then(|b| <[u8; 12]>::try_from(b).ok())
+            .map(|b| ContentId(b).text())
+            .into();
+        v["form"] = radiopost::forms::Form::of(&m).map_or(Value::Null, |form| {
+            let values: serde_json::Map<String, Value> = form
+                .values
+                .iter()
+                .filter_map(|(n, x)| {
+                    let x = match x {
+                        Cbor::Text(t) => Value::from(t.as_str()),
+                        Cbor::Bool(b) => Value::from(*b),
+                        other => Value::from(other.as_i64()?),
+                    };
+                    Some((n.to_string(), x))
+                })
+                .collect();
+            json!({"template": radiopost::cbor::hex(&form.template), "values": values})
+        });
+        Ok(v)
+    }
+
     /// A message into the outbox. Besides what the user wrote, `reply_to` names the message it
     /// answers (its content ID or the start of it), and `forward` the message it passes on, whose
     /// files it carries: those whose places `carry` lists, or all of them (W1).
+    ///
+    /// With `edit`, it is that outbox message changed, and takes its place ([`Store::replace`]):
+    /// it keeps the files of it that `carry` lists (all of them when it lists none) and answers
+    /// what it answered, and is refused, saying why, for one that cannot be changed now.
     fn compose(&self, body: &Value) -> Result<Value, Error> {
         let text = |name: &str| body[name].as_str().unwrap_or("").trim().to_owned();
-        self.busy()?;
+        let editing = body["edit"].as_str().filter(|p| !p.is_empty());
+        if editing.is_some() {
+            self.busy_editing()?;
+        } else {
+            self.busy()?;
+        }
         let mut store = Store::open(&self.home())?;
         let me = store.me()?;
-        let mut files = Vec::new();
-        if let Some(prefix) = body["forward"].as_str().filter(|p| !p.is_empty()) {
-            let carried = compose::files_of(&store.message(&store.find(prefix)?)?);
-            let carry: Option<Vec<u64>> = body["carry"]
-                .as_array()
-                .map(|a| a.iter().filter_map(Value::as_u64).collect());
-            files.extend(carried.into_iter().enumerate().filter_map(|(i, f)| {
+        let edited = match editing {
+            Some(prefix) => {
+                let id = store.find(prefix)?;
+                if let Some(why) = store.edit_refusal(&id) {
+                    return Err(why);
+                }
+                Some((id, store.message(&id)?))
+            }
+            None => None,
+        };
+        let forward = body["forward"].as_str().filter(|p| !p.is_empty());
+        if edited.is_some() && forward.is_some() {
+            return Err("an edit keeps the message's own files: it forwards nothing".into());
+        }
+        let carry: Option<Vec<u64>> = body["carry"]
+            .as_array()
+            .map(|a| a.iter().filter_map(Value::as_u64).collect());
+        let carried = match (&edited, forward) {
+            (Some((_, old)), _) => compose::files_of(old),
+            (None, Some(prefix)) => compose::files_of(&store.message(&store.find(prefix)?)?),
+            (None, None) => Vec::new(),
+        };
+        let mut files: Vec<File> = carried
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, f)| {
                 let i = u64::try_from(i).ok()?;
                 carry.as_ref().is_none_or(|c| c.contains(&i)).then_some(f)
-            }));
-        }
+            })
+            .collect();
         for f in body["files"].as_array().into_iter().flatten() {
             let name = f["name"].as_str().unwrap_or("file").to_owned();
             let data = f["data"]
@@ -1115,9 +1210,15 @@ impl Panel {
                 data,
             });
         }
-        let reply_to = match body["reply_to"].as_str().filter(|p| !p.is_empty()) {
-            Some(prefix) => Some(store.find(prefix)?.0),
-            None => None,
+        let reply_to = match (&edited, body["reply_to"].as_str().filter(|p| !p.is_empty())) {
+            // an edit answers what the message answered, even once that is deleted for good
+            (Some((_, old)), _) => old
+                .map()
+                .get(key::REPLY_TO)
+                .and_then(Cbor::as_bytes)
+                .and_then(|b| <[u8; 12]>::try_from(b).ok()),
+            (None, Some(prefix)) => Some(store.find(prefix)?.0),
+            (None, None) => None,
         };
         let (to, cc) = (named(&body["to"])?, named(&body["cc"])?);
         let draft = Draft {
@@ -1132,12 +1233,31 @@ impl Panel {
             reply_to,
             form: form_of(&body["form"])?,
         };
-        let id = store.queue(&draft.message()?)?;
-        // the address list learns whom the message is for; a failure there loses no message
-        if let Err(why) = addresses::remember(&self.base, &[to, cc].concat(), now()) {
+        let message = draft.message()?;
+        let (id, was) = match &edited {
+            Some((old, _)) => (store.replace(old, &message)?, Some(old.text())),
+            None => (store.queue(&message)?, None),
+        };
+        // the address list learns whom the message is for (an edit, only whom it adds); a
+        // failure there loses no message
+        let before: Vec<String> = edited.as_ref().map_or_else(Vec::new, |(_, old)| {
+            [key::TO, key::CC]
+                .iter()
+                .filter_map(|k| old.map().get(*k).and_then(Cbor::as_array))
+                .flatten()
+                .filter_map(Cbor::as_text)
+                .map(compose::address)
+                .collect()
+        });
+        let learned: Vec<_> = [to, cc]
+            .concat()
+            .into_iter()
+            .filter(|(_, a)| !before.contains(a))
+            .collect();
+        if let Err(why) = addresses::remember(&self.base, &learned, now()) {
             radiopost::logfile::line(&format!("the address list was not updated: {why}"));
         }
-        Ok(json!({"id": id.text()}))
+        Ok(json!({"id": id.text(), "replaced": was}))
     }
 
     fn state(&self) -> Result<Value, Error> {

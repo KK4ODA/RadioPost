@@ -683,6 +683,70 @@ impl Store {
         Ok(id)
     }
 
+    /// Why the message `id` cannot be edited, or `None` when it can: only a message in the outbox
+    /// that nobody else holds yet. One a cut-off gateway queued goes on from there (RP-7 §3.6),
+    /// so a changed copy would go as well; one sent is the post office's or the other station's.
+    #[must_use]
+    pub fn edit_refusal(&self, id: &ContentId) -> Option<String> {
+        if let Some(q) = self.queued_for(id) {
+            return Some(format!(
+                "it is queued at {}, which will pass it on as it is, so it can no longer be \
+                 changed: write a new message to correct it",
+                q.gateway
+            ));
+        }
+        if self.outbox.iter().any(|w| w.id == *id) {
+            return None;
+        }
+        if self.sent.contains(id) {
+            return Some(
+                "it has been sent, so it can no longer be changed: write a new message to \
+                 correct it"
+                    .into(),
+            );
+        }
+        if self
+            .trash
+            .iter()
+            .any(|t| matches!(&t.was, Was::Outbox(w) if w.id == *id))
+        {
+            return Some("it is in the trash: put it back in the outbox to edit it".into());
+        }
+        Some("that message is not in the outbox".into())
+    }
+
+    /// Puts `message`, the outbox message `old` as the user changed it, in its place: the same
+    /// serial and the same place in the order messages are offered, so the outbox holds the
+    /// changed message and not the old one. The changed message is a new message, with its own
+    /// content ID (RP-2 §3); the old one goes for good, its file with it unless the inbox or the
+    /// trash holds it too. Refused for a message [`Store::edit_refusal`] refuses.
+    ///
+    /// # Errors
+    ///
+    /// The message cannot be edited, or cannot be kept, or the state cannot be written.
+    pub fn replace(&mut self, old: &ContentId, message: &Message) -> Result<ContentId, Error> {
+        if let Some(why) = self.edit_refusal(old) {
+            return Err(why);
+        }
+        let id = self.keep(message)?;
+        if id != *old {
+            let at = self
+                .outbox
+                .iter()
+                .position(|w| w.id == *old)
+                .ok_or("that message is not in the outbox")?;
+            if self.outbox.iter().any(|w| w.id == id) {
+                // the very message is in the outbox already: it stays, once
+                self.outbox.remove(at);
+            } else {
+                self.outbox[at].id = id;
+            }
+            self.let_go(old);
+        }
+        self.save()?;
+        Ok(id)
+    }
+
     /// A message the other station now holds. Taken by a gateway, it goes on from there; taken by
     /// a station, it reaches the other recipients when the session is reported (RP-5 §6.6, D30),
     /// so it is not sent over the air again. Either way it is sent.
@@ -885,10 +949,15 @@ impl Store {
         {
             self.files.retain(|(s, _)| *s != serial);
         }
-        let held = self.inbox.iter().any(|a| a.id == id)
-            || self.outbox.iter().any(|w| w.id == id)
-            || self.sent.contains(&id)
-            || self.trash.iter().any(|t| t.was.id() == id);
+        self.let_go(&id);
+    }
+
+    /// A message's file goes once no folder and nothing in the trash holds it.
+    fn let_go(&self, id: &ContentId) {
+        let held = self.inbox.iter().any(|a| a.id == *id)
+            || self.outbox.iter().any(|w| w.id == *id)
+            || self.sent.contains(id)
+            || self.trash.iter().any(|t| t.was.id() == *id);
         if !held {
             let _ = fs::remove_file(self.home.join("messages").join(id.text()));
         }
@@ -1416,6 +1485,70 @@ mod tests {
         assert_eq!(store.trash.len(), 0, "{:?}", store.trash);
         assert!(!file(&ids[2]).exists(), "held by no folder");
         assert!(file(&ids[1]).exists());
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// An edited outbox message takes the old one's serial and place, and the outbox holds it
+    /// alone; the old one's file goes unless something else holds it; and a message handed over
+    /// (queued at a cut-off gateway, or sent), in the trash or not here is refused, with why.
+    #[test]
+    fn an_edit_takes_the_old_ones_place() {
+        use super::Folder;
+        let home = std::env::temp_dir().join(format!("radiopost-edit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let mut store = Store::open(&home).expect("a home");
+        let (a, b, c) = (message("a", 1), message("b", 2), message("c", 3));
+        let ids: Vec<_> = [&a, &b, &c]
+            .iter()
+            .map(|m| store.queue(m).expect("queued"))
+            .collect();
+        let file = |id: &radiopost::ContentId| home.join("messages").join(id.text());
+
+        // b changed: in its place, with its serial, and b gone
+        let b2 = message("b, corrected", 4);
+        let new = store.replace(&ids[1], &b2).expect("replaced");
+        assert_eq!(new, b2.content_id());
+        let outbox: Vec<_> = store.outbox.iter().map(|w| (w.id, w.serial)).collect();
+        assert_eq!(outbox, [(ids[0], 1), (new, 2), (ids[2], 3)]);
+        assert_eq!(store.next_serial, 4, "no serial taken");
+        assert!(!file(&ids[1]).exists(), "the old message is gone");
+        assert_eq!(store.message(&new).expect("kept"), b2);
+        let again = Store::open(&home).expect("the home");
+        assert_eq!(again.outbox, store.outbox, "kept in the state file");
+
+        // unchanged, it stays as it was
+        assert_eq!(store.replace(&new, &b2).expect("the same"), new);
+        assert_eq!(store.outbox.len(), 3);
+
+        // made the same as another message of the outbox, it is there once
+        let id = store.replace(&new, &c).expect("replaced");
+        assert_eq!(id, ids[2]);
+        let outbox: Vec<_> = store.outbox.iter().map(|w| w.id).collect();
+        assert_eq!(outbox, [ids[0], ids[2]]);
+        assert!(!file(&new).exists());
+
+        // a message also in the inbox keeps its file there
+        store.received(&a, "KK4ODA-1", 10, None).expect("received");
+        let a2 = message("a, corrected", 5);
+        let a2_id = store.replace(&ids[0], &a2).expect("replaced");
+        assert!(file(&ids[0]).exists(), "the inbox holds it");
+
+        // handed over, in the trash, or not here: refused, and nothing changes
+        store.queued_at(&ids[2], "N1CALL-10", 20);
+        let why = store.replace(&ids[2], &b2).expect_err("queued");
+        assert!(why.contains("queued at N1CALL-10"), "{why}");
+        store.delivered(&a2_id);
+        let why = store.replace(&a2_id, &b2).expect_err("sent");
+        assert!(why.contains("has been sent"), "{why}");
+        store.queue(&b2).expect("queued");
+        let b2_id = b2.content_id();
+        store.delete(Folder::Outbox, &b2_id, 30).expect("deleted");
+        let why = store.replace(&b2_id, &a2).expect_err("in the trash");
+        assert!(why.contains("trash"), "{why}");
+        let why = store.replace(&ids[1], &a2).expect_err("gone");
+        assert!(why.contains("not in the outbox"), "{why}");
+        let outbox: Vec<_> = store.outbox.iter().map(|w| w.id).collect();
+        assert_eq!(outbox, [ids[2]], "nothing changed");
         let _ = std::fs::remove_dir_all(&home);
     }
 }

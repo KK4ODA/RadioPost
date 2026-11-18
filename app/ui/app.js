@@ -398,11 +398,17 @@ async function changeCallsign(change) {
     return null;
   }
   forgetCallsign();
+  // a message being edited is in the other callsign's outbox: it stays there as it was
+  const editing = answering?.how === "edit";
+  if (editing) newComposer();
   const s = await refresh();
   if (s.me) probeOffice();
   if (change.add || !s.me) {
     show("setup");
     $("enroll").address.focus();
+  } else if (editing) {
+    toast("The edit was closed: the message stays as it was in the other callsign's outbox.");
+    await openFolder(folder);
   } else if (writing) {
     toast(`The message being written goes from ${s.me.address} now.`);
   } else if ($("setup").hidden && $("addresses-view").hidden) {
@@ -699,6 +705,11 @@ function rowActions(m, name) {
       setTimeout(() => { delete b.dataset.armed; b.classList.remove("armed"); }, 4000);
     }, "danger");
   } else {
+    if (name === "outbox") {
+      // a message a gateway queued is that gateway's to pass on: the panel says so if asked
+      button("write", m.queued ? `Queued at ${m.queued.gateway}: it can no longer be changed`
+                               : "Edit it: the changed message takes its place", () => edit(m.id));
+    }
     button("trash", "Move it to the trash", () => toTrash(m.id, name));
   }
   return td;
@@ -1159,10 +1170,81 @@ function newComposer() {
   showFormFields();
   answering = null;
   $("c-title").textContent = "New message";
+  $("c-submit").textContent = "Put in outbox";
+  $("c-submit").title = "Put it in the outbox";
+  $("cancel").textContent = "Discard";
+  $("cancel").title = "Discard it";
+  $("c-files").title = "The forwarded message's files: untick one to leave it out. Every byte goes on the air";
   $("c-files").replaceChildren();
   $("c-held").replaceChildren();
   $("c-original").hidden = true;
   return form;
+}
+
+// a file a forward or an edit carries, ticked: untick it to leave it out
+function carriedFile(f, i) {
+  const li = document.createElement("li");
+  const label = document.createElement("label");
+  label.className = "check";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = true;
+  box.dataset.carry = String(i);
+  label.append(box, `${f.name} (${f.type}, ${f.size} bytes)`);
+  li.append(label);
+  return li;
+}
+
+// a form's values, as the panel gives them, back in its fields (the inverse of formValues)
+function fillForm(values) {
+  const two = (n) => String(n).padStart(2, "0");
+  for (const input of $("c-form-fields").querySelectorAll("[data-field]")) {
+    const v = values[input.dataset.field];
+    if (v === undefined || v === null) continue;
+    const kind = input.dataset.kind;
+    if (kind === "check") input.checked = v === true;
+    else if (kind === "date") input.value = new Date(v * DAY_MS).toISOString().slice(0, 10);
+    else if (kind === "time") input.value = `${two(Math.floor(v / 60))}:${two(v % 60)}`;
+    else input.value = String(v);
+  }
+}
+
+// Edit: a message in the outbox, not yet handed over, in the composer as it was written; saved,
+// the changed message takes its place there. The panel says why when it cannot be changed: a
+// session may be sending it, or a gateway holds it already.
+async function edit(id) {
+  let m;
+  try {
+    m = await api(`edit?id=${id}`);
+  } catch (e) {
+    toast(e.message, true);
+    return;
+  }
+  if (m.form && !templates.some((t) => t.template === m.form.template)) {
+    toast("Its form is not one this computer holds, so it cannot be edited here.", true);
+    return;
+  }
+  const form = newComposer();
+  answering = {how: "edit", id: m.id};
+  $("c-title").textContent = "Edit message";
+  $("c-submit").textContent = "Save in outbox";
+  $("c-submit").title = "Put the changed message in the outbox, in place of the one it was";
+  $("cancel").textContent = "Cancel";
+  $("cancel").title = "Leave the message in the outbox as it was";
+  form.to.value = m.to.length ? `${m.to.join(", ")}, ` : "";
+  form.cc.value = m.cc.length ? `${m.cc.join(", ")}, ` : "";
+  form.subject.value = m.subject;
+  form.priority.value = String(m.priority);
+  if (m.form) {
+    $("c-form").value = m.form.template;
+    showFormFields();
+    fillForm(m.form.values);
+  }
+  form.body.value = m.body;
+  $("c-files").title = "The message's files: untick one to leave it out. Every byte goes on the air";
+  $("c-files").replaceChildren(...m.files.map(carriedFile));
+  show("composer");
+  form.subject.focus();
 }
 
 // Reply, Reply all or Forward: the composer filled in from the message read. A reply quotes
@@ -1182,18 +1264,7 @@ async function answer(how) {
   form.cc.value = a.cc.length ? `${a.cc.join(", ")}, ` : "";
   form.subject.value = a.subject;
   form.body.value = how === "forward" ? `\n\n${a.body}` : "";
-  $("c-files").replaceChildren(...a.files.map((f, i) => {
-    const li = document.createElement("li");
-    const label = document.createElement("label");
-    label.className = "check";
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    box.checked = true;
-    box.dataset.carry = String(i);
-    label.append(box, `${f.name} (${f.type}, ${f.size} bytes)`);
-    li.append(label);
-    return li;
-  }));
+  $("c-files").replaceChildren(...a.files.map(carriedFile));
   $("c-held").replaceChildren(...a.held.map((f) => {
     const li = document.createElement("li");
     li.textContent = `Not included: ${f.name} (${f.type}, ${f.size} bytes), held at the post office`;
@@ -1236,6 +1307,7 @@ async function openMessage(id, from = {folder}) {
   const received = from.folder === "inbox" || (trash && from.was === "inbox");
   $("r-reply").hidden = $("r-reply-all").hidden = !received;
   $("r-delete").hidden = trash || !FOLDER_NAMES[from.folder];
+  $("r-edit").hidden = from.folder !== "outbox";
   $("r-restore").hidden = !trash;
   $("r-purge").hidden = !trash;
   $("r-restore").title = trash ? `Put it back in the ${from.was}` : "";
@@ -1311,18 +1383,25 @@ async function send(event) {
   const filled = formValues();
   if (filled) message.form = filled;
   if (answering?.replyTo) message.reply_to = answering.replyTo;
+  const carried = () => [...$("c-files").querySelectorAll("input[data-carry]")]
+    .filter((b) => b.checked).map((b) => Number(b.dataset.carry));
   if (answering?.how === "forward") {
     message.forward = answering.id;
-    message.carry = [...$("c-files").querySelectorAll("input[data-carry]")]
-      .filter((b) => b.checked).map((b) => Number(b.dataset.carry));
+    message.carry = carried();
     // the note written above the message forwarded, without the blank lines left before it
     message.body = message.body.replace(/^\s*\n/, "");
+  }
+  const edited = answering?.how === "edit";
+  if (edited) {
+    message.edit = answering.id;
+    message.carry = carried();
   }
   try {
     await api("compose", message);
     newComposer();
     loadAddresses();
-    toast("In the outbox: the next session carries it.");
+    toast(edited ? "Changed: it waits in the outbox in the old one's place."
+                 : "In the outbox: the next session carries it.");
     await refresh();
     await openFolder("outbox");
   } catch (e) {
@@ -3014,6 +3093,7 @@ function wire() {
   $("r-reply").addEventListener("click", () => answer("reply"));
   $("r-reply-all").addEventListener("click", () => answer("reply-all"));
   $("r-forward").addEventListener("click", () => answer("forward"));
+  $("r-edit").addEventListener("click", () => edit(reading.id));
   $("r-delete").addEventListener("click", () => toTrash(reading.id, reading.folder));
   $("r-restore").addEventListener("click",
     () => fromTrash("restore", reading.id, reading.was, `Back in the ${reading.was}.`));

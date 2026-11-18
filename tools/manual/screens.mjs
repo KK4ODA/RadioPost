@@ -678,6 +678,8 @@ const SHOTS = {
                                                  height: 900});
     await spreadLog(page, "log", T - 1300, 19);
     await page.click("[data-folder=outbox]");
+    // the pointer on the first message, so its Edit and trash can show
+    await page.hover("#rows tr:nth-child(1)");
     await page.waitForTimeout(200);
     await shot(page, "client-outbox");
     await context.close();
