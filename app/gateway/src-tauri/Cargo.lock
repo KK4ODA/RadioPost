@@ -3019,17 +3019,18 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "radiopost"
-version = "0.1.0-beta.26"
+version = "0.1.0-beta.27"
 dependencies = [
  "ed25519-dalek",
  "flate2",
  "serde_json",
  "sha2 0.11.0",
+ "unicode-normalization",
 ]
 
 [[package]]
 name = "radiopost-aether"
-version = "0.1.0-beta.26"
+version = "0.1.0-beta.27"
 dependencies = [
  "rpmi",
  "serde_json",
@@ -3038,7 +3039,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-api"
-version = "0.1.0-beta.26"
+version = "0.1.0-beta.27"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -3051,7 +3052,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-gateway"
-version = "0.1.0-beta.26"
+version = "0.1.0-beta.27"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -3068,7 +3069,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-gateway-app"
-version = "0.1.0-beta.26"
+version = "0.1.0-beta.27"
 dependencies = [
  "radiopost-gateway",
  "radiopost-update",
@@ -3082,7 +3083,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-postoffice"
-version = "0.1.0-beta.26"
+version = "0.1.0-beta.27"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -3106,7 +3107,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-update"
-version = "0.1.0-beta.26"
+version = "0.1.0-beta.27"
 dependencies = [
  "base64 0.22.1",
  "minisign-verify",
@@ -3322,7 +3323,7 @@ dependencies = [
 
 [[package]]
 name = "rpmi"
-version = "0.1.0-beta.26"
+version = "0.1.0-beta.27"
 dependencies = [
  "serde_json",
 ]
