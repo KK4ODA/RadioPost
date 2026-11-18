@@ -492,26 +492,67 @@ fn a_channel_picked_is_tuned_at_once_and_a_station_call_keeps_it() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Listen is a switch that stays on (the 40 m sessions of 2026-11-18): after a session the
+/// station is listening again, the switch still on, until it is pressed again.
 #[test]
-fn listening_from_the_panel_can_be_stopped() {
+fn listening_from_the_panel_stays_on_until_pressed_again() {
     let dir = scratch("panel-stop");
     store_for(&dir.join("ana"), "device:ana", "ana");
+    let mut facundo = store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    facundo
+        .queue(&common::message("facundo-direct"))
+        .expect("queued");
     let c = Client {
         at: Panel::new(&dir.join("ana"), None)
             .start("127.0.0.1:0")
             .expect("a port"),
     };
-    let (_server, _, at_a) = loopback();
+    let (_server, at_f, at_a) = loopback();
     c.post("/api/listen", &json!({"adapter": at_a.to_string()}))
         .expect("listening");
     let deadline = Instant::now() + Duration::from_secs(10);
-    while c.get("/api/state")["activity"]["state"] != "listening" {
+    let activity = || c.get("/api/state")["activity"].clone();
+    while !c
+        .get("/api/log?since=0")
+        .to_string()
+        .contains("listening as N0CALL")
+    {
         assert!(Instant::now() < deadline, "never listened");
         thread::sleep(Duration::from_millis(20));
     }
+    let a = activity();
+    assert_eq!(
+        (&a["state"], &a["listen"]),
+        (&json!("listening"), &json!(true))
+    );
     assert!(c.post("/api/listen", &json!({})).is_err(), "one at a time");
+    let called = session::call(
+        &mut facundo,
+        "N0CALL",
+        session::Kind::Station,
+        &Options::new(&at_f.to_string()),
+        &mut |_| {},
+    )
+    .expect("called");
+    assert_eq!(called.failed, None);
+    while !c
+        .get("/api/log?since=0")
+        .to_string()
+        .contains("listening again")
+    {
+        assert!(Instant::now() < deadline, "never listened again");
+        thread::sleep(Duration::from_millis(20));
+    }
+    let a = activity();
+    assert_eq!(
+        (&a["state"], &a["listen"], &a["failed"]),
+        (&json!("listening"), &json!(true), &Value::Null),
+        "{a}"
+    );
+    assert_eq!(c.get("/api/state")["counts"]["inbox"], 1);
     c.post("/api/stop", &json!({})).expect("stopped");
-    while c.get("/api/state")["activity"]["state"] != "idle" {
+    assert_eq!(activity()["listen"], false, "off at once");
+    while activity()["state"] != "idle" {
         assert!(Instant::now() < deadline, "never stopped");
         thread::sleep(Duration::from_millis(20));
     }

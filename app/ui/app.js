@@ -264,7 +264,10 @@ function soundsOfState(s, a) {
   const was = lastCounts;
   lastCounts = {inbox: s.counts.inbox, sent: s.counts.sent};
   if (a.state === "session" && lastState !== "session") play("session-up");
-  if (a.state === "idle" && lastState === "session") play(a.failed ? "failed" : "session-down");
+  // a session answered ends with the station listening again, Listen still on
+  if (["idle", "listening"].includes(a.state) && lastState === "session") {
+    play(a.failed ? "failed" : "session-down");
+  }
   if (a.state === "idle" && lastState === "calling" && a.failed) play("failed");
   if (!was) return;
   if (s.counts.sent > was.sent) play("delivered");
@@ -294,19 +297,21 @@ async function refresh() {
     : "Found by its domain's DNS records.";
   if (!$("po-url").matches(":focus")) $("po-url").value = s.post_office || "";
   const a = s.activity;
-  const label = {idle: "Idle", calling: `Calling ${a.remote || ""}`, listening: "Listening",
+  const label = {idle: "Idle", calling: `Calling ${a.remote || ""}`,
+                 listening: a.held ? "Waiting for the modem" : "Listening",
                  session: `In session with ${a.remote || ""}`,
                  renewing: "Renewing credential", alerting: "Sending an alert"}[a.state];
   const state = $("state");
   state.dataset.state = a.state === "idle" && a.failed ? "failed" : a.state;
   state.textContent = a.state === "idle" && a.failed ? "Last session failed" : label;
-  state.title = a.failed || "What the station is doing";
+  state.title = a.held || a.failed || "What the station is doing";
   const busy = a.state !== "idle";
   document.body.dataset.busy = String(busy);
   $("call").disabled = busy || !s.me;
-  $("listen").disabled = busy || !s.me;
-  $("listen").title = listenTitle(s);
-  $("stop").hidden = a.state !== "listening";
+  $("call").title = a.listen
+    ? "Listening for P2P: press Listening for P2P to stop it, then call"
+    : CALL_TITLE;
+  showListen(s, a, busy);
   $("write").disabled = busy || !s.me;
   $("device").textContent = s.device || "No key yet.";
   myDevice = s.device ? hexToB64u(s.device) : "";
@@ -320,18 +325,39 @@ async function refresh() {
   $("trusted").textContent = s.trusted.length ? s.trusted.join(", ") : "None yet.";
   if (s.log !== logNext) await readLog();
   soundsOfState(s, a);
-  // a session that ends shows what it brought; a renewal or an alert changes no folder, and must
-  // not close a message being written
-  if (lastState !== "idle" && lastState !== "renewing" && lastState !== "alerting"
-      && a.state === "idle") await openFolder(folder);
+  // a session that ends shows what it brought, whether the station is idle or listening again; a
+  // renewal or an alert changes no folder, and must not close a message being written
+  if ((lastState !== "idle" && lastState !== "renewing" && lastState !== "alerting"
+       && a.state === "idle")
+      || (lastState === "session" && a.state === "listening")) await openFolder(folder);
   lastState = a.state;
   if (s.alerts) await syncAlerts(s.alerts);
   return s;
 }
 
+const CALL_TITLE = "Call the station on the channel picked and carry a session. "
+  + "The radio is tuned there first if it is not there already";
+
+// Listen for P2P is a push-on, push-off switch (the 40 m sessions of 2026-11-18, when a second
+// call found the station no longer listening). Pressed, it stays in, its lamp lit, and reads
+// Listening for P2P: the station answers P2P calls, goes back to listening after each session and
+// when the modem comes back, until it is pressed again. Its lamp is amber while the modem is away.
+// Released during a session, the session goes on and listening stops when it ends.
+function showListen(s, a, busy) {
+  const b = $("listen");
+  const on = Boolean(a.listen);
+  b.setAttribute("aria-pressed", String(on));
+  b.toggleAttribute("data-held", on && Boolean(a.held));
+  $("listen-label").textContent = on ? "Listening for P2P" : "Listen for P2P";
+  // on, it stays pressable, so that a second press stops listening even during a session
+  b.disabled = !s.me || (busy && !on);
+  b.title = listenTitle(s, a);
+}
+
 // Listen for P2P's tooltip: the callsigns it answers as (every callsign of this computer, the one
-// chosen first, W46), one call, and that a gateway on the station is not this client's to answer
-function listenTitle(s) {
+// chosen first, W46), that it holds until pressed again, and that a gateway on the station is not
+// this client's to answer
+function listenTitle(s, a) {
   const mine = s.me ? [s.me.operator] : [];
   for (const c of s.callsigns || []) {
     if (c.operator && !mine.includes(c.operator)) mine.push(c.operator);
@@ -339,7 +365,22 @@ function listenTitle(s) {
   const names = mine.length > 1
     ? `${mine.slice(0, -1).join(", ")} or ${mine[mine.length - 1]}`
     : mine[0] || "your callsign";
-  return `Answer one P2P call to ${names}, then stop. `
+  if (a.listen && a.held) {
+    return `On: waiting for the modem (${a.held}); tried again every 5 s. `
+      + "Press again to stop listening";
+  }
+  if (a.listen && a.state === "session") {
+    return `On: in session with ${a.remote || "a station"}, then listening again for P2P calls `
+      + `to ${names}. Press again to stop listening when this session ends`;
+  }
+  if (a.listen) {
+    return `On: answering P2P calls to ${names}, and listening again after each session. `
+      + "Press again to stop listening";
+  }
+  if (a.state === "session" || a.state === "listening") {
+    return "Off: listening stops when this session ends";
+  }
+  return `Answer P2P calls to ${names} until you press it again. `
     + "A gateway on this station keeps answering calls to its own callsign";
 }
 
@@ -3184,8 +3225,11 @@ function wire() {
       bandwidth: station ? Number($("bandwidth").value) : null,
     });
   });
-  $("listen").addEventListener("click", () => act("listen", {adapter: adapter()}));
-  $("stop").addEventListener("click", () => act("stop", {}));
+  // one switch: pressed in, it listens; pressed again, it stops
+  $("listen").addEventListener("click", () => {
+    if ($("listen").getAttribute("aria-pressed") === "true") act("stop", {});
+    else act("listen", {adapter: adapter()});
+  });
   $("update-go").addEventListener("click", () => act("update", {}));
   $("make-key").addEventListener("click", () => act("key", {}));
   $("cred-save").addEventListener("click", async () => {

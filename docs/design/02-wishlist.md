@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.43 |
+| **Version** | 0.3.44 |
 | **Updated** | 2026-11-18 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -118,7 +118,7 @@ rules:
 | W12 | Email-only members | — | — | — | Consolidated into W36 |
 | W13 | A callsign alias address | Setup | Low | Fits today | Planned |
 | W14 | Choosing a gateway tunes the radio | Radio | Medium | Optional addition (RP-4) | Implemented |
-| W15 | Keep listening for stations | Radio | Medium | Fits today | Proposed |
+| W15 | Keep listening for stations | Radio | Medium | Fits today | Implemented |
 | W16 | Scheduled connections | Radio | Low | Fits today | Planned |
 | W17 | Gateways ranked by propagation | Radio | Low | Fits today; optional addition for measurements | Planned |
 | W18 | Mail coming down compressed | Radio | High | Fits today | Implemented |
@@ -467,16 +467,16 @@ Leave the client answering station-to-station calls, not just the first.
 
 | | |
 |---|---|
-| Requested by | The editor, from [the on-air tests guide](../user/on-air-tests.md), §7: *Listen* answers one call, then stops. Requesters: 0. |
+| Requested by | The editor, from [the on-air tests guide](../user/on-air-tests.md), §7: *Listen* answers one call, then stops. The author, 2026-11-18, after the 40 m sessions from the mobile to the house: the house's client had stopped listening after one P2P session, and the mobile's next calls went unanswered. Requesters: 1. |
 | Component | Client. |
 | Compatibility | **Fits today**: `listen` (RP-4 §4) stays on. |
-| Existing coverage | New. |
+| Existing coverage | **Implemented** (2026-11-18): **Listen for P2P** is a switch that stays on (`aria-pressed`, a lamp, **Listening for P2P**) until it is pressed again. The client keeps its connection to the modem, its callsigns claimed and `listen` on, across sessions (`session::keep_listening`), so Aether never stops answering them (a claim ends with its connection, Aether's ADR-0106 §2.1); a connection that failed is opened again, and a modem that is away is tried every 5 s. The command line's `listen` still answers one call. |
 | Dependencies | None. |
 | Effort | Small. |
 | Priority | **Medium.** Station-to-station tests are what testers do first. |
 | Recommendation | Accept. |
-| Status | Proposed. |
-| Author decision | None yet. |
+| Status | Implemented. |
+| Author decision | **The author**, 2026-11-18: Listen is a latching switch, back to listening after every session however it ends and after the modem comes back. |
 | Notes | A station answering with nobody at it is under automatic control (§97.221). Aether's own documents read every Aether signal as wider than 500 Hz, which confines it to the §97.221(b) segments, and Aether's gate enforces that reading (RP-4 §8). That reading is Aether's; this list has not checked it. |
 
 ### W16. Scheduled connections
@@ -1195,3 +1195,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.41 | 2026-11-17 | W14: a channel is tuned as it is picked, with a tuner tone (RP-4 1.2.0 §4.3), and a station call carries a dial and a bandwidth. |
 | 0.3.42 | 2026-11-18 | The author's wishes W51 (sounds, and mail by its sender's level) and W52 (alerts between stations that share a keyword), both implemented; RP-8 drafted for W52; T4 is its broadcast format; gap G22 settled by RP-4 1.3.0. |
 | 0.3.43 | 2026-11-18 | W49's coverage: every account gets its mailbox, not only an approved one (a code-made account's email from outside had been refused). |
+| 0.3.44 | 2026-11-18 | W15 built, at the author's ask after the 40 m sessions of 2026-11-18: **Listen for P2P** stays on until pressed again. |

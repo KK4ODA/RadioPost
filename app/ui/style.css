@@ -30,6 +30,16 @@ button.quiet { background: transparent; }
 /* the one button that puts the station on the air: green, and as wide as its row allows */
 button.go { background: var(--go); color: var(--go-text); border-color: var(--go); font-weight: 600; }
 button.go:hover:not(:disabled) { border-color: var(--go); filter: brightness(1.08); }
+/* Listen for P2P: a push-on, push-off switch. Out, its lamp is dark. Pressed, it stays in, sunk,
+   its lamp lit, until it is pressed again; the lamp is amber while the modem is away */
+button.latch { display: inline-flex; align-items: center; gap: 8px; }
+button.latch .lamp { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--line);
+                     box-shadow: inset 0 0 0 1px var(--muted); }
+button.latch[aria-pressed="true"] { background: var(--bg); border-color: var(--ok); font-weight: 600;
+                                    box-shadow: inset 0 2px 5px rgba(0, 0, 0, .35); transform: translateY(1px); }
+button.latch[aria-pressed="true"] .lamp { background: var(--ok); box-shadow: 0 0 7px 1px var(--ok); }
+button.latch[data-held] { border-color: var(--busy); }
+button.latch[data-held] .lamp { background: var(--busy); box-shadow: 0 0 7px 1px var(--busy); }
 button:disabled { opacity: .5; cursor: default; }
 input, select, textarea { width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px;
                           background: var(--panel); }
@@ -62,6 +72,8 @@ h3 { font-size: 12px; color: var(--muted); margin: 14px 0 6px; font-weight: 600;
 .side { padding: 16px; border-right: 1px solid var(--line); background: var(--panel);
         display: flex; flex-direction: column; gap: 14px; overflow: auto; }
 .side > .primary { width: 100%; }
+/* a column taller than the window scrolls; its parts keep their size */
+.side > * { flex-shrink: 0; }
 .folders { list-style: none; margin: 0; padding: 0; }
 .folders button { width: 100%; text-align: left; border: 0; background: transparent; display: flex;
                   justify-content: space-between; }
@@ -132,6 +144,8 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 #gateways-open { margin: -4px 0 10px; padding: 0; height: auto; border: 0; color: var(--accent); }
 /* the call box: a station call's dial and bandwidth side by side, where the radio is, the tone */
 .station .row #call { flex: 1; }
+/* Listen for P2P on a row of its own, so that the box keeps its shape when it reads Listening */
+.station .row #listen { flex: 1 0 100%; justify-content: center; }
 .pair { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .pair select { width: auto; }
 .tuning { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: -2px 0 10px; }

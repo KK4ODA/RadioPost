@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.15.0 |
+| **Version** | 1.16.0 |
 | **Updated** | 2026-11-18 |
 | **Describes** | RadioPost 0.1.0-beta.27 |
 | **Licence** | CC BY 4.0 |
@@ -344,9 +344,9 @@ again with a new code**.
 
 1. **Who you are**: your address and callsign. With several callsigns, this is a list to choose
    from ([Working several callsigns](#11-working-several-callsigns)).
-2. **What the station is doing**: *Idle*, *Calling …*, *Listening*, *In session with …* or
-   *Renewing credential*. After a failed session it reads *Last session failed*: point at it to
-   see why.
+2. **What the station is doing**: *Idle*, *Calling …*, *Listening*, *Waiting for the modem*,
+   *In session with …* or *Renewing credential*. After a failed session it reads *Last session
+   failed*: point at it to see why.
 3. **Write**: a new message.
 4. **The folders**, with how many messages each holds:
    - **Inbox**: messages received.
@@ -356,9 +356,11 @@ again with a new code**.
    - **Trash**: messages you deleted.
    - **Addresses**: your address list.
 5. **Station**: whom to call, on which channel, and the **Call** and **Listen for P2P** buttons.
-   **Call** is the green one: it puts the station on the air. **Listen for P2P** answers one
-   station-to-station call to your callsign, then stops. **Modem** is where RadioPost finds Aether,
-   `ws://127.0.0.1:8515/v1`. Change it only if Aether's control port is not the usual one.
+   **Call** is the green one: it puts the station on the air. **Listen for P2P** is a switch:
+   click it and it stays in, its lamp lit, and reads **Listening for P2P**. RadioPost then answers
+   station-to-station calls to your callsign until you click it again. **Modem** is where
+   RadioPost finds Aether, `ws://127.0.0.1:8515/v1`. Change it only if Aether's control port is
+   not the usual one.
 6. **The folder or message you are looking at.** Click a row to read it.
 7. **Setup**: your account, post office, accept list, usual gateways and keys.
 8. **The log**: what RadioPost did, line by line, with the time.
@@ -577,10 +579,22 @@ Agree on a frequency and a bandwidth first.
 
 1. Tune the radio to the frequency, and set Aether's bandwidth. At 2300 Hz Aether also answers a
    call at 500 Hz.
-2. Click **Listen for P2P**. The state reads *Listening*. RadioPost answers one P2P call, to the
-   callsign at the top of the window or to any other of yours, then stops. Rest the mouse on the
-   button to see the callsigns it answers as.
-3. To stop waiting, click **Stop**.
+2. Click **Listen for P2P**. The switch stays in, its lamp lights green, and it reads
+   **Listening for P2P**. The state reads *Listening*. RadioPost answers P2P calls to the callsign
+   at the top of the window or to any other of yours. Rest the mouse on the switch to see the
+   callsigns it answers as.
+3. Leave it on. After each session, however it ended, RadioPost listens again by itself. If
+   Aether goes away (it restarts, say), the lamp turns amber and the state reads *Waiting for the
+   modem*. RadioPost tries again every 5 seconds and listens as soon as Aether is back.
+4. To stop listening, click **Listening for P2P** again. During a session, the session goes on to
+   its end, and listening stops then.
+
+![The Station box with Listening for P2P switched on: the switch sunk in, its lamp lit green, and Call greyed](screens/client-listening.png)
+
+*Figure 18. Listening for P2P, switched on.*
+
+While the switch is on, **Call** is greyed: click **Listening for P2P** to stop listening, then
+call.
 
 **The station that calls:**
 
@@ -595,7 +609,7 @@ Agree on a frequency and a bandwidth first.
 
 ![The Station box for a station call: the callsign, the dial and the bandwidth, and the dial to set by hand](screens/client-call-station.png)
 
-*Figure 18. A station call on a radio whose dial Aether cannot set.*
+*Figure 19. A station call on a radio whose dial Aether cannot set.*
 
 Mail addressed to the other station's address crosses. Each side keeps a record of the session.
 When you next have the Internet, a line under the Station box says how many sessions wait to be
@@ -632,7 +646,7 @@ You need:
 
 ![The Alerts view: an alert sent and answered, one heard, and two circles with their checks](screens/client-alerts.png)
 
-*Figure 19. Alerts.*
+*Figure 20. Alerts.*
 
 ### 10.2 Set up a circle
 
@@ -680,7 +694,7 @@ front, and a red box shows the alert.
 
 ![An alert from KK4ODA in the circle Family, with Acknowledge, Call back, three quick replies and a line of your own](screens/client-alarm.png)
 
-*Figure 20. An alert arriving.*
+*Figure 21. An alert arriving.*
 
 - **Acknowledge** stops the alarm. The other station sees *seen*.
 - **Received**, **Calling you now** and **Can't now** answer with that line, and stop the alarm.
@@ -699,7 +713,7 @@ its own account, its own address and its own mail.
 
 ![One computer with three callsigns, each its own account, and a shared key, address list and log](fig/callsigns.svg)
 
-*Figure 21. Several callsigns on one computer.*
+*Figure 22. Several callsigns on one computer.*
 
 ### 11.1 Add a callsign
 
@@ -761,7 +775,7 @@ Click **Setup** at the bottom of the left-hand column.
 
 ![The Setup page: enrollment, post office, accept list and usual gateways](screens/client-setup.png)
 
-*Figure 22. Setup.*
+*Figure 23. Setup.*
 
 ### Enroll with your post office
 
@@ -801,7 +815,7 @@ RadioPost plays a sound when something happens, and tells you about new mail by 
 
 ![Setup's Sounds and notifications: speakers chosen, a sound for each event, quiet hours, and how mail arrives](screens/client-sounds.png)
 
-*Figure 23. Sounds and notifications.*
+*Figure 24. Sounds and notifications.*
 
 **Mind the radio's sound card.** If this computer's sound goes to the radio's sound card (a
 SignaLink, or the radio's own USB audio), these sounds go on the air, and with VOX they key the
@@ -891,7 +905,7 @@ RadioPost keeps working when the Internet fails at a gateway.
 
 ![Before: the post office copies your mail to your usual gateway. During: the gateway serves the copies and keeps what you send. After: it reports](fig/cutoff.svg)
 
-*Figure 24. When the Internet is down.*
+*Figure 25. When the Internet is down.*
 
 **Before.** Name your usual gateways in Setup ([section 12](#usual-gateways)). Your post office
 then copies each new message for you to them as it arrives.
@@ -934,7 +948,7 @@ licensed operator can run one.
 
 ![Two users call the gateway by radio; the gateway's computer runs RadioPost Gateway and Aether HF and reaches each caller's post office](fig/gateway.svg)
 
-*Figure 25. A gateway station.*
+*Figure 26. A gateway station.*
 
 A gateway is usually left answering with nobody at the radio. It is then under **automatic
 control**, and the rules for that apply ([The rules](#36-the-rules)).
@@ -969,13 +983,13 @@ Open RadioPost Gateway. Until it is set up and registered, it says what is missi
 
 ![A new RadioPost Gateway: the notice says it is not set up, with Set up the gateway](screens/gateway-first.png)
 
-*Figure 26. RadioPost Gateway before setup.*
+*Figure 27. RadioPost Gateway before setup.*
 
 Click **Set up the gateway**. Setup has three steps.
 
 ![The gateway's Setup page: the gateway, its registration with two channels, and post offices](screens/gateway-setup.png)
 
-*Figure 27. Setting up the gateway.*
+*Figure 28. Setting up the gateway.*
 
 ### Step 1. The gateway
 
@@ -1049,7 +1063,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 ![The RadioPost Gateway window with numbered marks on its parts](screens/gateway-window.png)
 
-*Figure 28. The RadioPost Gateway window.*
+*Figure 29. The RadioPost Gateway window.*
 
 1. **The gateway's callsign**, and the account it is registered under.
 2. **What it is doing** (the table below).
@@ -1082,7 +1096,7 @@ While a session runs, a box shows who called, the account, since when, and the m
 
 ![The window during a session, with the Session under way box](screens/gateway-session.png)
 
-*Figure 29. A session at the gateway.*
+*Figure 30. A session at the gateway.*
 
 **Stopping and closing.** **Stop** ends a session under way and lets Aether go. Closing the
 window stops the gateway too. If it is answering, it asks first and says what closing stops.
@@ -1160,7 +1174,7 @@ text), each session waiting to be reported with its last try, and the last repor
 
 ![The Partners, Callers refused and Copies placed ahead panels, opened](screens/gateway-held.png)
 
-*Figure 30. What the gateway holds, its partners and the callers it refuses.*
+*Figure 31. What the gateway holds, its partners and the callers it refuses.*
 
 ## 22. Partners: forwarding by radio
 
@@ -1291,7 +1305,7 @@ on this tab.
 
 ![The Applications tab: one application waiting with its licence check, and the Decided list](screens/desk-applications.png)
 
-*Figure 31. Applications.*
+*Figure 32. Applications.*
 
 Each application shows the person's name, callsign and when they asked, the **Address** they
 want, their **Email now**, and what the post office found of the callsign:
@@ -1335,7 +1349,7 @@ the mailbox was made (*mailbox*, or *no mailbox* in red) and the applicant email
 
 ![The Accounts tab: five accounts with their names, devices and mail waiting](screens/desk-accounts.png)
 
-*Figure 32. Accounts.*
+*Figure 33. Accounts.*
 
 Every account, one a row:
 
@@ -1370,7 +1384,7 @@ that exists. Use it for someone you know holds the callsign.
 
 ![The New code tab: an address, a callsign and a name filled in, the licence checked, and the code made](screens/desk-code.png)
 
-*Figure 33. Making a code.*
+*Figure 34. Making a code.*
 
 1. Open **New code**.
 2. Fill in:
@@ -1420,7 +1434,7 @@ Know only post offices whose operators you trust to check callsigns. At first no
 
 ![The Post offices tab: one post office known, one seen, none blocked](screens/desk-others.png)
 
-*Figure 34. Other post offices.*
+*Figure 35. Other post offices.*
 
 - **Known**: the post offices you know, who runs each, when its records were last fetched, and
   whether DNSSEC signed them. They are fetched again every six hours. **Forget** stops knowing one;
@@ -1441,7 +1455,7 @@ when a check turns red, and again when all pass.
 
 ![The Health tab: eleven checks passed and one amber line about backups](screens/desk-health.png)
 
-*Figure 35. Health.*
+*Figure 36. Health.*
 
 Each line is one check:
 
@@ -1469,7 +1483,7 @@ The **Server** tab lets you look after the server without logging in to it.
 
 ![The Server tab: the jobs, one with its output open, and When you need more](screens/desk-server.png)
 
-*Figure 36. Jobs and a terminal.*
+*Figure 37. Jobs and a terminal.*
 
 **Jobs** are a fixed list of tasks the server's administrator account runs for you:
 
@@ -1504,7 +1518,7 @@ says the one command to run on the server, once.
 
 ![The Backups and DKIM keys boxes on the Server tab](screens/desk-backups.png)
 
-*Figure 37. Backups and DKIM keys.*
+*Figure 38. Backups and DKIM keys.*
 
 ### Backups
 
@@ -1561,7 +1575,7 @@ when they are older than 180 days.
 
 ![The Settings tab: applications, licence lookups, mailboxes and this post office](screens/desk-settings.png)
 
-*Figure 38. Settings.*
+*Figure 39. Settings.*
 
 ### Applications
 
@@ -1662,6 +1676,8 @@ These notes follow the US rules (Part 97). Check your own country's.
 | You see | Do |
 |---|---|
 | **Call** and **Listen for P2P** are greyed | This callsign has no credential yet: enroll it ([section 5](#5-getting-an-account)). |
+| **Call** is greyed, and **Listening for P2P** is in | The station is listening for P2P calls. Click **Listening for P2P** to stop, then call ([section 10](#10-station-to-station)). |
+| **Listening for P2P** is in, its lamp amber; the state reads *Waiting for the modem* | RadioPost cannot reach Aether. Start Aether, or check the **Modem** box. RadioPost tries again every 5 seconds and listens as soon as Aether answers. Point at the state to see why. |
 | *cannot reach the modem's adapter at ws://127.0.0.1:8515/v1* | Start Aether. Check the **Modem** box. |
 | The call goes out but nothing answers | Check the dial and the bandwidth against the gateway's channel. Check the gateway's hours. Try another gateway. |
 | Aether refuses RadioPost's calls | Aether is keyed by a host program. In Aether's Setup, step 2, choose CAT, serial, rigctld, FLRig, CM108 or VOX. |
@@ -1762,7 +1778,7 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 | Job | A task on the post office's server that the desk asks for, from a fixed list. |
 | Level | How something arrives: Silent, Normal, Important or Time-sensitive. |
 | Known post office | Another post office whose word your post office takes that its users are licensed. |
-| Listen for P2P | Wait for one other client to call you directly, station to station, then stop. A gateway on your station goes on answering its own callsign. |
+| Listen for P2P | A switch. While it is in, reading **Listening for P2P**, other clients can call you directly, station to station; after each session RadioPost listens again, until you click it again. A gateway on your station goes on answering its own callsign. |
 | Operator (of a post office) | Someone who runs a post office: approves accounts and gives codes. |
 | Partner | Another gateway this one forwards mail to by radio when cut off. |
 | Post office | The server that keeps your mailbox and exchanges email with the world. |
@@ -1789,7 +1805,7 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 **Station to station**
 
 1. Agree on a frequency and bandwidth. The one who answers tunes to them and clicks
-   **Listen for P2P**.
+   **Listen for P2P**. It stays on until clicked again.
 2. The other chooses **P2P (another client's station)**, types the callsign, the **Dial, MHz** and the
    **Bandwidth**, then **Call**.
 3. With a station that runs a gateway, call its operator's own callsign, not the gateway's.
@@ -1884,3 +1900,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.13.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18. §7 *Changing a message*: a message in the outbox is changed with its pencil or **Edit**, and saved in the old one's place with **Save in outbox**; what cannot be changed, and why (Figure 11 retaken with a row's pencil and trash can). §9 **Edit**; §37 its two refusals. |
 | 1.14.0 | 2026-11-18 | §26: what turns an application red: a club callsign asked for by someone who is neither the club nor its trustee (the trustee is looked up too), and an **Email now** at a domain kept for examples. |
 | 1.15.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18. §9: a form received, by gateway or P2P, shows as the form, each label beside its value, the sender's note below it; it had shown as its text. §7 to match. |
+| 1.16.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18, when a second P2P call found the house's client no longer listening. **Listen for P2P** is a switch that stays on: it reads **Listening for P2P**, its lamp lit, and RadioPost listens again after every session and when Aether comes back, until it is clicked again; the **Stop** button is gone (§6, §10, new Figure 18; §37, §39, §40). The state *Waiting for the modem*. The client's screenshots retaken. |

@@ -146,7 +146,7 @@ function clientState(over = {}) {
     callsigns: [{id: 1, chosen: true, ...ME}],
     counts: {outbox: OUTBOX.length, inbox: INBOX.length, sent: SENT.length, trash: 0, reports: 0,
              files: 0, waiting: WAITING.entries.length},
-    activity: {state: "idle", remote: null, failed: null},
+    activity: {state: "idle", remote: null, failed: null, listen: false, held: null},
     progress: null, update: null, log: CLIENT_LOG.length,
     alerts: {seq: 1, alarming: false, circles: ALERT_CIRCLES.length},
     ...over,
@@ -516,7 +516,7 @@ async function shotMain(page, name) {
 // callsign in Call and its channels in Channel
 async function openInSession(browser, width = 1280, height = 900) {
   const world = clientWorld({state: {
-    activity: {state: "session", remote: "KK4ODA-1", failed: null},
+    activity: {state: "session", remote: "KK4ODA-1", failed: null, listen: false, held: null},
     progress: {sending: {messages: 2, whole: 1, bytes: 3400, crossed: 2300},
                receiving: {messages: 3, whole: 1, bytes: 9600, crossed: 4100},
                receiving_now: true, rate_bps: 900}},
@@ -608,6 +608,18 @@ const SHOTS = {
     await page.waitForTimeout(300);
     await page.evaluate(() => { document.getElementById("toast").hidden = true; });
     await shot(page, "client-call-station", ".station");
+    await context.close();
+  },
+
+  // Listen for P2P switched on: sunk in, its lamp lit, reading Listening for P2P; Call greyed
+  async "client-listening"(browser) {
+    const world = clientWorld({state: {activity: {state: "listening", remote: null, failed: null,
+                                                  listen: true, held: null}}});
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(world),
+                                                 height: 900});
+    await spreadLog(page, "log", T - 1300, 19);
+    await page.waitForTimeout(300);
+    await shot(page, "client-listening", ".station");
     await context.close();
   },
 

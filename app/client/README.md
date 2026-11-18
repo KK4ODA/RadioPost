@@ -61,7 +61,7 @@ chosen.
 | `grid [SQUARE \| --clear]` | Your Maidenhead grid square (`EM73`, `EM73tt`), to rank gateways by distance. |
 | `waiting` | What waited at your post office at the last call to a gateway: every message not yet picked up (RP-3 §6.2), and mail a gateway cut off from the Internet kept for you from its other users, listed with serial 0 (RP-7 §4.4): that comes with what `--fetch` takes, asked for by its content ID. |
 | `fetch SERIAL… [--not]` | Fetch these waiting messages on the next call to a gateway, whatever `--fetch` says; `--not` stops asking. |
-| `listen` | Answers one P2P call, station to station (RP-3 §10), then stops: the panel's **Listen for P2P**. A gateway on the same station answers its own callsign. |
+| `listen` | Answers one P2P call, station to station (RP-3 §10), then stops. The panel's **Listen for P2P** is a switch that keeps listening after each session until it is pressed again (`session::keep_listening`). A gateway on the same station answers its own callsign. |
 | `panel [--port N] [--ui DIR]` | Serves the panel on this computer (port 8620) and says where to open it. |
 | `update` | Replaces `radiopost`, and the other RadioPost programs beside it, with the newest release's, once it checks that the project's update key signed them. The desktop application updates itself from its window. |
 | `conformance --adapter HOST:PORT`, `conformance off` | Conformance mode (below). |
@@ -212,10 +212,13 @@ both stations' proofs, waits in `state.json` until `report` (or the panel's Send
 ## Tests
 
 `tests/panel.rs`: the panel's guards, a message written with an attachment and carried by a call
-made from the panel (with what it carried, as the progress card shows it), a held attachment asked for, a reply, a reply to all and a forward (W1), listening stopped, and the trash (deleted,
+made from the panel (with what it carried, as the progress card shows it), a held attachment asked for, a reply, a reply to all and a forward (W1), listening that stays on after a session until pressed again, and the trash (deleted,
 restored to its place, deleted for good, emptied, and refused while a session runs), and the
 address list (learned from a message with the names typed, added to and renamed, taken off and
-put back as it was, during a session too). `tests/two_clients.rs`: two clients replay session-03
+put back as it was, during a session too). `tests/listening.rs` (W15): a station that keeps
+listening answers again after a session that completes, a caller who goes away mid-session and
+a session broken off on its side, and when its modem's connection is cut and mended; pressed
+again during a session, it stops when the session ends. `tests/two_clients.rs`: two clients replay session-03
 byte for byte through the loopback adapter
 with the vector's clocks and draws, and end with the folders the session says and the reports
 `vectors/direct.json` has; the program itself sets up two homes, composes, listens and calls; and it

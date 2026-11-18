@@ -79,8 +79,7 @@
         </label>
         <div class="row">
           <button class="go" id="call" title="Call the station on the channel picked and carry a session. The radio is tuned there first if it is not there already">Call</button>
-          <button id="listen" title="Answer one P2P call to your callsign, then stop. A gateway on this station keeps answering calls to its own callsign">Listen for P2P</button>
-          <button id="stop" class="quiet" title="Stop listening for P2P" hidden>Stop</button>
+          <button id="listen" class="latch" aria-pressed="false" title="Answer P2P calls to your callsign until you press it again. A gateway on this station keeps answering calls to its own callsign"><span class="lamp" aria-hidden="true"></span><span id="listen-label">Listen for P2P</span></button>
         </div>
         <label title="Aether HF's control API (ws://127.0.0.1:8515/v1, as Aether runs it), or an RPMI adapter's address: radiopost-tcp for a rehearsal over the Internet, rpmi-loopback for tests with no radio">Modem
           <input id="adapter" value="ws://127.0.0.1:8515/v1" spellcheck="false">

@@ -1374,11 +1374,7 @@ fn wait_for_call(
     // alerts sent on this connection, by their requests' `id`, to their references (RP-8 §6)
     let mut alerting: HashMap<String, String> = HashMap::new();
     let called = loop {
-        if opts
-            .stop
-            .as_ref()
-            .is_some_and(|s| s.load(Ordering::Relaxed))
-        {
+        if stopped(opts) {
             return Ok(None);
         }
         if let Some(c) = opts.alerts.as_ref().filter(|_| modem.caps.broadcast) {
@@ -1439,7 +1435,97 @@ fn wait_for_call(
     Ok(Some(called))
 }
 
-/// Listens for a station's call and carries its session (RP-3 §10), then returns.
+/// Whether the program said stop.
+fn stopped(opts: &Options) -> bool {
+    opts.stop
+        .as_ref()
+        .is_some_and(|s| s.load(Ordering::Relaxed))
+}
+
+/// A station listening: the modem's connection, the client's callsigns claimed on it and `listen`
+/// on (RP-4 §4), so that the modem answers calls to them. The client's other callsigns come with
+/// their homes (wishlist W46).
+struct Listener {
+    modem: Modem,
+    /// The callsign of the home that opened it.
+    me: String,
+    /// The client's other callsigns, each with its home.
+    others: Vec<(String, std::path::PathBuf)>,
+}
+
+impl Listener {
+    /// Claims the client's callsigns and turns `listen` on.
+    fn open(store: &Store, opts: &Options, say: &mut dyn FnMut(&str)) -> Result<Listener, Error> {
+        let mine = store.me()?.operator;
+        let others: Vec<(String, std::path::PathBuf)> = opts
+            .also
+            .iter()
+            .filter_map(|home| {
+                let me = Store::open(home).ok()?.me().ok()?;
+                Some((me.operator, home.clone()))
+            })
+            .filter(|(c, _)| !c.eq_ignore_ascii_case(&mine))
+            .collect();
+        let extra: Vec<String> = others.iter().map(|(c, _)| c.clone()).collect();
+        let (mut modem, me) = Modem::open(store, opts, &extra)?;
+        let listen = modem.host.listen(true);
+        if let Err(why) = modem.ask(&listen) {
+            modem.conn.close();
+            return Err(why);
+        }
+        let all = std::iter::once(me.clone())
+            .chain(extra.iter().cloned())
+            .collect::<Vec<_>>()
+            .join(", ");
+        tell(say, &format!("listening as {all}"));
+        Ok(Listener { modem, me, others })
+    }
+
+    /// Carries the session of a call that came (RP-3 §10), in the home whose callsign was called
+    /// (`local`): `store` when it is this one's. The connection stays open, the callsigns claimed.
+    fn answer(
+        &mut self,
+        store: &mut Store,
+        (connected, remote, local): (Event, String, String),
+        opts: &Options,
+        say: &mut dyn FnMut(&str),
+    ) -> Result<Report, Error> {
+        tell(say, &format!("{remote} called"));
+        // the home called; at an SSID or portable form of a callsign, that callsign's (RP-1 §6.3)
+        let called = self
+            .others
+            .iter()
+            .find(|(c, _)| c.eq_ignore_ascii_case(&local))
+            .or_else(|| {
+                if radiopost::callsign::same_base(&local, &self.me) {
+                    None
+                } else {
+                    self.others
+                        .iter()
+                        .find(|(c, _)| radiopost::callsign::same_base(c, &local))
+                }
+            })
+            .cloned();
+        if let Some((call, home)) = called {
+            tell(
+                say,
+                &format!("answering as {call}: the session's mail is in {call}'s folders"),
+            );
+            let mut other = Store::open(&home)?;
+            return answer_on(
+                &mut other,
+                &mut self.modem,
+                (&connected, &remote),
+                opts,
+                say,
+            );
+        }
+        answer_on(store, &mut self.modem, (&connected, &remote), opts, say)
+    }
+}
+
+/// Listens for a station's call and carries its session (RP-3 §10), then returns: one call, as
+/// the command line's `listen` answers. The panel's Listen is [`keep_listening`].
 ///
 /// # Errors
 ///
@@ -1449,63 +1535,150 @@ pub fn answer(
     opts: &Options,
     say: &mut dyn FnMut(&str),
 ) -> Result<Report, Error> {
-    // the client's other callsigns, each with its home (W46)
-    let mine = store.me()?.operator;
-    let others: Vec<(String, std::path::PathBuf)> = opts
-        .also
-        .iter()
-        .filter_map(|home| {
-            let me = Store::open(home).ok()?.me().ok()?;
-            Some((me.operator, home.clone()))
-        })
-        .filter(|(c, _)| !c.eq_ignore_ascii_case(&mine))
-        .collect();
-    let extra: Vec<String> = others.iter().map(|(c, _)| c.clone()).collect();
-    let (mut modem, me) = Modem::open(store, opts, &extra)?;
-    let listen = modem.host.listen(true);
-    modem.ask(&listen)?;
-    let all = std::iter::once(me.clone())
-        .chain(extra.iter().cloned())
-        .collect::<Vec<_>>()
-        .join(", ");
-    tell(say, &format!("listening as {all}"));
-    let Some((connected, remote, local)) = wait_for_call(&mut modem, opts)? else {
-        tell(say, "stopped listening");
-        modem.conn.close();
-        return Ok(Report {
-            failed: Some("stopped before a call came".into()),
-            ..Report::default()
-        });
+    let mut listener = Listener::open(store, opts, say)?;
+    let called = match wait_for_call(&mut listener.modem, opts) {
+        Ok(Some(called)) => called,
+        Ok(None) => {
+            tell(say, "stopped listening");
+            listener.modem.conn.close();
+            return Ok(Report {
+                failed: Some("stopped before a call came".into()),
+                ..Report::default()
+            });
+        }
+        Err(why) => {
+            listener.modem.conn.close();
+            return Err(why);
+        }
     };
-    tell(say, &format!("{remote} called"));
-    // the home called; at an SSID or portable form of a callsign, that callsign's (RP-1 §6.3)
-    let called = others
-        .iter()
-        .find(|(c, _)| c.eq_ignore_ascii_case(&local))
-        .or_else(|| {
-            if radiopost::callsign::same_base(&local, &me) {
-                None
-            } else {
-                others
-                    .iter()
-                    .find(|(c, _)| radiopost::callsign::same_base(c, &local))
+    let result = listener.answer(store, called, opts, say);
+    listener.modem.conn.close();
+    result
+}
+
+/// How long a station that keeps listening waits before it tries again a modem that went away or
+/// could not be reached: as the app's connection between calls does ([`crate::presence`]).
+pub const LISTEN_RETRY: Duration = Duration::from_secs(5);
+
+/// What a station that keeps listening ([`keep_listening`]) tells its window as it goes, besides
+/// its lines.
+#[derive(Debug)]
+pub enum Listening {
+    /// The client's callsigns are claimed and the modem answers calls to them: waiting for one.
+    Waiting,
+    /// This station called: a session begins.
+    Called(String),
+    /// A session is over, however it ended: what it did, or why it broke.
+    Ended(Result<Report, Error>),
+    /// The station cannot listen now (the modem's adapter cannot be reached, went away or
+    /// refused): why. It is tried again every [`LISTEN_RETRY`].
+    Held(Error),
+}
+
+/// Listens for calls and answers each (RP-3 §10) until `opts.stop` is set: the panel's Listen,
+/// a switch that stays on until its operator turns it off (the 40 m sessions of 2026-11-18, when
+/// a second call found the station no longer listening).
+///
+/// After each session, however it ended (done, failed, broken off, the other station gone), the
+/// station goes back to listening on the same connection, its callsigns still claimed, so the
+/// modem never stops answering them (Aether ends a claim with its connection, its ADR-0106). A
+/// connection that failed is opened again; while the adapter cannot be reached or refuses (the
+/// modem away, Aether restarting), it is tried again every [`LISTEN_RETRY`], each reason said
+/// once. The home at `home` is opened afresh for each call, so a session offers what was written
+/// since the last. `stop` set during a session ends listening once the session is over.
+pub fn keep_listening(
+    home: &std::path::Path,
+    opts: &Options,
+    say: &mut dyn FnMut(&str),
+    told: &mut dyn FnMut(Listening),
+) {
+    let mut listener: Option<Listener> = None;
+    // what was last said of why the station cannot listen, so that it is said once
+    let mut held: Option<String> = None;
+    loop {
+        if stopped(opts) {
+            break;
+        }
+        if listener.is_none() {
+            match Store::open(home).and_then(|store| Listener::open(&store, opts, say)) {
+                Ok(l) => {
+                    held = None;
+                    listener = Some(l);
+                    told(Listening::Waiting);
+                }
+                Err(why) => {
+                    if held.as_deref() != Some(why.as_str()) {
+                        tell(
+                            say,
+                            &format!(
+                                "cannot listen: {why}; trying again every {} s",
+                                LISTEN_RETRY.as_secs()
+                            ),
+                        );
+                        held = Some(why.clone());
+                    }
+                    told(Listening::Held(why));
+                    pause(opts, LISTEN_RETRY);
+                    continue;
+                }
             }
-        });
-    if let Some((call, home)) = called {
-        tell(
-            say,
-            &format!("answering as {call}: the session's mail is in {call}'s folders"),
-        );
-        let mut other = Store::open(home)?;
-        return answer_on(&mut other, modem, (&connected, &remote), opts, say);
+        }
+        let Some(l) = listener.as_mut() else {
+            continue;
+        };
+        let called = match wait_for_call(&mut l.modem, opts) {
+            Ok(Some(called)) => called,
+            Ok(None) => break,
+            Err(why) => {
+                // the connection failed while the station waited (Aether restarting, say): it is
+                // opened again after a pause, so an adapter that fails at once is not hammered
+                if let Some(gone) = listener.take() {
+                    gone.modem.conn.close();
+                }
+                tell(say, &format!("the modem's connection ended: {why}"));
+                // and if it cannot be opened again, that is said too, with its tries
+                held = None;
+                told(Listening::Held(why));
+                pause(opts, LISTEN_RETRY);
+                continue;
+            }
+        };
+        if let Event::Connected { remote, .. } = &called.0 {
+            told(Listening::Called(remote.clone()));
+        }
+        let result =
+            Store::open(home).and_then(|mut store| l.answer(&mut store, called, opts, say));
+        let broke = result.is_err();
+        told(Listening::Ended(result));
+        if broke {
+            // what the connection holds after a session that broke is not known: it is opened
+            // again, its callsigns claimed afresh
+            if let Some(gone) = listener.take() {
+                gone.modem.conn.close();
+            }
+        } else if !stopped(opts) {
+            tell(say, "listening again");
+            told(Listening::Waiting);
+        }
     }
-    answer_on(store, modem, (&connected, &remote), opts, say)
+    if let Some(l) = listener {
+        l.modem.conn.close();
+    }
+    tell(say, "stopped listening");
+}
+
+/// Waits `how_long`, or less when the program says stop.
+fn pause(opts: &Options, how_long: Duration) {
+    let until = std::time::Instant::now() + how_long;
+    while std::time::Instant::now() < until && !stopped(opts) {
+        std::thread::sleep(Duration::from_millis(100));
+    }
 }
 
 /// The session of a call answered, carried by the home called (RP-3 §10).
 fn answer_on(
     store: &mut Store,
-    mut modem: Modem,
+    modem: &mut Modem,
     (connected, remote): (&Event, &str),
     opts: &Options,
     say: &mut dyn FnMut(&str),
@@ -1547,7 +1720,7 @@ fn answer_on(
     };
     let mut carrier = Carrier::new(Answering(called));
     let result = carry(
-        &mut modem,
+        modem,
         &mut carrier,
         connected,
         store,
@@ -1569,7 +1742,6 @@ fn answer_on(
     store.save()?;
     result?;
     tell(say, &format!("the session with {remote} is over"));
-    modem.conn.close();
     Ok(report)
 }
 

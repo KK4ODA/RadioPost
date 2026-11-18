@@ -101,8 +101,11 @@ RadioPost 0.1.0-beta.15, Aether's header shows *✓ RadioPost client* while Radi
 *✓ RadioPost client · listening* while it listens. Open but idle, RadioPost holds no callsign, so
 Aether answers as it would without it.
 
-**Station A** (it answers): in RadioPost's *Station* area, click **Listen for P2P**. The badge at the top
-says *Listening*.
+**Station A** (it answers): in RadioPost's *Station* area, click **Listen for P2P**. It is a switch:
+it stays in, its lamp lit, and reads **Listening for P2P**; the badge at the top says *Listening*.
+It stays on until you click it again. After each session RadioPost listens again by itself, and if
+Aether restarts it waits for it (the lamp amber, the badge *Waiting for the modem*) and listens
+again when Aether is back.
 
 **Station B** (it calls):
 
@@ -128,8 +131,8 @@ the identifier at the end.
 
 Then look: A's **Inbox** has B's message, and B's **Sent** has it. Swap roles; send a message each
 way in one session (each writes one to the other before the call); attach a small file (a few
-hundred bytes: every byte goes on the air). After each session, click **Listen for P2P** again to answer
-the next call.
+hundred bytes: every byte goes on the air). A's **Listening for P2P** stays on between sessions, so
+B can call again at once. To swap roles, A clicks **Listening for P2P** to stop listening, then calls.
 
 Closing RadioPost while it listens or a session is under way asks first: closing ends the
 session and leaves the other station waiting.
@@ -171,4 +174,5 @@ with:
   copy to anyone else (a `Cc`, an email address) goes on. Email through a gateway has
   [a guide of its own](on-air-gateway.md).
 * **Renewal.** A credential lasts 90 days; the operator issues a new one after that.
-* **One session at a time.** **Listen for P2P** answers one call, then stops.
+* **One session at a time.** A station listening carries one session at a time; a second caller
+  tries again once it is over.

@@ -94,6 +94,12 @@ struct Activity {
     remote: Option<String>,
     /// How the last session ended, when it failed.
     failed: Option<String>,
+    /// Listen is on: pressed once, it stays on, and the station goes back to listening after each
+    /// session, until it is pressed again ([`session::keep_listening`]). Off while a session runs
+    /// means listening stops when it ends.
+    listen: bool,
+    /// Why the station cannot listen now, while Listen is on: the modem away, tried again.
+    held: Option<String>,
     /// What the sessions said, in order.
     log: Vec<String>,
 }
@@ -706,13 +712,7 @@ impl Panel {
                 self.identity(path, body)
             }
             (Method::Post, "/api/call") => self.call(body),
-            (Method::Post, "/api/listen") => self.run(
-                None,
-                Kind::Station,
-                &text("adapter"),
-                Fetch::All,
-                (None, None, None),
-            ),
+            (Method::Post, "/api/listen") => self.listen(&text("adapter")),
             (Method::Post, "/api/tune") => {
                 let dial = dial_of(&body["dial_hz"])?.ok_or("dial_hz: which dial")?;
                 self.tune(&text("adapter"), dial)
@@ -748,7 +748,10 @@ impl Panel {
                 Ok(alerts::notify_settings(&self.base))
             }
             (Method::Post, "/api/stop") => {
+                // Listen pressed again: off at once, and the station stops listening, now or when
+                // the session under way ends
                 self.stop.store(true, Ordering::Relaxed);
+                lock(&self.activity).listen = false;
                 Ok(json!({}))
             }
             _ => Err(format!("no {method} {path}")),
@@ -793,7 +796,7 @@ impl Panel {
             ),
         };
         self.run(
-            Some(callsign),
+            callsign,
             kind,
             &text("adapter"),
             fetch,
@@ -1292,7 +1295,8 @@ impl Panel {
                        "sent": store.sent.len(), "trash": store.trash.len(),
                        "reports": store.reports.len(),
                        "files": store.files.len(), "waiting": store.waiting_entries().len()},
-            "activity": {"state": a.state, "remote": a.remote, "failed": a.failed},
+            "activity": {"state": a.state, "remote": a.remote, "failed": a.failed,
+                         "listen": a.listen, "held": a.held},
             "alerts": self.alerts.summary(),
             "progress": self.live.lock().unwrap_or_else(PoisonError::into_inner).summary(),
             "update": self.updates.status(),
@@ -1561,68 +1565,72 @@ impl Panel {
         Ok(json!({"on": on, "seconds": seconds}))
     }
 
-    fn run(
-        &self,
-        remote: Option<String>,
-        kind: Kind,
-        adapter: &str,
-        fetch: Fetch,
-        (dial_hz, call_s, bandwidth): (Option<u64>, Option<u64>, Option<i64>),
-    ) -> Result<Value, Error> {
-        {
-            let mut a = lock(&self.activity);
-            match a.state {
-                "idle" => {}
-                "renewing" => return Err("renewing the credential: try again in a moment".into()),
-                "alerting" => return Err("an alert is going out: try again in a moment".into()),
-                _ => return Err("a session is under way".into()),
-            }
-            a.state = if remote.is_some() {
-                "calling"
-            } else {
-                "listening"
-            };
-            a.remote.clone_from(&remote);
-            a.failed = None;
+    /// Takes the station for a call or for listening (`state`), when it is idle.
+    fn take_station(&self, state: &'static str, remote: Option<String>) -> Result<(), Error> {
+        let mut a = lock(&self.activity);
+        match a.state {
+            "idle" => {}
+            "renewing" => return Err("renewing the credential: try again in a moment".into()),
+            "alerting" => return Err("an alert is going out: try again in a moment".into()),
+            _ => return Err("a session is under way".into()),
         }
+        a.state = state;
+        a.remote = remote;
+        a.failed = None;
+        a.listen = state == "listening";
+        a.held = None;
+        Ok(())
+    }
+
+    /// What a call or listening runs with: the modem, which becomes the app's modem between calls
+    /// too, the panel's stop, its progress rings and its alerts (RP-8); listening answers calls to
+    /// every callsign of this client (W46).
+    fn station_options(&self, adapter: &str) -> Options {
         self.stop.store(false, Ordering::Relaxed);
         let adapter = modem_or_default(adapter);
-        // the modem a call or listening goes through is the app's modem between calls too
         self.presence.set_modem(&adapter);
         let mut opts = Options::new(&adapter);
         opts.stop = Some(Arc::clone(&self.stop));
-        opts.fetch = fetch;
-        opts.dial_hz = dial_hz;
         // the channel was tuned when the operator picked it: the radio stays where it was put
         opts.tune_back = false;
-        opts.call_s = call_s;
-        opts.bandwidth = bandwidth;
         *self.live.lock().unwrap_or_else(PoisonError::into_inner) = session::Live::default();
         opts.live = Some(Arc::clone(&self.live));
-        // listening answers calls to every callsign of this client (W46)
         opts.alerts = Some(self.carrier());
         opts.also = callsigns::list(&self.base)
             .into_iter()
             .map(|c| c.home)
             .collect();
+        opts
+    }
+
+    /// A call, on a thread of its own.
+    fn run(
+        &self,
+        remote: String,
+        kind: Kind,
+        adapter: &str,
+        fetch: Fetch,
+        (dial_hz, call_s, bandwidth): (Option<u64>, Option<u64>, Option<i64>),
+    ) -> Result<Value, Error> {
+        self.take_station("calling", Some(remote.clone()))?;
+        let mut opts = self.station_options(adapter);
+        opts.fetch = fetch;
+        opts.dial_hz = dial_hz;
+        opts.call_s = call_s;
+        opts.bandwidth = bandwidth;
         // read once the activity is set, so the callsign chosen cannot change before it is opened
         let home = self.home();
         let activity = Arc::clone(&self.activity);
         thread::spawn(move || {
             let mut say = |line: &str| {
                 let mut a = lock(&activity);
-                if line.starts_with("connected to ") || line.ends_with(" called") {
+                if line.starts_with("connected to ") {
                     a.state = "session";
-                }
-                if let Some(who) = line.strip_suffix(" called") {
-                    a.remote = Some(who.to_owned());
                 }
                 a.log.push(line.to_owned());
             };
-            let result = Store::open(&home).and_then(|mut store| match &remote {
-                Some(r) => session::call(&mut store, r, kind, &opts, &mut say),
-                None => session::answer(&mut store, &opts, &mut say),
-            });
+            let result = Store::open(&home)
+                .and_then(|mut store| session::call(&mut store, &remote, kind, &opts, &mut say));
             let mut a = lock(&activity);
             a.failed = match result {
                 Ok(report) => report.failed,
@@ -1634,6 +1642,59 @@ impl Panel {
                 a.log.push(line);
             }
             a.state = "idle";
+        });
+        Ok(json!({}))
+    }
+
+    /// Listen pressed: the station listens for P2P calls on a thread of its own, and goes back to
+    /// listening after each session and whenever the modem comes back, until Listen is pressed
+    /// again (`/api/stop`). Between sessions the activity is `listening`; in one, `session`.
+    fn listen(&self, adapter: &str) -> Result<Value, Error> {
+        self.take_station("listening", None)?;
+        let opts = self.station_options(adapter);
+        // read once the activity is set, so the callsign chosen cannot change before it is opened
+        let home = self.home();
+        let (activity, told_to) = (Arc::clone(&self.activity), Arc::clone(&self.activity));
+        let rings = Arc::clone(&self.live);
+        thread::spawn(move || {
+            let mut say = |line: &str| lock(&activity).log.push(line.to_owned());
+            let mut told = |what: session::Listening| {
+                let mut a = lock(&told_to);
+                match what {
+                    session::Listening::Waiting => {
+                        a.state = "listening";
+                        a.held = None;
+                    }
+                    session::Listening::Called(who) => {
+                        a.state = "session";
+                        a.remote = Some(who);
+                        a.failed = None;
+                        *rings.lock().unwrap_or_else(PoisonError::into_inner) =
+                            session::Live::default();
+                    }
+                    session::Listening::Ended(result) => {
+                        a.failed = match result {
+                            Ok(report) => report.failed,
+                            Err(e) => Some(e),
+                        };
+                        if let Some(why) = &a.failed {
+                            let line = format!("ended: {why}");
+                            radiopost::logfile::line(&line);
+                            a.log.push(line);
+                        }
+                        a.state = "listening";
+                    }
+                    session::Listening::Held(why) => {
+                        a.state = "listening";
+                        a.held = Some(why);
+                    }
+                }
+            };
+            session::keep_listening(&home, &opts, &mut say, &mut told);
+            let mut a = lock(&activity);
+            a.state = "idle";
+            a.listen = false;
+            a.held = None;
         });
         Ok(json!({}))
     }
