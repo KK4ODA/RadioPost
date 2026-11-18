@@ -376,7 +376,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `l_amat.zip` (HD, EN, AM joined; the real file of 2026-11-08: 1,606,615 callsigns in 21 s,
   170 MB, no email addresses in it) found by binary search on disk; `qrz.rs` is QRZ's XML
   interface; `evidence.rs` judges good/warn/bad; `lookups.rs` looks each new application up on a
-  worker thread. `mailboxes.rs` makes the mailbox (Stalwart's JMAP `x:Domain/get` and
+  worker thread. Two red flags came from a probe of radiopost.org on 2026-11-18 ("Probe Name"
+  asking for W1AW, written to at `probe@example.com`): a club callsign's trustee is looked up
+  too, and an applicant who is neither the club (by its licence's name) nor the trustee is `bad`;
+  an application's contact at an RFC 2606/6761 reserved domain is `bad`. Both are evidence, not
+  refusals at `POST /applications`, so RP-5 and its vectors (which write to `example.*`) are
+  untouched. `mailboxes.rs` makes the mailbox (Stalwart's JMAP `x:Domain/get` and
   `x:Account/set`, tried only against a stand-in; or a named program) wherever an account begins
   (`aftercare.rs`): at an approval (the welcome brings its password), with a code for an address
   that is no account yet (`/office/codes` and the operator's `/code` answer `mailbox` with the

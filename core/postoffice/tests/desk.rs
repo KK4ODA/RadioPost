@@ -248,20 +248,23 @@ fn the_operator_runs_applications_from_the_client() {
         }
         f.join("|") + "\n"
     };
-    radiopost_postoffice::licences::build(
+    // Lena's licence, and a club's whose trustee she is
+    let hd = |usi: &str, call: &str| {
         rec(
             "HD",
             59,
             &[
-                (1, "7"),
-                (4, "N6CALL"),
+                (1, usi),
+                (4, call),
                 (5, "A"),
                 (7, "01/02/2024"),
                 (8, "01/02/2034"),
             ],
         )
-        .as_bytes(),
-        rec(
+    };
+    radiopost_postoffice::licences::build(
+        (hd("7", "N6CALL") + &hd("8", "W5CLB")).as_bytes(),
+        (rec(
             "EN",
             30,
             &[
@@ -274,9 +277,23 @@ fn the_operator_runs_applications_from_the_client() {
                 (17, "GA"),
                 (18, "31201"),
             ],
-        )
-        .as_bytes(),
-        rec("AM", 18, &[(1, "7"), (4, "N6CALL"), (5, "G")]).as_bytes(),
+        ) + &rec(
+            "EN",
+            30,
+            &[
+                (1, "8"),
+                (4, "W5CLB"),
+                (7, "OAK STREET RADIO CLUB"),
+                (15, "1 OAK ST"),
+                (16, "MACON"),
+                (17, "GA"),
+                (18, "31201"),
+            ],
+        ))
+            .as_bytes(),
+        (rec("AM", 18, &[(1, "7"), (4, "N6CALL"), (5, "G")])
+            + &rec("AM", 18, &[(1, "8"), (4, "W5CLB"), (8, "N6CALL")]))
+            .as_bytes(),
         &mut copy,
     )
     .expect("a copy");
@@ -293,7 +310,7 @@ fn the_operator_runs_applications_from_the_client() {
     let lena = SigningKey::from_bytes(&[6; 32]);
     let signed = format!("lena@test.example\nN6CALL\n{BASE}");
     let body = json!({"address": "lena@test.example", "operator": "N6CALL", "name": "Lena Ortiz",
-        "contact": "lena@example.org",
+        "contact": "lena.ortiz@hampost.org",
         "device": base64url::encode(&lena.verifying_key().to_bytes()),
         "signature": base64url::encode(&crypto::sign(context::API_APPLY, signed.as_bytes(), &lena))});
     let (status, applied) = http(&api, "POST", "/rp/v1/applications", None, Some(&body));
@@ -320,6 +337,54 @@ fn the_operator_runs_applications_from_the_client() {
         None,
     );
     assert_eq!(found["verdict"], "bad", "{found}");
+    // a club callsign: its trustee is looked up too, and a stranger told from her
+    let club = |name: &str| {
+        http(
+            &api,
+            "GET",
+            &format!("/rp/v1/office/lookup/W5CLB?name={name}"),
+            Some(&op),
+            None,
+        )
+        .1
+    };
+    let trustee = club("Lena+Ortiz");
+    assert_eq!(trustee["verdict"], "warn", "{trustee}");
+    assert!(
+        trustee["lines"].to_string().contains("Trustee: N6CALL"),
+        "{trustee}"
+    );
+    let stranger = club("Probe+Name");
+    assert_eq!(stranger["verdict"], "bad", "{stranger}");
+    assert!(
+        stranger["flags"].to_string().contains("neither the club"),
+        "{stranger}"
+    );
+    // an application with an address no reply can reach: said, beside the licence
+    let probe = SigningKey::from_bytes(&[7; 32]);
+    let signed = format!("probe@test.example\nN6CALL\n{BASE}");
+    let body = json!({"address": "probe@test.example", "operator": "N6CALL", "name": "Lena Ortiz",
+        "contact": "probe@example.com",
+        "device": base64url::encode(&probe.verifying_key().to_bytes()),
+        "signature": base64url::encode(&crypto::sign(context::API_APPLY, signed.as_bytes(), &probe))});
+    let (status, applied) = http(&api, "POST", "/rp/v1/applications", None, Some(&body));
+    assert_eq!(status, 202, "{applied}");
+    let mut evidence = Json::Null;
+    for _ in 0..50 {
+        let (_, list) = http(&api, "GET", "/rp/v1/office/applications", Some(&op), None);
+        evidence = list["applications"][2]["evidence"].clone();
+        if !evidence.is_null() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert_eq!(evidence["verdict"], "bad", "{evidence}");
+    assert!(
+        evidence["flags"]
+            .to_string()
+            .contains("probe@example.com is at a domain reserved"),
+        "{evidence}"
+    );
     assert_eq!(
         http(
             &api,

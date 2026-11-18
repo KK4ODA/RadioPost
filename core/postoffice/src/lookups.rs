@@ -94,9 +94,30 @@ impl Running {
     /// callsign (applications other than `skip`, and accounts).
     #[must_use]
     pub fn evidence_for(&self, call: &str, name: &str, skip: Option<&str>) -> Json {
+        self.evidence_with(call, name, None, skip)
+    }
+
+    /// [`Running::evidence_for`], and for an application the address it asked to be written
+    /// to at, `contact`. A club's trustee is looked up too, to tell the trustee from a stranger.
+    fn evidence_with(
+        &self,
+        call: &str,
+        name: &str,
+        contact: Option<&str>,
+        skip: Option<&str>,
+    ) -> Json {
         let call = licences::base_of(call);
+        let fcc = self.fcc();
+        let licence = fcc.as_ref().map(|f| f.find(&call));
+        let trustee = match (&fcc, &licence) {
+            (Some(f), Some(Ok(Some(l)))) if l.class.is_empty() && !l.trustee.is_empty() => {
+                Some(f.find(&licences::base_of(&l.trustee)))
+            }
+            _ => None,
+        };
         let found = Found {
-            fcc: self.fcc().map(|f| f.find(&call)),
+            fcc: licence,
+            trustee,
             qrz: self.qrz().map(|q| q.find(&call)),
         };
         let mut history = Vec::new();
@@ -127,23 +148,23 @@ impl Running {
                 history.push(format!("{call} already holds {}", held.join(", ")));
             }
         }
-        let mut e = evidence::judge(name, &call, &found, &history, &day(now()));
+        let mut e = evidence::judge(name, &call, contact, &found, &history, &day(now()));
         e["checked"] = json!(now());
         e
     }
 
     /// Looks the application `id` up again and keeps what was found in it. Returns its entry.
     pub fn look_up(&self, id: &str) -> Option<Json> {
-        let (call, name) = {
+        let (call, name, contact) = {
             let office = self.office();
             let a = office
                 .state
                 .applications
                 .iter()
                 .find(|a| a.application == id)?;
-            (a.operator.clone(), a.name.clone())
+            (a.operator.clone(), a.name.clone(), a.contact.clone())
         };
-        let found = self.evidence_for(&call, &name, Some(id));
+        let found = self.evidence_with(&call, &name, Some(&contact), Some(id));
         let mut office = self.office();
         let a = office
             .state

@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.13.0 |
+| **Version** | 1.14.0 |
 | **Updated** | 2026-11-18 |
 | **Describes** | RadioPost 0.1.0-beta.27 |
 | **Licence** | CC BY 4.0 |
@@ -1292,7 +1292,12 @@ want, their **Email now**, and what the post office found of the callsign:
 - a **green** bar: an active licence in the applicant's name;
 - an **amber** bar: something to check, such as another name, a club callsign or an earlier
   application;
-- a **red** bar: no licence, or one no longer valid.
+- a **red** bar: no licence, or one no longer valid; a club callsign asked for by someone who is
+  neither the club nor its trustee; or an **Email now** at a domain kept for examples, such as
+  `example.com`, which no email can reach.
+
+A club callsign is never green. The post office also looks up the club's trustee, and says whether
+the applicant gave the club's name or the trustee's. Get the trustee's word before you approve.
 
 That is evidence, not proof: anyone can read who holds a callsign. To decide:
 
@@ -1870,3 +1875,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.11.0 | 2026-11-18 | Alerts and sounds (wishlist W51, W52; RP-8). §10.1 to §10.4: alerts between stations that share a keyword, circles and their checks, sending one and what it becomes, the alarm and its answers (new Figures 19 and 20). §12: *Sounds and notifications*, the levels, quiet hours, and the radio's sound card (new Figure 23). §13: **Notify** for addresses and groups. §36, §37, §39, §40 to match; the client's screenshots retaken with **Alerts** in the left-hand column. |
 | 1.12.0 | 2026-11-18 | Every account gets its mailbox. §26: a postcard's mailbox and welcome come when its code is used. §27: the **Mailbox** column and **Make mailbox**, its password shown once and given off the air. §28: a code for a new address makes the mailbox and shows its password under the code. §31: Health checks that every account has its mailbox. §34, §37 to match; the desk's Accounts and New code screenshots retaken. |
 | 1.13.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18. §7 *Changing a message*: a message in the outbox is changed with its pencil or **Edit**, and saved in the old one's place with **Save in outbox**; what cannot be changed, and why (Figure 11 retaken with a row's pencil and trash can). §9 **Edit**; §37 its two refusals. |
+| 1.14.0 | 2026-11-18 | §26: what turns an application red: a club callsign asked for by someone who is neither the club nor its trustee (the trustee is looked up too), and an **Email now** at a domain kept for examples. |
