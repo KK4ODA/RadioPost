@@ -1352,6 +1352,21 @@ fn a_client_renews_its_credential_on_a_gateway_call_when_it_is_due() {
     assert!(after.expires >= before.expires);
 }
 
+/// A post office out of reach that says so at once: a port that takes each connection and closes
+/// it, which the HTTP client reports as the post office unreachable. Not a closed port: Windows
+/// refuses a connection to one only after about two seconds of retries (Linux at once), longer
+/// than the tests that count failures wait.
+fn out_of_reach() -> String {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a port");
+    let at = listener.local_addr().expect("an address");
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            drop(stream);
+        }
+    });
+    format!("http://{at}")
+}
+
 /// RP-5 §6.2: in its credential's last month the gateway renews its own credential with its
 /// account's post office, and the gateway already answering takes it up at its next session; with
 /// the post office out of reach it says why once, not at every try.
@@ -1430,7 +1445,7 @@ fn the_gateway_renews_its_own_credential_and_answers_with_it() {
     let mut settings = station::Settings::load(&gw).expect("settings");
     settings
         .post_offices
-        .insert("test.example".into(), "http://127.0.0.1:9".into());
+        .insert("test.example".into(), out_of_reach());
     settings.save(&gw).expect("saved");
     let mut renewal = station::Renewal::new(&gw, Duration::ZERO, 100 * 86_400);
     let mut said = Vec::new();

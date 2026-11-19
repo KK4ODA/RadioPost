@@ -437,6 +437,21 @@ fn enroll(running: &Running, base: &str, public: &str, home: &Path) {
     radiopost(home, &args).expect("enrolled");
 }
 
+/// A post office out of reach that says so at once: a port that takes each connection and closes
+/// it, which the HTTP client reports as the post office unreachable. Not a closed port: Windows
+/// refuses a connection to one only after about two seconds of retries (Linux at once), longer
+/// than the tests that count failures wait.
+fn out_of_reach() -> String {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a port");
+    let at = listener.local_addr().expect("an address");
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            drop(stream);
+        }
+    });
+    format!("http://{at}")
+}
+
 /// RP-1 §4.2: the open window renews the credential over the Internet in its last month, says so
 /// in its log, and with no post office to reach says why once, not at every try.
 #[test]
@@ -487,7 +502,7 @@ fn the_open_window_renews_the_credential_in_its_last_month() {
 
     // with its post office out of reach, a window trying every 50 ms says why once
     let mut store = Store::open(&home).expect("home");
-    store.post_office = Some("http://127.0.0.1:9".into());
+    store.post_office = Some(out_of_reach());
     store.save().expect("saved");
     let away = Panel::new(&home, None)
         .with_renewal(Duration::ZERO, Duration::from_millis(50), within)
