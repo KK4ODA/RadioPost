@@ -89,9 +89,25 @@ function showUpdate(u, name) {
     : `Open ${u.offer.page} in your browser`;
 }
 
+// this version, in the header and the Updates card in Setup, and what the channel said when
+// last asked
+function showVersion(u, name) {
+  $("version").textContent = u ? u.current : "";
+  const said = $("updates-state");
+  if (!u) return;
+  const at = u.checked ? when(u.checked) : "";
+  said.textContent = `This is ${name} ${u.current}. ` + (u.checking ? "Checking…"
+    : !u.checked ? "Not checked yet."
+    : u.error ? `Checked ${at}, but the update channel could not be reached: ${u.error}`
+    : u.offer ? `Checked ${at}: ${u.offer.version} is out, at the top of the window.`
+    : `Checked ${at}: this is the newest.`);
+  $("updates-check").disabled = Boolean(u.checking);
+}
+
 function render(s) {
   state = s;
   showUpdate(s.update, "RadioPost Gateway");
+  showVersion(s.update, "RadioPost Gateway");
   const settings = s.settings;
   const st = s.status;
   const answering = s.running;
@@ -593,6 +609,7 @@ $("stop").addEventListener("click", async () => {
   await act("stop", {}, render);
   $("stop").disabled = false;
 });
+$("updates-check").addEventListener("click", () => act("update/check", {}, render));
 $("update-go").addEventListener("click", () => {
   if (state && state.update.can_install && state.running
       && !window.confirm("The gateway stops answering while it updates, and starts again after. Update now?")) {

@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.22.0 |
-| **Updated** | 2026-11-18 |
+| **Version** | 1.23.0 |
+| **Updated** | 2026-11-19 |
 | **Describes** | RadioPost 0.1.0-beta.29 |
 | **Licence** | CC BY 4.0 |
 
@@ -104,12 +104,9 @@ The copy in the repository follows the programs as they are being built. Release
 beside the installers. Use that one if you want the manual for exactly the version you
 installed.
 
-To see which RadioPost you have:
-
-- **RadioPost Gateway**: the last line of its **Setup** page says *RadioPost Gateway* and the
-  version.
-- **RadioPost**, the client: when a newer release is out, the line at the top of the window says
-  *… is out (this is …)*, with your version.
+To see which RadioPost you have, look beside the program's name at the top left of its window:
+*RadioPost 0.1.0-beta.29*, or *RadioPost Gateway 0.1.0-beta.29*. The **Updates** box in
+**Setup** says it too.
 
 ### Printing the manual
 
@@ -232,6 +229,8 @@ The same page has **RadioPost Gateway**, the program for running a gateway
 **Updates.** When a newer release is out, a line at the top of RadioPost's window says so. Click
 **Update and restart**. RadioPost downloads it, checks that the project signed it, installs it
 and opens again. On Linux with a `.deb`, it asks for your password, as installing a package does.
+RadioPost asks for a newer release when it opens and every six hours. To ask now, as when a
+release has just come out, click **Check for updates** in **Setup**, **Updates**.
 
 **Where RadioPost keeps your things.** In the folder `.radiopost` in your home folder. On
 Windows that is `C:\Users\<you>\.radiopost`. It holds your key, your credential, your mail and
@@ -344,7 +343,8 @@ again with a new code**.
 *Figure 7. The RadioPost window.*
 
 1. **Who you are**: your address and callsign. With several callsigns, this is a list to choose
-   from ([Working several callsigns](#11-working-several-callsigns)).
+   from ([Working several callsigns](#11-working-several-callsigns)). To its left, beside
+   *RadioPost*, is the version you are running.
 2. **What the station is doing**: *Idle*, *Calling …*, *Listening*, *Waiting for the modem*,
    *In session with …* or *Renewing credential*. After a failed session it reads *Last session
    failed*: point at it to see why.
@@ -913,6 +913,12 @@ enrolling fills them in.
 - **Post offices trusted** lists the post offices whose keys RadioPost trusts. A test post
   office's operator may give you a domain and key to add.
 
+### Updates
+
+The version of RadioPost you are running, when it last asked for a newer release, and what it
+found. It asks when it opens and every six hours. **Check for updates** asks now. When a newer
+release is out, the line at the top of the window offers **Update and restart**.
+
 ## 13. Addresses and the Trash
 
 **Addresses** is your address list. Everyone you write to is added, with the name you typed
@@ -1150,6 +1156,11 @@ the gateway says so and keeps its registration. Ask that post office's operators
 The gateway finds each user's post office on the Internet by itself. Name one here only while its
 records are not published yet: its **Domain** and its **API address** (`https://…/rp/v1`).
 
+### Updates
+
+Below the steps, **Updates** says which RadioPost Gateway you are running, when it last asked for
+a newer release, and what it found. **Check for updates** asks now.
+
 ## 19. Running the gateway
 
 Click **Start**, at the top. The gateway claims its callsign at Aether and listens.
@@ -1158,7 +1169,8 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 *Figure 30. The RadioPost Gateway window.*
 
-1. **The gateway's callsign**, and the account it is registered under.
+1. **The gateway's callsign**, and the account it is registered under. To its left, beside
+   *RadioPost Gateway*, is the version you are running.
 2. **What it is doing** (the table below).
 3. **Start** and **Stop**.
 4. **Setup**. Settings change only while the gateway is stopped.
@@ -1206,8 +1218,8 @@ as it opens. To open it when you sign in:
 left them. One layout for one screen: the gateway on the left, full height; Aether in **Compact**
 at the top right; the RadioPost client under Aether.
 
-**Updates.** A line at the top says when a newer release is out (it checks when it opens and every
-six hours). **Update and restart** stops the gateway, installs the update and starts it again,
+**Updates.** A line at the top says when a newer release is out. The gateway asks when it opens and
+every six hours; **Check for updates**, at the foot of **Setup**, asks now. **Update and restart** stops the gateway, installs the update and starts it again,
 answering as before.
 
 ### When a scan stops
@@ -2037,3 +2049,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.20.0 | 2026-11-18 | §9: **Print**, and a PDF by the system's print dialog; an ICS-213 prints as FEMA's ICS 213. **Save** beside each file a message carries, in the Downloads folder, never over another file (Figure 16 retaken with a file and **Print**). |
 | 1.21.0 | 2026-11-18 | A tester's gateway registered with radiopost.org under his first account while he was trying his own post office, and nothing could take it off. §17, §18 step 2: **Account**, the client's account the gateway registers with, and the line that says where before **Register with …**; the form keeps what was registered. §18 *Unregistering, or moving to another post office*: **Unregister**, what it does, one post office at a time, and what keeps it from unregistering. §23: `accounts`, `register --account`, `unregister`. §24: `record.json`. §25, §27 *Gateways registered here*: the desk's **Gateways** tab and its **Unregister** (new Figure 35; later figures renumbered). §37, §40 to match. The gateway's Setup and the desk's screenshots retaken. |
 | 1.22.0 | 2026-11-18 | §27: **New password** beside an account's mailbox, for someone who forgot theirs (the mail server has no reset of its own): a new password, shown once, only the password changed. §37 to match. |
+| 1.23.0 | 2026-11-19 | Each program's version beside its name at the top of its window (§1, §6, §19). §12 and §18: **Updates** in **Setup**, with **Check for updates**, which asks for a newer release now instead of at the next six-hourly check. §4 and §19 to match. Figures 7 and 30, and the windows that show the top bar, retaken. |

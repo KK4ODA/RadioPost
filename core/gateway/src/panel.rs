@@ -369,16 +369,23 @@ impl Panel {
                 self.runner.check()?;
                 Ok(self.state())
             }
-            (Method::Post, "/api/update") => {
-                if self.updates.status()["can_install"] == true {
-                    self.updates.install()?;
-                } else {
-                    self.updates.download()?;
-                }
-                Ok(self.state())
-            }
+            (Method::Post, "/api/update" | "/api/update/check") => self.update(path),
             _ => Err(format!("no {method} {path}")),
         }
+    }
+
+    /// `/api/update/check` asks the channel now, on a thread of its own; `/api/update` installs
+    /// the update on offer through the desktop application, or opens its page for a download by
+    /// hand.
+    fn update(&self, path: &str) -> Result<Value, String> {
+        if path == "/api/update/check" {
+            self.updates.check_now();
+        } else if self.updates.status()["can_install"] == true {
+            self.updates.install()?;
+        } else {
+            self.updates.download()?;
+        }
+        Ok(self.state())
     }
 
     /// The gateway made, or its settings changed.

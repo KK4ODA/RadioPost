@@ -266,6 +266,22 @@ function showUpdate(u, name) {
     : `Open ${u.offer.page} in your browser`;
 }
 
+// this version, in the header and the Updates card in Setup, and what the channel said when
+// last asked
+function showVersion(u, name) {
+  $("version").textContent = u ? u.current : "";
+  const said = $("updates-state");
+  if (!u) return;
+  const at = u.checked
+    ? new Date(u.checked * 1000).toLocaleString([], {dateStyle: "medium", timeStyle: "short"}) : "";
+  said.textContent = `This is ${name} ${u.current}. ` + (u.checking ? "Checking…"
+    : !u.checked ? "Not checked yet."
+    : u.error ? `Checked ${at}, but the update channel could not be reached: ${u.error}`
+    : u.offer ? `Checked ${at}: ${u.offer.version} is out, at the top of the window.`
+    : `Checked ${at}: this is the newest.`);
+  $("updates-check").disabled = Boolean(u.checking);
+}
+
 // what the station's state says to the ear: a session up or ended, a call failed, a message
 // delivered, mail arrived (checked by its senders' levels)
 let lastCounts = null;
@@ -290,6 +306,7 @@ function soundsOfState(s, a) {
 async function refresh() {
   const s = await api("state");
   showUpdate(s.update, "RadioPost");
+  showVersion(s.update, "RadioPost");
   myVersion = (s.update && s.update.current) || "";
   $("who").textContent = s.me ? `${s.me.address}  ·  ${s.me.operator}` : "No credential yet";
   meAddress = s.me ? s.me.address : "";
@@ -3476,6 +3493,7 @@ function wire() {
     else act("listen", {adapter: adapter()});
   });
   $("update-go").addEventListener("click", () => act("update", {}));
+  $("updates-check").addEventListener("click", () => act("update/check", {}));
   $("make-key").addEventListener("click", () => act("key", {}));
   $("cred-save").addEventListener("click", async () => {
     await act("credential", {hex: $("cred-hex").value});

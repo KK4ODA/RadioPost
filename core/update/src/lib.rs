@@ -11,7 +11,8 @@
 //! The desktop applications install their update with Tauri's updater, from the same manifests
 //! and the same key; [`install_tools`] replaces the command-line programs from the signed tools
 //! archive. [`Watch`] keeps what a program's panel shows: the offer, checked when the program
-//! starts and every six hours, and an install under way.
+//! starts, every six hours and when the user asks (**Check for updates**), and an install under
+//! way.
 
 use std::collections::BTreeMap;
 use std::io::{Cursor, Read};
@@ -405,6 +406,7 @@ pub type Install = Arc<dyn Fn() -> Result<(), String> + Send + Sync>;
 struct Seen {
     offer: Option<Offer>,
     checked: u64,
+    checking: bool,
     error: Option<String>,
     installing: bool,
     failed: Option<String>,
@@ -445,8 +447,10 @@ impl Watch {
 
     /// Asks the channel now.
     pub fn check(&self) {
+        self.seen().checking = true;
         let result = check(&self.channel, self.product, &self.current);
         let mut s = self.seen();
+        s.checking = false;
         s.checked = now();
         match result {
             Ok(offer) => {
@@ -455,6 +459,22 @@ impl Watch {
             }
             Err(e) => s.error = Some(e),
         }
+    }
+
+    /// Asks the channel now on a thread of its own, unless it is being asked already: a panel's
+    /// **Check for updates**, which must not wait on the network (a release can come out just
+    /// after the last check, and the next is six hours away). Whether a check started.
+    pub fn check_now(self: &Arc<Self>) -> bool {
+        {
+            let mut s = self.seen();
+            if s.checking {
+                return false;
+            }
+            s.checking = true;
+        }
+        let me = Arc::clone(self);
+        std::thread::spawn(move || me.check());
+        true
     }
 
     /// Asks the channel now and every six hours, on a thread of its own.
@@ -480,7 +500,8 @@ impl Watch {
     }
 
     /// What the panel shows: this version, the offer, when the channel was last asked and what
-    /// went wrong, whether this program can install the update itself, and an install under way.
+    /// went wrong, whether it is being asked now, whether this program can install the update
+    /// itself, and an install under way.
     #[must_use]
     pub fn status(&self) -> Value {
         let s = self.seen();
@@ -496,6 +517,7 @@ impl Watch {
                 "version": o.version, "notes": o.notes, "page": o.page,
             })),
             "checked": s.checked,
+            "checking": s.checking,
             "error": s.error,
             "can_install": can_install,
             "installing": s.installing,

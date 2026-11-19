@@ -11,7 +11,7 @@
 </head>
 <body>
   <header class="top">
-    <div class="brand" title="RadioPost Gateway: users call it by radio, and it carries their mail to their post offices">RadioPost Gateway</div>
+    <div class="brand" title="RadioPost Gateway: users call it by radio, and it carries their mail to their post offices">RadioPost Gateway <span class="version" id="version" title="The version running here. Setup, Updates, asks whether a newer one is out"></span></div>
     <div class="who" id="who" title="The gateway's callsign, and the account it is registered under"></div>
     <div class="state" id="state" data-state="stopped" title="What the gateway is doing">Stopped</div>
     <button class="primary" id="start" title="Answer calls: the gateway claims its callsign at the modem and listens">Start</button>
@@ -234,6 +234,12 @@
         <label title="The post office's API address, https://…/rp/v1; empty to forget it">API address <input name="url" placeholder="https://po.radiopost.org/rp/v1" spellcheck="false"></label>
         <div class="row"><button type="submit">Save</button></div>
       </form>
+
+      <div class="card">
+        <h2 title="RadioPost Gateway asks for a newer release when it starts and every six hours">Updates</h2>
+        <p id="updates-state"></p>
+        <button type="button" id="updates-check" title="Ask now whether a newer release is out: a release can come out just after the last check">Check for updates</button>
+      </div>
 
       <p class="note" id="where"></p>
     </section>

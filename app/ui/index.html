@@ -14,7 +14,7 @@
 </head>
 <body>
   <header class="top">
-    <div class="brand" title="RadioPost: email by amateur radio">RadioPost</div>
+    <div class="brand" title="RadioPost: email by amateur radio">RadioPost <span class="version" id="version" title="The version running here. Setup, Updates, asks whether a newer one is out"></span></div>
     <div class="who" title="The account and callsign this client speaks for">
       <span id="who"></span>
       <select id="who-pick" class="narrow" aria-label="Callsign" title="The callsign this client works as: the account whose mail it shows and writes, and the callsign it calls and listens as. Change it between sessions" hidden></select>
@@ -662,6 +662,11 @@
           <label title="The post office's domain">Domain <input id="t-domain" placeholder="hampost.org" spellcheck="false"></label>
           <label title="Its key, 32 bytes in hex, as its DNS records publish it">Key (hex) <input id="t-key" spellcheck="false"></label>
           <button id="t-save" title="Trust this key: the operator decides (RP-1 §7.3)">Trust</button>
+        </div>
+        <div class="card">
+          <h2 title="RadioPost asks for a newer release when it starts and every six hours">Updates</h2>
+          <p id="updates-state"></p>
+          <button id="updates-check" title="Ask now whether a newer release is out: a release can come out just after the last check">Check for updates</button>
         </div>
       </section>
     </main>

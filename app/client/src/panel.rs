@@ -844,6 +844,11 @@ impl Panel {
                 Ok(json!({"opened": crate::terminal::open(target)?}))
             }
             (Method::Post, "/api/update") => self.update(),
+            (Method::Post, "/api/update/check") => {
+                // on a thread of its own: this panel answers one request at a time
+                self.updates.check_now();
+                self.state()
+            }
             (Method::Get, "/api/alerts") => Ok(self.alerts.json()),
             (Method::Post, "/api/alerts") => self.alert_request(body),
             (Method::Post, "/api/circles") => self.circle_request(body),

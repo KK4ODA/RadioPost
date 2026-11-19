@@ -270,3 +270,51 @@ fn a_watch_shows_the_offer_and_installs_through_the_application() {
     assert_eq!(up_to_date.status()["offer"], serde_json::Value::Null);
     assert!(up_to_date.install().is_err(), "nothing on offer");
 }
+
+/// A release out since the last check is found when the user asks, without waiting six hours;
+/// the check runs on a thread of its own, says it is checking, and a second ask while it runs
+/// starts no other. A channel that answers only when the test lets it.
+#[test]
+fn a_release_out_since_the_last_check_is_found_when_asked() {
+    use std::sync::Mutex;
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+    let server = tiny_http::Server::http("127.0.0.1:0").expect("a port");
+    let base = format!(
+        "http://{}",
+        server.server_addr().to_ip().expect("an address")
+    );
+    let offered = Arc::new(Mutex::new("0.1.0-beta.27".to_owned()));
+    let (answer, gate) = mpsc::channel::<()>();
+    let version = Arc::clone(&offered);
+    thread::spawn(move || {
+        for request in server.incoming_requests() {
+            gate.recv_timeout(Duration::from_secs(10))
+                .expect("let through");
+            let v = version.lock().expect("lock").clone();
+            let manifest = json!({"version": v, "notes": "",
+                "platforms": {platform(): {"url": "http://x/y", "signature": "z"}}});
+            let _ = request.respond(tiny_http::Response::from_string(manifest.to_string()));
+        }
+    });
+    let watch = Watch::new(Product::Client, "0.1.0-beta.27", &base);
+    answer.send(()).expect("sent");
+    watch.check();
+    assert_eq!(watch.status()["offer"], serde_json::Value::Null);
+    let first = watch.status()["checked"].as_u64().expect("checked");
+
+    // beta.29 comes out; the user asks
+    *offered.lock().expect("lock") = "0.1.0-beta.29".to_owned();
+    assert!(watch.check_now(), "a check started");
+    assert_eq!(watch.status()["checking"], true);
+    assert!(!watch.check_now(), "a second ask starts no other");
+    answer.send(()).expect("sent");
+    let until = Instant::now() + Duration::from_secs(5);
+    while watch.status()["checking"] == true {
+        assert!(Instant::now() < until, "still checking");
+        thread::sleep(Duration::from_millis(20));
+    }
+    let status = watch.status();
+    assert_eq!(status["offer"]["version"], "0.1.0-beta.29", "{status}");
+    assert!(status["checked"].as_u64() >= Some(first));
+}

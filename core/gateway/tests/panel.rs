@@ -574,3 +574,44 @@ fn the_panel_says_a_newer_release_is_out_and_installs_it() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A release out since the gateway last asked is found when the operator presses Check for
+/// updates, without waiting six hours.
+#[test]
+fn check_for_updates_finds_a_release_out_since_the_last_check() {
+    use radiopost_update::{Product, Watch};
+    use std::sync::Mutex;
+    let server = tiny_http::Server::http("127.0.0.1:0").expect("a port");
+    let base = format!(
+        "http://{}",
+        server.server_addr().to_ip().expect("an address")
+    );
+    let offered = Arc::new(Mutex::new("0.1.0-beta.27".to_owned()));
+    let version = Arc::clone(&offered);
+    std::thread::spawn(move || {
+        for request in server.incoming_requests() {
+            let v = version.lock().expect("lock").clone();
+            let manifest = json!({"version": v, "notes": "",
+                "platforms": {radiopost_update::platform(): {"url": "http://x/y", "signature": "s"}}});
+            let _ = request.respond(tiny_http::Response::from_string(manifest.to_string()));
+        }
+    });
+    let dir = scratch("panel-update-check");
+    let watch = Watch::new(Product::Gateway, "0.1.0-beta.27", &base);
+    watch.check();
+    let page = Page {
+        at: Panel::new(Arc::new(Runner::new(&dir.join("gateway"))), None)
+            .with_updates(Arc::clone(&watch))
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    assert_eq!(page.get("/api/state")["update"]["offer"], Value::Null);
+    *offered.lock().expect("lock") = "0.1.0-beta.29".to_owned();
+    page.post("/api/update/check", &json!({})).expect("asked");
+    let until = Instant::now() + Duration::from_secs(5);
+    while page.get("/api/state")["update"]["offer"]["version"] != "0.1.0-beta.29" {
+        assert!(Instant::now() < until, "the new release is never offered");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

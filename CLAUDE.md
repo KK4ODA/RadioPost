@@ -374,7 +374,14 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   with the project's key (`core/update/updater.pub`; the private half is the release's secret
   `TAURI_SIGNING_PRIVATE_KEY`, never in the repository) and replaces the command-line programs
   (`radiopost-po update` and the others' `update`); `Watch` is what a panel shows, and the Tauri
-  shells give it an installer (`tauri-plugin-updater`, the key and endpoints set in code). Its
+  shells give it an installer (`tauri-plugin-updater`, the key and endpoints set in code). A
+  `Watch` asks at start and every six hours (`EVERY`), and `check_now` when the user presses
+  **Check for updates** (Setup, **Updates**; `POST /api/update/check` in both panels), on a thread
+  of its own since the client's panel answers one request at a time; `status()` carries
+  `checking`. Each window shows its version beside its name (`#version`, from `update.current`);
+  `screens.mjs` reads the version from `core/Cargo.toml`. Only shots that show the top bar or a
+  changed card are retaken: the committed shots render differently on another machine, and a
+  full rerun changes every PNG. Its
   tests use a throwaway key whose private half was discarded. **One version**: `tools/release.py
   bump X` writes it in every Cargo manifest, lockfile and the guide's download link (the Tauri
   configurations take Cargo's); `check` runs in CI and in the release's preflight, which also

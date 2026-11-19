@@ -31,6 +31,11 @@ const ORIGIN = "http://radiopost.test";
 const NOW = new Date("2026-11-14T15:24:00-05:00");
 const T = Math.floor(NOW.getTime() / 1000);
 const DAY = 86400;
+// the version the panels say they run: this tree's
+const VERSION = readFileSync(join(ROOT, "core", "Cargo.toml"), "utf8")
+  .match(/^version = "(.+)"$/m)[1];
+const UPDATE = {current: VERSION, offer: null, checked: T - 3600, checking: false, error: null,
+                can_install: false, installing: false, failed: null};
 const TYPES = {".html": "text/html", ".js": "text/javascript", ".css": "text/css",
                ".svg": "image/svg+xml"};
 
@@ -148,7 +153,7 @@ function clientState(over = {}) {
     counts: {outbox: OUTBOX.length, inbox: INBOX.length, sent: SENT.length, trash: 0, reports: 0,
              files: 0, waiting: WAITING.entries.length},
     activity: {state: "idle", remote: null, failed: null, listen: false, held: null},
-    progress: null, update: null, log: CLIENT_LOG.length,
+    progress: null, update: UPDATE, log: CLIENT_LOG.length,
     alerts: {seq: 1, alarming: false, circles: ALERT_CIRCLES.length},
     ...over,
   };
@@ -371,8 +376,8 @@ function gatewayState(over = {}) {
       {dial_hz: 3591500, mode: "USB", modem: "aether", bandwidth_hz: 500},
       {dial_hz: 7101000, mode: "USB", modem: "aether", bandwidth_hz: 2300}],
       grid: "EM73", place: "Atlanta, Georgia", hours: "always", internet: true},
-    dir: "C:\\Users\\you\\.radiopost-gateway", version: "0.1.0-beta.20",
-    aether: "ws://127.0.0.1:8515/v1", update: null,
+    dir: "C:\\Users\\you\\.radiopost-gateway", version: VERSION,
+    aether: "ws://127.0.0.1:8515/v1", update: UPDATE,
     ...over,
   };
 }
@@ -988,7 +993,7 @@ const SHOTS = {
     await page.waitForTimeout(200);
     await page.locator("body").click({position: {x: 1270, y: 10}});
     await page.screenshot({path: join(OUT, "gateway-setup.png"), clip: await unionClip(page,
-      ["#setup h1", "#po-form"], 1100)});
+      ["#setup h1", "#po-form", "#updates-check"], 1100)});
     console.log("docs/manual/screens/gateway-setup.png");
     await context.close();
   },
