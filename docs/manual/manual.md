@@ -7,7 +7,7 @@
 | **Status** | Current |
 | **Version** | 1.23.1 |
 | **Updated** | 2026-11-19 |
-| **Describes** | RadioPost 0.1.0-beta.30 |
+| **Describes** | RadioPost 0.1.0-beta.31 |
 | **Licence** | CC BY 4.0 |
 
 This manual shows you how to send and receive email by radio with RadioPost, how to run a
