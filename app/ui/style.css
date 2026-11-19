@@ -19,8 +19,11 @@
 * { box-sizing: border-box; }
 /* what the page marks hidden stays hidden, whatever display a class gives it */
 [hidden] { display: none !important; }
+/* one column, the window's width: a long line in the log scrolls in its place, and never widens
+   the page past the window */
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 var(--face);
-       display: grid; grid-template-rows: auto 1fr auto; height: 100vh; overflow: hidden; }
+       display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr);
+       height: 100vh; overflow: hidden; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { height: var(--control-h); padding: 0 14px; border: 1px solid var(--line); border-radius: 6px;
          background: var(--panel); cursor: pointer; }
@@ -131,13 +134,24 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
          padding: 8px 14px; border-radius: 6px; max-width: 420px; }
 .toast.bad { background: var(--bad); color: #fff; }
 
+/* stacked in one column (app.js's STACKED: Write opens a window of its own here). The column's
+   buttons keep their own widths, not the window's, and the folders go side by side */
 @media (max-width: 720px) {
   .transfer { left: 16px; right: 16px; width: auto; }
   body { height: auto; overflow: visible; }
   .frame { grid-template-columns: 1fr; overflow: visible; }
   .side { border-right: 0; border-bottom: 1px solid var(--line); }
+  .side > .primary, #office-open, #setup-open { width: auto; align-self: flex-start; }
+  .folders { display: flex; flex-wrap: wrap; gap: 2px 4px; }
+  .folders button { width: auto; gap: 6px; }
+  .side .folders li.sep { border-top: 0; margin-top: 0; padding-top: 0; }
   main { padding: 16px; }
 }
+/* a composer window of its own: the composer alone */
+:root[data-window="compose"] body { grid-template-rows: 1fr; }
+:root[data-window="compose"] :is(.top, .side, .log) { display: none; }
+:root[data-window="compose"] .frame { grid-template-columns: 1fr; }
+:root[data-window="compose"] .toast { bottom: 20px; }
 .entries { list-style: none; padding: 0; margin: 0 0 8px; }
 .kinds { display: flex; flex-direction: column; gap: 2px; margin: 0 0 10px; }
 .kinds label.check { margin: 0; color: var(--text); font-size: 14px; }

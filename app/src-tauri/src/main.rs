@@ -16,6 +16,13 @@
 //! The window opens where the operator left it, at the size they left it (`WINDOW_KEPT`), so
 //! RadioPost arranged once beside Aether and the gateway's window opens that way again.
 //!
+//! When the window is narrow, the panel stacks its parts in one column, and Write opens the
+//! composer in a window of its own: the page asks for it with `window.open` on `/?compose=…`, and
+//! this program makes it (`composer_window`), the one window the page may open. It shows the same
+//! page from the same server; its page going to `/closed` closes it, and to `/front` brings it
+//! forward (`navigation`), the page never going there. Composer windows open where the operator
+//! left the last one. Closing the main window closes them too.
+//!
 //! When an alert starts sounding (RP-8), the window comes forward, out of the taskbar if it was
 //! minimized, and asks for attention: the operator may be in another program (`bring_forward`).
 
@@ -24,14 +31,16 @@
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use radiopost_client::panel::Panel;
 use radiopost_client::store;
 use radiopost_update::{Install, Product, Watch};
-use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::webview::{NewWindowFeatures, NewWindowResponse};
+use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_updater::UpdaterExt as _;
-use tauri_plugin_window_state::StateFlags;
+use tauri_plugin_window_state::{StateFlags, WindowExt as _};
 
 /// The panel's port, the same as `radiopost panel`'s, so what the page keeps (the modem adapter's
 /// address) is kept from one run to the next; another free port when that one is taken.
@@ -47,6 +56,152 @@ const WINDOW_KEPT: StateFlags = StateFlags::SIZE
 
 /// How often the window looks for an alert that has started sounding.
 const ALARM_LOOK: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// The composer windows' name: each is `compose-<n>`, and the window-state plugin keeps them all
+/// under this one, so a composer window opens where the last one was left, at its size.
+const COMPOSER: &str = "compose";
+
+/// The composer windows opened so far, to name the next.
+static COMPOSERS: AtomicU32 = AtomicU32::new(0);
+
+/// Where a composer window's page goes when it is done: the window closes instead, the page never
+/// going there. A page's own `window.close()` closes the window on Windows only (on Linux the
+/// webview drops the page and leaves the window, on macOS it does nothing).
+const CLOSED: &str = "/closed";
+
+/// Where the main window sends a composer window's page to bring it forward, when Write is
+/// pressed again while it is open: the window comes forward instead, its page as it was. A page's
+/// `focus()` of another window does nothing in the app's webviews.
+const FRONT: &str = "/front";
+
+/// What a composer window's page is told before it runs: that its window is the app's, so it is
+/// closed and brought forward by [`CLOSED`] and [`FRONT`] (`app/ui/app.js`'s `closeWindow` and
+/// `bringForward`).
+const IN_THE_APP: &str = "window.radiopostApp = true;";
+
+/// Whether a window the panel's page asks for (`window.open`) is the composer in a window of its
+/// own: the panel's own page, with `compose` in its query.
+fn opens_composer(panel: &Url, url: &Url) -> bool {
+    url.origin() == panel.origin()
+        && url.path() == "/"
+        && url.query_pairs().any(|(name, _)| name == COMPOSER)
+}
+
+/// What a composer window does with a page it is sent to.
+#[derive(Debug, PartialEq, Eq)]
+enum Navigation {
+    /// Shows it: the panel's own pages, and the blank page a window starts on.
+    Go,
+    /// Closes the window: the page is done ([`CLOSED`]).
+    Close,
+    /// Brings the window forward, the page staying ([`FRONT`]).
+    Front,
+    /// Stays where it is: anywhere else.
+    Refuse,
+}
+
+fn navigation(panel: &Url, to: &Url) -> Navigation {
+    if to.as_str() == "about:blank" {
+        Navigation::Go
+    } else if to.origin() != panel.origin() {
+        Navigation::Refuse
+    } else if to.path() == CLOSED {
+        Navigation::Close
+    } else if to.path() == FRONT {
+        Navigation::Front
+    } else {
+        Navigation::Go
+    }
+}
+
+/// Does `what` to the window named `label` from another thread: done inside the page's own
+/// event, it would re-enter the webview.
+fn later(app: &AppHandle, label: &str, what: fn(&tauri::WebviewWindow)) {
+    let (app, label) = (app.clone(), label.to_owned());
+    std::thread::spawn(move || {
+        if let Some(window) = app.get_webview_window(&label) {
+            what(&window);
+        }
+    });
+}
+
+/// A window the panel's page asks for: the composer in a window of its own, made here, with the
+/// size the page asked for and the panel's page in it; any other is refused, as before.
+fn composer_window(
+    app: &AppHandle,
+    panel: &Url,
+    url: &Url,
+    features: NewWindowFeatures,
+) -> NewWindowResponse<tauri::Wry> {
+    if !opens_composer(panel, url) {
+        return NewWindowResponse::Deny;
+    }
+    let label = format!(
+        "{COMPOSER}-{}",
+        COMPOSERS.fetch_add(1, Ordering::Relaxed) + 1
+    );
+    let (app_, named, home) = (app.clone(), label.clone(), panel.clone());
+    let built = WebviewWindowBuilder::new(app, &label, WebviewUrl::External(blank()))
+        .window_features(features)
+        .title("RadioPost")
+        .min_inner_size(380.0, 480.0)
+        // shown once it is where the last composer window was (`placed`)
+        .visible(false)
+        .initialization_script(IN_THE_APP)
+        .on_navigation(move |to| match navigation(&home, to) {
+            Navigation::Go => true,
+            Navigation::Refuse => false,
+            Navigation::Close => {
+                later(&app_, &named, |window| {
+                    let _ = window.close();
+                });
+                false
+            }
+            Navigation::Front => {
+                later(&app_, &named, |window| {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                });
+                false
+            }
+        })
+        .on_new_window(|_, _| NewWindowResponse::Deny)
+        .on_document_title_changed(|window, title| {
+            let _ = window.set_title(&title);
+        })
+        .build();
+    match built {
+        Ok(window) => {
+            placed(window.clone());
+            NewWindowResponse::Create { window }
+        }
+        Err(e) => {
+            radiopost_client::logfile::line(&format!("the composer's window cannot open: {e}"));
+            NewWindowResponse::Deny
+        }
+    }
+}
+
+/// A new composer window put where the last one was, at its size, then shown and in front.
+///
+/// From another thread, once the page's `window.open` has its window: the window-state plugin's
+/// own restore runs while the window is being made, and on Windows moving it there sends the
+/// window's events while Tauri holds its plugins' lock, which their handler takes again, and the
+/// program hangs (found running it, 2026-11-18). So the plugin skips composer windows' first
+/// restore (`skip_initial_state`) and this does it.
+fn placed(window: tauri::WebviewWindow) {
+    std::thread::spawn(move || {
+        let _ = window.restore_state(WINDOW_KEPT);
+        let _ = window.show();
+        let _ = window.set_focus();
+    });
+}
+
+/// The page a new window starts on, before the page that asked for it is put in it.
+fn blank() -> Url {
+    "about:blank".parse().expect("about:blank is a URL")
+}
 
 /// Brings the window forward each time an alert starts sounding (RP-8 §7): out of the taskbar,
 /// in front, and asking for attention, which flashes its taskbar button on Windows.
@@ -150,6 +305,15 @@ fn main() {
         .plugin(
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags(WINDOW_KEPT)
+                .map_label(|label| {
+                    if label.starts_with(COMPOSER) {
+                        COMPOSER
+                    } else {
+                        label
+                    }
+                })
+                // `placed` puts each composer window where the last was
+                .skip_initial_state(COMPOSER)
                 .build(),
         )
         .setup(move |app| {
@@ -158,14 +322,21 @@ fn main() {
                 updates.set_install(installer(app.handle().clone()));
             }
             updates.watch();
-            let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url.parse()?))
+            let page: Url = url.parse()?;
+            let opening = app.handle().clone();
+            let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(page.clone()))
                 .title("RadioPost")
                 .inner_size(1100.0, 760.0)
                 .min_inner_size(380.0, 480.0)
+                .on_new_window(move |to, features| composer_window(&opening, &page, &to, features))
                 .build()?;
             bring_forward(watching, window.clone());
             let asking = window.clone();
             window.on_window_event(move |event| {
+                // the program ends with its main window, composer windows and all
+                if let WindowEvent::Destroyed = event {
+                    asking.app_handle().exit(0);
+                }
                 if let WindowEvent::CloseRequested { api, .. } = event
                     && let Some(what) = interrupts(panel.activity())
                 {
@@ -211,7 +382,73 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::TcpStream;
 
-    use super::{interrupts, start_panel};
+    use tauri::Url;
+
+    use super::{Navigation, interrupts, navigation, opens_composer, start_panel};
+
+    fn url(text: &str) -> Url {
+        text.parse().expect("a URL")
+    }
+
+    /// The page may open the composer in a window of its own, and nothing else: no other page,
+    /// no other origin (the postcard's blank window stays refused, as before).
+    #[test]
+    fn the_one_window_the_page_may_open() {
+        let panel = url("http://127.0.0.1:8620/");
+        for yes in [
+            "http://127.0.0.1:8620/?compose=new",
+            "http://127.0.0.1:8620/?compose=reply&id=b3f1c9a2",
+            "http://127.0.0.1:8620/?compose=new&to=ana%40radiopost.org%2C+",
+        ] {
+            assert!(opens_composer(&panel, &url(yes)), "{yes}");
+        }
+        for no in [
+            "about:blank",
+            "http://127.0.0.1:8620/",
+            "http://127.0.0.1:8620/?composed=1",
+            "http://127.0.0.1:8620/style.css?compose=new",
+            "http://127.0.0.1:8621/?compose=new",
+            "http://localhost:8620/?compose=new",
+            "https://example.com/?compose=new",
+        ] {
+            assert!(!opens_composer(&panel, &url(no)), "{no}");
+        }
+    }
+
+    /// A composer window shows the panel's pages, closes at `/closed`, comes forward at `/front`,
+    /// and goes nowhere else.
+    #[test]
+    fn where_a_composer_window_goes() {
+        let panel = url("http://127.0.0.1:8620/");
+        assert_eq!(navigation(&panel, &url("about:blank")), Navigation::Go);
+        assert_eq!(
+            navigation(
+                &panel,
+                &url("http://127.0.0.1:8620/?compose=forward&id=4c2d")
+            ),
+            Navigation::Go
+        );
+        assert_eq!(
+            navigation(&panel, &url("http://127.0.0.1:8620/closed")),
+            Navigation::Close
+        );
+        assert_eq!(
+            navigation(&panel, &url("http://127.0.0.1:8620/front")),
+            Navigation::Front
+        );
+        for elsewhere in [
+            "https://example.com/",
+            "http://127.0.0.1:8621/closed",
+            "https://example.com/front",
+            "file:///C:/Windows/",
+        ] {
+            assert_eq!(
+                navigation(&panel, &url(elsewhere)),
+                Navigation::Refuse,
+                "{elsewhere}"
+            );
+        }
+    }
 
     /// The window's page is the panel's, served for the home given.
     #[test]

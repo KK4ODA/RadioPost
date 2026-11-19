@@ -464,6 +464,14 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   station listens. Nothing on the air changes: the edited message is a new content ID. `app/src-tauri` (`radiopost-app`, its
   own package and lockfile, outside the core workspace; CI's `app · desktop` job) is the Tauri
   window around it: the panel's server in-process on 8620 or a free port, the window on it, no IPC.
+  Write pops out (2026-11-18): at 720 px and under the panel stacks in one column (`STACKED`), and
+  Write, Reply, Forward and writing to an address open the composer in a window of its own, the
+  same page with `?compose=` (`ALONE`: `startAlone`, `popOut`; it tells the main window what it
+  put in the outbox over `BroadcastChannel("radiopost")`). In a browser a pop-up; in the shell,
+  `on_new_window` makes it a window `compose-<n>` (`composer_window`), which closes and comes
+  forward when its page goes to `/closed` or `/front` (a page's `close()` and `focus()` do not
+  work there on every system), and which the window-state plugin keeps under `compose`, its first
+  restore skipped and done from a thread (`placed`): restored inside `window.open`, the program hung.
   It needs `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev
   libayatana-appindicator3-dev`; `xvfb-run` and ImageMagick's `import` show the real window here.
   Its icons come from `tools/figures/icons.py` (`--check` compares pixels, not zlib's bytes).

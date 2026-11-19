@@ -7,6 +7,9 @@
   <title>RadioPost</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
+  <!-- a composer window of its own (app.js, ALONE), marked before the page draws: the panel's
+       other parts never show in it -->
+  <script>if (new URLSearchParams(location.search).has("compose")) document.documentElement.dataset.window = "compose";</script>
   <script type="module" src="app.js"></script>
 </head>
 <body>
@@ -26,7 +29,7 @@
 
   <div class="frame">
     <nav class="side" aria-label="Folders">
-      <button class="primary" id="write" title="Write a message; it waits in the outbox until a session carries it">Write</button>
+      <button class="primary" id="write" title="Write a message; it waits in the outbox until a session carries it. When this window is narrow, you write it in a window of its own">Write</button>
       <ul class="folders">
         <li><button data-folder="inbox" title="Messages received">Inbox <span class="count" id="n-inbox"></span></button></li>
         <li><button data-folder="outbox" title="Messages waiting to be sent">Outbox <span class="count" id="n-outbox"></span></button></li>

@@ -3,6 +3,15 @@
 // setup, over the client's JSON API (app/client/src/panel.rs). No build step.
 
 const $ = (id) => document.getElementById(id);
+
+// The panel stacks its parts in one column at this width and under (style.css's @media rule for
+// it): the folders and the station then fill the window and push the rest below it. There Write,
+// Reply, Forward and writing to an address open the composer in a window of its own: a pop-up in a
+// browser, a window of the desktop app's own in RadioPost (app/src-tauri). That window loads this
+// page with `?compose=`, and the page is then the composer alone (`ALONE`).
+const STACKED = window.matchMedia("(max-width: 720px)");
+const ALONE = new URLSearchParams(location.search).has("compose");
+
 let folder = "inbox";
 let logNext = 0;
 let meAddress = "";
@@ -430,7 +439,7 @@ function forgetCallsign() {
 }
 
 async function changeCallsign(change) {
-  const writing = !$("composer").hidden;
+  const writing = !$("composer").hidden || composersOpen();
   try {
     await api("callsigns", change);
   } catch (e) {
@@ -442,12 +451,13 @@ async function changeCallsign(change) {
   // a message being edited is in the other callsign's outbox: it stays there as it was
   const editing = answering?.how === "edit";
   if (editing) newComposer();
+  const editsClosed = closeEdits();
   const s = await refresh();
   if (s.me) probeOffice();
   if (change.add || !s.me) {
     show("setup");
     $("enroll").address.focus();
-  } else if (editing) {
+  } else if (editing || editsClosed) {
     toast("The edit was closed: the message stays as it was in the other callsign's outbox.");
     await openFolder(folder);
   } else if (writing) {
@@ -847,6 +857,7 @@ function groupWritten(g, head = "") {
 }
 
 function writeToGroup(g) {
+  if (popOut({to: `${groupWritten(g).join(", ")}, `})) return;
   const form = newComposer();
   form.to.value = `${groupWritten(g).join(", ")}, `;
   show("composer");
@@ -970,6 +981,7 @@ async function forgetAddress(address, after) {
 }
 
 function writeTo(e) {
+  if (popOut({to: `${writtenAs(e)}, `})) return;
   const form = newComposer();
   form.to.value = `${writtenAs(e)}, `;
   show("composer");
@@ -1252,18 +1264,19 @@ function fillForm(values) {
 
 // Edit: a message in the outbox, not yet handed over, in the composer as it was written; saved,
 // the changed message takes its place there. The panel says why when it cannot be changed: a
-// session may be sending it, or a gateway holds it already.
+// session may be sending it, or a gateway holds it already. False when it cannot be edited.
 async function edit(id) {
+  if (popOut({how: "edit", id})) return true;
   let m;
   try {
     m = await api(`edit?id=${id}`);
   } catch (e) {
     toast(e.message, true);
-    return;
+    return false;
   }
   if (m.form && !templates.some((t) => t.template === m.form.template)) {
     toast("Its form is not one this computer holds, so it cannot be edited here.", true);
-    return;
+    return false;
   }
   const form = newComposer();
   answering = {how: "edit", id: m.id};
@@ -1286,17 +1299,20 @@ async function edit(id) {
   $("c-files").replaceChildren(...m.files.map(carriedFile));
   show("composer");
   form.subject.focus();
+  return true;
 }
 
-// Reply, Reply all or Forward: the composer filled in from the message read. A reply quotes
-// nothing (every byte goes on the air); the original shows under the composer for reference.
-async function answer(how) {
+// Reply, Reply all or Forward: the composer filled in from the message read (`id`). A reply
+// quotes nothing (every byte goes on the air); the original shows under the composer for
+// reference. False when the message cannot be answered.
+async function answer(how, id = reading.id) {
+  if (popOut({how, id})) return true;
   let a;
   try {
-    a = await api(`answer?id=${reading.id}&how=${how}`);
+    a = await api(`answer?id=${encodeURIComponent(id)}&how=${how}`);
   } catch (e) {
     toast(e.message, true);
-    return;
+    return false;
   }
   const form = newComposer();
   answering = {how, id: a.original.id, replyTo: a.reply_to};
@@ -1338,6 +1354,7 @@ async function answer(how) {
   const first = how === "forward" ? form.to : form.body;
   first.focus();
   if (first === form.body) form.body.setSelectionRange(0, 0);
+  return true;
 }
 
 async function openMessage(id, from = {folder}) {
@@ -1449,14 +1466,126 @@ async function send(event) {
   try {
     await api("compose", message);
     newComposer();
-    loadAddresses();
-    toast(edited ? "Changed: it waits in the outbox in the old one's place."
-                 : "In the outbox: the next session carries it.");
-    await refresh();
-    await openFolder("outbox");
+    if (ALONE) {
+      // the panel's window does the rest, as below
+      windowsChannel?.postMessage({composed: true, edited});
+      closeWindow();
+      return;
+    }
+    await written(false, edited);
   } catch (e) {
     toast(e.message, true);
   }
+}
+
+// a message just put in the outbox, or changed there (`edited`), by this window's composer or by
+// one in a window of its own (`elsewhere`): the address list read again, the folders counted, and
+// the Outbox shown, unless this window was busy with something else meanwhile
+async function written(elsewhere = false, edited = false) {
+  loadAddresses();
+  toast(edited ? "Changed: it waits in the outbox in the old one's place."
+               : "In the outbox: the next session carries it.");
+  await refresh();
+  if (!elsewhere || !$("list-view").hidden || !$("reader").hidden) await openFolder("outbox");
+}
+
+function discard() {
+  newComposer();
+  if (ALONE) closeWindow();
+  else openFolder(folder);
+}
+
+// ── the composer in a window of its own (stacked layouts) ───────────────────────────────────
+// Each window is asked for by what it holds: Write's new message, an answer to a message, or a
+// message to an address. Asked for again while it is open, it comes forward with what was typed,
+// as the panel keeps a message half written. A window refused (a pop-up blocker) leaves the
+// composer here. The window's page is this one: the same composer, the same API. What it puts in
+// the outbox it tells the panel's window over a BroadcastChannel, and closes.
+
+const windowsChannel = "BroadcastChannel" in window ? new BroadcastChannel("radiopost") : null;
+const composerWindows = new Map();
+
+function composersOpen() {
+  return [...composerWindows.values()].some((w) => !w.closed);
+}
+
+// the composer in a window of its own, opened on `start` ({how, id} or {to}), when the panel is
+// stacked; false when it opens here
+function popOut(start) {
+  if (ALONE || !STACKED.matches) return false;
+  const query = new URLSearchParams({compose: start.how || "new"});
+  if (start.id) query.set("id", start.id);
+  if (start.to) query.set("to", start.to);
+  const key = query.toString();
+  const open = composerWindows.get(key);
+  if (open && !open.closed) {
+    bringForward(open);
+    return true;
+  }
+  const w = window.open(`/?${key}`, "_blank", "popup,width=780,height=760");
+  if (!w) {
+    toast("No window of its own could open, so the message is written here: allow pop-ups for the panel.", true);
+    return false;
+  }
+  composerWindows.set(key, w);
+  return true;
+}
+
+// A browser's pop-up closes itself and comes forward when asked. A window of the desktop app's
+// (`radiopostApp`, set by the app) does neither on every system, so its page is sent to /closed or
+// /front instead, which the app stops and takes as the word to close the window or bring it
+// forward (app/src-tauri): the page stays as it was.
+function closeWindow(w = window) {
+  if (w.radiopostApp) w.location.replace("/closed");
+  else w.close();
+}
+
+function bringForward(w) {
+  if (w.radiopostApp) w.location.assign("/front");
+  else w.focus();
+}
+
+// the composer windows editing a message, closed, the message staying as it was; true if any were
+function closeEdits() {
+  let any = false;
+  for (const [key, w] of composerWindows) {
+    if (key.startsWith("compose=edit&") && !w.closed) {
+      closeWindow(w);
+      any = true;
+    }
+  }
+  return any;
+}
+
+function wireComposer() {
+  wireSuggestions($("composer").to);
+  wireSuggestions($("composer").cc);
+  $("cancel").addEventListener("click", discard);
+  $("composer").addEventListener("submit", send);
+  $("c-form").addEventListener("change", showFormFields);
+}
+
+// the page as a composer window: the composer alone, on what the panel's window asked for
+async function startAlone() {
+  wireComposer();
+  await loadAddresses();
+  await loadForms();
+  const q = new URLSearchParams(location.search);
+  const how = q.get("compose");
+  const on = how === "edit" ? edit : ANSWER_TITLES[how] ? (id) => answer(how, id) : null;
+  if (on && !await on(q.get("id"))) {
+    // what could not be opened is said where it was asked for, as there
+    windowsChannel?.postMessage({said: $("toast-text").textContent});
+    closeWindow();
+    return;
+  }
+  if (!on) {
+    const form = newComposer();
+    form.to.value = q.get("to") || "";
+    show("composer");
+    (form.to.value ? form.subject : form.to).focus();
+  }
+  document.title = `${$("c-title").textContent} · RadioPost`;
 }
 
 function adapter() {
@@ -3108,12 +3237,12 @@ function wire() {
     b.addEventListener("click", () => openFolder(b.dataset.folder));
   }
   $("write").addEventListener("click", () => {
+    if (popOut({})) return;
     // a reply left half written stays; a new message starts empty
     if (answering) newComposer();
     show("composer");
   });
-  wireSuggestions($("composer").to);
-  wireSuggestions($("composer").cc);
+  wireComposer();
   $("address-filter").addEventListener("input", renderAddresses);
   const addAddress = async () => {
     const typed = $("address-new").value.trim();
@@ -3136,9 +3265,6 @@ function wire() {
   $("group-form").addEventListener("submit", saveGroup);
   $("group-cancel").addEventListener("click", () => editGroup(null));
   $("address-new").addEventListener("keydown", (e) => { if (e.key === "Enter") addAddress(); });
-  $("cancel").addEventListener("click", () => { newComposer(); openFolder(folder); });
-  $("composer").addEventListener("submit", send);
-  $("c-form").addEventListener("change", showFormFields);
   $("back").addEventListener("click", () => openFolder(folder));
   $("r-reply").addEventListener("click", () => answer("reply"));
   $("r-reply-all").addEventListener("click", () => answer("reply-all"));
@@ -3417,6 +3543,11 @@ function wire() {
 async function start() {
   wire();
   wireAlerts();
+  // what a composer window of its own put in the outbox, or could not open
+  windowsChannel?.addEventListener("message", (e) => {
+    if (e.data && e.data.composed) written(true, e.data.edited).catch(() => {});
+    if (e.data && e.data.said) toast(e.data.said, true);
+  });
   try { notifySettings = await api("notify"); } catch { notifySettings = {}; }
   renderSounds();
   await loadAddresses();
@@ -3431,4 +3562,4 @@ async function start() {
   setInterval(() => { if (meAddress) probeOffice(); }, 60000);
 }
 
-start().catch((e) => toast(e.message, true));
+(ALONE ? startAlone() : start()).catch((e) => toast(e.message, true));

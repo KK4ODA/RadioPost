@@ -389,9 +389,9 @@ function gatewayApi(world) {
 async function open(browser, {ui, api, width = 1280, height = 800}) {
   const context = await browser.newContext({viewport: {width, height}, deviceScaleFactor: 2,
     colorScheme: "light", locale: "en-US", timezoneId: "America/New_York"});
-  const page = await context.newPage();
-  await page.clock.setFixedTime(NOW);
-  await page.route(`${ORIGIN}/**`, async (route) => {
+  // the clock and the API are the context's, so a window the page opens has them too
+  await context.clock.setFixedTime(NOW);
+  await context.route(`${ORIGIN}/**`, async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname.startsWith("/api/")) {
       const path = url.pathname.slice(5);
@@ -409,6 +409,7 @@ async function open(browser, {ui, api, width = 1280, height = 800}) {
       await route.fulfill({status: 404, body: ""});
     }
   });
+  const page = await context.newPage();
   await page.goto(`${ORIGIN}/`);
   await page.waitForTimeout(400);
   return {page, context};
@@ -636,6 +637,50 @@ const SHOTS = {
       + "the spare battery box.\n\n73,\nAna, N0CALL");
     await page.locator("body").click({position: {x: 1200, y: 760}});
     await shot(page, "client-compose");
+    await context.close();
+  },
+
+  // a narrow window: the panel stacked in one column, and Write's composer in a window of its own
+  // beside it, the two drawn side by side as on a screen
+  async "client-compose-window"(browser) {
+    const panelSize = {width: 600, height: 820};
+    const composerSize = {width: 660, height: 820};
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+                                                 ...panelSize});
+    await spreadLog(page, "log", T - 1300, 19);
+    const opened = context.waitForEvent("page");
+    await page.click("#write");
+    const w = await opened;
+    await w.setViewportSize(composerSize);
+    await w.waitForTimeout(400);
+    const form = w.locator("#composer");
+    await form.locator("input[name=to]").fill("maria@example.com");
+    await form.locator("input[name=to]").press("Escape");
+    await form.locator("input[name=subject]").fill("Field Day: count me in");
+    await form.locator("textarea[name=body]").fill(
+      "Hi Maria,\n\nCount me in for Friday. I will bring the 40 m dipole, a chair and\n"
+      + "the spare battery box.\n\n73,\nAna, N0CALL");
+    await w.evaluate(() => document.activeElement.blur());
+    const panel = (await page.screenshot()).toString("base64");
+    const composer = (await w.screenshot()).toString("base64");
+    const frame = (title, png, size) => `<figure><figcaption>${title}</figcaption>`
+      + `<img src="data:image/png;base64,${png}" width="${size.width}" height="${size.height}"></figure>`;
+    const both = await context.newPage();
+    const gap = 28;
+    await both.setViewportSize({width: panelSize.width + composerSize.width + 3 * gap + 4,
+                                height: panelSize.height + 2 * gap + 32});
+    await both.setContent(`<style>
+      body { margin: 0; padding: ${gap}px; display: flex; gap: ${gap}px; align-items: flex-start;
+             background: #d5dae0; font: 13px/30px Inter, system-ui, sans-serif; }
+      figure { margin: 0; border: 1px solid #9aa3ad; border-radius: 8px; overflow: hidden;
+               background: #fff; box-shadow: 0 10px 30px rgb(0 0 0 / .18); }
+      figcaption { height: 30px; padding: 0 12px; background: #eef0f2; color: #1b1f23;
+                   border-bottom: 1px solid #d9dde1; }
+      img { display: block; }
+    </style>${frame("RadioPost", panel, panelSize)}${frame("New message · RadioPost", composer,
+      composerSize)}`);
+    await both.screenshot({path: join(OUT, "client-compose-window.png")});
+    console.log("docs/manual/screens/client-compose-window.png");
     await context.close();
   },
 
