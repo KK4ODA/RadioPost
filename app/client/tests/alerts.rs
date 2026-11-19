@@ -58,19 +58,42 @@ fn shared_loopback() -> (Server, String, String) {
     (server, at_f, at_a)
 }
 
+/// The times the panel lent its station to the alerts, and the times it was given back.
+#[derive(Clone, Default)]
+struct Lends {
+    taken: Arc<AtomicUsize>,
+    back: Arc<AtomicUsize>,
+}
+
+impl Lends {
+    /// Waits until every lend has been given back. While a lend lasts, `send_alerts` sends all
+    /// that falls due on the one connection, so a step taken before the last lend ends has what
+    /// it queues go on that lend, not a new one (CI's runners did, now and then). An operator
+    /// acknowledges or replies seconds later, long after it ended.
+    fn settled(&self) {
+        let end = Instant::now() + Duration::from_secs(10);
+        while self.taken.load(Ordering::SeqCst) != self.back.load(Ordering::SeqCst) {
+            assert!(
+                Instant::now() < end,
+                "the station was not given back in time"
+            );
+            thread::sleep(Duration::from_millis(20));
+        }
+    }
+}
+
 /// A client's connection between calls, carrying its alerts; the station is lent to it each time
-/// it asks, as an idle panel would, and the times it was are counted.
-fn carrying(home: &Path, modem: &str, lent: &Arc<AtomicUsize>) -> (Presence, Alerts) {
+/// it asks, as an idle panel would, and the times it was taken and given back are counted.
+fn carrying(home: &Path, modem: &str, lends: &Lends) -> (Presence, Alerts) {
     let alerts = Alerts::open(home);
     let presence = Presence::new(home).retrying_every(Duration::from_millis(200));
-    let counted = Arc::clone(lent);
+    let counted = lends.clone();
     presence.carry(Carrier {
         alerts: alerts.clone(),
         base: home.to_owned(),
         gate: Arc::new(move |take| {
-            if take {
-                counted.fetch_add(1, Ordering::SeqCst);
-            }
+            let count = if take { &counted.taken } else { &counted.back };
+            count.fetch_add(1, Ordering::SeqCst);
             true
         }),
         say: Arc::new(|_line: &str| {}),
@@ -106,9 +129,9 @@ fn an_alert_crosses_between_two_panels_and_is_answered() {
     store_for(&f_home, "device:facundo", "facundo");
     store_for(&a_home, "device:ana", "ana");
     let (_server, at_f, at_a) = shared_loopback();
-    let lent = Arc::new(AtomicUsize::new(0));
-    let (f_presence, facundo) = carrying(&f_home, &at_f, &lent);
-    let (a_presence, ana) = carrying(&a_home, &at_a, &lent);
+    let lends = Lends::default();
+    let (f_presence, facundo) = carrying(&f_home, &at_f, &lends);
+    let (a_presence, ana) = carrying(&a_home, &at_a, &lends);
     facundo
         .add_circle("Family", KEYWORD, Level::TimeSensitive)
         .expect("kept");
@@ -131,10 +154,12 @@ fn an_alert_crosses_between_two_panels_and_is_answered() {
     assert_eq!(heard_there["state"], "new");
     assert!(ana.alarming(), "it sounds until acknowledged");
     until(&facundo, Duration::from_secs(10), |e| e["state"] == "heard");
+    lends.settled();
 
     ana.acknowledge(&tag, unix_now()).expect("acknowledged");
     assert!(!ana.alarming());
     until(&facundo, Duration::from_secs(10), |e| e["state"] == "seen");
+    lends.settled();
     ana.reply(&tag, "On my way, 5 min", unix_now())
         .expect("replied");
     let answered = until(&facundo, Duration::from_secs(10), |e| {
@@ -148,8 +173,14 @@ fn an_alert_crosses_between_two_panels_and_is_answered() {
     assert_eq!(last["from"], "N0CALL");
     assert_eq!(last["text"], "On my way, 5 min");
     assert!(
-        lent.load(Ordering::SeqCst) >= 4,
+        lends.taken.load(Ordering::SeqCst) >= 4,
         "each send took the station from the panel"
+    );
+    lends.settled();
+    assert_eq!(
+        lends.taken.load(Ordering::SeqCst),
+        lends.back.load(Ordering::SeqCst),
+        "every lend was given back"
     );
     f_presence.stop();
     a_presence.stop();
@@ -165,11 +196,10 @@ fn a_modem_that_serves_one_program_is_let_go() {
     // given up; one that says it is not shared is never held (the loopback test of `presence`
     // covers the answered case through Aether's stand-in)
     let adapter = TcpListener::bind("127.0.0.1:0").expect("a port");
-    let lent = Arc::new(AtomicUsize::new(0));
     let (presence, alerts) = carrying(
         &home,
         &adapter.local_addr().expect("bound").to_string(),
-        &lent,
+        &Lends::default(),
     );
     // no circle: no connection to a modem that is not Aether
     adapter.set_nonblocking(true).expect("non-blocking");
