@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.23.0 |
+| **Version** | 1.23.1 |
 | **Updated** | 2026-11-19 |
 | **Describes** | RadioPost 0.1.0-beta.30 |
 | **Licence** | CC BY 4.0 |
@@ -2050,3 +2050,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.21.0 | 2026-11-18 | A tester's gateway registered with radiopost.org under his first account while he was trying his own post office, and nothing could take it off. §17, §18 step 2: **Account**, the client's account the gateway registers with, and the line that says where before **Register with …**; the form keeps what was registered. §18 *Unregistering, or moving to another post office*: **Unregister**, what it does, one post office at a time, and what keeps it from unregistering. §23: `accounts`, `register --account`, `unregister`. §24: `record.json`. §25, §27 *Gateways registered here*: the desk's **Gateways** tab and its **Unregister** (new Figure 35; later figures renumbered). §37, §40 to match. The gateway's Setup and the desk's screenshots retaken. |
 | 1.22.0 | 2026-11-18 | §27: **New password** beside an account's mailbox, for someone who forgot theirs (the mail server has no reset of its own): a new password, shown once, only the password changed. §37 to match. |
 | 1.23.0 | 2026-11-19 | Each program's version beside its name at the top of its window (§1, §6, §19). §12 and §18: **Updates** in **Setup**, with **Check for updates**, which asks for a newer release now instead of at the next six-hourly check. §4 and §19 to match. Figures 7 and 30, and the windows that show the top bar, retaken. |
+| 1.23.1 | 2026-11-19 | §27: the desk's **Accounts** tab keeps a callsign, a date and an address whole (an address breaks only after its @), and a password shown under **Mailbox** wraps; it had squeezed the other columns until callsigns read one letter a line. Figure 34 retaken. |

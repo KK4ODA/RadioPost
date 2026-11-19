@@ -332,7 +332,7 @@
 
         <div class="o-pane" id="o-accounts" hidden>
           <input id="o-filter" class="filter" type="search" placeholder="Find" spellcheck="false" autocomplete="off" title="Show the accounts whose address, name or callsign has this in it">
-          <table class="list" aria-label="Accounts">
+          <div class="scroll"><table class="list" aria-label="Accounts">
             <thead><tr>
               <th title="The account">Address</th><th title="The name on the email it sends">Name</th>
               <th title="Each device enrolled for it: the callsign, and until when its credential runs">Devices</th>
@@ -340,7 +340,7 @@
               <th title="Whether the mail server has its mailbox: without one, email from outside is refused for the account">Mailbox</th>
             </tr></thead>
             <tbody id="o-account-rows"></tbody>
-          </table>
+          </table></div>
         </div>
 
         <form class="o-pane card" id="o-code" hidden>

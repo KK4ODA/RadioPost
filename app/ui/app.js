@@ -2234,7 +2234,10 @@ function drawAccounts() {
           title: "Make its mailbox in the mail server now; its password is shown once",
           onclick: () => makeMailbox(a, mailbox)}));
     }
-    return el("tr", {}, el("td", {class: "mono", text: a.address}), name, devices,
+    // an address may break after its @ and nowhere else
+    const at = a.address.indexOf("@") + 1;
+    const address = el("td", {class: "mono"}, a.address.slice(0, at), el("wbr"), a.address.slice(at));
+    return el("tr", {}, address, name, devices,
       el("td", {class: "n", text: String(a.waiting || 0)}), mailbox);
   }));
 }

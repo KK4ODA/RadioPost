@@ -372,6 +372,12 @@ h2.section { margin-top: 24px; }
 .decided td, #o-accounts td, #o-mail td { cursor: default; }
 .dev { display: flex; gap: 8px; align-items: center; font-size: 13px; }
 .dev .mono { font-size: 12px; }
+/* the accounts: an address breaks only after its @, a device is one line, and a password shown in
+   the Mailbox cell wraps: as a list's last cell (nowrap) its two sentences took the whole width, the
+   other columns at their least, the callsigns one letter a line */
+#o-accounts td.mono { overflow-wrap: normal; }
+.dev > span { white-space: nowrap; overflow-wrap: normal; }
+#o-account-rows td:last-child .note { white-space: normal; }
 .dev.revoked { color: var(--muted); text-decoration: line-through; }
 .dev button { height: 24px; padding: 0 8px; font-size: 12px; }
 .made { margin-top: 14px; padding: 12px; border: 1px dashed var(--line); border-radius: 8px; }
