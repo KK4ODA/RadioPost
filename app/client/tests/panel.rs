@@ -350,19 +350,83 @@ fn a_form_sent_p2p_reads_as_the_form() {
     assert_eq!(
         form["rows"],
         json!([
-            {"label": "Incident name", "value": "Shelter 3", "lines": false},
-            {"label": "To (name and position)", "value": "Ana Lopez, EOC", "lines": false},
-            {"label": "From (name and position)", "value": "Facundo, net control", "lines": false},
-            {"label": "Subject", "value": "Cots and water", "lines": false},
-            {"label": "Date", "value": date, "lines": false},
-            {"label": "Time", "value": time, "lines": false},
-            {"label": "Message", "value": "Forty cots by 18:00.\nWater for 120.", "lines": true},
-            {"label": "Approved by (name and position)", "value": "J. Ortega", "lines": false},
+            {"n": 1, "label": "Incident name", "value": "Shelter 3", "lines": false},
+            {"n": 2, "label": "To (name and position)", "value": "Ana Lopez, EOC", "lines": false},
+            {"n": 3, "label": "From (name and position)", "value": "Facundo, net control", "lines": false},
+            {"n": 4, "label": "Subject", "value": "Cots and water", "lines": false},
+            {"n": 5, "label": "Date", "value": date, "lines": false},
+            {"n": 6, "label": "Time", "value": time, "lines": false},
+            {"n": 7, "label": "Message", "value": "Forty cots by 18:00.\nWater for 120.", "lines": true},
+            {"n": 8, "label": "Approved by (name and position)", "value": "J. Ortega", "lines": false},
         ]),
         "{m}"
     );
     // the note the sender added below the form is the message's text, apart from the form
     assert_eq!(m["body"], "Sent from the mobile.", "{m}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The reader's **Save** (the author's ask of 2026-11-18): a message's attachment saved as a file,
+/// under a safe name whatever the other station called it, never over a file already there; and
+/// a form's print layout, the paper form it comes from, given with its template.
+#[test]
+fn an_attachment_is_saved_and_a_form_prints_as_its_paper_form() {
+    let dir = scratch("panel-save");
+    store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    let saved = dir.join("Downloads");
+    let c = Client {
+        at: Panel::new(&dir.join("facundo"), None)
+            .saving_in(&saved)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let id = c
+        .post(
+            "/api/compose",
+            &json!({"to": "ana@hampost.org", "subject": "Two files", "body": "",
+                    "files": [{"name": "grid.txt", "data": "RU03Mw=="},
+                              {"name": "../../evil.txt", "data": "bm8="}]}),
+        )
+        .expect("composed")["id"]
+        .as_str()
+        .expect("an ID")
+        .to_owned();
+    let save = |n: u64| c.post("/api/save", &json!({"id": &id[..6], "n": n}));
+    let first = save(0).expect("saved");
+    assert_eq!(first["name"], "grid.txt", "{first}");
+    assert_eq!(
+        std::fs::read(saved.join("grid.txt")).expect("the file"),
+        b"EM73"
+    );
+    // saved again, it goes beside the first, which stays as it was
+    let second = save(0).expect("saved again");
+    assert_eq!(second["name"], "grid (2).txt", "{second}");
+    assert!(saved.join("grid (2).txt").is_file());
+    // a name that would climb out of the folder stays in it
+    let climbing = save(1).expect("saved");
+    assert_eq!(climbing["name"], "evil.txt", "{climbing}");
+    assert_eq!(
+        std::fs::read(saved.join("evil.txt")).expect("the file"),
+        b"no"
+    );
+    assert!(!dir.join("evil.txt").exists());
+    assert!(
+        save(2)
+            .expect_err("no third")
+            .contains("no such attachment")
+    );
+
+    // the published ICS-213 prints as FEMA's ICS 213, its layout named by the template's fingerprint
+    let ics213 = &c.get("/api/forms")[0];
+    let print = ics213["print"].as_str().expect("a print layout");
+    assert!(
+        print.contains(&format!(
+            "data-template=\"{}\"",
+            ics213["template"].as_str().expect("a fingerprint")
+        )),
+        "{print}"
+    );
+    assert!(print.contains("GENERAL MESSAGE (ICS 213)"), "{print}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

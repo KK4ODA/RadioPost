@@ -1392,9 +1392,22 @@ async function openMessage(id, from = {folder}) {
   $("r-cc").hidden = $("r-cc-t").hidden = !m.cc.length;
   $("r-date").textContent = new Date(m.date * 1000).toLocaleString();
   $("r-id").textContent = m.id;
-  $("r-files").replaceChildren(...m.files.map((f) => {
-    const li = document.createElement("li");
-    li.textContent = `${f.name} (${f.type}, ${f.size} bytes)`;
+  // each file saved in the Downloads folder, to open with the program of the operator's choice
+  $("r-files").replaceChildren(...m.files.map((f, n) => {
+    const li = el("li", {text: `${f.name} (${f.type}, ${f.size} bytes) `});
+    const save = el("button", {type: "button", class: "link", text: "Save",
+      title: "Save it as a file in your Downloads folder, to open with the program of your choice. A file already there is never written over"});
+    save.addEventListener("click", async () => {
+      try {
+        const s = await api("save", {id, n});
+        save.textContent = "Saved";
+        li.title = s.path;
+        toast(`Saved as ${s.name} in ${s.path.slice(0, s.path.length - s.name.length - 1)}`);
+      } catch (e) {
+        toast(e.message, true);
+      }
+    });
+    li.append(save);
     return li;
   }));
   $("r-held").replaceChildren(...m.held.map((f) => {
@@ -1430,7 +1443,46 @@ async function openMessage(id, from = {folder}) {
     [el("dt", {text: r.label}), el("dd", {class: r.lines ? "lines" : "", text: r.value})]));
   $("r-body").textContent = m.body;
   $("r-body").hidden = !!f && !m.body;
+  // printed, a form with a layout is the paper form it comes from; anything else, the message as
+  // it shows here. The PDF's name is the form's and the subject
+  const layout = f && f.filled && templates.find((t) => t.template === f.template)?.print;
+  $("reader").classList.toggle("has-paper", !!layout);
+  $("r-paper").replaceChildren(...(layout ? paper(m, layout) : []));
+  printTitle = [f && f.filled ? f.title : "", m.subject || "Message"].filter(Boolean).join(" - ");
   show("reader");
+}
+
+// what the message read prints as, by its name: the name a PDF of it is offered
+let printTitle = "RadioPost";
+
+// A form as the paper form it comes from, for printing: the program's own layout
+// (forms/*.print.html, compiled in, never anything from the air), each field's value put in its
+// place as text, then what RadioPost knows of the message and the sender's note.
+function paper(m, layout) {
+  const t = document.createElement("template");
+  t.innerHTML = layout;
+  const values = new Map(m.form.rows.map((r) => [String(r.n), r.value]));
+  for (const place of t.content.querySelectorAll("[data-field]")) {
+    place.textContent = values.get(place.dataset.field) ?? "";
+  }
+  const when = `${new Date(m.date * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC`;
+  const out = [t.content, el("p", {class: "paper-line",
+    text: `Sent by RadioPost from ${m.from} to ${[...m.to, ...m.cc].join(", ")}, ${when}. Message ${m.id}.`})];
+  if (m.files.length) {
+    out.push(el("p", {class: "paper-line", text: `Attachments: ${m.files.map((x) => x.name).join(", ")}.`}));
+  }
+  if (m.body) out.push(el("p", {class: "paper-line", text: "The sender's note:"}), el("pre", {class: "paper-note", text: m.body}));
+  return out;
+}
+
+// The system's print dialog, where Save as PDF makes a PDF. In the app (`radiopostPrints`, set by
+// the app) the window prints itself: macOS's webview does nothing at window.print(), so the page
+// goes to /print instead, which the app stops and takes as the word to print (app/src-tauri).
+function printMessage() {
+  document.title = printTitle;
+  addEventListener("afterprint", () => { document.title = "RadioPost"; }, {once: true});
+  if (window.radiopostPrints) location.assign("/print");
+  else window.print();
 }
 
 function fileData(file) {
@@ -3275,6 +3327,7 @@ function wire() {
   $("r-reply-all").addEventListener("click", () => answer("reply-all"));
   $("r-forward").addEventListener("click", () => answer("forward"));
   $("r-edit").addEventListener("click", () => edit(reading.id));
+  $("r-print").addEventListener("click", printMessage);
   $("r-delete").addEventListener("click", () => toTrash(reading.id, reading.folder));
   $("r-restore").addEventListener("click",
     () => fromTrash("restore", reading.id, reading.was, `Back in the ${reading.was}.`));

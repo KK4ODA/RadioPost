@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.19.0 |
+| **Version** | 1.20.0 |
 | **Updated** | 2026-11-18 |
 | **Describes** | RadioPost 0.1.0-beta.27 |
 | **Licence** | CC BY 4.0 |
@@ -562,7 +562,7 @@ leaves the other station waiting. What did not cross is offered again on your ne
 
 Click a message in the **Inbox** to read it.
 
-![A message open in the reader, with an attachment held at the post office](screens/client-reader.png)
+![A message open in the reader, with a file to save and an attachment held at the post office](screens/client-reader.png)
 
 *Figure 16. Reading a message.*
 
@@ -575,6 +575,11 @@ Click a message in the **Inbox** to read it.
   So its **Subject**, **Date** and **Time** stay the original's (sent as a form again, they would
   be your message's own), and the station it reaches shows it as text, not as a form. The labels
   go on the air too, so it takes a little longer than the form did.
+- **Print** prints it. To make a PDF, choose *Save as PDF* (on Windows, *Microsoft Print to
+  PDF*) as the printer. A message prints as it shows, without the buttons. An ICS-213 prints as
+  FEMA's ICS 213, the paper form, its blocks numbered as there and its signature lines blank to
+  sign on paper. Under it come the sender, the recipients, the date and time in UTC, the
+  message's ID, its files and the sender's note.
 - **Delete** moves it to the Trash (or press the Delete key).
 - **Edit**, on a message in the **Outbox**, changes it before it goes
   ([section 7](#7-writing-a-message)).
@@ -585,6 +590,14 @@ in, its label beside its value, in the form's order. The **Subject**, **Date** a
 the message's own. The sender's note, if any, follows in a box of its own. A form your computer
 does not hold shows as *Form* and a number, its values by field number: ask the sender which form
 it is.
+
+**Files.** Click **Save** beside a file to save it in the **Downloads** folder in your home
+folder. RadioPost never writes over a file already there: a second `grid.txt` is saved as
+`grid (2).txt`. It says where the file went. Open it from there with the program of your choice.
+A file came from another station, so treat it as you would a download: RadioPost keeps only the
+last part of its name and leaves out characters your system does not allow. On Windows it marks
+the file as downloaded, so Windows warns before running it and opens a document in its
+protected view.
 
 **Attachments held at the post office.** A file too large for the radio does not come with its
 message. Under it you see *held at the post office* and the button **Ask on the next call**.
@@ -1949,3 +1962,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.17.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18. §6: in a narrow window the parts stack in one column, the folders side by side. §7.1: there **Write**, **Reply**, **Reply all**, **Forward**, **Edit** and writing to an address open the message in a window of its own, beside the RadioPost window, or a pop-up in a browser (new Figure 12; later figures renumbered). |
 | 1.18.0 | 2026-11-18 | §9: **Forward** carries a form as its text, the labels with the values and the sender's note below; it had carried the note alone, and the form's values were lost. **Reply** shows a form's text under your own; it had shown the note. |
 | 1.19.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18: a house station listens for days. While **Listening for P2P** is on and no station has called, messages are written, changed and deleted as usual, and a station that calls takes what is in the outbox then; **Call** and **Tuner tone** stay greyed (§7, §10, §39). The credential is renewed while the station listens (§5.4). §37: *the station is listening for P2P calls*, and an edit is refused only during a session. |
+| 1.20.0 | 2026-11-18 | §9: **Print**, and a PDF by the system's print dialog; an ICS-213 prints as FEMA's ICS 213. **Save** beside each file a message carries, in the Downloads folder, never over another file (Figure 16 retaken with a file and **Print**). |

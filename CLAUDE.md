@@ -34,6 +34,11 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   reference. The client's composer has **Form** (`/api/forms`), `compose --form --field N=VALUE`,
   `forms`; the post office writes a form's text into the email (RP-6 1.1.0 §3.1). A new template
   goes in `forms/` and in `make.py`, never a change to a published one.
+  A form prints as its paper form (W53): `forms/*.print.html`, named by the template's
+  fingerprint, each field placed by number (`radiopost::forms::layout`); the reader's **Print**
+  prints in place by the page's print styles (the app's window prints itself at `/print`, Tauri's
+  `print`: macOS's webview ignores `window.print()`), and **Save** writes a file to Downloads under
+  a safe name, never over another, marked as downloaded on Windows (`downloads.rs`, `/api/save`).
   `core/radiopost` is the library of RadioPost's objects; `tests/vectors.rs` replays `vectors/`
   against it, and CI runs `cargo fmt`, `cargo clippy -D warnings` (Aether's lint levels) and
   `cargo test --locked` (`core/README.md`). Writing it found two gaps in the vectors: no ID text

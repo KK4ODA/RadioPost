@@ -10,6 +10,7 @@
 //! * [`alerts`]: alerts between stations that share a keyword (RP-8), and the page's sound and
 //!   notification settings.
 //! * [`backups`]: the post office's backups, fetched by its operator's computer by itself.
+//! * [`downloads`]: a received message's attachments saved as files, under safe names.
 //! * [`session`]: calling a gateway or a station, or answering a station, over RPMI.
 //! * [`online`]: the post office over the Internet: enrollment, renewal, settings, the accept
 //!   list, station-to-station sessions reported (RP-5 §6), and the gateways it lists (§4.4).
@@ -35,6 +36,7 @@ pub mod backups;
 pub mod callsigns;
 pub mod compose;
 pub mod contacts;
+pub mod downloads;
 pub mod grid;
 pub use radiopost::logfile;
 pub mod online;

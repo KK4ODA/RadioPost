@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.44 |
+| **Version** | 0.3.45 |
 | **Updated** | 2026-11-18 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -156,6 +156,7 @@ rules:
 | W50 | A gateway that scans its channels | Operation | Medium | Optional addition (RP-4, RP-5 §4.4); G21 | Built |
 | W51 | Sounds, and mail that arrives by its sender | Mail | Medium | Fits today | Implemented |
 | W52 | Time-sensitive alerts between stations that share a keyword | Applications | Medium | Optional addition: RP-8 (Draft), RP-0 1.1.0, RP-4 1.3.0; G22 | Implemented |
+| W53 | Print a message, a form as its paper form, and save its files | Mail | High | Fits today | Implemented |
 
 Groups: *Mail* (§4), *Setup* (§5), *Radio* (§6), *Operation* (§7), *Offline* (§8),
 *Applications* (§9), *Adapters* (§10), *Rules* (§11). Consolidated and deferred wishes are in §14.
@@ -306,6 +307,25 @@ group: silent, a soft sound, a banner, or an alarm until it is opened.
 | Status | Implemented (2026-11-18): Setup's *Sounds and notifications*, the **Notify** column in Addresses (`notify.json`). |
 | Author decision | Asked for, 2026-11-18, with W52. |
 | Notes | Sounds are synthesized, so no sound files ship. A window plays nothing before its first click, so the desktop window also comes forward for an alarm. |
+
+### W53. Print a message, a form as its paper form, and save its files
+
+Print a message, or make a PDF of it; an ICS-213 printed as FEMA's ICS 213; and a message's files
+saved, to open in another program.
+
+| | |
+|---|---|
+| Requested by | The author (KK4ODA), 2026-11-18, after the 40 m sessions: "a way of exporting or printing messages? For a form, it would be nice to print in PDF format in the corresponding ICS form". Requesters: 1. Saving files was found asking: a file that came P2P that afternoon could not be taken out of the client. |
+| Component | Client. |
+| Compatibility | **Fits today**: what a program does with mail it holds. RP-2 §8.4 gives a form's text; a print layout is the program's own and never goes on the air, so a published template stays as it is (RP-2 §8.1). |
+| Existing coverage | New. The reader listed a message's files by name and size only, and nothing printed but the desk's postcard. |
+| Dependencies | W32 (forms). W5 (`.eml` export) is the other way out of the client, for a mail program. |
+| Effort | Small. |
+| Priority | **High.** A form is printed to be handed on or filed, and a file received is of no use inside the client. |
+| Recommendation | Accept. Print in place with the page's print styles and the system's print dialog, whose *Save as PDF* makes the PDF: no PDF code. A layout for each form that has a paper form (`forms/*.print.html`), matched by the template's fingerprint, its fields placed by number, the values put in as text; a form without one prints as it shows. Files saved in the Downloads folder under a safe name, never over another file, and marked as downloaded on Windows. Filling FEMA's own fillable PDF was set aside: it needs a PDF library and FEMA's field names, for much the same page. |
+| Status | Implemented (2026-11-18): the reader's **Print** and **Save**, `forms/ics-213.print.html`, `POST /api/save`. The desktop window prints itself at `/print` (Tauri's `print`), since macOS's webview ignores the page's `window.print()`. |
+| Author decision | Asked for, 2026-11-18: "all three" (save files, print, the ICS-213 layout). |
+| Notes | The command line saves no files yet. The printed form gives the date and time as the message's, in UTC, and leaves the signature lines blank, to sign on paper. |
 
 ---
 
@@ -1196,3 +1216,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.42 | 2026-11-18 | The author's wishes W51 (sounds, and mail by its sender's level) and W52 (alerts between stations that share a keyword), both implemented; RP-8 drafted for W52; T4 is its broadcast format; gap G22 settled by RP-4 1.3.0. |
 | 0.3.43 | 2026-11-18 | W49's coverage: every account gets its mailbox, not only an approved one (a code-made account's email from outside had been refused). |
 | 0.3.44 | 2026-11-18 | W15 built, at the author's ask after the 40 m sessions of 2026-11-18: **Listen for P2P** stays on until pressed again. |
+| 0.3.45 | 2026-11-18 | W53, at the author's ask after the 40 m sessions: **Print** (a PDF by the system's print dialog, an ICS-213 as FEMA's ICS 213) and **Save** for a message's files, built. |

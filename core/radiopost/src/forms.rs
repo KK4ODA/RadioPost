@@ -7,6 +7,7 @@
 //! * [`Form`]: key 13 of a message.
 //! * [`shown`]: the text a message's form shows as, with the templates a station holds;
 //!   [`shown_as`]: the same as rows, label and value, for a program to lay out as the form.
+//! * [`layout`]: how a form prints, as the paper form it comes from (`forms/*.print.html`).
 
 use serde_json::Value as Json;
 
@@ -15,6 +16,19 @@ use crate::message::{Message, key};
 
 /// RadioPost's published templates (RP-2 §8.1), as their JSON files.
 pub const PUBLISHED: &[&str] = &[include_str!("../../../forms/ics-213.json")];
+
+/// The print layouts the programs hold (`forms/*.print.html`): how a form prints on paper, as the
+/// paper form it comes from. Each names the template it lays out by its fingerprint
+/// (`data-template`) and has a place for each field it shows (`data-field`, the field's number).
+/// A layout is the programs' own, never on the air: a station without one prints the form's rows.
+pub const LAYOUTS: &[&str] = &[include_str!("../../../forms/ics-213.print.html")];
+
+/// The print layout for the template with this fingerprint, when the programs hold one.
+#[must_use]
+pub fn layout(fingerprint: &[u8; 8]) -> Option<&'static str> {
+    let named = format!("data-template=\"{}\"", crate::cbor::hex(fingerprint));
+    LAYOUTS.iter().copied().find(|l| l.contains(&named))
+}
 
 /// A field's type (RP-2 §8.1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -345,6 +359,7 @@ impl Template {
                     None => form.value(f.n).map(|v| shown_value(f, v)),
                 }?;
                 Some(Row {
+                    n: f.n,
                     label: f.label.clone(),
                     value,
                     lines: f.kind == Kind::Text,
@@ -374,6 +389,8 @@ pub struct Shown {
 /// One field of a form as it shows (RP-2 §8.4).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
+    /// The field's number (RP-2 §8.1), by which a print layout places it.
+    pub n: u64,
     /// The field's label, or `Field <n>` without the template.
     pub label: String,
     /// Its value as text: a date `YYYY-MM-DD`, a time `HH:MM UTC`, a choice its text, a check
@@ -468,6 +485,7 @@ impl Form {
                     other => other.diagnostic(),
                 };
                 Row {
+                    n: *n,
                     label: format!("Field {n}"),
                     lines: value.contains('\n'),
                     value,
@@ -583,5 +601,37 @@ mod tests {
         let t = Template::published();
         assert_eq!(t[0].name, "ICS-213 General Message");
         assert_eq!(t[0].fields.len(), 11);
+    }
+
+    /// The numbers in a layout's `attribute="…"`, in order.
+    fn numbers(layout: &str, attribute: &str) -> Vec<String> {
+        layout
+            .split(&format!("{attribute}=\""))
+            .skip(1)
+            .filter_map(|rest| rest.split_once('"').map(|(n, _)| n.to_owned()))
+            .collect()
+    }
+
+    /// Each layout lays out a published template, found by its fingerprint, with one place for
+    /// every field of it, bound or not: nothing a form holds is left off the paper, and no place
+    /// waits for a field the template does not have.
+    #[test]
+    fn each_layout_has_a_place_for_every_field_of_its_template() {
+        let published = Template::published();
+        for l in LAYOUTS {
+            let named = numbers(l, "data-template");
+            assert_eq!(named.len(), 1, "a layout names one template");
+            let t = published
+                .iter()
+                .find(|t| crate::cbor::hex(&t.fingerprint()) == named[0])
+                .unwrap_or_else(|| panic!("no published template is {}", named[0]));
+            assert_eq!(layout(&t.fingerprint()), Some(*l));
+            let mut places = numbers(l, "data-field");
+            places.sort();
+            let mut fields: Vec<String> = t.fields.iter().map(|f| f.n.to_string()).collect();
+            fields.sort();
+            assert_eq!(places, fields, "{}", t.name);
+        }
+        assert_eq!(layout(&[0; 8]), None);
     }
 }

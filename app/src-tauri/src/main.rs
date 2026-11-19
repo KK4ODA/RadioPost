@@ -23,6 +23,10 @@
 //! forward (`navigation`), the page never going there. Composer windows open where the operator
 //! left the last one. Closing the main window closes them too.
 //!
+//! **Print** in the reader prints the window: its page goes to `/print`, which this program stops
+//! and takes as the word to print (`Navigation::Print`, Tauri's `print`): macOS's webview does
+//! nothing at the page's own `window.print()`. The page knows to by `radiopostPrints` ([`PRINTS`]).
+//!
 //! When an alert starts sounding (RP-8), the window comes forward, out of the taskbar if it was
 //! minimized, and asks for attention: the operator may be in another program (`bring_forward`).
 
@@ -74,6 +78,16 @@ const CLOSED: &str = "/closed";
 /// `focus()` of another window does nothing in the app's webviews.
 const FRONT: &str = "/front";
 
+/// Where a window's page goes to be printed (the reader's **Print**): the window prints instead,
+/// with the system's print dialog, where Save as PDF makes a PDF; the page never goes there.
+/// Tauri's `print` is the one way on every system: macOS's webview does nothing at the page's own
+/// `window.print()`.
+const PRINT: &str = "/print";
+
+/// What the main window's page is told before it runs: that it prints by [`PRINT`] (`app/ui/app.js`'s
+/// `printMessage`).
+const PRINTS: &str = "window.radiopostPrints = true;";
+
 /// What a composer window's page is told before it runs: that its window is the app's, so it is
 /// closed and brought forward by [`CLOSED`] and [`FRONT`] (`app/ui/app.js`'s `closeWindow` and
 /// `bringForward`).
@@ -96,6 +110,8 @@ enum Navigation {
     Close,
     /// Brings the window forward, the page staying ([`FRONT`]).
     Front,
+    /// Prints the window, the page staying ([`PRINT`]).
+    Print,
     /// Stays where it is: anywhere else.
     Refuse,
 }
@@ -109,6 +125,8 @@ fn navigation(panel: &Url, to: &Url) -> Navigation {
         Navigation::Close
     } else if to.path() == FRONT {
         Navigation::Front
+    } else if to.path() == PRINT {
+        Navigation::Print
     } else {
         Navigation::Go
     }
@@ -123,6 +141,21 @@ fn later(app: &AppHandle, label: &str, what: fn(&tauri::WebviewWindow)) {
             what(&window);
         }
     });
+}
+
+/// Where the main window's page may go: anywhere, but [`PRINT`], at which the window prints, the
+/// page staying (the reader's **Print**).
+fn printing(app: AppHandle, panel: Url) -> impl Fn(&Url) -> bool + Send + 'static {
+    move |to| {
+        if navigation(&panel, to) == Navigation::Print {
+            later(&app, "main", |window| {
+                let _ = window.print();
+            });
+            false
+        } else {
+            true
+        }
+    }
 }
 
 /// A window the panel's page asks for: the composer in a window of its own, made here, with the
@@ -162,6 +195,12 @@ fn composer_window(
                     let _ = window.unminimize();
                     let _ = window.show();
                     let _ = window.set_focus();
+                });
+                false
+            }
+            Navigation::Print => {
+                later(&app_, &named, |window| {
+                    let _ = window.print();
                 });
                 false
             }
@@ -328,6 +367,8 @@ fn main() {
                 .title("RadioPost")
                 .inner_size(1100.0, 760.0)
                 .min_inner_size(380.0, 480.0)
+                .initialization_script(PRINTS)
+                .on_navigation(printing(app.handle().clone(), page.clone()))
                 .on_new_window(move |to, features| composer_window(&opening, &page, &to, features))
                 .build()?;
             bring_forward(watching, window.clone());
@@ -415,10 +456,10 @@ mod tests {
         }
     }
 
-    /// A composer window shows the panel's pages, closes at `/closed`, comes forward at `/front`,
-    /// and goes nowhere else.
+    /// A window shows the panel's pages, closes at `/closed`, comes forward at `/front`, prints at
+    /// `/print`, and goes nowhere else.
     #[test]
-    fn where_a_composer_window_goes() {
+    fn where_a_window_goes() {
         let panel = url("http://127.0.0.1:8620/");
         assert_eq!(navigation(&panel, &url("about:blank")), Navigation::Go);
         assert_eq!(
@@ -436,10 +477,16 @@ mod tests {
             navigation(&panel, &url("http://127.0.0.1:8620/front")),
             Navigation::Front
         );
+        // the reader's Print, in either window: the window prints
+        assert_eq!(
+            navigation(&panel, &url("http://127.0.0.1:8620/print")),
+            Navigation::Print
+        );
         for elsewhere in [
             "https://example.com/",
             "http://127.0.0.1:8621/closed",
             "https://example.com/front",
+            "https://example.com/print",
             "file:///C:/Windows/",
         ] {
             assert_eq!(

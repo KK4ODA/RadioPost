@@ -132,6 +132,8 @@ pub struct Panel {
     backups_now: Arc<AtomicBool>,
     /// How often that thread looks: [`crate::backups::EVERY`], shorter in tests.
     backups_every: std::time::Duration,
+    /// Where a received attachment is saved: [`crate::downloads::folder`], elsewhere in tests.
+    downloads: PathBuf,
 }
 
 /// When the panel renews the credential: first after `first`, then every `every`, once it has
@@ -242,7 +244,16 @@ impl Panel {
             alerts: Alerts::open(home),
             backups_now: Arc::new(AtomicBool::new(true)),
             backups_every: crate::backups::EVERY,
+            downloads: crate::downloads::folder(home),
         }
+    }
+
+    /// The same panel, saving received attachments in `folder`: for tests, which leave the
+    /// user's Downloads folder alone.
+    #[must_use]
+    pub fn saving_in(mut self, folder: &Path) -> Panel {
+        folder.clone_into(&mut self.downloads);
+        self
     }
 
     /// The same panel, looking for a new backup of the post office every `every`: for tests.
@@ -797,6 +808,7 @@ impl Panel {
             (Method::Post, "/api/callsigns") => self.callsigns(body),
             (Method::Post, "/api/compose") => self.compose(body),
             (Method::Post, "/api/held") => self.ask_for_held(body),
+            (Method::Post, "/api/save") => self.save_file(body),
             (_, "/api/addresses") => self.addresses(method, body),
             (Method::Post, "/api/delete" | "/api/restore" | "/api/purge" | "/api/empty-trash") => {
                 self.trash(path, body)
@@ -1045,6 +1057,24 @@ impl Panel {
         Ok(json!({"status": status, "body": answer}))
     }
 
+    /// A received message's attachment saved as a file in the Downloads folder, under a safe
+    /// name and never over another file ([`crate::downloads`]): `{id, n}`, `n` counted from 0 as
+    /// the message lists its files. Answers where it went.
+    fn save_file(&self, body: &Value) -> Result<Value, Error> {
+        let store = Store::open(&self.home())?;
+        let id = store.find(body["id"].as_str().unwrap_or(""))?;
+        let n = body["n"]
+            .as_u64()
+            .and_then(|n| usize::try_from(n).ok())
+            .ok_or("n: which attachment, counted from 0")?;
+        let path = crate::downloads::save(&store.message(&id)?, n, &self.downloads)?;
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        Ok(json!({"path": path.display().to_string(), "name": name}))
+    }
+
     /// A backup of the post office sealed with the operator's passphrase, fetched over the desk
     /// and kept on this computer, in `RadioPost backups` in the user's home folder.
     fn office_backup(&self, body: &Value) -> Result<Value, Error> {
@@ -1105,7 +1135,7 @@ impl Panel {
             let rows: Vec<Value> = shown
                 .iter()
                 .flat_map(|s| &s.rows)
-                .map(|r| json!({"label": r.label, "value": r.value, "lines": r.lines}))
+                .map(|r| json!({"n": r.n, "label": r.label, "value": r.value, "lines": r.lines}))
                 .collect();
             v["form"] = json!({
                 "template": radiopost::cbor::hex(&form.template),
@@ -1823,8 +1853,10 @@ fn forms_json() -> Value {
                            "bound": f.bound.map(radiopost::forms::Bound::name), "max": f.max})
                 })
                 .collect();
+            // how it prints, as the paper form it comes from, when this program holds a layout
+            let print = radiopost::forms::layout(&t.fingerprint());
             json!({"template": radiopost::cbor::hex(&t.fingerprint()), "name": t.name,
-                   "note": t.note, "fields": fields})
+                   "note": t.note, "fields": fields, "print": print})
         })
         .collect()
 }

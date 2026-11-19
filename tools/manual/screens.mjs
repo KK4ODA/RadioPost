@@ -63,11 +63,12 @@ const SENT = [
     subject: "Safe and warm here", date: T - 3 * DAY + 4000, state: "sent"}),
 ];
 const MESSAGES = {
-  [INBOX[0].id]: {...INBOX[0], files: [], held: [
+  [INBOX[0].id]: {...INBOX[0], files: [{name: "directions.txt", type: "text/plain", size: 412}],
+    held: [
     {name: "site-map.pdf", type: "application/pdf", size: 412806, asked: false}],
     body: "Hi Ana,\n\nGreat news that you can come. We set up on Friday at noon at the county\n"
-      + "park, by the north pavilion. The site map is attached.\n\nBring the 40 m dipole if you "
-      + "can, and a chair.\n\n73,\nMaria"},
+      + "park, by the north pavilion. Directions and the site map are attached.\n\nBring the 40 m "
+      + "dipole if you can, and a chair.\n\n73,\nMaria"},
 };
 const WAITING = {via: "KK4ODA-1", at: T - 1150, entries: [
   {serial: 41, from: "club-news@hampost.org", subject: "November club newsletter", size: 18400,

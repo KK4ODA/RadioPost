@@ -14,8 +14,16 @@ Each file is the template as JSON: `name`, an optional `note`, and `fields`, eac
 where they apply, `required`, `choices`, `bound` (`subject`, `date`, `time`) and `max`. RP-2 §8.1
 says how it becomes the CBOR that is fingerprinted.
 
+**Print layouts.** `ics-213.print.html` is how the client prints an ICS-213: as FEMA's ICS 213,
+the paper form. A layout is the programs' own and never goes on the air, so it is a file of its
+own, not part of the template: it names the template it lays out by its fingerprint
+(`data-template`), and has a place for each field (`data-field`, the field's number), where the
+client puts the value as text. A form with no layout prints as it shows. The client holds the
+layouts listed in `radiopost::forms::LAYOUTS`, whose test checks that each has a place for every
+field of its template.
+
 To add a form, write its template here, add it to `tools/vectors/make.py` so that `vectors/forms.json`
 gives its fingerprint, and let the programs hold it. Never change a published template: write a new
 one.
 
-These templates are published under CC BY 4.0, as the specifications are.
+These templates and layouts are published under CC BY 4.0, as the specifications are.
