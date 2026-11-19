@@ -12,6 +12,7 @@ import hashlib
 import re
 import unicodedata
 import zlib
+from collections.abc import Callable
 from typing import Any
 
 from . import cbor, ed25519
@@ -208,8 +209,75 @@ def air_form(canonical: bytes, compression: int) -> bytes:
     raise ValueError(f"compression {compression} is not made by this reference")
 
 
+MAX_CANONICAL = 16 * 1024 * 1024  # RP-2 §5: a station inflates to this at least
+
+
+def _uint(v: Any) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool) and v >= 0
+
+
+def _texts(v: Any) -> bool:
+    return isinstance(v, list) and all(isinstance(t, str) for t in v)
+
+
+def _maps_of(v: Any, kinds: dict[int, Callable[[Any], bool]]) -> bool:
+    """An array of maps, each holding every key of `kinds`, of its kind."""
+    return isinstance(v, list) and all(
+        isinstance(m, dict) and all(k in m and ok(m[k]) for k, ok in kinds.items()) for m in v
+    )
+
+
+def _is_form(v: Any) -> bool:
+    return (
+        isinstance(v, dict)
+        and isinstance(v.get(1), bytes)
+        and len(v[1]) == 8
+        and isinstance(v.get(2), dict)
+        and all(_uint(k) for k in v[2])
+    )
+
+
+# RP-2 §2: each key the table defines, and what its value must be; `True` marks the required.
+MESSAGE_KINDS: dict[int, tuple[bool, Callable[[Any], bool]]] = {
+    2: (True, lambda v: isinstance(v, str)),
+    3: (True, _texts),
+    4: (False, _texts),
+    5: (True, _uint),
+    6: (True, lambda v: isinstance(v, str)),
+    7: (True, lambda v: isinstance(v, str)),
+    8: (
+        False,
+        lambda v: _maps_of(
+            v,
+            {
+                1: lambda x: isinstance(x, str),
+                2: lambda x: isinstance(x, str),
+                3: lambda x: isinstance(x, bytes),
+            },
+        ),
+    ),
+    9: (False, _uint),
+    10: (False, lambda v: isinstance(v, bytes) and len(v) == 12),
+    11: (False, _uint),
+    12: (
+        False,
+        lambda v: _maps_of(
+            v,
+            {
+                1: lambda x: isinstance(x, str),
+                2: lambda x: isinstance(x, str),
+                3: _uint,
+                4: lambda x: isinstance(x, bytes),
+            },
+        ),
+    ),
+    13: (False, _is_form),
+}
+
+
 def air_decode(air: bytes) -> bytes:
-    """An air form back to its canonical encoding; ValueError("malformed") when it is not one."""
+    """An air form back to its canonical encoding; ValueError with the RP-0 §9.3 name
+    (`malformed`, or `too-large` past RP-2 §5's bound) when it is not one."""
     if not air:
         raise ValueError("malformed")
     if air[0] == 0:
@@ -217,10 +285,13 @@ def air_decode(air: bytes) -> bytes:
     elif air[0] == 1:
         unpacker = zlib.decompressobj(-15)
         try:
-            canonical = unpacker.decompress(air[1:]) + unpacker.flush()
+            canonical = unpacker.decompress(air[1:], MAX_CANONICAL + 1)
+            if len(canonical) > MAX_CANONICAL:
+                raise ValueError("too-large")
+            canonical += unpacker.flush()
         except zlib.error as err:
             raise ValueError("malformed") from err
-        if not unpacker.eof or unpacker.unused_data:
+        if not unpacker.eof or unpacker.unused_data or unpacker.unconsumed_tail:
             raise ValueError("malformed")
     else:
         raise ValueError("malformed")
@@ -230,6 +301,9 @@ def air_decode(air: bytes) -> bytes:
         raise ValueError("malformed") from err
     if not isinstance(message, dict) or message.get(1) != 1:
         raise ValueError("malformed")
+    for key, (required, ok) in MESSAGE_KINDS.items():
+        if (key in message and not ok(message[key])) or (required and key not in message):
+            raise ValueError("malformed")
     return canonical
 
 
@@ -262,7 +336,8 @@ def verify_credential(
 ) -> tuple[str, dict[int, Any] | None]:
     """RP-1 §5, in its order. Returns ("ok", body) or (the RP-0 §9.3 error name, body or None).
 
-    ``post_offices`` maps a domain to its keys: each {"public": bytes, "not_before", "not_after"}.
+    ``post_offices`` maps a domain to its keys: each {"public": bytes, "not_before", "not_after"},
+    the period left out for a key known only from DNS.
     ``revoked`` maps a domain to {"serials": [...], "kids": [bytes, ...]}.
     """
     opened = cose_open(credential)
@@ -282,7 +357,9 @@ def verify_credential(
     matching = [
         k
         for k in keys
-        if kid(k["public"]) == key_id and k["not_before"] <= body.get(6, -1) < k["not_after"]
+        # a key known only from DNS has no validity period (RP-1 §5 step 3)
+        if kid(k["public"]) == key_id
+        and k.get("not_before", 0) <= body.get(6, -1) < k.get("not_after", float("inf"))
     ]
     if not any(cose_verify(CTX_CREDENTIAL, opened, k["public"]) for k in matching):
         return "credential-invalid", body
@@ -329,8 +406,7 @@ def meets(
         return "ignored"
     if domain in accepted:
         return "known"
-    tags = [parse_txt(r) for r in records]
-    return "seen" if any(t is not None and t["t"] == "api" for t in tags) else "ignored"
+    return "seen" if api_of(records) is not None else "ignored"  # §7.1: one API, not two
 
 
 # -- RP-1: session statements --------------------------------------------------------------------
@@ -356,13 +432,26 @@ def statement(
 
 
 def base_callsign(callsign: str) -> str:
-    """RP-0 §6.1: the callsign without its SSID, prefix and suffix: of the parts its `/` separate,
-    the SSID taken off, the longest, or of two as long the last."""
+    """RP-0 §6.1: the callsign without its SSID, prefix and suffix. Of the parts its `/` separate,
+    the SSID taken off: of three, the middle one; of two, the longer, or of two as long the last."""
+    parts = callsign.strip().upper().split("-", 1)[0].split("/")
+    if len(parts) == 3:
+        return parts[1]
     best = ""
-    for part in callsign.strip().upper().split("-", 1)[0].split("/"):
+    for part in parts:
         if len(part) >= len(best):
             best = part
     return best
+
+
+def same_address(a: str, b: str) -> bool:
+    """RP-0 §6.2: one address when they differ only in the case of ASCII letters."""
+    return a.encode().lower() == b.encode().lower()
+
+
+def among(address: str, addresses: list[str]) -> bool:
+    """RP-0 §6.2: whether `address` is one of `addresses`, for "addressed to"."""
+    return any(same_address(address, a) for a in addresses)
 
 
 def same_base(a: object, b: object) -> bool:
@@ -454,6 +543,13 @@ def statement_from_welcome(hello: dict[int, Any], welcome: dict[int, Any]) -> di
 
 
 # -- RP-1 §7.1: DNS records ----------------------------------------------------------------------
+
+
+def api_of(records: list[str]) -> str | None:
+    """RP-1 §7.1: a domain's API, from its `_radiopost` TXT records: the one `url` its valid API
+    records give, or None when they give none, or more than one."""
+    urls = {t["url"] for t in map(parse_txt, records) if t is not None and t["t"] == "api"}
+    return urls.pop() if len(urls) == 1 else None
 
 
 def parse_txt(txt: str) -> dict[str, str] | None:

@@ -20,7 +20,7 @@ use radiopost::session::gateway::{Gateway, GatewayConfig, Upstreams};
 use radiopost::session::{Caps, Event as SessionEvent, Outgoing};
 use radiopost_postoffice::serve::Running;
 use radiopost_tcp::{Adapter, Config, Security, tls};
-use rpmi::host::{Carrier, Direction, Engine, Event, Host};
+use rpmi::host::{Carrier, Direction, Engine, Event, Host, Silence};
 use rpmi::tcp::Connection;
 
 use crate::report::{From, Record};
@@ -219,7 +219,8 @@ impl Answering {
             record: record.clone(),
         });
         let mut event = Some(connected.clone());
-        let mut quiet_since = Instant::now();
+        // RP-3 §8: from the last bytes, stopped while the modem receives
+        let mut silence = Silence::new();
         let result = loop {
             if let Some(e) = event.take() {
                 let (requests, events) = carrier.on_event(&mut modem.host, &e);
@@ -234,23 +235,23 @@ impl Answering {
             }
             match modem.next() {
                 Ok(Some(e)) => {
-                    quiet_since = Instant::now();
+                    silence.heard(&e);
                     event = Some(e);
                 }
-                Ok(None) if quiet_since.elapsed() < QUIET => {}
-                Ok(None) => {
-                    if let Some(link) = carrier.link() {
-                        let bye = modem.host.disconnect(link);
-                        let _ = modem.conn.send(&bye);
-                    }
-                    let events = carrier.engine_mut().link_lost();
-                    lock(&record).events(&events);
-                    break Err(format!("nothing heard for {} seconds", QUIET.as_secs()));
-                }
+                Ok(None) => {}
                 Err(e) => {
                     carrier.engine_mut().link_lost();
                     break Err(format!("the adapter: {e}"));
                 }
+            }
+            if silence.over(QUIET) {
+                if let Some(link) = carrier.link() {
+                    let bye = modem.host.disconnect(link);
+                    let _ = modem.conn.send(&bye);
+                }
+                let events = carrier.engine_mut().link_lost();
+                lock(&record).events(&events);
+                break Err(format!("nothing heard for {} seconds", QUIET.as_secs()));
             }
         };
         let mut r = lock(&record);

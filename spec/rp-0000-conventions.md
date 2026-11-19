@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.1.0 |
-| **Updated** | 2026-11-18 |
+| **Version** | 1.2.0 |
+| **Updated** | 2026-11-19 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
@@ -48,7 +48,7 @@ a post office, a client that talks to a modem directly).
 
 | Role | MUST implement | MAY implement |
 |---|---|---|
-| **Client** | RP-1 §4–§6 (credentials, verifying a post office), RP-2, RP-3 (client side) | RP-4 (as host), RP-5 §6 (client endpoints) |
+| **Client** | RP-1 §4–§6, §7.1, §7.2 and §8 (credentials and statements; a post office's keys and revocations), RP-2, RP-3 (client side: calling a gateway, and calling and answering a station, §10) | RP-4 (as host), RP-5 §3, §4 and §6 (logging in, public documents, client endpoints) |
 | **Gateway** | RP-1, RP-2 §2–§5, RP-3 (gateway side), RP-5 §5 (gateway endpoints, as caller) | RP-4 (as host), RP-7 |
 | **Post office** | RP-1 (issuer side), RP-2, RP-5 (server), RP-6 | — |
 | **Modem adapter** | RP-4 (adapter side) | — |
@@ -169,16 +169,23 @@ callsign = [prefix "/"] base ["/" suffix] ["-" ssid]
 `base`, `prefix` and `suffix` are 1 to 10 letters and digits; the whole is at most 20 characters.
 Comparison is case-insensitive. A program MUST store and send callsigns in uppercase.
 
-A callsign's **base** is the callsign without its SSID, prefix and suffix: of the parts its `/`
-separate, once the SSID is taken off, the longest, or of two as long the last. `VE3/KK4ODA`,
-`KK4ODA/P`, `KK4ODA-7` and `W4/KK4ODA/M-2` all have the base `KK4ODA`. Where a check compares
-**base callsigns** (RP-1 §6.3), two callsigns pass when their bases are equal; the station is the
-same licensee on the air another way. Test vectors: `vectors/statements.json`, `base_callsigns`.
+A callsign's **base** is the callsign without its SSID, prefix and suffix. Once the SSID is taken
+off, the `/` separate one, two or three parts. Of three, the base is the middle one, as the grammar
+places it. Of two, it is the longer, or of two as long the last: a prefix is written before the
+base and a suffix after it, and the one or the other is usually the shorter. `VE3/KK4ODA`,
+`KK4ODA/P`, `KK4ODA-7` and `W4/KK4ODA/M-2` all have the base `KK4ODA`, and `W4/K1A/QRP` the base
+`K1A`. Where a check compares **base callsigns** (RP-1 §6.3), two callsigns pass when their bases
+are equal; the station is the same licensee on the air another way. Test vectors:
+`vectors/statements.json`, `base_callsigns`.
 
 ### 6.2 Addresses
 
 A RadioPost address is an Internet mail address (RFC 5321 `Mailbox`, the `addr-spec` of RFC 5322).
-The domain part is compared case-insensitively and sent in lowercase.
+The domain part is sent in lowercase. Two addresses are the **same address** when they differ only
+in the case of ASCII letters, in either part: the domain as DNS compares names (RFC 4343), and the
+local part because a post office's accounts are written in lowercase (below). Nothing else is
+folded. Wherever a specification asks whether a message is addressed to an account, or whether two
+addresses are one, it compares them so.
 
 For accounts a post office creates, the local part SHOULD use only lowercase letters, digits, `.`,
 `-` and `_`, so that it is short on the air and cannot be confused.
@@ -394,3 +401,4 @@ Position reports and bulletins (wishlist W33, W34) would take the next numbers.
 | 0.8.0 | 2026-11-15 | A callsign's base (§6.1), for RP-1 §6.3's checks (gaps G10, G12). |
 | 1.0.0 | 2026-11-15 | Stable, with RP-1 to RP-6 (D41): §8.2 says how a Stable document's version moves, §8.4 that its changes are announced. |
 | 1.1.0 | 2026-11-18 | RP-8, alerts (§2): HMAC-SHA256 tags and PBKDF2 keys (§5); the contexts `RadioPost-circle-v1`, `RadioPost-circle-id-v1` and `RadioPost-alert-v1` (§9.2); broadcast types (§9.5); §8.6: the vectors cover RP-8. MINOR, announced (§8.4): nothing for an implementation to do. |
+| 1.2.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 3; D43). §3: a client implements RP-1 §7.1, §7.2 and §8 too, which RP-1 §5 already needed, and RP-3 §10 both ways, as the conformance tester had graded it; its MAY column names RP-5 §3 and §4. §6.1: of three parts, the base is the middle one (the length rule had made `W4/K1A/QRP`'s base `QRP`). §6.2: two addresses are one when they differ only in the case of ASCII letters, in either part (only the domain had been said, and programs compared local parts both ways). Test vectors (`statements.json`, `base_callsigns`). MINOR, announced (§8.4): a verifier that keeps the old base refuses some statements `not-authorized`, and a station that compares local parts exactly refuses a message `refused-by-policy`; nothing is taken that should not be. Implementations should take the new base and compare addresses so. |

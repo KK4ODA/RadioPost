@@ -20,13 +20,44 @@ pub const RESOLVER: &str = "https://dns.google/resolve";
 /// What one RP-5 request comes to: a status and a body.
 pub type Answer = (u16, Option<Json>);
 
-/// The code a problem body carries (RP-5 §1), or `internal`.
+/// The error a problem body names (RP-5 §1): its `code`, or, for a code this reader does not
+/// know, its `name`; `internal` when it names none.
 #[must_use]
 pub fn code_of(body: Option<&Json>) -> ErrorCode {
-    body.and_then(|b| b.get("code"))
+    named(body).unwrap_or(ErrorCode::Internal)
+}
+
+fn named(body: Option<&Json>) -> Option<ErrorCode> {
+    let body = body?;
+    body.get("code")
         .and_then(Json::as_u64)
         .and_then(ErrorCode::from_code)
-        .unwrap_or(ErrorCode::Internal)
+        .or_else(|| {
+            body.get("name")
+                .and_then(Json::as_str)
+                .and_then(ErrorCode::from_name)
+        })
+}
+
+/// RP-5 §1: the error an answer of `status` stands for: what its problem body names, or, failing
+/// that (a code this reader does not know, or a proxy's page), the one error the status alone
+/// says. 403 and 422 name no one error alone, and are read as `not-authorized` and
+/// `credential-invalid`, the first each table row gives; anything else is `internal`.
+#[must_use]
+pub fn error_of(status: u16, body: Option<&Json>) -> ErrorCode {
+    named(body).unwrap_or(match status {
+        400 => ErrorCode::Malformed,
+        401 | 403 => ErrorCode::NotAuthorized,
+        404 => ErrorCode::UnknownMessage,
+        409 => ErrorCode::AlreadyHave,
+        413 => ErrorCode::TooLarge,
+        422 => ErrorCode::CredentialInvalid,
+        429 => ErrorCode::Busy,
+        502 => ErrorCode::PostOfficeUnreachable,
+        504 => ErrorCode::Timeout,
+        507 => ErrorCode::QuotaExceeded,
+        _ => ErrorCode::Internal,
+    })
 }
 
 /// A credential and the device key it is for, to log in with.
@@ -187,7 +218,7 @@ impl Http {
                 .and_then(Json::as_str)
                 .map(str::to_owned)
                 .ok_or(ErrorCode::Internal),
-            (_, body) => Err(code_of(body.as_ref())),
+            (status, body) => Err(error_of(status, body.as_ref())),
         }
     }
 
@@ -441,13 +472,11 @@ pub fn records_signed(
     ))
 }
 
-/// RP-1 §7.1: a domain's post office API, from its `t=api` record.
+/// RP-1 §7.1: a domain's post office API, from its `t=api` record: none when two give
+/// different URLs ([`radiopost::dns::api_of`]).
 #[must_use]
 pub fn lookup(resolver: &str, domain: &str) -> Option<String> {
-    records(resolver, domain)
-        .into_iter()
-        .find(|t| t.get("t").map(String::as_str) == Some("api"))
-        .and_then(|t| t.get("url").cloned())
+    radiopost::dns::api_of(&records(resolver, domain))
 }
 
 /// RP-1 §7.1: a domain's post office keys, from its `t=key` records.
@@ -458,4 +487,29 @@ pub fn keys(resolver: &str, domain: &str) -> Vec<[u8; 32]> {
         .filter(|t| t.get("t").map(String::as_str) == Some("key"))
         .filter_map(radiopost::dns::key_of)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// RP-5 §1: `code` first, then `name` for a code this reader does not know, then the status.
+    #[test]
+    fn an_error_is_read_by_its_code_then_its_name_then_its_status() {
+        let known = json!({"code": 4, "name": "credential-expired"});
+        assert_eq!(error_of(422, Some(&known)), ErrorCode::CredentialExpired);
+        let disagree = json!({"code": 4, "name": "busy"});
+        assert_eq!(error_of(422, Some(&disagree)), ErrorCode::CredentialExpired);
+        let new_code = json!({"code": 99, "name": "busy"});
+        assert_eq!(error_of(429, Some(&new_code)), ErrorCode::Busy);
+        let unknown = json!({"code": 99, "name": "something-new"});
+        assert_eq!(error_of(413, Some(&unknown)), ErrorCode::TooLarge);
+        assert_eq!(error_of(502, None), ErrorCode::PostOfficeUnreachable);
+        assert_eq!(
+            error_of(404, Some(&json!("<html>"))),
+            ErrorCode::UnknownMessage
+        );
+        assert_eq!(error_of(418, None), ErrorCode::Internal);
+        assert_eq!(code_of(Some(&new_code)), ErrorCode::Busy);
+    }
 }

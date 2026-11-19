@@ -174,7 +174,7 @@ pub fn assemble(
     at: u64,
 ) -> Option<(Found, Option<String>)> {
     let kind = |t: &BTreeMap<String, String>, k: &str| t.get("t").map(String::as_str) == Some(k);
-    let api = records.iter().find(|t| kind(t, "api"))?.get("url")?.clone();
+    let api = dns::api_of(records)?;
     let mut found = Found {
         api,
         dnssec,
@@ -294,14 +294,10 @@ pub fn fetch(resolver: &str, domain: &str, at: u64) -> Lookup {
         Ok(r) => r,
         Err(e) => return Lookup::Failed(e),
     };
-    let Some(api) = records
-        .iter()
-        .find(|t| t.get("t").map(String::as_str) == Some("api"))
-        .and_then(|t| t.get("url"))
-    else {
+    let Some(api) = dns::api_of(&records) else {
         return Lookup::NoRecord;
     };
-    let http = radiopost_api::Http::anonymous(api);
+    let http = radiopost_api::Http::anonymous(&api);
     let get = |path: &str| match http.send_text("GET", path, None, None) {
         Ok((200, text)) => Some(text.trim().to_owned()),
         _ => None,
@@ -547,9 +543,10 @@ impl Running {
     pub fn refresh_list(&self, domain: &str) {
         let settings = self.settings();
         let published = json!({"post_offices": self.published_post_offices(&settings)});
-        let Some(entry) = gateway_list::entries(&published)
+        // its API's entry, checked with the keys of every domain naming it (RP-5 §4.4)
+        let Some(entry) = gateway_list::by_api(&gateway_list::entries(&published), "")
             .into_iter()
-            .find(|e| e.domain == domain)
+            .find(|e| e.domains.iter().any(|d| d == domain))
         else {
             return;
         };

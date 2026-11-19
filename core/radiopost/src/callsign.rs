@@ -2,20 +2,26 @@
 //! Callsigns (RP-0 §6.1): a callsign's base, the licensee's own callsign without the SSID, prefix
 //! or suffix a station is on the air with, which RP-1 §6.3's checks compare.
 
-/// RP-0 §6.1: the callsign without its SSID, prefix and suffix: of the parts its `/` separate,
-/// the SSID taken off, the longest, or of two as long the last. In uppercase.
+/// RP-0 §6.1: the callsign without its SSID, prefix and suffix. Of the parts its `/` separate,
+/// the SSID taken off: of three, the middle one; of two, the longer, or of two as long the last.
+/// In uppercase.
 #[must_use]
 pub fn base(callsign: &str) -> String {
     let call = callsign.trim();
     let call = call.split_once('-').map_or(call, |(c, _)| c);
-    call.split('/')
-        .fold(
-            "",
+    let parts: Vec<&str> = call.split('/').collect();
+    let base = match parts.as_slice() {
+        // of three, the middle one, as the grammar places it, whatever their lengths
+        [_, middle, _] => middle,
+        // of two, the longer, or of two as long the last
+        _ => parts.iter().fold(
+            &"",
             |best, part| {
                 if part.len() >= best.len() { part } else { best }
             },
-        )
-        .to_ascii_uppercase()
+        ),
+    };
+    base.to_ascii_uppercase()
 }
 
 /// RP-0 §6.1: whether `callsign` is one as it is sent: upper-case letters and digits, a prefix

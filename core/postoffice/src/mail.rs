@@ -1135,7 +1135,7 @@ pub fn check_part(
     ) else {
         return Err(ErrorCode::Malformed);
     };
-    let message = Message::from_air(air).map_err(|_| ErrorCode::Malformed)?;
+    let message = Message::from_air(air).map_err(|refused| refused.code())?;
     let stmt = Statement::decode(raw_statement).ok_or(ErrorCode::Malformed)?;
     let body = credential::verify(cred, trust, started, flags::SEND).map_err(|r| r.code)?;
     if stmt.address != body.address || stmt.operator != body.operator {

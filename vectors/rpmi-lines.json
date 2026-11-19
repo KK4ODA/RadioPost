@@ -5,7 +5,7 @@
     "RP-4": "§2, §4, §7"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "An adapter that has said `hello` to a host with the callsign KK4ODA, and has no links, reads each `line` (one line of JSON Lines, without its LF) and answers with `answers`. Messages compare as JSON values; `text` need not match.",
+  "rule": "An adapter that has said `hello` to a host with the callsign KK4ODA, and has no links, reads each `line` (one line of JSON Lines, without its LF) and answers with `answers`, which may be none: a request without `id` gets no `ok` (RP-4 §2). A line that is not I-JSON (RFC 7493) is answered as one that is not JSON. Messages compare as JSON values, a `data` member as its bytes; `text` need not match.",
   "lines": [
     {
       "what": "a string id, an unknown member",
@@ -463,6 +463,143 @@
           "id": 38,
           "code": "malformed",
           "text": "`seconds` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "an id of 1.0, written with a fraction",
+      "line": "{\"op\": \"status\", \"id\": 1.0}",
+      "answers": [
+        {
+          "op": "error",
+          "code": "malformed",
+          "text": "`id` is neither a string nor an integer"
+        }
+      ]
+    },
+    {
+      "what": "an id of 1e2, written with an exponent",
+      "line": "{\"op\": \"status\", \"id\": 1e2}",
+      "answers": [
+        {
+          "op": "error",
+          "code": "malformed",
+          "text": "`id` is neither a string nor an integer"
+        }
+      ]
+    },
+    {
+      "what": "an id of 2^53, past an integer's range",
+      "line": "{\"op\": \"status\", \"id\": 9007199254740992}",
+      "answers": [
+        {
+          "op": "error",
+          "code": "malformed",
+          "text": "`id` is neither a string nor an integer"
+        }
+      ]
+    },
+    {
+      "what": "an id of -(2^53-1), the least integer",
+      "line": "{\"op\": \"status\", \"id\": -9007199254740991}",
+      "answers": [
+        {
+          "op": "status",
+          "id": -9007199254740991,
+          "listening": false,
+          "callsigns": [
+            "KK4ODA"
+          ],
+          "busy": false,
+          "links": []
+        }
+      ]
+    },
+    {
+      "what": "a lone surrogate in an unknown member",
+      "line": "{\"op\": \"status\", \"id\": 40, \"note\": \"\\ud800\"}",
+      "answers": [
+        {
+          "op": "error",
+          "code": "malformed",
+          "text": "not I-JSON"
+        }
+      ]
+    },
+    {
+      "what": "NaN in an unknown member",
+      "line": "{\"op\": \"status\", \"id\": 41, \"note\": NaN}",
+      "answers": [
+        {
+          "op": "error",
+          "code": "malformed",
+          "text": "not I-JSON"
+        }
+      ]
+    },
+    {
+      "what": "a member named twice",
+      "line": "{\"op\": \"status\", \"id\": 42, \"op\": \"dial\"}",
+      "answers": [
+        {
+          "op": "error",
+          "code": "malformed",
+          "text": "not I-JSON"
+        }
+      ]
+    },
+    {
+      "what": "a bandwidth past an integer's range",
+      "line": "{\"op\": \"connect\", \"id\": 43, \"remote\": \"N1CALL-10\", \"bandwidth\": 9007199254740992}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 43,
+          "code": "malformed",
+          "text": "`bandwidth` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "a status without an id",
+      "line": "{\"op\": \"status\"}",
+      "answers": [
+        {
+          "op": "status",
+          "listening": false,
+          "callsigns": [
+            "KK4ODA"
+          ],
+          "busy": false,
+          "links": []
+        }
+      ]
+    },
+    {
+      "what": "a listen without an id: no ok",
+      "line": "{\"op\": \"listen\", \"on\": false}",
+      "answers": []
+    },
+    {
+      "what": "an unknown op without an id: its error has none",
+      "line": "{\"op\": \"rig\"}",
+      "answers": [
+        {
+          "op": "error",
+          "code": "unsupported",
+          "text": "no op rig"
+        }
+      ]
+    },
+    {
+      "what": "base64 whose pad bits are not zero: its bytes are read",
+      "line": "{\"op\": \"send\", \"id\": 44, \"link\": \"c1\", \"data\": \"QR==\"}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 44,
+          "code": "not-connected",
+          "text": "no such link of this host's"
         }
       ]
     }

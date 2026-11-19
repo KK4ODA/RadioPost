@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -50,12 +51,45 @@ def error(rid: Any, code: str, text: str) -> Message:
     return answer("error", rid, code=code, text=text)
 
 
+MAX_INTEGER = 2**53 - 1
+"""RP-4 §2: an integer lies from -(2^53-1) to 2^53-1, as I-JSON's numbers do (RFC 7493 §2.2)."""
+
+
+class NotIJson(ValueError):
+    """A line that is JSON but not I-JSON (RFC 7493): RP-4 §2 reads it as no line at all."""
+
+
+def _no_repeats(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    names = [n for n, _ in pairs]
+    if len(set(names)) != len(names):
+        raise NotIJson("a member named twice")
+    return dict(pairs)
+
+
+def _whole(value: Any) -> bool:
+    """No lone surrogate in any string, nor number past double precision (RFC 7493 §2.1, §2.2)."""
+    if isinstance(value, str):
+        return not any(0xD800 <= ord(c) <= 0xDFFF for c in value)
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if isinstance(value, list):
+        return all(_whole(v) for v in value)
+    if isinstance(value, dict):
+        return all(_whole(k) and _whole(v) for k, v in value.items())
+    return True
+
+
 def parse_line(line: str) -> tuple[Message | None, Message | None]:
     """RP-4 §2: (the request, None), or (None, the `error` to answer it with)."""
     try:
-        obj = json.loads(line)
+        # Python reads NaN and Infinity, which are not JSON; `_whole` refuses them
+        obj = json.loads(line, object_pairs_hook=_no_repeats)
+    except NotIJson:
+        return None, error(None, "malformed", "not I-JSON")
     except ValueError:
         return None, error(None, "malformed", "not JSON")
+    if not _whole(obj):
+        return None, error(None, "malformed", "not I-JSON")
     if not isinstance(obj, dict):
         return None, error(None, "malformed", "not a JSON object")
     rid = obj.get("id")
@@ -68,9 +102,14 @@ def parse_line(line: str) -> tuple[Message | None, Message | None]:
     return obj, None
 
 
+def is_int(value: Any) -> bool:
+    """An integer as RP-4 §2 has it: a JSON number with no fraction or exponent, in range."""
+    return isinstance(value, int) and not isinstance(value, bool) and abs(value) <= MAX_INTEGER
+
+
 def is_id(value: Any) -> bool:
     """A string or an integer, as `id` and `ref` are (RP-4 §2, §4)."""
-    return not isinstance(value, bool) and isinstance(value, str | int)
+    return isinstance(value, str) or is_int(value)
 
 
 def is_text_list(value: Any) -> bool:
@@ -78,18 +117,12 @@ def is_text_list(value: Any) -> bool:
 
 
 def is_version(value: Any) -> bool:
-    return (
-        isinstance(value, list)
-        and len(value) == 2
-        and all(isinstance(v, int) and not isinstance(v, bool) for v in value)
-    )
+    return isinstance(value, list) and len(value) == 2 and all(is_int(v) for v in value)
 
 
 def is_dial_list(value: Any) -> bool:
     """RP-4 §4: `dials` is a list of integers, each above 0."""
-    return isinstance(value, list) and all(
-        isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in value
-    )
+    return isinstance(value, list) and all(is_int(v) and v > 0 for v in value)
 
 
 TONE_MAX_S = 10
@@ -108,8 +141,8 @@ MEMBERS: dict[str, list[tuple[str, bool, Any]]] = {
         ("id", True, is_id),
         ("remote", True, lambda v: isinstance(v, str)),
         ("as", False, lambda v: isinstance(v, str)),
-        ("bandwidth", False, lambda v: isinstance(v, int) and not isinstance(v, bool)),
-        ("call_s", False, lambda v: isinstance(v, int) and not isinstance(v, bool) and v >= 0),
+        ("bandwidth", False, is_int),
+        ("call_s", False, lambda v: is_int(v) and v >= 0),
     ],
     "send": [
         ("link", True, lambda v: isinstance(v, str)),
@@ -122,14 +155,14 @@ MEMBERS: dict[str, list[tuple[str, bool, Any]]] = {
     "status": [],
     "dial": [],
     "tune": [
-        ("dial_hz", True, lambda v: isinstance(v, int) and not isinstance(v, bool) and v > 0),
+        ("dial_hz", True, lambda v: is_int(v) and v > 0),
     ],
     "scan": [("id", True, is_id), ("dials", True, is_dial_list)],
     "tone": [
         (
             "seconds",
             True,
-            lambda v: isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= TONE_MAX_S,
+            lambda v: is_int(v) and 0 <= v <= TONE_MAX_S,
         ),
     ],
 }

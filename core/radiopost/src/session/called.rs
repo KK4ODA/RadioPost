@@ -7,6 +7,7 @@ use super::{
     Caps, Event, Inbound, Outgoing, Progress, Proof, Proofs, Receipts, VERSION, WaitingEntry, done,
     error_pdu, listed_ids, listed_pairs, msg_pdus, piece_for, take_counted, transmission,
 };
+use crate::address;
 use crate::cbor::Value;
 use crate::credential::{self, Body, Credential, Trust, flags};
 use crate::crypto::ContentId;
@@ -51,6 +52,8 @@ enum State {
 pub struct Called {
     own_proof: Option<Proof>,
     caller_proof: Option<Proof>,
+    /// The caller's `HELLO` nonce, kept when its statement was taken in challenge form.
+    caller_nonce: Option<[u8; 8]>,
     cfg: CalledConfig,
     mail_for: MailFor,
     me: Body,
@@ -81,6 +84,7 @@ impl Called {
         Ok(Called {
             own_proof: None,
             caller_proof: None,
+            caller_nonce: None,
             cfg,
             mail_for,
             me,
@@ -150,6 +154,7 @@ impl Called {
             started: self.cfg.time,
             mine: self.own_proof.clone()?,
             theirs: self.caller_proof.clone()?,
+            nonce: self.caller_nonce,
         })
     }
 
@@ -322,8 +327,16 @@ impl Called {
         };
         match verdict {
             Ok(()) => {
-                if let Form::Time { nonce, .. } = &stmt.form {
-                    self.accepted = Some((stmt.address.clone(), *nonce));
+                match &stmt.form {
+                    Form::Time { nonce, .. } => {
+                        self.accepted = Some((stmt.address.clone(), *nonce));
+                    }
+                    Form::Challenge(_) => {
+                        self.caller_nonce = hello
+                            .get(7)
+                            .and_then(Value::as_bytes)
+                            .and_then(|n| n.try_into().ok());
+                    }
                 }
                 self.caller_proof = Some(Proof {
                     statement: stmt.encode(),
@@ -434,10 +447,11 @@ impl Called {
         let piece = piece_for(self.caller_caps.max_pdu, self.cfg.piece);
         let mut pdus = vec![welcome];
         for (serial, out) in &self.waiting {
+            // an offset at or past the end is taken as 0 (RP-3 §7)
             let resume = partials
                 .iter()
                 .find(|(id, _)| *id == out.id())
-                .map(|(_, o)| *o);
+                .map(|(_, o)| if *o < out.air.len() as u64 { *o } else { 0 });
             if out.air.len() as u64 <= auto || resume.is_some() {
                 pdus.extend(msg_pdus(out, resume.unwrap_or(0), piece, Some(*serial)));
                 self.progress
@@ -455,7 +469,7 @@ impl Called {
         match take_counted(&mut self.inbound, &mut self.progress, pdu) {
             Some(Ok((_, message, air))) => {
                 let id = message.content_id();
-                let ours = message.recipients().contains(&self.me.address.as_str());
+                let ours = address::among(&self.me.address, &message.recipients());
                 self.progress.received(id, ours);
                 if ours {
                     self.receipts.complete.push(id);

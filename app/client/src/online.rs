@@ -374,16 +374,20 @@ fn other_lists(
     errors: &mut serde_json::Map<String, Value>,
 ) {
     let entries = gateway_list::entries(known);
-    let asked: Vec<&gateway_list::Entry> = gateway_list::by_api(&entries)
-        .into_iter()
-        .filter(|e| e.domain != home)
-        .collect();
+    // each API once, the home's own entry passed over (RP-5 §4.4)
+    let asked = gateway_list::by_api(&entries, home);
     lists.retain(|d, _| asked.iter().any(|e| &e.domain == d));
-    for entry in asked {
+    for entry in &asked {
+        // what befalls a list befalls every domain naming its API
+        let say = |errors: &mut serde_json::Map<String, Value>, why: String| {
+            for d in &entry.domains {
+                errors.insert(d.clone(), json!(why));
+            }
+        };
         let text = match fetch(&entry.api, "/gateways") {
             Ok(text) => text,
             Err(why) => {
-                errors.insert(entry.domain.clone(), json!(why));
+                say(errors, why);
                 continue;
             }
         };
@@ -397,12 +401,12 @@ fn other_lists(
             }
             Err(code) => {
                 lists.remove(&entry.domain);
-                errors.insert(
-                    entry.domain.clone(),
-                    json!(format!(
+                say(
+                    errors,
+                    format!(
                         "its gateway list is not signed by its keys ({})",
                         code.name()
-                    )),
+                    ),
                 );
             }
         }

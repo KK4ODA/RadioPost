@@ -189,10 +189,24 @@ fn messages_have_their_ids_and_air_forms() {
         }
     }
     for bad in file["invalid"].as_array().expect("invalid") {
-        assert!(
-            Message::from_air(&bytes(bad, "air_hex")).is_err(),
-            "took: {}",
+        let refused = Message::from_air(&bytes(bad, "air_hex"))
+            .err()
+            .unwrap_or_else(|| panic!("took: {}", text(bad, "why")));
+        assert_eq!(
+            refused.code().name(),
+            text(bad, "expect"),
+            "{}",
             text(bad, "why")
+        );
+    }
+    for good in file["taken"].as_array().expect("taken") {
+        let message = Message::from_air(&bytes(good, "air_hex"))
+            .unwrap_or_else(|e| panic!("{}: {e}", text(good, "why")));
+        assert_eq!(
+            message.content_id().as_bytes().to_vec(),
+            bytes(good, "content_id_hex"),
+            "{}",
+            text(good, "why")
         );
     }
     for bad in file["invalid_ids"].as_array().expect("invalid_ids") {
@@ -287,7 +301,22 @@ fn credentials_are_made_and_checked_as_rp1_says() {
             .iter()
             .filter_map(Json::as_str)
             .collect();
-        let trust = k.trust(&known, &case["revoked"]);
+        let mut trust = k.trust(&known, &case["revoked"]);
+        // keys known only from DNS have no validity period (RP-1 §5 step 3)
+        let dns_only: Vec<&str> = case["dns_only_kids"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Json::as_str)
+            .collect();
+        for key in trust.keys.values_mut().flatten() {
+            if dns_only
+                .contains(&radiopost::cbor::hex(&radiopost::crypto::kid(&key.public)).as_str())
+            {
+                key.not_before = 0;
+                key.not_after = u64::MAX;
+            }
+        }
         let now = case["now"].as_u64().expect("now");
         let result = credential::verify(&raw, &trust, now, need(case)).map_err(|r| r.code);
         assert_eq!(verdict(&result), text(case, "expect"), "{what}");
@@ -408,6 +437,15 @@ fn pdus_frame_and_refuse_as_rp3_says() {
         };
         assert_eq!(verdict(&got), text(bad, "expect"), "{}", text(bad, "why"));
     }
+    // RP-3 §5.2: a waiting entry's subject, cut between Unicode scalar values
+    for s in file["subjects"].as_array().expect("subjects") {
+        assert_eq!(
+            radiopost::session::subject40(text(s, "subject")),
+            text(s, "cut"),
+            "{}",
+            text(s, "what")
+        );
+    }
     assert_eq!(hex(&[0x0a, 0xff]), "0aff");
 }
 
@@ -493,12 +531,27 @@ fn third_party_mail_is_listed_only_where_rp6_5_1_allows() {
 
 #[test]
 fn dns_records_are_read_and_post_offices_trusted_as_rp1_7_says() {
-    use radiopost::dns::{Found, Meets, meets, parse, trusts};
+    use radiopost::dns::{Found, Meets, api_of, meets, parse, trusts};
     let file = vectors("dns.json");
     for r in file["records"].as_array().expect("records") {
         let got = parse(text(r, "txt")).map(|t| serde_json::to_value(t).expect("JSON"));
         let want = (!r["result"].is_null()).then(|| r["result"].clone());
         assert_eq!(got, want, "{}", text(r, "what"));
+    }
+    // RP-1 §7.1: one API, or none when two records give different URLs
+    for set in file["record_sets"].as_array().expect("record sets") {
+        let records: Vec<_> = set["txts"]
+            .as_array()
+            .expect("txts")
+            .iter()
+            .filter_map(|t| parse(t.as_str().expect("text")))
+            .collect();
+        assert_eq!(
+            api_of(&records).as_deref(),
+            set["api"].as_str(),
+            "{}",
+            text(set, "what")
+        );
     }
     let found: std::collections::BTreeMap<String, Found> = file["found"]
         .as_object()
@@ -582,17 +635,21 @@ fn gateway_lists_are_read_from_every_post_office_the_home_knows() {
         let mut fetched = Vec::new();
         let mut others = Vec::new();
         let mut left_out = serde_json::Map::new();
-        for entry in by_api(&taken) {
+        for entry in by_api(&taken, home) {
             fetched.push(Json::String(entry.api.clone()));
             let served = &file["served"][&entry.api];
-            let Some(list) = served["gateways"].as_str() else {
-                left_out.insert(entry.domain.clone(), "unreachable".into());
-                continue;
+            let verdict = match served["gateways"].as_str() {
+                None => Err("unreachable"),
+                Some(list) => verify_list(&entry, served["info"].as_str(), list)
+                    .map_err(radiopost::ErrorCode::name),
             };
-            match verify_list(entry, served["info"].as_str(), list) {
+            match verdict {
                 Ok(records) => others.push((entry.domain.clone(), records)),
-                Err(code) => {
-                    left_out.insert(entry.domain.clone(), code.name().into());
+                // every domain naming the API is left out with it
+                Err(why) => {
+                    for d in &entry.domains {
+                        left_out.insert(d.clone(), why.into());
+                    }
                 }
             }
         }

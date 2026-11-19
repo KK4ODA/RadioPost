@@ -6,6 +6,8 @@
 //! connection, hands each to [`Event::read`] and its carrier, and writes the requests it is given
 //! back.
 
+use std::time::{Duration, Instant};
+
 use serde_json::Value;
 
 use crate::base64;
@@ -516,6 +518,56 @@ impl Event {
     }
 }
 
+/// RP-3 §8's silence on a session's link: the time since bytes last arrived, stopped while the
+/// modem's last `quality` says it is receiving. Other events (`busy`, `queued`, a `quality`
+/// saying `receiving` false) do not restart it; with no `quality` at all, nothing stops it.
+#[derive(Debug)]
+pub struct Silence {
+    since: Instant,
+    receiving: bool,
+}
+
+impl Default for Silence {
+    fn default() -> Self {
+        Silence {
+            since: Instant::now(),
+            receiving: false,
+        }
+    }
+}
+
+impl Silence {
+    /// A session whose link has just come up.
+    #[must_use]
+    pub fn new() -> Silence {
+        Silence::default()
+    }
+
+    /// One event from the adapter.
+    pub fn heard(&mut self, event: &Event) {
+        match event {
+            Event::Received { .. } => self.since = Instant::now(),
+            Event::Quality {
+                receiving: Some(now),
+                ..
+            } => {
+                if *now || self.receiving {
+                    // while it receives, and from the moment it stops, the count starts afresh
+                    self.since = Instant::now();
+                }
+                self.receiving = *now;
+            }
+            _ => {}
+        }
+    }
+
+    /// Whether the session has been silent for `quiet` (RP-3 §8: 300 seconds).
+    #[must_use]
+    pub fn over(&self, quiet: Duration) -> bool {
+        !self.receiving && self.since.elapsed() >= quiet
+    }
+}
+
 /// What a session engine offers the link it rides on: RP-3's engines, seen from RP-4.
 pub trait Engine {
     /// What the engine reports.
@@ -635,5 +687,38 @@ impl<E: Engine> Carrier<E> {
             out.push(host.disconnect(&link));
         }
         (out, said)
+    }
+}
+
+#[cfg(test)]
+mod silence {
+    use super::*;
+
+    #[test]
+    fn only_bytes_or_receiving_hold_off_the_silence() {
+        let quiet = Duration::from_millis(40);
+        let mut s = Silence::new();
+        let receiving = |r| Event::Quality {
+            link: None,
+            snr_db: None,
+            rate_bps: None,
+            receiving: Some(r),
+        };
+        std::thread::sleep(quiet);
+        s.heard(&Event::Busy(false));
+        s.heard(&receiving(false));
+        assert!(s.over(quiet), "busy and not receiving restart nothing");
+        s.heard(&receiving(true));
+        std::thread::sleep(quiet);
+        assert!(!s.over(quiet), "held while the modem receives");
+        s.heard(&receiving(false));
+        assert!(!s.over(quiet), "counted afresh once it stops");
+        std::thread::sleep(quiet);
+        assert!(s.over(quiet));
+        s.heard(&Event::Received {
+            link: "c1".into(),
+            data: vec![1],
+        });
+        assert!(!s.over(quiet), "bytes restart it");
     }
 }

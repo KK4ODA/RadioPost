@@ -17,7 +17,7 @@ use radiopost::crypto::ContentId;
 use radiopost::session::client::{Client, ClientConfig, Forwarding};
 use radiopost::session::gateway::{Gateway, GatewayConfig, Note, Partners, Upstream, Upstreams};
 use radiopost::session::{Caps, Event as SessionEvent, WaitingEntry};
-use rpmi::host::{Carrier, Direction, Engine, Event, Host};
+use rpmi::host::{Carrier, Direction, Engine, Event, Host, Silence};
 use rpmi::tcp::Connection;
 use serde::{Deserialize, Serialize};
 
@@ -1958,7 +1958,8 @@ fn carry(
     let mut carrier = Carrier::new(Answering(engine));
     // each event is handed to the engine once: a quiet read hands it nothing
     let mut event = Some(connected.clone());
-    let mut quiet_since = Instant::now();
+    // RP-3 §8: from the last bytes, stopped while the modem receives
+    let mut silence = Silence::new();
     let hang_up = |carrier: &mut Carrier<Answering>, modem: &mut Modem| {
         if let Some(link) = carrier.link() {
             let bye = modem.host.disconnect(link);
@@ -1987,19 +1988,19 @@ fn carry(
         }
         match modem.next() {
             Ok(Some(e)) => {
-                quiet_since = Instant::now();
+                silence.heard(&e);
                 event = Some(e);
             }
-            Ok(None) if quiet_since.elapsed() < QUIET => {}
-            Ok(None) => {
-                // RP-3 §8: the station called asks the modem to disconnect
-                hang_up(&mut carrier, modem);
-                break Err("nothing heard for 300 seconds".to_owned());
-            }
+            Ok(None) => {}
             Err(e) => {
                 carrier.engine_mut().link_lost();
                 break Err(format!("the modem's adapter: {e}"));
             }
+        }
+        if silence.over(QUIET) {
+            // RP-3 §8: the station called asks the modem to disconnect
+            hang_up(&mut carrier, modem);
+            break Err("nothing heard for 300 seconds".to_owned());
         }
     };
     let notes = carrier.engine_mut().0.take_notes();
@@ -2192,7 +2193,8 @@ fn forward_here(
     let mut carrier = Carrier::new(Calling(client));
     let mut outcome = Outcome::default();
     let mut event = Some(connected);
-    let mut quiet_since = Instant::now();
+    // RP-3 §8: from the last bytes, stopped while the modem receives
+    let mut silence = Silence::new();
     let result = loop {
         if let Some(e) = event.take() {
             let (requests, events) = carrier.on_event(&mut modem.host, &e);
@@ -2222,22 +2224,22 @@ fn forward_here(
         }
         match modem.next() {
             Ok(Some(e)) => {
-                quiet_since = Instant::now();
+                silence.heard(&e);
                 event = Some(e);
             }
-            Ok(None) if quiet_since.elapsed() < QUIET => {}
-            Ok(None) => {
-                if let Some(link) = carrier.link() {
-                    let bye = modem.host.disconnect(link);
-                    let _ = modem.conn.send(&bye);
-                }
-                carrier.engine_mut().link_lost();
-                break Err(format!("nothing heard for {} seconds", QUIET.as_secs()));
-            }
+            Ok(None) => {}
             Err(e) => {
                 carrier.engine_mut().link_lost();
                 break Err(format!("the modem's adapter: {e}"));
             }
+        }
+        if silence.over(QUIET) {
+            if let Some(link) = carrier.link() {
+                let bye = modem.host.disconnect(link);
+                let _ = modem.conn.send(&bye);
+            }
+            carrier.engine_mut().link_lost();
+            break Err(format!("nothing heard for {} seconds", QUIET.as_secs()));
         }
     };
     let summary = match &result {

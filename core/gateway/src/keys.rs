@@ -101,10 +101,7 @@ pub fn fetch(domain: &str, source: &Source<'_>, at: u64) -> Result<Vec<(String, 
     } else {
         radiopost_api::records(source.resolver, domain)
     };
-    let api = records
-        .iter()
-        .find(|t| t.get("t").map(String::as_str) == Some("api"))
-        .and_then(|t| t.get("url").cloned());
+    let api = radiopost::dns::api_of(&records);
     let api = match (api, source.url, source.own_credential) {
         (Some(api), _, _) => api,
         (None, Some(url), Some(credential)) => {

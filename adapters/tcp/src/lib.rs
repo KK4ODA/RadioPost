@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rpmi::polled::{Closer, PolledStream};
 use rpmi::wire::{Caps, Message, Request, admit, answer, answer_with, error, line_of, parse_line};
@@ -142,16 +142,26 @@ impl Stream {
     }
 }
 
-/// One line of the opening (RP-4 §9.5), read a byte at a time so nothing after it is taken.
-fn read_opening(s: &mut Stream) -> io::Result<String> {
+/// One line of the opening (RP-4 §9.5), read a byte at a time so nothing after it is taken: ASCII,
+/// at most [`MAX_OPENING`] bytes before its LF, whole by `deadline` (30 seconds from the
+/// connection), or `TimedOut`.
+fn read_opening(s: &mut Stream, deadline: Instant) -> io::Result<String> {
     let mut line = Vec::new();
     let mut byte = [0u8; 1];
     loop {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(ErrorKind::TimedOut.into());
+        }
+        s.raw().set_wait(Some(left));
         if s.read(&mut byte)? == 0 {
             return Err(ErrorKind::UnexpectedEof.into());
         }
         if byte[0] == b'\n' {
             return String::from_utf8(line).map_err(|_| ErrorKind::InvalidData.into());
+        }
+        if !byte[0].is_ascii() {
+            return Err(ErrorKind::InvalidData.into());
         }
         line.push(byte[0]);
         if line.len() > MAX_OPENING {
@@ -195,6 +205,13 @@ struct Conn {
 }
 
 impl Conn {
+    /// `ok`, for a request with an `id`: one without gets none (RP-4 §2).
+    fn ok(&self, id: Option<&Value>) {
+        if id.is_some() {
+            self.emit(answer("ok", id));
+        }
+    }
+
     fn emit(&self, m: Message) {
         let _ = self.out.send(Out::Line(m));
     }
@@ -381,14 +398,14 @@ impl Adapter {
             Request::Hello { .. } => {}
             Request::Callsigns(list) => {
                 conn.callsigns = list;
-                conn.emit(answer("ok", id));
+                conn.ok(id);
             }
             Request::Listen(on) => {
                 if conn.callsigns.is_empty() {
                     conn.emit(error(id, "refused", "no callsigns yet"));
                 } else {
                     conn.listening = on;
-                    conn.emit(answer("ok", id));
+                    conn.ok(id);
                 }
             }
             Request::Connect {
@@ -403,7 +420,7 @@ impl Adapter {
                     let queued = l.queued;
                     let _ = l.tx.send(ToLink::Data(data));
                     if id.is_some() {
-                        conn.emit(answer("ok", id));
+                        conn.ok(id);
                     }
                     conn.emit(answer_with(
                         "queued",
@@ -416,14 +433,14 @@ impl Adapter {
             Request::Disconnect { link } => match conn.link.as_ref() {
                 Some(l) if l.name == link => {
                     let _ = l.tx.send(ToLink::Close);
-                    conn.emit(answer("ok", id));
+                    conn.ok(id);
                 }
                 _ => conn.emit(error(id, "not-connected", "no such link of this host's")),
             },
             Request::Abort { link: Some(link) } => match conn.link.take() {
                 Some(l) if l.name == link => {
                     l.raw.close();
-                    conn.emit(answer("ok", id));
+                    conn.ok(id);
                     conn.emit(answer_with(
                         "disconnected",
                         None,
@@ -438,7 +455,7 @@ impl Adapter {
             Request::Abort { link: None } => match conn.call.take() {
                 Some(call) => {
                     call.cancelled.store(true, Ordering::SeqCst);
-                    conn.emit(answer("ok", id));
+                    conn.ok(id);
                     conn.emit(answer_with(
                         "failed",
                         Some(&call.id),
@@ -592,6 +609,8 @@ impl Adapter {
             }
         }
         let tcp = tcp.ok_or(last)?;
+        // the other adapter's line comes whole within 30 seconds of the connection (RP-4 §9.5)
+        let deadline = Instant::now() + ANSWER_WAIT;
         let _ = tcp.set_nodelay(true);
         let tcp = PolledStream::new(&tcp, Some(ANSWER_WAIT), "rptcp-link")
             .map_err(|e| ("refused", format!("{addr}: {e}")))?;
@@ -608,7 +627,7 @@ impl Adapter {
         s.write_all(opening.as_bytes())
             .and_then(|()| s.flush())
             .map_err(|e| ("refused", format!("{addr}: {e}")))?;
-        let reply = read_opening(&mut s).map_err(|e| match e.kind() {
+        let reply = read_opening(&mut s, deadline).map_err(|e| match e.kind() {
             ErrorKind::WouldBlock | ErrorKind::TimedOut => ("timeout", "no answer".to_owned()),
             _ => ("refused", format!("{addr}: {e}")),
         })?;
@@ -679,6 +698,7 @@ impl Adapter {
     // -- calls in -------------------------------------------------------------------------------
 
     fn answer(&self, tcp: &TcpStream) {
+        let deadline = Instant::now() + ANSWER_WAIT;
         let _ = tcp.set_nodelay(true);
         let Ok(tcp) = PolledStream::new(tcp, Some(ANSWER_WAIT), "rptcp-link") else {
             return;
@@ -694,7 +714,7 @@ impl Adapter {
             },
             Security::Tls { server: None, .. } => return,
         };
-        let Ok(opening) = read_opening(&mut s) else {
+        let Ok(opening) = read_opening(&mut s, deadline) else {
             return;
         };
         let mut words = opening.split(' ');

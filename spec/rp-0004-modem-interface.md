@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.3.0 |
-| **Updated** | 2026-11-18 |
+| **Version** | 1.3.1 |
+| **Updated** | 2026-11-19 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -24,7 +24,9 @@ adapter for it, and a modem may speak RPMI itself.
 
 * An **adapter** is a program, or a part of one, that speaks RPMI on one side and a particular
   modem's interface on the other. It MAY run as its own process, be built into the host, or be the
-  modem itself.
+  modem itself. One built into the host may hand the host RPMI's requests and events as the
+  program's own values rather than as lines: §2's transport and framing are then not used, and
+  every request and event keeps its meaning.
 * A **link** is one connection to one remote station: a reliable, ordered, two-way byte stream, as
   RP-3 §1 needs. The adapter names each link with a string ID.
 * A modem that carries datagrams (one-to-many frames, no connection) MAY offer **broadcasts**.
@@ -85,17 +87,23 @@ The adapter listens; the host connects to it, over **TCP on the loopback interfa
 host, so an adapter never listens beyond its own machine; a transport between machines, with its
 own authentication, would be a later MINOR addition (gap G4).
 
-Messages are **JSON Lines**: one JSON object (RP-0 §4.2) per line, UTF-8, ended by LF. Every object
-has an `op` member naming it. Byte data is in a `data` member in **standard base64** (RFC 4648 §4,
-with padding), because adapters are often small scripts and every language has it.
+Messages are **JSON Lines**: one JSON object (RP-0 §4.2) per line, UTF-8, ended by LF. Each line is
+I-JSON (RFC 7493): a line holding a lone surrogate, a member named twice in one object, or a number
+outside IEEE 754 double precision is not one. An **integer** here (an `id`, a `ref`, and the
+members §4 types as integers) is a number written with no fraction and no exponent, from
+−(2^53−1) to 2^53−1. Every object has an `op` member naming it. Byte data is in a `data` member in
+**standard base64** (RFC 4648 §4, with padding), because adapters are often small scripts and every
+language has it. A writer sets the bits a final group pads with to zero (RFC 4648 §3.5); a reader
+takes the bytes and need not check those bits. A `data` member is its bytes, however it is spelt.
 
 Requests from the host MAY carry an `id` (a string or integer). The adapter answers each request
-that has an `id` with `ok` or `error` carrying the same `id`. Events from the adapter carry no `id`
-unless they answer a request.
+that has an `id` with `ok` or `error` carrying the same `id`. A request without one gets no `ok`;
+an `error` answering it, or its `status` or `dial` answer, comes without an `id`. Events from the
+adapter carry no `id` unless they answer a request.
 
 An adapter MUST ignore members it does not know, and answer an unknown `op` with `error`
-`unsupported`. It answers `error` `malformed` (RP-0 §9.3) to a line that is not a JSON object with
-a string `op`, whose `id` is neither a string nor an integer, or whose `data` is not standard
+`unsupported`. It answers `error` `malformed` (RP-0 §9.3) to a line that is not an I-JSON object
+with a string `op`, whose `id` is neither a string nor an integer, or whose `data` is not standard
 base64 with padding, and to a request that lacks a member §4 gives it without a `?` or has one of
 the wrong type (§4, *Types*); the `error` carries the request's `id` when it could be read. It
 checks a request in that order: the line, then `hello` first (§3), then the `op`, then the
@@ -578,13 +586,24 @@ checks no band rules (§8).
 ### 9.5 TCP
 
 For the Internet, amateur mesh networks (AREDN), and tests. The adapter takes calls from other
-adapters on a TCP port (**8774** by default). `remote` is `CALLSIGN@host:port`, or `host:port`
-(whoever answers there), or a name the adapter's operator maps to one of these. No callsign is
-keyed and no band rules apply: `regulatory` is false. There is no radio, so no `dial` (§4.1).
+adapters on a TCP port (**8774** by default). `remote` is one of:
+
+* `CALLSIGN@host:port`: that callsign, at that address;
+* `host:port`: whoever answers there, called as `*` (`*@host:port` is the same);
+* a name the adapter's operator maps to an address. A name mapped to `CALLSIGN@host:port` calls
+  that callsign; one mapped to a bare `host:port` calls the name itself as the callsign, so that
+  one address may serve several callsigns (`RPTEST-1` and `RPTEST-2` at the same `host:port`).
+
+`host` is written as in a URL (RFC 3986): a name, an IPv4 address, or an IPv6 address in brackets
+(`[2001:db8::1]:8774`). A `remote` that is none of these fails `refused`. No callsign is keyed and
+no band rules apply: `regulatory` is false. There is no radio, so no `dial` (§4.1).
 
 * **On the Internet the link is TLS**, version 1.2 or later. The caller checks the certificate of
   the adapter it calls, by the usual roots of the web or by the certificate's SHA-256 fingerprint,
-  which the two operators exchange.
+  which the two operators exchange: SHA-256 of the DER of the certificate the adapter called
+  presents (its leaf), written as 64 hexadecimal digits. An adapter that takes calls from the
+  Internet has a certificate, one its operator gives it or one it makes for itself; plain TCP is
+  its operator's choice for a mesh, never what happens for want of a certificate.
 * **On an amateur mesh network the link is plain TCP.** The mesh is on the air, and nothing on the
   air is encrypted (RP-0 §5).
 
@@ -597,10 +616,12 @@ LF:
 | The adapter called | `OK <callsign>` | The link is up. Its host listens and holds `<called>`; for `*`, the callsign is the host's first. |
 | The adapter called | `NO <code>` | No link: `refused` (no host, not listening, or not its callsign) or `busy` (a link or a call of its host's is up). It then closes the connection. |
 
-A line longer than 200 bytes, or one that does not read as above, ends the connection. The caller's
-host hears `connected` with `remote` the callsign `OK` named, or `failed` with `NO`'s code;
-`failed` `timeout` when no line comes within 30 seconds, and `refused` when the connection itself
-is refused. After the lines the link carries the hosts' bytes as they are, both ways. Either side
+A line is ASCII. One of more than 200 bytes before its LF, or one that does not read as above, ends
+the connection. The caller's host hears `connected` with `remote` the callsign `OK` named, or
+`failed` with `NO`'s code; `failed` `timeout` when the line has not come whole within 30 seconds of
+the TCP connection being made (TLS's handshake included), and `refused` when the connection is
+refused, or closed before the line comes. The adapter called closes a connection whose line has
+not come whole within 30 seconds of it. Bytes after a line's LF are the link's. After the lines the link carries the hosts' bytes as they are, both ways. Either side
 closing it is the other's `disconnected` `remote`. `delivery` is false: TCP says when bytes have
 left, not when the other host holds them.
 
@@ -713,3 +734,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 1.1.0 | 2026-11-17 | Scanning (§4.2, wishlist W50): `caps.scan`, the `scan` request and event, a scan the host's that asked and ended by another host's `tune` (§1.1); `connect`'s `call_s` and `caps.call_s`; §9.1, Aether's scan (its ADR-0129). MINOR, announced (RP-0 §8.4): nothing for an implementation to do. |
 | 1.2.0 | 2026-11-17 | The tuner tone (§4.3): `caps.tone` and the `tone` request, refused `busy` while any link or call is up on the station, a stop always taken (§1.1, §8). §1.1: a `connect` in another bandwidth moves the whole station for the call and back, refused `busy` while another program's is up. §4.1: a channel the operator picks in the host is the operator's choice, and the radio stays. §9.1: Aether's bandwidths and a call's move (`bandwidth.set`), and the tone as Aether's `tune`. From the RadioPost mail of 2026-11-17, whose mobile could not be told to set its tuner before a call. Test vectors: the tone in the dial conversation and in `rpmi-lines.json`. MINOR, announced (RP-0 §8.4): nothing for an implementation to do. |
 | 1.3.0 | 2026-11-18 | §6: every host that has said `hello` hears each broadcast, callsigns or none; sending one needs callsigns; what `source` names; RadioPost's broadcasts are RP-8's alerts. MINOR, announced (RP-0 §8.4): nothing for an implementation to do, since the reference's simulated modem and the Aether adapter already pass broadcasts to every host. |
+| 1.3.1 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 7; D43). §1: an adapter built into the host may skip §2's transport and framing. §2: lines are I-JSON, and an integer has no fraction or exponent and fits in ±(2^53−1) (the reference and the Rust adapter had parted on `NaN`, lone surrogates and large integers); a request without `id` gets no `ok` but does get an `error`, `status` or `dial` without one; a `data` member is its bytes, its pad bits written as zero. §9.5: what each form of `remote` calls, a name mapped to a bare address calling the name, IPv6 in brackets; the opening line ASCII, its 200 bytes before the LF, its 30 seconds from the connection; the fingerprint is the leaf certificate's; plain TCP only by choice. Test vectors (`rpmi-lines.json`; `rpmi-conversations.json`'s rule: a host's ids and refs are its own, and `data` compares as bytes). PATCH, announced (RP-0 §8.4): nothing for an implementation to do. |

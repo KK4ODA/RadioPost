@@ -243,3 +243,33 @@ fn calls_are_refused_as_rp4_9_5_says() {
     assert_eq!(text(&busy, "code"), "busy");
     assert!(other.read_message().expect("closed").is_none());
 }
+
+/// RP-4 §9.5: an opening line is ASCII, at most 200 bytes before its LF. One at the limit is read
+/// (and here refused, the callsign not the host's); one past it, or not ASCII, ends the
+/// connection unanswered.
+#[test]
+fn an_opening_line_past_200_bytes_or_not_ascii_ends_the_connection() {
+    let (far_rpmi, far_calls) = adapter(Security::Plain, HashMap::new());
+    let _far = Station::open(far_rpmi, &["N1CALL-10"], true);
+    let answer = |line: &[u8]| -> Vec<u8> {
+        let mut tcp = std::net::TcpStream::connect(far_calls).expect("connected");
+        tcp.set_read_timeout(Some(Duration::from_secs(10)))
+            .expect("a timeout");
+        std::io::Write::write_all(&mut tcp, line).expect("written");
+        let mut got = Vec::new();
+        let _ = std::io::Read::read_to_end(&mut tcp, &mut got);
+        got
+    };
+    let padded = |n: usize| {
+        let mut line = b"RPTCP 1 KK4ODA N9".to_vec();
+        line.resize(n, b'Z');
+        line.push(b'\n');
+        line
+    };
+    assert_eq!(answer(&padded(200)), b"NO refused\n");
+    assert!(answer(&padded(201)).is_empty(), "past 200 bytes");
+    assert!(
+        answer("RPTCP 1 KK4ÖDA N1CALL-10\n".as_bytes()).is_empty(),
+        "not ASCII"
+    );
+}

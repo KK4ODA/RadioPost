@@ -609,6 +609,15 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   implementation cannot ignore now needs a new protocol version (RP-0 §8.3), and every change to
   them is announced (§8.4). RP-7 stays a Draft. Callsigns are compared by their base (D40, RP-0
   §6.1, RP-1 §6.3): a gateway's own exactly, a client's and a statement's `operator` by base.
+- (2026-11-19) RadioPostKit, Georges Auberger's Swift implementation, asked 35 questions (GitHub
+  issues 3 to 8; D43; RP-0 1.2.0 to RP-5 1.3.0): a client calls and answers stations; of three
+  callsign parts the base is the middle one (`callsign::base`, `rp.base_callsign`); addresses
+  compare without regard to ASCII case (`radiopost::address`, `rp.same_address`); two API URLs
+  mean no API (`dns::api_of`); receivers check RP-2 §2's keys and types but take a message with no
+  recipient; inflation to 16 MiB, past it `too-large` (`message::TOO_LARGE`); a caller that signed
+  a challenge keeps that proof, and `/direct` takes it with the `HELLO` nonce (`Proofs::nonce`);
+  RPMI lines are I-JSON, integers within ±(2^53−1); a list's repeated callsign counts once; the
+  300 seconds of RP-3 §8 count from the last bytes (`rpmi::host::Silence`).
 - (2026-11-15) The forwarding trial on the air (stage 5, `docs/user/on-air-forwarding.md`) is
   deferred until later: too early in the process.
 - (2026-11-12) With more than one post office: a client's gateway list read from every post

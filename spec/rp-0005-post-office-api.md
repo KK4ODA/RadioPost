@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.2.0 |
-| **Updated** | 2026-11-18 |
+| **Version** | 1.3.0 |
+| **Updated** | 2026-11-19 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-3 |
@@ -26,8 +26,10 @@ part of this API.
 
 ## 1. Conventions
 
-* **Base URL.** The `url` of the domain's `t=api` DNS record (RP-1 §7.1), ending in `/rp/v1`. Paths
-  below are relative to it.
+* **Base URL.** The `url` of the domain's `t=api` DNS record (RP-1 §7.1), ending in `/rp/v1`, with
+  no `/` after it. Paths below are relative to it. Where a signature covers the base URL (§3.2,
+  §6.1, §6.4, §6.7) it covers these bytes exactly as the record gives them: nothing is normalised.
+  A base URL an operator gives (RP-1 §7.3) is written the same way.
 * **HTTPS only**, TLS 1.2 or later.
 * **JSON** request and response bodies (RP-0 §4.2), `Content-Type: application/json`.
 * **Binary values** in base64url without padding; **content IDs** in base32 text (RP-0 §6.3);
@@ -57,7 +59,14 @@ part of this API.
   | 504 | `timeout` |
   | 507 | `quota-exceeded` |
 
-* **Rate limits** are answered `429` with `Retry-After`.
+* **Reading an error.** `code` is the error, and `name` says the same. A reader that does not know
+  the `code` (a new one is a MINOR addition, RP-0 §8.2) reads `name`, and failing that the status:
+  400 `malformed`, 401 `not-authorized`, 404 `unknown-message`, 409 `already-have`, 413
+  `too-large`, 429 `busy`, 500 `internal`, 502 `post-office-unreachable`, 504 `timeout`, 507
+  `quota-exceeded`; 403 and 422 alone name no one error. An answer that is not a problem body (a
+  proxy's page) is read by its status alone.
+
+* **Rate limits** are answered `429` with `Retry-After`, in seconds.
 * **Signed documents** (§4) are returned as `application/jose` (a JWS compact serialisation, RP-0
   §5) signed by one of the post office's keys, `kid` in the JWS header as the key's hex ID.
 
@@ -190,6 +199,23 @@ The gateways registered with this post office (§6.4), for clients' gateway list
    "updated": 1794300000}]}
 ```
 
+A record's members:
+
+| Member | Type | Meaning |
+|---|---|---|
+| `callsign` | text | The gateway's callsign (RP-0 §6.1), as callers name it. |
+| `operator` | text | The callsign of the licensee who operates it (§6.4). |
+| `grid` | text | Its Maidenhead locator, 4 or 6 characters. |
+| `place` | text | Where it is, for people. |
+| `channels` | array of channel | Where it listens. A channel has `dial_hz` (integer), `mode` (`USB` or `FM`), `modem` (RP-0 §9.4), `bandwidth_hz` (integer) and, when it scans, `scan_s` (integer). |
+| `hours` | text | When it listens, for people: `always`, or what its operator writes. |
+| `internet` | bool | It usually reaches the Internet. |
+| `copies` | map | Copies placed ahead it holds (§5.8): `users`, `days` and `max_air_bytes`, integers. |
+| `forwarding` | array | Its windows for cut-off partners (RP-7 §5). |
+| `updated` | integer | When the record last changed. |
+
+A reader ignores a member of another type, as it ignores one it does not know (RP-0 §4.2).
+
 `modem` names the modem from the registry of RP-0 §9.4. A reader ignores a channel whose `modem`
 it does not know: the modem may have been added after the reader was written. `mode` is the
 radio's: `USB` for a modem on single sideband, `FM` for one on an FM radio. On an `FM` channel,
@@ -221,10 +247,18 @@ or a post office, takes:
 When the home's info document says `gateways: "listed"`, only the home's list is taken: the home
 lets no other gateway in (§2).
 
-The reader keeps, with each record, the domain of the post office that listed it. A callsign in
-more than one list takes the home's record when the home lists it. Otherwise it is **ambiguous**:
-a client keeps each record; a post office places no copies at it (§5.8), since it could not tell
-whose credential to serve them to.
+Entries with the same `api` are one post office, serving several domains (§4.3): its list is
+fetched once, checked with a key of any of those entries (or one its info document adds), and its
+records kept with the domain of the first such entry. When that list is left out, every domain
+naming it is left out. An entry for the home's own domain is passed over: the home's list is
+already taken. An info document that does not come, or does not verify, adds no keys, and the list
+is checked with the entries' own.
+
+The reader keeps, with each record, the domain of the post office that listed it. A list that
+names a callsign twice counts once, by its first record. A callsign in more than one list takes
+the home's record when the home lists it. Otherwise it is **ambiguous**: a client keeps each
+record; a post office places no copies at it (§5.8), since it could not tell whose credential to
+serve them to.
 
 The reader refreshes the lists at least every **6 hours** while online, keeps the last it verified
 of each list it cannot fetch, and uses what it holds while offline.
@@ -503,6 +537,9 @@ key.
 | `radio_skips_read` | Mail already read in an ordinary mail program is not offered by radio. Default false. |
 | `accept_on_send` | Mail the user sends adds its recipients to the accept list (§6.5). Default true. |
 
+`PUT /settings` replaces the settings whole and answers `204`: a member it leaves out takes its
+default. To change one member, a client reads the settings, changes it and sends them all.
+
 With `radio_skips_read`, the post office takes a message the user has read in a mail program as
 **picked up** (§5.5): it leaves the waiting list and its copies placed ahead are dropped (§5.8).
 Hiding it from the list would not be enough: a gateway holding a copy would still offer it while
@@ -597,29 +634,34 @@ recipients:
 * `started`: the station called's clock when the session started (its `WELCOME` `time`).
 * `role`: `caller` or `called`, this user's part.
 * `mine`, `theirs`: each station's proof (RP-1 §6.4): the caller's statement as its `HELLO` gave it,
-  the station called's as RP-1 §6.5 builds it, each with its signature and credential, base64url.
+  or in challenge form when the station called asked for one (RP-3 §5.3), and the station called's
+  as RP-1 §6.5 builds it, each with its signature and credential, base64url.
+* `nonce`: the caller's `HELLO` nonce, base64url, when the caller's statement is in challenge form
+  and so holds none. The station called's statement carries it.
 * `sent`: the messages this user handed over and the other station listed `complete`.
 * `received`: the messages this user received and listed `complete`.
 
 The post office checks each session in this order and, at the first failure, answers it
 `{"code", "name"}` and takes nothing of it:
 
-1. Both proofs decode, and `role` is one of the two. Otherwise `malformed`.
+1. Both proofs decode, `role` is one of the two, and a caller's statement in challenge form comes
+   with an 8-byte `nonce`. Otherwise `malformed`.
 2. `mine`'s credential (RP-1 §5) as it was at `started`, with `send` if `sent` is not empty and
    `receive` if `received` is not empty; then `theirs`', with `send` if `received` is not empty.
 3. `mine`'s credential is for the token's account, an account of this post office. Otherwise
    `not-authorized`.
 4. The statements, as RP-1 §6.3 checks a statement relayed later: the caller's with the station
-   called as the station it names and `time` against `started`; the station called's with the
-   caller as the station it names and the caller's `nonce` (RP-1 §6.5).
+   called as the station it names and `time` against `started`, or in challenge form with no
+   `time`, its challenge taken as the station called's; the station called's with the caller as
+   the station it names and the caller's nonce (RP-1 §6.5), its statement's or `nonce`.
 
 Then, one result per message, `sent` first, each in the order given:
 
 * A sent message must be in `mine`'s statement and from its address, and a received one in
-  `theirs`' and from its address, addressed (`to` or `cc`) to this user. Otherwise it is refused,
-  `not-authorized`, as in §5.4.
+  `theirs`' and from its address, addressed (`to` or `cc`) to this user, the addresses compared as
+  RP-0 §6.2 says. Otherwise it is refused, `not-authorized`, as in §5.4.
 * **Sent:** taken as mail the user sent (§5.4; the accept list fills as §6.5 says), and sent on to
-  every recipient but the other station's account, which has it: `{"id", "status": "accepted",
+  every recipient but the other station's account (RP-0 §6.2), which has it: `{"id", "status": "accepted",
   "sent_on": [...]}`, or `duplicate` when the post office already had it.
 * **Received:** filed in the user's mailbox with the next serial, already picked up, so no gateway
   offers it again: `{"id", "status": "accepted", "serial"}`, or `duplicate` when the mailbox holds
@@ -841,7 +883,7 @@ no record for is `404` `unknown-message`.
 used, another declined, one sent by postcard and enrolled with its code; the operator's status,
 accounts, codes and revocation; a gateway's registration withdrawn by an operator; and the refusals of
 both), `vectors/direct.json` (§6.6: session-03 reported by both stations, sent again, refused to a
-gateway, and nine cases), `vectors/api-account.json` (renewal over the Internet and by radio, a gateway's, an expired and a
+gateway, and thirteen cases: a caller's statement in challenge form among them), `vectors/api-account.json` (renewal over the Internet and by radio, a gateway's, an expired and a
 revoked credential; the accept list read and changed, shared by a role mailbox's operators, filled
 by mail sent, and its effect at the door), `vectors/api-exchanges.json` (enrollment, a gateway registered, logins, session-01
 at the post office, copies placed ahead and dropped, copies at a gateway registered with another
@@ -882,3 +924,4 @@ read from the home's and every post office it knows) and `vectors/api.json` (the
 | 1.0.0 | 2026-11-15 | Stable (D41), with no change to its requirements. |
 | 1.1.0 | 2026-11-17 | §4.4: a channel's `scan_s` (a gateway that scans, RP-4 1.1.0 §4.2), a client's call that lasts that long, and a gateway that lists only the channels it listens on (wishlist W50, gap G21). MINOR, announced (RP-0 §8.4): nothing for an implementation to do. |
 | 1.2.0 | 2026-11-18 | §6.4: `DELETE /gateways/{callsign}` withdraws a gateway's registration, for the user whose callsign is its `operator`: the record leaves the gateway list, the credentials issued for the gateway are revoked, and the items placed at it are dropped; registering a callsign again replaces its record; a gateway is registered with one post office at a time, reports what it holds before it is withdrawn, and looks in the list after a `404`. §7.7: `DELETE /office/gateways/{callsign}`, the operators' withdrawal. §1: `404` for a gateway not registered. §8: who may withdraw one. 1.0.0 named `DELETE` and said no more, so a gateway registered by mistake could not be taken off (a tester's, at radiopost.org, 2026-11-18). Test vectors (`api-exchanges.json`, `api-office.json`). MINOR, announced (RP-0 §8.4): nothing for an implementation to do. A post office of 1.1.0 answers a withdrawal `404` and keeps the record; one of 1.2.0 SHOULD offer it. |
+| 1.3.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 8; D43). §1: the base URL signed as the record gives it, with no `/` after it; how a reader reads an error whose `code` it does not know, or an answer with no problem body; `Retry-After` in seconds. §4.4: a record's members and their types; entries sharing an `api` are one post office (the first domain, any entry's keys, every domain left out together); the home's own entry passed over; a callsign a list names twice counts once (the reference and the Rust library had made it ambiguous). §6.3: `PUT /settings` replaces the settings whole. §6.6: a caller's statement in challenge form, with the caller's `nonce`, is taken (no station-to-station session in which the station called asked for a challenge could be reported); addresses compared as RP-0 1.2.0 §6.2 says. Test vectors (`gateway-lists.json`, `direct.json`). MINOR, announced (RP-0 §8.4): `nonce` is a new optional member, and a post office of 1.2.0 refuses such a report `signature-invalid` or `time-skew`. Post offices should take it, and clients send it. |

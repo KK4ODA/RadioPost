@@ -38,6 +38,19 @@ pub fn parse(txt: &str) -> Option<BTreeMap<String, String>> {
     }
 }
 
+/// RP-1 §7.1: a domain's API, from its records (as [`parse`] read them): the one `url` its API
+/// records give. The same `url` twice is one; two different leave the domain with no API, as
+/// though it had none: a reader never guesses between them.
+#[must_use]
+pub fn api_of(records: &[BTreeMap<String, String>]) -> Option<String> {
+    let mut urls = records
+        .iter()
+        .filter(|t| t.get("t").map(String::as_str) == Some("api"))
+        .filter_map(|t| t.get("url"));
+    let first = urls.next()?;
+    urls.all(|u| u == first).then(|| first.clone())
+}
+
 /// The 32 bytes of a key record's `p`.
 #[must_use]
 pub fn key_of(tags: &BTreeMap<String, String>) -> Option<[u8; 32]> {
@@ -116,10 +129,7 @@ pub fn meets(
     if is(accepted) {
         return Meets::Known;
     }
-    if records
-        .iter()
-        .any(|t| t.get("t").map(String::as_str) == Some("api"))
-    {
+    if api_of(records).is_some() {
         Meets::Seen
     } else {
         Meets::Ignored

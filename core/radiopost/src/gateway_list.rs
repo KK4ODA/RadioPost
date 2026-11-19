@@ -21,6 +21,9 @@ pub struct Entry {
     pub api: String,
     /// Its keys by ID in hex, each kept only when the ID is that key's (RP-0 §5).
     pub keys: HashMap<String, [u8; 32]>,
+    /// Every domain whose entry names this `api`, this one first: one post office serving
+    /// several domains (RP-5 §4.3). From [`entries`], only its own.
+    pub domains: Vec<String>,
 }
 
 /// The entries of a `/post-offices` payload, in its order; one with no `api` is left out.
@@ -45,20 +48,38 @@ pub fn entries(payload: &Value) -> Vec<Entry> {
                         .then(|| (kid.to_owned(), public))
                 })
                 .collect();
-            Some(Entry { domain, api, keys })
+            Some(Entry {
+                domains: vec![domain.clone()],
+                domain,
+                api,
+                keys,
+            })
         })
         .collect()
 }
 
-/// Each API once, with the first entry that names it: one post office serving several domains is
-/// asked once, and its list counted once.
+/// Each API once (RP-5 §4.4): one post office serving several domains is asked once, its list
+/// counted once and kept under the first domain naming it, checked with the keys of any entry
+/// naming it, and left out for every domain naming it (`domains`). An entry for the home's own
+/// domain is passed over: the home's list is taken already.
 #[must_use]
-pub fn by_api(entries: &[Entry]) -> Vec<&Entry> {
-    let mut seen = HashSet::new();
-    entries
-        .iter()
-        .filter(|e| seen.insert(e.api.clone()))
-        .collect()
+pub fn by_api(entries: &[Entry], home: &str) -> Vec<Entry> {
+    let mut out: Vec<Entry> = Vec::new();
+    for e in entries.iter().filter(|e| e.domain != home) {
+        match out.iter_mut().find(|o| o.api == e.api) {
+            Some(first) => {
+                first.domains.push(e.domain.clone());
+                for (kid, public) in &e.keys {
+                    first.keys.entry(kid.clone()).or_insert(*public);
+                }
+            }
+            None => out.push(Entry {
+                domains: vec![e.domain.clone()],
+                ..e.clone()
+            }),
+        }
+    }
+    out
 }
 
 /// A post office's `/gateways` checked with its entry's keys and those its info document adds,
@@ -99,10 +120,22 @@ fn tagged(record: &Value, domain: &str) -> Value {
 pub fn merge(home: &str, home_gateways: &[Value], others: &[(String, Vec<Value>)]) -> Merged {
     let callsign = |r: &Value| r["callsign"].as_str().unwrap_or("").to_owned();
     let home_calls: HashSet<String> = home_gateways.iter().map(callsign).collect();
-    let mut gateways: Vec<Value> = home_gateways.iter().map(|r| tagged(r, home)).collect();
+    // a list that names a callsign twice counts once, by its first record
+    let firsts = |records: &'_ [Value]| -> Vec<Value> {
+        let mut seen = HashSet::new();
+        records
+            .iter()
+            .filter(|r| seen.insert(callsign(r)))
+            .cloned()
+            .collect()
+    };
+    let mut gateways: Vec<Value> = firsts(home_gateways)
+        .iter()
+        .map(|r| tagged(r, home))
+        .collect();
     let mut counted: BTreeMap<String, usize> = BTreeMap::new();
     for (domain, records) in others {
-        for r in records {
+        for r in &firsts(records) {
             let c = callsign(r);
             if home_calls.contains(&c) {
                 continue; // the home's record wins

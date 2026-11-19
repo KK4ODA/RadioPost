@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.1.0 |
-| **Updated** | 2026-11-15 |
+| **Version** | 1.2.0 |
+| **Updated** | 2026-11-19 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -31,7 +31,7 @@ A message is a CBOR map (RP-0 §4.1):
 |---|---|---|---|---|
 | 1 | `v` | uint | yes | Format version: 1. |
 | 2 | `from` | text | yes | The sender's address. |
-| 3 | `to` | array of text | yes | Recipients; at least one in `to` or `cc`. |
+| 3 | `to` | array of text | yes | Recipients. A client puts at least one address in `to` or `cc`; a message a post office makes of an email sent by `Bcc` alone has none (RP-6 §2.4). |
 | 4 | `cc` | array of text | no | Copy recipients. |
 | 5 | `date` | uint | yes | When the sender wrote it. |
 | 6 | `subject` | text | yes | May be empty. |
@@ -52,11 +52,22 @@ A **held-file** is a map: `1` `name` (text), `2` `type` (text), `3` `size` (uint
 Keys 0 and 14–63 are reserved. Receivers MUST ignore keys they do not know (RP-0 §4.1) but MUST
 keep them: they are part of the message and of its content ID.
 
+**What a receiver checks.** A receiver MUST refuse as `malformed` (RP-0 §9.3) a message that lacks
+a key this table requires, or that has a key it defines of another type than the table gives: a
+file or held-file that is not a map holding its keys of their types, a `reply_to` that is not 12
+bytes, a `form` that is not a map whose key 1 is 8 bytes and key 2 a map with integer keys (the
+values are §8's, and fill their template or not). It checks nothing more: a message with no address
+in `to` or `cc`, a `priority` above 2, or text not in NFC is taken as it is.
+
 **Priority.** `priority` orders transfers (RP-3 §6) and is shown to the recipient. `2` is for
 emergency traffic only, as in the operator's traffic-handling practice.
 
 **Addresses** follow RP-0 §6.2. **Text** follows RP-0 §4.3: a sender MUST normalise `subject`,
-`body` and file names to NFC with LF line endings before encoding.
+`body` and file names to NFC with LF line endings before encoding, turning CR LF, and then a CR
+alone, into LF first. A receiver neither checks nor changes the text: it is part of the canonical
+encoding and of the content ID (§3). NFC is as the sender's version of Unicode has it; text in NFC
+stays in NFC under later versions (Unicode's normalization stability policy), and no receiver
+normalises again, so a version never changes a content ID.
 
 ---
 
@@ -96,6 +107,9 @@ air_form = compression (1 byte) || compressed bytes
 A sender chooses a compression both ends support (RP-3 §5.1, `caps`) and SHOULD choose the one that
 gives the fewest bytes, including `0` when compression would not help (photos already compressed).
 
+With compression 1, the bytes after the first are exactly one raw DEFLATE stream. A stream that
+does not end, or that has bytes after its final block, is `malformed`.
+
 The content ID is computed on the uncompressed encoding, so a station may recompress a message
 without changing its ID.
 
@@ -120,7 +134,13 @@ working. Until then code 3 is not used.
 | Limit | Value |
 |---|---|
 | A station MUST be able to handle an air form of at least | 64 KiB |
+| A station MUST be able to inflate an air form to a canonical encoding of at least | 16 MiB |
 | A post office states its own limit for radio delivery | RP-5 §4.1, `max_air_bytes` |
+
+A station MAY refuse an air form whose canonical encoding would pass 16 MiB, as `too-large`
+(RP-0 §9.3), and stop inflating it there. Raw DEFLATE packs a lot into little: zlib at level 9
+makes 16 MiB of zeros into 16 310 bytes, so a 64 KiB air form could otherwise ask a station for
+some 64 MiB.
 
 Larger attachments are **held**: the post office keeps them, the message lists them under `held`,
 and the recipient asks for them only if it wants them (RP-3 §6, RP-5 §5.3).
@@ -291,3 +311,4 @@ and without its template, and ten sets of values checked against the template.
 | 0.2.0 | 2026-11-09 | Dictionary 1: trained only on a published corpus, adopted only if it beats DEFLATE by 20 % on short messages (§4). |
 | 1.0.0 | 2026-11-15 | Stable (D41). §4: dictionary 1, if adopted, is an option both ends say they support, never a requirement (gap G7). §6: a trimmed message points to the one it answers; nothing on the air asks for the full text (gap G1). |
 | 1.1.0 | 2026-11-15 | Forms (§8, key 13, wishlist W32): a form travels as its template's fingerprint and its values by field number, the template held by each station; the template's CBOR map, its fingerprint, the values that fill it and the text a form shows as. An implementation that does not show forms keeps key 13 as before: nothing it must do. Test vectors: `forms.json`, and `shelter3-213` in `messages.json`. |
+| 1.2.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 5; D43). §2: a receiver refuses as `malformed` a message missing a required key or with a key of the wrong type (no receiver had checked); "at least one in `to` or `cc`" binds clients, since a post office makes `to: []` of an email sent by `Bcc` alone (RP-6 §2.4); how a sender turns CR into LF; a receiver neither checks nor changes text, so Unicode versions never change a content ID. §4: compression 1 is exactly one DEFLATE stream, as `messages.json` already had it. §5: a station inflates to 16 MiB at least, and may refuse more as `too-large` (the Rust library had refused past 16 MiB as `malformed`, and the reference had no bound). Test vectors (`messages.json`). MINOR, announced (RP-0 §8.4): no conforming sender makes what is now refused, and a station that takes more refuses nothing it should take. Implementations should check the keys and inflate to 16 MiB. |

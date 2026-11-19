@@ -12,6 +12,7 @@ use std::fmt::Write as _;
 
 use ed25519_dalek::SigningKey;
 use radiopost::ErrorCode;
+use radiopost::address;
 use radiopost::base64url;
 use radiopost::cbor;
 use radiopost::credential::{self, Body, Credential, Refused, Trust, flags};
@@ -562,7 +563,11 @@ impl PostOffice {
     }
 
     fn ours(&self, address: &str) -> bool {
-        self.config.domains.iter().any(|d| d == domain_of(address))
+        // RP-0 §6.2: a domain compares without regard to case
+        self.config
+            .domains
+            .iter()
+            .any(|d| d.eq_ignore_ascii_case(domain_of(address)))
     }
 
     // -- what happens outside the API ---------------------------------------------------------
@@ -1586,13 +1591,15 @@ impl PostOffice {
             .and_then(cbor::Value::as_u64)
             .unwrap_or(0);
         let from = message.from().unwrap_or("").to_owned();
+        // accounts are kept in lowercase (RP-0 §6.2)
         let recipients: Vec<String> = message
             .recipients()
             .iter()
-            .map(|r| (*r).to_owned())
+            .map(|r| r.to_ascii_lowercase())
             .collect();
         for address in recipients {
-            if !self.ours(&address) || address == has_it || !self.is_account(&address) {
+            if !self.ours(&address) || address::same(&address, has_it) || !self.is_account(&address)
+            {
                 continue;
             }
             let serial = self.next_mailbox_serial(&address);
@@ -1622,7 +1629,7 @@ impl PostOffice {
         let to: Vec<String> = message
             .recipients()
             .iter()
-            .filter(|r| **r != has_it)
+            .filter(|r| !address::same(r, has_it))
             .map(|r| (*r).to_owned())
             .collect();
         if !to.is_empty() {
@@ -2211,6 +2218,21 @@ impl PostOffice {
         if !matches!(role, Some("caller" | "called")) {
             return Err(ErrorCode::Malformed);
         }
+        // A caller's statement in challenge form holds no nonce: the report gives its HELLO's,
+        // which the station called's statement carries.
+        let caller_statement = if role == Some("caller") {
+            &mine.1
+        } else {
+            &theirs.1
+        };
+        let caller_nonce = match caller_statement.challenge() {
+            None => caller_statement.nonce(),
+            Some(_) => Some(
+                unb64(s, "nonce")
+                    .and_then(|n| <[u8; 8]>::try_from(n.as_slice()).ok())
+                    .ok_or(ErrorCode::Malformed)?,
+            ),
+        };
         let any = |k: &str| {
             s.get(k)
                 .and_then(Json::as_array)
@@ -2234,10 +2256,12 @@ impl PostOffice {
         } else {
             ((&theirs, &theirs_body), (&mine, &mine_body))
         };
+        // RP-1 §6.3 as for a statement relayed later: its time against `started`, or, in
+        // challenge form, the challenge taken as the station called's, which checked it.
         let relayed = Freshness {
             now: started,
             seen: &[],
-            challenge: None,
+            challenge: calling.0.1.challenge(),
             sent_nonce: None,
         };
         statement::verify(
@@ -2248,7 +2272,7 @@ impl PostOffice {
             &relayed,
         )?;
         let answered = Freshness {
-            sent_nonce: calling.0.1.nonce(),
+            sent_nonce: caller_nonce,
             ..relayed
         };
         statement::verify(
@@ -2289,7 +2313,7 @@ impl PostOffice {
         let others: Vec<&str> = message
             .recipients()
             .into_iter()
-            .filter(|r| *r != theirs.address)
+            .filter(|r| !address::same(r, &theirs.address))
             .collect();
         json!({"id": id, "status": "accepted", "sent_on": others})
     }
@@ -2303,7 +2327,7 @@ impl PostOffice {
                 "not the other station's, signed",
             );
         };
-        if !message.recipients().contains(&mine.address.as_str()) {
+        if !address::among(&mine.address, &message.recipients()) {
             return refused(id, ErrorCode::NotAuthorized, "not addressed to this user");
         }
         let box_has = self
