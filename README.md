@@ -268,11 +268,13 @@ against RadioPost's over the Internet.
 
 **RP-0 to RP-6 are Stable** (1.0.0 on 2026-11-15): radiopost.org's pilot runs them, and a change
 an existing implementation cannot ignore now comes only with a new protocol version (RP-0 §8.3).
-Since then they have had only minor versions, additions an existing implementation can ignore:
-forms (RP-2 and RP-6 1.1.0), gateways that scan and the tuner tone (RP-4 1.1.0 and 1.2.0, RP-5
-1.1.0), and withdrawing a gateway's registration (RP-5 1.2.0). RP-4 also describes the VARA,
-ARDOP and packet adapters. RP-7, forwarding between gateways, and RP-8, alerts, are drafts. All
-nine are written, with test vectors for RP-1 to RP-8.
+Since then they have changed only in minor and patch versions: forms (RP-2 and RP-6 1.1.0),
+gateways that scan and the tuner tone (RP-4 1.1.0 and 1.2.0, RP-5 1.1.0), alerts (RP-0 1.1.0 and
+RP-4 1.3.0), withdrawing a gateway's registration (RP-5 1.2.0), and the answers to 35 questions
+from RadioPostKit, a second implementation, each keeping what conforming programs already send
+(RP-0 1.2.0, RP-1 1.1.0, RP-2 1.2.0, RP-3 1.1.0, RP-4 1.3.1, RP-5 1.3.0). RP-4 also describes
+the VARA, ARDOP and packet adapters. RP-7, forwarding between gateways, and RP-8, alerts, are
+drafts. All nine are written, with test vectors for RP-1 to RP-8.
 
 The programs follow the [order of work](docs/design/00-detailed-design.md#9-order-of-work), in
 Rust, each checked against the test vectors:
