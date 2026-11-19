@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.17.0 |
+| **Version** | 1.18.0 |
 | **Updated** | 2026-11-18 |
 | **Describes** | RadioPost 0.1.0-beta.27 |
 | **Licence** | CC BY 4.0 |
@@ -565,10 +565,13 @@ Click a message in the **Inbox** to read it.
 
 - **Reply** answers the sender. The other end's mail program keeps the thread. RadioPost does not
   quote the message you answer, because every byte goes on the air: it shows the original under
-  your text, for you only.
+  your text, for you only. A form shows there as its text, the sender's note below it.
 - **Reply all** also copies everyone else it went to.
 - **Forward** passes the message on, with its text and files. You can untick files you do not
-  want to carry.
+  want to carry. A form goes as its text, each label with its value, the sender's note below it.
+  So its **Subject**, **Date** and **Time** stay the original's (sent as a form again, they would
+  be your message's own), and the station it reaches shows it as text, not as a form. The labels
+  go on the air too, so it takes a little longer than the form did.
 - **Delete** moves it to the Trash (or press the Delete key).
 - **Edit**, on a message in the **Outbox**, changes it before it goes
   ([section 7](#7-writing-a-message)).
@@ -1934,3 +1937,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.15.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18. §9: a form received, by gateway or P2P, shows as the form, each label beside its value, the sender's note below it; it had shown as its text. §7 to match. |
 | 1.16.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18, when a second P2P call found the house's client no longer listening. **Listen for P2P** is a switch that stays on: it reads **Listening for P2P**, its lamp lit, and RadioPost listens again after every session and when Aether comes back, until it is clicked again; the **Stop** button is gone (§6, §10, new Figure 18; §37, §39, §40). The state *Waiting for the modem*. The client's screenshots retaken. |
 | 1.17.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18. §6: in a narrow window the parts stack in one column, the folders side by side. §7.1: there **Write**, **Reply**, **Reply all**, **Forward**, **Edit** and writing to an address open the message in a window of its own, beside the RadioPost window, or a pop-up in a browser (new Figure 12; later figures renumbered). |
+| 1.18.0 | 2026-11-18 | §9: **Forward** carries a form as its text, the labels with the values and the sender's note below; it had carried the note alone, and the form's values were lost. **Reply** shows a form's text under your own; it had shown the note. |

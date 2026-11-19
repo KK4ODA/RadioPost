@@ -1100,6 +1100,8 @@ impl Panel {
             .and_then(Cbor::as_text)
             .unwrap_or("")
             .into();
+        // what the composer shows of it, for reference: a form's text, the note below it
+        v["text"] = compose::text_of(&original).into();
         Ok(json!({
             "how": how.name(), "to": started.to, "cc": started.cc, "subject": started.subject,
             "body": started.body,

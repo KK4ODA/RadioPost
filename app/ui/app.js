@@ -1349,7 +1349,8 @@ async function answer(how, id = reading.id) {
   $("c-original").hidden = how === "forward";
   $("c-original-head").textContent =
     `${o.from} wrote on ${new Date(o.date * 1000).toLocaleString()}: not sent, for reference`;
-  $("c-original-body").textContent = o.body;
+  // what the message shows as: a form's text (RP-2 §8.4), the sender's note below it
+  $("c-original-body").textContent = o.text;
   show("composer");
   const first = how === "forward" ? form.to : form.body;
   first.focus();

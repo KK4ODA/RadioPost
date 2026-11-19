@@ -225,7 +225,8 @@ pub enum Answer {
     Reply,
     /// To its sender, with its other recipients in Cc, in its thread.
     ReplyAll,
-    /// To someone else: its text and files in a new message, which answers nothing.
+    /// To someone else: its text (a form's as text) and files in a new message, which answers
+    /// nothing.
     Forward,
 }
 
@@ -309,8 +310,27 @@ pub fn reply_subject(subject: &str) -> String {
     }
 }
 
+/// A message's text as it shows: a form's text (RP-2 §8.4), made from the template this client
+/// holds or by number, with the sender's note below it; otherwise its `body`.
+#[must_use]
+pub fn text_of(message: &Message) -> String {
+    radiopost::forms::shown(message, &radiopost::forms::Template::published()).unwrap_or_else(
+        || {
+            message
+                .map()
+                .get(key::BODY)
+                .and_then(Value::as_text)
+                .unwrap_or("")
+                .to_owned()
+        },
+    )
+}
+
 /// The text a forward carries: a short header (`Forwarded message`, From, Date, Subject), a blank
-/// line, and the original's text. Short, because every byte goes on the air.
+/// line, and the original's text ([`text_of`]). Short, because every byte goes on the air.
+///
+/// A form goes as its text, not as the form again: its fields bound to the message's subject,
+/// date and time (RP-2 §8.1) would be the forward's own, and say what the original did not.
 #[must_use]
 pub fn forwarded(original: &Message) -> String {
     let map = original.map();
@@ -321,7 +341,7 @@ pub fn forwarded(original: &Message) -> String {
         text(key::FROM),
         utc(date),
         text(key::SUBJECT),
-        text(key::BODY)
+        text_of(original)
     )
 }
 
@@ -654,8 +674,8 @@ pub fn checked_form(form: &radiopost::forms::Form) -> Result<radiopost::forms::F
 #[cfg(test)]
 mod tests {
     use super::{
-        Draft, File, checked_address, days_from_civil, form_from_args, normalise, parse_addresses,
-        reply_subject, utc, with_note,
+        Draft, File, checked_address, days_from_civil, form_from_args, forwarded, normalise,
+        parse_addresses, reply_subject, text_of, utc, with_note,
     };
 
     #[test]
@@ -690,6 +710,9 @@ mod tests {
                 && text.contains("Message:\n140 people tonight.\nNeed 40 cots.\n"),
             "{text}"
         );
+        // forwarded, from the command line too, the form goes as that text
+        assert_eq!(text_of(&m), text);
+        assert!(forwarded(&m).ends_with(&format!("Subject: Cots\n\n{text}")));
         // what does not fill the template is not sent (RP-2 §8.2)
         let missing = form_from_args("ics-213", &fields[..2]).expect_err("refused");
         assert!(missing.contains("a required field missing"), "{missing}");

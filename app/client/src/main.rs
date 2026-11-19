@@ -370,11 +370,7 @@ fn show(m: &Message) -> String {
     }
     out.push('\n');
     // a form shows as its text, made from the template this client holds (RP-2 §8.4)
-    let templates = radiopost::forms::Template::published();
-    match radiopost::forms::shown(m, &templates) {
-        Some(text) => out.push_str(&text),
-        None => out.push_str(map.get(key::BODY).and_then(Value::as_text).unwrap_or("")),
-    }
+    out.push_str(&compose::text_of(m));
     out
 }
 

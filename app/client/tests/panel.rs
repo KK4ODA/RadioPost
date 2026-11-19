@@ -1179,6 +1179,93 @@ fn a_reply_a_reply_to_all_and_a_forward_from_the_panel() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// W1, RP-2 §8 (found 2026-11-18, while a received form came to show as the form): a message that
+/// carries a form is forwarded with the form's text (RP-2 §8.4), the sender's note below it, and a
+/// reply shows that text under the composer. Both had taken the note alone, so the form's values
+/// were lost. The forward is not the form again: its Subject, Date and Time are bound to the
+/// message's own, and would have become the forward's.
+#[test]
+fn a_form_forwarded_or_answered_keeps_the_form() {
+    use radiopost::cbor::Value as Cbor;
+    use radiopost::message::key;
+    use radiopost_client::compose::{Draft, form_from_args};
+    let dir = scratch("panel-answer-form");
+    let mut store = store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    let fields = [
+        "1=Shelter 3".to_owned(),
+        "2=Facundo, net control".to_owned(),
+        "3=J. Park, Shelter 3 manager".to_owned(),
+        "7=Forty cots by 18:00.\\nWater for 120.".to_owned(),
+    ];
+    let ics213 = Draft {
+        from: "shelter3@radiopost.org".into(),
+        to: vec!["facundo@radiopost.org".into()],
+        date: 1_794_233_400,
+        subject: "Cots".into(),
+        body: "Sent from the mobile.".into(),
+        priority: 1,
+        form: Some(form_from_args("ics-213", &fields).expect("a form")),
+        ..Draft::default()
+    }
+    .message()
+    .expect("a message");
+    store
+        .received(&ics213, "N1CALL-10", 1_794_233_500, Some(431))
+        .expect("kept");
+    let c = Client {
+        at: Panel::new(&dir.join("facundo"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let short = &ics213.content_id().text()[..6];
+    let shown = "ICS-213 General Message\n\nIncident name: Shelter 3\n\
+                 To (name and position): Facundo, net control\n\
+                 From (name and position): J. Park, Shelter 3 manager\n\
+                 Subject: Cots\nDate: 2026-11-09\nTime: 14:10 UTC\n\
+                 Message:\nForty cots by 18:00.\nWater for 120.\n\n\
+                 Sent from the mobile.";
+
+    // a reply shows the form under the composer, for reference, the note below it
+    let a = c.get(&format!("/api/answer?id={short}&how=reply"));
+    assert_eq!(a["body"], "", "a reply quotes nothing");
+    assert_eq!(a["original"]["text"], shown, "{a}");
+
+    // a forward carries the form's text, the original's subject, date and time in it
+    let a = c.get(&format!("/api/answer?id={short}&how=forward"));
+    assert_eq!(a["subject"], "Fwd: Cots");
+    assert_eq!(
+        a["body"].as_str(),
+        Some(
+            format!(
+                "Forwarded message\nFrom: shelter3@radiopost.org\nDate: 2026-11-09 14:10Z\n\
+                 Subject: Cots\n\n{shown}"
+            )
+            .as_str()
+        ),
+        "{a}"
+    );
+    let id = c
+        .post(
+            "/api/compose",
+            &json!({"to": "eoc@radiopost.org", "subject": a["subject"],
+                    "body": format!("For the EOC.\n\n{}", a["body"].as_str().unwrap_or("")),
+                    "forward": a["original"]["id"]}),
+        )
+        .expect("composed")["id"]
+        .as_str()
+        .expect("an ID")
+        .to_owned();
+    let forward = common::kept(&dir.join("facundo"), &id);
+    let map = forward.map();
+    assert_eq!(map.get(key::FORM), None, "the form goes as its text");
+    let body = map.get(key::BODY).and_then(Cbor::as_text).unwrap_or("");
+    assert!(
+        body.starts_with("For the EOC.\n\nForwarded message\n") && body.ends_with(shown),
+        "{body}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// D34: the panel says when a newer release is out, and its update runs the application's own
 /// installer (here a stand-in that only says it ran).
 #[test]
