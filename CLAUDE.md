@@ -404,7 +404,7 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   an application's contact at an RFC 2606/6761 reserved domain is `bad`. Both are evidence, not
   refusals at `POST /applications`, so RP-5 and its vectors (which write to `example.*`) are
   untouched. `mailboxes.rs` makes the mailbox (Stalwart's JMAP `x:Domain/get` and
-  `x:Account/set`, tried only against a stand-in; or a named program) wherever an account begins
+  `x:Account/set`; or a named program) wherever an account begins
   (`aftercare.rs`): at an approval (the welcome brings its password), with a code for an address
   that is no account yet (`/office/codes` and the operator's `/code` answer `mailbox` with the
   password, shown once), and at a postcard's enrollment (`after_enrollment`: the welcome then).
@@ -413,6 +413,16 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   account without one, and **Make mailbox** (`POST /office/mailbox`, `radiopost-po mailbox`)
   makes it. Until 2026-11-18 a code made no mailbox, so Stalwart refused every email from
   outside for such an account (*550 5.1.1 Mailbox does not exist*, before the door is asked).
+  **New password** (`POST /office/password`, the operator's `/password`, `radiopost-po
+  password`; `mailboxes::set_password`) is for a user who lost theirs, since Stalwart has no
+  reset: the account found by `emailAddress`, its credentials read, and only the `Password`'s
+  `secret` changed by a JSON pointer (`credentials/<place>/secret`), so app passwords, passkeys
+  and the second factor stay; a `command` way is refused. Stalwart's lists go over JMAP as
+  objects keyed `"0"`, `"1"`, … and an array is refused (*invalidPatch, Invalid value for object
+  property*; its `crates/registry/src/types/list.rs`, read 2026-11-18): up to 0.1.0-beta.28
+  `make` sent `credentials` as an array, so every mailbox it made was refused. The API key needs
+  `sysAccountUpdate` for it. The stand-in in `tests/mailboxes.rs` refuses an array and applies
+  pointer updates as Stalwart does.
   `notices.rs` and `aftercare.rs` send the emails. One mailbox's second part (W36, RP-6 0.8.0 §2.6): `send_on` and
   `picked_up(…, by_radio)` queue `State::to_mailboxes` (`MailboxTask`), and `mirror.rs`, run with
   `seen.rs` every minute, imports §3.1's email into the sender's `sent`-role mailbox (uploaded to

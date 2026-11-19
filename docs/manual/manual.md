@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.21.0 |
+| **Version** | 1.22.0 |
 | **Updated** | 2026-11-18 |
 | **Describes** | RadioPost 0.1.0-beta.28 |
 | **Licence** | CC BY 4.0 |
@@ -1457,9 +1457,9 @@ Every account, one a row:
 - **Devices**: each computer enrolled for the account, with its callsign and until when its
   credential runs. *this computer* marks the one you are using. A revoked one is crossed out.
 - **Waiting**: messages waiting for the account's next call to a gateway.
-- **Mailbox**: *Yes* when the mail server has the account's mailbox, *none* in red when it does
-  not. Without one, email from outside is refused for the account. Empty when the post office
-  cannot ask the mail server ([Settings](#mailboxes)).
+- **Mailbox**: *Yes* when the mail server has the account's mailbox, with **New password**, and
+  *none* in red when it does not. Without one, email from outside is refused for the account.
+  Empty when the post office cannot ask the mail server ([Settings](#mailboxes)).
 
 **Find** shows the accounts whose address, name or callsign contains what you type.
 
@@ -1467,6 +1467,12 @@ Every account, one a row:
 password for mail programs once, with **Copy**. It keeps no copy. Give it to the person off the
 air, by email, by phone or in person, never in a message by radio: nothing on the air is
 encrypted.
+
+**A forgotten password.** The mail server has no way for people to reset their own password, so
+they ask you. Click **New password** beside *Yes*, then again to confirm: the old password stops
+working at once. The post office sets a new one and shows it once, with **Copy**. Only the
+password changes; the person's app passwords and passkeys stay. Give it to them off the air, as
+above. Their RadioPost devices are not affected: they do not use this password.
 
 **A lost or stolen computer.** Click **Revoke** beside its device, then again to confirm. Every
 credential of that device stops working: it can no longer log in or call a gateway. Gateways
@@ -1852,6 +1858,7 @@ These notes follow the US rules (Part 97). Check your own country's.
 | No **Post office** button | The callsign chosen at the top is not one of the post office's operators: choose yours. The desk also needs the Internet. |
 | Applicants are told *it takes no applications* | Tick **Take applications for accounts** in **Settings**. |
 | *no mailbox* beside an approved account, or *none* under **Mailbox** in **Accounts** | The mail server has no mailbox for it, so email from outside is refused (the sender gets *Mailbox does not exist*). Click **Make mailbox** in **Accounts**; if it fails, check **Settings**, **Mailboxes**, with **Check**, or make it in the mail server by hand. |
+| Someone cannot sign in to their mail: they forgot the password | **New password** beside their mailbox in **Accounts**. Give them the new one off the air. |
 | *not emailed* beside a decision | The email to the applicant did not go. **Settings**, **Mailboxes** says whether the post office can send email. |
 | A red line in **Health** | Fix what it says. You are emailed when a line turns red, and again when all pass. |
 | Mail waits in **Mail out** | The mail server is not taking it: run the **mail-log** job and read it. |
@@ -2029,3 +2036,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.19.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18: a house station listens for days. While **Listening for P2P** is on and no station has called, messages are written, changed and deleted as usual, and a station that calls takes what is in the outbox then; **Call** and **Tuner tone** stay greyed (§7, §10, §39). The credential is renewed while the station listens (§5.4). §37: *the station is listening for P2P calls*, and an edit is refused only during a session. |
 | 1.20.0 | 2026-11-18 | §9: **Print**, and a PDF by the system's print dialog; an ICS-213 prints as FEMA's ICS 213. **Save** beside each file a message carries, in the Downloads folder, never over another file (Figure 16 retaken with a file and **Print**). |
 | 1.21.0 | 2026-11-18 | A tester's gateway registered with radiopost.org under his first account while he was trying his own post office, and nothing could take it off. §17, §18 step 2: **Account**, the client's account the gateway registers with, and the line that says where before **Register with …**; the form keeps what was registered. §18 *Unregistering, or moving to another post office*: **Unregister**, what it does, one post office at a time, and what keeps it from unregistering. §23: `accounts`, `register --account`, `unregister`. §24: `record.json`. §25, §27 *Gateways registered here*: the desk's **Gateways** tab and its **Unregister** (new Figure 35; later figures renumbered). §37, §40 to match. The gateway's Setup and the desk's screenshots retaken. |
+| 1.22.0 | 2026-11-18 | §27: **New password** beside an account's mailbox, for someone who forgot theirs (the mail server has no reset of its own): a new password, shown once, only the password changed. §37 to match. |

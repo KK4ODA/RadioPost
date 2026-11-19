@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.2.0 |
+| **Version** | 1.3.0 |
 | **Updated** | 2026-11-18 |
 | **Describes** | RadioPost 0.1.0-beta.28 |
 | **Licence** | CC BY 4.0 |
@@ -293,13 +293,13 @@ keeps closed to the Internet. You reach it through your SSH connection:
    | 6 | **Directory, Accounts** | An account `radiopost`, with the password the installer printed. | The post office sends users' mail out through it. |
    | 7 | **AUTH Stage, Must Match Sender** | `false` if `authenticated_as == 'radiopost' \|\| authenticated_as == 'radiopost@radiopost.org'`, otherwise `true`. | Lets the post office send as each user's address. Name both forms: Stalwart may give either. |
    | 8 | **MTA Hooks** | URL `http://127.0.0.1:8772/`; stages *rcpt* and *data*; Bearer, with the token the installer printed; timeout 30000 ms; keep *temporary failure on error*; enabled for every session (`true`). | This is the door: Stalwart asks the post office before it takes each email. |
-   | 9 | **Directory, API keys** | A key with the right to create accounts. Keep it: you give it to the desk in [chapter 6](#6-your-own-radiopost-and-the-desk). | Each new account's mailbox is made by the post office; it fills Sent folders and marks mail read. |
+   | 9 | **Directory, API keys** | A key with the right to create and change accounts. Keep it: you give it to the desk in [chapter 6](#6-your-own-radiopost-and-the-desk). | Each new account's mailbox is made by the post office, and a lost password replaced; it fills Sent folders and marks mail read. |
 
    > **Note.** The API key of setting 9 needs these rights. A key in *Inherit* mode on an
    > administrator's account has them all. A key in *Replace* mode needs `authenticate`,
-   > `impersonate`, `sysDomainGet`, `sysAccountCreate`, `sysAccountGet`, `sysAccountQuery`,
-   > `jmapEmailQuery` and `jmapEmailGet` (to make mailboxes, check that each account has one, and
-   > see what users read), `jmapEmailUpdate`, `jmapEmailImport`, `jmapMailboxQuery`,
+   > `impersonate`, `sysDomainGet`, `sysAccountCreate`, `sysAccountUpdate`, `sysAccountGet`,
+   > `sysAccountQuery`, `jmapEmailQuery` and `jmapEmailGet` (to make mailboxes, give a new
+   > password, check that each account has one, and see what users read), `jmapEmailUpdate`, `jmapEmailImport`, `jmapMailboxQuery`,
    > `jmapMailboxGet` and `jmapBlobUpload` (for Sent folders and read marks), and
    > `sysDkimSignatureGet`, `sysDkimSignatureQuery`, `sysDkimSignatureCreate`,
    > `sysDkimSignatureUpdate` and `sysDkimSignatureDestroy` (for rotating the DKIM keys). The post
@@ -483,6 +483,16 @@ account's mailbox; **Make mailbox** makes a missing one and shows its password o
 server: `radiopost-po --dir /var/lib/radiopost mailbox --address ana@radiopost.org`. Without
 **Mailboxes** set, make each one in Stalwart's administration (**Directory**, **Accounts**) with
 the same address.
+
+**Lost passwords.** Stalwart has no way for users to reset a password they forgot, so they ask
+you. On the desk's **Accounts** tab, **New password** beside the account's mailbox sets a new one
+in Stalwart and shows it once; click it twice, since the old password stops working at once.
+Only the password changes: the user's app passwords, passkeys and second factor stay. Give it on
+as you give a code, off the air. On the server:
+`radiopost-po --dir /var/lib/radiopost password --address ana@radiopost.org`. The user's
+RadioPost devices are not affected: they sign in with their credentials, not this password.
+Without **Mailboxes** set to Stalwart, set it in Stalwart's administration (**Directory**,
+**Accounts**, the account).
 
 **Who runs the post office.** The desk goes by callsign: whoever holds a credential naming one of
 the post office's operator callsigns can use it. Nobody becomes an operator by applying: an
@@ -1030,6 +1040,7 @@ All are `radiopost-po --dir /var/lib/radiopost COMMAND`, but `install` and `upda
 | `status` | How many accounts and codes; the gateways; sessions. |
 | `code --address A --operator CALL [--role] [--name NAME]` | A one-time code, good for a week. For a new address, its mailbox too, its password shown once (chapter 9). |
 | `mailbox --address A` | Make an account's missing mailbox in Stalwart now; its password is shown once (chapter 9). |
+| `password --address A` | A new password for an account's mailbox, for a user who lost theirs; the old one stops working, the new one is shown once (chapter 9). |
 | `name --address A --name NAME` | The name on an account's email. |
 | `revoke --device KEY` | Revoke every credential of a lost device. |
 | `gateways` | The gateways registered here, each with the account that registered it, its credentials and the copies placed there (chapter 9). |
@@ -1057,6 +1068,8 @@ All are `radiopost-po --dir /var/lib/radiopost COMMAND`, but `install` and `upda
 | Stalwart refuses the post office's login as `radiopost` | Give the full address in `config.json`'s `smtp`, written `radiopost%40radiopost.org`. |
 | Every email for users is let in without checks, or none arrives | The door is not called. Restart Stalwart after its settings (section 5.2), then test the door (section 18.4). |
 | Email for a user is refused right after `RCPT TO`: *550 5.1.1 Mailbox does not exist* | The user has no mailbox at Stalwart. With **Mailboxes** set (chapter 6), **Make mailbox** on the desk's Accounts tab, or `radiopost-po mailbox --address A`; otherwise make it by hand (chapter 9). Accounts made by a code before 0.1.0-beta.28 have none: Health names them. |
+| **Make mailbox**, or a new account's mailbox, says *invalidPatch Invalid value for object property* | Stalwart refused the password in the form a post office before 0.1.0-beta.29 sent it. Update the post office (chapter 10), then **Make mailbox** on the desk's Accounts tab for each account Health names. |
+| A user cannot sign in to their mail: they forgot the password | **New password** on the desk's Accounts tab, or `radiopost-po password --address A` (chapter 9). Give it to them off the air. |
 | The desk's jobs stay *asked for, waiting for the runner* | `sudo radiopost-po --dir /var/lib/radiopost jobs --install`, once. |
 | Health is red | Do what the line says. You are emailed again when all pass. |
 | A user registered a gateway here by mistake, or under the wrong account | The desk's **Gateways** tab, **Unregister**; or `radiopost-po unregister --callsign CALL`. Before 0.1.0-beta.28, by hand (chapter 9). |
@@ -1124,3 +1137,4 @@ drawn by `tools/figures/server.py`; its screenshots of the desk are the user's m
 | 1.0.1 | 2026-11-17 | Troubleshooting: the FCC copy that never comes (the FCC's site refused releases before 0.1.0-beta.24), and building it from a file fetched by hand. |
 | 1.1.0 | 2026-11-18 | Every account gets its mailbox: a code for a new address makes it and shows its password once, a postcard's enrollment makes it and emails the welcome, Health names an account without one, and **Make mailbox** (the Accounts tab, `radiopost-po mailbox`) makes a missing one. The API key's rights gain `sysAccountCreate`. Accounts made by a code had no mailbox, so email from outside was refused for them. |
 | 1.2.0 | 2026-11-18 | Chapter 9 *Gateways*: the desk's **Gateways** tab and its **Unregister**, `gateways` and `unregister` on the server, and, before 0.1.0-beta.28, unregistering by hand (the credential revoked on the desk, the record taken out of `state.json`). Chapter 20's commands and chapter 21's troubleshooting to match. |
+| 1.3.0 | 2026-11-18 | **New password** on the desk's Accounts tab and `password` on the server: a new password for a user who lost theirs (Stalwart has none of its own), only the password changed. The API key's rights gain `sysAccountUpdate`. Troubleshooting: a mailbox refused with *invalidPatch* (a post office before 0.1.0-beta.29 sent the password in a form Stalwart refuses), and a forgotten password. |

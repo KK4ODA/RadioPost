@@ -216,7 +216,7 @@ fn an_approved_account_gets_its_mailbox_and_its_welcome() {
         ),
         (Some("User"), Some("jose"), Some("d1"))
     );
-    let password = create["credentials"][0]["secret"]
+    let password = create["credentials"]["0"]["secret"]
         .as_str()
         .expect("a password")
         .to_owned();

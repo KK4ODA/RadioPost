@@ -7,9 +7,10 @@
 //! code. A mail server that refuses email for a user before the door is asked (RP-6 §2.1) was how
 //! an account made by a code lost every email from outside.
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::io::{Read as _, Write as _};
 use std::net::TcpStream;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -54,18 +55,70 @@ fn http(
     (status, serde_json::from_str(body).unwrap_or(Json::Null))
 }
 
-/// The accounts a stand-in Stalwart holds, by address.
-type Held = Arc<Mutex<BTreeSet<String>>>;
+/// The accounts a stand-in Stalwart holds: each address's credentials, as Stalwart's lists go
+/// over JMAP, an object keyed by place (`"0"`, `"1"`, …).
+type Held = Arc<Mutex<BTreeMap<String, Json>>>;
+
+/// What Stalwart says of credentials of the wrong shape, as its `List` patch does.
+fn invalid() -> Json {
+    json!({"type": "invalidPatch", "description": "Invalid value for object property",
+        "properties": ["credentials"]})
+}
+
+/// An account's credentials as `x:Account/get` gives them: every secret masked.
+fn masked(credentials: &Json) -> Json {
+    let mut c = credentials.clone();
+    for one in c.as_object_mut().into_iter().flat_map(|m| m.values_mut()) {
+        if one.get("secret").is_some() {
+            one["secret"] = json!("********");
+        }
+    }
+    c
+}
+
+/// `x:Account/set`'s `update` on the accounts held, as Stalwart patches: the whole credentials
+/// (an object), one place of them, or one member of one place, by a JSON pointer.
+fn update(held: &Held, update: &Json) -> Json {
+    let mut held = held.lock().expect("lock");
+    let (mut updated, mut not) = (json!({}), json!({}));
+    for (id, patch) in update.as_object().into_iter().flatten() {
+        let Some(credentials) = held.get_mut(id) else {
+            not[id] = json!({"type": "notFound"});
+            continue;
+        };
+        let mut ok = true;
+        for (path, value) in patch.as_object().into_iter().flatten() {
+            let parts: Vec<&str> = path.split('/').collect();
+            match parts.as_slice() {
+                ["credentials"] if value.is_object() => *credentials = value.clone(),
+                ["credentials", place] if value.is_object() => credentials[*place] = value.clone(),
+                ["credentials", place, member] if credentials.get(*place).is_some() => {
+                    credentials[*place][*member] = value.clone();
+                }
+                _ => ok = false,
+            }
+        }
+        if ok {
+            updated[id] = Json::Null;
+        } else {
+            not[id] = invalid();
+        }
+    }
+    json!({"methodResponses": [["x:Account/set", {"updated": updated, "notUpdated": not}, "a"]]})
+}
 
 /// A stand-in Stalwart with the domain `test.example` (ID `d1`) and the accounts it holds, by
-/// address: it makes one at `x:Account/set` and lists them at `x:Account/get`, with the post
-/// office's own `radiopost@` among them as on a real server. Also how many it was asked to make.
+/// address: it makes one at `x:Account/set` (refusing credentials sent as an array, as Stalwart
+/// does), changes one there, and lists them at `x:Account/get` (or gives some by ID, with their
+/// credentials masked), with the post office's own `radiopost@` among them as on a real server.
+/// Also how many it was asked to make.
 fn stalwart() -> (String, Held, Arc<Mutex<usize>>) {
     let server = tiny_http::Server::http("127.0.0.1:0").expect("a port");
     let at = format!("http://{}", server.server_addr());
-    let held: Held = Arc::new(Mutex::new(BTreeSet::from([
-        "radiopost@test.example".to_owned()
-    ])));
+    let held: Held = Arc::new(Mutex::new(BTreeMap::from([(
+        "radiopost@test.example".to_owned(),
+        json!({"0": {"@type": "Password", "secret": "radiopost"}}),
+    )])));
     let asked = Arc::new(Mutex::new(0));
     let (keep, count) = (Arc::clone(&held), Arc::clone(&asked));
     std::thread::spawn(move || {
@@ -77,26 +130,43 @@ fn stalwart() -> (String, Held, Arc<Mutex<usize>>) {
             let answer = match call[0].as_str() {
                 Some("x:Domain/get") => json!({"methodResponses": [
                     ["x:Domain/get", {"list": [{"id": "d1", "name": "test.example"}]}, "d"]]}),
+                Some("x:Account/set") if call[1].get("update").is_some() => {
+                    update(&keep, &call[1]["update"])
+                }
                 Some("x:Account/set") => {
                     *count.lock().expect("lock") += 1;
                     let new = &call[1]["create"]["new"];
                     assert_eq!(new["domainId"], "d1", "{new}");
                     let address = format!("{}@test.example", new["name"].as_str().unwrap_or(""));
-                    if keep.lock().expect("lock").insert(address.clone()) {
+                    let mut held = keep.lock().expect("lock");
+                    if !new["credentials"].is_object() {
                         json!({"methodResponses": [
-                            ["x:Account/set", {"created": {"new": {"id": address}}}, "a"]]})
-                    } else {
+                            ["x:Account/set", {"notCreated": {"new": invalid()}}, "a"]]})
+                    } else if held.contains_key(&address) {
                         json!({"methodResponses": [["x:Account/set", {"notCreated": {"new":
                             {"type": "alreadyExists", "description": address}}}, "a"]]})
+                    } else {
+                        held.insert(address.clone(), new["credentials"].clone());
+                        json!({"methodResponses": [
+                            ["x:Account/set", {"created": {"new": {"id": address}}}, "a"]]})
                     }
                 }
                 Some("x:Account/get") => {
-                    let list: Vec<Json> = keep
-                        .lock()
-                        .expect("lock")
-                        .iter()
-                        .map(|a| json!({"id": a, "emailAddress": a}))
-                        .collect();
+                    let held = keep.lock().expect("lock");
+                    let list: Vec<Json> = match call[1]["ids"].as_array() {
+                        Some(ids) => ids
+                            .iter()
+                            .filter_map(Json::as_str)
+                            .filter_map(|id| {
+                                held.get(id)
+                                    .map(|c| json!({"id": id, "credentials": masked(c)}))
+                            })
+                            .collect(),
+                        None => held
+                            .keys()
+                            .map(|a| json!({"id": a, "emailAddress": a}))
+                            .collect(),
+                    };
                     json!({"methodResponses": [["x:Account/get", {"list": list}, "a"]]})
                 }
                 _ => json!({"methodResponses": [["error", {"type": "unknownMethod"}, "x"]]}),
@@ -182,10 +252,19 @@ fn settings(stalwart: String, smtp: &MailServer) -> Settings {
     }
 }
 
-#[test]
-#[allow(clippy::too_many_lines, reason = "one story, told in order")]
-fn every_account_gets_its_mailbox_however_it_began() {
-    let dir = std::env::temp_dir().join(format!("radiopost-mailboxes-{}", std::process::id()));
+/// A post office over the stand-ins, in a directory of its own.
+struct Bench {
+    dir: PathBuf,
+    smtp: MailServer,
+    held: Held,
+    asked: Arc<Mutex<usize>>,
+    running: Arc<Running>,
+    api: String,
+    admin: String,
+}
+
+fn bench(name: &str) -> Bench {
+    let dir = std::env::temp_dir().join(format!("radiopost-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a directory");
     let smtp = MailServer::start().expect("the stand-in mail server");
@@ -201,7 +280,30 @@ fn every_account_gets_its_mailbox_however_it_began() {
     let running = Arc::new(Running::load(&dir, serve::system_draw()).expect("loaded"));
     let (api, admin) =
         serve::serve(Arc::clone(&running), "127.0.0.1:0", "127.0.0.1:0").expect("serving");
-    let has = |a: &str| held.lock().expect("lock").contains(a);
+    Bench {
+        dir,
+        smtp,
+        held,
+        asked,
+        running,
+        api,
+        admin,
+    }
+}
+
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn every_account_gets_its_mailbox_however_it_began() {
+    let Bench {
+        dir,
+        smtp,
+        held,
+        asked,
+        running,
+        api,
+        admin,
+    } = bench("mailboxes");
+    let has = |a: &str| held.lock().expect("lock").contains_key(a);
 
     // a code for a new address, made on the server: the mailbox is made, its password shown once
     let (status, made) = http(
@@ -215,6 +317,10 @@ fn every_account_gets_its_mailbox_however_it_began() {
     assert!(has("kk4oda@test.example"));
     assert_eq!(made["mailbox"]["address"], "kk4oda@test.example", "{made}");
     assert_eq!(made["mailbox"]["password"].as_str().map(str::len), Some(20));
+    assert_eq!(
+        held.lock().expect("lock")["kk4oda@test.example"],
+        json!({"0": {"@type": "Password", "secret": made["mailbox"]["password"]}})
+    );
     let code = made["code"].as_str().expect("a code").to_owned();
 
     // the operator enrolls with it; a code for a new device of the account makes no mailbox
@@ -371,5 +477,139 @@ fn every_account_gets_its_mailbox_however_it_began() {
         list["applications"][0]["mailbox"]["made"].is_string(),
         "{list}"
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn a_user_who_lost_their_password_is_given_a_new_one_and_nothing_else_changes() {
+    let Bench {
+        dir,
+        held,
+        api,
+        admin,
+        ..
+    } = bench("password");
+    // the post office's operator, at the desk, and a user of it
+    let (_, mine) = http(
+        &admin,
+        "POST",
+        "/code",
+        None,
+        Some(&json!({"address": "kk4oda@test.example", "operator": "KK4ODA"})),
+    );
+    let laptop = SigningKey::from_bytes(&[3; 32]);
+    let credential = enroll(
+        &api,
+        "kk4oda@test.example",
+        "KK4ODA",
+        mine["code"].as_str().expect("a code"),
+        &laptop,
+    );
+    let op = login(&api, &credential, &laptop);
+    let (_, made) = http(
+        &admin,
+        "POST",
+        "/code",
+        None,
+        Some(&json!({"address": "g@test.example", "operator": "N1CALL"})),
+    );
+    let first = made["mailbox"]["password"]
+        .as_str()
+        .expect("a password")
+        .to_owned();
+
+    // the user has made an app password and a second factor since: their password is not in
+    // the first place, and its neighbours must outlive the change
+    held.lock().expect("lock").insert(
+        "g@test.example".into(),
+        json!({"0": {"@type": "AppPassword", "description": "phone", "secret": "app-secret"},
+               "1": {"@type": "Password", "secret": first, "otpUrl": "otpauth://totp/g"}}),
+    );
+    let credentials = || held.lock().expect("lock")["g@test.example"].clone();
+
+    // New password, from the desk: a new one, shown once; only the password changed
+    let (status, set) = http(
+        &api,
+        "POST",
+        "/rp/v1/office/password",
+        Some(&op),
+        Some(&json!({"address": "G@test.example"})),
+    );
+    assert_eq!(status, 200, "{set}");
+    assert_eq!(set["address"], "g@test.example", "{set}");
+    let second = set["password"].as_str().expect("a password").to_owned();
+    assert!(second.len() == 20 && second != first, "{set}");
+    assert_eq!(
+        credentials(),
+        json!({"0": {"@type": "AppPassword", "description": "phone", "secret": "app-secret"},
+               "1": {"@type": "Password", "secret": second, "otpUrl": "otpauth://totp/g"}})
+    );
+
+    // and from the operator's port
+    let (status, set) = http(
+        &admin,
+        "POST",
+        "/password",
+        None,
+        Some(&json!({"address": "g@test.example"})),
+    );
+    assert_eq!(status, 200, "{set}");
+    assert_eq!(credentials()["1"]["secret"], set["password"]);
+    assert_ne!(set["password"], json!(second));
+
+    // an account with a passkey and no password is given one, beside the passkey
+    held.lock().expect("lock").insert(
+        "g@test.example".into(),
+        json!({"0": {"@type": "Passkey", "description": "laptop"}}),
+    );
+    let (_, set) = http(
+        &admin,
+        "POST",
+        "/password",
+        None,
+        Some(&json!({"address": "g@test.example"})),
+    );
+    assert_eq!(
+        credentials(),
+        json!({"0": {"@type": "Passkey", "description": "laptop"},
+               "1": {"@type": "Password", "secret": set["password"]}})
+    );
+
+    // the mail server has no mailbox for it: said, and no password shown
+    held.lock().expect("lock").remove("g@test.example");
+    let (status, set) = http(
+        &api,
+        "POST",
+        "/rp/v1/office/password",
+        Some(&op),
+        Some(&json!({"address": "g@test.example"})),
+    );
+    assert_eq!(status, 200, "{set}");
+    assert!(set.get("password").is_none(), "{set}");
+    assert!(
+        set["error"]
+            .as_str()
+            .is_some_and(|e| e.contains("no account g@test.example")),
+        "{set}"
+    );
+
+    // an address that is no account here is refused
+    let (status, _) = http(
+        &admin,
+        "POST",
+        "/password",
+        None,
+        Some(&json!({"address": "nobody@test.example"})),
+    );
+    assert_eq!(status, 400);
+    let (status, _) = http(
+        &api,
+        "POST",
+        "/rp/v1/office/password",
+        Some(&op),
+        Some(&json!({"address": "nobody@test.example"})),
+    );
+    assert_eq!(status, 404);
     let _ = std::fs::remove_dir_all(&dir);
 }

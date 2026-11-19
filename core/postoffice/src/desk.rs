@@ -83,6 +83,7 @@ impl Running {
                         | "/office/licences"
                         | "/office/mailboxes/check"
                         | "/office/mailbox"
+                        | "/office/password"
                 )
                 | ("GET" | "PUT", "/office/settings")
                 | ("GET" | "POST", "/office/post-offices")
@@ -144,16 +145,9 @@ impl Running {
             }
             ("GET", "/office/settings") => ok(&self.desk_settings()),
             ("POST", "/office/mailboxes/check") => ok(&self.check_mailboxes()),
-            ("POST", "/office/mailbox") => match self.mailbox_for(&text("address")) {
-                Some(made) => {
-                    eprintln!(
-                        "radiopost-po: {who} asked for the mailbox of {}",
-                        text("address")
-                    );
-                    ok(&made)
-                }
-                None => refused(ErrorCode::UnknownMessage, 404),
-            },
+            ("POST", "/office/mailbox" | "/office/password") => {
+                self.account_mailbox(route, &who, &text("address"))
+            }
             ("GET", "/office/post-offices") => ok(&self.post_offices_view()),
             ("POST", "/office/post-offices") => match self.post_office_decision(body) {
                 Ok(said) => {
@@ -174,9 +168,26 @@ impl Running {
         })
     }
 
+    /// `POST /office/mailbox` (an account's mailbox, made now) or `/office/password` (a new
+    /// password for it), asked by `who`: what was done, its password shown once.
+    fn account_mailbox(&self, route: &str, who: &str, address: &str) -> Answer {
+        let (done, what) = if route == "/office/mailbox" {
+            (self.mailbox_for(address), "the mailbox of")
+        } else {
+            (self.new_password_for(address), "a new password for")
+        };
+        match done {
+            Some(done) => {
+                eprintln!("radiopost-po: {who} asked for {what} {address}");
+                ok(&done)
+            }
+            None => refused(ErrorCode::UnknownMessage, 404),
+        }
+    }
+
     /// The operator's port's share of the desk, taken before it locks the post office:
     /// `GET`/`PUT /settings`, `GET /lookup?call=…&name=…`, `POST /licences` (fetch the copy),
-    /// `POST /mailbox` (an account's mailbox, made now).
+    /// `POST /mailbox` (an account's mailbox, made now), `POST /password` (a new password for it).
     pub(crate) fn admin_desk(
         &self,
         method: &str,
@@ -206,10 +217,15 @@ impl Running {
                     .to_string(),
             ),
             ("POST", "/mailboxes/check") => (200, self.check_mailboxes().to_string()),
-            ("POST", "/mailbox") => {
+            ("POST", "/mailbox" | "/password") => {
                 let address = body["address"].as_str().unwrap_or("");
-                match self.mailbox_for(address) {
-                    Some(made) => (200, made.to_string()),
+                let done = if route == "/mailbox" {
+                    self.mailbox_for(address)
+                } else {
+                    self.new_password_for(address)
+                };
+                match done {
+                    Some(done) => (200, done.to_string()),
                     None => (
                         400,
                         json!({"error": format!("{address} is no account here")}).to_string(),

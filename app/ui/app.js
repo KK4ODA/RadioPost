@@ -2203,7 +2203,13 @@ function drawAccounts() {
     }));
     if (!a.credentials.length) devices.append(el("span", {class: "note", text: "No device yet"}));
     const mailbox = el("td", {});
-    if (a.mailbox === true) mailbox.append(el("span", {text: "Yes", title: "The mail server has its mailbox"}));
+    if (a.mailbox === true) {
+      mailbox.append(el("span", {text: "Yes", title: "The mail server has its mailbox"}), " ",
+        el("button", {class: "link", type: "button", text: "New password",
+          title: "For a user who lost their password: set a new one in the mail server, shown once; the old one stops working",
+          onclick: (e) => armed(e.currentTarget, "Click again: the old one stops working",
+            () => newPassword(a, mailbox))}));
+    }
     if (a.mailbox === false) {
       mailbox.append(el("span", {class: "pill declined", text: "none",
           title: "The mail server has no mailbox for it, so email from outside is refused"}),
@@ -2216,21 +2222,33 @@ function drawAccounts() {
   }));
 }
 
-// what became of a mailbox made for an account: its password, shown once (the post office keeps
-// none) and never to go by radio, or why none was made
+// a password for mail programs, shown once (the post office keeps none) and never to go by radio
+function shownOnce(lead, password) {
+  const pw = el("span", {class: "mono", text: password});
+  return [el("p", {class: "note"}, lead, pw, " ",
+    el("button", {class: "quiet", type: "button", text: "Copy", title: "Copy the password",
+      onclick: async () => {
+        try { await navigator.clipboard.writeText(password); toast("Copied."); }
+        catch { toast("Select the password and copy it.", true); }
+      }})),
+    el("p", {class: "note", text: "It is not kept, and it is shown only now. Give it to them off the air, never in a message by radio."})];
+}
+
+// what became of a mailbox made for an account: its password, or why none was made
 function mailboxSaid(m) {
   if (!m) return [];
   if (!m.password) {
     return [el("p", {class: "note bad", text: `No mailbox made: ${m.error || "the mail server did not say why"}. Email from outside is refused for ${m.address} until it has one.`})];
   }
-  const pw = el("span", {class: "mono", text: m.password});
-  return [el("p", {class: "note"}, `Mailbox made for ${m.address}. Its password for mail programs: `, pw, " ",
-    el("button", {class: "quiet", type: "button", text: "Copy", title: "Copy the password",
-      onclick: async () => {
-        try { await navigator.clipboard.writeText(m.password); toast("Copied."); }
-        catch { toast("Select the password and copy it.", true); }
-      }})),
-    el("p", {class: "note", text: "It is not kept, and it is shown only now. Give it to them off the air, never in a message by radio."})];
+  return shownOnce(`Mailbox made for ${m.address}. Its password for mail programs: `, m.password);
+}
+
+// what became of a new password for an account's mailbox, or why none was set
+function passwordSaid(m) {
+  if (!m.password) {
+    return [el("p", {class: "note bad", text: `No new password set: ${m.error || "the mail server did not say why"}.`})];
+  }
+  return shownOnce(`New password for ${m.address}; the old one no longer works: `, m.password);
 }
 
 async function makeMailbox(a, cell) {
@@ -2238,6 +2256,14 @@ async function makeMailbox(a, cell) {
     const m = await desk("POST", "/office/mailbox", {address: a.address});
     if (m.password) a.mailbox = true;
     cell.replaceChildren(...mailboxSaid(m));
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function newPassword(a, cell) {
+  try {
+    cell.replaceChildren(...passwordSaid(await desk("POST", "/office/password", {address: a.address})));
   } catch (e) {
     toast(e.message, true);
   }

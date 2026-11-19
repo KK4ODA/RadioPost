@@ -15,6 +15,14 @@
 //! The password goes to the new user in the welcome email, for their mail programs. A mailbox
 //! that could not be made is said on the desk, and never undoes the approval.
 //!
+//! Stalwart has no "forgotten password" of its own, so a user who loses theirs asks the
+//! operator, and `set_password` gives their mailbox a new one (`stalwart` only: a command makes
+//! mailboxes and nothing more).
+//!
+//! Stalwart's lists (an account's `credentials`) go over JMAP as objects keyed by their places,
+//! `"0"`, `"1"`, …, and an array is refused ("Invalid value for object property", its
+//! `crates/registry/src/types/list.rs`), and an update changes one by a JSON pointer to it.
+//!
 //! The same key reads which messages users have read in their mail programs, for
 //! `radio_skips_read` (`seen`).
 
@@ -244,7 +252,7 @@ fn stalwart(
         "name": local,
         "domainId": domain_id,
         "description": name,
-        "credentials": [{"@type": "Password", "secret": password}],
+        "credentials": {"0": {"@type": "Password", "secret": password}},
         "roles": {"@type": "User"},
     });
     if let Some(mb) = settings.quota_mb {
@@ -265,6 +273,104 @@ fn stalwart(
     }
     let id = set[1]["created"]["new"]["id"].as_str().unwrap_or("?");
     Ok(format!("mailbox {address} made in Stalwart (account {id})"))
+}
+
+/// Gives the mailbox of `address` the new `password`, for a user who lost theirs: the old one
+/// stops working. Returns what to tell the operator; `Ok(None)` when no way is set.
+///
+/// # Errors
+///
+/// Mailboxes are made by a command, which cannot change a password; Stalwart has no account for
+/// `address`, refused, or could not be reached.
+pub fn set_password(
+    settings: &MailboxSettings,
+    address: &str,
+    password: &str,
+) -> Result<Option<String>, String> {
+    match settings.kind.as_str() {
+        "stalwart" => stalwart_password(settings, address, password).map(Some),
+        "command" => Err(
+            "mailboxes are made by a command, which cannot change a password: set it in the \
+             mail server"
+                .to_owned(),
+        ),
+        "" => Ok(None),
+        other => Err(format!("no way to make mailboxes called {other:?}")),
+    }
+}
+
+/// The account's password changed in place, by a pointer to its place in the account's
+/// credentials: Stalwart takes it for the same credential, hashes the new secret, and keeps the
+/// rest (app passwords, passkeys, a second factor). An account with no password (a passkey
+/// only) is given one at the next place.
+fn stalwart_password(
+    settings: &MailboxSettings,
+    address: &str,
+    password: &str,
+) -> Result<String, String> {
+    let responses = jmap(
+        settings,
+        &json!([["x:Account/get", {"ids": null, "properties": ["emailAddress"]}, "a"]]),
+    )?;
+    let id = responses
+        .iter()
+        .filter(|r| r[0] == "x:Account/get")
+        .flat_map(|r| r[1]["list"].as_array().cloned().unwrap_or_default())
+        .find(|a| {
+            a["emailAddress"]
+                .as_str()
+                .is_some_and(|e| e.eq_ignore_ascii_case(address))
+        })
+        .and_then(|a| a["id"].as_str().map(str::to_owned))
+        .ok_or_else(|| format!("Stalwart has no account {address}: Make mailbox makes it"))?;
+    let responses = jmap(
+        settings,
+        &json!([["x:Account/get", {"ids": [id], "properties": ["credentials"]}, "a"]]),
+    )?;
+    let credentials = responses
+        .iter()
+        .find(|r| r[0] == "x:Account/get")
+        .and_then(|r| r[1]["list"][0]["credentials"].as_object().cloned())
+        .unwrap_or_default();
+    let mut patch = serde_json::Map::new();
+    if let Some((place, _)) = credentials.iter().find(|(_, c)| c["@type"] == "Password") {
+        patch.insert(format!("credentials/{place}/secret"), json!(password));
+    } else {
+        let next = credentials
+            .keys()
+            .filter_map(|k| k.parse::<u32>().ok())
+            .max()
+            .map_or(0, |k| k + 1);
+        patch.insert(
+            format!("credentials/{next}"),
+            json!({"@type": "Password", "secret": password}),
+        );
+    }
+    let mut update = serde_json::Map::new();
+    update.insert(id.clone(), Json::Object(patch));
+    let responses = jmap(
+        settings,
+        &json!([["x:Account/set", {"update": update}, "a"]]),
+    )?;
+    let set = responses
+        .iter()
+        .find(|r| r[0] == "x:Account/set")
+        .ok_or("Stalwart did not answer x:Account/set")?;
+    if let Some(why) = set[1]["notUpdated"].get(&id) {
+        let kind = why["type"].as_str().unwrap_or("refused");
+        let text = why["description"].as_str().unwrap_or("");
+        return Err(format!(
+            "Stalwart did not change the password of {address}: {kind} {text}"
+        ));
+    }
+    if set[1]["updated"].get(&id).is_none() {
+        return Err(format!(
+            "Stalwart did not say it changed the password of {address}"
+        ));
+    }
+    Ok(format!(
+        "a new password for {address} set in Stalwart (account {id})"
+    ))
 }
 
 fn command(cmd: &[String], address: &str, name: &str, password: &str) -> Result<String, String> {
@@ -301,6 +407,21 @@ mod tests {
         assert_eq!(a.len(), 20);
         assert_ne!(a, b);
         assert!(a.chars().all(|c| c.is_ascii_alphanumeric()));
+    }
+
+    #[test]
+    fn only_stalwart_has_its_passwords_changed() {
+        let by = |kind: &str| MailboxSettings {
+            kind: kind.to_owned(),
+            command: vec!["make-mailbox".to_owned()],
+            ..MailboxSettings::default()
+        };
+        assert_eq!(set_password(&by(""), "a@b.c", "p"), Ok(None));
+        assert!(
+            set_password(&by("command"), "a@b.c", "p")
+                .expect_err("refused")
+                .contains("set it in the mail server")
+        );
     }
 
     #[test]

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.46 |
+| **Version** | 0.3.47 |
 | **Updated** | 2026-11-18 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -732,7 +732,7 @@ server up with one program instead of a page of commands.
 | Requested by | The author (KK4ODA), 2026-11-12: running radiopost.org had meant pasting Debian commands; a dashboard, registration approved by FCC and QRZ lookups, a terminal holding the login. Requesters: 1. |
 | Component | Post office, client; RP-5. |
 | Compatibility | **Optional addition** (RP-5 0.14.0): applications (§6.7) and the operator endpoints (§7), which a post office may offer and a client may use; the rest is `radiopost-po`'s own members and endpoints under `/office/`, which RP-5 §7.2 and §7.3 allow and other clients ignore. |
-| Existing coverage | Built (2026-11-12), design D35. The desk in the client (for the post office's operators, logged in with their own credential): applications approved, declined or sent a postcard, with the FCC copy's and QRZ's evidence; accounts and their devices; codes; mail out; the hourly checks, with an email when one turns red; jobs the server's administrator runs from a fixed list through a root-owned systemd unit; nightly backups and sealed ones downloaded; a terminal by the system's own SSH; the server's state copied for a Claude session. Every account gets its mailbox in Stalwart (or by a program): at an approval, with the welcome; with a code for a new address, its password shown to the operator; at a postcard's enrollment, with the welcome. Health and the Accounts tab name an account without one, and **Make mailbox** makes it. `radiopost-po install` sets a Debian server up step by step. Other post offices (gap G15, built 2026-11-12): known, seen and blocked on the desk's *Post offices* tab, followed in DNS. |
+| Existing coverage | Built (2026-11-12), design D35. The desk in the client (for the post office's operators, logged in with their own credential): applications approved, declined or sent a postcard, with the FCC copy's and QRZ's evidence; accounts and their devices; codes; mail out; the hourly checks, with an email when one turns red; jobs the server's administrator runs from a fixed list through a root-owned systemd unit; nightly backups and sealed ones downloaded; a terminal by the system's own SSH; the server's state copied for a Claude session. Every account gets its mailbox in Stalwart (or by a program): at an approval, with the welcome; with a code for a new address, its password shown to the operator; at a postcard's enrollment, with the welcome. Health and the Accounts tab name an account without one, and **Make mailbox** makes it; **New password** gives a user who lost theirs a new one (Stalwart has no reset of its own), only the password changed. `radiopost-po install` sets a Debian server up step by step. Other post offices (gap G15, built 2026-11-12): known, seen and blocked on the desk's *Post offices* tab, followed in DNS. |
 | Dependencies | W10 (LoTW) would let an application be approved without a person. |
 | Effort | Large. |
 | Priority | **High.** Every new user needed a shell on the server. |
@@ -1239,3 +1239,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.44 | 2026-11-18 | W15 built, at the author's ask after the 40 m sessions of 2026-11-18: **Listen for P2P** stays on until pressed again. |
 | 0.3.45 | 2026-11-18 | W53, at the author's ask after the 40 m sessions: **Print** (a PDF by the system's print dialog, an ICS-213 as FEMA's ICS 213) and **Save** for a message's files, built. |
 | 0.3.46 | 2026-11-18 | W54 implemented, at a tester's report through the author: a gateway unregistered from RadioPost Gateway or the post office's desk, and the account it registers with chosen; gap G23 settled by RP-5 1.2.0. |
+| 0.3.47 | 2026-11-18 | W49's coverage: **New password** for a user who lost their mailbox's password, at a user's ask through the author. |

@@ -10,7 +10,8 @@
 //! (its password shown to the operator beside the code), and when an account approved by
 //! postcard enrolls with the card's code (its password in the welcome then, once the licence is
 //! proved). An account left without one gets it from the desk's Accounts tab or
-//! `radiopost-po mailbox`. A password never goes on the air, and the post office keeps none.
+//! `radiopost-po mailbox`, and a user who lost their password gets a new one there or from
+//! `radiopost-po password`. A password never goes on the air, and the post office keeps none.
 
 use serde_json::{Value as Json, json};
 
@@ -115,6 +116,34 @@ impl Running {
         if let Some(pw) = password {
             record["password"] = json!(pw);
         }
+        Some(record)
+    }
+
+    /// A new password for an account's mailbox, set now for the operator, who gives it on: for a
+    /// user who lost theirs, since the mail server has no way to reset one. What was set
+    /// (`address`, `set` and `password`, or `error`, and `at`), or `None` when `address` is no
+    /// account. The old password stops working; the post office keeps neither.
+    pub(crate) fn new_password_for(&self, address: &str) -> Option<Json> {
+        let address = address.trim().to_lowercase();
+        if !self.office().state.accounts.contains(&address) {
+            return None;
+        }
+        let password = new_password();
+        let mut record =
+            match mailboxes::set_password(&self.settings().mailboxes, &address, &password) {
+                Ok(Some(said)) => {
+                    eprintln!("radiopost-po: {said}");
+                    json!({"set": said, "password": password})
+                }
+                Ok(None) => json!({"error": "no way to make mailboxes is set: set the password \
+                                             in the mail server"}),
+                Err(e) => {
+                    eprintln!("radiopost-po: a new password for {address}: {e}");
+                    json!({"error": e})
+                }
+            };
+        record["address"] = json!(address);
+        record["at"] = json!(now());
         Some(record)
     }
 

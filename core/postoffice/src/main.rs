@@ -47,6 +47,9 @@ usage: radiopost-po --dir DIR COMMAND
   mailbox --address A
                      make an account's mailbox in the mail server now, for one that has none;
                      its password is shown once: give it on off the air
+  password --address A
+                     a new password for an account's mailbox, for a user who lost theirs; the
+                     old one stops working, the new one is shown once: give it on off the air
   name --address A --name NAME
                      the display name of the account's email (RP-6 §3.1)
   deliver --to ADDR --from ADDR --subject TEXT --air FILE [--licensed]
@@ -273,6 +276,32 @@ fn say_mailbox(mailbox: &Json) {
             "no mailbox made: {e}\n\
              email from outside is refused for the account until it has one"
         ),
+        (None, None) => {}
+    }
+}
+
+/// `mailbox` (an account's missing mailbox, made now) or `password` (a new password for it).
+fn mailbox_command(files: &Files, a: &Args, command: &str) -> Result<(), String> {
+    let body = json!({"address": a.need("--address")?});
+    let done = admin(files, "POST", &format!("/{command}"), &body)?;
+    if command == "mailbox" {
+        say_mailbox(&done);
+    } else {
+        say_password(&done);
+    }
+    Ok(())
+}
+
+/// What became of a new password for an account's mailbox: set, shown once, or why not.
+fn say_password(set: &Json) {
+    match (set["password"].as_str(), set["error"].as_str()) {
+        (Some(pw), _) => println!(
+            "a new password for {}: {pw}\n\
+             the old one no longer works; this one is not kept: give it to them off the air, \
+             never in a message by radio",
+            set["address"].as_str().unwrap_or("the account")
+        ),
+        (None, Some(e)) => println!("no new password set: {e}"),
         (None, None) => {}
     }
 }
@@ -968,11 +997,7 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
         "know" => know(&files, a),
         "post-offices" => post_offices(&files, a),
         "code" => code(&files, a),
-        "mailbox" => {
-            let body = json!({"address": a.need("--address")?});
-            say_mailbox(&admin(&files, "POST", "/mailbox", &body)?);
-            Ok(())
-        }
+        "mailbox" | "password" => mailbox_command(&files, a, command),
         "name" => {
             let body = json!({"address": a.need("--address")?, "name": a.need("--name")?});
             admin(&files, "POST", "/name", &body)?;
