@@ -118,6 +118,10 @@ fn the_operator_runs_applications_from_the_client() {
             &serde_json::to_string(&settings()).expect("JSON"),
         )
         .expect("written");
+    // the service asks for the night's backup of the mailboxes by itself when it starts within
+    // `backups::MAIL_HOURS_UTC` (a CI run at 11:10 UTC once found it among the jobs below)
+    let nightly =
+        radiopost_postoffice::backups::MAIL_HOURS_UTC.contains(&(serve::now() % 86_400 / 3600));
     let (api, admin) = start(&dir);
 
     // the operator's laptop enrolls with a code made on the server, and logs in
@@ -425,7 +429,12 @@ fn the_operator_runs_applications_from_the_client() {
     let exe = std::path::Path::new("/usr/local/bin/radiopost-po");
     let table = radiopost_postoffice::jobs::table(&dir, exe);
     let said = radiopost_postoffice::jobs::run_pending(&dir, &table, serve::now);
-    assert_eq!(said, ["disk: done"]);
+    // with no mail server here, the nightly backup fails when the clock asked for it
+    let mut expected = vec!["disk: done"];
+    if nightly {
+        expected.push("mail-backup: failed");
+    }
+    assert_eq!(said, expected);
     let (_, jobs) = http(&api, "GET", "/rp/v1/office/jobs", Some(&op), None);
     assert_eq!(disk(&jobs)["last"]["by"], json!("KK4ODA"));
 
