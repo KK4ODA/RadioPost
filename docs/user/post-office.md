@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.3.0 |
-| **Updated** | 2026-11-18 |
+| **Version** | 1.3.1 |
+| **Updated** | 2026-11-19 |
 | **Describes** | RadioPost 0.1.0-beta.30 |
 | **Licence** | CC BY 4.0 |
 
@@ -295,8 +295,9 @@ keeps closed to the Internet. You reach it through your SSH connection:
    | 8 | **MTA Hooks** | URL `http://127.0.0.1:8772/`; stages *rcpt* and *data*; Bearer, with the token the installer printed; timeout 30000 ms; keep *temporary failure on error*; enabled for every session (`true`). | This is the door: Stalwart asks the post office before it takes each email. |
    | 9 | **Directory, API keys** | A key with the right to create and change accounts. Keep it: you give it to the desk in [chapter 6](#6-your-own-radiopost-and-the-desk). | Each new account's mailbox is made by the post office, and a lost password replaced; it fills Sent folders and marks mail read. |
 
-   > **Note.** The API key of setting 9 needs these rights. A key in *Inherit* mode on an
-   > administrator's account has them all. A key in *Replace* mode needs `authenticate`,
+   > **Note.** The API key of setting 9 needs these rights. A key whose permissions are *Same as
+   > account* (Stalwart's *Inherit*), made under the administrator's account, has them all. A key
+   > given a list of its own (*Replace*) needs `authenticate`,
    > `impersonate`, `sysDomainGet`, `sysAccountCreate`, `sysAccountUpdate`, `sysAccountGet`,
    > `sysAccountQuery`, `jmapEmailQuery` and `jmapEmailGet` (to make mailboxes, give a new
    > password, check that each account has one, and see what users read), `jmapEmailUpdate`, `jmapEmailImport`, `jmapMailboxQuery`,
@@ -1138,3 +1139,4 @@ drawn by `tools/figures/server.py`; its screenshots of the desk are the user's m
 | 1.1.0 | 2026-11-18 | Every account gets its mailbox: a code for a new address makes it and shows its password once, a postcard's enrollment makes it and emails the welcome, Health names an account without one, and **Make mailbox** (the Accounts tab, `radiopost-po mailbox`) makes a missing one. The API key's rights gain `sysAccountCreate`. Accounts made by a code had no mailbox, so email from outside was refused for them. |
 | 1.2.0 | 2026-11-18 | Chapter 9 *Gateways*: the desk's **Gateways** tab and its **Unregister**, `gateways` and `unregister` on the server, and, before 0.1.0-beta.28, unregistering by hand (the credential revoked on the desk, the record taken out of `state.json`). Chapter 20's commands and chapter 21's troubleshooting to match. |
 | 1.3.0 | 2026-11-18 | **New password** on the desk's Accounts tab and `password` on the server: a new password for a user who lost theirs (Stalwart has none of its own), only the password changed. The API key's rights gain `sysAccountUpdate`. Troubleshooting: a mailbox refused with *invalidPatch* (a post office before 0.1.0-beta.29 sent the password in a form Stalwart refuses), and a forgotten password. |
+| 1.3.1 | 2026-11-19 | Section 5.2: the API key's permissions named as Stalwart's page shows them, *Same as account*; the guide had said *Inherit*, Stalwart's word in its code. |
