@@ -226,6 +226,29 @@ fn set_up(
     );
     // RP-5 §6.4: the gateway's own credential names the gateway as its operator
     assert_eq!(registered["state"]["credential"]["operator"], "KK4ODA-1");
+    // the page says where it is registered, and from which account (W46)
+    let now = &registered["state"]["registration"];
+    assert_eq!(
+        (
+            now["domain"].as_str(),
+            now["address"].as_str(),
+            now["post_office"].as_str()
+        ),
+        (
+            Some("test.example"),
+            Some("facundo@test.example"),
+            Some(base)
+        )
+    );
+    let accounts = page
+        .post(
+            "/api/accounts",
+            &json!({"home": home.display().to_string()}),
+        )
+        .expect("listed");
+    assert_eq!(accounts["accounts"][0]["address"], "facundo@test.example");
+    assert_eq!(accounts["accounts"][0]["domain"], "test.example");
+    assert_eq!(registered["state"]["last_record"]["place"], "Atlanta, GA");
     let record = running.office().state.gateways["KK4ODA-1"].clone();
     assert_eq!(record["grid"], "EM73");
     assert_eq!(record["channels"][0]["dial_hz"], 7_101_000);
@@ -263,6 +286,10 @@ fn a_gateway_set_up_registered_and_run_from_its_panel() {
         page.post("/api/setup", &change).is_err(),
         "held while answering"
     );
+    let held = page
+        .post("/api/unregister", &json!({}))
+        .expect_err("held while answering");
+    assert!(held.contains("stop the gateway first"), "{held}");
 
     // a user calls with a message
     let mut user = client(
@@ -397,6 +424,25 @@ fn a_gateway_set_up_registered_and_run_from_its_panel() {
     assert!(page.log().iter().any(|l| l == "stopped answering"));
     page.post("/api/setup", &change)
         .expect("changed while stopped");
+    // unregistered from the panel once stopped (RP-5 §6.4): the callsign registered, KK4ODA-1,
+    // though the settings now say KK4ODA-2
+    let said = page
+        .post("/api/unregister", &json!({}))
+        .expect("unregistered");
+    assert!(
+        said["said"]
+            .as_str()
+            .is_some_and(|s| s.starts_with("KK4ODA-1 is no longer registered with test.example")),
+        "{said}"
+    );
+    assert!(running.office().state.gateways.is_empty());
+    assert_eq!(said["state"]["registration"], Value::Null);
+    assert_eq!(said["state"]["credential"], Value::Null);
+    assert_eq!(said["state"]["last_record"]["grid"], "EM73");
+    assert!(
+        page.post("/api/unregister", &json!({})).is_err(),
+        "not registered now"
+    );
     let list = page
         .post("/api/partners", &json!({"add": "kk4oda-2"}))
         .expect("named");

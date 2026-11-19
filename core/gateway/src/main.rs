@@ -28,10 +28,22 @@ directory, as the RadioPost Gateway app has it.
                      answer on one more modem, or no longer on it (W26): one session at a
                      time, the other modems not answering while one carries a session
   modems             the modems the gateway answers on, the first first
-  register --home HOME [--grid G] [--place TEXT] [--channel HZ,MODE,MODEM,BW]...
-                     register the gateway with your post office (RP-5 §6.4), logged in
-                     as you with your client's key and credential in HOME, and keep the
-                     gateway's credential
+  accounts [--home HOME]
+                     the accounts of the RadioPost app on this computer (HOME, else
+                     $RADIOPOST_HOME or .radiopost in your home directory): the gateway
+                     registers with one of them, and so with its post office
+  register [--home HOME] [--account WHO] [--grid G] [--place TEXT]
+           [--channel HZ,MODE,MODEM,BW]...
+                     register the gateway with an account's post office (RP-5 §6.4), logged
+                     in as that account with your client's key and credential, and keep the
+                     gateway's credential. WHO is the account's address, callsign or number
+                     (`accounts` lists them); needed when the app holds more than one
+  unregister [--here]
+                     withdraw the gateway's registration at its post office (RP-5 §6.4), as
+                     the account it was registered from: it leaves the gateway list, its
+                     credential is revoked, and the copies it holds are dropped. Stop the
+                     gateway first. --here forgets it on this computer only, for a post
+                     office that cannot be reached (its operators remove it there)
   credential --file FILE
                      keep a credential a post office issued for the gateway's key by other
                      means than `register` (raw bytes or hex)
@@ -129,7 +141,7 @@ fn init(dir: &Path, a: &Args) -> Result<(), String> {
         base64url::encode(station::key(dir)?.verifying_key().as_bytes())
     );
     println!(
-        "next: radiopost-gateway --dir {} register --home YOUR_CLIENT_HOME",
+        "next: radiopost-gateway --dir {} register --account YOUR_ADDRESS",
         dir.display()
     );
     Ok(())
@@ -155,6 +167,46 @@ fn channels(a: &Args) -> Result<Vec<Json>, String> {
         .collect()
 }
 
+/// The RadioPost app's home the operator names, or the usual one.
+fn client_base(a: &Args) -> PathBuf {
+    a.one("--home")
+        .map_or_else(operator::client_home, PathBuf::from)
+}
+
+/// The accounts the gateway may register with, and the one it is registered with now.
+fn accounts(dir: &Path, a: &Args) {
+    let base = client_base(a);
+    let all = operator::accounts(&base);
+    if all.is_empty() {
+        println!(
+            "the RadioPost app at {} holds no enrolled account",
+            base.display()
+        );
+    }
+    for acct in &all {
+        let chosen = if acct.chosen {
+            "  (chosen in the app)"
+        } else {
+            ""
+        };
+        println!(
+            "{}  {}  {}'s post office{chosen}",
+            acct.id,
+            acct.label(),
+            acct.domain()
+        );
+    }
+    match operator::registration(dir) {
+        Some(r) => println!(
+            "registered now: {} with {}'s post office, for {}",
+            r["callsign"].as_str().unwrap_or(""),
+            r["domain"].as_str().unwrap_or(""),
+            r["address"].as_str().unwrap_or("")
+        ),
+        None => println!("the gateway is not registered"),
+    }
+}
+
 fn register(dir: &Path, a: &Args) -> Result<(), String> {
     let mut record = json!({"channels": channels(a)?, "hours": "always", "internet": true});
     for (flag, key) in [("--grid", "grid"), ("--place", "place")] {
@@ -162,8 +214,29 @@ fn register(dir: &Path, a: &Args) -> Result<(), String> {
             record[key] = v.into();
         }
     }
-    let said = operator::register(dir, &PathBuf::from(a.need("--home")?), record)?;
+    let account = operator::account(&client_base(a), a.one("--account").as_deref())?;
+    println!(
+        "registering with {}'s post office, logged in as {}",
+        account.domain(),
+        account.label()
+    );
+    let said = operator::register(dir, &account.home, record)?;
     println!("{said}");
+    Ok(())
+}
+
+fn unregister(dir: &Path, a: &Args) -> Result<(), String> {
+    if a.has("--here") {
+        let was = operator::registration(dir).ok_or("the gateway is not registered")?;
+        operator::forget(dir)?;
+        println!(
+            "forgotten on this computer; {}'s post office still lists {} until its operators              remove it",
+            was["domain"].as_str().unwrap_or(""),
+            was["callsign"].as_str().unwrap_or("")
+        );
+        return Ok(());
+    }
+    println!("{}", operator::unregister(dir)?);
     Ok(())
 }
 
@@ -479,7 +552,12 @@ fn blocking(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
 fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
     match command {
         "init" => init(dir, a),
+        "accounts" => {
+            accounts(dir, a);
+            Ok(())
+        }
         "register" => register(dir, a),
+        "unregister" => unregister(dir, a),
         "post-office" => {
             let mut s = Settings::load(dir)?;
             s.post_offices

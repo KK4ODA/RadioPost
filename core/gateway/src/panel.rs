@@ -349,6 +349,9 @@ impl Panel {
                 let said = self.register(body)?;
                 Ok(json!({"said": said, "state": self.state()}))
             }
+            (Method::Post, "/api/accounts" | "/api/unregister") => {
+                self.registration_api(path, body)
+            }
             (Method::Post, "/api/credential") => {
                 self.stopped()?;
                 station::keep_credential(dir, text(body, "hex").as_bytes())?;
@@ -443,13 +446,37 @@ impl Panel {
         }
     }
 
+    /// The accounts of the RadioPost app at a home the operator names (W46), asked by `POST`
+    /// so that a Windows path needs no escaping in a query; and the registration withdrawn at its
+    /// post office and forgotten here (RP-5 §6.4), while the gateway is stopped.
+    fn registration_api(&self, path: &str, body: &Value) -> Result<Value, String> {
+        if path == "/api/accounts" {
+            let home = match text(body, "home") {
+                "" => operator::client_home(),
+                h => PathBuf::from(h),
+            };
+            let accounts: Vec<Value> = operator::accounts(&home)
+                .iter()
+                .map(operator::ClientAccount::json)
+                .collect();
+            return Ok(json!({"home": home.display().to_string(), "accounts": accounts}));
+        }
+        self.stopped()?;
+        let said = operator::unregister(self.runner.dir())?;
+        self.runner.monitor().log(&said);
+        Ok(json!({"said": said, "state": self.state()}))
+    }
+
     /// RP-5 §6.4: the gateway registered with its operator's post office, logged in as the
     /// operator with the RadioPost app's enrollment on this computer.
     fn register(&self, body: &Value) -> Result<String, String> {
-        let home = match text(body, "home") {
+        let base = match text(body, "home") {
             "" => operator::client_home(),
             h => PathBuf::from(h),
         };
+        // the account the operator chose (W46): its address; none, the only one there is
+        let home =
+            operator::account(&base, Some(text(body, "account")).filter(|a| !a.is_empty()))?.home;
         let channels: Vec<Value> = body["channels"]
             .as_array()
             .into_iter()
@@ -536,6 +563,10 @@ impl Panel {
         let enrolled = operator::enrolled_as(&home)
             .ok()
             .map(|b| json!({"address": b.address, "operator": b.operator}));
+        let accounts: Vec<Value> = operator::accounts(&home)
+            .iter()
+            .map(operator::ClientAccount::json)
+            .collect();
         json!({
             "version": env!("CARGO_PKG_VERSION"),
             "dir": dir.display().to_string(),
@@ -544,7 +575,10 @@ impl Panel {
             "credential": credential,
             "running": self.runner.running(),
             "status": self.runner.monitor().status(),
-            "client": {"home": home.display().to_string(), "enrolled": enrolled},
+            "client": {"home": home.display().to_string(), "enrolled": enrolled,
+                       "accounts": accounts},
+            "registration": operator::registration(dir),
+            "last_record": operator::last_record(dir),
             "held": held_summary(dir),
             "aether": AETHER,
             "update": self.updates.status(),

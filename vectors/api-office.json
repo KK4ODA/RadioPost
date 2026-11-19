@@ -2247,6 +2247,261 @@
           }
         }
       ]
+    },
+    {
+      "what": "a gateway's registration withdrawn by an operator: not by a user who is not one; the callsign in lower case; then unknown; its credential revoked",
+      "exchanges": [
+        {
+          "note": "Shelter 3 registers N3CALL-1 under its account, by mistake (RP-5 §6.4)."
+        },
+        {
+          "at": 1794494400,
+          "who": "Shelter 3 (N3CALL)",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "expires": 1794494700
+            }
+          }
+        },
+        {
+          "at": 1794494400,
+          "who": "Shelter 3 (N3CALL)",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFioAQECGQQ1A3ZzaGVsdGVyM0ByYWRpb3Bvc3Qub3JnBGZOM0NBTEwFWCBfHY7YHDVavR3J7ZgAglth-pNqZhVWVI-pJHZuGC57GAYaauaBAAcaa10oAAkHWEDkx2PRUBVIe2zQJE3FYsu6ORyy11DFgeuM1KJS-T2Tt6P0F67Mb2GBMZGc97cCkyx3fQJoYSp403c492kgR5MG",
+              "nonce": "rqxtxkEnRCP3aSbii22Q3qIGrjC-Abo3u4odjImO0yc",
+              "signature": "TqxWfE31N87vDNgZeYWYw_ag5KAAh8aFl6h_hu4CxhJjyHEiVGaoyE8-P6SkI7_7D_5YvUIAxM9nkJzHyCbIBA"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_gHcVqC4ApeGkiQ7Tgp044f34",
+              "expires": 1794498000,
+              "address": "shelter3@radiopost.org",
+              "operator": "N3CALL",
+              "flags": 7
+            }
+          }
+        },
+        {
+          "at": 1794494401,
+          "who": "Shelter 3 (N3CALL)",
+          "request": {
+            "method": "POST",
+            "path": "/gateways",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34",
+            "body": {
+              "record": {
+                "callsign": "N3CALL-1",
+                "operator": "N3CALL",
+                "grid": "EM73",
+                "place": "Shelter 3, Decatur, GA",
+                "channels": [
+                  {
+                    "dial_hz": 7101000,
+                    "mode": "USB",
+                    "modem": "aether",
+                    "bandwidth_hz": 2300
+                  }
+                ],
+                "hours": "always",
+                "internet": true
+              },
+              "device": "tw2x_nv7FL9qiH7Gxj8Bwtwrm2NY6Kwwk-nb-193aLI",
+              "signature": "i0xXq-4YTXObjqdbpLvxkH82rG6GIsyDu3ftNPpzGPnXvXmBlq1yqSUVbc8NEpEEyQe9KrOFIlUpOxbibuNCBw"
+            }
+          },
+          "response": {
+            "status": 201,
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFqoAQECGQQaA3ZzaGVsdGVyM0ByYWRpb3Bvc3Qub3JnBGhOM0NBTEwtMQVYILcNsf57-xS_aoh-xsY_AcLcK5tjWOisMJPp2_tfd2iyBhpq9c_BBxprbHbBCQlYQKKL7QVCgktiv7IQ8R8fFORXZTmRqloLK5EbOD7RBdHG8cdLPkL6ZpVsCgmaiLE_Ex_aBDX6u-bHZUS1Q0p05Qs"
+            }
+          }
+        },
+        {
+          "note": "Shelter 3 is no operator: the operators' withdrawal is not for it (RP-5 §7.1)."
+        },
+        {
+          "at": 1794494402,
+          "who": "Shelter 3 (N3CALL)",
+          "request": {
+            "method": "DELETE",
+            "path": "/office/gateways/N3CALL-1",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 403,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        },
+        {
+          "note": "KK4ODA, an operator, withdraws it (RP-5 §7.7), the callsign typed in lower case: its credential is revoked, and the accounts show it."
+        },
+        {
+          "at": 1794494410,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "qDHrLf-NrMWfaCOoClbU8mMP7XQDR4U4H9sfHd1VrCw",
+              "expires": 1794494710
+            }
+          }
+        },
+        {
+          "at": 1794494410,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFeoAQECGQQRA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEZktLNE9EQQVYIONHzRHPhpswVmjl_4_FN4toJ_R5oYwqGZj21OhKGcZBBhpq5oEABxprXSgACQNYQNTcZ3tMenxmvs1eoqaKU-45fqeSL-vfuu4MFq9GeM7umuF11yWDTlneQNMTczJW2JzZM6s_rBQnP1X4mfwIBwo",
+              "nonce": "qDHrLf-NrMWfaCOoClbU8mMP7XQDR4U4H9sfHd1VrCw",
+              "signature": "1QxRwE8d_kktAeQWmIttwufV8hxxq1WsxywIbXoxGA2Btb_VSXT64JjetiZIavY_jRovPWFiUkuLVZQr229UAg"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_nrAE4HmjRoMr3kBoGs0KWXrc",
+              "expires": 1794498010,
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA",
+              "flags": 3,
+              "office": true
+            }
+          }
+        },
+        {
+          "at": 1794494411,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "DELETE",
+            "path": "/office/gateways/n3call-1",
+            "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "callsign": "N3CALL-1",
+              "revoked": [
+                1050
+              ]
+            }
+          }
+        },
+        {
+          "at": 1794494412,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "DELETE",
+            "path": "/office/gateways/N3CALL-1",
+            "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc"
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "type": "about:blank",
+              "title": "Unknown message",
+              "status": 404,
+              "code": 15,
+              "name": "unknown-message"
+            }
+          }
+        },
+        {
+          "at": 1794494413,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "GET",
+            "path": "/office/accounts",
+            "authorization": "Bearer tok_nrAE4HmjRoMr3kBoGs0KWXrc"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "accounts": [
+                {
+                  "address": "facundo@radiopost.org",
+                  "waiting": 0,
+                  "credentials": []
+                },
+                {
+                  "address": "shelter3@radiopost.org",
+                  "waiting": 0,
+                  "credentials": [
+                    {
+                      "serial": 1050,
+                      "operator": "N3CALL-1",
+                      "device": "tw2x_nv7FL9qiH7Gxj8Bwtwrm2NY6Kwwk-nb-193aLI",
+                      "flags": 9,
+                      "expires": 1802270401,
+                      "revoked": true
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "at": 1794494420,
+          "who": "N3CALL-1",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "KdVDtVMXFVJDLCJc-DBQaG1CekuqA0Y2T4Wekk_y9ns",
+              "expires": 1794494720
+            }
+          }
+        },
+        {
+          "at": 1794494420,
+          "who": "N3CALL-1",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFqoAQECGQQaA3ZzaGVsdGVyM0ByYWRpb3Bvc3Qub3JnBGhOM0NBTEwtMQVYILcNsf57-xS_aoh-xsY_AcLcK5tjWOisMJPp2_tfd2iyBhpq9c_BBxprbHbBCQlYQKKL7QVCgktiv7IQ8R8fFORXZTmRqloLK5EbOD7RBdHG8cdLPkL6ZpVsCgmaiLE_Ex_aBDX6u-bHZUS1Q0p05Qs",
+              "nonce": "KdVDtVMXFVJDLCJc-DBQaG1CekuqA0Y2T4Wekk_y9ns",
+              "signature": "SqkAkggX_JtbazXhI7V576X4wyZTHpC6xjxgSfSkqKCzfxRdlW4W0kh6tRr60ejq_EZs-mVQ72WP9Vl3F9IPAA"
+            }
+          },
+          "response": {
+            "status": 422,
+            "body": {
+              "type": "about:blank",
+              "title": "Credential revoked",
+              "status": 422,
+              "code": 5,
+              "name": "credential-revoked"
+            }
+          }
+        }
+      ]
     }
   ]
 }

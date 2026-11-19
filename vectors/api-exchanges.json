@@ -2221,6 +2221,489 @@
           }
         }
       ]
+    },
+    {
+      "what": "a gateway's registration withdrawn: refused to a gateway's token, to another callsign and for a callsign not registered; by its operator, its credential revoked and the copy placed there dropped; then no copy placed, the callsign unknown; registered again, withdrawn again",
+      "setup": {
+        "note": "Each of `deliveries` arrives for facundo@radiopost.org at `at`, with the note that names its serial.",
+        "deliveries": [
+          {
+            "serial": 422,
+            "message": "ana-to-facundo",
+            "at": 1794235300
+          },
+          {
+            "serial": 423,
+            "message": "maria-house",
+            "at": 1794235370
+          }
+        ]
+      },
+      "exchanges": [
+        {
+          "note": "Facundo names KK4ODA-1 as his usual gateway and registers it (RP-5 §6.3, §6.4)."
+        },
+        {
+          "at": 1794235210,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "PUT",
+            "path": "/settings",
+            "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi",
+            "body": {
+              "usual_gateways": [
+                "KK4ODA-1"
+              ]
+            }
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "at": 1794235220,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/gateways",
+            "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi",
+            "body": {
+              "record": {
+                "callsign": "KK4ODA-1",
+                "operator": "KK4ODA",
+                "grid": "EM73",
+                "place": "Atlanta, GA",
+                "channels": [
+                  {
+                    "dial_hz": 3590000,
+                    "mode": "USB",
+                    "modem": "aether",
+                    "bandwidth_hz": 2300,
+                    "scan_s": 14
+                  },
+                  {
+                    "dial_hz": 7101000,
+                    "mode": "USB",
+                    "modem": "aether",
+                    "bandwidth_hz": 2300,
+                    "scan_s": 14
+                  }
+                ],
+                "hours": "always",
+                "internet": true,
+                "copies": {
+                  "users": 50,
+                  "days": 7,
+                  "max_air_bytes": 16384
+                }
+              },
+              "device": "L2s9kPkHedoS8O1-BJo5ldNc8ngoQyraV2NU22EELJs",
+              "signature": "ioPARb1BRU0yoTdDRYI7-mxDjO2WgPAUyN21-JAhQu1HBI2zPilmFCEw0G3Tc3eFu2tvHIs93oJzmhFay2d6DA"
+            }
+          },
+          "response": {
+            "status": 201,
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFmoAQECGQQaA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEaEtLNE9EQS0xBVggL2s9kPkHedoS8O1-BJo5ldNc8ngoQyraV2NU22EELJsGGmrx21QHGmtoglQJCVhA4wVDl4PiEKzbV_H8xGrIGe07vvBlgPziScM_wJYQo2jf8dVnter519YBRQJDV7HXSN7NlONqNYFbDRpln8zkDA"
+            }
+          }
+        },
+        {
+          "at": 1794235230,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "YnIMfdL74LxF8F0CuKW2UTsDNl77F_AW6aiohypUgGs",
+              "expires": 1794235530
+            }
+          }
+        },
+        {
+          "at": 1794235230,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFmoAQECGQQaA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEaEtLNE9EQS0xBVggL2s9kPkHedoS8O1-BJo5ldNc8ngoQyraV2NU22EELJsGGmrx21QHGmtoglQJCVhA4wVDl4PiEKzbV_H8xGrIGe07vvBlgPziScM_wJYQo2jf8dVnter519YBRQJDV7HXSN7NlONqNYFbDRpln8zkDA",
+              "nonce": "YnIMfdL74LxF8F0CuKW2UTsDNl77F_AW6aiohypUgGs",
+              "signature": "fI8i2ala9dNOb5FatzxWe5xR9ChsmwRv_4GAHjZImcKcDttJ50dAJW1cvJauMW9PuUoVBix4QTWUD5SQgqh-BQ"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_7FDsReE3n0Nfd47g83S1DcTo",
+              "expires": 1794238830,
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA-1",
+              "flags": 9
+            }
+          }
+        },
+        {
+          "note": "Mail arrives for facundo@radiopost.org: #422, a copy placed at KK4ODA-1."
+        },
+        {
+          "at": 1794235310,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "GET",
+            "path": "/copies?after=&wait=0",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "cursor": "c_1",
+              "placing": true,
+              "items": [
+                {
+                  "kind": "copy",
+                  "address": "facundo@radiopost.org",
+                  "serial": 422,
+                  "id": "bnidnck4opwdqyelsa4a",
+                  "from": "ana@hampost.org",
+                  "subject": "Net tonight",
+                  "size": 199,
+                  "priority": 0,
+                  "third_party": false,
+                  "air": "AKYBAQJvYW5hQGhhbXBvc3Qub3JnA4F1ZmFjdW5kb0ByYWRpb3Bvc3Qub3JnBRpq8gVwBmtOZXQgdG9uaWdodAd4hEZhY3VuZG8sIHRoZSBjb3VudHkgbmV0IG1lZXRzIGF0IDIwOjAwIGxvY2FsIG9uIDMuNTkwIE1Iei4gSWYgeW91IGNhbm5vdCBtYWtlIGl0LCBzZW5kIG1lIHlvdXIgY2hlY2staW4gYW5kIEkgd2lsbCByZWFkIGl0LiA3MywgQW5hCg",
+                  "expires": 1794840100
+                }
+              ]
+            }
+          }
+        },
+        {
+          "note": "N1CALL-10's token is a gateway's, and Shelter 3's callsign, N3CALL, is not the record's operator: neither may withdraw KK4ODA-1. Nor is N2CALL-5 registered here."
+        },
+        {
+          "at": 1794235320,
+          "who": "N1CALL-10",
+          "request": {
+            "method": "DELETE",
+            "path": "/gateways/KK4ODA-1",
+            "authorization": "Bearer tok_gHcVqC4ApeGkiQ7Tgp044f34"
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 403,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        },
+        {
+          "at": 1794235321,
+          "who": "Shelter 3 (N3CALL)",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "TfBr6ZDPHEjEd_4ejFm07gnHXoq-1VMN1Vj--BI9PZA",
+              "expires": 1794235621
+            }
+          }
+        },
+        {
+          "at": 1794235321,
+          "who": "Shelter 3 (N3CALL)",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFioAQECGQQ1A3ZzaGVsdGVyM0ByYWRpb3Bvc3Qub3JnBGZOM0NBTEwFWCBfHY7YHDVavR3J7ZgAglth-pNqZhVWVI-pJHZuGC57GAYaauaBAAcaa10oAAkHWEDkx2PRUBVIe2zQJE3FYsu6ORyy11DFgeuM1KJS-T2Tt6P0F67Mb2GBMZGc97cCkyx3fQJoYSp403c492kgR5MG",
+              "nonce": "TfBr6ZDPHEjEd_4ejFm07gnHXoq-1VMN1Vj--BI9PZA",
+              "signature": "0ZtOf9C0UtySoRVyFu91hAzkbRJovPQuEJ7-t9zeNnq2czbDdMBPqHfpNYzgy_U2mJxuwvcVrO_p9RuCkmrtBg"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_4ZCaC2EKWUg9gz5cxdvp2E4a",
+              "expires": 1794238921,
+              "address": "shelter3@radiopost.org",
+              "operator": "N3CALL",
+              "flags": 7
+            }
+          }
+        },
+        {
+          "at": 1794235322,
+          "who": "Shelter 3 (N3CALL)",
+          "request": {
+            "method": "DELETE",
+            "path": "/gateways/KK4ODA-1",
+            "authorization": "Bearer tok_4ZCaC2EKWUg9gz5cxdvp2E4a"
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 403,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        },
+        {
+          "at": 1794235330,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "DELETE",
+            "path": "/gateways/N2CALL-5",
+            "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi"
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "type": "about:blank",
+              "title": "Unknown message",
+              "status": 404,
+              "code": 15,
+              "name": "unknown-message"
+            }
+          }
+        },
+        {
+          "note": "Facundo withdraws KK4ODA-1: its record leaves the list, its credential is revoked, and the copy of #422 placed there is dropped. #422 itself waits in his mailbox."
+        },
+        {
+          "at": 1794235340,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "DELETE",
+            "path": "/gateways/KK4ODA-1",
+            "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "callsign": "KK4ODA-1",
+              "revoked": [
+                1050
+              ]
+            }
+          }
+        },
+        {
+          "at": 1794235350,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "GET",
+            "path": "/copies?after=&wait=0",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo"
+          },
+          "response": {
+            "status": 401,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 401,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        },
+        {
+          "at": 1794235351,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "I2vUuzDA58xjIuwZCncC1HUKshe1128VcgdhvDQwfqQ",
+              "expires": 1794235651
+            }
+          }
+        },
+        {
+          "at": 1794235351,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFmoAQECGQQaA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEaEtLNE9EQS0xBVggL2s9kPkHedoS8O1-BJo5ldNc8ngoQyraV2NU22EELJsGGmrx21QHGmtoglQJCVhA4wVDl4PiEKzbV_H8xGrIGe07vvBlgPziScM_wJYQo2jf8dVnter519YBRQJDV7HXSN7NlONqNYFbDRpln8zkDA",
+              "nonce": "I2vUuzDA58xjIuwZCncC1HUKshe1128VcgdhvDQwfqQ",
+              "signature": "Z5AX-u-ZR-tn4KiJHwSAuC_QX-67PsOVadsHFvuaBDYBQ_6jESSrGASAk21R8x2fTODQ_mXdvmql9nDLBWRiDQ"
+            }
+          },
+          "response": {
+            "status": 422,
+            "body": {
+              "type": "about:blank",
+              "title": "Credential revoked",
+              "status": 422,
+              "code": 5,
+              "name": "credential-revoked"
+            }
+          }
+        },
+        {
+          "note": "Mail arrives for facundo@radiopost.org: #423, and no list names KK4ODA-1."
+        },
+        {
+          "at": 1794235380,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "DELETE",
+            "path": "/gateways/KK4ODA-1",
+            "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi"
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "type": "about:blank",
+              "title": "Unknown message",
+              "status": 404,
+              "code": 15,
+              "name": "unknown-message"
+            }
+          }
+        },
+        {
+          "note": "Facundo registers KK4ODA-1 again: a new credential, and nothing placed there while it was not registered. Then he withdraws it again: both its credentials are revoked."
+        },
+        {
+          "at": 1794235390,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/gateways",
+            "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi",
+            "body": {
+              "record": {
+                "callsign": "KK4ODA-1",
+                "operator": "KK4ODA",
+                "grid": "EM73",
+                "place": "Atlanta, GA",
+                "channels": [
+                  {
+                    "dial_hz": 3590000,
+                    "mode": "USB",
+                    "modem": "aether",
+                    "bandwidth_hz": 2300,
+                    "scan_s": 14
+                  },
+                  {
+                    "dial_hz": 7101000,
+                    "mode": "USB",
+                    "modem": "aether",
+                    "bandwidth_hz": 2300,
+                    "scan_s": 14
+                  }
+                ],
+                "hours": "always",
+                "internet": true,
+                "copies": {
+                  "users": 50,
+                  "days": 7,
+                  "max_air_bytes": 16384
+                }
+              },
+              "device": "L2s9kPkHedoS8O1-BJo5ldNc8ngoQyraV2NU22EELJs",
+              "signature": "ioPARb1BRU0yoTdDRYI7-mxDjO2WgPAUyN21-JAhQu1HBI2zPilmFCEw0G3Tc3eFu2tvHIs93oJzmhFay2d6DA"
+            }
+          },
+          "response": {
+            "status": 201,
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFmoAQECGQQbA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEaEtLNE9EQS0xBVggL2s9kPkHedoS8O1-BJo5ldNc8ngoQyraV2NU22EELJsGGmrx2_4HGmtogv4JCVhAgTMkYdp_qD9yCYjAwy1k_gzAj6-4apvSJEKIyZwkTZEpiii7mk9lzv01VBgG-utc_AfVgpR3KVmCDhTmDFhQBQ"
+            }
+          }
+        },
+        {
+          "at": 1794235400,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "Gu3tZMk5gcGsMKh6YXydpp1H7mwhACF1Ai2ou69LWhQ",
+              "expires": 1794235700
+            }
+          }
+        },
+        {
+          "at": 1794235400,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFmoAQECGQQbA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEaEtLNE9EQS0xBVggL2s9kPkHedoS8O1-BJo5ldNc8ngoQyraV2NU22EELJsGGmrx2_4HGmtogv4JCVhAgTMkYdp_qD9yCYjAwy1k_gzAj6-4apvSJEKIyZwkTZEpiii7mk9lzv01VBgG-utc_AfVgpR3KVmCDhTmDFhQBQ",
+              "nonce": "Gu3tZMk5gcGsMKh6YXydpp1H7mwhACF1Ai2ou69LWhQ",
+              "signature": "UUW8vZqgqHV_YRlQBX14nMWoXQCV7QFj2i-vg11IjqSM7MMs3yTovo66OXODtKfLBymdhLaMck2I6FUhCrYfBQ"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_M1PREggL8gE7aDpF7zH-p4Eh",
+              "expires": 1794239000,
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA-1",
+              "flags": 9
+            }
+          }
+        },
+        {
+          "at": 1794235410,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "GET",
+            "path": "/copies?after=&wait=0",
+            "authorization": "Bearer tok_M1PREggL8gE7aDpF7zH-p4Eh"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "cursor": "c_0",
+              "placing": true,
+              "items": []
+            }
+          }
+        },
+        {
+          "at": 1794235420,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "DELETE",
+            "path": "/gateways/KK4ODA-1",
+            "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "callsign": "KK4ODA-1",
+              "revoked": [
+                1050,
+                1051
+              ]
+            }
+          }
+        }
+      ]
     }
   ],
   "report": [

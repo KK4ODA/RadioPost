@@ -46,6 +46,10 @@ h2 { font-size: 13px; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
 .note { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
 .ok { color: var(--ok); }
 .bad { color: var(--bad); }
+button.danger { color: var(--bad); }
+.registered { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;
+  margin: 0 0 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; }
+.registered p { margin: 0; flex: 1 1 18rem; }
 
 .top { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--panel);
        border-bottom: 1px solid var(--line); flex-wrap: wrap; }

@@ -2007,6 +2007,7 @@ async function openOffice(tab = office.tab) {
     officeSummary();
     if (tab === "applications") await renderApplications();
     if (tab === "accounts") await renderAccounts();
+    if (tab === "gateways") await renderGateways();
     if (tab === "mail") await renderMail();
     if (tab === "others") await renderOthers();
     if (tab === "settings") await renderOfficeSettings();
@@ -2309,6 +2310,40 @@ function askOperates(body, call) {
         onclick: () => { box.hidden = true; }})));
   box.hidden = false;
   $("o-made").hidden = true;
+}
+
+// ── the gateways registered here (RP-5 §6.4), and their withdrawal (§7.7) ─────────────────────
+
+async function renderGateways() {
+  const list = (await desk("GET", "/office/gateways")).gateways || [];
+  $("o-gateways-none").hidden = list.length > 0;
+  $("o-gateway-rows").replaceChildren(...list.map((g) => {
+    const live = (g.credentials || []).filter((c) => !c.revoked);
+    const button = el("button", {class: "quiet danger", type: "button", text: "Unregister",
+      title: `Take ${g.callsign} off the gateway list, revoke its credential and drop the copies placed there`,
+      onclick: (e) => armed(e.currentTarget, "Click again to unregister", () => unregisterGateway(g))});
+    return el("tr", {},
+      el("td", {}, el("span", {class: "mono", text: g.callsign}),
+        el("span", {class: "note", text: ` · ${g.operator || "?"}`})),
+      el("td", {class: "mono", text: g.address || "—",
+        title: live.length ? `Credential ${live.map((c) => c.serial).join(", ")}` : "No credential in force"}),
+      el("td", {text: (g.record && g.record.place) || ""}),
+      el("td", {text: `${g.placed || 0}${g.last_poll ? `, asked ${when(g.last_poll)}` : ""}`}),
+      el("td", {class: "acts"}, button));
+  }));
+}
+
+async function unregisterGateway(g) {
+  const path = `/office/gateways/${encodeURIComponent(g.callsign)}`;
+  try {
+    const r = await desk("DELETE", path);
+    const n = (r.revoked || []).length;
+    toast(`${r.callsign} is no longer registered here${n ? `; credential${n === 1 ? "" : "s"} ${r.revoked.join(", ")} revoked` : ""}.`);
+  } catch (e) {
+    const gone = e.status === 404 && !olderOffice(path, null, e.body || {});
+    toast(gone ? `${g.callsign} is not registered here any more.` : e.message, true);
+  }
+  await renderGateways();
 }
 
 async function renderMail() {

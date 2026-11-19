@@ -49,7 +49,9 @@ gateway that can reach the Internet (§4).
   once (More info, then Run anyway); on macOS, open it with Control-click, then Open.
 * **RadioPost**, the client, on the same computer, enrolled as you with your post office (its
   Setup, with the code your post office's operator gave you). The gateway registers in your name
-  through it. It needs nothing else: you can keep using RadioPost on another computer. Each
+  through it. With several accounts in it (its callsigns, each with its own post office), you
+  choose which one the gateway registers with. It needs nothing else: you can keep using RadioPost
+  on another computer. Each
   computer enrolls with a code of its own, since each has its own key: an enrollment on another
   computer does not count here, and copying its `.radiopost` folder would put one key on two
   computers.
@@ -80,9 +82,13 @@ them answered before it heard is ended (`abort`) once the session is over. Calls
 (RP-7 §2) go on the first **Modem**. Two modems on one radio must share its keying through rigctld
 or FLRig, since only one program can hold a CAT port; each hears the other's signal as busy.
 
-**2. Registration.** The form shows the account the RadioPost app on this computer is enrolled
-as. **RadioPost app's home** is the folder where that app keeps its key and credential
-(`.radiopost` in your user folder): leave it. Under **Channels**, give each dial frequency (MHz, upper sideband) where callers will find the
+**2. Registration.** **RadioPost app's home** is the folder where the RadioPost app on this
+computer keeps its keys and credentials (`.radiopost` in your user folder): leave it. **Account**
+lists that app's accounts, each callsign and address with its post office in brackets; it starts
+on the one the app has chosen. Pick the one the gateway registers with: that account's post office
+lists the gateway, and the gateway's credential names that address. The line under it says, before
+you click, where the gateway will be registered and as whom, and the button names the post office:
+**Register with radiopost.org**. Under **Channels**, give each dial frequency (MHz, upper sideband) where callers will find the
 gateway, the **Modem** callers use there (RP-0 §9.4's names), and its bandwidth (for Aether, 500
 or 2300 Hz; on an FM radio, the channel and its width, RP-5 §4.4). Tick **Scan these channels** to listen on all of them with one radio
 (wishlist W50, RP-4 §4.2): Aether 0.2.0-beta.162 or later moves the radio over them, a while on
@@ -102,6 +108,26 @@ While the gateway answers, it renews that credential by itself in its last month
 account's post office, and uses the new one from its next session; the log says so. If renewing
 keeps failing (the log says why, once), register again before the credential runs out (the same
 way: it replaces the registration); the Registration box turns red two weeks ahead.
+
+Once registered, the top of step 2 says where: *KK4ODA-1 is registered with radiopost.org's post
+office (https://po.radiopost.org/rp/v1), from KK4ODA · kk4oda@radiopost.org.* The form keeps the
+channels, grid, place and hours you registered, so registering again changes only what you change.
+
+**Unregistering.** **Unregister**, beside that line, clicked twice, withdraws the registration
+(RP-5 §6.4): logged in as the account it was registered from, the gateway asks its post office to
+take it off its gateway list. The post office revokes the gateway's credential and stops placing
+copies of users' mail there; the copies the gateway holds are dropped, and the mail itself stays in
+the users' mailboxes. Stop the gateway first. While sessions it carried with the Internet down
+still wait to be reported (Held), it refuses: they hold users' mail, which could never be handed in
+with the credential revoked. Start it with the Internet up, let it report them, then unregister.
+
+A gateway is registered with one post office at a time: registering with another account's post
+office while it is registered is refused. **To move it**, say from radiopost.org to your own post
+office: **Unregister**, pick the other account under **Account**, and **Register with …**. A post
+office that does not take withdrawals yet (one running RP-5 before 1.2.0) keeps the gateway on its
+list: the gateway says so and keeps its registration, and that post office's operators remove it
+(on their desk, **Gateways**, or `radiopost-po unregister`). They can also remove a gateway
+registered by mistake without its operator.
 
 **3. Post offices (optional).** The gateway finds each user's post office in DNS. Name one here
 only while its DNS records are not published yet: its domain and its API address
@@ -323,6 +349,15 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
+`radiopost-gateway accounts` lists the RadioPost app's accounts (its home is `--home`, else
+`.radiopost` in your home directory) and where the gateway is registered now. `radiopost-gateway
+register --account kk4oda@radiopost.org --channel 7101000,USB,aether,2300 --grid EM73 --place
+"Atlanta, GA"` registers with that account's post office (`--account` takes the address, the
+callsign or the number `accounts` gives, and is needed only when the app holds more than one).
+`radiopost-gateway unregister` withdraws the registration; stop the gateway first. `unregister
+--here` forgets it on this computer only, without asking the post office: for a post office that
+cannot be reached any more, whose operators then remove the record themselves.
+
 `radiopost-gateway serve` answers calls with no panel at all, as before. `radiopost-gateway modem
 --add 127.0.0.1:8601` has it answer on one more modem, `modem --remove` no longer, and `modems`
 lists them; stop the gateway first. `radiopost-gateway block
@@ -342,7 +377,8 @@ another; Setup shows where):
 |---|---|
 | `gateway.json` | The settings. |
 | `key.hex` | The gateway's key. Back it up: a new key needs a new registration. Never share it. |
-| `credential.hex` | The gateway's credential, from its registration. |
+| `credential.hex` | The gateway's credential, from its registration. Gone once it is unregistered. |
+| `record.json` | What was last registered (all your channels, grid, place, hours) and from which account, app home and post office. After **Unregister**, the record alone, and where it was withdrawn: the form fills from it. |
 | `held.json` | Callers' credentials seen, and pieces of uploads a broken link left (RP-3 §7). |
 | `store.json` | What it holds for when the Internet is down (§4): copies placed ahead, the sessions carried while cut off and not yet reported (its own, and those a partner forwarded), what it passed on, the post offices' keys and revocation lists, and what it knows of each partner. Keep it: a session in it that is lost is mail its sender's RadioPost offers again only after 30 days. |
 | `sessions.json` | The last 200 sessions carried, as the Sessions list shows them. |
@@ -359,6 +395,10 @@ another; Setup shows where):
 | Waiting for the modem: *the modem refused* | Another program holds the callsign at Aether (RMS Trimode, if it uses the same one), or Aether refused it: Aether's log says why. |
 | Aether HF stops at start: *host interface: 127.0.0.1:8515 is already in use* | Aether's host programs port was set to 8515, its control port's number. Open Aether's `station.toml` (in PowerShell, `notepad "$env:APPDATA\aether-hf\station.toml"`), write `bind = "127.0.0.1:8300"` under `[host]`, save, and start Aether again. |
 | Register: *… .radiopost holds no device key* | The RadioPost app on this computer is not enrolled: enroll it in its Setup, with a code of its own (§1). |
+| Register: *KK4ODA-1 is registered with radiopost.org's post office now …* | You picked an account at another post office. Unregister the gateway first (§2), then register it with the account you want. |
+| Unregister: *… still wait to be reported* | Sessions carried while the Internet was down hold users' mail. Start the gateway with the Internet up: it reports them, and Held says when. Then unregister. |
+| Unregister: *… keeps KK4ODA-1 on its gateway list* | That post office does not take withdrawals yet. Ask its operators to remove the gateway, then click **Unregister** again: the gateway finds itself off the list and forgets the registration. |
+| Unregister: *… is not in the RadioPost app on this computer* | The account the gateway was registered from is not enrolled here. Enroll it in RadioPost, or ask its post office's operators to remove the gateway and use `radiopost-gateway unregister --here`. |
 | *This modem neither checks the band rules nor says where the radio's dial is* | Aether's band rules are off, as they are when a host program keys the radio, and it cannot read the dial. Set Aether's keying and its rules profile (Aether's Setup steps 1 and 2). |
 | **Not answering here**: *the radio is at … MHz … outside the segments* | The modem checks no band rules, so the gateway judges the dial: turn the radio to the gateway's channel. |
 | A post office *not found* | Its DNS records are not published: name it in Setup, step 3. |

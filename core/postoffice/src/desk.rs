@@ -3,9 +3,9 @@
 //!
 //! RP-5 §7 is what any post office may offer an operator's client. This service adds its own, as
 //! RP-5 §7.2 and §7.3 allow: more members in `/office/status`, and endpoints a client may use or
-//! ignore (`/office/outgoing`, `/office/name`, `/office/settings`). They answer only to a token
-//! RP-5 §7.1 lets in, and they live here, around [`PostOffice::handle`], so that the vectors'
-//! replay of the post office itself stays exact.
+//! ignore (`/office/outgoing`, `/office/name`, `/office/settings`, `/office/gateways`). They
+//! answer only to a token RP-5 §7.1 lets in, and they live here, around [`PostOffice::handle`],
+//! so that the vectors' replay of the post office itself stays exact.
 //!
 //! [`PostOffice::handle`]: crate::office::PostOffice::handle
 
@@ -75,7 +75,7 @@ impl Running {
         let (route, query) = path.split_once('?').unwrap_or((path, ""));
         let own = matches!(
             (method, route),
-            ("GET", "/office/outgoing")
+            ("GET", "/office/outgoing" | "/office/gateways")
                 | (
                     "POST",
                     "/office/name"
@@ -334,6 +334,11 @@ impl Running {
     fn desk_care(&self, method: &str, route: &str, who: &str, body: &Json) -> Option<Answer> {
         if let Some(answer) = self.desk_backup_keys(method, route, who, body) {
             return Some(answer);
+        }
+        // what the desk lists of the gateways registered; RP-5 §7.7's withdrawal is the post
+        // office's own
+        if (method, route) == ("GET", "/office/gateways") {
+            return Some(ok(&json!({"gateways": self.office().registrations()})));
         }
         // the DKIM keys rotated by hand, step by step (crate::dkim)
         if route == "/office/dkim" {

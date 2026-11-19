@@ -121,7 +121,7 @@ impl Keys {
 #[test]
 fn keys_derive_as_published() {
     let k = keys();
-    assert_eq!(k.seeds.len(), 15);
+    assert_eq!(k.seeds.len(), 16);
 }
 
 #[test]

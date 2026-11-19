@@ -188,6 +188,15 @@ const DESK_GET = {
      credentials: []},
   ]},
   "/office/outgoing": {outgoing: []},
+  // the gateways registered here (RP-5 §6.4): N3CALL-1 by mistake, under the shelter's account
+  "/office/gateways": {gateways: [
+    {callsign: "KK4ODA-1", operator: "KK4ODA", address: "facundo@radiopost.org",
+     record: {place: "Atlanta, Georgia", grid: "EM73"}, placed: 2, last_poll: T - 40,
+     cut_off: false, credentials: [{serial: 1188, expires: T + 63 * DAY, revoked: false}]},
+    {callsign: "N3CALL-1", operator: "N3CALL", address: "shelter3@radiopost.org",
+     record: {place: "Shelter 3, Decatur", grid: "EM73"}, placed: 0, last_poll: null,
+     cut_off: false, credentials: [{serial: 1231, expires: T + 89 * DAY, revoked: false}]},
+  ]},
   "/office/post-offices": {
     known: [{domain: "hampost.org", operator: "N1CALL", country: "US",
              contact: "postmaster@hampost.org", found: T - 3 * 3600, api: true, dnssec: true}],
@@ -331,6 +340,14 @@ const GW_LOG = [
   [T - 1148, "the session with N0CALL is over"],
 ];
 
+// the RadioPost client's accounts on the gateway's computer (W46): the gateway registers with one
+const GW_ACCOUNTS = [
+  {id: 1, home: "C:\\Users\\you\\.radiopost", address: "facundo@radiopost.org", operator: "KK4ODA",
+   domain: "radiopost.org", chosen: true},
+  {id: 2, home: "C:\\Users\\you\\.radiopost\\callsigns\\2", address: "kk4oda@hampost.org",
+   operator: "KK4ODA", domain: "hampost.org", chosen: false},
+];
+
 function gatewayState(over = {}) {
   return {
     settings: GW_SETTINGS,
@@ -344,7 +361,16 @@ function gatewayState(over = {}) {
     held: {copies: 5, users: 3, records: 0, queued: 0},
     key: "5a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a19",
     client: {home: "C:\\Users\\you\\.radiopost",
-             enrolled: {operator: "KK4ODA", address: "facundo@radiopost.org"}},
+             enrolled: {operator: "KK4ODA", address: "facundo@radiopost.org"},
+             accounts: GW_ACCOUNTS},
+    registration: {callsign: "KK4ODA-1", address: "facundo@radiopost.org", domain: "radiopost.org",
+                   serial: 1187, expires: T + 63 * DAY, operator: "KK4ODA",
+                   post_office: "https://po.radiopost.org/rp/v1",
+                   home: "C:\\Users\\you\\.radiopost"},
+    last_record: {channels: [
+      {dial_hz: 3591500, mode: "USB", modem: "aether", bandwidth_hz: 500},
+      {dial_hz: 7101000, mode: "USB", modem: "aether", bandwidth_hz: 2300}],
+      grid: "EM73", place: "Atlanta, Georgia", hours: "always", internet: true},
     dir: "C:\\Users\\you\\.radiopost-gateway", version: "0.1.0-beta.20",
     aether: "ws://127.0.0.1:8515/v1", update: null,
     ...over,
@@ -360,6 +386,7 @@ function gatewayApi(world) {
         return {lines: Number(query.get("since")) ? [] : log, next: log.length};
       }
       case "sessions": return world.sessions;
+      case "accounts": return {home: world.state.client.home, accounts: GW_ACCOUNTS};
       case "held": return {
         copies: [
           {address: "ana@radiopost.org", serial: 41, from: "club-news@hampost.org",
@@ -853,6 +880,12 @@ const SHOTS = {
     await page.context().close();
   },
 
+  async "desk-gateways"(browser) {
+    const page = await openDesk(browser, "gateways", 700);
+    await shotMain(page, "desk-gateways");
+    await page.context().close();
+  },
+
   async "desk-code"(browser) {
     const page = await openDesk(browser, "code", 1000);
     const form = page.locator("#o-code");
@@ -936,7 +969,8 @@ const SHOTS = {
   async "gateway-first"(browser) {
     const world = {state: gatewayState({settings: null, credential: null, running: false,
       status: {state: "stopped", since: T - 60, problem: null, session: null, logged: 0, checks: []},
-      held: {}, key: null}), sessions: [], log: [], refused: [], partners: []};
+      held: {}, key: null, registration: null, last_record: null}), sessions: [], log: [],
+      refused: [], partners: []};
     const {page, context} = await open(browser, {ui: GATEWAY_UI, api: gatewayApi(world), height: 720});
     await page.waitForTimeout(400);
     await shot(page, "gateway-first");
@@ -947,17 +981,11 @@ const SHOTS = {
     const world = {state: gatewayState({running: false,
       status: {state: "stopped", since: T - 60, problem: null, session: null, logged: 0,
                checks: []}}), sessions: GW_SESSIONS};
-    const {page, context} = await open(browser, {ui: GATEWAY_UI, api: gatewayApi(world), height: 2100});
+    const {page, context} = await open(browser, {ui: GATEWAY_UI, api: gatewayApi(world), height: 2300});
     await page.waitForTimeout(400);
+    // registered with radiopost.org: the form filled from the record it registered
     await page.click("#setup-open");
-    const reg = page.locator("#register-form");
-    await reg.locator("input[name=grid]").fill("EM73");
-    await reg.locator("input[name=place]").fill("Atlanta, Georgia");
-    const dial = page.locator("#channel-rows input").first();
-    await dial.fill("3.5915");
-    await page.locator("#channel-rows tr").first().locator("select").nth(1).selectOption("500");
-    await page.click("#add-channel");
-    await page.locator("#channel-rows input").nth(1).fill("7.101");
+    await page.waitForTimeout(200);
     await page.locator("body").click({position: {x: 1270, y: 10}});
     await page.screenshot({path: join(OUT, "gateway-setup.png"), clip: await unionClip(page,
       ["#setup h1", "#po-form"], 1100)});

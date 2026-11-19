@@ -188,11 +188,18 @@
 
       <form class="card" id="register-form">
         <h2>2. Registration</h2>
-        <p class="note">Registers the gateway with your post office, logged in as you through the RadioPost app on this computer. The post office lists the gateway for its users and issues it a credential.</p>
-        <p class="note" id="enrolled"></p>
-        <label title="The RadioPost app's home, where its enrollment is kept">RadioPost app's home
+        <p class="note">Registers the gateway with a post office, logged in as one of your accounts in the RadioPost app on this computer. The post office lists the gateway for its users and issues it a credential. A gateway is registered with one post office at a time.</p>
+        <div class="registered" id="registered" hidden>
+          <p id="registered-text"></p>
+          <button type="button" class="quiet danger" id="unregister" title="Withdraw the registration at its post office: the gateway leaves its gateway list, its credential is revoked, and the copies of users' mail it holds are dropped. You can register it again, with this post office or another">Unregister</button>
+        </div>
+        <label title="The RadioPost app's home, where its accounts are kept">RadioPost app's home
           <input name="home" spellcheck="false">
         </label>
+        <label title="Which of the app's accounts registers the gateway: the gateway is registered with that account's post office, under its address">Account
+          <select name="account"></select>
+        </label>
+        <p class="note" id="enrolled"></p>
         <h2 title="Where callers find the gateway: each dial frequency, the modem callers use there, and its bandwidth">Channels</h2>
         <table class="channels" aria-label="Channels">
           <thead><tr><th>Dial, MHz</th><th>Modem</th><th>Bandwidth</th><th></th></tr></thead>
@@ -209,7 +216,7 @@
         <label title="When it answers: always, or in words such as 1800-0200 UTC">Hours
           <input name="hours" value="always">
         </label>
-        <div class="row"><button class="primary" type="submit">Register</button></div>
+        <div class="row"><button class="primary" type="submit" id="register-go">Register</button></div>
         <details>
           <summary>A credential issued by other means</summary>
           <label title="A credential a post office issued for the gateway's key, in hexadecimal">Credential

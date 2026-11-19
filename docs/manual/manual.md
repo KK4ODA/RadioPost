@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.20.0 |
+| **Version** | 1.21.0 |
 | **Updated** | 2026-11-18 |
 | **Describes** | RadioPost 0.1.0-beta.27 |
 | **Licence** | CC BY 4.0 |
@@ -1025,8 +1025,9 @@ The gateway's computer needs:
 - **Aether's ports as they are** (8515 for RadioPost; [section 3](#3-what-you-need)).
 - **An Internet connection.** The gateway only connects out, so a home router needs no change.
 - **RadioPost**, the client, on the same computer, **enrolled as you** with your own code. The
-  gateway registers in your name through it. You can keep using RadioPost on another computer
-  too, with its own code.
+  gateway registers in your name through it. With several callsigns in it, each with its own
+  account and post office ([section 11](#11-working-several-callsigns)), you choose which one the
+  gateway registers with. You can keep using RadioPost on another computer too, with its own code.
 - **RadioPost Gateway**, from the [releases page](https://github.com/KK4ODA/RadioPost/releases):
   the installer named **RadioPost Gateway** for your computer.
 
@@ -1081,22 +1082,29 @@ line, such as `127.0.0.1:8601`.
 
 ### Step 2. Registration
 
-The form shows the account the RadioPost client on this computer is enrolled as.
+The gateway registers with a post office as one of your accounts in the RadioPost client on this
+computer. That post office lists the gateway for its users, and the gateway's credential names
+that account's address. A gateway is registered with one post office at a time.
 
-1. **RadioPost app's home**: the folder where the client keeps its key and credential. Leave it.
-2. Under **Channels**, add each dial frequency where callers will find the gateway, in MHz, upper
+1. **RadioPost app's home**: the folder where the client keeps its keys and credentials. Leave it.
+2. **Account**: the client's accounts, each callsign and address with its post office in brackets,
+   such as *KK4ODA · facundo@radiopost.org (radiopost.org)*. It starts on the one the client has
+   chosen. Pick the one the gateway registers with. The line under it says, before you click,
+   where the gateway will be registered and as whom, and the button names the post office:
+   **Register with radiopost.org**.
+3. Under **Channels**, add each dial frequency where callers will find the gateway, in MHz, upper
    sideband, with the **Modem** callers use there and its **Bandwidth** (for Aether, 500 or
    2300 Hz). On an FM radio the frequency is the channel's, and the bandwidth the channel's width.
    **Add a channel** adds a row.
-3. Tick **Scan these channels** to listen on all of them with one radio. Aether moves the radio
+4. Tick **Scan these channels** to listen on all of them with one radio. Aether moves the radio
    over them, a while on each, the first being home. It never leaves a channel while a call is
    arriving or a session is up. This needs Aether 0.2.0-beta.162 or later, a radio Aether can tune
    (CAT, rigctld or FLRig), and two to four channels, all for the first modem. The gateway's
    record then says how long a caller's call must keep trying to find it; the gateway adds that,
    registering again from this computer, the first time it scans.
-4. **Grid** and **Place** help callers choose a gateway near them. **Hours** says when it answers:
+5. **Grid** and **Place** help callers choose a gateway near them. **Hours** says when it answers:
    `always`, or in words such as `1800-0200 UTC`.
-5. Click **Register**.
+6. Click **Register with …**.
 
 List only channels the gateway listens on: the ones it scans, or the one its radio sits on. A
 caller on any other channel is never answered.
@@ -1106,8 +1114,36 @@ gateway renews it by itself in its last month, while it answers. If renewing kee
 log says why, and the **Registration** box turns red two weeks before it runs out: register again
 the same way.
 
+Once registered, the top of step 2 says where: *KK4ODA-1 is registered with radiopost.org's post
+office (https://po.radiopost.org/rp/v1), from KK4ODA · facundo@radiopost.org.* The form keeps the
+channels, grid, place and hours you registered, so registering again changes only what you change.
+
 A post office's operator can also issue the gateway's credential by other means. Paste it under
 **A credential issued by other means** and click **Keep credential**.
+
+#### Unregistering, or moving to another post office
+
+**Unregister**, beside the line that says where the gateway is registered, takes it off that post
+office. Stop the gateway first, then click **Unregister**, and again to confirm. Logged in as the
+account it was registered from, the gateway asks its post office to withdraw it:
+
+- the post office takes it off its list of gateways, so its users no longer see it;
+- it revokes the gateway's credential, so the gateway can no longer log in there;
+- it stops placing copies of users' mail at the gateway, and the gateway drops the copies it
+  holds. The mail itself stays in the users' mailboxes.
+
+The form keeps your channels, grid and place, for registering again.
+
+**To move the gateway** to another post office, such as from radiopost.org to your own: click
+**Unregister**, pick the other account under **Account**, and click **Register with …**. While
+the gateway is registered, registering it with another account's post office is refused: the
+line under **Account** turns red and says to unregister first.
+
+The gateway refuses to unregister while sessions it carried with the Internet down still wait to
+be reported (**Held**): they hold users' mail. Start it with the Internet up, let it report them,
+then unregister. A post office that does not take withdrawals yet keeps the gateway on its list:
+the gateway says so and keeps its registration. Ask that post office's operators to remove it
+([Gateways registered here](#gateways-registered-here)), then click **Unregister** again.
 
 ### Step 3. Post offices (optional)
 
@@ -1294,6 +1330,9 @@ Useful commands:
 | Command | Does |
 |---|---|
 | `radiopost-gateway held` | What the gateway holds. |
+| `radiopost-gateway accounts` | The client's accounts the gateway can register with, and where it is registered now. |
+| `radiopost-gateway register --account facundo@radiopost.org --channel 7101000,USB,aether,2300` | Register with that account's post office. `--account` takes the address, the callsign or the number `accounts` gives, and is needed when the client holds more than one. |
+| `radiopost-gateway unregister` | Withdraw the registration, as **Unregister** does. Stop the gateway first. `--here` forgets it on this computer only, for a post office that cannot be reached. |
 | `radiopost-gateway block --caller N3CALL --note "why"` | Refuse a caller. `unblock --caller N3CALL` carries it again. |
 | `radiopost-gateway blocked` | The callers and post offices refused. |
 | `radiopost-gateway partner --add N1CALL-10` | Name a partner (`--remove` to drop it). |
@@ -1310,7 +1349,8 @@ In the folder `.radiopost-gateway` in your home folder (Setup's last line says w
 |---|---|
 | `gateway.json` | The settings. |
 | `key.hex` | The gateway's key. Back it up: a new key needs a new registration. Never share it. |
-| `credential.hex` | The gateway's credential. |
+| `credential.hex` | The gateway's credential. Gone once the gateway is unregistered. |
+| `record.json` | What was last registered, and from which account and post office; after **Unregister**, what was registered alone. |
 | `store.json` | Copies placed ahead, sessions waiting to be reported, and what it knows of partners. Keep it. |
 | `sessions.json` | The last 200 sessions. |
 | `refused.json` | The callers you refuse. |
@@ -1345,6 +1385,7 @@ applying: the post office's settings name its operators.
 |---|---|---|
 | **Applications** | Approve, decline or postcard the people asking for an account. | [26](#26-applications) |
 | **Accounts** | See every account and its devices; rename; revoke a lost device. | [27](#27-accounts-and-devices) |
+| **Gateways** | See the gateways registered here and from which account; unregister one. | [27](#gateways-registered-here) |
 | **New code** | Make a one-time code for a new account or a new device. | [28](#28-codes) |
 | **Mail out** | See mail sent by radio still waiting to go out by email. | [29](#29-mail-out) |
 | **Post offices** | Know, forget or block other post offices. | [30](#30-other-post-offices) |
@@ -1434,6 +1475,27 @@ its owner a code for their new computer ([section 28](#28-codes)).
 
 Revoking the computer you are using takes the desk away from it: the button says so first.
 
+### Gateways registered here
+
+![The Gateways tab: two gateways, the account each was registered from, and Unregister](screens/desk-gateways.png)
+
+*Figure 35. Gateways.*
+
+The **Gateways** tab lists each gateway registered with your post office, one a row:
+
+- **Gateway**: its callsign, and its operator's.
+- **Registered from**: the account that registered it. Its credential names that address.
+- **Place**, as its record says.
+- **Copies**: copies of users' mail placed at the gateway and not yet taken, and when it last
+  asked for them.
+
+**Unregister**, clicked twice, takes a gateway off your post office: off the list your users and
+other post offices read, its credential revoked so it can no longer log in, and the copies placed
+there dropped. The mail itself stays in the mailboxes. Use it for a gateway registered here by
+mistake, or one whose operator can no longer reach it. Its operator can register it again. A
+gateway's operator can also unregister it from RadioPost Gateway
+([section 18](#unregistering-or-moving-to-another-post-office)).
+
 ## 28. Codes
 
 A code lets someone enroll without applying: for a new account, or for a new device of an account
@@ -1441,7 +1503,7 @@ that exists. Use it for someone you know holds the callsign.
 
 ![The New code tab: an address, a callsign and a name filled in, the licence checked, and the code made](screens/desk-code.png)
 
-*Figure 35. Making a code.*
+*Figure 36. Making a code.*
 
 1. Open **New code**.
 2. Fill in:
@@ -1491,7 +1553,7 @@ Know only post offices whose operators you trust to check callsigns. At first no
 
 ![The Post offices tab: one post office known, one seen, none blocked](screens/desk-others.png)
 
-*Figure 36. Other post offices.*
+*Figure 37. Other post offices.*
 
 - **Known**: the post offices you know, who runs each, when its records were last fetched, and
   whether DNSSEC signed them. They are fetched again every six hours. **Forget** stops knowing one;
@@ -1512,7 +1574,7 @@ when a check turns red, and again when all pass.
 
 ![The Health tab: eleven checks passed and one amber line about backups](screens/desk-health.png)
 
-*Figure 37. Health.*
+*Figure 38. Health.*
 
 Each line is one check:
 
@@ -1540,7 +1602,7 @@ The **Server** tab lets you look after the server without logging in to it.
 
 ![The Server tab: the jobs, one with its output open, and When you need more](screens/desk-server.png)
 
-*Figure 38. Jobs and a terminal.*
+*Figure 39. Jobs and a terminal.*
 
 **Jobs** are a fixed list of tasks the server's administrator account runs for you:
 
@@ -1575,7 +1637,7 @@ says the one command to run on the server, once.
 
 ![The Backups and DKIM keys boxes on the Server tab](screens/desk-backups.png)
 
-*Figure 39. Backups and DKIM keys.*
+*Figure 40. Backups and DKIM keys.*
 
 ### Backups
 
@@ -1632,7 +1694,7 @@ when they are older than 180 days.
 
 ![The Settings tab: applications, licence lookups, mailboxes and this post office](screens/desk-settings.png)
 
-*Figure 40. Settings.*
+*Figure 41. Settings.*
 
 ### Applications
 
@@ -1769,6 +1831,9 @@ These notes follow the US rules (Part 97). Check your own country's.
 | *Waiting for the modem: the modem refused* | Another program holds the callsign at Aether, or Aether refused it: Aether's log says why. |
 | **Start** is greyed | The gateway is not set up or not registered: follow the notice. |
 | Register: *… holds no device key* | The RadioPost client on this computer is not enrolled. Enroll it first, with its own code. |
+| Register: *… is registered with radiopost.org's post office now* | You picked an account at another post office. **Unregister** first, then register with the account you want ([section 18](#unregistering-or-moving-to-another-post-office)). |
+| Unregister: *… still wait to be reported* | Sessions carried with the Internet down hold users' mail. **Start** the gateway with the Internet up, let it report them, then unregister. |
+| Unregister: *… keeps KK4ODA-1 on its gateway list* | That post office does not take withdrawals yet. Ask its operators to remove the gateway, then click **Unregister** again. |
 | *This modem neither checks the band rules nor says where the radio's dial is* | Aether's rules are off, as they are when a host program keys the radio, and it cannot read the dial. Set Aether's keying and rules (its Setup, steps 1 and 2). |
 | *The radio is at … MHz: … outside the segments*, badge **Not answering here** | Aether's rules are off, so the gateway judges the dial itself. Turn the radio to the gateway's channel. |
 | *could not tune the radio back* | The radio stayed on the partner's or gateway's channel after a call. Tune it back in Aether. |
@@ -1893,7 +1958,7 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 
 1. Aether running and keying the radio itself.
 2. The RadioPost client on the same computer enrolled as you.
-3. RadioPost Gateway: **Setup**, steps 1 and 2, **Register**.
+3. RadioPost Gateway: **Setup**, steps 1 and 2: pick the **Account**, then **Register with …**.
 4. **Start**. The badge says *Listening*.
 
 ---
@@ -1963,3 +2028,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.18.0 | 2026-11-18 | §9: **Forward** carries a form as its text, the labels with the values and the sender's note below; it had carried the note alone, and the form's values were lost. **Reply** shows a form's text under your own; it had shown the note. |
 | 1.19.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18: a house station listens for days. While **Listening for P2P** is on and no station has called, messages are written, changed and deleted as usual, and a station that calls takes what is in the outbox then; **Call** and **Tuner tone** stay greyed (§7, §10, §39). The credential is renewed while the station listens (§5.4). §37: *the station is listening for P2P calls*, and an edit is refused only during a session. |
 | 1.20.0 | 2026-11-18 | §9: **Print**, and a PDF by the system's print dialog; an ICS-213 prints as FEMA's ICS 213. **Save** beside each file a message carries, in the Downloads folder, never over another file (Figure 16 retaken with a file and **Print**). |
+| 1.21.0 | 2026-11-18 | A tester's gateway registered with radiopost.org under his first account while he was trying his own post office, and nothing could take it off. §17, §18 step 2: **Account**, the client's account the gateway registers with, and the line that says where before **Register with …**; the form keeps what was registered. §18 *Unregistering, or moving to another post office*: **Unregister**, what it does, one post office at a time, and what keeps it from unregistering. §23: `accounts`, `register --account`, `unregister`. §24: `record.json`. §25, §27 *Gateways registered here*: the desk's **Gateways** tab and its **Unregister** (new Figure 35; later figures renumbered). §37, §40 to match. The gateway's Setup and the desk's screenshots retaken. |

@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.1.0 |
-| **Updated** | 2026-11-17 |
+| **Version** | 1.2.0 |
+| **Updated** | 2026-11-18 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-3 |
@@ -12,7 +12,8 @@
 
 The HTTPS interface of a post office. **Gateways** use it to carry their users' sessions, report
 pickups, hand in mail queued while offline and receive copies placed ahead. **Clients** use it to
-enroll, renew credentials and change their settings. **Applicants** ask for an account, and the
+enroll, renew credentials, change their settings and register the gateways they operate.
+**Applicants** ask for an account, and the
 post office's **operators** decide, look after its accounts and issue codes. **Anyone** may read a
 post office's public documents: its keys, revocations, the post offices it knows, its gateways and
 its radio routes.
@@ -46,7 +47,7 @@ part of this API.
   | 400 | `unsupported-version`, `malformed` |
   | 401 | `not-authorized`, when the request has no token, or one unknown or expired |
   | 403 | `not-authorized` otherwise (the token may not do this), `refused-by-policy` |
-  | 404 | `unknown-message`: no such serial in the session, no such session of this gateway's, or no such application (§6.7) |
+  | 404 | `unknown-message`: no such serial in the session, no such session of this gateway's, no such application (§6.7), or no such gateway registered (§6.4, §7.7) |
   | 409 | `already-have` |
   | 413 | `too-large` |
   | 422 | `credential-invalid`, `credential-expired`, `credential-revoked`, `credential-required`, `unknown-post-office`, `signature-invalid`, `time-skew` |
@@ -521,7 +522,39 @@ A licensed user registers a gateway they operate:
   token's operator (otherwise `403` `not-authorized`) and the signature, and answers `201`
   `{"credential": "…"}` with the `send` and `gateway` flags, the gateway's callsign as
   `operator` and the user's address as `address`.
-* **`PUT /gateways/{callsign}`** updates the record; **`DELETE`** withdraws it.
+  Registering a callsign again replaces its record, and issues a new credential.
+* **`PUT /gateways/{callsign}`** updates the record.
+* **`DELETE /gateways/{callsign}`** with a user token withdraws the registration: the gateway's
+  operator takes it off the air, or moves it to another post office. The token's credential has
+  the record's `operator` as its `operator`. A post office SHOULD offer it. The post office:
+
+  * removes the record, so its gateway list (§4.4) no longer names the gateway;
+  * revokes every credential it issued with the gateway's callsign as `operator` and the
+    `gateway` flag (RP-1 §8), which ends their tokens (§3.2);
+  * drops the items it placed at the gateway (§5.8) and places nothing more there. No other post
+    office does either, once no list names the gateway. The mail itself stays in its users'
+    mailboxes. Forward items it placed elsewhere for the gateway as a cut-off gateway (RP-7 §4.1)
+    are dropped, as when the gateway polls again.
+
+  It answers `200`:
+
+  ```json
+  {"callsign": "KK4ODA-1", "revoked": [1051]}
+  ```
+
+  `revoked` is the serials revoked. The callsign is compared without regard to case (RP-0 §6.1). A
+  callsign the post office holds no record for is `404` `unknown-message`; a token whose
+  credential has another `operator`, `403` `not-authorized`.
+
+A gateway is registered with one post office at a time: a callsign in two lists is ambiguous
+wherever neither is the reader's home (§4.4). To move a gateway, its operator withdraws it before
+registering it with the other post office. A gateway reports the sessions it holds (§5.6) before
+its registration is withdrawn: with its credential revoked, it can hand nothing in.
+
+A post office that implements an earlier version of this document may answer a withdrawal `404`
+`unknown-message` and keep the record. A gateway that meets a `404` looks for its callsign in the
+post office's gateway list (§4.4) before it forgets the registration, and asks the post office's
+operators (§7.7) when the list still names it.
 
 ### 6.5 The accept list
 
@@ -763,6 +796,13 @@ An address that is not at one of its domains, or a member of the wrong form (`op
 as when a device is lost, and ends their tokens. Answers `200` `{"revoked": [1042, 1077]}`, the
 serials. A device key that is not 32 bytes is `400` `malformed`.
 
+### 7.7 `DELETE /office/gateways/{callsign}`
+
+Withdraws a gateway's registration as its operator's withdrawal does (§6.4), whoever registered
+it: for a gateway registered by mistake, or one whose operator can no longer reach it. Answers
+`200` `{"callsign": "KK4ODA-1", "revoked": [1051]}` as §6.4 does. A callsign the post office holds
+no record for is `404` `unknown-message`.
+
 ---
 
 ## 8. Security considerations *(informative)*
@@ -784,6 +824,10 @@ serials. A device key that is not 32 bytes is `400` `malformed`.
   operator's callsign as real, so an application naming one is refused rather than left to an
   operator's attention, and a code naming one for someone else's address is made only when asked
   for in so many words (§7.1).
+* A gateway's registration is withdrawn by its operator or by the post office's operators, and
+  never by the gateway's own credential (§6.4, §7.7): a stolen gateway key cannot take a gateway
+  off its users' lists. Withdrawing it revokes its credentials, so a gateway its post office no
+  longer lists cannot go on logging in and carrying sessions as that post office's gateway.
 * Copies placed ahead reach a gateway without a user's session, so they go only to the credential
   of the post office that listed the gateway (§5.8). A post office that lists a callsign another
   already lists makes it ambiguous wherever neither is the home, and copies stop there (§4.4): it
@@ -795,12 +839,14 @@ serials. A device key that is not 32 bytes is `400` `malformed`.
 
 `vectors/api-office.json` (§6.7 and §7: an application approved, its credential collected and
 used, another declined, one sent by postcard and enrolled with its code; the operator's status,
-accounts, codes and revocation; and the refusals of both), `vectors/direct.json` (§6.6: session-03 reported by both stations, sent again, refused to a
+accounts, codes and revocation; a gateway's registration withdrawn by an operator; and the refusals of
+both), `vectors/direct.json` (§6.6: session-03 reported by both stations, sent again, refused to a
 gateway, and nine cases), `vectors/api-account.json` (renewal over the Internet and by radio, a gateway's, an expired and a
 revoked credential; the accept list read and changed, shared by a role mailbox's operators, filled
 by mail sent, and its effect at the door), `vectors/api-exchanges.json` (enrollment, a gateway registered, logins, session-01
 at the post office, copies placed ahead and dropped, copies at a gateway registered with another
-post office and for whose credential, an offline gateway's report, and the failures above), `vectors/jws.json` (§4), `vectors/gateway-lists.json` (§4.4: a gateway list
+post office and for whose credential, a gateway's registration withdrawn, an offline gateway's
+report, and the failures above), `vectors/jws.json` (§4), `vectors/gateway-lists.json` (§4.4: a gateway list
 read from the home's and every post office it knows) and `vectors/api.json` (the signatures of
 §3.2, §6.1, §6.4 and §6.7).
 
@@ -835,3 +881,4 @@ read from the home's and every post office it knows) and `vectors/api.json` (the
 | 0.19.0 | 2026-11-13 | §6.3: `radio_skips_read` takes mail read in a mail program as picked up, so its copies placed ahead are dropped too, learned without delaying a session; default false. It had said only that such mail is not offered, which a post office could meet by hiding it while gateways kept offering its copies. §6.5: mail the user sends from a mail program fills the accept list too, every recipient of the submission (RP-6 §2.6): concept §5.1 promises that writing to someone adds them, and §6.5 named only mail sent by radio; it now names §6.6's station-to-station mail too, which already filled it. |
 | 1.0.0 | 2026-11-15 | Stable (D41), with no change to its requirements. |
 | 1.1.0 | 2026-11-17 | §4.4: a channel's `scan_s` (a gateway that scans, RP-4 1.1.0 §4.2), a client's call that lasts that long, and a gateway that lists only the channels it listens on (wishlist W50, gap G21). MINOR, announced (RP-0 §8.4): nothing for an implementation to do. |
+| 1.2.0 | 2026-11-18 | §6.4: `DELETE /gateways/{callsign}` withdraws a gateway's registration, for the user whose callsign is its `operator`: the record leaves the gateway list, the credentials issued for the gateway are revoked, and the items placed at it are dropped; registering a callsign again replaces its record; a gateway is registered with one post office at a time, reports what it holds before it is withdrawn, and looks in the list after a `404`. §7.7: `DELETE /office/gateways/{callsign}`, the operators' withdrawal. §1: `404` for a gateway not registered. §8: who may withdraw one. 1.0.0 named `DELETE` and said no more, so a gateway registered by mistake could not be taken off (a tester's, at radiopost.org, 2026-11-18). Test vectors (`api-exchanges.json`, `api-office.json`). MINOR, announced (RP-0 §8.4): nothing for an implementation to do. A post office of 1.1.0 answers a withdrawal `404` and keeps the record; one of 1.2.0 SHOULD offer it. |

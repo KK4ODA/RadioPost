@@ -1046,6 +1046,9 @@ impl PostOffice {
                 return Response::ok(200, s.unwrap_or_else(|| json!({})));
             }
             ("POST", "/gateways") => return self.register(&user, body),
+            ("DELETE", _) if parts.len() == 2 && parts[0] == "gateways" => {
+                return self.withdraw_own(&user, parts[1]);
+            }
             ("POST", "/credentials") => {
                 let credential = self.renewed(&user);
                 return Response::ok(200, json!({"credential": base64url::encode(&credential)}));
@@ -2040,6 +2043,122 @@ impl PostOffice {
             flags::SEND | flags::GATEWAY,
         );
         Response::ok(201, json!({"credential": base64url::encode(&credential)}))
+    }
+
+    /// The callsign a gateway's record is kept under, compared without regard to case (RP-0 §6.1).
+    fn registered(&self, callsign: &str) -> Option<String> {
+        self.state
+            .gateways
+            .keys()
+            .find(|c| c.eq_ignore_ascii_case(callsign))
+            .cloned()
+    }
+
+    /// RP-5 §6.4: the user whose callsign is the record's `operator` withdraws it.
+    fn withdraw_own(&mut self, user: &Holder, callsign: &str) -> Response {
+        let Some(found) = self.registered(callsign) else {
+            return problem(ErrorCode::UnknownMessage, Some(404));
+        };
+        let operator = self.state.gateways[&found]
+            .get("operator")
+            .and_then(Json::as_str);
+        if operator != Some(user.operator.as_str()) {
+            return problem(ErrorCode::NotAuthorized, None);
+        }
+        self.withdrawal(&found)
+    }
+
+    /// RP-5 §6.4, §7.7: a withdrawal's answer, the callsign as registered and the serials
+    /// revoked.
+    pub(crate) fn withdrawal(&mut self, callsign: &str) -> Response {
+        match self.withdraw_gateway(callsign) {
+            Some((callsign, revoked)) => {
+                Response::ok(200, json!({"callsign": callsign, "revoked": revoked}))
+            }
+            None => problem(ErrorCode::UnknownMessage, Some(404)),
+        }
+    }
+
+    /// Withdraws a gateway's registration (RP-5 §6.4, §7.7): its record leaves the gateway list,
+    /// every credential issued with its callsign as `operator` and the `gateway` flag is revoked
+    /// with its tokens, the items placed there are dropped and nothing more is placed, and the
+    /// forward items placed for it at other gateways are dropped as when it polls again (RP-7
+    /// §4.1). Returns the callsign as registered and every serial revoked; `None` when no record
+    /// has the callsign.
+    pub fn withdraw_gateway(&mut self, callsign: &str) -> Option<(String, Vec<u64>)> {
+        let found = self.registered(callsign)?;
+        self.state.gateways.remove(&found);
+        let serials: Vec<u64> = self
+            .state
+            .credentials
+            .iter()
+            .filter(|(_, c)| c.operator == found && c.flags & flags::GATEWAY != 0)
+            .map(|(s, _)| *s)
+            .collect();
+        for s in &serials {
+            if !self.state.revoked.contains(s) {
+                self.state.revoked.push(*s);
+            }
+        }
+        self.state
+            .tokens
+            .retain(|_, h| !serials.contains(&h.serial));
+        self.state.copies.remove(&found);
+        self.state.acked.remove(&found);
+        self.state.last_poll.remove(&found);
+        self.state.cut.remove(&found);
+        for (via, address, serial) in self.state.forwarded.remove(&found).unwrap_or_default() {
+            self.state
+                .copies
+                .entry(via)
+                .or_default()
+                .push(json!({"kind": "drop", "address": address, "serial": serial}));
+        }
+        Some((found, serials))
+    }
+
+    /// The gateways registered here, for its operators (the desk's `/office/gateways`,
+    /// `radiopost-po gateways`): each record; the account its newest gateway credential names,
+    /// which is who registered it; each such credential's serial, end and whether it is revoked;
+    /// how many items placed there it has not yet acknowledged (RP-5 §5.8); when it last polled;
+    /// and whether it is counted cut off (RP-7 §4.1).
+    #[must_use]
+    pub fn registrations(&self) -> Vec<Json> {
+        self.state
+            .gateways
+            .iter()
+            .map(|(callsign, record)| {
+                let issued: Vec<(&u64, &crate::operator::Issued)> = self
+                    .state
+                    .credentials
+                    .iter()
+                    .filter(|(_, c)| c.operator == *callsign && c.flags & flags::GATEWAY != 0)
+                    .collect();
+                let credentials: Vec<Json> = issued
+                    .iter()
+                    .map(|(s, c)| {
+                        json!({"serial": s, "expires": c.expires,
+                               "revoked": self.state.revoked.contains(s)})
+                    })
+                    .collect();
+                let placed = self
+                    .state
+                    .copies
+                    .get(callsign)
+                    .map_or(0, Vec::len)
+                    .saturating_sub(self.state.acked.get(callsign).copied().unwrap_or(0));
+                json!({
+                    "callsign": callsign,
+                    "operator": record["operator"],
+                    "address": issued.last().map(|(_, c)| c.address.clone()),
+                    "record": record,
+                    "credentials": credentials,
+                    "placed": placed,
+                    "last_poll": self.state.last_poll.get(callsign),
+                    "cut_off": self.state.cut.contains(callsign),
+                })
+            })
+            .collect()
     }
 
     // -- station-to-station reports (RP-5 §6.6) -----------------------------------------------

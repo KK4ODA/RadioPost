@@ -225,7 +225,18 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   office in-process), `upstream::Http` logs in with the gateway's credential (ureq, again on a 401),
   `station` answers calls on an RPMI modem and finds post offices in `gateway.json` or by DNS over
   HTTPS (RP-1 §7.1, `radiopost::dns`), `operator::register` registers it from the operator's client
-  home (RP-5 §6.4). `tests/online.rs` is the whole path: client → loopback adapter → gateway program
+  home (RP-5 §6.4). Registration and its withdrawal (W54, RP-5 1.2.0 §6.4 and §7.7; a tester's
+  gateway registered with radiopost.org by mistake, 2026-11-18): the operator chooses the client's
+  account (`operator::accounts` reads the client's W46 layout, `account` finds one; Setup's
+  **Account**, `register --account`); one post office at a time, so registering at another domain
+  while registered is refused; `record.json` keeps the account, home and base URL, and after
+  `operator::unregister` (Setup's **Unregister**, `unregister`; refused while records wait to be
+  reported) only the record, which fills the form; a `404` reads the list (unchecked) before it
+  forgets. The post office's `PostOffice::withdraw_gateway` drops the record, revokes every
+  gateway credential issued for the callsign and drops its items and forward items, for the
+  record's operator (`DELETE /gateways/{c}`), its operators (`DELETE /office/gateways/{c}`, the
+  desk's **Gateways** tab over the desk's own `GET /office/gateways`, `registrations`) and the
+  operator's port (`radiopost-po gateways`, `unregister --callsign`). `tests/online.rs` is the whole path: client → loopback adapter → gateway program
   → post office service over HTTP. A post office's base URL is what the gateway signs at login and
   registration, so a test's post office takes the URL of the port it listens on.
   The tester's Phase 2 roles: `gateway` (it plays the caller through the test adapter, with

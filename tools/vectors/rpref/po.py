@@ -407,6 +407,8 @@ class PostOffice:
             return 200, self.settings.get(user[3], {})
         if (method, route) == ("POST", "/gateways"):
             return self.register(user, body or {})
+        if method == "DELETE" and len(parts) == 2 and parts[0] == "gateways":
+            return self._withdraw_own(user, parts[1])
         if (method, route) == ("POST", "/credentials"):
             return 200, {"credential": jws.b64u(self.renewed(user))}
         if (method, route) == ("POST", "/direct"):
@@ -981,6 +983,44 @@ class PostOffice:
         credential = self.issue(user[3], record["callsign"], device, flags)
         return 201, {"credential": jws.b64u(credential)}
 
+    def _registered(self, callsign: str) -> str | None:
+        """The callsign a record is kept under, compared without regard to case (RP-0 §6.1)."""
+        return next((c for c in self.gateways if c.upper() == callsign.upper()), None)
+
+    def _withdraw_own(self, user: dict[int, Any], callsign: str) -> Response:
+        """RP-5 §6.4: the user whose callsign is the record's `operator` withdraws it."""
+        found = self._registered(callsign)
+        if found is None:
+            return problem("unknown-message", 404)
+        if self.gateways[found].get("operator") != user[4]:
+            return problem("not-authorized")
+        return self._withdraw(found)
+
+    def _withdraw(self, callsign: str) -> Response:
+        """RP-5 §6.4, §7.7: the record gone from the list, every gateway credential issued for the
+        callsign revoked with its tokens, the items placed there dropped, and forward items placed
+        for it elsewhere dropped as when it polls again (RP-7 §4.1)."""
+        found = self._registered(callsign)
+        if found is None:
+            return problem("unknown-message", 404)
+        del self.gateways[found]
+        serials = [
+            s
+            for s, c in sorted(self.credentials.items())
+            if c["operator"] == found and c["flags"] & rp.FLAGS["gateway"]
+        ]
+        listed = self.revoked.setdefault(self.domains[0], {"serials": [], "kids": []})
+        listed["serials"].extend(s for s in serials if s not in listed["serials"])
+        self.tokens = {k: v for k, v in self.tokens.items() if v["body"][2] not in serials}
+        self.copies.pop(found, None)
+        self.acked.pop(found, None)
+        self.last_poll.pop(found, None)
+        self.cut.discard(found)
+        for via, address, serial in self.forwarded.pop(found, []):
+            drop = {"kind": "drop", "address": address, "serial": serial}
+            self.copies.setdefault(via, []).append(drop)
+        return 200, {"callsign": found, "revoked": serials}
+
     # -- applications (RP-5 §6.7) -----------------------------------------------------------------
 
     def _alive(self, app: dict[str, Any]) -> bool:
@@ -1093,6 +1133,8 @@ class PostOffice:
             if device is None or len(device) != 32:
                 return problem("malformed")
             return 200, {"revoked": self._revoke_device(device)}
+        if method == "DELETE" and len(rest) == 2 and rest[0] == "gateways":
+            return self._withdraw(rest[1])  # RP-5 §7.7: whoever registered it
         return problem("unknown-message", 404)
 
     @staticmethod

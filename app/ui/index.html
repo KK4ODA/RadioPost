@@ -309,6 +309,7 @@
         <div class="tabs" role="tablist" aria-label="Post office">
           <button role="tab" data-otab="applications" title="People asking for an account: approve, decline, or send a code by post">Applications <span class="count" id="o-n-applications"></span></button>
           <button role="tab" data-otab="accounts" title="Every account, its name and the devices enrolled for it">Accounts</button>
+          <button role="tab" data-otab="gateways" title="The gateways registered here, and from which account: take off one registered by mistake">Gateways</button>
           <button role="tab" data-otab="code" title="A one-time code for a new account, or a new device of one">New code</button>
           <button role="tab" data-otab="mail" title="Mail sent by radio, waiting to go on by email">Mail out <span class="count" id="o-n-mail"></span></button>
           <button role="tab" data-otab="others" title="Other post offices: those you know, those met that you may know, those you blocked">Post offices <span class="count" id="o-n-others"></span></button>
@@ -359,6 +360,15 @@
             <div id="o-made-mailbox"></div>
           </div>
         </form>
+
+        <div class="o-pane" id="o-gateways" hidden>
+          <p class="note">The gateways registered with this post office, each from the account of its operator. Unregister takes one off the gateway list your users and other post offices read, revokes its credential so it can no longer log in, and drops the copies placed there; the mail stays in the mailboxes. Its operator can register it again.</p>
+          <p class="empty" id="o-gateways-none">No gateway is registered here.</p>
+          <div class="scroll"><table class="list" aria-label="Gateways registered">
+            <thead><tr><th title="The gateway's callsign, and its operator's">Gateway</th><th title="The account it was registered from: its credential names it">Registered from</th><th title="Where it is, as its record says">Place</th><th title="Copies of users' mail placed there and not yet acknowledged; when it last asked for them">Copies</th><th class="acts"></th></tr></thead>
+            <tbody id="o-gateway-rows"></tbody>
+          </table></div>
+        </div>
 
         <div class="o-pane" id="o-mail" hidden>
           <p class="empty" id="o-mail-none">Nothing waiting to go out by email.</p>

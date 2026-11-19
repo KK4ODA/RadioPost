@@ -121,6 +121,13 @@
       "seed_hex": "194ab19183b96bacf594fcff1d7e60bed12e6a7d395b5a3a16949c00c6592dd3",
       "public_hex": "2bf5b5112c8153fc3a15248202a61858f0040479654b99f09824340a2308a68e",
       "kid_hex": "872af857"
+    },
+    {
+      "label": "device:gateway-n3call-1",
+      "what": "Gateway N3CALL-1, registered by Shelter 3 by mistake",
+      "seed_hex": "86340637964b1e94fd13470e1d016f6439497b6adbbb65e65499dbd151296eef",
+      "public_hex": "b70db1fe7bfb14bf6a887ec6c63f01c2dc2b9b6358e8ac3093e9dbfb5f7768b2",
+      "kid_hex": "cb641361"
     }
   ]
 }

@@ -99,6 +99,7 @@ KEY_LABELS = [
     ("device:jose", "José's laptop, applying for jose@radiopost.org as N5CALL", None, None),
     ("device:lena", "Lena's laptop, applying for lena@radiopost.org as N6CALL", None, None),
     ("device:ruth", "Ruth's laptop, applying for ruth@radiopost.org as N7CALL", None, None),
+    ("device:gateway-n3call-1", "Gateway N3CALL-1, registered by Shelter 3 by mistake", None, None),
 ]
 
 SECRET = {label: seed(label) for label, *_ in KEY_LABELS}
@@ -3459,6 +3460,7 @@ def api_cases() -> list[dict[str, Any]]:
     )
     cases.append(held_case(good))
     cases.append(across_case())
+    cases.append(withdrawn_case())
     return cases
 
 
@@ -3538,6 +3540,101 @@ def across_case() -> dict[str, Any]:
     across_delivery(office, 423)
     ex.call(T_SESSION + 180, gw, "GET", after, None, tokens[gw])
     return {"what": ACROSS, "setup": ACROSS_SETUP, "exchanges": ex.log}
+
+
+WITHDRAWN = (
+    "a gateway's registration withdrawn: refused to a gateway's token, to another callsign and "
+    "for a callsign not registered; by its operator, its credential revoked and the copy placed "
+    "there dropped; then no copy placed, the callsign unknown; registered again, withdrawn again"
+)
+WITHDRAWN_SETUP = {
+    "note": (
+        "Each of `deliveries` arrives for facundo@radiopost.org at `at`, with the note that names "
+        "its serial."
+    ),
+    "deliveries": [
+        {"serial": 422, "message": "ana-to-facundo", "at": T_SESSION + 100},
+        {"serial": 423, "message": "maria-house", "at": T_SESSION + 170},
+    ],
+}
+
+
+def setup_delivery(office: po.PostOffice, setup: dict[str, Any], serial: int) -> None:
+    """One of a case's `deliveries`."""
+    d = next(d for d in setup["deliveries"] if d["serial"] == serial)
+    fields = MESSAGES[d["message"]]
+    office.now = d["at"]
+    office.deliver(
+        "facundo@radiopost.org",
+        serial,
+        air0(d["message"]),
+        sender=fields["from"],
+        subject=fields["subject"],
+        priority=0,
+        third_party=third_party(d["message"]),
+    )
+
+
+def withdrawn_case() -> dict[str, Any]:
+    """RP-5 §6.4: KK4ODA-1's registration withdrawn by Facundo, its operator."""
+    office, ex, tokens = case_office()
+    facundo, laptop, gw = tokens["facundo"], "Facundo's laptop", "KK4ODA-1"
+    gateway = "device:gateway-kk4oda-1"
+    reg = GATEWAY_RECORD["callsign"].encode() + PO_RADIOPOST.encode()
+    registration = {
+        "record": GATEWAY_RECORD,
+        "device": jws.b64u(PUBLIC[gateway]),
+        "signature": jws.b64u(rp.sign(rp.CTX_GATEWAY, reg, SECRET[gateway])),
+    }
+    ex.note("Facundo names KK4ODA-1 as his usual gateway and registers it (RP-5 §6.3, §6.4).")
+    ex.call(T_SESSION + 10, laptop, "PUT", "/settings", {"usual_gateways": [gw]}, facundo)
+    issued = ex.call(T_SESSION + 20, laptop, "POST", "/gateways", registration, facundo)
+    first = jws.unb64u(issued["credential"])
+    assert first is not None
+    kk = ex.login_with(T_SESSION + 30, gw, first, gateway)
+    ex.note("Mail arrives for facundo@radiopost.org: #422, a copy placed at KK4ODA-1.")
+    setup_delivery(office, WITHDRAWN_SETUP, 422)
+    ex.call(T_SESSION + 110, gw, "GET", "/copies?after=&wait=0", None, kk)
+    ex.note(
+        "N1CALL-10's token is a gateway's, and Shelter 3's callsign, N3CALL, is not the record's "
+        "operator: neither may withdraw KK4ODA-1. Nor is N2CALL-5 registered here."
+    )
+    path = "/gateways/KK4ODA-1"
+    ex.call(T_SESSION + 120, "N1CALL-10", "DELETE", path, None, tokens["N1CALL-10"])
+    shelter = ex.login(T_SESSION + 121, "Shelter 3 (N3CALL)", "shelter3-n3call")
+    ex.call(T_SESSION + 122, "Shelter 3 (N3CALL)", "DELETE", path, None, shelter)
+    ex.call(T_SESSION + 130, laptop, "DELETE", "/gateways/N2CALL-5", None, facundo)
+    ex.note(
+        "Facundo withdraws KK4ODA-1: its record leaves the list, its credential is revoked, and "
+        "the copy of #422 placed there is dropped. #422 itself waits in his mailbox."
+    )
+    ex.call(T_SESSION + 140, laptop, "DELETE", path, None, facundo)
+    ex.call(T_SESSION + 150, gw, "GET", "/copies?after=&wait=0", None, kk)
+    ex.login_with(T_SESSION + 151, gw, first, gateway)
+    ex.note("Mail arrives for facundo@radiopost.org: #423, and no list names KK4ODA-1.")
+    setup_delivery(office, WITHDRAWN_SETUP, 423)
+    ex.call(T_SESSION + 180, laptop, "DELETE", path, None, facundo)
+    ex.note(
+        "Facundo registers KK4ODA-1 again: a new credential, and nothing placed there while it "
+        "was not registered. Then he withdraws it again: both its credentials are revoked."
+    )
+    again = ex.call(T_SESSION + 190, laptop, "POST", "/gateways", registration, facundo)
+    second = jws.unb64u(again["credential"])
+    assert second is not None
+    kk = ex.login_with(T_SESSION + 200, gw, second, gateway)
+    ex.call(T_SESSION + 210, gw, "GET", "/copies?after=&wait=0", None, kk)
+    ex.call(T_SESSION + 220, laptop, "DELETE", path, None, facundo)
+    return {"what": WITHDRAWN, "setup": WITHDRAWN_SETUP, "exchanges": ex.log}
+
+
+def withdrawn_said(c: dict[str, Any]) -> list[str]:
+    """A case's answers as `copies_said` has them, and each withdrawal's serials revoked."""
+    out = copies_said(c)
+    bodies = [(e["response"].get("body") or {}) for e in c["exchanges"] if "request" in e]
+    return [
+        f"{said}; {b['callsign']} revoked {b['revoked']}" if "revoked" in b else said
+        for said, b in zip(out, bodies, strict=True)
+    ]
 
 
 def copies_said(c: dict[str, Any]) -> list[str]:
@@ -3758,8 +3855,58 @@ def make_api_exchanges() -> dict[str, Any]:
                 "204",
                 "200",
             ],
+            WITHDRAWN: [
+                "204",
+                "201",
+                "200",
+                "200",
+                "200",
+                "403 not-authorized",
+                "200",
+                "200",
+                "403 not-authorized",
+                "404 unknown-message",
+                "200",
+                "401 not-authorized",
+                "200",
+                "422 credential-revoked",
+                "404 unknown-message",
+                "201",
+                "200",
+                "200",
+                "200",
+                "200",
+            ],
         },
         answers,
+    )
+    confirm(  # RP-5 §6.4: a withdrawal, worked out from the specification
+        [c for c in cases if c["what"] == WITHDRAWN],
+        {
+            WITHDRAWN: [
+                "204",  # usual gateway named
+                "201",  # registered: credential 1050
+                "200",
+                "200",  # KK4ODA-1 logs in with it
+                "200; placing true; [copy 422]",
+                "403 not-authorized",  # a gateway's token, on a client endpoint (§2)
+                "200",
+                "200",  # Shelter 3 logs in
+                "403 not-authorized",  # N3CALL is not the record's operator
+                "404 unknown-message",  # N2CALL-5 is not registered here
+                "200; KK4ODA-1 revoked [1050]",
+                "401 not-authorized",  # the revocation ended its token
+                "200",
+                "422 credential-revoked",  # and its credential logs in no more
+                "404 unknown-message",  # withdrawn already
+                "201",  # registered again: credential 1051
+                "200",
+                "200",
+                "200; placing true; []",  # neither #422's copy, dropped, nor #423's, never placed
+                "200; KK4ODA-1 revoked [1050, 1051]",  # every credential issued for it
+            ]
+        },
+        withdrawn_said,
     )
     confirm(  # RP-5 §4.4, §5.8: whose items, `placing`, an ambiguous callsign
         [c for c in cases if c["what"] == ACROSS],
@@ -5629,6 +5776,17 @@ def application(who: str, base: str = PO_RADIOPOST, **change: str) -> dict[str, 
     }
 
 
+N3CALL_RECORD = {
+    "callsign": "N3CALL-1",
+    "operator": "N3CALL",
+    "grid": "EM73",
+    "place": "Shelter 3, Decatur, GA",
+    "channels": [{"dial_hz": 7101000, "mode": "USB", "modem": "aether", "bandwidth_hz": 2300}],
+    "hours": "always",
+    "internet": True,
+}
+
+
 def office_post_office(operators: list[str] | None = None) -> po.PostOffice:
     """radiopost.org taking applications, run by KK4ODA (RP-5 §4.1, §7.1)."""
     office = post_office()
@@ -6006,6 +6164,43 @@ def office_cases() -> list[dict[str, Any]]:
         "boolean; for the operator's own account",
         operator_codes,
     )
+
+    def withdrawn(ex: Exchanges) -> None:
+        shelter, gateway = "Shelter 3 (N3CALL)", "device:gateway-n3call-1"
+        ex.note("Shelter 3 registers N3CALL-1 under its account, by mistake (RP-5 §6.4).")
+        tok = ex.login(at, shelter, "shelter3-n3call")
+        signed = b"N3CALL-1" + PO_RADIOPOST.encode()
+        issued = ex.call(
+            at + 1,
+            shelter,
+            "POST",
+            "/gateways",
+            {
+                "record": N3CALL_RECORD,
+                "device": jws.b64u(PUBLIC[gateway]),
+                "signature": jws.b64u(rp.sign(rp.CTX_GATEWAY, signed, SECRET[gateway])),
+            },
+            tok,
+        )
+        ex.note("Shelter 3 is no operator: the operators' withdrawal is not for it (RP-5 §7.1).")
+        ex.call(at + 2, shelter, "DELETE", "/office/gateways/N3CALL-1", None, tok)
+        ex.note(
+            "KK4ODA, an operator, withdraws it (RP-5 §7.7), the callsign typed in lower case: "
+            "its credential is revoked, and the accounts show it."
+        )
+        op = ex.login(at + 10, "Facundo's laptop", "facundo")
+        ex.call(at + 11, "Facundo's laptop", "DELETE", "/office/gateways/n3call-1", None, op)
+        ex.call(at + 12, "Facundo's laptop", "DELETE", "/office/gateways/N3CALL-1", None, op)
+        ex.call(at + 13, "Facundo's laptop", "GET", "/office/accounts", None, op)
+        credential = jws.unb64u(issued["credential"])
+        assert credential is not None
+        ex.login_with(at + 20, "N3CALL-1", credential, gateway)
+
+    case(
+        "a gateway's registration withdrawn by an operator: not by a user who is not one; the "
+        "callsign in lower case; then unknown; its credential revoked",
+        withdrawn,
+    )
     return cases
 
 
@@ -6109,6 +6304,15 @@ def make_api_office() -> dict[str, Any]:
     ], story_answers
     logins = [e for e in story if e.get("request", {}).get("path") == "/auth/token"]
     assert [e["response"]["body"].get("office") for e in logins] == [True, None, True, None]
+    # RP-5 §7.7, §7.4: the answer names the record's callsign and the serial revoked, and the
+    # accounts show that credential revoked, under the account that registered the gateway
+    withdrawal = next(c for c in cases if c["what"].startswith("a gateway's registration"))
+    said = [e["response"].get("body") for e in withdrawal["exchanges"] if "request" in e]
+    assert said[6] == {"callsign": "N3CALL-1", "revoked": [1050]}, said[6]
+    shelter = next(a for a in said[8]["accounts"] if a["address"] == "shelter3@radiopost.org")
+    assert [(c["serial"], c["operator"], c["revoked"]) for c in shelter["credentials"]] == [
+        (1050, "N3CALL-1", True)
+    ], shelter
     confirm(  # RP-5 §6.7, §7
         cases,
         {
@@ -6171,6 +6375,20 @@ def make_api_office() -> dict[str, Any]:
                 "400 malformed",
             ],
             "an application with an operator's callsign": ["403 refused-by-policy"],
+            "a gateway's registration withdrawn by an operator: not by a user who is not one; the "
+            "callsign in lower case; then unknown; its credential revoked": [
+                "200",
+                "200",  # Shelter 3 logs in
+                "201",  # N3CALL-1 registered: credential 1050
+                "403 not-authorized",  # not an operator (§7.1)
+                "200",
+                "200",  # KK4ODA logs in
+                "200",  # withdrawn (§7.7)
+                "404 unknown-message",  # and no longer registered
+                "200",  # the accounts
+                "200",
+                "422 credential-revoked",  # N3CALL-1's credential logs in no more
+            ],
             "an application whose callsign has become an operator's since": [
                 "202",
                 "200",
@@ -8230,8 +8448,8 @@ def check_office(data: dict[str, Any]) -> None:
             assert raw is not None
             result, cbody = rp.verify_credential(raw, po_keys(), {}, e["at"], [])
             assert result == "ok" and cbody is not None
-            if req["path"] == "/enroll":
-                wanted = req["body"]["device"]
+            if req["path"] in {"/enroll", "/gateways"}:
+                wanted = req["body"]["device"]  # the new device's, or the gateway's (RP-5 §6.4)
             else:
                 wanted = devices[req["path"].rsplit("/", 1)[1]]
             assert jws.b64u(cbody[5]) == wanted

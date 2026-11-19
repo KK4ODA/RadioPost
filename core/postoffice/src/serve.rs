@@ -563,6 +563,24 @@ impl Running {
                     self.after_enrollment(address);
                 }
             }
+            // RP-5 §6.4, §7.7: a registration withdrawn is logged, by whom it was
+            ("DELETE", 200)
+                if path.starts_with("/gateways/") || path.starts_with("/office/gateways/") =>
+            {
+                let by = if path.starts_with("/office/") {
+                    "an operator, on the desk"
+                } else {
+                    "its operator"
+                };
+                eprintln!(
+                    "radiopost-po: gateway {}'s registration withdrawn by {by}, revoking {}",
+                    named("callsign").unwrap_or("?"),
+                    answer
+                        .body
+                        .as_ref()
+                        .map_or(Json::Null, |b| b["revoked"].clone())
+                );
+            }
             _ => {}
         }
         let Some(body) = answer.body.as_mut().filter(|_| answer.status == 200) else {
@@ -607,8 +625,12 @@ impl Running {
     }
 
     /// Answers one of the operator's commands (`radiopost-po code`, `deliver`, `revoke`,
-    /// `outgoing`, `status`).
+    /// `gateways`, `unregister`, `outgoing`, `status`).
     #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the table of the operator's commands, one each"
+    )]
     pub fn admin(&self, method: &str, path: &str, body: &[u8]) -> (u16, String) {
         let body: Json = serde_json::from_slice(body).unwrap_or(Json::Null);
         let text = |k: &str| body.get(k).and_then(Json::as_str).unwrap_or("").to_owned();
@@ -676,6 +698,7 @@ impl Running {
                     None => Err("a device key, base64url".to_owned()),
                 }
             }
+            (_, p) if p.starts_with("/gateways") => admin_gateways(&mut office, method, path),
             (_, "/routes") => admin_routes(&mut office, method, &body),
             (_, "/backup-mx") => admin_backup_mx(&mut office, method, &body),
             ("POST", "/name") => {
@@ -727,6 +750,25 @@ fn flags_named(body: &Json) -> u64 {
                 _ => 0,
             }
         })
+}
+
+/// The operator's port's gateways: `GET /gateways` lists those registered, for `radiopost-po
+/// gateways`; `DELETE /gateways/{callsign}` withdraws one (RP-5 §7.7), for `radiopost-po
+/// unregister`.
+fn admin_gateways(office: &mut PostOffice, method: &str, path: &str) -> Result<Json, String> {
+    match (method, path.strip_prefix("/gateways/")) {
+        ("GET", None) => Ok(json!({"gateways": office.registrations()})),
+        ("DELETE", Some(callsign)) => match office.withdraw_gateway(callsign) {
+            Some((callsign, revoked)) => {
+                eprintln!(
+                    "radiopost-po: the operator's port withdrew gateway {callsign}'s                      registration, revoking {revoked:?}"
+                );
+                Ok(json!({"callsign": callsign, "revoked": revoked}))
+            }
+            None => Err(format!("no gateway {callsign} is registered here")),
+        },
+        _ => Err(format!("no command {method} {path}")),
+    }
 }
 
 /// The operator's port's radio routes (RP-7 §6.1), for `radiopost-po route` and `routes`: a route

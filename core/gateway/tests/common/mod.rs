@@ -118,6 +118,23 @@ pub fn post_office_at(
     listener: TcpListener,
     base: &str,
 ) -> (Arc<Running>, String, SigningKey) {
+    post_office_of(dir, listener, base, "test.example")
+}
+
+/// The post office for `domain`, on a port of its own: a second post office, for a gateway that
+/// moves from one to another.
+pub fn post_office_for(dir: &Path, domain: &str) -> (Arc<Running>, String, SigningKey) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("a free port");
+    let at = listener.local_addr().expect("an address");
+    post_office_of(dir, listener, &format!("http://{at}"), domain)
+}
+
+fn post_office_of(
+    dir: &Path,
+    listener: TcpListener,
+    base: &str,
+    domain: &str,
+) -> (Arc<Running>, String, SigningKey) {
     let base = base.to_owned();
     std::fs::create_dir_all(dir).expect("a directory");
     let files = Files::new(dir);
@@ -126,13 +143,13 @@ pub fn post_office_at(
         .write("key.hex", &radiopost::cbor::hex(&key.to_bytes()))
         .expect("written");
     let settings = Settings {
-        domains: vec!["test.example".into()],
+        domains: vec![domain.into()],
         base_url: base.clone(),
         listen: listener.local_addr().expect("an address").to_string(),
         admin: "127.0.0.1:0".into(),
         info: Info {
             operator: "KK4ODA".into(),
-            contact: "postmaster@test.example".into(),
+            contact: format!("postmaster@{domain}"),
             country: "US".into(),
             max_air_bytes: 65_536,
             max_email_bytes: 10_485_760,

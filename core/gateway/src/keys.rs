@@ -45,7 +45,7 @@ pub(crate) fn get(api: &str, path: &str) -> Option<String> {
 }
 
 /// The payload of a JWS, read without checking it: only to find which of its keys to try.
-fn unchecked_payload(jws: &str) -> Option<Json> {
+pub(crate) fn unchecked_payload(jws: &str) -> Option<Json> {
     let body = jws.split('.').nth(1)?;
     serde_json::from_slice(&base64url::decode(body)?).ok()
 }

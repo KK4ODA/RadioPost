@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.45 |
+| **Version** | 0.3.46 |
 | **Updated** | 2026-11-18 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -157,6 +157,7 @@ rules:
 | W51 | Sounds, and mail that arrives by its sender | Mail | Medium | Fits today | Implemented |
 | W52 | Time-sensitive alerts between stations that share a keyword | Applications | Medium | Optional addition: RP-8 (Draft), RP-0 1.1.0, RP-4 1.3.0; G22 | Implemented |
 | W53 | Print a message, a form as its paper form, and save its files | Mail | High | Fits today | Implemented |
+| W54 | Unregister a gateway, and choose the account that registers it | Operation | High | Optional addition (RP-5 1.2.0 §6.4, §7.7); G23 | Implemented |
 
 Groups: *Mail* (§4), *Setup* (§5), *Radio* (§6), *Operation* (§7), *Offline* (§8),
 *Applications* (§9), *Adapters* (§10), *Rules* (§11). Consolidated and deferred wishes are in §14.
@@ -759,6 +760,25 @@ with RMS Trimode, and a client finds it on any of them.
 | Author decision | Accepted as proposed, 2026-11-17: the operator wins over a scan, G21 a SHOULD, Aether's harness before the air. |
 | Notes | Aether's timing model: a call of *n* + 2 tries finds a gateway scanning *n* channels every time on a good path; Aether's default two tries find it 26–63 % of the time. At four channels a call nobody answers lasts about 91 s. Channels on one band inside one passband could be heard at once without scanning (Aether's ADR-0129 §4); not proposed now. |
 
+### W54. Unregister a gateway, and choose the account that registers it
+
+Take a gateway's registration back, from the gateway or from the post office's desk; and say which
+of the client's accounts, and so which post office, a gateway registers with.
+
+| | |
+|---|---|
+| Requested by | A tester, by email to the author, 2026-11-18: setting up RadioPost Gateway against his own test post office, the gateway registered with radiopost.org under his radiopost.org account, the client's first; he found no way to unregister it, nor to tell the gateway which account to use. The author answered that he would add it. Requesters: 1. |
+| Component | Gateway, post office, client (the desk); RP-5. |
+| Compatibility | **Optional addition** (RP-5 1.2.0): `DELETE /gateways/{callsign}` for the record's operator (§6.4), which 1.0.0 named and said no more of, and `DELETE /office/gateways/{callsign}` for the post office's operators (§7.7). A post office of 1.1.0 answers either `404` and keeps the record; a gateway that meets a `404` reads the gateway list before it forgets its registration (G23). Choosing the account is the gateway's own business. |
+| Existing coverage | New. The gateway registered from the client's first home (W46 keeps the others in `callsigns/<n>`), so with several accounts it used the first; registering again with another account replaced `credential.hex` and `record.json` and left the first registration listed. Nothing took a record off a post office's list but an edit of its `state.json`. |
+| Dependencies | W46 (several accounts in one client). |
+| Effort | Medium: RP-5 1.2.0 and its vectors, the post office's endpoints, desk tab and commands, the gateway's account choice, Unregister and commands. |
+| Priority | **High.** A tester's gateway sat on radiopost.org's list by mistake, and copies of mail would have been placed there. |
+| Recommendation | Accept. Withdrawing revokes the gateway's credentials, drops the items placed there, and leaves the mail in the mailboxes. A gateway is registered with one post office at a time (a callsign in two lists is ambiguous to a third reader, RP-5 §4.4), so registering elsewhere while registered is refused, and a withdrawal waits until the sessions it carried while cut off are reported. |
+| Status | Implemented (2026-11-18): RP-5 1.2.0 §6.4 and §7.7 with `api-exchanges.json`'s and `api-office.json`'s cases; the post office's endpoints, the desk's **Gateways** tab, `radiopost-po gateways` and `unregister`; RadioPost Gateway's **Account**, **Register with …** and **Unregister**, `accounts`, `register --account`, `unregister [--here]`; the form filled from the record last registered. |
+| Author decision | Asked for by the author, 2026-11-18. |
+| Notes | Before the release that carries it, a post office's operator takes a registration off by hand: the gateway's credential revoked on the desk's Accounts tab, and the record taken out of `state.json` with the post office stopped (the server guide, chapter 9). |
+
 ---
 
 ## 8. Offline and disconnected operation
@@ -1131,6 +1151,7 @@ document.
 | G20 | RP-1 §7.3 | Which keys a gateway trusts, offline, for a post office its operator names by URL because its DNS records are not published (the gateway's settings, design §5.2): §7.3 trusts only post offices found in DNS and one hop of their lists. | Such a gateway could check no caller offline. | For the gateway's own post office, the key that signed the gateway's own credential (fetched over HTTPS at registration), and those an info document signed by it adds, as §7.2 does from DNS; built that way (2026-11-13), not yet in RP-1. **Settled** (2026-11-15, D41): RP-1 1.0.0 §7.3. | W28 |
 | G21 | RP-5 §4.4 | Nothing says a gateway listens on the channels it lists. Ours registers what its operator enters and listens on one dial. | A client that calls a listed channel the gateway is not on is never answered, and cannot tell why. | A gateway SHOULD list only channels it listens on: the dials it scans, and otherwise the dial each modem's radio sits on (drafted in [the scanning proposal](03-scanning.md), §3.2). **Settled** (2026-11-17): RP-5 1.1.0 §4.4. | W50 |
 | G22 | RP-4 §6 | Who hears a broadcast was not said: every host, or only those with callsigns, or only the program whose callsign it names. | A program listening for alerts between calls, with no callsign claimed, might hear none. | Every host that has said `hello`, callsigns or none; sending needs callsigns. **Settled** (2026-11-18): RP-4 1.3.0 §6, as the reference and the Aether adapter already did. | W52 |
+| G23 | RP-5 §6.4 | `DELETE /gateways/{callsign}` was named and nothing more said: who may, what happens to the gateway's credential and to the copies placed there, and what a post office answers. Neither implementation offered it, and the operators had no endpoint either. | A gateway registered by mistake stays listed, keeps a valid credential, and has users' copies placed at it; its operator cannot take it back. | Its operator withdraws it (the token's `operator` is the record's), and so may the post office's operators; its credentials are revoked and its items dropped; one post office at a time; a gateway that meets a `404` reads the list before it forgets. **Settled** (2026-11-18): RP-5 1.2.0 §6.4, §7.7. | W54 |
 
 ---
 
@@ -1217,3 +1238,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.43 | 2026-11-18 | W49's coverage: every account gets its mailbox, not only an approved one (a code-made account's email from outside had been refused). |
 | 0.3.44 | 2026-11-18 | W15 built, at the author's ask after the 40 m sessions of 2026-11-18: **Listen for P2P** stays on until pressed again. |
 | 0.3.45 | 2026-11-18 | W53, at the author's ask after the 40 m sessions: **Print** (a PDF by the system's print dialog, an ICS-213 as FEMA's ICS 213) and **Save** for a message's files, built. |
+| 0.3.46 | 2026-11-18 | W54 implemented, at a tester's report through the author: a gateway unregistered from RadioPost Gateway or the post office's desk, and the account it registers with chosen; gap G23 settled by RP-5 1.2.0. |

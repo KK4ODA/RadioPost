@@ -632,7 +632,7 @@ fn applications_and_the_operator_endpoints_as_rp5_says() {
         |_, _| {},
     );
     let cases = file["cases"].as_array().expect("cases");
-    assert_eq!(cases.len(), 22);
+    assert_eq!(cases.len(), 23);
     for case in cases {
         let what = case["what"].as_str().expect("what");
         let mut office = match what {

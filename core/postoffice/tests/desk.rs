@@ -634,3 +634,123 @@ fn the_operator_runs_applications_from_the_client() {
     assert_eq!(s["applications"], json!("open"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// An account made on the server and enrolled from a device: its credential, base64url.
+fn enrolled(api: &str, admin: &str, address: &str, operator: &str, device: &SigningKey) -> String {
+    let (_, made) = http(
+        admin,
+        "POST",
+        "/code",
+        None,
+        Some(&json!({"address": address, "operator": operator})),
+    );
+    let code = made["code"].as_str().expect("a code").to_owned();
+    let signed = format!("{code}{BASE}");
+    let enroll = json!({"address": address, "operator": operator, "code": code,
+        "device": base64url::encode(&device.verifying_key().to_bytes()),
+        "signature": base64url::encode(&crypto::sign(context::API_ENROLL, signed.as_bytes(), device))});
+    let (status, enrolled) = http(api, "POST", "/rp/v1/enroll", None, Some(&enroll));
+    assert_eq!(status, 200, "{enrolled}");
+    enrolled["credential"]
+        .as_str()
+        .expect("a credential")
+        .to_owned()
+}
+
+#[test]
+fn the_desk_lists_the_gateways_and_withdraws_one_registered_by_mistake() {
+    let dir = std::env::temp_dir().join(format!("radiopost-desk-gw-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a directory");
+    let files = Files::new(&dir);
+    files.write("key.hex", &"09".repeat(32)).expect("written");
+    files
+        .write(
+            "config.json",
+            &serde_json::to_string(&settings()).expect("JSON"),
+        )
+        .expect("written");
+    let (api, admin) = start(&dir);
+    let laptop = SigningKey::from_bytes(&[3; 32]);
+    let op_credential = enrolled(&api, &admin, "kk4oda@test.example", "KK4ODA", &laptop);
+    let op = login(&api, &op_credential, &laptop)["token"]
+        .as_str()
+        .expect("a token")
+        .to_owned();
+
+    // Shelter 3 registers N3CALL-1 under its account (RP-5 §6.4)
+    let shelter = SigningKey::from_bytes(&[11; 32]);
+    let shelter_credential = enrolled(&api, &admin, "shelter3@test.example", "N3CALL", &shelter);
+    let user = login(&api, &shelter_credential, &shelter)["token"]
+        .as_str()
+        .expect("a token")
+        .to_owned();
+    let gateway = SigningKey::from_bytes(&[12; 32]);
+    let signed = format!("N3CALL-1{BASE}");
+    let body = json!({
+        "record": {"callsign": "N3CALL-1", "operator": "N3CALL", "place": "Shelter 3",
+                   "channels": [{"dial_hz": 7_101_000, "mode": "USB", "modem": "aether",
+                                 "bandwidth_hz": 2300}],
+                   "hours": "always", "internet": true},
+        "device": base64url::encode(&gateway.verifying_key().to_bytes()),
+        "signature": base64url::encode(&crypto::sign(context::API_GATEWAY, signed.as_bytes(), &gateway)),
+    });
+    let (status, issued) = http(&api, "POST", "/rp/v1/gateways", Some(&user), Some(&body));
+    assert_eq!(status, 201, "{issued}");
+
+    // the desk lists it with the account that registered it; a user who is no operator is refused
+    let (status, list) = http(&api, "GET", "/rp/v1/office/gateways", Some(&op), None);
+    assert_eq!(status, 200, "{list}");
+    let g = &list["gateways"][0];
+    assert_eq!(
+        (
+            g["callsign"].as_str(),
+            g["address"].as_str(),
+            g["operator"].as_str()
+        ),
+        (
+            Some("N3CALL-1"),
+            Some("shelter3@test.example"),
+            Some("N3CALL")
+        )
+    );
+    let serial = g["credentials"][0]["serial"].clone();
+    assert_eq!(g["credentials"][0]["revoked"], json!(false));
+    let (status, _) = http(&api, "GET", "/rp/v1/office/gateways", Some(&user), None);
+    assert_eq!(status, 403);
+    let (status, _) = http(
+        &api,
+        "DELETE",
+        "/rp/v1/office/gateways/N3CALL-1",
+        Some(&user),
+        None,
+    );
+    assert_eq!(status, 403);
+
+    // the operator withdraws it (RP-5 §7.7): off the list, its credential revoked
+    let (status, gone) = http(
+        &api,
+        "DELETE",
+        "/rp/v1/office/gateways/N3CALL-1",
+        Some(&op),
+        None,
+    );
+    assert_eq!(status, 200, "{gone}");
+    assert_eq!(gone, json!({"callsign": "N3CALL-1", "revoked": [serial]}));
+    let (_, list) = http(&api, "GET", "/rp/v1/office/gateways", Some(&op), None);
+    assert_eq!(list["gateways"], json!([]));
+    let (status, _) = http(
+        &api,
+        "DELETE",
+        "/rp/v1/office/gateways/N3CALL-1",
+        Some(&op),
+        None,
+    );
+    assert_eq!(status, 404);
+    // and the operator's port says so too
+    let (status, listed) = http(&admin, "GET", "/gateways", None, None);
+    assert_eq!((status, listed["gateways"].clone()), (200, json!([])));
+    let (status, said) = http(&admin, "DELETE", "/gateways/N3CALL-1", None, None);
+    assert_eq!(status, 400, "{said}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

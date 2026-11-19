@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.1.0 |
+| **Version** | 1.2.0 |
 | **Updated** | 2026-11-18 |
 | **Describes** | RadioPost 0.1.0-beta.27 |
 | **Licence** | CC BY 4.0 |
@@ -489,10 +489,50 @@ the post office's operator callsigns can use it. Nobody becomes an operator by a
 application naming an operator's callsign is refused. A code naming an operator's callsign for
 someone else's address shows a red warning first.
 
+**Gateways.** A user registers a gateway they operate from RadioPost Gateway, as one of their
+accounts; the post office lists it for its users and other post offices, and issues it a
+credential. The desk's **Gateways** tab lists each one with the account that registered it
+([manual, Gateways registered here](../manual/manual.md#gateways-registered-here)). **Unregister**
+takes one off: off the list, its credential revoked, the copies placed there dropped (the mail
+stays in the mailboxes). Use it for a gateway registered here by mistake, or one whose operator
+can no longer reach it; its operator can also unregister it from the gateway. On the server:
+
+```
+radiopost-po --dir /var/lib/radiopost gateways
+radiopost-po --dir /var/lib/radiopost unregister --callsign N3CALL-1
+```
+
+A radio route naming the gateway (chapter 14) stays until you change it.
+
+**From releases before 0.1.0-beta.28** neither the desk nor `radiopost-po` can unregister a
+gateway. By hand: on the desk's **Accounts** tab, find the account that registered it; beside the
+device whose callsign is the gateway's, click **Revoke**, and again. Its credential no longer logs
+in. Then take its record out of the post office's state, with the post office stopped (it writes
+`state.json` whole after every request), a copy kept first:
+
+```
+sudo systemctl stop radiopost-po
+sudo cp /var/lib/radiopost/state.json /root/state.json.before
+sudo python3 - N3CALL-1 <<'END'
+import json, sys
+call, path = sys.argv[1], "/var/lib/radiopost/state.json"
+s = json.load(open(path))
+s["gateways"].pop(call, None)
+for k in ("copies", "last_poll", "acked", "forwarded"):
+    s.get(k, {}).pop(call, None)
+s["cut"] = [c for c in s.get("cut", []) if c != call]
+json.dump(s, open(path, "w"), indent=2)
+END
+sudo systemctl start radiopost-po
+sudo -u radiopost radiopost-po --dir /var/lib/radiopost status
+```
+
+`status` lists the gateways still registered. Writing over the file keeps its owner.
+
 **From the server**, the same: `applications --open` or `--close`, `applications`, `approve ID`,
 `decline ID --text TEXT`, `postcard ID`, `licences --on`, `qrz --username U --password P`,
-`lookup CALL --name NAME`, `mailboxes --stalwart URL --key KEY --check`, `mailbox --address A`
-([chapter 20](#20-commands)).
+`lookup CALL --name NAME`, `mailboxes --stalwart URL --key KEY --check`, `mailbox --address A`,
+`gateways`, `unregister --callsign CALL` ([chapter 20](#20-commands)).
 
 ## 10. Updating
 
@@ -992,6 +1032,8 @@ All are `radiopost-po --dir /var/lib/radiopost COMMAND`, but `install` and `upda
 | `mailbox --address A` | Make an account's missing mailbox in Stalwart now; its password is shown once (chapter 9). |
 | `name --address A --name NAME` | The name on an account's email. |
 | `revoke --device KEY` | Revoke every credential of a lost device. |
+| `gateways` | The gateways registered here, each with the account that registered it, its credentials and the copies placed there (chapter 9). |
+| `unregister --callsign CALL` | Take a gateway off: off the gateway list, its credentials revoked, the copies placed there dropped (chapter 9). |
 | `applications [--open \| --close]`, `approve ID [--role]`, `decline ID --text TEXT`, `postcard ID` | Applications for accounts. |
 | `licences [--on \| --off \| --fetch \| --from ZIP]`, `qrz --username U --password P`, `lookup CALL [--name NAME]` | Licence lookups. |
 | `mailboxes [--stalwart URL --key KEY \| --command PROGRAM \| --off] [--check]` | How new accounts' mailboxes are made. |
@@ -1017,6 +1059,7 @@ All are `radiopost-po --dir /var/lib/radiopost COMMAND`, but `install` and `upda
 | Email for a user is refused right after `RCPT TO`: *550 5.1.1 Mailbox does not exist* | The user has no mailbox at Stalwart. With **Mailboxes** set (chapter 6), **Make mailbox** on the desk's Accounts tab, or `radiopost-po mailbox --address A`; otherwise make it by hand (chapter 9). Accounts made by a code before 0.1.0-beta.28 have none: Health names them. |
 | The desk's jobs stay *asked for, waiting for the runner* | `sudo radiopost-po --dir /var/lib/radiopost jobs --install`, once. |
 | Health is red | Do what the line says. You are emailed again when all pass. |
+| A user registered a gateway here by mistake, or under the wrong account | The desk's **Gateways** tab, **Unregister**; or `radiopost-po unregister --callsign CALL`. Before 0.1.0-beta.28, by hand (chapter 9). |
 | The post office's log says the mail server cannot be read | **Mailboxes** is not set to Stalwart with its API key (chapter 6). |
 | Mail through the backup is refused at the post office for DMARC | The post office's Stalwart does not skip DMARC for the backup's address (chapter 16, step 6). |
 | The backup holds every message back with `451` | Its door has no copy of the accounts yet: check its log, and that it reaches `https://po.radiopost.org`. |
@@ -1080,3 +1123,4 @@ drawn by `tools/figures/server.py`; its screenshots of the desk are the user's m
 | 1.0.0 | 2026-11-15 | Rewritten in the manual's style: step by step around the installer, with schematics and screenshots, a contents, troubleshooting and a glossary. The previous guide's content is kept: the setup by hand is now chapter 18, and the backup mail server chapter 16. |
 | 1.0.1 | 2026-11-17 | Troubleshooting: the FCC copy that never comes (the FCC's site refused releases before 0.1.0-beta.24), and building it from a file fetched by hand. |
 | 1.1.0 | 2026-11-18 | Every account gets its mailbox: a code for a new address makes it and shows its password once, a postcard's enrollment makes it and emails the welcome, Health names an account without one, and **Make mailbox** (the Accounts tab, `radiopost-po mailbox`) makes a missing one. The API key's rights gain `sysAccountCreate`. Accounts made by a code had no mailbox, so email from outside was refused for them. |
+| 1.2.0 | 2026-11-18 | Chapter 9 *Gateways*: the desk's **Gateways** tab and its **Unregister**, `gateways` and `unregister` on the server, and, before 0.1.0-beta.28, unregistering by hand (the credential revoked on the desk, the record taken out of `state.json`). Chapter 20's commands and chapter 21's troubleshooting to match. |

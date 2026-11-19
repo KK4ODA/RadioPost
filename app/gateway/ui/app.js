@@ -149,7 +149,7 @@ function render(s) {
     : left <= 0 ? `The credential ran out on ${day(s.credential.expires)}: register again (Setup).`
       : left < 14 * 86400
         ? `The credential runs out on ${day(s.credential.expires)} and has not renewed itself (the log says why): register again soon (Setup).`
-        : `Registered under ${s.credential.address}: credential ${s.credential.serial}, until ${day(s.credential.expires)}.`;
+        : `Registered with ${domainOf(s.credential.address)}'s post office for ${s.credential.address}: credential ${s.credential.serial}, until ${day(s.credential.expires)}.`;
   $("registration").className = s.credential && left < 14 * 86400 ? "bad" : "";
 
   const now = st.session;
@@ -176,9 +176,8 @@ function render(s) {
   renderPostOffices(s);
   $("key-line").hidden = !s.key;
   $("key").textContent = s.key || "";
-  $("enrolled").textContent = s.client.enrolled
-    ? `The RadioPost app on this computer is enrolled as ${s.client.enrolled.operator}, ${s.client.enrolled.address}.`
-    : "The RadioPost app on this computer is not enrolled yet: enroll it first (its Setup), or give the home of one that is.";
+  renderRegistered(s);
+  planLine();
   $("where").textContent = `The gateway's files: ${s.dir}. RadioPost Gateway ${s.version}.`;
   $("held").hidden = !answering;
   for (const form of ["gateway-form", "register-form", "po-form"]) {
@@ -216,11 +215,71 @@ function fillForms(s) {
   }
   const r = $("register-form").elements;
   r.home.value = s.client.home;
+  fillAccounts(s.client.accounts, s.registration);
   const scan = (settings && settings.scan) || [];
   r.scan.checked = scan.length > 0;
+  // the record last registered, or withdrawn, fills the rest: registering again changes only
+  // what the operator changes
+  const last = s.last_record;
+  if (last) {
+    for (const k of ["grid", "place", "hours"]) if (last[k]) r[k].value = last[k];
+  }
   if (!$("channel-rows").children.length) {
-    if (scan.length) for (const hz of scan) addChannel(hz / 1e6, 2300);
+    const channels = (last && last.channels) || [];
+    if (channels.length) for (const c of channels) addChannel(c.dial_hz / 1e6, c.bandwidth_hz, c.modem);
+    else if (scan.length) for (const hz of scan) addChannel(hz / 1e6, 2300);
     else addChannel(7.101, 2300);
+  }
+}
+
+const domainOf = (address) => (address || "").split("@").pop();
+
+// the accounts of the RadioPost app (W46): the one the gateway is registered with chosen, else the
+// one the app has chosen
+let accountsShown = [];
+function fillAccounts(accounts, registration) {
+  accountsShown = accounts || [];
+  const select = $("register-form").elements.account;
+  const was = select.value;
+  select.replaceChildren(...accountsShown.map((a) => {
+    const o = document.createElement("option");
+    o.value = a.address;
+    o.textContent = `${a.operator} · ${a.address} (${a.domain})`;
+    return o;
+  }));
+  const pick = accountsShown.find((a) => a.address === was)
+    || accountsShown.find((a) => registration && a.address === registration.address)
+    || accountsShown.find((a) => a.chosen)
+    || accountsShown[0];
+  if (pick) select.value = pick.address;
+  planLine();
+}
+
+// what the gateway is registered as now, with Unregister beside it
+function renderRegistered(s) {
+  const r = s.registration;
+  $("registered").hidden = !r;
+  if (!r) return;
+  const at = r.post_office ? ` (${r.post_office})` : "";
+  $("registered-text").textContent = `${r.callsign} is registered with ${r.domain}'s post office${at}, from ${r.operator ? `${r.operator} · ` : ""}${r.address}.`;
+}
+
+// what Register will do, in words, before it is clicked
+function planLine() {
+  const f = $("register-form").elements;
+  const a = accountsShown.find((x) => x.address === f.account.value);
+  const callsign = (state && state.settings && state.settings.callsign) || "The gateway";
+  const now = state && state.registration;
+  $("register-go").textContent = a ? `Register with ${a.domain}` : "Register";
+  $("register-go").disabled = !a || (state && state.running);
+  $("enrolled").className = "note";
+  if (!a) {
+    $("enrolled").textContent = "The RadioPost app at this home holds no enrolled account: enroll it first (its Setup), or give the home of one that is.";
+  } else if (now && now.domain !== a.domain) {
+    $("enrolled").className = "note bad";
+    $("enrolled").textContent = `${callsign} is registered with ${now.domain}'s post office now. Unregister it there first, then register it with ${a.domain}'s.`;
+  } else {
+    $("enrolled").textContent = `${callsign} registers with ${a.domain}'s post office, logged in as ${a.operator}, ${a.address}: it is listed there, and its credential names that address.`;
   }
 }
 
@@ -632,10 +691,29 @@ $("register-form").addEventListener("submit", (e) => {
     return {dial_hz: Math.round(Number(dial.value) * 1e6), mode: modemNamed(modem.value).mode,
             modem: modem.value, bandwidth_hz: Number(bw.value)};
   }).filter((c) => c.dial_hz > 0);
-  act("register", {home: f.home.value, grid: f.grid.value, place: f.place.value,
+  act("register", {home: f.home.value, account: f.account.value, grid: f.grid.value, place: f.place.value,
                    hours: f.hours.value, channels,
                    scan: f.scan.checked ? channels.map((c) => c.dial_hz) : []},
       (a) => { render(a.state); toast(a.said); });
+});
+
+$("register-form").elements.account.addEventListener("change", planLine);
+$("register-form").elements.home.addEventListener("change", (e) => {
+  act("accounts", {home: e.target.value}, (a) => fillAccounts(a.accounts, state && state.registration));
+});
+
+// a second click within four seconds unregisters
+$("unregister").addEventListener("click", (e) => {
+  const b = e.currentTarget;
+  if (!b.dataset.armed) {
+    b.dataset.armed = "1";
+    b.textContent = "Click again to unregister";
+    setTimeout(() => { delete b.dataset.armed; b.textContent = "Unregister"; }, 4000);
+    return;
+  }
+  delete b.dataset.armed;
+  b.textContent = "Unregister";
+  act("unregister", {}, (a) => { render(a.state); toast(a.said); });
 });
 
 $("keep-credential").addEventListener("click", () => {

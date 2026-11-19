@@ -373,6 +373,8 @@ impl PostOffice {
                     None => problem(ErrorCode::Malformed, None),
                 }
             }
+            // RP-5 §7.7: a gateway's registration withdrawn, whoever registered it
+            ("DELETE", ["gateways", callsign]) => self.withdrawal(callsign),
             _ => problem(ErrorCode::UnknownMessage, Some(404)),
         }
     }

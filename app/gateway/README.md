@@ -20,11 +20,12 @@ same computer, and answers calls when the gateway is set to answer at start; `--
 page from a directory, for working on it. The app's window shows it on 8621, or another free port.
 
 Its API, under `/api/`: `GET state` (the settings, the gateway's key and credential, whether it
-runs, its status, the client home it registers through, and in `held` the copies and the queue in
-numbers), `GET log?since=N`, `GET sessions`, `GET held` (each copy held, never its text; each
-session waiting to be reported; the last reports; the post offices polled and the keys kept), and,
-with `X-RadioPost: 1`, `POST setup`, `post-office`, `register`, `credential`, `start`, `stop` and
-`check`. The settings change only while the gateway is stopped. As the client's panel does, it
+runs, its status, the client home it registers through and that client's accounts, where it is
+registered and the record last registered, and in `held` the copies and the queue in numbers),
+`GET log?since=N`, `GET sessions`, `GET held` (each copy held, never its text; each session
+waiting to be reported; the last reports; the post offices polled and the keys kept), and, with
+`X-RadioPost: 1`, `POST setup`, `post-office`, `accounts` (a client home's accounts), `register`
+(with the chosen `account`), `unregister`, `credential`, `start`, `stop` and `check`. The settings change only while the gateway is stopped. As the client's panel does, it
 answers only on the loopback interface and only to its own host name.
 
 While it answers, the gateway waits for its modem when it cannot reach it (trying every five

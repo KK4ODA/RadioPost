@@ -52,6 +52,11 @@ usage: radiopost-po --dir DIR COMMAND
   deliver --to ADDR --from ADDR --subject TEXT --air FILE [--licensed]
                      put a message's air form in a mailbox by hand
   revoke --device KEY revoke every credential of a device key (base64url or hex)
+  gateways           the gateways registered here: each one's account, credentials and copies
+  unregister --callsign CALL
+                     withdraw a gateway's registration (RP-5 §7.7), whoever registered it: it
+                     leaves the gateway list, its credentials are revoked, and the copies placed
+                     there are dropped (the mail stays in the mailboxes)
   applications [--open | --close]
                      the applications for accounts (RP-5 §6.7); open or close them
   licences [--on | --off | --fetch | --from ZIP]
@@ -993,6 +998,27 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
             println!("revoked serials {}", answer["revoked"]);
             Ok(())
         }
+        "gateways" => {
+            let answer = admin(&files, "GET", "/gateways", &Json::Null)?;
+            print_gateways(&answer);
+            Ok(())
+        }
+        "unregister" => {
+            let callsign = a.need("--callsign")?.to_uppercase();
+            let answer = admin(
+                &files,
+                "DELETE",
+                &format!("/gateways/{callsign}"),
+                &Json::Null,
+            )?;
+            println!(
+                "{} is no longer registered here: off the gateway list, credentials {} revoked, \
+                 the copies placed there dropped",
+                answer["callsign"].as_str().unwrap_or(&callsign),
+                answer["revoked"]
+            );
+            Ok(())
+        }
         "applications" => applications(&files, a),
         "licences" => licences(&dir, &files, a),
         "qrz" => {
@@ -1019,6 +1045,39 @@ fn run(a: &Args, command: &str) -> Result<(), String> {
         }
         "check" => check(&files, a),
         _ => Err(format!("unknown command {command}\n{USAGE}")),
+    }
+}
+
+/// `gateways`: each gateway registered here, who registered it and what it holds.
+fn print_gateways(answer: &Json) {
+    let gateways = answer["gateways"].as_array().cloned().unwrap_or_default();
+    if gateways.is_empty() {
+        println!("no gateway is registered here");
+    }
+    for g in gateways {
+        let serials: Vec<String> = g["credentials"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|c| {
+                let revoked = if c["revoked"] == true { " revoked" } else { "" };
+                format!("{}{revoked}", c["serial"])
+            })
+            .collect();
+        println!(
+            "{}  operator {}, registered from {}; {}; credentials {}; {} items placed, not yet \
+             acknowledged",
+            g["callsign"].as_str().unwrap_or(""),
+            g["operator"].as_str().unwrap_or("?"),
+            g["address"].as_str().unwrap_or("an account not known here"),
+            g["record"]["place"].as_str().unwrap_or("no place given"),
+            if serials.is_empty() {
+                "none issued here".to_owned()
+            } else {
+                serials.join(", ")
+            },
+            g["placed"]
+        );
     }
 }
 
