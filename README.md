@@ -36,6 +36,40 @@ Mail goes both ways in one call.</sub></p>
 > [releases page](https://github.com/KK4ODA/RadioPost/releases), and the programs update
 > themselves. The protocols RP-0 to RP-6 are Stable.
 
+## What sets it apart
+
+Email by radio is not new. This is what RadioPost does differently:
+
+* **Your own address.** An ordinary email address at your post office's domain, such as
+  `ana@radiopost.org` or your club's own, not a callsign at one shared domain.
+* **No central server.** Clubs and groups run post offices on their own domains, and these work
+  as one network, as email providers do. Adding a gateway or a post office needs nobody's
+  permission.
+* **Any gateway serves any user.** A gateway checks your credential itself, with no Internet
+  needed for the check, and passes your session to your own post office, whoever runs the gateway.
+* **Open from end to end.** The protocols are published, with test vectors and a conformance
+  tester, and the client, the gateway and the post office are open source. Anyone can write a
+  program that works with everyone else's. Nothing is encrypted, and every byte RadioPost sends
+  follows a published format: over Aether, whose waveform is published too, anyone can read a
+  recorded session.
+* **Any modem.** One protocol over Aether HF, Mercury, VARA HF and FM, ARDOP, AX.25 packet or
+  TCP, each through a small adapter. A gateway can answer on several modems.
+* **Mail keeps moving when the Internet is down.** Your usual gateway holds copies of your new
+  mail ahead of time, keeps what you send, hands mail between its own users at once, and can pass
+  its queue by radio to a partner gateway that still reaches the Internet.
+* **Few turnarounds.** A gateway session takes five transmissions, where the usual radio mail
+  exchange takes eight to ten. The list of what waits comes first, and you choose what to fetch.
+* **Nothing sent twice.** A message is named by its content, so one you already hold is never
+  sent again, through any gateway. A message cut off by a lost link resumes from the last byte
+  received, through any gateway.
+* **A key for each computer.** Each computer signs your sessions with a key of its own that never
+  leaves it, and your post office can revoke one device without touching the others.
+* **Forms by their values.** An ICS-213 goes as the values you typed, in about a fifth less air
+  time than its text. It shows as the form at the other station and prints as FEMA's paper
+  ICS 213.
+* **Alerts with no session.** A one-line alert reaches one station or a whole circle as a short
+  broadcast, on a path too weak for a session, and can sound an alarm there until someone answers.
+
 ## How it works
 
 ![Your station, a gateway, your post office and anyone with email, joined left to right by radio, the Internet and ordinary email](docs/manual/fig/overview.svg)
@@ -58,36 +92,61 @@ stations can also send mail to each other directly, with no gateway and no Inter
 
 ## What you can do
 
-**Read and answer as you would any email.** Reply, reply all, forward, an address book,
-attachments. A large attachment waits at your post office until you ask for it on a call.
+**Read and answer as you would any email.** Reply, reply all, forward, attachments. Change a
+message in the outbox until it goes. Print a message or make a PDF of it, and save the files it
+carries. A large attachment waits at your post office until you ask for it on a call.
 
 <p align="center"><img src="docs/images/readme-reader.png" width="620" alt="A message open in RadioPost, with Reply, Reply all and Forward, and an attachment held at the post office with a button to ask for it on the next call"></p>
 
 **Send a form in less air time.** Choose ICS-213 General Message under **Form** and fill in its
 fields. Only what you type goes on the air, so a short ICS-213 takes about a fifth less time than
-the same text typed out. The station that receives it shows the whole form, and someone reading by
-email gets it as text with its labels. [Writing a message](docs/manual/manual.md#7-writing-a-message)
-says more.
+the same text typed out. The station that receives it shows the whole form and prints it as
+FEMA's paper ICS 213, and someone reading by email gets it as text with its labels.
+[Writing a message](docs/manual/manual.md#7-writing-a-message) says more.
 
 <p align="center"><img src="docs/images/readme-form.png" width="620" alt="The New message form with ICS-213 General Message chosen: To, Subject, and the form's fields filled in for a shelter asking a county EOC for cots and water"></p>
 
 **Find a gateway near you.** The list comes from your post office and the ones it knows, sorted
 by distance from your grid square, with each gateway's channels and hours. It is kept for when
-there is no Internet.
+there is no Internet. Pick a channel and RadioPost tunes the radio there, and keys a tuner tone
+when you ask. A gateway that scans several channels is reached on any of them: RadioPost keeps
+calling until it comes round.
 
 <p align="center"><img src="docs/images/readme-gateways.png" width="700" alt="The Gateways list: three gateways with where they are, how far, their channels and their hours, each with a Choose button"></p>
+
+**Mail station to station**, with no gateway and no Internet. Switch on **Listen for P2P** and
+RadioPost answers calls to any of your callsigns, session after session, until you switch it off.
+To call, give the other station's callsign, the dial and the bandwidth. When you next have the
+Internet, **Send reports** tells your post office, which marks the mail delivered.
+
+**Raise an alert.** Stations that share a keyword make a circle: a family, a net, a team. An
+alert to one of them, or to all of them, needs no call. At the other station it can sound an
+alarm and bring RadioPost to the front until someone answers: *Received*, *Calling you now*, or a
+line of their own. Anyone can read an alert, but only the circle's stations can raise one.
+[Alerts](docs/manual/manual.md#101-alerts) says how.
+
+<p align="center"><img src="docs/manual/screens/client-alarm.png" width="620" alt="An alert from KK4ODA in the circle Family, Please call me on 146.52 now, with Acknowledge, Call back, three quick replies and a line of your own"></p>
+
+**Keep your contacts and your callsigns.** Import contacts from a phone, Google, Outlook or
+Thunderbird, and make groups for a net or a shelter team. Choose how mail from each address
+sounds, from silent to an alarm, with quiet hours. Work several callsigns, such as your own and
+your club's, each with its own account and mail.
 
 **Run a gateway for others.** RadioPost Gateway answers calls by itself and passes each session to
 the caller's post office. It shows who is calling, the copies it holds for when the Internet is
 down, and which callers you refuse. It runs on the same Aether station as a Winlink gateway, on
-one radio. It can also answer on several modems, one session at a time: Aether and Mercury on one
-radio, or Aether on HF and packet on VHF.
+one radio. With Aether it can scan up to four channels, and its registration tells callers how
+long to keep calling. It can also answer on several modems, one session at a time: Aether and
+Mercury on one radio, or Aether on HF and packet on VHF. You choose which of your accounts
+registers it, and can unregister it to move it to another post office.
 
 ![RadioPost Gateway during a session: its modem, post offices, registration, the copies it holds, refused callers, partners, and the session under way with N0CALL](docs/images/readme-gateway.png)
 
 **Run a post office for your club.** Your own domain, your own rules, nobody's permission. The
-desk takes applications, checks each callsign against the FCC's licence list, makes the
-mailboxes, and watches the server's health and backups.
+desk takes applications and checks each callsign against the FCC's licence list. It flags what
+looks wrong, such as a club callsign asked for by a stranger, or an address no reply can reach.
+It makes every account's mailbox, sets a new password for someone who lost theirs, and watches
+the server's health and backups.
 
 <p align="center"><img src="docs/images/readme-desk.png" width="700" alt="The post office desk's Accounts tab: addresses, names, each account's devices with Revoke, and the mail waiting"></p>
 
@@ -114,8 +173,13 @@ three minutes at 2300 Hz, and in under eight at 500 Hz. This is what the gateway
 delivery curves and the constellations, is in
 <a href="https://github.com/KK4ODA/aether-hf#on-the-air">Aether's README</a>.</sub></p>
 
-Aether keys the radio, checks the band rules before every transmission and sends the Morse
-identifier. One Aether station serves RadioPost and Winlink programs side by side, on one radio.
+On 2026-11-17 and 18 the same two stations worked 40 m at 2300 Hz, the gateway scanning 7.101
+and 3.590 MHz: a 52 kB attachment crossed at about 920 bit/s, and P2P mail crossed between two
+RadioPost clients under heavy QRM, an ICS-213 among it.
+
+Aether keys the radio, checks the band rules before every transmission and identifies the
+station, in Morse or in its data signal. One Aether station serves RadioPost and Winlink programs
+side by side, on one radio.
 
 ## Other modems
 
@@ -132,9 +196,10 @@ runs beside it ([RP-4](spec/rp-0004-modem-interface.md)). RadioPost's tools hold
 
 Start the adapter and put its address, such as `127.0.0.1:8600`, in RadioPost's **Modem** box. A
 gateway adds its modems under **More modems**
-([More than one modem](docs/manual/manual.md#more-than-one-modem)). The VARA, ARDOP and packet
-adapters are new and come with the next release. Only Aether has carried RadioPost on the air so
-far, so a report from a station on any of the others is welcome. A sixth adapter, `radiopost-tcp`,
+([More than one modem](docs/manual/manual.md#more-than-one-modem)). The adapters are in the tools
+archive on the [releases page](https://github.com/KK4ODA/RadioPost/releases). Alerts, scanning
+and the tuner tone need Aether. Only Aether has carried RadioPost on the air so far, so a report
+from a station on any of the others is welcome. A sixth adapter, `radiopost-tcp`,
 joins two stations over the Internet, to try RadioPost before going on the air.
 
 ## Get started
@@ -187,7 +252,7 @@ office or modem adapter from the specifications, and it will work with everyone 
 
 | You are building | Start with |
 |---|---|
-| A client | RP-1, RP-2, RP-3; RP-4 to drive a modem |
+| A client | RP-1, RP-2, RP-3; RP-4 to drive a modem; RP-8 for alerts |
 | A gateway | RP-1, RP-2, RP-3, RP-5; RP-4 to drive modems; RP-7 to forward when cut off |
 | A post office | RP-1, RP-2, RP-5, RP-6 |
 | An adapter for a modem | RP-4 |
@@ -203,10 +268,11 @@ against RadioPost's over the Internet.
 
 **RP-0 to RP-6 are Stable** (1.0.0 on 2026-11-15): radiopost.org's pilot runs them, and a change
 an existing implementation cannot ignore now comes only with a new protocol version (RP-0 §8.3).
-Since then, RP-2 and RP-6 1.1.0 have added forms, which a program that does not show them need
-not handle, and RP-4 1.0.3 describes the VARA, ARDOP and packet adapters. RP-7, forwarding between
-gateways, is still a draft. All eight are written, with test vectors for
-RP-1 to RP-7.
+Since then they have had only minor versions, additions an existing implementation can ignore:
+forms (RP-2 and RP-6 1.1.0), gateways that scan and the tuner tone (RP-4 1.1.0 and 1.2.0, RP-5
+1.1.0), and withdrawing a gateway's registration (RP-5 1.2.0). RP-4 also describes the VARA,
+ARDOP and packet adapters. RP-7, forwarding between gateways, and RP-8, alerts, are drafts. All
+nine are written, with test vectors for RP-1 to RP-8.
 
 The programs follow the [order of work](docs/design/00-detailed-design.md#9-order-of-work), in
 Rust, each checked against the test vectors:
@@ -218,8 +284,10 @@ Rust, each checked against the test vectors:
   published commands, one for ARDOP (ardopcf), one for AX.25 packet through a TNC's AGWPE port
   (Dire Wolf), and one for TCP.
 * **The client** ([`app/client`](app/client/README.md)): mail to another station or through a
-  gateway, on the command line, from its panel in a browser, or as a desktop application.
-* **The gateway**: it answers users' calls, on one modem or several, and carries their sessions to
+  gateway, and alerts to a circle, on the command line, from its panel in a browser, or as a
+  desktop application.
+* **The gateway**: it answers users' calls, on one modem or several, scanning its channels with
+  Aether, and carries their sessions to
   their post offices, as a desktop application of its own, RadioPost Gateway
   ([`app/gateway`](app/gateway/README.md), [the operator's guide](docs/user/gateway.md)). When the Internet is down it serves the copies of
   users' mail placed ahead with it, queues what they send, and reports it all when the Internet is
