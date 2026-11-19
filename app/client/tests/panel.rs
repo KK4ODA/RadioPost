@@ -559,6 +559,170 @@ fn listening_from_the_panel_stays_on_until_pressed_again() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The content ID the panel gave a message written.
+fn written(v: &Value) -> String {
+    v["id"].as_str().expect("an id").to_owned()
+}
+
+/// A house station may listen for P2P for days (the 40 m sessions of 2026-11-18), so mail is
+/// written, edited and deleted while it waits; the modem stays the station's. The next station to
+/// call takes what was written: the message written and the one edited go, the one deleted stays
+/// in the trash. Messages written as the call comes in are carried or stay in the outbox, never
+/// lost to the session's own save; during the session they are refused, saying why.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
+fn mail_written_while_listening_goes_to_the_next_caller() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let dir = scratch("panel-listen-write");
+    store_for(&dir.join("ana"), "device:ana", "ana");
+    let mut facundo = store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    let c = Client {
+        at: Panel::new(&dir.join("ana"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let (_server, at_f, at_a) = loopback();
+    c.post("/api/listen", &json!({"adapter": at_a.to_string()}))
+        .expect("listening");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let said = |line: &str| c.get("/api/log?since=0").to_string().contains(line);
+    while !said("listening as N0CALL") {
+        assert!(Instant::now() < deadline, "never listened");
+        thread::sleep(Duration::from_millis(20));
+    }
+
+    // written, deleted and edited while the station waits for a call
+    let write = |subject: &str| {
+        written(
+            &c.post(
+                "/api/compose",
+                &json!({"to": "facundo@radiopost.org", "subject": subject, "body": "73"}),
+            )
+            .expect("written while listening"),
+        )
+    };
+    let kept = write("kept");
+    let gone = write("gone");
+    let draft = write("draft");
+    c.post("/api/delete", &json!({"folder": "outbox", "id": gone}))
+        .expect("deleted while listening");
+    assert_eq!(c.get(&format!("/api/edit?id={draft}"))["subject"], "draft");
+    let edited = written(
+        &c.post(
+            "/api/compose",
+            &json!({"edit": draft, "to": "facundo@radiopost.org", "subject": "edited",
+                    "body": "73 de N0CALL"}),
+        )
+        .expect("edited while listening"),
+    );
+    let a = c.get("/api/state")["activity"].clone();
+    assert_eq!(
+        (&a["state"], &a["listen"]),
+        (&json!("listening"), &json!(true))
+    );
+
+    // the modem stays the station's: no call, no tuning, no tuner tone while it listens
+    let modem = at_a.to_string();
+    for (path, body) in [
+        ("/api/call", json!({"callsign": "kk4oda", "adapter": modem})),
+        ("/api/tune", json!({"adapter": modem, "dial_hz": 7_103_000})),
+        ("/api/tone", json!({"adapter": modem, "on": true})),
+    ] {
+        let why = c.post(path, &body).expect_err("the modem is listening");
+        assert!(why.contains("listening for P2P"), "{path}: {why}");
+    }
+
+    // a station calls while more is written
+    let stop = Arc::new(AtomicBool::new(false));
+    let writer = {
+        let (stop, at) = (Arc::clone(&stop), c.at);
+        thread::spawn(move || {
+            let c = Client { at };
+            let (mut taken, mut refused) = (Vec::new(), Vec::new());
+            for n in 0.. {
+                if stop.load(Ordering::Relaxed) {
+                    break;
+                }
+                let body = json!({"to": "facundo@radiopost.org", "subject": format!("as it calls {n}"),
+                                  "body": "73"});
+                match c.post("/api/compose", &body) {
+                    Ok(v) => taken.push(written(&v)),
+                    Err(why) => refused.push(why),
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+            (taken, refused)
+        })
+    };
+    thread::sleep(Duration::from_millis(100));
+    let called = session::call(
+        &mut facundo,
+        "N0CALL",
+        session::Kind::Station,
+        &Options::new(&at_f.to_string()),
+        &mut |_| {},
+    )
+    .expect("called");
+    assert_eq!(called.failed, None);
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while !said("listening again") {
+        assert!(Instant::now() < deadline, "never listened again");
+        thread::sleep(Duration::from_millis(20));
+    }
+    thread::sleep(Duration::from_millis(100));
+    stop.store(true, Ordering::Relaxed);
+    let (taken, refused) = writer.join().expect("the writer");
+    for why in &refused {
+        assert!(why.contains("a session is under way"), "{why}");
+    }
+
+    // nothing written is lost: each message is carried to Facundo or waits in the outbox
+    let ana = radiopost_client::store::Store::open(&dir.join("ana")).expect("Ana's home");
+    let sent: Vec<String> = ana.sent.iter().map(radiopost::ContentId::text).collect();
+    let outbox: Vec<String> = ana.outbox.iter().map(|w| w.id.text()).collect();
+    for id in [&kept, &edited] {
+        assert!(
+            sent.contains(id),
+            "{id} was written before the call: {sent:?}"
+        );
+    }
+    for id in &taken {
+        assert!(
+            sent.contains(id) || outbox.contains(id),
+            "{id} is lost: sent {sent:?}, outbox {outbox:?}"
+        );
+        ana.message(&ana.find(id).expect("kept")).expect("its file");
+    }
+    let mut carried: Vec<String> = facundo.inbox.iter().map(|m| m.id.text()).collect();
+    let mut went = sent.clone();
+    carried.sort();
+    went.sort();
+    assert_eq!(carried, went, "what Ana sent is what Facundo has");
+    assert!(!sent.contains(&gone) && !outbox.contains(&gone));
+    assert_eq!(ana.trash.len(), 1, "the one deleted");
+    assert!(
+        !sent.contains(&draft) && !outbox.contains(&draft),
+        "the edit took its place"
+    );
+
+    // and listening goes on, the switch still on, mail still written
+    let a = c.get("/api/state")["activity"].clone();
+    assert_eq!(
+        (&a["state"], &a["listen"], &a["failed"]),
+        (&json!("listening"), &json!(true), &Value::Null),
+        "{a}"
+    );
+    write("after the call");
+    c.post("/api/stop", &json!({})).expect("stopped");
+    while c.get("/api/state")["activity"]["state"] != "idle" {
+        assert!(Instant::now() < deadline, "never stopped");
+        thread::sleep(Duration::from_millis(20));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The address list: whom a message was written to is kept with the names typed, one is added
 /// and renamed by hand, one is taken off and put back as it was, and the list changes while a
 /// session runs (it is a file of its own, which the session never writes).
@@ -633,9 +797,10 @@ fn the_address_list_learns_and_forgets() {
 }
 
 /// The trash: a message deleted from the outbox is listed there with the folder it came from,
-/// goes back, and goes for good; the trash is emptied; and nothing changes while a session runs,
-/// which keeps the folders until it ends.
+/// goes back, and goes for good; the trash is emptied; listening for P2P, the folders change
+/// between calls; and nothing changes during a call, which keeps the folders until it ends.
 #[test]
+#[allow(clippy::too_many_lines, reason = "one story, told in order")]
 fn messages_go_to_the_trash_and_back() {
     let dir = scratch("panel-trash");
     store_for(&dir.join("ana"), "device:ana", "ana");
@@ -708,7 +873,7 @@ fn messages_go_to_the_trash_and_back() {
     );
     assert_eq!((count("outbox"), count("trash")), (0, 0));
 
-    // a session keeps the folders until it ends
+    // listening for P2P, the folders change between calls
     let three = write("three");
     let (_server, _, at_a) = loopback();
     c.post("/api/listen", &json!({"adapter": at_a.to_string()}))
@@ -718,18 +883,42 @@ fn messages_go_to_the_trash_and_back() {
         assert!(Instant::now() < deadline, "never listened");
         thread::sleep(Duration::from_millis(20));
     }
+    c.post("/api/delete", &json!({"folder": "outbox", "id": three}))
+        .expect("deleted while listening");
+    assert_eq!((count("outbox"), count("trash")), (0, 1));
+    c.post("/api/restore", &json!({"id": three, "was": "outbox"}))
+        .expect("put back while listening");
+    assert_eq!((count("outbox"), count("trash")), (1, 0));
+    c.post("/api/stop", &json!({})).expect("stopped");
+    while c.get("/api/state")["activity"]["state"] != "idle" {
+        assert!(Instant::now() < deadline, "never stopped");
+        thread::sleep(Duration::from_millis(20));
+    }
+
+    // a call keeps the folders until it ends: here one nobody answers, given up after 10 s
+    c.post(
+        "/api/call",
+        &json!({"callsign": "kk4oda", "station": true, "adapter": at_a.to_string()}),
+    )
+    .expect("calling");
     let refused = c
         .post("/api/delete", &json!({"folder": "outbox", "id": three}))
-        .expect_err("refused while listening");
-    assert!(refused.contains("session"), "{refused}");
-    c.post("/api/stop", &json!({})).expect("stopped");
+        .expect_err("refused during a call");
+    assert!(refused.contains("a session is under way"), "{refused}");
+    assert_eq!(count("outbox"), 1);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while c.get("/api/state")["activity"]["state"] != "idle" {
+        assert!(Instant::now() < deadline, "the call was never given up");
+        thread::sleep(Duration::from_millis(50));
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// An outbox message edited from the panel (the author's notes of 2026-11-18): the composer is
 /// filled in with everything it holds, the ICS-213's values with it; the message saved takes the
-/// old one's place, and the old one is gone. An edit is refused, saying why, while listening,
-/// while a call may be carrying the message, and once it is queued at a gateway or sent.
+/// old one's place, and the old one is gone. Listening for P2P, it is saved between calls. An
+/// edit is refused, saying why, while a call may be carrying the message, and once it is queued
+/// at a gateway or sent.
 #[test]
 #[allow(clippy::too_many_lines, reason = "one story, told in order")]
 fn an_outbox_message_is_edited_in_its_place() {
@@ -878,7 +1067,7 @@ fn an_outbox_message_is_edited_in_its_place() {
     assert_eq!(status, 400);
     assert!(why.contains("queued at N1CALL-10"), "{why}");
 
-    // listening, a station that calls may take it
+    // listening for P2P, it is changed between calls
     let (_quiet, at_l, _) = loopback();
     c.post("/api/listen", &json!({"adapter": at_l.to_string()}))
         .expect("listening");
@@ -887,13 +1076,14 @@ fn an_outbox_message_is_edited_in_its_place() {
         assert!(Instant::now() < deadline, "never listened");
         thread::sleep(Duration::from_millis(20));
     }
-    let why = c
+    assert_eq!(c.get(&format!("/api/edit?id={last}"))["subject"], "last");
+    let saved = c
         .post(
             "/api/compose",
-            &json!({"edit": last, "to": "x@example.com"}),
+            &json!({"edit": last, "to": "maria@example.com", "subject": "last, between calls"}),
         )
-        .expect_err("listening");
-    assert!(why.contains("while listening"), "{why}");
+        .expect("saved while listening");
+    assert_eq!(saved["replaced"], last.as_str());
     c.post("/api/stop", &json!({})).expect("stopped");
     while c.get("/api/state")["activity"]["state"] != "idle" {
         assert!(Instant::now() < deadline, "never stopped");

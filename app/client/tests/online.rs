@@ -387,6 +387,34 @@ fn panel_log(at: std::net::SocketAddr) -> Vec<String> {
         .collect()
 }
 
+/// A change asked of the panel at `at`: what it answered, or its error.
+fn panel_post(
+    at: std::net::SocketAddr,
+    path: &str,
+    body: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    use std::io::{Read as _, Write as _};
+    let mut s = std::net::TcpStream::connect(at).expect("the panel");
+    let body = body.to_string();
+    write!(
+        s,
+        "POST {path} HTTP/1.1\r\nHost: {at}\r\nX-RadioPost: 1\r\nContent-Type: application/json\r\n\
+         Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
+    .expect("asked");
+    let mut answer = String::new();
+    s.read_to_string(&mut answer).expect("answered");
+    let ok = answer.starts_with("HTTP/1.1 200");
+    let v: serde_json::Value =
+        serde_json::from_str(answer.split_once("\r\n\r\n").map_or("", |(_, b)| b)).expect("JSON");
+    if ok {
+        Ok(v)
+    } else {
+        Err(v["error"].as_str().unwrap_or("").to_owned())
+    }
+}
+
 /// Facundo's home at `home`, enrolled with the post office at `base` with a code its operator
 /// made.
 fn enroll(running: &Running, base: &str, public: &str, home: &Path) {
@@ -474,6 +502,64 @@ fn the_open_window_renews_the_credential_in_its_last_month() {
     assert_eq!(failed.len(), 1, "{log:?}");
     assert!(failed[0].ends_with("trying again every hour, and on the next gateway call"));
     assert_eq!(me().serial, after.serial, "nothing kept");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A house station listens for P2P for days (the 40 m sessions of 2026-11-18): its window renews
+/// the credential while it listens, by itself and from Setup, without taking the station, which
+/// goes on listening.
+#[test]
+fn the_window_renews_the_credential_while_listening_for_p2p() {
+    use radiopost_client::panel::Panel;
+
+    let dir = scratch("renewal-listening");
+    let (running, base, public) = post_office(&dir.join("po"));
+    let home = dir.join("facundo");
+    enroll(&running, &base, &public, &home);
+    let serial = || {
+        Store::open(&home)
+            .expect("home")
+            .me()
+            .expect("a credential")
+            .serial
+    };
+    let before = serial();
+    // its first try a second after the window opens, by when the station listens
+    let at = Panel::new(&home, None)
+        .with_renewal(
+            Duration::from_secs(1),
+            Duration::from_secs(3600),
+            100 * 86_400,
+        )
+        .start("127.0.0.1:0")
+        .expect("a panel");
+    let (_server, at_f, _) = loopback();
+    panel_post(at, "/api/listen", &json!({"adapter": at_f.to_string()})).expect("listening");
+    wait_until("renewed", || serial() != before);
+    let lines = panel_log(at);
+    let at_line = |start: &str| lines.iter().position(|l| l.starts_with(start));
+    let listening = at_line("listening as KK4ODA").expect("listening");
+    let renewed = at_line("renewed the credential over the Internet: credential").expect("renewed");
+    assert!(listening < renewed, "renewed while listening: {lines:?}");
+    let listens = || {
+        let a = panel_get(at, "/api/state")["activity"].clone();
+        (a["state"].clone(), a["listen"].clone())
+    };
+    assert_eq!(listens(), (json!("listening"), json!(true)));
+
+    // Setup's Renew credential, while it listens
+    let now = serial();
+    let said = panel_post(at, "/api/renew", &json!({})).expect("renewed from Setup");
+    assert!(
+        said["said"]
+            .as_str()
+            .is_some_and(|s| s.starts_with("credential ") && s.ends_with("(KK4ODA)")),
+        "{said}"
+    );
+    assert_ne!(serial(), now, "kept at once, no session holding the home");
+    assert_eq!(listens(), (json!("listening"), json!(true)));
+    panel_post(at, "/api/stop", &json!({})).expect("stopped");
+    wait_until("idle", || listens().0 == "idle");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

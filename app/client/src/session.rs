@@ -1585,7 +1585,10 @@ pub enum Listening {
 /// connection that failed is opened again; while the adapter cannot be reached or refuses (the
 /// modem away, Aether restarting), it is tried again every [`LISTEN_RETRY`], each reason said
 /// once. The home at `home` is opened afresh for each call, so a session offers what was written
-/// since the last. `stop` set during a session ends listening once the session is over.
+/// since the last: `told` hears [`Listening::Called`] before the home is opened, and
+/// [`Listening::Ended`] once the session's last save is done, so a window that changes the home
+/// between sessions can keep its changes and the session's from meeting (the panel's lock).
+/// `stop` set during a session ends listening once the session is over.
 pub fn keep_listening(
     home: &std::path::Path,
     opts: &Options,

@@ -325,17 +325,32 @@ fn ask(store: &Store, method: &str, path: &str, body: Option<&Value>) -> Result<
 ///
 /// The post office could not be reached or refused.
 pub fn renew(store: &Store) -> Result<String, Error> {
+    let bytes = renewal(store)?;
+    Ok(described(&store.set_credential(&bytes)?))
+}
+
+/// RP-5 §6.2: a new credential for this device, as the post office issued it, not yet kept: the
+/// panel keeps it only between sessions ([`Store::set_credential`]).
+///
+/// # Errors
+///
+/// The post office could not be reached or refused.
+pub fn renewal(store: &Store) -> Result<Vec<u8>, Error> {
     let answer = ask(store, "POST", "/credentials", Some(&json!({})))?;
-    let bytes = answer
+    answer
         .get("credential")
         .and_then(Value::as_str)
         .and_then(radiopost::base64url::decode)
-        .ok_or("the post office's answer held no credential")?;
-    let body = store.set_credential(&bytes)?;
-    Ok(format!(
+        .ok_or_else(|| "the post office's answer held no credential".into())
+}
+
+/// A credential as a renewal says it: its serial, address and callsign.
+#[must_use]
+pub fn described(body: &radiopost::credential::Body) -> String {
+    format!(
         "credential {} for {} ({})",
         body.serial, body.address, body.operator
-    ))
+    )
 }
 
 /// A document from a post office's API, as text.

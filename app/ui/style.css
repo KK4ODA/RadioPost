@@ -229,6 +229,7 @@ button[data-armed] { border-color: var(--bad); color: var(--bad); }
 .reader-acts { margin: 0 0 14px; }
 .reader-acts #back { margin: 0; }
 body[data-busy="true"] .needs-idle { opacity: .4; pointer-events: none; }
+body[data-home="held"] .changes-home { opacity: .4; pointer-events: none; }
 .toast { display: flex; align-items: center; gap: 12px; }
 .toast button { height: 26px; padding: 0 10px; background: transparent; color: inherit;
                 border-color: currentColor; }

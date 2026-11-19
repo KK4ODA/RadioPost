@@ -104,7 +104,7 @@
       <section id="list-view">
         <div class="head">
           <h1 id="folder-title">Inbox</h1>
-          <button class="quiet danger needs-idle" id="empty-trash" title="Delete every message in the trash for good" hidden>Empty trash</button>
+          <button class="quiet danger changes-home" id="empty-trash" title="Delete every message in the trash for good" hidden>Empty trash</button>
         </div>
         <table class="list" aria-label="Messages">
           <thead><tr><th id="who-col" title="Who wrote it">From</th><th title="What it is about">Subject</th><th title="When it was written">Date</th><th class="acts"></th></tr></thead>
@@ -245,10 +245,10 @@
           <button class="quiet" id="r-reply" title="Answer the sender, in the message's thread at the other end too. The original is not quoted: every byte goes on the air">Reply</button>
           <button class="quiet" id="r-reply-all" title="Answer the sender, and copy everyone else it went to but you">Reply all</button>
           <button class="quiet" id="r-forward" title="Pass it on to someone else, with its text and files">Forward</button>
-          <button class="quiet needs-idle" id="r-edit" title="Change it before it goes: the changed message takes its place in the outbox" hidden>Edit</button>
-          <button class="quiet needs-idle" id="r-delete" title="Move it to the trash (Delete key)">Delete</button>
-          <button class="quiet needs-idle" id="r-restore" title="Put it back in the folder it was deleted from">Restore</button>
-          <button class="quiet danger needs-idle" id="r-purge" title="Delete it for good">Delete forever</button>
+          <button class="quiet changes-home" id="r-edit" title="Change it before it goes: the changed message takes its place in the outbox" hidden>Edit</button>
+          <button class="quiet changes-home" id="r-delete" title="Move it to the trash (Delete key)">Delete</button>
+          <button class="quiet changes-home" id="r-restore" title="Put it back in the folder it was deleted from">Restore</button>
+          <button class="quiet danger changes-home" id="r-purge" title="Delete it for good">Delete forever</button>
         </div>
         <h1 id="r-subject"></h1>
         <dl class="fields">

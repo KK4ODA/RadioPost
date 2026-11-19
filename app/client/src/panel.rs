@@ -7,10 +7,15 @@
 //! callsign chosen ([`crate::callsigns`]), which the header's list changes between sessions. A
 //! session runs on a thread of its own with a store of its own; while it runs, the panel changes
 //! nothing in the home, and the callsign chosen stays, so the two never write over each other.
+//! Between sessions, idle or listening for P2P, the panel writes, edits, deletes and marks
+//! messages under the activity's lock (`Panel::between_sessions`), which a call that comes takes
+//! before its session opens the home: what was written is offered, and nothing written is lost to
+//! the session's own save.
 //!
 //! While it is open, the panel renews every callsign's credential over the Internet in its last
-//! month ([`crate::renewal`]): when it starts and every hour, between sessions, as the activity
-//! `renewing`.
+//! month ([`crate::renewal`]): when it starts and every hour, between sessions. Idle, the station
+//! is taken as the activity `renewing`; listening, it is not, so a station calling never waits for
+//! the post office, and only the keeping is between sessions (`Panel::renew`).
 //!
 //! While it runs and its modem is Aether, it holds a connection that says who it is and nothing
 //! more ([`crate::presence`]), so Aether names the app between calls too. That connection, and a
@@ -140,6 +145,19 @@ struct Renewal {
 
 fn lock(a: &Mutex<Activity>) -> MutexGuard<'_, Activity> {
     a.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Why a request that needs the station is refused while it is in `state`.
+fn why_busy(state: &str) -> Error {
+    match state {
+        "renewing" => "renewing the credential: try again in a moment",
+        "alerting" => "an alert is going out: try again in a moment",
+        "listening" => {
+            "the station is listening for P2P calls: click Listening for P2P to stop it first"
+        }
+        _ => "a session is under way: try again when it ends",
+    }
+    .into()
 }
 
 fn now() -> u64 {
@@ -494,8 +512,8 @@ impl Panel {
     }
 
     /// One try for the credential at `home`: what to say of it, if anything (`said` is what was
-    /// said of its last failure). Only between sessions, as the activity `renewing`, so a session
-    /// and a renewal never write a home together.
+    /// said of its last failure). Only while the station is idle or listening ([`Panel::renew`]):
+    /// during a call or a session it waits for the next hour.
     fn renew_now(&self, home: &Path, said: &mut String) -> Option<String> {
         let Ok(me) = Store::open(home).and_then(|s| s.me()) else {
             return None;
@@ -504,15 +522,9 @@ impl Panel {
         if !crate::renewal::due(me.expires, now, self.renewal.within) {
             return None;
         }
-        {
-            let mut a = lock(&self.activity);
-            if a.state != "idle" {
-                return None;
-            }
-            a.state = "renewing";
-        }
-        let result = Store::open(home).and_then(|store| online::renew(&store));
-        lock(&self.activity).state = "idle";
+        let Ok(result) = self.renew(home) else {
+            return None;
+        };
         match result {
             Ok(issued) => {
                 said.clear();
@@ -533,6 +545,74 @@ impl Panel {
                 Some(line)
             }
         }
+    }
+
+    /// Renews the credential at `home` over the Internet: refused (the outer error, saying why)
+    /// while a call, a session, an alert or another renewal holds the station; otherwise the
+    /// try's line, or why it failed.
+    ///
+    /// The post office may take seconds to answer, so no lock is held while it does. Idle, the
+    /// station is taken as `renewing`, as before, so that nothing starts meanwhile. Listening (a
+    /// house station may listen for days), it is not taken: a station that calls is answered at
+    /// once. Only the keeping, one file renamed into place, waits for no session to hold the home
+    /// ([`Panel::keep_credential`]), so a session and a renewal never write a home together.
+    fn renew(&self, home: &Path) -> Result<Result<String, Error>, Error> {
+        let took = {
+            let mut a = lock(&self.activity);
+            match a.state {
+                "idle" => {
+                    a.state = "renewing";
+                    true
+                }
+                "listening" => false,
+                other => return Err(why_busy(other)),
+            }
+        };
+        let result = Store::open(home)
+            .and_then(|store| online::renewal(&store))
+            .and_then(|bytes| self.keep_credential(home, bytes));
+        if took {
+            lock(&self.activity).state = "idle";
+        }
+        Ok(result)
+    }
+
+    /// Keeps a renewed credential at `home`: now, under the activity's lock, when no call or
+    /// session holds the home; otherwise when it ends, by a thread of its own, so that neither the
+    /// renewal nor the page waits for a session. What to say of it.
+    fn keep_credential(&self, home: &Path, bytes: Vec<u8>) -> Result<String, Error> {
+        let holds = |state: &str| matches!(state, "calling" | "session");
+        {
+            let a = lock(&self.activity);
+            if !holds(a.state) {
+                let kept = Store::open(home)?.set_credential(&bytes)?;
+                drop(a);
+                return Ok(online::described(&kept));
+            }
+        }
+        let body = radiopost::credential::Credential::decode(&bytes)
+            .ok_or("the post office's answer is not a credential")?
+            .body;
+        let (activity, home) = (Arc::clone(&self.activity), home.to_owned());
+        thread::spawn(move || {
+            loop {
+                thread::sleep(std::time::Duration::from_millis(200));
+                let mut a = lock(&activity);
+                if holds(a.state) {
+                    continue;
+                }
+                if let Err(why) = Store::open(&home).and_then(|s| s.set_credential(&bytes)) {
+                    let line = format!("could not keep the renewed credential: {why}");
+                    radiopost::logfile::line(&line);
+                    a.log.push(line);
+                }
+                return;
+            }
+        });
+        Ok(format!(
+            "{}, kept when the session under way ends",
+            online::described(&body)
+        ))
     }
 
     fn handle(&self, mut request: Request) {
@@ -611,31 +691,44 @@ impl Panel {
         lock(&self.activity).state
     }
 
+    /// Refused unless the station is idle: what uses the modem (a call, listening, the dial, the
+    /// tuner tone), what changes who the station is (Setup), what reaches the post office for
+    /// long, and an update, which restarts the program.
     fn busy(&self) -> Result<(), Error> {
         match lock(&self.activity).state {
             "idle" => Ok(()),
-            "renewing" => Err("renewing the credential: try again in a moment".into()),
-            "alerting" => Err("an alert is going out: try again in a moment".into()),
-            _ => Err("a session is under way: try again when it ends".into()),
+            other => Err(why_busy(other)),
         }
     }
 
-    /// [`Panel::busy`] for an edit of an outbox message, saying why the message may be going
-    /// out now: a session holds the outbox until it ends, and sends from it.
-    fn busy_editing(&self) -> Result<(), Error> {
-        let state = lock(&self.activity).state;
-        match state {
+    /// The home held for a quick change of the messages (written, edited, deleted, marked to
+    /// fetch or ask for) while no session can begin: the activity's lock, taken while the station
+    /// is idle or listening between sessions, and held until the change is on disk. A call that
+    /// comes meanwhile waits for it: [`Panel::listen`]'s `Called` takes the same lock and sets
+    /// `session` before [`session::keep_listening`] opens the home for the call, and a call from
+    /// the panel takes the station under it too. So what was written is offered to the caller,
+    /// and the session's own save, which writes the folders whole, keeps it. Refused, saying why,
+    /// while a call, a session, a renewal or an alert holds the station.
+    fn between_sessions(&self) -> Result<MutexGuard<'_, Activity>, Error> {
+        let a = lock(&self.activity);
+        match a.state {
+            "idle" | "listening" => Ok(a),
+            other => Err(why_busy(other)),
+        }
+    }
+
+    /// [`Panel::between_sessions`] for an edit of an outbox message, saying why the message may
+    /// be going out now: a session holds the outbox until it ends, and sends from it.
+    fn editing_between_sessions(&self) -> Result<MutexGuard<'_, Activity>, Error> {
+        let a = lock(&self.activity);
+        match a.state {
+            "idle" | "listening" => Ok(a),
             "calling" | "session" => Err(
                 "this message cannot be changed while a session is under way: it may be going \
                  out now. Edit it when the session ends"
                     .into(),
             ),
-            "listening" => Err(
-                "this message cannot be changed while listening: a station that calls may take \
-                 it at any moment. Stop listening, then edit it"
-                    .into(),
-            ),
-            _ => self.busy(),
+            other => Err(why_busy(other)),
         }
     }
 
@@ -873,11 +966,7 @@ impl Panel {
                 store.save()?;
                 self.state()
             }
-            "/api/renew" => {
-                self.busy()?;
-                let store = Store::open(&self.home())?;
-                Ok(json!({"said": online::renew(&store)?}))
-            }
+            "/api/renew" => Ok(json!({"said": self.renew(&self.home())??})),
             "/api/report" => {
                 self.busy()?;
                 let mut store = Store::open(&self.home())?;
@@ -1056,7 +1145,7 @@ impl Panel {
     /// RP-3 §5.6: asks, on the next call to a gateway, for a received message's held attachments,
     /// those named or all of them.
     fn ask_for_held(&self, body: &Value) -> Result<Value, Error> {
-        self.busy()?;
+        let _held = self.between_sessions()?;
         let mut store = Store::open(&self.home())?;
         let id = store.find(body["id"].as_str().unwrap_or(""))?;
         let names: Vec<String> = body["names"]
@@ -1124,7 +1213,7 @@ impl Panel {
     /// composer gives them. Refused, saying why, for a message that cannot be changed now: one a
     /// session may be sending, or one handed over ([`Store::edit_refusal`]).
     fn edit(&self, prefix: &str) -> Result<Value, Error> {
-        self.busy_editing()?;
+        drop(self.editing_between_sessions()?);
         let store = Store::open(&self.home())?;
         let id = store.find(prefix)?;
         if let Some(why) = store.edit_refusal(&id) {
@@ -1173,14 +1262,17 @@ impl Panel {
     /// With `edit`, it is that outbox message changed, and takes its place ([`Store::replace`]):
     /// it keeps the files of it that `carry` lists (all of them when it lists none) and answers
     /// what it answered, and is refused, saying why, for one that cannot be changed now.
+    ///
+    /// Between sessions only, idle or listening, the home held until the message is on disk
+    /// ([`Panel::between_sessions`]): a station that calls while Listen for P2P is on takes it.
     fn compose(&self, body: &Value) -> Result<Value, Error> {
         let text = |name: &str| body[name].as_str().unwrap_or("").trim().to_owned();
         let editing = body["edit"].as_str().filter(|p| !p.is_empty());
-        if editing.is_some() {
-            self.busy_editing()?;
+        let _held = if editing.is_some() {
+            self.editing_between_sessions()?
         } else {
-            self.busy()?;
-        }
+            self.between_sessions()?
+        };
         let mut store = Store::open(&self.home())?;
         let me = store.me()?;
         let edited = match editing {
@@ -1435,9 +1527,10 @@ impl Panel {
 
     /// The trash: a message moved there from a folder (`delete`, `folder` and `id`), put back
     /// (`restore`) or deleted for good (`purge`, `id` and `was`, the folder it came from), and
-    /// the trash emptied. Not while a session runs: it keeps the folders until it ends.
+    /// the trash emptied. Not while a session runs: it keeps the folders until it ends. Between
+    /// sessions, listening too, the home is held until the change is on disk.
     fn trash(&self, path: &str, body: &Value) -> Result<Value, Error> {
-        self.busy()?;
+        let _held = self.between_sessions()?;
         let mut store = Store::open(&self.home())?;
         let id = || {
             let text = body["id"].as_str().unwrap_or("");
@@ -1470,9 +1563,10 @@ impl Panel {
                 self.gateways()
             }
             (Method::Post, "/api/grid") => {
-                self.busy()?;
+                let held = self.between_sessions()?;
                 let mut store = Store::open(&self.home())?;
                 store.set_grid(Some(&text("grid")))?;
+                drop(held);
                 self.gateways()
             }
             (Method::Get, "/api/waiting") => {
@@ -1481,7 +1575,7 @@ impl Panel {
                 Ok(json!({"via": w["via"], "at": w["at"], "entries": store.waiting_entries()}))
             }
             (Method::Post, "/api/fetch") => {
-                self.busy()?;
+                let _held = self.between_sessions()?;
                 let mut store = Store::open(&self.home())?;
                 let serial = body["serial"].as_u64().ok_or("which message: its serial")?;
                 store.fetch_on_next_call(serial, body["on"].as_bool().unwrap_or(true))?;
@@ -1570,11 +1664,8 @@ impl Panel {
     /// Takes the station for a call or for listening (`state`), when it is idle.
     fn take_station(&self, state: &'static str, remote: Option<String>) -> Result<(), Error> {
         let mut a = lock(&self.activity);
-        match a.state {
-            "idle" => {}
-            "renewing" => return Err("renewing the credential: try again in a moment".into()),
-            "alerting" => return Err("an alert is going out: try again in a moment".into()),
-            _ => return Err("a session is under way".into()),
+        if a.state != "idle" {
+            return Err(why_busy(a.state));
         }
         a.state = state;
         a.remote = remote;
@@ -1668,6 +1759,10 @@ impl Panel {
                         a.held = None;
                     }
                     session::Listening::Called(who) => {
+                        // told before the home is opened for the call, under the lock the panel
+                        // holds while it changes the home (`between_sessions`): a change under
+                        // way is on disk before the session reads the outbox, and none begins
+                        // until the session is over
                         a.state = "session";
                         a.remote = Some(who);
                         a.failed = None;
@@ -1760,4 +1855,88 @@ fn form_of(form: &Value) -> Result<Option<radiopost::forms::Form>, Error> {
     }
     values.sort_by_key(|(n, _)| *n);
     Ok(Some(radiopost::forms::Form { template, values }))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+    use std::time::{Duration, Instant};
+
+    use super::{Panel, Store, lock, thread, unhex};
+
+    /// A field of an entry of one of the vectors' lists, found by its name.
+    fn vector(file: &str, list: &str, (key, name): (&str, &str), field: &str) -> String {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../vectors")
+            .join(file);
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("a vector file"))
+                .expect("JSON");
+        v[list]
+            .as_array()
+            .expect("a list")
+            .iter()
+            .find(|e| e[key] == name)
+            .and_then(|e| e[field].as_str())
+            .expect("the entry")
+            .to_owned()
+    }
+
+    /// A renewal that comes back once a call has taken the station (it was listening when the
+    /// renewal began) keeps the credential only when the session ends, never while the session
+    /// holds the home; between sessions it is kept at once.
+    #[test]
+    fn a_credential_renewed_during_a_session_is_kept_when_it_ends() {
+        let home =
+            std::env::temp_dir().join(format!("radiopost-panel-keep-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let store = Store::open(&home).expect("a home");
+        let seed: [u8; 32] = unhex(&vector(
+            "keys.json",
+            "keys",
+            ("label", "device:ana"),
+            "seed_hex",
+        ))
+        .and_then(|b| b.try_into().ok())
+        .expect("a seed");
+        store
+            .set_device(&ed25519_dalek::SigningKey::from_bytes(&seed))
+            .expect("kept");
+        let bytes = unhex(&vector(
+            "credentials.json",
+            "credentials",
+            ("name", "ana"),
+            "credential_hex",
+        ))
+        .expect("hex");
+        let panel = Panel::new(&home, None);
+
+        lock(&panel.activity).state = "session";
+        let said = panel
+            .keep_credential(&home, bytes.clone())
+            .expect("a credential");
+        assert!(
+            said.ends_with(", kept when the session under way ends"),
+            "{said}"
+        );
+        thread::sleep(Duration::from_millis(600));
+        assert!(
+            store.credential().is_err(),
+            "not while a session holds the home"
+        );
+        lock(&panel.activity).state = "listening";
+        let until = Instant::now() + Duration::from_secs(5);
+        while store.credential().is_err() {
+            assert!(Instant::now() < until, "never kept");
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert_eq!(store.credential().expect("kept"), bytes);
+
+        std::fs::remove_file(home.join("credential")).expect("removed");
+        let said = panel.keep_credential(&home, bytes.clone()).expect("kept");
+        assert!(said.starts_with("credential "), "{said}");
+        assert!(!said.contains("kept when"), "at once: {said}");
+        assert_eq!(store.credential().expect("kept"), bytes);
+        let _ = std::fs::remove_dir_all(&home);
+    }
 }

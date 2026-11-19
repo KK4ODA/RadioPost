@@ -316,12 +316,16 @@ async function refresh() {
   state.title = a.held || a.failed || "What the station is doing";
   const busy = a.state !== "idle";
   document.body.dataset.busy = String(busy);
+  // messages are written, edited and deleted between sessions, listening for P2P too; a call, a
+  // session, a renewal or an alert holds them until it ends
+  const held = !["idle", "listening"].includes(a.state);
+  document.body.dataset.home = held ? "held" : "free";
   $("call").disabled = busy || !s.me;
   $("call").title = a.listen
     ? "Listening for P2P: press Listening for P2P to stop it, then call"
     : CALL_TITLE;
   showListen(s, a, busy);
-  $("write").disabled = busy || !s.me;
+  $("write").disabled = held || !s.me;
   $("device").textContent = s.device || "No key yet.";
   myDevice = s.device ? hexToB64u(s.device) : "";
   $("make-key").hidden = Boolean(s.device);
@@ -733,7 +737,7 @@ function rowActions(m, name) {
   const button = (glyph, title, run, extra = "") => {
     const b = document.createElement("button");
     b.type = "button";
-    b.className = `act needs-idle ${extra}`;
+    b.className = `act changes-home ${extra}`;
     b.title = title;
     b.setAttribute("aria-label", title);
     b.append(icon(glyph));

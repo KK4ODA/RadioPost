@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.18.0 |
+| **Version** | 1.19.0 |
 | **Updated** | 2026-11-18 |
 | **Describes** | RadioPost 0.1.0-beta.27 |
 | **Licence** | CC BY 4.0 |
@@ -326,8 +326,9 @@ What the operators can decide:
 ### 5.4 Your credential
 
 Your credential lasts 90 days. In its last month RadioPost renews it by itself: over the Internet
-while its window is open, or during a call to a gateway. The log at the bottom says when it did,
-or why it could not. **Renew credential**, in Setup, renews it at once.
+while its window is open, listening for P2P calls or not, or during a call to a gateway. The log at
+the bottom says when it did, or why it could not. **Renew credential**, in Setup, renews it at
+once.
 
 If it ever runs out, Setup says so in red. Ask your operator for a new code and click **Enroll
 again with a new code**.
@@ -441,10 +442,12 @@ RadioPost does not change a message that has left, or may be leaving, and says w
 
 - a message tagged *queued at* a gateway: that gateway passes it on as it is;
 - a message in **Sent**;
-- any message while a session is under way, or while you **Listen for P2P**: it may be going out.
-  Edit it when the session ends, or click **Stop** first.
+- any message while a session is under way: it may be going out. Edit it when the session ends.
 
 To correct a message that has left, write a new one.
+
+While **Listening for P2P** is on and no station has called, you write, change and delete
+messages as usual. A station that calls takes what is in the outbox for it at that moment.
 
 **Changed your mind?** The trash can at the end of a row moves the message to the **Trash**.
 The note that follows has **Undo**.
@@ -628,8 +631,14 @@ Agree on a frequency and a bandwidth first.
 
 *Figure 19. Listening for P2P, switched on.*
 
-While the switch is on, **Call** is greyed: click **Listening for P2P** to stop listening, then
-call.
+While the switch is on, **Call** and **Tuner tone** are greyed: the radio is listening. Click
+**Listening for P2P** to stop listening, then call.
+
+Everything else goes on while the station listens. Write, change and delete messages as usual: a
+station that calls takes what is in the outbox for it then, even a message saved a moment before.
+During a session, **Write** and the buttons that change messages are greyed until it ends.
+RadioPost renews your credential while it listens, as it does at other times
+([5.4](#54-your-credential)), and a station that calls meanwhile is answered at once.
 
 **The station that calls:**
 
@@ -1718,8 +1727,9 @@ These notes follow the US rules (Part 97). Check your own country's.
 | Aether refuses RadioPost's calls | Aether is keyed by a host program. In Aether's Setup, step 2, choose CAT, serial, rigctld, FLRig, CM108 or VOX. |
 | Aether stops at start: *127.0.0.1:8515 is already in use* | Aether's host programs port was set to 8515. Put it back to 8300 ([Aether's ports](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#20-the-programs-and-their-ports)). |
 | *a session is under way: try again when it ends* | Wait for the session to end, or close the window to stop it. |
+| *the station is listening for P2P calls: click Listening for P2P to stop it first* | A call, tuning, the tuner tone, refreshing the gateway list, an update and most of Setup wait while the station listens. Click **Listening for P2P** to stop, then try again. Writing, changing and deleting messages go on while it listens. |
 | *renewing the credential: try again in a moment* | Wait a few seconds. |
-| *this message cannot be changed while a session is under way* (or *while listening*) | It may be going out. Edit it when the session ends, or click **Stop** first. |
+| *this message cannot be changed while a session is under way* | It may be going out. Edit it when the session ends. |
 | *it is queued at …, which will pass it on as it is, so it can no longer be changed* | That gateway holds it. Write a new message to correct it. |
 | Setup says the credential ran out | Ask your operator for a new code, then **Enroll again with a new code**. |
 | *Your settings could not be read* | Usual gateways need the Internet. Try **Read** again when you have it. |
@@ -1813,7 +1823,7 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 | Job | A task on the post office's server that the desk asks for, from a fixed list. |
 | Level | How something arrives: Silent, Normal, Important or Time-sensitive. |
 | Known post office | Another post office whose word your post office takes that its users are licensed. |
-| Listen for P2P | A switch. While it is in, reading **Listening for P2P**, other clients can call you directly, station to station; after each session RadioPost listens again, until you click it again. A gateway on your station goes on answering its own callsign. |
+| Listen for P2P | A switch. While it is in, reading **Listening for P2P**, other clients can call you directly, station to station; after each session RadioPost listens again, until you click it again. Meanwhile you write, change and delete messages as usual. A gateway on your station goes on answering its own callsign. |
 | Operator (of a post office) | Someone who runs a post office: approves accounts and gives codes. |
 | Partner | Another gateway this one forwards mail to by radio when cut off. |
 | Post office | The server that keeps your mailbox and exchanges email with the world. |
@@ -1938,3 +1948,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.16.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18, when a second P2P call found the house's client no longer listening. **Listen for P2P** is a switch that stays on: it reads **Listening for P2P**, its lamp lit, and RadioPost listens again after every session and when Aether comes back, until it is clicked again; the **Stop** button is gone (§6, §10, new Figure 18; §37, §39, §40). The state *Waiting for the modem*. The client's screenshots retaken. |
 | 1.17.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18. §6: in a narrow window the parts stack in one column, the folders side by side. §7.1: there **Write**, **Reply**, **Reply all**, **Forward**, **Edit** and writing to an address open the message in a window of its own, beside the RadioPost window, or a pop-up in a browser (new Figure 12; later figures renumbered). |
 | 1.18.0 | 2026-11-18 | §9: **Forward** carries a form as its text, the labels with the values and the sender's note below; it had carried the note alone, and the form's values were lost. **Reply** shows a form's text under your own; it had shown the note. |
+| 1.19.0 | 2026-11-18 | From the 40 m sessions of 2026-11-18: a house station listens for days. While **Listening for P2P** is on and no station has called, messages are written, changed and deleted as usual, and a station that calls takes what is in the outbox then; **Call** and **Tuner tone** stay greyed (§7, §10, §39). The credential is renewed while the station listens (§5.4). §37: *the station is listening for P2P calls*, and an edit is refused only during a session. |
