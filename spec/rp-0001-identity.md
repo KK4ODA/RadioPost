@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.0.0 |
-| **Updated** | 2026-11-15 |
+| **Version** | 1.1.0 |
+| **Updated** | 2026-11-19 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -120,7 +120,9 @@ the credential at the first failure:
 2. The address's domain names a post office whose keys the verifier holds (§7). Otherwise
    `unknown-post-office`.
 3. One of that post office's keys has the protected header's `kid`, is in its validity period at
-   `issued`, and its signature verifies (RP-0 §5). Otherwise `credential-invalid`.
+   `issued`, and its signature verifies (RP-0 §5). Otherwise `credential-invalid`. A key's
+   validity period is the one its info document gives (`not_before`, `not_after`, §7.2); a key
+   known only from DNS has none, and is taken as valid.
 4. The verifier's clock is before `expires`, and not more than 600 seconds before `issued`.
    Otherwise `credential-expired` (or `credential-invalid` for a future `issued`).
 5. The `serial`, and the header's `kid`, are not in the post office's revocation list the verifier holds
@@ -187,8 +189,10 @@ A verifier MUST check, in this order, and stop at the first failure:
 6. In challenge form: `challenge` is the one the verifier issued for this session. Otherwise
    `signature-invalid`: a signature over another challenge is a signature over another statement.
 
-A post office verifying a statement relayed later (RP-5 §5.6) checks 1, 2 and 4, and checks `time`
-against the gateway's reported session time instead of its own clock. A post office opening a
+A post office verifying a statement relayed later (RP-5 §5.6, §6.6) checks 1, 2 and 4, and checks
+`time` against the reported session time instead of its own clock. A challenge-form statement
+relayed later holds no `time`: the station called issued its challenge and checked it by step 6,
+and the post office takes it so (RP-5 §6.6). A post office opening a
 session for a gateway (RP-5 §5.2) takes a challenge-form statement's challenge as the gateway's
 own, which the gateway checked by step 6, and only once.
 
@@ -198,7 +202,10 @@ Test vectors: `vectors/credentials.json` (§4, §5) and `vectors/statements.json
 ### 6.4 Proof of submission
 
 When a message enters RadioPost by radio, the gateway keeps its **proof**: the sender's
-credential, the statement, the statement's signature, and the session's start time. Anyone holding
+credential, the statement, the statement's signature, and the session's start time. When the
+station called asked for a challenge (RP-3 §5.3), the statement is the one in challenge form, with
+the `AUTH` signature, on both sides: the caller keeps that one as its own proof too, not its
+`HELLO`'s. Anyone holding
 the message and its proof can check that the account in the statement sent it, because the
 statement lists the message's content ID and the content ID is a hash of the message (RP-2 §3).
 Gateways pass the proof on with the message (RP-5 §5.4, RP-7) so that a forwarding station can
@@ -238,7 +245,7 @@ _radiopost.radiopost.org.  TXT  "v=RP1; t=key; kid=3f9a1c22; p=Hk3sW…9Q="
 
 | Record | Tags |
 |---|---|
-| `t=api` | `url`: the base URL of the post office API (RP-5). Exactly one. |
+| `t=api` | `url`: the base URL of the post office API (RP-5). Exactly one: the same `url` twice is one record, and two records with different `url`s leave the domain with no API, as though it had none. |
 | `t=key` | `kid`: the key ID in hex; `p`: the 32-byte public key in standard base64. One per current key. |
 
 Tags are separated by `;`; spaces around a tag, its name and its value are ignored. Unknown tags
@@ -391,3 +398,4 @@ A serial MAY be dropped from the list once the credential it names has expired.
 | 0.6.0 | 2026-11-12 | Which post offices a post office knows (§7.5): those its operators accept, their records and documents fetched and refreshed as a gateway's are; what knowing means; others found as mail crosses and kept as seen, for the operators; why it differs from a gateway's trust. §7.3 had covered gateways only, and the door, RP-5 §2 and RP-6 §4 rested on a list each operator typed, with no key rotation followed. Test vectors (`dns.json`, `office_cases`). |
 | 0.7.0 | 2026-11-15 | §6.3 steps 2 and 3 compare base callsigns (RP-0 §6.1), so a station on the air as `VE3/KK4ODA/P` or `KK4ODA-7` proves itself with its `KK4ODA` credential, and a client answers under an SSID of its callsign; a gateway called still checks its own callsign exactly (gaps G10, G12). An earlier verifier refuses such a statement `not-authorized`, so nothing is taken that should not be. |
 | 1.0.0 | 2026-11-15 | Stable (D41). §7.3: the keys a gateway trusts for its own post office when its operator names it by URL (gap G20). |
+| 1.1.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 4; D43). §5 step 3: a key known only from DNS has no validity period and passes; an info document's period applies to a key it lists. §6.3: a challenge-form statement relayed later, in a station-to-station report, is taken without a `time` (RP-5 1.3.0 §6.6). §6.4: after `AUTH`, the caller's proof is its challenge-form statement, on both sides. §7.1: two API records with different URLs leave a domain with no API (the Rust programs had taken whichever DNS gave first). Test vectors (`credentials.json`, `dns.json`, `direct.json`). MINOR, announced (RP-0 §8.4): a post office that does not take such a statement refuses the report, and nothing else changes. Implementations should keep the challenge-form proof and refuse two API URLs. |

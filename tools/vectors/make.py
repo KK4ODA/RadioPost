@@ -619,30 +619,63 @@ def make_messages() -> dict[str, Any]:
     second = cbor.encode(2) + cbor.encode(MESSAGES["facundo-reply"]["from"])
     assert canonical[1 : 1 + len(first) + len(second)] == first + second
     swapped[1 : 1 + len(first) + len(second)] = second + first
-    invalid = [
-        {
-            "why": "map keys out of order: the same message, not in deterministic form",
-            "air_hex": (b"\x00" + bytes(swapped)).hex(),
-            "expect": "malformed",
-        },
-        {
-            "why": "compression byte 9 is not defined",
-            "air_hex": (b"\x09" + canonical).hex(),
-            "expect": "malformed",
-        },
-        {
-            "why": "DEFLATE stream with bytes after its end",
-            "air_hex": (rp.air_form(canonical, 1) + b"\x00").hex(),
-            "expect": "malformed",
-        },
-        {
-            "why": "the `v` key is missing",
-            "air_hex": (
-                b"\x00" + cbor.encode({2: "a@b.c", 3: ["d@e.f"], 5: 0, 6: "", 7: ""})
-            ).hex(),
-            "expect": "malformed",
-        },
+
+    def verdict(air: bytes) -> str:
+        try:
+            rp.air_decode(air)
+        except ValueError as refused:
+            return str(refused)
+        return "ok"
+
+    def plain(fields: dict[int, Any]) -> bytes:
+        return b"\x00" + cbor.encode(fields)
+
+    least = {1: 1, 2: "a@b.c", 3: ["d@e.f"], 5: 0, 6: "", 7: ""}
+    refused_in = [
+        (
+            "map keys out of order: the same message, not in deterministic form",
+            b"\x00" + bytes(swapped),
+        ),
+        ("compression byte 9 is not defined", b"\x09" + canonical),
+        ("DEFLATE stream with bytes after its end", rp.air_form(canonical, 1) + b"\x00"),
+        ("a DEFLATE stream cut short", rp.air_form(canonical, 1)[:-2]),
+        ("the `v` key is missing", plain({k: v for k, v in least.items() if k != 1})),
+        ("the `from` key is missing", plain({k: v for k, v in least.items() if k != 2})),
+        ("`to` is text, not an array", plain(least | {3: "d@e.f"})),
+        ("`date` is text", plain(least | {5: "today"})),
+        ("a file without its `data`", plain(least | {8: [{1: "a.txt", 2: "text/plain"}]})),
+        ("a `reply_to` of 11 bytes", plain(least | {10: bytes(11)})),
+        ("a `form` whose fingerprint is 7 bytes", plain(least | {13: {1: bytes(7), 2: {}}})),
+        ("it inflates past 16 MiB", rp.air_form(bytes(rp.MAX_CANONICAL + 1), 1)),
     ]
+    invalid = [{"why": w, "air_hex": a.hex(), "expect": verdict(a)} for w, a in refused_in]
+    confirm(  # RP-2 §2's keys and their types, §4's one stream, §5's 16 MiB
+        invalid,
+        {w: "malformed" for w, _ in refused_in} | {"it inflates past 16 MiB": "too-large"},
+        by="why",
+    )
+    taken_in = [
+        (
+            "no address in `to` or `cc`: a post office's message of an email sent by Bcc alone",
+            plain(least | {3: []}),
+        ),
+        (
+            "text not in NFC (e and a combining acute), taken as it is",
+            plain(least | {7: "Cafe\u0301\n"}),
+        ),
+        ("a `priority` of 3", plain(least | {9: 3})),
+        ("a key this station does not know, kept", plain(least | {40: "kept"})),
+    ]
+    taken = [
+        {
+            "why": w,
+            "air_hex": a.hex(),
+            "content_id_hex": rp.content_id(a[1:]).hex(),
+            "expect": verdict(a),
+        }
+        for w, a in taken_in
+    ]
+    confirm(taken, {w: "ok" for w, _ in taken_in}, by="why")  # RP-2 §2: checked no further
     good = rp.id_text(encoded("maria-419")[1])
     ids_in = [
         (good[:-1], "19 characters"),
@@ -666,9 +699,11 @@ def make_messages() -> dict[str, Any]:
         "From `fields`, an encoder produces exactly `canonical_hex`; its content ID is "
         "`content_id_hex`, written `content_id_text`. Every air form decodes to `canonical_hex`. "
         "An air form marked `exact: false` is one valid DEFLATE stream among many: check that it "
-        "inflates, not that you produce the same bytes. Every `invalid` air form is refused as "
-        "`malformed`, and every `invalid_ids` text is not a content ID: 96 bits leave the last "
-        "character 4 unused bits, which are zero, so that each ID has one text."
+        "inflates, not that you produce the same bytes. Every `invalid` air form is refused with "
+        "its `expect`, an RP-0 §9.3 name (RP-2 §2 to §5); every `taken` air form is taken as it "
+        "is, its content ID `content_id_hex` over the bytes received; and every `invalid_ids` "
+        "text is not a content ID: 96 bits leave the last character 4 unused bits, which are "
+        "zero, so that each ID has one text."
     )
     out["fields_note"] = (
         "Field names are RP-2 §2's; a name ending in `_hex` holds bytes. `files` and `held` items "
@@ -677,6 +712,7 @@ def make_messages() -> dict[str, Any]:
     )
     out["messages"] = entries
     out["invalid"] = invalid
+    out["taken"] = taken
     out["invalid_ids"] = id_cases
     return out
 
@@ -934,6 +970,16 @@ def make_credentials() -> dict[str, Any]:
             )[3],
         ),
         (
+            "signed by radiopost.org's new key, known only from DNS: no validity period",
+            None,
+            T_SESSION,
+            ["send"],
+            {},
+            rp.make_credential(
+                credential_body(CREDENTIALS["facundo"]), SECRET["po:radiopost.org:new"]
+            )[3],
+        ),
+        (
             "header naming radiopost.org's previous key, not the signer",
             None,
             T_SESSION,
@@ -948,6 +994,13 @@ def make_credentials() -> dict[str, Any]:
         known = po_keys()
         if what == "post office not known to this verifier":
             known = {"radiopost.org": known["radiopost.org"]}
+        dns_only = []
+        if "known only from DNS" in what:
+            new = PUBLIC["po:radiopost.org:new"]
+            dns_only = [rp.kid(new).hex()]
+            known["radiopost.org"] = [
+                {"public": k["public"]} if k["public"] == new else k for k in known["radiopost.org"]
+            ]
         result, _ = rp.verify_credential(cred, known, revoked, now, need)
         cases.append(
             {
@@ -957,6 +1010,7 @@ def make_credentials() -> dict[str, Any]:
                 "now": now,
                 "need": need,
                 "known_post_offices": sorted(known),
+                "dns_only_kids": dns_only,
                 "revoked": {
                     d: {
                         k: [x.hex() if isinstance(x, bytes) else x for x in v] for k, v in r.items()
@@ -989,6 +1043,7 @@ def make_credentials() -> dict[str, Any]:
             "signed and valid, but a header left unprotected": "credential-invalid",
             "header naming radiopost.org's previous key, not the signer": "credential-invalid",
             "signed by radiopost.org's new key before its validity": "credential-invalid",
+            "signed by radiopost.org's new key, known only from DNS: no validity period": "ok",
         },
     )
     out = header("Credentials and how they verify", {"RP-1": "§4–§5, §8", "RP-0": "§5, §9.3"})
@@ -996,8 +1051,9 @@ def make_credentials() -> dict[str, Any]:
         "From `body` and the signing key (`kid_hex`), an issuer produces exactly `payload_hex`, "
         "`protected_hex`, the COSE `to_be_signed_hex`, `signature_hex` and `credential_hex`, an "
         "untagged COSE_Sign1 (Ed25519 is deterministic). A verifier given a "
-        "case's clock, needed flags, known post offices (keys and validity periods from keys.json) "
-        "and revocations returns `expect`: `ok` or an RP-0 §9.3 error name, checking in RP-1 §5's "
+        "case's clock, needed flags, known post offices (keys and validity periods from keys.json, "
+        "except the keys of `dns_only_kids`, known only from DNS and so with no period) and "
+        "revocations returns `expect`: `ok` or an RP-0 §9.3 error name, checking in RP-1 §5's "
         "order."
     )
     out["credentials"] = entries
@@ -1378,6 +1434,9 @@ def make_statements() -> dict[str, Any]:
         "W4/G4ABC": "G4ABC",
         "VE3X/W1AW": "W1AW",
         "kk4oda-1": "KK4ODA",
+        "W4/K1A/QRP": "K1A",  # of three parts, the middle, whatever their lengths
+        "AB1/CD2/EF3": "CD2",
+        "VE3/K1A/MOBILE-4": "K1A",
     }
     for callsign, base in bases.items():
         assert rp.base_callsign(callsign) == base, (callsign, rp.base_callsign(callsign))
@@ -2148,10 +2207,38 @@ def make_pdus() -> dict[str, Any]:
     out["rule"] = (
         "From `diagnostic`, an encoder produces exactly `pdu_hex`, framed as `frame_hex` "
         "(two bytes of length, big-endian). Every `invalid` frame is answered with ERROR `expect` "
-        "(RP-3 §2), at a receiver whose `max_pdu` is the case's, or 65 535 where it has none."
+        "(RP-3 §2), at a receiver whose `max_pdu` is the case's, or 65 535 where it has none. "
+        "Each of `subjects` is a message's subject and what a waiting entry carries of it, `cut`: "
+        "the longest part of at most 40 bytes of UTF-8 that ends between two Unicode scalar "
+        "values, grapheme clusters not considered (RP-3 §5.2)."
     )
     out["pdus"] = [pdu_entry(name, p) for name, p in examples]
     out["invalid"] = invalid
+    # RP-3 §5.2: a waiting entry's subject, cut between Unicode scalar values, never inside one
+    subjects_in = [
+        ("short", "Shelter roster"),
+        ("40 bytes exactly", "A" * 40),
+        ("41 bytes", "A" * 41),
+        ("an e acute across bytes 40 and 41", "A" * 39 + "é and more"),
+        ("a euro sign across bytes 39 to 41", "A" * 38 + "€ and more"),
+        ("an emoji across bytes 38 to 41", "A" * 37 + "\U0001f4fb radio"),
+        ("a combining acute after byte 40: cut inside the grapheme", "A" * 39 + "e\u0301 more"),
+    ]
+    subjects = [{"what": w, "subject": t, "cut": subject40(t)} for w, t in subjects_in]
+    confirm(
+        subjects,
+        {
+            "short": "Shelter roster",
+            "40 bytes exactly": "A" * 40,
+            "41 bytes": "A" * 40,
+            "an e acute across bytes 40 and 41": "A" * 39,
+            "a euro sign across bytes 39 to 41": "A" * 38,
+            "an emoji across bytes 38 to 41": "A" * 37,
+            "a combining acute after byte 40: cut inside the grapheme": "A" * 39 + "e",
+        },
+        lambda c: c["cut"],
+    )
+    out["subjects"] = subjects
     return out
 
 
@@ -2456,11 +2543,13 @@ def make_rpmi_conversations() -> dict[str, Any]:
     out["rule"] = (
         "Each step is one line on one station's connection between a host and its adapter: "
         "`to: adapter` from the host, `to: host` from the adapter, or a connection opening or "
-        "closing. Messages compare as JSON values, not as text; `text` is for people and need not "
-        "match. An adapter given the host lines answers with the adapter lines, except where the "
-        "modem decides: how `received` splits the bytes (here at most 128 a line) and the time "
-        "between events. A modem with `caps.dial` starts at `modem.dial_hz`. A host given the "
-        "adapter lines sends the host lines. Notes are for people."
+        "closing. Messages compare as JSON values, not as text, and a `data` member as its "
+        "bytes; `text` is for people and need not match. An adapter given the host lines answers "
+        "with the adapter lines, except where the modem decides: how `received` splits the bytes "
+        "(here at most 128 a line) and the time between events. A modem with `caps.dial` starts "
+        "at `modem.dial_hz`. A host given the adapter lines sends the host lines, except that its "
+        "`id` and `ref` values are its own (RP-4 §2, §4): they compare up to a renaming, one to "
+        "one, on each connection. Notes are for people."
     )
     out["modem"] = {
         "name": RPMI_MODEM,
@@ -2796,6 +2885,25 @@ RPMI_LINES = [
     ),
     ('{"op": "tone", "id": 37}', "a tone without its seconds"),
     ('{"op": "tone", "id": 38, "seconds": 11}', "a tone longer than ten seconds"),
+    # RP-4 1.3.1 §2: I-JSON, integers in range, requests without an id, `data` as its bytes
+    ('{"op": "status", "id": 1.0}', "an id of 1.0, written with a fraction"),
+    ('{"op": "status", "id": 1e2}', "an id of 1e2, written with an exponent"),
+    ('{"op": "status", "id": 9007199254740992}', "an id of 2^53, past an integer's range"),
+    ('{"op": "status", "id": -9007199254740991}', "an id of -(2^53-1), the least integer"),
+    ('{"op": "status", "id": 40, "note": "\\ud800"}', "a lone surrogate in an unknown member"),
+    ('{"op": "status", "id": 41, "note": NaN}', "NaN in an unknown member"),
+    ('{"op": "status", "id": 42, "op": "dial"}', "a member named twice"),
+    (
+        '{"op": "connect", "id": 43, "remote": "N1CALL-10", "bandwidth": 9007199254740992}',
+        "a bandwidth past an integer's range",
+    ),
+    ('{"op": "status"}', "a status without an id"),
+    ('{"op": "listen", "on": false}', "a listen without an id: no ok"),
+    ('{"op": "rig"}', "an unknown op without an id: its error has none"),
+    (
+        '{"op": "send", "id": 44, "link": "c1", "data": "QR=="}',
+        "base64 whose pad bits are not zero: its bytes are read",
+    ),
 ]
 
 
@@ -2850,14 +2958,36 @@ def make_rpmi_lines() -> dict[str, Any]:
             "a broadcast's ref that is an object": ("error", "malformed", 36),
             "a tone without its seconds": ("error", "malformed", 37),  # §4.3
             "a tone longer than ten seconds": ("error", "malformed", 38),
+            "an id of 1.0, written with a fraction": ("error", "malformed", None),
+            "an id of 1e2, written with an exponent": ("error", "malformed", None),
+            "an id of 2^53, past an integer's range": ("error", "malformed", None),
+            "an id of -(2^53-1), the least integer": ("status", None, -9007199254740991),
+            "a lone surrogate in an unknown member": ("error", "malformed", None),
+            "NaN in an unknown member": ("error", "malformed", None),
+            "a member named twice": ("error", "malformed", None),
+            "a bandwidth past an integer's range": ("error", "malformed", 43),
+            "a status without an id": ("status", None, None),
+            "a listen without an id: no ok": None,
+            "an unknown op without an id: its error has none": ("error", "unsupported", None),
+            "base64 whose pad bits are not zero: its bytes are read": (
+                "error",
+                "not-connected",
+                44,
+            ),
         },
-        lambda c: (c["answers"][0]["op"], c["answers"][0].get("code"), c["answers"][0].get("id")),
+        lambda c: (
+            (c["answers"][0]["op"], c["answers"][0].get("code"), c["answers"][0].get("id"))
+            if c["answers"]
+            else None
+        ),
     )
     out = header("RPMI lines: read, or answered with an error", {"RP-4": "§2, §4, §7"})
     out["rule"] = (
         "An adapter that has said `hello` to a host with the callsign KK4ODA, and has no links, "
-        "reads each `line` (one line of JSON Lines, without its LF) and answers with `answers`. "
-        "Messages compare as JSON values; `text` need not match."
+        "reads each `line` (one line of JSON Lines, without its LF) and answers with `answers`, "
+        "which may be none: a request without `id` gets no `ok` (RP-4 §2). A line that is not "
+        "I-JSON (RFC 7493) is answered as one that is not JSON. Messages compare as JSON values, "
+        "a `data` member as its bytes; `text` need not match."
     )
     out["lines"] = cases
     return out
@@ -5237,6 +5367,50 @@ def make_direct() -> dict[str, Any]:
         "statement": jws.b64u(cbor.encode(late)),
         "signature": jws.b64u(rp.sign(rp.CTX_SESSION, cbor.encode(late), SECRET["device:facundo"])),
     }
+    # Ana's station asked him to sign a challenge (RP-3 §5.3): his proof is that statement, which
+    # holds no nonce, so the report gives his HELLO's (RP-1 §6.4, RP-5 §6.6)
+    challenged = rp.statement(
+        "facundo@radiopost.org",
+        "KK4ODA",
+        "N0CALL",
+        [encoded(n)[1] for n in STATION_OFFERS],
+        challenge=stream("session-03 challenge", 16),
+    )
+    challenged_proof = facundo | {
+        "statement": jws.b64u(cbor.encode(challenged)),
+        "signature": jws.b64u(
+            rp.sign(rp.CTX_SESSION, cbor.encode(challenged), SECRET["device:facundo"])
+        ),
+    }
+    # a message for him with his address in capitals: his all the same (RP-0 §6.2)
+    shouted = cbor.encode(
+        {
+            1: 1,
+            2: "ana@hampost.org",
+            3: ["Facundo@RadioPost.ORG"],
+            5: STATION_CLOCK - 600,
+            6: "Heard you",
+            7: "Loud and clear.\n",
+        }
+    )
+    shouted_stmt = rp.statement(
+        "ana@hampost.org",
+        "N0CALL",
+        "KK4ODA",
+        [encoded("ana-to-facundo")[1], rp.content_id(shouted)],
+        time=STATION_CLOCK,
+        nonce=STATION_NONCE,
+    )
+    shouted_proof = ana_proof | {
+        "statement": jws.b64u(cbor.encode(shouted_stmt)),
+        "signature": jws.b64u(
+            rp.sign(rp.CTX_SESSION, cbor.encode(shouted_stmt), SECRET["device:ana"])
+        ),
+    }
+    shouted_in = {
+        "id": rp.id_text(rp.content_id(shouted)),
+        "air": jws.b64u(rp.air_form(shouted, 0)),
+    }
     cases_in = [
         ("as Facundo reports it", direct_report("facundo"), "facundo"),
         (
@@ -5279,6 +5453,32 @@ def make_direct() -> dict[str, Any]:
             "facundo",
         ),
         ("Ana's own report, sent to radiopost.org", direct_report("ana"), "ana"),
+        (
+            "his statement in challenge form, with his HELLO's nonce",
+            direct_report("facundo", mine=challenged_proof, nonce=jws.b64u(STATION_NONCE)),
+            "facundo",
+        ),
+        (
+            "his statement in challenge form, with no nonce",
+            direct_report("facundo", mine=challenged_proof),
+            "facundo",
+        ),
+        (
+            "his statement in challenge form, with another nonce",
+            direct_report(
+                "facundo", mine=challenged_proof, nonce=jws.b64u(stream("another nonce", 8))
+            ),
+            "facundo",
+        ),
+        (
+            "a received message addressed to him in capitals",
+            direct_report(
+                "facundo",
+                theirs=shouted_proof,
+                received=[*handed_in(["ana-to-facundo"])["messages"], shouted_in],
+            ),
+            "facundo",
+        ),
     ]
     cases = []
     for what, entry, cred in cases_in:
@@ -5344,6 +5544,21 @@ def make_direct() -> dict[str, Any]:
             },
             "a sent message not his": {
                 "results": [refusal("ana-to-facundo", "not-authorized"), taken["results"][1]]
+            },
+            "his statement in challenge form, with his HELLO's nonce": taken,
+            "his statement in challenge form, with no nonce": {
+                "code": rp.ERRORS["malformed"],
+                "name": "malformed",
+            },
+            "his statement in challenge form, with another nonce": {
+                "code": rp.ERRORS["signature-invalid"],
+                "name": "signature-invalid",
+            },
+            "a received message addressed to him in capitals": {
+                "results": [
+                    *taken["results"],
+                    {"id": shouted_in["id"], "status": "accepted", "serial": 423},
+                ]
             },
         },
         verdict=lambda c: without_text(c["expect"]),
@@ -7215,6 +7430,36 @@ def make_dns() -> dict[str, Any]:
         },
         lambda c: "read" if c["result"] else "ignored",
     )
+    other = "https://po2.radiopost.org/rp/v1"
+    key_txt = f"v=RP1; t=key; kid={kid}; p={b64}"
+    api_txt = f"v=RP1; t=api; url={PO_RADIOPOST}"
+    sets_in = [
+        ("one API record and a key record", [api_txt, key_txt]),
+        ("the same API record twice", [api_txt, key_txt, api_txt]),
+        (
+            "the same URL in two records, one with an unknown tag",
+            [api_txt, f"{api_txt}; note=moved"],
+        ),
+        ("two API records with different URLs", [api_txt, f"v=RP1; t=api; url={other}"]),
+        (
+            "two API records, one ignored for its URL",
+            [api_txt, "v=RP1; t=api; url=http://po.radiopost.org/rp/v1"],
+        ),
+        ("a key record and no API record", [key_txt]),
+    ]
+    record_sets = [{"what": w, "txts": t, "api": rp.api_of(t)} for w, t in sets_in]
+    confirm(  # RP-1 §7.1: exactly one API; two URLs leave the domain with none
+        record_sets,
+        {
+            "one API record and a key record": PO_RADIOPOST,
+            "the same API record twice": PO_RADIOPOST,
+            "the same URL in two records, one with an unknown tag": PO_RADIOPOST,
+            "two API records with different URLs": None,
+            "two API records, one ignored for its URL": PO_RADIOPOST,
+            "a key record and no API record": None,
+        },
+        lambda c: c["api"],
+    )
     found = {
         "radiopost.org": "dns",
         "hampost.org": "list:radiopost.org",
@@ -7267,15 +7512,18 @@ def make_dns() -> dict[str, Any]:
     )
     out["rule"] = (
         "Parsing `txt` gives `result`: the record's tags, or null when it must be ignored. A "
-        "gateway that learned post offices as `found` says (`dns`, or `list:` and the post office "
-        "whose list named it) trusts a case's `domain`, given its operator's `blocked` and `only`, "
-        "when `expect` is true (RP-1 §7.3). A post office with `office`'s own domains, the domains "
-        "its operators `accepted` and `blocked`, and the DNS `zone` (each domain's `_radiopost` "
-        "TXT records) makes of a domain it meets `expect`: `known`, `seen` (kept for its "
-        "operators), or `ignored` (RP-1 §7.5). `met` says where it met it; it does not change the "
-        "answer."
+        "domain whose `_radiopost` TXT records are a record set's `txts` has the API `api`: the"
+        " one `url` its valid API records give, or null when they give none or more than one "
+        "(RP-1 §7.1). A gateway that learned post offices as `found` says (`dns`, or `list:` "
+        "and the post office whose list named it) trusts a case's `domain`, given its "
+        "operator's `blocked` and `only`, when `expect` is true (RP-1 §7.3). A post office with"
+        " `office`'s own domains, the domains its operators `accepted` and `blocked`, and the "
+        "DNS `zone` (each domain's `_radiopost` TXT records) makes of a domain it meets "
+        "`expect`: `known`, `seen` (kept for its operators), or `ignored` (RP-1 §7.5). `met` "
+        "says where it met it; it does not change the answer."
     )
     out["records"] = cases
+    out["record_sets"] = record_sets
     out["found"] = found
     out["trust_cases"] = trust_cases
     out["office"] = office
@@ -7403,6 +7651,14 @@ def make_gateway_lists() -> dict[str, Any]:
         "rotated.example": "https://po.rotated.example/rp/v1",
         "forged.example": "https://po.forged.example/rp/v1",
         "unreachable.example": "https://po.unreachable.example/rp/v1",
+        # RP-5 1.3.0 §4.4: a shared API that does not answer, a shared API whose list its second
+        # entry's key signed, a list naming a callsign twice, and the home's own entry
+        "dark.example": "https://po.dark.example/rp/v1",
+        "dark-mail.example": "https://po.dark.example/rp/v1",
+        "pair-a.example": "https://po.pair.example/rp/v1",
+        "pair-b.example": "https://po.pair.example/rp/v1",
+        "twice.example": "https://po.twice.example/rp/v1",
+        "radiopost.org": PO_RADIOPOST,
     }
     entry_keys = {
         "hampost.org": "po:hampost.org",
@@ -7412,6 +7668,12 @@ def make_gateway_lists() -> dict[str, Any]:
         "rotated.example": "po:rotated.example",
         "forged.example": "po:forged.example",
         "unreachable.example": "po:unreachable.example",
+        "dark.example": "po:dark.example",
+        "dark-mail.example": "po:dark.example",
+        "pair-a.example": "po:pair-a.example",
+        "pair-b.example": "po:pair-b.example",
+        "twice.example": "po:twice.example",
+        "radiopost.org": "po:radiopost.org",
     }
     post_offices = {
         "issued": T_DOCUMENTS,
@@ -7461,12 +7723,43 @@ def make_gateway_lists() -> dict[str, Any]:
             [gw("W0BAD-1", "EM48", "Somewhere", 7104000)],
             gateways_by="po:a-stranger",
         ),
+        apis["pair-a.example"]: {
+            "info": signed(
+                {
+                    "version": 1,
+                    "domains": ["pair-a.example", "pair-b.example"],
+                    "keys": [key_entry_of("po:pair-b.example")],
+                    "gateways": "any",
+                },
+                "po:pair-b.example",
+            ),
+            "gateways": signed(
+                {"issued": T_DOCUMENTS, "gateways": [gw("W6PAIR-1", "CM87", "Oakland", 7105000)]},
+                "po:pair-b.example",
+            ),
+        },
+        apis["twice.example"]: served(
+            ["twice.example"],
+            "po:twice.example",
+            [
+                gw("W7TWO-1", "DN17", "Boise, as first listed", 7106000),
+                gw("W7TWO-1", "DN17", "Boise, listed again", 14106000),
+            ],
+        ),
     }
     every = list(apis)
     cases_in = [
         ("the home's list alone", [], False),
         ("every post office the home knows", every, False),
         ("the home lets only its own gateways in (`listed`)", every, True),
+        ("a shared API that does not answer", ["dark.example", "dark-mail.example"], False),
+        (
+            "a shared API's list signed by its second entry's key",
+            ["pair-a.example", "pair-b.example"],
+            False,
+        ),
+        ("a list that names a callsign twice", ["twice.example"], False),
+        ("an entry for the home's own domain", ["radiopost.org", "hampost.org"], False),
     ]
     cases = []
     for what, domains, listed in cases_in:
@@ -7500,7 +7793,8 @@ def make_gateway_lists() -> dict[str, Any]:
         {
             "the home's list alone": alone,
             "every post office the home knows": {
-                "fetched": 6,  # qrp-mail.example and qrp.example share one API
+                # three pairs of domains share an API, and the home's own is passed over
+                "fetched": 9,
                 "gateways": [
                     "KK4ODA-1@radiopost.org",
                     "N1CALL-10@hampost.org",
@@ -7510,14 +7804,45 @@ def make_gateway_lists() -> dict[str, Any]:
                     "N9ROT-1@rotated.example",
                     "W4EOC-2@eoc-mail.example",
                     "W5QRP-1@qrp-mail.example",
+                    "W6PAIR-1@pair-a.example",
+                    "W7TWO-1@twice.example",
                 ],
                 "ambiguous": ["N8CALL-7"],
                 "left_out": {
                     "forged.example": "signature-invalid",
                     "unreachable.example": "unreachable",
+                    "dark.example": "unreachable",
+                    "dark-mail.example": "unreachable",
                 },
             },
             "the home lets only its own gateways in (`listed`)": alone,
+            "a shared API that does not answer": alone
+            | {
+                "fetched": 1,
+                "left_out": {"dark.example": "unreachable", "dark-mail.example": "unreachable"},
+            },
+            "a shared API's list signed by its second entry's key": {
+                "fetched": 1,
+                "gateways": [*alone["gateways"], "W6PAIR-1@pair-a.example"],
+                "ambiguous": [],
+                "left_out": {},
+            },
+            "a list that names a callsign twice": {
+                "fetched": 1,
+                "gateways": [*alone["gateways"], "W7TWO-1@twice.example"],
+                "ambiguous": [],
+                "left_out": {},
+            },
+            "an entry for the home's own domain": {
+                "fetched": 1,
+                "gateways": [
+                    "KK4ODA-1@radiopost.org",
+                    "N1CALL-10@hampost.org",
+                    "N2CALL-5@radiopost.org",
+                ],
+                "ambiguous": [],
+                "left_out": {},
+            },
         },
         summary,
     )
@@ -7531,14 +7856,15 @@ def make_gateway_lists() -> dict[str, Any]:
         "entries of `entries`, in that order; with `home_listed` it takes none (the home's info "
         'document says `gateways: "listed"`). It fetches each entry\'s API once '
         "(`expect.fetched`, in order): `served` holds what each API answers, `info` and "
-        "`gateways` as JWS, and an API not in it does not answer. It checks each list with the "
-        "entry's keys and those the post office's info document adds, signed by one of them "
-        "(RP-1 §7.2), and leaves out a "
-        "list that does not verify or does not come (`expect.left_out`, by the entry's domain). "
+        "`gateways` as JWS, and an API not in it does not answer. Entries sharing an API are one "
+        "post office; an entry for the home's own domain is passed over. It checks each list "
+        "with the keys of any entry naming its API and those the post office's info document "
+        "adds, signed by one of them (RP-1 §7.2), and leaves out a list that does not verify or "
+        "does not come (`expect.left_out`, by the domain of every entry naming its API). "
         "`expect.gateways` is every record of the lists taken, with `post_office` the domain of "
-        "the entry it came by: the home's first; a callsign the home lists comes only from the "
-        "home; one in two other lists comes from each, and is `ambiguous`. The records' order is "
-        "not significant."
+        "the first entry naming its API: the home's first; a callsign the home lists comes only "
+        "from the home; a list naming a callsign twice gives its first record; one in two other "
+        "lists comes from each, and is `ambiguous`. The records' order is not significant."
     )
     out["home"] = "radiopost.org"
     out["home_gateways"] = home_gateways
@@ -8426,11 +8752,14 @@ def check_direct(data: dict[str, Any]) -> None:
                 continue
             kind, m = given[r["id"]]
             message = cbor.decode(rp.air_decode(jws.unb64u(m["air"]) or b""))
+            # RP-0 §6.2: one address when only the case of ASCII letters differs
             to = message.get(3, []) + message.get(4, [])
+            folded = [a.encode().lower() for a in to]
             if kind == "sent":
-                assert r["sent_on"] == [a for a in to if a != address(session["theirs"])]
+                theirs = address(session["theirs"]).encode().lower()
+                assert r["sent_on"] == [a for a, f in zip(to, folded, strict=True) if f != theirs]
             else:
-                assert address(session["mine"]) in to and r["serial"] > 0
+                assert address(session["mine"]).encode().lower() in folded and r["serial"] > 0
 
 
 def check_office(data: dict[str, Any]) -> None:

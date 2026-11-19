@@ -49,11 +49,73 @@ pub fn error(id: Option<&Value>, code: &str, text: &str) -> Message {
 }
 
 fn is_id(v: &Value) -> bool {
-    v.is_string() || v.is_i64() || v.is_u64()
+    v.is_string() || integer(v).is_some()
+}
+
+/// The largest integer RP-4 §2 takes, either sign: I-JSON's exact range (RFC 7493 §2.2).
+pub const MAX_INTEGER: i64 = (1 << 53) - 1;
+
+/// A JSON value read as I-JSON (RFC 7493): `serde_json` already refuses a lone surrogate, `NaN`
+/// and a number past double precision; this refuses a member named twice in one object too.
+struct IJson(Value);
+
+impl<'de> serde::Deserialize<'de> for IJson {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        d.deserialize_any(IJsonVisitor).map(IJson)
+    }
+}
+
+struct IJsonVisitor;
+
+impl<'de> serde::de::Visitor<'de> for IJsonVisitor {
+    type Value = Value;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("an I-JSON value")
+    }
+    fn visit_bool<E>(self, v: bool) -> Result<Value, E> {
+        Ok(Value::Bool(v))
+    }
+    fn visit_i64<E>(self, v: i64) -> Result<Value, E> {
+        Ok(Value::from(v))
+    }
+    fn visit_u64<E>(self, v: u64) -> Result<Value, E> {
+        Ok(Value::from(v))
+    }
+    fn visit_f64<E>(self, v: f64) -> Result<Value, E> {
+        Ok(Value::from(v))
+    }
+    fn visit_str<E>(self, v: &str) -> Result<Value, E> {
+        Ok(Value::from(v))
+    }
+    fn visit_string<E>(self, v: String) -> Result<Value, E> {
+        Ok(Value::String(v))
+    }
+    fn visit_unit<E>(self) -> Result<Value, E> {
+        Ok(Value::Null)
+    }
+    fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Value, A::Error> {
+        let mut out = Vec::new();
+        while let Some(IJson(v)) = seq.next_element()? {
+            out.push(v);
+        }
+        Ok(Value::Array(out))
+    }
+    fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Value, A::Error> {
+        let mut out = serde_json::Map::new();
+        while let Some(name) = map.next_key::<String>()? {
+            if out.contains_key(&name) {
+                return Err(serde::de::Error::custom("a member named twice"));
+            }
+            let IJson(v) = map.next_value()?;
+            out.insert(name, v);
+        }
+        Ok(Value::Object(out))
+    }
 }
 
 /// RP-4 §2: the message a line holds, or the `error` `malformed` to answer it with. A line is
-/// refused when it is not a JSON object with a string `op`, when its `id` is neither a string nor
+/// refused when it is not an I-JSON object with a string `op`, when its `id` is neither a string nor
 /// an integer, or when its `data` is not standard base64 with padding; the `error` carries the
 /// `id` when it could be read.
 ///
@@ -61,8 +123,8 @@ fn is_id(v: &Value) -> bool {
 ///
 /// The `error` message to answer the line with.
 pub fn parse_line(line: &str) -> Result<Message, Message> {
-    let Ok(value) = serde_json::from_str::<Value>(line) else {
-        return Err(error(None, "malformed", "not JSON"));
+    let Ok(IJson(value)) = serde_json::from_str::<IJson>(line) else {
+        return Err(error(None, "malformed", "not I-JSON"));
     };
     let Value::Object(m) = value else {
         return Err(error(None, "malformed", "not a JSON object"));
@@ -96,11 +158,18 @@ pub fn op_of(m: &Message) -> &str {
     m.get("op").and_then(Value::as_str).unwrap_or("")
 }
 
-/// A JSON integer, of either sign.
+/// A JSON integer, of either sign, within RP-4 §2's range: a number written with no fraction or
+/// exponent (`serde_json` reads those as floats), at most 2^53-1 from zero.
 fn integer(v: &Value) -> Option<i128> {
     v.as_i64()
         .map(i128::from)
         .or_else(|| v.as_u64().map(i128::from))
+        .filter(|n| n.unsigned_abs() <= MAX_INTEGER.unsigned_abs().into())
+}
+
+/// An integer of RP-4 §2's range, 0 or above.
+fn natural(v: &Value) -> Option<u64> {
+    integer(v).and_then(|n| u64::try_from(n).ok())
 }
 
 /// The requests of RP-4 §4, read member by member.
@@ -209,8 +278,8 @@ fn radio(m: &Message) -> Result<Request, String> {
         "dial" => Request::Dial,
         "tune" => Request::Tune(
             m.get("dial_hz")
-                .ok_or("no `dial_hz`")?
-                .as_u64()
+                .ok_or("no `dial_hz`")
+                .map(natural)?
                 .filter(|&hz| hz > 0)
                 .ok_or("`dial_hz` is not an integer above 0")?,
         ),
@@ -224,7 +293,7 @@ fn radio(m: &Message) -> Result<Request, String> {
                 .as_array()
                 .and_then(|a| {
                     a.iter()
-                        .map(|v| v.as_u64().filter(|&hz| hz > 0))
+                        .map(|v| natural(v).filter(|&hz| hz > 0))
                         .collect::<Option<Vec<_>>>()
                 })
                 .ok_or("`dials` is not a list of integers above 0")?;
@@ -232,8 +301,8 @@ fn radio(m: &Message) -> Result<Request, String> {
         }
         "tone" => Request::Tone(
             m.get("seconds")
-                .ok_or("no `seconds`")?
-                .as_u64()
+                .ok_or("no `seconds`")
+                .map(natural)?
                 .filter(|&s| s <= TONE_MAX_S)
                 .ok_or("`seconds` is not an integer from 0 to 10")?,
         ),
@@ -293,7 +362,7 @@ impl Request {
                 };
                 let call_s = match m.get("call_s") {
                     None => None,
-                    Some(v) => Some(v.as_u64().ok_or("`call_s` is not an integer, 0 or above")?),
+                    Some(v) => Some(natural(v).ok_or("`call_s` is not an integer, 0 or above")?),
                 };
                 Request::Connect {
                     remote: text(m, "remote")?,

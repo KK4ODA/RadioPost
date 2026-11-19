@@ -11,6 +11,7 @@ use super::{
     WaitingEntry, done, error_pdu, error_pdu_saying, listed_ids, listed_pairs, msg_pdus, piece_for,
     take_counted, transmission,
 };
+use crate::address;
 use crate::cbor::Value;
 use crate::credential::{self, Body, Credential, Trust, flags};
 use crate::crypto::ContentId;
@@ -111,6 +112,9 @@ pub struct Client {
     /// The offers the other station declined in `WELCOME`, with their codes.
     declined: Vec<(ContentId, u64)>,
     hello_proof: Option<Proof>,
+    /// Its `HELLO` nonce, once it signed the station called's challenge (RP-3 §5.3): its proof is
+    /// then in challenge form, which holds no nonce, and a report needs it (RP-5 §6.6).
+    challenged: Option<[u8; 8]>,
     station_proof: Option<(u64, Proof)>,
     cfg: ClientConfig,
     choose: Chooser,
@@ -151,6 +155,7 @@ impl Client {
             forwarding: None,
             declined: Vec::new(),
             hello_proof: None,
+            challenged: None,
             station_proof: None,
             cfg,
             choose,
@@ -298,7 +303,9 @@ impl Client {
     }
 
     /// Both stations' proofs, once the station called has proved itself (RP-3 §10): what a
-    /// station-to-station session is reported with (RP-5 §6.6).
+    /// station-to-station session is reported with (RP-5 §6.6). When the station called asked
+    /// for a challenge, this station's proof is its challenge-form statement, and its nonce goes
+    /// with the proofs.
     #[must_use]
     pub fn proofs(&self) -> Option<Proofs> {
         let (started, theirs) = self.station_proof.clone()?;
@@ -306,6 +313,7 @@ impl Client {
             started,
             mine: self.hello_proof.clone()?,
             theirs,
+            nonce: self.challenged,
         })
     }
 
@@ -434,9 +442,15 @@ impl Client {
                 let Ok(challenge) = <[u8; 16]>::try_from(challenge) else {
                     return self.fail(ErrorCode::Malformed);
                 };
-                let sig = self
-                    .statement(Form::Challenge(challenge))
-                    .sign(&self.cfg.device);
+                let stmt = self.statement(Form::Challenge(challenge));
+                let sig = stmt.sign(&self.cfg.device);
+                // Its proof is now this statement and signature, not its HELLO's (RP-1 §6.4).
+                self.hello_proof = Some(Proof {
+                    statement: stmt.encode(),
+                    signature: sig.to_vec(),
+                    credential: self.cfg.credential.clone(),
+                });
+                self.challenged = Some(self.cfg.nonce);
                 let auth =
                     Value::int_map(vec![(0, Value::Uint(kind::AUTH)), (1, Value::bytes(&sig))]);
                 self.queued.push(transmission(&[auth]));
@@ -498,7 +512,7 @@ impl Client {
                 let (_, offset) = accepted.iter().find(|(id, _)| *id == out.id())?;
                 let for_peer = peer_account
                     .as_deref()
-                    .is_none_or(|a| out.message.recipients().contains(&a));
+                    .is_none_or(|a| address::among(a, &out.message.recipients()));
                 for_peer.then_some((i, *offset))
             })
             .collect();

@@ -21,7 +21,7 @@ use radiopost::session::{
 };
 use radiopost::{ContentId, ErrorCode};
 use rpmi::base64;
-use rpmi::host::{Carrier, Direction, Engine, Event, Host};
+use rpmi::host::{Carrier, Direction, Engine, Event, Host, Silence};
 use rpmi::tcp::Connection;
 use rpmi::wire::{Caps as ModemCaps, Message as Line};
 use serde_json::{Value, json};
@@ -382,6 +382,8 @@ struct Modem {
     name: String,
     /// What its `hello` said it can do.
     caps: ModemCaps,
+    /// How long a session may be silent (RP-3 §8).
+    quiet: Duration,
 }
 
 impl Modem {
@@ -421,6 +423,7 @@ impl Modem {
                 host: Host::new(),
                 name: opts.adapter.clone(),
                 caps: ModemCaps::from_json(&Value::Null),
+                quiet: opts.quiet,
             };
             let hello = modem.host.hello(&opts.app);
             match modem.ask(&hello) {
@@ -714,7 +717,10 @@ fn carry<E: Engine<Event = SessionEvent> + Counted>(
     say: &mut dyn FnMut(&str),
 ) -> Result<(), Error> {
     let mut event = connected.clone();
+    // RP-3 §8: the silence counts from the last bytes, stopped while the modem receives
+    let mut silence = Silence::new();
     loop {
+        silence.heard(&event);
         let (requests, said) = carrier.on_event(&mut modem.host, &event);
         for e in said {
             apply(e, store, report, stats, say)?;
@@ -743,7 +749,15 @@ fn carry<E: Engine<Event = SessionEvent> + Counted>(
         if carrier.is_ended() {
             return Ok(());
         }
-        event = match modem.next() {
+        let next = if silence.over(modem.quiet) {
+            Err(format!(
+                "nothing arrived for {} seconds",
+                modem.quiet.as_secs()
+            ))
+        } else {
+            modem.next()
+        };
+        event = match next {
             Ok(e) => e,
             Err(why) => {
                 // RP-3 §8: nothing heard for too long; drop the link and keep what was held
@@ -810,14 +824,19 @@ fn report_of(proofs: Option<Proofs>, role: &str, stats: &SessionStats) -> Option
             .map(|(id, air)| json!({"id": id.text(), "air": base64url(air)}))
             .collect::<Vec<_>>()
     };
-    Some(json!({
+    let mut report = json!({
         "started": proofs.started,
         "role": role,
         "mine": proof(&proofs.mine),
         "theirs": proof(&proofs.theirs),
         "sent": list(&stats.sent),
         "received": list(&stats.received),
-    }))
+    });
+    // the caller's HELLO nonce, when its statement is in challenge form and holds none
+    if let Some(nonce) = proofs.nonce {
+        report["nonce"] = json!(base64url(&nonce));
+    }
+    Some(report)
 }
 
 fn apply(

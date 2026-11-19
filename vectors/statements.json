@@ -44,6 +44,18 @@
     {
       "callsign": "kk4oda-1",
       "base": "KK4ODA"
+    },
+    {
+      "callsign": "W4/K1A/QRP",
+      "base": "K1A"
+    },
+    {
+      "callsign": "AB1/CD2/EF3",
+      "base": "CD2"
+    },
+    {
+      "callsign": "VE3/K1A/MOBILE-4",
+      "base": "K1A"
     }
   ],
   "statements": [

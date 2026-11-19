@@ -101,34 +101,50 @@ def gateway_list(
     `post_office` that listed it, the `ambiguous` callsigns, and the lists `left_out`, by domain,
     with why.
     """
-    out = [dict(g, post_office=home) for g in home_gateways]
-    result: dict[str, Any] = {"fetched": [], "gateways": out, "ambiguous": [], "left_out": {}}
+    result: dict[str, Any] = {
+        "fetched": [],
+        "gateways": [dict(g, post_office=home) for g in firsts(home_gateways)],
+        "ambiguous": [],
+        "left_out": {},
+    }
     if home_listed:
         return result  # the home lets no other gateway in (§2)
+    entries = [e for e in entries if e["domain"] != home]  # the home's list is taken already
     others: list[tuple[str, list[dict[str, Any]]]] = []
-    for entry in entries:
-        api = entry["api"]
-        if api in result["fetched"]:
-            continue  # once for each `api`: one post office serving several domains
+    for api in dict.fromkeys(e["api"] for e in entries):  # each API once, in order
+        sharing = [e for e in entries if e["api"] == api]  # one post office, several domains
         result["fetched"].append(api)
         documents = served.get(api)
-        if documents is None:
-            result["left_out"][entry["domain"]] = "unreachable"
+        verdict, payload = "unreachable", None
+        if documents is not None:
+            keys = {}
+            for entry in sharing:  # a key of any of its entries
+                for k in entry["keys"]:
+                    public = jws.unb64u(k["public"])
+                    good = public is not None and len(public) == 32
+                    if good and rp.kid(public).hex() == k["kid"]:
+                        keys[k["kid"]] = public
+            verdict, payload = jws.verify(
+                documents["gateways"], jws.accepted_keys(keys, documents.get("info"))
+            )
+        if verdict != "ok" or payload is None:
+            for entry in sharing:
+                result["left_out"][entry["domain"]] = verdict
             continue
-        keys = {}
-        for k in entry["keys"]:
-            public = jws.unb64u(k["public"])
-            if public is not None and len(public) == 32 and rp.kid(public).hex() == k["kid"]:
-                keys[k["kid"]] = public
-        verdict, payload = jws.verify(
-            documents["gateways"], jws.accepted_keys(keys, documents.get("info"))
-        )
-        if verdict != "ok":
-            result["left_out"][entry["domain"]] = verdict
-            continue
-        others.append((entry["domain"], payload["gateways"]))
+        others.append((sharing[0]["domain"], payload["gateways"]))
     result["gateways"], result["ambiguous"] = merge_lists(home, home_gateways, others)
     return result
+
+
+def firsts(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """RP-5 §4.4: a list that names a callsign twice counts once, by its first record."""
+    seen: set[str] = set()
+    out = []
+    for g in records:
+        if g["callsign"] not in seen:
+            seen.add(g["callsign"])
+            out.append(g)
+    return out
 
 
 def merge_lists(
@@ -137,11 +153,11 @@ def merge_lists(
     """RP-5 §4.4: the home's records, then each other list's, each with the `post_office` that
     listed it; a callsign the home lists comes only from the home, and one in two other lists is
     ambiguous."""
-    out = [dict(g, post_office=home) for g in home_gateways]
+    out = [dict(g, post_office=home) for g in firsts(home_gateways)]
     home_calls = {g["callsign"] for g in home_gateways}
     counted: dict[str, int] = {}
     for domain, records in others:
-        for g in records:
+        for g in firsts(records):
             if g["callsign"] not in home_calls:  # the home's record wins
                 counted[g["callsign"]] = counted.get(g["callsign"], 0) + 1
                 out.append(dict(g, post_office=domain))
@@ -678,8 +694,9 @@ class PostOffice:
         """Mail between this post office's own accounts goes to their radio mailboxes at once."""
         message = cbor.decode(canonical)
         air = rp.air_form(canonical, 0)
-        for address in message.get(3, []) + message.get(4, []):
-            if address.rpartition("@")[2] not in self.domains or address == has_it:
+        for written in message.get(3, []) + message.get(4, []):
+            address = written.encode().lower().decode()  # accounts are kept so (RP-0 §6.2)
+            if address.rpartition("@")[2] not in self.domains or rp.same_address(address, has_it):
                 continue
             if address not in self.accounts and address not in self.mailboxes:
                 continue  # postmaster@, an email-only member: no radio mailbox (RP-6 §2.6)
@@ -716,6 +733,10 @@ class PostOffice:
         proofs = self._direct_proofs(s)
         if proofs is None or role not in {"caller", "called"}:
             return "malformed"
+        caller, called = (0, 1) if role == "caller" else (1, 0)
+        caller_nonce = self._caller_nonce(s, proofs[caller][1])
+        if caller_nonce is None:
+            return "malformed"
         need = (["send"] if s.get("sent") else []) + (["receive"] if s.get("received") else [])
         bodies = []
         for (credential, _, _), flags in zip(
@@ -729,11 +750,17 @@ class PostOffice:
             bodies.append(cbody)
         if bodies[0][3] != user[3] or user[3].rpartition("@")[2] not in self.domains:
             return "not-authorized"
-        caller, called = (0, 1) if role == "caller" else (1, 0)
         (_, cstmt, csig), (_, dstmt, dsig) = proofs[caller], proofs[called]
-        # station to station, both sides clients: callsigns compared by their base (RP-1 §6.3)
+        # station to station, both sides clients: callsigns compared by their base (RP-1 §6.3);
+        # in challenge form, the challenge is the station called's, which checked it
         result = rp.verify_statement(
-            cstmt, csig, bodies[caller], me=bodies[called][4], now=started, verifier="client"
+            cstmt,
+            csig,
+            bodies[caller],
+            me=bodies[called][4],
+            now=started,
+            challenge=cstmt.get(7),
+            verifier="client",
         )
         if result == "ok":
             result = rp.verify_statement(
@@ -743,11 +770,21 @@ class PostOffice:
                 me=bodies[caller][4],
                 now=started,
                 verifier="client",
-                sent_nonce=cstmt.get(5),
+                sent_nonce=caller_nonce,
             )
         if result != "ok":
             return result
         return proofs[0][1], proofs[1][1]
+
+    @staticmethod
+    def _caller_nonce(s: dict[str, Any], stmt: dict[int, Any]) -> bytes | None:
+        """The caller's HELLO nonce: its statement's, or in challenge form, which holds none, the
+        report's `nonce` (RP-5 §6.6). None when it has none of 8 bytes."""
+        if 7 not in stmt:
+            return stmt.get(5)
+        given = s.get("nonce")
+        nonce = jws.unb64u(given) if isinstance(given, str) else None
+        return nonce if nonce is not None and len(nonce) == 8 else None
 
     @staticmethod
     def _direct_proofs(s: dict[str, Any]) -> list[tuple[bytes, dict[int, Any], bytes]] | None:
@@ -793,7 +830,9 @@ class PostOffice:
         message = cbor.decode(canonical)
         self.written_to(mine[1], message)
         self._deliver_here(canonical, has_it=theirs[1])
-        others = [a for a in message.get(3, []) + message.get(4, []) if a != theirs[1]]
+        others = [
+            a for a in message.get(3, []) + message.get(4, []) if not rp.same_address(a, theirs[1])
+        ]
         return {"id": text, "status": "accepted", "sent_on": others}
 
     def _received_direct(
@@ -805,7 +844,7 @@ class PostOffice:
             return refused(m.get("id", ""), "not-authorized", "not the other station's, signed")
         text, canonical = found
         message = cbor.decode(canonical)
-        if mine[1] not in message.get(3, []) + message.get(4, []):
+        if not rp.among(mine[1], message.get(3, []) + message.get(4, [])):
             return refused(text, "not-authorized", "not addressed to this user")
         box = self.mailboxes.setdefault(mine[1], [])
         if any(w.cid == rp.content_id(canonical) for w in box):

@@ -7,6 +7,7 @@
 //! Every type here is checked against the test vectors in `vectors/` (`tests/vectors.rs`). Where
 //! this library and a specification disagree, the specification is right.
 
+pub mod address;
 pub mod alert;
 pub mod base64url;
 pub mod callsign;

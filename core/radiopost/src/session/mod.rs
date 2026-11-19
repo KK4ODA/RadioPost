@@ -287,7 +287,9 @@ pub enum Event {
     End,
 }
 
-/// One station's proof (RP-1 §6.4): its statement, the signature over it, and its credential.
+/// One station's proof (RP-1 §6.4): its statement, the signature over it, and its credential. A
+/// caller that signed a challenge (RP-3 §5.3) proves itself with that statement and the `AUTH`
+/// signature, not with its `HELLO`'s.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Proof {
     /// The statement, as RP-1 §6.1 encodes it.
@@ -308,6 +310,9 @@ pub struct Proofs {
     pub mine: Proof,
     /// The other station's.
     pub theirs: Proof,
+    /// The caller's `HELLO` nonce when the caller's statement is in challenge form, which holds
+    /// none: the station called's statement is checked against it (RP-5 §6.6).
+    pub nonce: Option<[u8; 8]>,
 }
 
 /// A message received in part (RP-3 §7): the bytes held, and its serial if it had one.
@@ -373,6 +378,12 @@ impl Inbound {
             total,
             serial,
         });
+        // Held to its end or past it, so asked for from there: the sender takes that offset as
+        // 0 and sends the whole message, which starts it over (RP-3 §7).
+        if offset == 0 && !entry.held.is_empty() && entry.held.len() as u64 >= entry.total {
+            entry.held.clear();
+            entry.total = total;
+        }
         // In order and without gaps, from the same air form (RP-3 §5.4, §7).
         if entry.total != total || offset != entry.held.len() as u64 {
             self.pieces.remove(&id);
@@ -387,7 +398,9 @@ impl Inbound {
             Ok(message) if whole.held.len() as u64 == total && message.content_id() == id => {
                 Some(Ok((whole.serial.or(serial), message, whole.held)))
             }
-            _ => fail(ErrorCode::Malformed),
+            // past RP-2 §5's bound it is `too-large`; anything else `malformed`
+            Err(refused) => fail(refused.code()),
+            Ok(_) => fail(ErrorCode::Malformed),
         }
     }
 
@@ -416,11 +429,13 @@ impl Inbound {
     }
 }
 
-/// The `MSG` PDUs that carry an air form from `offset`, `piece` data bytes at most each.
+/// The `MSG` PDUs that carry an air form from `offset`, `piece` data bytes at most each. An
+/// offset not less than the air form's length is taken as 0, so the whole message goes (RP-3 §7).
 fn msg_pdus(out: &Outgoing, offset: u64, piece: usize, serial: Option<u64>) -> Vec<Value> {
     let start = usize::try_from(offset)
-        .unwrap_or(usize::MAX)
-        .min(out.air.len());
+        .ok()
+        .filter(|&o| o < out.air.len())
+        .unwrap_or(0);
     out.air[start..]
         .chunks(piece.max(1))
         .enumerate()

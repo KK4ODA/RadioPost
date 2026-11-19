@@ -13,7 +13,7 @@ use radiopost_postoffice::{PostOffice, Request};
 use serde_json::{Value as Json, json};
 
 pub use radiopost_api::{Account, Http};
-use radiopost_api::{Answer, code_of};
+use radiopost_api::{Answer, code_of, error_of};
 
 /// How a gateway talks to one post office: one request at a time.
 trait Transport: Send {
@@ -41,7 +41,7 @@ impl<T: Transport> Upstream for Session<T> {
                     .map(str::to_owned);
                 Ok(answer)
             }
-            (_, body) => Err(code_of(body.as_ref())),
+            (status, body) => Err(error_of(status, body.as_ref())),
         }
     }
 
@@ -56,7 +56,7 @@ impl<T: Transport> Upstream for Session<T> {
                 .and_then(Json::as_str)
                 .and_then(base64url::decode)
                 .ok_or(ErrorCode::Malformed),
-            (_, body) => Err(code_of(body.as_ref())),
+            (status, body) => Err(error_of(status, body.as_ref())),
         }
     }
 
@@ -84,7 +84,7 @@ impl<T: Transport> Upstream for Session<T> {
                         .collect()
                 })
                 .unwrap_or_default()),
-            (_, body) => Err(code_of(body.as_ref())),
+            (status, body) => Err(error_of(status, body.as_ref())),
         }
     }
 
@@ -96,7 +96,7 @@ impl<T: Transport> Upstream for Session<T> {
             Some(&json!({"serials": serials})),
         )? {
             (204, _) => Ok(()),
-            (_, body) => Err(code_of(body.as_ref())),
+            (status, body) => Err(error_of(status, body.as_ref())),
         }
     }
 
@@ -110,7 +110,7 @@ impl<T: Transport> Upstream for Session<T> {
             .request("POST", &format!("/sessions/{sid}/files"), Some(&body))?
         {
             (202, _) => Ok(()),
-            (_, body) => Err(code_of(body.as_ref())),
+            (status, body) => Err(error_of(status, body.as_ref())),
         }
     }
 

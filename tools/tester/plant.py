@@ -55,12 +55,12 @@ FAULTS = {
     ),
     "C-07": (
         ENGINE,
-        "statement::verify(&stmt, sig, &body, &self.me.operator, &freshness)?;",
-        "let _ = statement::verify(&stmt, sig, &body, &self.me.operator, &freshness);",
+        "statement::verify(&stmt, sig, &body, me, &freshness)?;",
+        "let _ = statement::verify(&stmt, sig, &body, me, &freshness);",
     ),
     "C-08": (
         CALLED,
-        "let ours = message.recipients().contains(&self.me.address.as_str());",
+        "let ours = address::among(&self.me.address, &message.recipients());",
         "let ours = true;",
     ),
     "C-09": (

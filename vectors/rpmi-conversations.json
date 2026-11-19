@@ -5,7 +5,7 @@
     "RP-4": "§1–§7"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "Each step is one line on one station's connection between a host and its adapter: `to: adapter` from the host, `to: host` from the adapter, or a connection opening or closing. Messages compare as JSON values, not as text; `text` is for people and need not match. An adapter given the host lines answers with the adapter lines, except where the modem decides: how `received` splits the bytes (here at most 128 a line) and the time between events. A modem with `caps.dial` starts at `modem.dial_hz`. A host given the adapter lines sends the host lines. Notes are for people.",
+  "rule": "Each step is one line on one station's connection between a host and its adapter: `to: adapter` from the host, `to: host` from the adapter, or a connection opening or closing. Messages compare as JSON values, not as text, and a `data` member as its bytes; `text` is for people and need not match. An adapter given the host lines answers with the adapter lines, except where the modem decides: how `received` splits the bytes (here at most 128 a line) and the time between events. A modem with `caps.dial` starts at `modem.dial_hz`. A host given the adapter lines sends the host lines, except that its `id` and `ref` values are its own (RP-4 §2, §4): they compare up to a renaming, one to one, on each connection. Notes are for people.",
   "modem": {
     "name": "rpref simulated modem 1",
     "received_bytes_at_most": 128,

@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.0.0 |
-| **Updated** | 2026-11-15 |
+| **Version** | 1.1.0 |
+| **Updated** | 2026-11-19 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2; carried by RP-4 |
@@ -132,7 +132,9 @@ The caller's first PDU, sent as soon as the link is up.
 `signature` against it (RP-1 §6.3).
 
 A caller SHOULD always sign `HELLO`. It MAY leave `signature` out when it knows its clock is wrong;
-the gateway then asks it to sign a challenge.
+how it knows is its own. The station called answers a `HELLO` with no signature, one whose `time`
+is outside the window or whose nonce it has seen, with `WELCOME` `sign` (RP-1 §6.1, §6.3 step 5),
+and the caller then proves itself with the challenge-form statement (RP-1 §6.4).
 
 ### 5.2 WELCOME
 
@@ -159,8 +161,9 @@ Keys 13 and 15 are absent from a gateway's `WELCOME`. Key 14 is not used in `WEL
 
 A waiting **entry** is
 `[serial, id, from, subject, size, priority, flags]`: the mailbox serial (uint, §6.2), the content
-ID, the sender's address (text), the subject cut to at most 40 bytes of UTF-8 on a character
-boundary (text), the air-form size (uint), the priority (uint), and flags (uint): 1 `held`
+ID, the sender's address (text), the subject cut to the longest part of it that is at most 40
+bytes of UTF-8 and ends between two Unicode scalar values, never inside one (grapheme clusters are
+not considered; text), the air-form size (uint), the priority (uint), and flags (uint): 1 `held`
 (attachments held at the post office), 2 `copy` (a copy placed ahead, served while offline), 4
 `local` (handed between two users of a cut-off gateway, RP-7 §4.4; its serial is 0), 8
 `third-party` (its sender is not shown to be licensed: listed only as RP-6 §5.1 allows).
@@ -245,8 +248,9 @@ and `DONE` again.
 all it owes, and answers, when it holds: after `HELLO`, a `WELCOME` (with `status` `sign` or
 `credential`, alone; with `ready`, its `MSG` PDUs and `DONE`); after `MSG` PDUs, a `RECEIPT` listing
 each; after `REQUEST`, the `MSG` PDUs asked for and `DONE`. The called station answers the caller's
-`DONE` or `REQUEST`. When both have sent `DONE` and every message is receipted, the session is over
-(§8).
+`DONE` or `REQUEST` with what it owes: a `RECEIPT` for the `MSG` PDUs it received, and after a
+`REQUEST` what was asked for and `DONE`; when it owes nothing, it sends nothing. When both have sent
+`DONE` and every message is receipted, the session is over (§8).
 
 ### 5.8 CREDENTIAL
 
@@ -305,8 +309,9 @@ piece before it.
 * **Downloads:** the caller keeps the pieces it received, and lists each such message in its next
   `HELLO` under `partials`, with the number of bytes it holds, through the same gateway or any
   other. A message in `partials` counts as asked for: the gateway sends the rest of it from that
-  offset, after `WELCOME` and whatever its size (§5.2). A gateway that does not list the message as
-  waiting ignores the entry, and the caller keeps its pieces for another session.
+  offset, after `WELCOME` and whatever its size (§5.2). An offset that is not less than the air
+  form's length is taken as 0, so the whole message comes. A gateway that does not list the
+  message as waiting ignores the entry, and the caller keeps its pieces for another session.
 * **Uploads:** a gateway keeps the pieces of a message it accepted for at least **24 hours**, keyed
   by address and content ID, and offers to resume through `accept` offsets. The caller sends the
   rest from the offset given.
@@ -334,7 +339,13 @@ sent that it still cares about. Then **the caller hangs up** (asks the modem to 
 
 If nothing arrives for **300 seconds** while the modem reports nothing being received (RP-4,
 `quality`), the station waiting ends the session: the caller hangs up, the called station asks the
-modem to disconnect. A link broken by the modem ends the session at once.
+modem to disconnect. The 300 seconds run from the last bytes that arrived, and stop while the
+modem's last `quality` says `receiving` true; without `caps.quality` nothing stops them. Other
+events from the modem (`busy`, `queued`, a `quality` saying `receiving` false) do not restart them.
+A link broken by the modem ends the session at once.
+
+The station called never hangs up a session that is going well: once it owes nothing (§5.7), it
+writes nothing more and waits for the link to end, or for the 300 seconds.
 
 **Why the caller hangs up:** someone has to, and the end must not depend on either station
 guessing. The caller knows when it has what it came for. On a link where the caller also runs the
@@ -375,7 +386,8 @@ call** and takes the called station's part.
   code and hangs up.
 * An offer does not say whom a message is for, so it accepts the offers it has room for. The
   caller, which now knows the station's account from its verified credential, sends of those only
-  the messages addressed (`to` or `cc`) to that account; the others stay in its outbox. A message
+  the messages addressed (`to` or `cc`) to that account, the addresses compared as RP-0 §6.2 says;
+  the others stay in its outbox. A message
   that arrives addressed elsewhere all the same is listed as failed, `refused-by-policy`, and
   dropped.
 * Its `waiting` list holds only messages its own user addressed to the caller's account, all of
@@ -465,3 +477,4 @@ has one example of each PDU, and frames that must be refused.
 | 0.10.0 | 2026-11-09 | A frame over the receiver's `max_pdu` is answered `ERROR` `too-large` (§2): the section named only frames that do not decode. A `pdus.json` case. Found by writing the conformance tester. |
 | 0.11.0 | 2026-11-10 | §5.6: a gateway passes `files` to the post office and says in a `NOTICE` how that went; what comes is RP-6 §2.5. |
 | 1.0.0 | 2026-11-15 | Stable (D41). §8: a link carries one session (gap G9). |
+| 1.1.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 6; D43). §5.1: what a station called answers an unsigned or stale `HELLO` with, and that the caller's proof is then the challenge-form statement (RP-1 1.1.0 §6.4). §5.2: a subject is cut between Unicode scalar values, not grapheme clusters. §5.7: the station called answers with what it owes, and nothing when it owes nothing. §7: a `partials` offset at or past the air form's end is taken as 0 (the Rust engines had sent no piece and taken the message as sent). §8: what the 300 seconds count, without `quality` too, and that the station called does not hang up. §10: addresses compared as RP-0 1.2.0 §6.2 says (the Rust engines had compared them byte for byte). Test vectors (`pdus.json`'s waiting subjects; `session-03`'s station by `direct.json`). MINOR, announced (RP-0 §8.4): a station called that keeps sending nothing for such an offset leaves the caller to ask again. Implementations should compare addresses so and count the silence so. |

@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.11.0 |
-| **Updated** | 2026-11-17 |
+| **Version** | 0.11.1 |
+| **Updated** | 2026-11-19 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §7 |
@@ -117,7 +117,7 @@ the outline; each phase writes its tests in full (§6).
 
 ### 3.1 A client
 
-RP-0 §3: RP-1 §4, §5, §6, RP-2, RP-3 client side.
+RP-0 §3: RP-1 §4–§6, §7.1, §7.2 and §8, RP-2, RP-3 client side, calling and answering stations (§10).
 
 | ID | Checks | Builds on |
 |---|---|---|
@@ -268,3 +268,4 @@ RP-0 §3: RP-4, the adapter's side.
 | 0.9.0 | 2026-11-15 | Phase 4's tests built (§6, RP-7): F-01 (calls only in a partner's window, at most three a minute apart, none on a busy channel; `--slow`), F-02 (records refused in order with their codes, a record's `PROOF` as sent, the credential by hash once held, a taken record forwarded on), F-03 (placements checked in order, the good one held as a copy, the next `cursor`), F-04 (records kept for a partner that reaches the post offices), F-05 (windows published only inside the segments; with `--slow`, a partner's window outside them never called in), F-06 (mail offered again). The test adapter has two bystander stations to make the channel busy, and reads the calls a program places. Each shown failing on a planted fault. |
 | 0.10.0 | 2026-11-15 | §7: the public test service built (wishlist W43): what it checks, and what it leaves to this tester. |
 | 0.11.0 | 2026-11-17 | Gateways that scan (wishlist W50, RP-4 1.1.0 §4.2, RP-5 1.1.0 §4.4): A-06 built, shown failing on a planted fault; C-13 and G-10 outlined, with what the tester needs for them. |
+| 0.11.1 | 2026-11-19 | §3.1: a client's part of RP-1 and RP-3 as RP-0 1.2.0 §3 now names it (D43). |

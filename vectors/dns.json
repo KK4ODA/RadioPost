@@ -5,7 +5,7 @@
     "RP-1": "§7.1, §7.3, §7.5"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "Parsing `txt` gives `result`: the record's tags, or null when it must be ignored. A gateway that learned post offices as `found` says (`dns`, or `list:` and the post office whose list named it) trusts a case's `domain`, given its operator's `blocked` and `only`, when `expect` is true (RP-1 §7.3). A post office with `office`'s own domains, the domains its operators `accepted` and `blocked`, and the DNS `zone` (each domain's `_radiopost` TXT records) makes of a domain it meets `expect`: `known`, `seen` (kept for its operators), or `ignored` (RP-1 §7.5). `met` says where it met it; it does not change the answer.",
+  "rule": "Parsing `txt` gives `result`: the record's tags, or null when it must be ignored. A domain whose `_radiopost` TXT records are a record set's `txts` has the API `api`: the one `url` its valid API records give, or null when they give none or more than one (RP-1 §7.1). A gateway that learned post offices as `found` says (`dns`, or `list:` and the post office whose list named it) trusts a case's `domain`, given its operator's `blocked` and `only`, when `expect` is true (RP-1 §7.3). A post office with `office`'s own domains, the domains its operators `accepted` and `blocked`, and the DNS `zone` (each domain's `_radiopost` TXT records) makes of a domain it meets `expect`: `known`, `seen` (kept for its operators), or `ignored` (RP-1 §7.5). `met` says where it met it; it does not change the answer.",
   "records": [
     {
       "what": "an API record",
@@ -91,6 +91,56 @@
       "what": "not RadioPost's: an SPF record",
       "txt": "v=spf1 mx -all",
       "result": null
+    }
+  ],
+  "record_sets": [
+    {
+      "what": "one API record and a key record",
+      "txts": [
+        "v=RP1; t=api; url=https://po.radiopost.org/rp/v1",
+        "v=RP1; t=key; kid=fbbd5f5c; p=dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY="
+      ],
+      "api": "https://po.radiopost.org/rp/v1"
+    },
+    {
+      "what": "the same API record twice",
+      "txts": [
+        "v=RP1; t=api; url=https://po.radiopost.org/rp/v1",
+        "v=RP1; t=key; kid=fbbd5f5c; p=dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY=",
+        "v=RP1; t=api; url=https://po.radiopost.org/rp/v1"
+      ],
+      "api": "https://po.radiopost.org/rp/v1"
+    },
+    {
+      "what": "the same URL in two records, one with an unknown tag",
+      "txts": [
+        "v=RP1; t=api; url=https://po.radiopost.org/rp/v1",
+        "v=RP1; t=api; url=https://po.radiopost.org/rp/v1; note=moved"
+      ],
+      "api": "https://po.radiopost.org/rp/v1"
+    },
+    {
+      "what": "two API records with different URLs",
+      "txts": [
+        "v=RP1; t=api; url=https://po.radiopost.org/rp/v1",
+        "v=RP1; t=api; url=https://po2.radiopost.org/rp/v1"
+      ],
+      "api": null
+    },
+    {
+      "what": "two API records, one ignored for its URL",
+      "txts": [
+        "v=RP1; t=api; url=https://po.radiopost.org/rp/v1",
+        "v=RP1; t=api; url=http://po.radiopost.org/rp/v1"
+      ],
+      "api": "https://po.radiopost.org/rp/v1"
+    },
+    {
+      "what": "a key record and no API record",
+      "txts": [
+        "v=RP1; t=key; kid=fbbd5f5c; p=dmDCk1mTrS70nNg/yQuSYaxq1/AR6moPzpckQDM+XAY="
+      ],
+      "api": null
     }
   ],
   "found": {

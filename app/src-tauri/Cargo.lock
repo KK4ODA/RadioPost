@@ -2830,6 +2830,7 @@ dependencies = [
 name = "rpmi"
 version = "0.1.0-beta.29"
 dependencies = [
+ "serde",
  "serde_json",
 ]
 

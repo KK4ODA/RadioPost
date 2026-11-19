@@ -14,6 +14,7 @@ use radiopost::message::{Compression, Message};
 use radiopost::session::called::{Called, CalledConfig};
 use radiopost::session::client::{Client, ClientConfig};
 use radiopost::session::{Caps, Event, Outgoing, Partial};
+use radiopost::statement::Statement;
 use radiopost::{ContentId, ErrorCode};
 use serde_json::Value as Json;
 
@@ -494,7 +495,17 @@ fn station_caller(w: &World, file: &Json) -> Client {
 
 /// [`station_caller`], calling Ana's station at `called`.
 fn station_caller_to(w: &World, file: &Json, called: &str) -> Client {
-    let cfg = ClientConfig {
+    station_caller_with(w, file, called, |_| {})
+}
+
+/// [`station_caller_to`], its configuration changed first.
+fn station_caller_with(
+    w: &World,
+    file: &Json,
+    called: &str,
+    change: impl FnOnce(&mut ClientConfig),
+) -> Client {
+    let mut cfg = ClientConfig {
         credential: w.credentials["facundo"].clone(),
         device: w.device("device:facundo"),
         called: called.into(),
@@ -509,7 +520,119 @@ fn station_caller_to(w: &World, file: &Json, called: &str) -> Client {
         piece: 4096,
         station: Some(w.trust.clone()),
     };
+    change(&mut cfg);
     Client::new(cfg, radiopost::session::client::by_serials(vec![])).expect("a client")
+}
+
+/// Runs two engines against each other until neither has a transmission due, the caller's
+/// `HELLO` first. Returns what each side reported.
+fn run(caller: &mut Client, station: &mut Called) -> (Vec<Event>, Vec<Event>) {
+    let (mut theirs, mut ours) = (Vec::new(), Vec::new());
+    let mut last = caller.hello();
+    for turn in 1..16 {
+        let next = if turn % 2 == 1 {
+            ours.extend(station.receive(&last));
+            station.transmit()
+        } else {
+            theirs.extend(caller.receive(&last));
+            caller.transmit()
+        };
+        match next {
+            Some(t) => last = t,
+            None => break,
+        }
+    }
+    (theirs, ours)
+}
+
+/// RP-1 §6.4, RP-5 §6.6: Facundo's clock is an hour out, so Ana's station asks him to sign a
+/// challenge. His proof is then the challenge-form statement and the `AUTH` signature, the same
+/// on both sides, and the proofs carry his `HELLO` nonce, which the statement no longer holds.
+#[test]
+fn a_challenge_signed_is_the_callers_proof() {
+    let w = world();
+    let file = vectors("session-03.json");
+    let mut caller = station_caller_with(&w, &file, "N0CALL", |c| c.time += 3_600);
+    let mut station = ana(&w, &file);
+    run(&mut caller, &mut station);
+    assert!(caller.is_over(), "the session ran to its end");
+    let (his, hers) = (
+        caller.proofs().expect("the caller's"),
+        station.proofs().expect("the station's"),
+    );
+    let stmt = Statement::decode(&his.mine.statement).expect("a statement");
+    assert_eq!(
+        stmt.challenge(),
+        Some([7; 16]),
+        "the challenge Ana's station gave"
+    );
+    assert_eq!(
+        his.nonce,
+        Some(nonce_of(&turns(&file)[0])),
+        "his HELLO's nonce"
+    );
+    assert_eq!(hers.nonce, his.nonce);
+    assert_eq!(
+        his.mine, hers.theirs,
+        "both sides hold the same proof of his"
+    );
+    assert_eq!(his.theirs, hers.mine);
+}
+
+/// RP-3 §7: a caller that asks for the rest of a message from an offset at or past its end gets
+/// the whole message, taken as from 0, and starts it over.
+#[test]
+fn a_partial_offset_past_the_end_is_taken_as_zero() {
+    let w = world();
+    let file = vectors("session-03.json");
+    let note = w.out("ana-to-facundo");
+    let mut held = note.air.clone();
+    held.push(0);
+    let mut caller = station_caller_with(&w, &file, "N0CALL", |c| {
+        c.partials = vec![Partial {
+            id: note.id(),
+            held,
+            total: note.air.len() as u64,
+            serial: Some(1),
+        }];
+    });
+    let mut station = ana(&w, &file);
+    let (theirs, _) = run(&mut caller, &mut station);
+    assert!(
+        received(&theirs).contains(&(Some(1), note.id())),
+        "the whole message came"
+    );
+}
+
+/// RP-3 §10, RP-0 §6.2: a message addressed to `Ana@HamPost.org` is for Ana's account: the
+/// caller sends it, and her station takes it.
+#[test]
+fn an_address_in_capitals_is_the_same_account() {
+    let w = world();
+    let file = vectors("session-03.json");
+    let mut entries = w.messages["facundo-direct"]
+        .map()
+        .as_map()
+        .expect("a map")
+        .to_vec();
+    for (k, v) in &mut entries {
+        if *k == Value::Uint(3) {
+            *v = Value::Array(vec![Value::text("Ana@HamPost.org")]);
+        }
+    }
+    let shouted = Message::from_map(&Value::Map(entries)).expect("a message");
+    let id = shouted.content_id();
+    let mut caller = station_caller_with(&w, &file, "N0CALL", |c| {
+        c.outbox = vec![Outgoing::new(shouted, Compression::None)];
+    });
+    let mut station = ana(&w, &file);
+    let (theirs, ours) = run(&mut caller, &mut station);
+    assert!(
+        ours.iter()
+            .any(|e| matches!(e, Event::Received { message, .. } if message.content_id() == id)),
+        "her station takes it"
+    );
+    assert!(theirs.contains(&Event::Delivered(id)), "and receipts it");
 }
 
 #[test]
