@@ -1363,7 +1363,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "radiopost"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "ed25519-dalek",
  "flate2",
@@ -1374,7 +1374,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-aether"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "ed25519-dalek",
  "radiopost",
@@ -1385,7 +1385,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-api"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -1398,7 +1398,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-ardop"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "radiopost-mercury",
  "radiopost-tester",
@@ -1408,7 +1408,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-client"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -1427,7 +1427,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-gateway"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -1448,7 +1448,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-issue"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -1458,7 +1458,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-mercury"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "radiopost-tester",
  "rpmi",
@@ -1467,7 +1467,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-packet"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "radiopost-tester",
  "rpmi",
@@ -1476,7 +1476,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-postoffice"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -1502,7 +1502,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-tcp"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "radiopost-tester",
  "rcgen",
@@ -1515,7 +1515,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-test-service"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -1531,7 +1531,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-tester"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -1544,7 +1544,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-update"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "base64 0.22.1",
  "minisign-verify",
@@ -1558,7 +1558,7 @@ dependencies = [
 
 [[package]]
 name = "radiopost-vara"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "radiopost-mercury",
  "radiopost-tester",
@@ -1657,7 +1657,7 @@ dependencies = [
 
 [[package]]
 name = "rpmi"
-version = "0.1.0-beta.31"
+version = "0.1.0-beta.32"
 dependencies = [
  "ed25519-dalek",
  "radiopost",
