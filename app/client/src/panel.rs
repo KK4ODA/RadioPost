@@ -23,6 +23,11 @@
 //! its activity, which is `alerting` while one goes out, so no call starts meanwhile. The page says which
 //! modem (`POST /api/modem`, from its Modem box), as each call and listening does.
 //!
+//! When the program starts, the page asks whether to listen for P2P (Setup's *When RadioPost
+//! starts* turns the question off). The panel keeps it open once a run (`ask_listen` in
+//! `/api/state`), so loading the page again does not ask again: answered (`POST /api/asked`), or
+//! made moot by Listen pressed or a call made, it is closed until the program starts again.
+//!
 //! Only this machine's own pages reach it: a request must name the panel's own host (so a page
 //! that rebinds a name to 127.0.0.1 is refused), and a change must carry `X-RadioPost: 1`, which
 //! another site's page cannot send without a preflight the panel never grants.
@@ -134,6 +139,9 @@ pub struct Panel {
     backups_every: std::time::Duration,
     /// Where a received attachment is saved: [`crate::downloads::folder`], elsewhere in tests.
     downloads: PathBuf,
+    /// The question at start, whether to listen for P2P, answered or made moot (Listen pressed, a
+    /// call made): the page asks it once a run, not at each load.
+    asked: Arc<AtomicBool>,
 }
 
 /// When the panel renews the credential: first after `first`, then every `every`, once it has
@@ -245,6 +253,7 @@ impl Panel {
             backups_now: Arc::new(AtomicBool::new(true)),
             backups_every: crate::backups::EVERY,
             downloads: crate::downloads::folder(home),
+            asked: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -818,6 +827,11 @@ impl Panel {
             }
             (Method::Post, "/api/call") => self.call(body),
             (Method::Post, "/api/listen") => self.listen(&text("adapter")),
+            (Method::Post, "/api/asked") => {
+                // the question at start answered, whichever way: not asked again this run
+                self.asked.store(true, Ordering::Relaxed);
+                Ok(json!({}))
+            }
             (Method::Post, "/api/tune") => {
                 let dial = dial_of(&body["dial_hz"])?.ok_or("dial_hz: which dial")?;
                 self.tune(&text("adapter"), dial)
@@ -1426,6 +1440,7 @@ impl Panel {
                        "files": store.files.len(), "waiting": store.waiting_entries().len()},
             "activity": {"state": a.state, "remote": a.remote, "failed": a.failed,
                          "listen": a.listen, "held": a.held},
+            "ask_listen": !self.asked.load(Ordering::Relaxed),
             "alerts": self.alerts.summary(),
             "progress": self.live.lock().unwrap_or_else(PoisonError::into_inner).summary(),
             "update": self.updates.status(),
@@ -1696,12 +1711,14 @@ impl Panel {
         Ok(json!({"on": on, "seconds": seconds}))
     }
 
-    /// Takes the station for a call or for listening (`state`), when it is idle.
+    /// Takes the station for a call or for listening (`state`), when it is idle. Either answers
+    /// the question at start.
     fn take_station(&self, state: &'static str, remote: Option<String>) -> Result<(), Error> {
         let mut a = lock(&self.activity);
         if a.state != "idle" {
             return Err(why_busy(a.state));
         }
+        self.asked.store(true, Ordering::Relaxed);
         a.state = state;
         a.remote = remote;
         a.failed = None;
@@ -1899,6 +1916,9 @@ mod tests {
     use std::path::Path;
     use std::time::{Duration, Instant};
 
+    use serde_json::{Value, json};
+    use tiny_http::Method;
+
     use super::{Panel, Store, lock, thread, unhex};
 
     /// A field of an entry of one of the vectors' lists, found by its name.
@@ -1974,6 +1994,46 @@ mod tests {
         assert!(said.starts_with("credential "), "{said}");
         assert!(!said.contains("kept when"), "at once: {said}");
         assert_eq!(store.credential().expect("kept"), bytes);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// The question at start, whether to listen for P2P, is open once a run: answered, it stays
+    /// closed for every request of that run, and Listen pressed or a call made closes it too. A
+    /// program started again asks again.
+    #[test]
+    fn the_question_at_start_is_asked_once_a_run() {
+        let home = std::env::temp_dir().join(format!("radiopost-panel-ask-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let open = |panel: &Panel| {
+            panel
+                .api(&Method::Get, "/api/state", "", &Value::Null)
+                .expect("the state")["ask_listen"]
+                .clone()
+        };
+
+        let panel = Panel::new(&home, None);
+        assert_eq!(open(&panel), json!(true), "asked at start");
+        panel
+            .api(&Method::Post, "/api/asked", "", &json!({}))
+            .expect("answered");
+        assert_eq!(open(&panel), json!(false), "answered");
+        assert_eq!(
+            open(&panel.clone()),
+            json!(false),
+            "the same run, another request"
+        );
+
+        let again = Panel::new(&home, None);
+        assert_eq!(open(&again), json!(true), "a new run asks again");
+        again
+            .take_station("calling", Some("KK4ODA-1".into()))
+            .expect("idle");
+        assert_eq!(open(&again), json!(false), "a call made answers it");
+
+        let busy = Panel::new(&home, None);
+        lock(&busy.activity).state = "renewing";
+        assert!(busy.take_station("listening", None).is_err(), "not taken");
+        assert_eq!(open(&busy), json!(true), "a refused Listen answers nothing");
         let _ = std::fs::remove_dir_all(&home);
     }
 }

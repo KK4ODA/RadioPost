@@ -14,7 +14,8 @@
 //! * **Sans clock.** Every call takes `now`, so the tests replay a morning in a moment.
 //! * **Sounds and levels** (`notify.json`): the page's own settings, kept here so they hold
 //!   whatever port the panel is on. The page decides what to sound; [`Alerts::alarming`] tells the
-//!   window to come forward.
+//!   window to come forward. The page keeps one more setting there, `ask_listen` (false: no
+//!   question at start whether to listen for P2P, [`crate::panel`]).
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -31,7 +32,8 @@ use crate::store::{Error, Store, unhex, write};
 pub const CIRCLES: &str = "circles.json";
 /// The alerts' log, in the first home.
 pub const LOG: &str = "alerts.json";
-/// The page's sound and notification settings, in the first home.
+/// The page's sound and notification settings, and whether it asks to listen at start, in the
+/// first home.
 pub const NOTIFY: &str = "notify.json";
 /// How many alerts the log keeps.
 pub const KEPT: usize = 200;

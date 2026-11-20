@@ -459,6 +459,16 @@ details.hint code, .note code { font-family: var(--mono); font-size: 12px; backg
 .alarm .row { margin: 12px 0 0; }
 .alarm .quick button { flex: 1; }
 .alarm form.row { flex-wrap: nowrap; }
+/* the question at start: listen for P2P? Over the window until it is answered */
+.ask { position: fixed; inset: 0; z-index: 15; display: grid; place-items: center;
+       background: rgba(0, 0, 0, .45); }
+.ask-box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+           padding: 20px 24px 14px; width: min(480px, calc(100vw - 32px));
+           box-shadow: 0 12px 40px rgba(0, 0, 0, .35); }
+.ask-box h2 { margin: 0 0 8px; font-size: 16px; color: var(--text); }
+.ask-box p { margin: 0; line-height: 1.45; }
+.ask .row { margin: 16px 0 10px; }
+.ask label.check { margin: 0; }
 .banner { display: flex; align-items: center; gap: 10px; margin: -6px 0 14px; padding: 8px 12px;
           border: 1px solid var(--busy); border-left-width: 4px; border-radius: 6px; background: var(--panel); }
 .banner span { flex: 1; }

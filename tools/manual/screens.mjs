@@ -657,6 +657,16 @@ const SHOTS = {
     await context.close();
   },
 
+  // the question when RadioPost starts: listen for P2P?
+  async "client-ask-listen"(browser) {
+    const world = clientWorld({state: {ask_listen: true}});
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(world)});
+    await spreadLog(page, "log", T - 1300, 19);
+    await page.waitForTimeout(300);
+    await shot(page, "client-ask-listen");
+    await context.close();
+  },
+
   async "client-compose"(browser) {
     const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
                                                  height: 900});

@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.47 |
-| **Updated** | 2026-11-18 |
+| **Version** | 0.3.48 |
+| **Updated** | 2026-11-20 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §9 and §10 |
@@ -491,7 +491,7 @@ Leave the client answering station-to-station calls, not just the first.
 | Requested by | The editor, from [the on-air tests guide](../user/on-air-tests.md), §7: *Listen* answers one call, then stops. The author, 2026-11-18, after the 40 m sessions from the mobile to the house: the house's client had stopped listening after one P2P session, and the mobile's next calls went unanswered. Requesters: 1. |
 | Component | Client. |
 | Compatibility | **Fits today**: `listen` (RP-4 §4) stays on. |
-| Existing coverage | **Implemented** (2026-11-18): **Listen for P2P** is a switch that stays on (`aria-pressed`, a lamp, **Listening for P2P**) until it is pressed again. The client keeps its connection to the modem, its callsigns claimed and `listen` on, across sessions (`session::keep_listening`), so Aether never stops answering them (a claim ends with its connection, Aether's ADR-0106 §2.1); a connection that failed is opened again, and a modem that is away is tried every 5 s. The command line's `listen` still answers one call. |
+| Existing coverage | **Implemented** (2026-11-18): **Listen for P2P** is a switch that stays on (`aria-pressed`, a lamp, **Listening for P2P**) until it is pressed again. The client keeps its connection to the modem, its callsigns claimed and `listen` on, across sessions (`session::keep_listening`), so Aether never stops answering them (a claim ends with its connection, Aether's ADR-0106 §2.1); a connection that failed is opened again, and a modem that is away is tried every 5 s. The command line's `listen` still answers one call. When the panel's program starts, the page asks once whether to listen (2026-11-20, the author's ask): the panel keeps the question open once a run (`ask_listen` in its state, closed by `POST /api/asked`, Listen or a call), and `ask_listen` false in `notify.json` (the question's box, Setup's *When RadioPost starts*) turns it off. |
 | Dependencies | None. |
 | Effort | Small. |
 | Priority | **Medium.** Station-to-station tests are what testers do first. |
@@ -1240,3 +1240,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.45 | 2026-11-18 | W53, at the author's ask after the 40 m sessions: **Print** (a PDF by the system's print dialog, an ICS-213 as FEMA's ICS 213) and **Save** for a message's files, built. |
 | 0.3.46 | 2026-11-18 | W54 implemented, at a tester's report through the author: a gateway unregistered from RadioPost Gateway or the post office's desk, and the account it registers with chosen; gap G23 settled by RP-5 1.2.0. |
 | 0.3.47 | 2026-11-18 | W49's coverage: **New password** for a user who lost their mailbox's password, at a user's ask through the author. |
+| 0.3.48 | 2026-11-20 | W15's coverage, at the author's ask: the client asks when it starts whether to listen for P2P. |

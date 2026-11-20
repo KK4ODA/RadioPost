@@ -362,6 +362,7 @@ async function refresh() {
       || (lastState === "session" && a.state === "listening")) await openFolder(folder);
   lastState = a.state;
   if (s.alerts) await syncAlerts(s.alerts);
+  await listenWhenFree(a);
   return s;
 }
 
@@ -384,17 +385,22 @@ function showListen(s, a, busy) {
   b.title = listenTitle(s, a);
 }
 
-// Listen for P2P's tooltip: the callsigns it answers as (every callsign of this computer, the one
-// chosen first, W46), that it holds until pressed again, and that a gateway on the station is not
-// this client's to answer
-function listenTitle(s, a) {
+// the callsigns Listen for P2P answers as: every callsign of this computer, the one chosen first
+// (W46)
+function listenNames(s) {
   const mine = s.me ? [s.me.operator] : [];
   for (const c of s.callsigns || []) {
     if (c.operator && !mine.includes(c.operator)) mine.push(c.operator);
   }
-  const names = mine.length > 1
+  return mine.length > 1
     ? `${mine.slice(0, -1).join(", ")} or ${mine[mine.length - 1]}`
     : mine[0] || "your callsign";
+}
+
+// Listen for P2P's tooltip: the callsigns it answers as, that it holds until pressed again, and
+// that a gateway on the station is not this client's to answer
+function listenTitle(s, a) {
+  const names = listenNames(s);
   if (a.listen && a.held) {
     return `On: waiting for the modem (${a.held}); tried again every 5 s. `
       + "Press again to stop listening";
@@ -412,6 +418,67 @@ function listenTitle(s, a) {
   }
   return `Answer P2P calls to ${names} until you press it again. `
     + "A gateway on this station keeps answering calls to its own callsign";
+}
+
+// ── the question at start: listen for P2P? (W15; the author's ask, 2026-11-20) ────────────────
+// A house station is mostly left listening, so when RadioPost starts it asks once. Once a run,
+// not at each load of the page: the panel says whether the question is still open (`ask_listen`),
+// and Listen pressed or a call made closes it too. Only with a credential, and only when the
+// station is free or about to be (a renewal or an alert as the panel opens). Unticking the
+// question's box, or Setup's When RadioPost starts, turns it off: `ask_listen` false in the page's
+// settings (notify.json, in the first home, whatever port the panel is on).
+
+let listenWanted = false;
+
+function askListen(s) {
+  const a = s.activity;
+  if (!s.ask_listen || notifySettings.ask_listen === false || !s.me || !s.device) return;
+  if (a.listen || !["idle", "renewing", "alerting"].includes(a.state)) return;
+  $("ask-text").textContent = `Answer P2P calls to ${listenNames(s)} from now on? RadioPost `
+    + "listens on the frequency the radio is on, and again after each session, until you click "
+    + "Listening for P2P under Station.";
+  $("ask-again").checked = true;
+  $("ask").hidden = false;
+  $("ask-yes").focus();
+}
+
+async function answerAsk(listen) {
+  if ($("ask").hidden) return;
+  $("ask").hidden = true;
+  if (!$("ask-again").checked) {
+    notifySettings.ask_listen = false;
+    $("ask-listen").checked = false;
+    await saveNotify();
+  }
+  try { await api("asked", {}); } catch { /* asked again only if the page loads again */ }
+  if (listen) {
+    listenWanted = true;
+    await refresh();
+  }
+}
+
+// Listen for P2P, as answered at start, once the station is free; given up if something else
+// took it meanwhile, or Listen was pressed
+async function listenWhenFree(a) {
+  if (!listenWanted) return;
+  if (a.listen || !["idle", "renewing", "alerting"].includes(a.state)) {
+    listenWanted = false;
+  } else if (a.state === "idle") {
+    listenWanted = false;
+    await act("listen", {adapter: adapter()});
+  }
+}
+
+function wireAsk() {
+  $("ask-yes").addEventListener("click", () => answerAsk(true));
+  $("ask-no").addEventListener("click", () => answerAsk(false));
+  $("ask").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); answerAsk(false); }
+  });
+  $("ask-listen").addEventListener("change", () => {
+    notifySettings.ask_listen = $("ask-listen").checked;
+    saveNotify();
+  });
 }
 
 // ── the callsigns this computer works (wishlist W46, W7) ───────────────────────────────────────
@@ -3256,6 +3323,7 @@ async function fillDevices() {
 }
 
 function renderSounds() {
+  $("ask-listen").checked = notifySettings.ask_listen !== false;
   const s = sounds();
   $("snd-on").checked = s.on !== false;
   $("snd-volume").value = s.volume ?? 60;
@@ -3683,6 +3751,7 @@ function wire() {
 async function start() {
   wire();
   wireAlerts();
+  wireAsk();
   // what a composer window of its own put in the outbox, or could not open
   windowsChannel?.addEventListener("message", (e) => {
     if (e.data && e.data.composed) written(true, e.data.edited).catch(() => {});
@@ -3696,6 +3765,7 @@ async function start() {
   const s = await refresh();
   if (!s.device || !s.me) show("setup");
   else await openFolder("inbox");
+  askListen(s);
   setInterval(() => refresh().catch(() => {}), 1000);
   if (s.me) probeOffice();
   // a new application shows on the button within a minute

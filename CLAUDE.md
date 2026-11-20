@@ -99,7 +99,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   connection, so closing it after each session had stopped the answering), opens a failed one
   again, tries a modem that is away every 5 s, and opens the home afresh at each call; the panel's
   `Activity.listen` is the switch and `held` why it cannot listen. `answer` (the command line's
-  `listen`) still answers one call. Tested in `tests/listening.rs`.
+  `listen`) still answers one call. Tested in `tests/listening.rs`. When the program starts the
+  page asks once whether to listen (2026-11-20): the panel's `asked` keeps the question open once
+  a run (`ask_listen` in `/api/state`; closed by `POST /api/asked` or `take_station`, so a reload
+  does not ask again), the page asks only with a credential and waits for a renewal or an alert
+  to end before it listens, and `ask_listen` false in `notify.json` (Setup's *When RadioPost
+  starts*) turns it off.
   Several callsigns (W46, W7; the author's decisions 2026-11-13): each a home of its own, the first
   the home as before and the others in `callsigns/<n>` under it, `chosen` naming the one in use
   (`callsigns.rs`); the panel opens the chosen home at each request and changes it only while idle,

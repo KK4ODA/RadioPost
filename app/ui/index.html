@@ -643,6 +643,10 @@
           <p class="note">Emergency mail arrives at least as Important. Only an address or group you set can reach Time-sensitive: anyone can choose Emergency.</p>
           <label class="check" title="A notification from the system when this window is in the background"><input type="checkbox" id="snd-notify"> Notify me when this window is in the background</label>
         </div>
+        <div class="card" id="start-card">
+          <h2>When RadioPost starts</h2>
+          <label class="check" title="When RadioPost opens, ask whether to answer P2P calls to your callsigns until you click Listening for P2P"><input type="checkbox" id="ask-listen"> Ask whether to listen for P2P</label>
+        </div>
         <div class="card">
           <h2>This device's key</h2>
           <p class="mono" id="device" title="Give this public key to your post office when you enroll"></p>
@@ -703,6 +707,17 @@
         <button type="submit" title="Answer with your line">Reply</button>
       </form>
       <p class="note" id="alarm-more"></p>
+    </div>
+  </div>
+  <div class="ask" id="ask" role="dialog" aria-modal="true" aria-labelledby="ask-head" aria-describedby="ask-text" hidden>
+    <div class="ask-box">
+      <h2 id="ask-head">Listen for P2P?</h2>
+      <p id="ask-text"></p>
+      <div class="row">
+        <button class="primary" id="ask-yes" title="Answer P2P calls from now on, as Listen for P2P under Station does, until you click Listening for P2P">Listen for P2P</button>
+        <button id="ask-no" title="Not now: Listen for P2P under Station starts it whenever you want">Not now</button>
+      </div>
+      <label class="check" title="Untick it and RadioPost no longer asks; Setup, When RadioPost starts, brings the question back"><input type="checkbox" id="ask-again" checked> Ask each time RadioPost starts</label>
     </div>
   </div>
   <div class="toast" id="toast" role="status" hidden><span id="toast-text"></span><button id="toast-act" hidden></button></div>
