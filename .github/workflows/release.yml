@@ -264,3 +264,27 @@ jobs:
               --notes "What the newest release offers each program: client.json, gateway.json and tools.json. Installed programs read them to say when a newer release is out. Never delete this release."
           fi
           gh release upload channel-beta dist/client.json dist/gateway.json dist/tools.json --clobber
+
+      # radiopost.org lists this release: tell it now, not at its daily build. Without the
+      # secret, or if GitHub refuses, the release is not held back: the site catches up by
+      # itself within a day.
+      - name: Tell radiopost.org
+        if: needs.preflight.outputs.tag != ''
+        continue-on-error: true
+        env:
+          SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+          RELEASED: ${{ steps.tag.outputs.tag }}
+        run: |
+          if [ -z "$SITE_DISPATCH_TOKEN" ]; then
+            echo "no SITE_DISPATCH_TOKEN: radiopost.org's daily build will list this release"
+            exit 0
+          fi
+          body=$(printf '{"event_type":"release-published","client_payload":{"repo":"%s","tag":"%s"}}' \
+            "$GITHUB_REPOSITORY" "$RELEASED")
+          curl -fsS -X POST --max-time 30 \
+            -H "Authorization: Bearer $SITE_DISPATCH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -d "$body" https://api.github.com/repos/KK4ODA/radiopost.org/dispatches \
+            && echo "radiopost.org told of $RELEASED" \
+            || echo "::warning::radiopost.org was not told; its daily build will list this release"
