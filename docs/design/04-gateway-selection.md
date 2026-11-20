@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.0 |
+| **Version** | 0.2.0 |
 | **Updated** | 2026-11-20 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -16,8 +16,8 @@ The question this document answers is the operator's:
 
 Today the client answers it by distance from a typed grid square. This document proposes how to
 answer it properly, for HF and for VHF and UHF, and how hf-predict should change to help. It is a
-proposal for the author's review: nothing here is built, no specification changes, and the
-decisions it needs are listed in §21.
+proposal for the author's review: nothing here is built, and no specification changes. The
+author answered its ten questions on 2026-11-20 (§21).
 
 **How facts are marked.** Facts about RadioPost, Aether and hf-predict were read in their
 repositories on 2026-11-20. Outside facts were researched the same day: **[P]** checked on a primary
@@ -49,7 +49,7 @@ central service; optional additions to RP-4 and RP-5 would sharpen it.
 | Directory | RP-5's signed lists, as now; optional record members for site, station, listening windows and the post office's last contact; local entries for the operator | 7 |
 | hf-predict | Its domain code moved into Tauri-free crates, relicensed MIT OR Apache-2.0, embedded in both apps; one small local API for today's FT8 evidence | 11 |
 | Records | One line of JSON per attempt, never rewritten; everything learned recomputed from them | 15 |
-| Order of work | Position, directory and **attempt records first**; then VHF terrain and HF in either order; then learning, then transaction ranking; automation last and attended only | 18 |
+| Order of work | Position, directory and **attempt records first**; then VHF terrain and HF in either order; then learning, then transaction ranking; after a failure the client suggests the next candidate and never calls by itself | 18 |
 | Proof | Method against method on RadioPost's own records and a randomised field study; Winlink's published method as one baseline; no claim before the numbers | 19 |
 
 **What is new against Winlink Express and Pat** (§4): their HF prediction is VOACAP at one required
@@ -261,14 +261,14 @@ last on 40 m at midnight. Ranking callsigns hides exactly the differences that d
 
 | # | Quantity | What it is | Main evidence |
 |---|---|---|---|
-| Q1 | RF path viability | Can a signal get there and back at all, each way? | Propagation (HF), terrain and link budget (VHF), signals heard |
-| Q2 | Connection probability | Does a call end in a link? | Q1, the gateway being there and listening, the channel being free, the modem's call |
-| Q3 | Link stability | How often does a link that is up break before the work is done? | Session histories |
-| Q4 | Effective throughput | Bytes of mail a second, after acknowledgements, retransmissions and turnarounds, each way | The modem's ladder and the SNR (prior), measured sessions |
-| Q5 | Service availability | Is the gateway program answering and reaching its post office? | The post office's view (§7.4), `ERROR` codes in sessions |
-| Q6 | Completion probability | Does *this* transaction finish within the time the operator gives it? | Q2–Q5 and the transaction's size |
-| Q7 | Expected completion time | Including failed calls, reconnections and overhead | Q2–Q5 and the size |
-| Q8 | Confidence | How much evidence stands behind each of the above | The amount, age and relevance of the evidence |
+| Q1 | RF path viability | Can a signal get there and back at all, each way? | Propagation (HF), terrain and link budget (VHF), signals heard | As recommended: the crates MIT OR Apache-2.0 |
+| Q2 | Connection probability | Does a call end in a link? | Q1, the gateway being there and listening, the channel being free, the modem's call | As recommended: hf-predict's repository, as a workspace |
+| Q3 | Link stability | How often does a link that is up break before the work is done? | Session histories | As recommended: phased |
+| Q4 | Effective throughput | Bytes of mail a second, after acknowledgements, retransmissions and turnarounds, each way | The modem's ladder and the SNR (prior), measured sessions | As recommended: phased |
+| Q5 | Service availability | Is the gateway program answering and reaching its post office? | The post office's view (§7.4), `ERROR` codes in sessions | As recommended: Copernicus everywhere |
+| Q6 | Completion probability | Does *this* transaction finish within the time the operator gives it? | Q2–Q5 and the transaction's size | As recommended: T80; 30 and 10 minutes |
+| Q7 | Expected completion time | Including failed calls, reconnections and overhead | Q2–Q5 and the size | As recommended: bundled |
+| Q8 | Confidence | How much evidence stands behind each of the above | The amount, age and relevance of the evidence | As recommended: local, full positions |
 
 Q1 to Q5 are learned and predicted separately because each has different evidence, changes at a
 different speed, and fails for different reasons. Q6 and Q7 are computed from them (§13). Q8 is
@@ -1117,8 +1117,8 @@ better gateway is never found. The remedy is under the operator's control:
 * **"Check this gateway"** (with `caps.probe`, §12.2) sends one probe on the operator's click and
   records both directions' SNR, which updates δ without a session.
 
-There is **no automatic probing and no automatic calling** before Phase 6, and then only attended and
-within limits (§18). The client never transmits to learn on its own.
+There is **no automatic probing and no automatic calling**, in any phase (the author's decision,
+§21, Q9). The client never transmits to learn, or to try another gateway, on its own.
 
 ### 12.9 Seeing and resetting what was learned
 
@@ -1387,8 +1387,8 @@ favourite predicted poor keeps its warning ("Your favourite, but 10 m is closed 
 When the operator asks for "the next one" after a failure, the next candidate is chosen by scoring
 pairs (§13.4): the second choice that, after the first's failure, gives the best chance of finishing,
 counting that the first failure makes the same path today less likely. In plain terms: try another
-band or another direction before another gateway beside the first. Automatic fallback (§18, Phase
-6) uses the same order.
+band or another direction before another gateway beside the first. After a failure the client
+suggests that candidate with its reason (§18, Phase 6); the operator decides whether to call it.
 
 ### 14.7 Time other than now
 
@@ -1752,7 +1752,7 @@ conditions not included; no storm forecast; your position as saved (Home)".
 | Attempt records, classification, learning | RadioPost client, new module `selection` | Evidence in, estimates out | The records |
 | Transaction model, ranking | RadioPost client, `selection` | Candidates in, ranked and explained out | All the above |
 | Panel views | `app/ui` | §16 | The panel API (§15.3) |
-| Fallback controller (Phase 6) | RadioPost client | Attended retries in ranked pair order | The ranking, RPMI |
+| Next-candidate suggestion (Phase 6) | RadioPost client | After a failure, proposes the next candidate in pair order, with its reason; never calls | The ranking |
 
 The client calls the libraries in-process: no new program, no new port, no new service. The one
 cross-program link (hf-predict's evidence API) is optional and read-only.
@@ -1771,16 +1771,13 @@ because every later phase learns from them and evidence not recorded is lost.
 | **3. HF** | hf-predict's crates (§11.3 steps 1–3); both-way VOACAP for each channel, batched and cached; Aether's modem profile; the time picker; the evidence API from hf-predict | hf-predict's workspace | The crates pass hf-predict's own tests and engine reference cases; the same prediction from the app and the library; RadioPost's HF ranking works with networking off |
 | **4. Learning** | Classification rules versioned; δ, A, S, η, λ, O, H estimated with pooling and forgetting; the details view's three columns; forgetting; the station-health warning | Phase 1's records; Phases 2–3 for δ | Learning replayed on recorded and simulated attempt streams reproduces known offsets within their stated spread; a planted station fault is flagged and not blamed on gateways; the same records always give the same estimates |
 | **5. Transaction ranking** | The transaction (§13.1); simulation; T80 and the priority objectives; reasons and ties; ranking pairs for "next one" | Phase 4 | The closed form and simulation agree (appendix A); the validation of §19 run on all records so far, reported with intervals, before the ranking becomes the default order |
-| **6. Refinement and automation** | Probing on request (`caps.probe`); "suggest one to try"; the RP-4 and RP-5 optional additions if the author accepts them; obstruction data experiments; attended automatic fallback within the operator's limits | Phase 5; the author's decisions (§21) | Each experiment judged on recorded outcomes before it changes the default; fallback only attended, only in eligible channels, stopped by any operator action |
+| **6. Refinement** | Probing on request (`caps.probe`, RP-4, §21 Q4); "suggest one to try"; obstruction data experiments; after a failure, the next candidate suggested with its reason | Phase 5 | Each experiment judged on recorded outcomes before it changes the default; no path in the client starts a call or a probe without the operator's click |
 
-**Automatic fallback (Phase 6), its rules.** It is a convenience for an operator who is present:
-it moves to the next candidate of the pair order (§14.6) after a classified failure, at most a set
-number of calls (three by default) and a set time, never on a busy channel, never on a channel
-outside the operator's rules for the control in use (RP-4 §8, the modem's rules check or the
-client's own), with the radio's tuning through RPMI's dial (RP-4 §4.1) and the modem's busy
-detector, and it stops at any operator action. Unattended operation (a station calling with no one
-present) is automatic control, allowed in the US only in the segments RP-7 §5.1 lists, and is not
-part of this design.
+**After a failure (Phase 6).** The client names the next candidate of the pair order (§14.6), with
+why ("another band: 40 m failed, 80 m does not share today's ionosphere"), and puts it in the call
+box for one click. It never calls, retries or retunes by itself: the author's decision (§21, Q9).
+Unattended operation (a station calling with no one present) is automatic control, allowed in the
+US only in the segments RP-7 §5.1 lists, and is not part of this design.
 
 **Effort, roughly.** Phase 1 and Phase 3 are each a few weeks; Phase 2 is the largest (elevation
 handling and its tests); Phases 4 and 5 are modest in code and long in calendar time, because they
@@ -1947,20 +1944,21 @@ Asked of every part: does it earn its place, and what would be lost by cutting i
 
 ## 21. Decisions for the author
 
-Each has a recommendation; none is assumed.
+Asked one at a time and answered by the author on 2026-11-20. Nine answers are the recommendation;
+Q9's is not, and the design follows it (§12.8, §14.6, §17, §18).
 
-| # | Question | Recommendation |
-|---|---|---|
-| Q1 | Relicense hf-predict's extracted crates MIT OR Apache-2.0? (The app may stay Apache-2.0.) | Yes: RadioPost's binaries then carry one licence choice throughout |
-| Q2 | Where do the shared crates live: hf-predict's repository as a workspace, a new repository, or RadioPost's? | hf-predict's: the engine build and its CI are there; move them to their own repository only if a third program needs them |
-| Q3 | Propose RP-5's optional record members: `site`, a channel's `station`, `listens`, and `seen` from the post office? | `seen` and `listens` with Phase 1; `site` and `station` with Phase 2, when terrain can use them. Each MINOR and announced (RP-0 §8.4) |
-| Q4 | Propose RP-4's optional additions: `quality.peer_snr_db`, `failed.heard` and `snr_db`, `probe`? | The first two with Phase 4 (learning is sharper with them); `probe` with Phase 6 |
-| Q5 | Copernicus GLO-30 (fetched, with its notices) as the elevation source? | Yes; GLO-90 for the first pass; 3DEP and canopy data as a US experiment later |
-| Q6 | The default score: the time done 4 times in 5? Deadlines for priority (30 min) and emergency (10 min)? | Yes, as settings |
-| Q7 | Bundle the VOACAP engine in the client (about 9 MB installed, a few MB to download)? | Yes: HF ranking must work with no Internet |
-| Q8 | Attempt records local only, with full positions, and an option for squares only? | Yes. A shared outcome data set is a separate question (§20.4) |
-| Q9 | Attended automatic fallback in Phase 6, within the operator's limits? | Yes, attended only; unattended calling stays out of this design |
-| Q10 | Rewrite W17 and add the new wishes once this is accepted? | Yes, with each wish's compatibility notes, as the wishlist does |
+| # | Question | Recommendation | The author's answer |
+|---|---|---|---|
+| Q1 | Relicense hf-predict's extracted crates MIT OR Apache-2.0? (The app may stay Apache-2.0.) | Yes: RadioPost's binaries then carry one licence choice throughout | As recommended: the crates MIT OR Apache-2.0 |
+| Q2 | Where do the shared crates live: hf-predict's repository as a workspace, a new repository, or RadioPost's? | hf-predict's: the engine build and its CI are there; move them to their own repository only if a third program needs them | As recommended: hf-predict's repository, as a workspace |
+| Q3 | Propose RP-5's optional record members: `site`, a channel's `station`, `listens`, and `seen` from the post office? | `seen` and `listens` with Phase 1; `site` and `station` with Phase 2, when terrain can use them. Each MINOR and announced (RP-0 §8.4) | As recommended: phased |
+| Q4 | Propose RP-4's optional additions: `quality.peer_snr_db`, `failed.heard` and `snr_db`, `probe`? | The first two with Phase 4 (learning is sharper with them); `probe` with Phase 6 | As recommended: phased |
+| Q5 | Copernicus GLO-30 (fetched, with its notices) as the elevation source? | Yes; GLO-90 for the first pass; 3DEP and canopy data as a US experiment later | As recommended: Copernicus everywhere |
+| Q6 | The default score: the time done 4 times in 5? Deadlines for priority (30 min) and emergency (10 min)? | Yes, as settings | As recommended: T80; 30 and 10 minutes |
+| Q7 | Bundle the VOACAP engine in the client (about 9 MB installed, a few MB to download)? | Yes: HF ranking must work with no Internet | As recommended: bundled |
+| Q8 | Attempt records local only, with full positions, and an option for squares only? | Yes. A shared outcome data set is a separate question (§20.4) | As recommended: local, full positions |
+| Q9 | Attended automatic fallback in Phase 6, within the operator's limits? | Yes, attended only; unattended calling stays out of this design | **Suggest, never call**: after a failure the client proposes the next candidate and why; the operator presses Call. No automatic transmissions at all |
+| Q10 | Rewrite W17 and add the new wishes once this is accepted? | Yes, with each wish's compatibility notes, as the wishlist does | As recommended, once the proposal is accepted |
 
 ---
 
@@ -2060,3 +2058,4 @@ for size in (2000, 50000):
 | Version | Date | Change |
 |---|---|---|
 | 0.1.0 | 2026-11-20 | First draft, for the author's review: the selection problem; position and GPS; the directory and optional RP-5 members; VHF terrain (Copernicus, P.526 §4.5, link budgets); HF (VOACAP both ways through the modem's ladder); hf-predict's crates; attempt records, failure classification and learning; the transaction model and T80; the ranking; the panel; roadmap, validation, risks and ten decisions. Research of 2026-11-20 on Winlink Express, Pat, GPS sources, elevation data and propagation models. |
+| 0.2.0 | 2026-11-20 | §21: the author's answers to the ten questions, asked one at a time. Q1 to Q8 and Q10 as recommended; Q9, after a failure the client suggests the next candidate and never calls by itself, so §1, §12.8, §14.6, §17 and §18's Phase 6 no longer have an automatic fallback. |
