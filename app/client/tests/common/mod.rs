@@ -83,6 +83,15 @@ pub fn loopback() -> (Server, SocketAddr, SocketAddr) {
 
 /// The loopback adapter, its radios on `dial_hz` and able to tune (RP-4 §4.1) when it is given.
 pub fn loopback_dialled(dial_hz: Option<u64>) -> (Server, SocketAddr, SocketAddr) {
+    loopback_with(dial_hz, Duration::from_secs(10))
+}
+
+/// The loopback adapter as [`loopback_dialled`], its modems giving up on a call nobody answers
+/// after `call_timeout`.
+pub fn loopback_with(
+    dial_hz: Option<u64>,
+    call_timeout: Duration,
+) -> (Server, SocketAddr, SocketAddr) {
     let caps = Caps {
         bandwidths: vec![500, 2300],
         max_links: 1,
@@ -109,7 +118,7 @@ pub fn loopback_dialled(dial_hz: Option<u64>) -> (Server, SocketAddr, SocketAddr
     let mut ch = Channel::new();
     let f = ch.add_station(station("KK4ODA", "c"));
     let a = ch.add_station(station("N0CALL", "a"));
-    let server = Server::new(ch, Duration::from_secs(10));
+    let server = Server::new(ch, call_timeout);
     let at_f = server.listen(f, "127.0.0.1:0").expect("a port");
     let at_a = server.listen(a, "127.0.0.1:0").expect("a port");
     (server, at_f, at_a)

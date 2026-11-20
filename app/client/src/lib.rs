@@ -20,6 +20,7 @@
 //! * [`panel`]: the page in `app/ui/` and its JSON API, served on the loopback interface.
 //! * [`presence`]: the panel's connection to Aether between calls, which names the app there and
 //!   claims nothing.
+//! * [`selection`]: the record of every call placed, and why each failed, to choose gateways by.
 //! * [`terminal`]: a terminal on the post office's server, over SSH, for its operators.
 //!
 //! `radiopost` is its command-line program; the desktop application (Tauri, D27) is built on the
@@ -43,6 +44,7 @@ pub mod online;
 pub mod panel;
 pub mod presence;
 pub mod renewal;
+pub mod selection;
 pub mod session;
 pub mod store;
 pub mod terminal;

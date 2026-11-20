@@ -26,6 +26,7 @@ use rpmi::tcp::Connection;
 use rpmi::wire::{Caps as ModemCaps, Message as Line};
 use serde_json::{Value, json};
 
+use crate::selection::attempts::{self, Recorder, SessionNotes, Trace};
 use crate::store::{Error, Store};
 
 /// RP-3 §8: nothing heard for this long ends the session.
@@ -246,6 +247,13 @@ pub struct Report {
     pub queued: Vec<ContentId>,
     /// Why the call or the session failed, when it did.
     pub failed: Option<String>,
+    /// The codes of the other station's `ERROR`s (RP-3 §5.9), in order.
+    pub errors: Vec<String>,
+    /// `NOTICE`s heard (RP-3 §5.10).
+    pub notices: u32,
+    /// This side refused the other station: a gateway answered a station call (RP-3 §10), or its
+    /// answer did not check.
+    pub refused_other: bool,
 }
 
 fn random<const N: usize>() -> [u8; N] {
@@ -384,6 +392,11 @@ struct Modem {
     caps: ModemCaps,
     /// How long a session may be silent (RP-3 §8).
     quiet: Duration,
+    /// The modem's name, as its `hello` gave it.
+    said_name: String,
+    /// The record of the call under way, fed every event and request (choosing a gateway,
+    /// §12.1), when there is one.
+    trace: Option<Arc<Mutex<Trace>>>,
 }
 
 impl Modem {
@@ -424,11 +437,16 @@ impl Modem {
                 name: opts.adapter.clone(),
                 caps: ModemCaps::from_json(&Value::Null),
                 quiet: opts.quiet,
+                said_name: String::new(),
+                trace: None,
             };
             let hello = modem.host.hello(&opts.app);
             match modem.ask(&hello) {
-                Ok(Event::Hello { caps, .. }) => {
+                Ok(Event::Hello {
+                    caps, modem: said, ..
+                }) => {
                     modem.caps = caps;
+                    modem.said_name = said;
                     break modem;
                 }
                 Ok(_) => break modem,
@@ -444,28 +462,47 @@ impl Modem {
         Ok(modem)
     }
 
+    /// What the call's record is told, when a call is recorded.
+    fn note(&self, f: impl FnOnce(&mut Trace)) {
+        if let Some(t) = &self.trace {
+            f(&mut t.lock().unwrap_or_else(PoisonError::into_inner));
+        }
+    }
+
     fn send(&mut self, m: &Line) -> Result<(), Error> {
-        self.conn
-            .send(m)
-            .map_err(|e| format!("the adapter's connection failed: {e}"))
+        self.note(|t| t.sending(m));
+        self.conn.send(m).map_err(|e| {
+            self.note(Trace::fault);
+            format!("the adapter's connection failed: {e}")
+        })
     }
 
     fn next(&mut self) -> Result<Event, Error> {
-        let m = self
+        let read = self
             .conn
             .read_message()
-            .map_err(|e| format!("the adapter said nothing in time, or failed: {e}"))?
-            .ok_or("the adapter closed the connection")?;
-        Event::read(&m).map_err(|why| format!("the adapter wrote what RP-4 does not: {why}"))
+            .map_err(|e| format!("the adapter said nothing in time, or failed: {e}"))
+            .and_then(|m| m.ok_or_else(|| "the adapter closed the connection".to_owned()));
+        let m = read.inspect_err(|_| self.note(Trace::fault))?;
+        let e = Event::read(&m)
+            .map_err(|why| format!("the adapter wrote what RP-4 does not: {why}"))?;
+        self.note(|t| t.saw(&e));
+        Ok(e)
     }
 
     /// The adapter's next event, or `None` when a quarter of a second passes without one.
     fn poll(&mut self) -> Result<Option<Event>, Error> {
         match self.conn.read_message() {
-            Ok(Some(m)) => Event::read(&m)
-                .map(Some)
-                .map_err(|why| format!("the adapter wrote what RP-4 does not: {why}")),
-            Ok(None) => Err("the adapter closed the connection".into()),
+            Ok(Some(m)) => {
+                let e = Event::read(&m)
+                    .map_err(|why| format!("the adapter wrote what RP-4 does not: {why}"))?;
+                self.note(|t| t.saw(&e));
+                Ok(Some(e))
+            }
+            Ok(None) => {
+                self.note(Trace::fault);
+                Err("the adapter closed the connection".into())
+            }
             Err(e)
                 if matches!(
                     e.kind(),
@@ -474,7 +511,10 @@ impl Modem {
             {
                 Ok(None)
             }
-            Err(e) => Err(format!("the adapter's connection failed: {e}")),
+            Err(e) => {
+                self.note(Trace::fault);
+                Err(format!("the adapter's connection failed: {e}"))
+            }
         }
     }
 
@@ -491,6 +531,7 @@ impl Modem {
                     text,
                 } if Some(i) == id.as_ref() => {
                     let op = request.get("op").and_then(Value::as_str).unwrap_or("");
+                    self.note(|t| t.refused(op, code));
                     if code == "no-modem" {
                         return Err(format!(
                             "the modem at {} cannot be reached: is it running?",
@@ -750,6 +791,7 @@ fn carry<E: Engine<Event = SessionEvent> + Counted>(
             return Ok(());
         }
         let next = if silence.over(modem.quiet) {
+            modem.note(Trace::silence);
             Err(format!(
                 "nothing arrived for {} seconds",
                 modem.quiet.as_secs()
@@ -917,8 +959,12 @@ fn apply(
                 &format!("the other station is {}, {checked}", body.operator),
             );
         }
-        SessionEvent::Notice(text) => tell(say, &format!("notice: {text}")),
+        SessionEvent::Notice(text) => {
+            report.notices += 1;
+            tell(say, &format!("notice: {text}"));
+        }
         SessionEvent::Error { code, text } => {
+            report.errors.push(code.to_string());
             let why = format!(
                 "the other station sent ERROR {code}{}",
                 text.map(|t| format!(": {t}")).unwrap_or_default()
@@ -959,6 +1005,7 @@ fn refused(
         _ => return,
     };
     tell(say, &why);
+    report.refused_other = true;
     report.failed = Some(why);
 }
 
@@ -1163,16 +1210,91 @@ pub fn call(
     opts: &Options,
     say: &mut dyn FnMut(&str),
 ) -> Result<Report, Error> {
-    let (mut modem, _) = Modem::open(store, opts, &[])?;
+    let base = crate::callsigns::base_of(store.home());
+    let record = Recorder::begin(&base, opts.now(), attempt(store, remote, kind, opts));
+    let trace = record.trace();
+    let result = call_traced(store, remote, kind, opts, say, &trace);
+    record.finish(result.as_ref().err().map(String::as_str));
+    result
+}
+
+/// [`call`], with what happens told to `trace`, the call's record (choosing a gateway, §12.1).
+fn call_traced(
+    store: &mut Store,
+    remote: &str,
+    kind: Kind,
+    opts: &Options,
+    say: &mut dyn FnMut(&str),
+    trace: &Arc<Mutex<Trace>>,
+) -> Result<Report, Error> {
+    let (mut modem, me) = Modem::open(store, opts, &[])?;
+    modem.trace = Some(Arc::clone(trace));
+    let said = modem.said_name.clone();
+    modem.note(|t| t.opened(&said, &me));
     let back = modem
         .tune_for_call(opts.dial_hz, say)?
         .filter(|_| opts.tune_back);
     let result = call_on(&mut modem, store, remote, kind, opts, say);
+    // tuning back is after the call, not part of it
+    modem.trace = None;
     if let Some(was) = back {
         modem.tune_back(was, say);
     }
     modem.conn.close();
     result
+}
+
+/// What a call sets out to do, as known before it is placed: its channel, the operator's grid
+/// square, and the messages it will offer and ask for (choosing a gateway, §13.1).
+fn attempt(store: &Store, remote: &str, kind: Kind, opts: &Options) -> attempts::Call {
+    let now = opts.now();
+    let offered = if kind == Kind::Station {
+        store.outbox.clone()
+    } else {
+        store.outbox_for(remote, now)
+    };
+    let mut plan = attempts::Plan {
+        messages: offered.len(),
+        ..attempts::Plan::default()
+    };
+    for w in &offered {
+        if let Ok(m) = store.message(&w.id) {
+            let priority = m
+                .map()
+                .get(radiopost::message::key::PRIORITY)
+                .and_then(radiopost::cbor::Value::as_u64)
+                .unwrap_or(0);
+            plan.priority = plan.priority.max(priority);
+            plan.out_bytes += outgoing(m, opts.packing).air.len() as u64;
+        }
+    }
+    if kind == Kind::Gateway {
+        plan.in_listed_bytes = store
+            .waiting_entries()
+            .iter()
+            .filter(|e| fetched(opts.fetch, e))
+            .filter_map(|e| e["size"].as_u64())
+            .sum();
+    }
+    attempts::Call {
+        remote: remote.to_owned(),
+        gateway: kind == Kind::Gateway,
+        dial_hz: opts.dial_hz,
+        bandwidth_hz: opts.bandwidth,
+        call_s: opts.call_s.or_else(|| {
+            (kind == Kind::Gateway)
+                .then(|| store.scan_s_of(remote, opts.dial_hz))
+                .flatten()
+        }),
+        grid: store.grid.clone(),
+        plan,
+    }
+}
+
+/// Whether a message that waited at the last call will be asked for: marked, or taken by the
+/// fetch rule, as [`chooser`] decides.
+fn fetched(fetch: Fetch, entry: &Value) -> bool {
+    entry["fetch"] == true || entry["size"].as_u64().is_some_and(|s| takes(fetch, s))
 }
 
 /// How long the call's tries must keep starting (RP-4 §4, `call_s`): a gateway that scans its
@@ -1322,6 +1444,19 @@ fn call_on(
         opts.live.as_deref(),
         say,
     );
+    let over = carrier.engine().0.is_over();
+    modem.note(|t| {
+        t.session(SessionNotes {
+            online: stats.online,
+            errors: report.errors.clone(),
+            notices: report.notices,
+            over,
+            refused_other: report.refused_other,
+            taken: report.delivered.len(),
+            queued: report.queued.len(),
+            received: report.received.len(),
+        });
+    });
     if carrier.engine().0.files_answered() {
         store.files.clear();
     }
@@ -1351,17 +1486,19 @@ fn chooser(fetch: Fetch, marked: Vec<u64>) -> Chooser {
     Box::new(move |entries: &[WaitingEntry]| {
         entries
             .iter()
-            .filter(|e| {
-                (e.serial != 0 && marked.contains(&e.serial))
-                    || match fetch {
-                        Fetch::All => true,
-                        Fetch::UpTo(n) => e.size <= n,
-                        Fetch::Nothing => false,
-                    }
-            })
+            .filter(|e| (e.serial != 0 && marked.contains(&e.serial)) || takes(fetch, e.size))
             .map(|e| e.id)
             .collect()
     })
+}
+
+/// Whether the fetch rule takes a waiting message of `size` bytes.
+fn takes(fetch: Fetch, size: u64) -> bool {
+    match fetch {
+        Fetch::All => true,
+        Fetch::UpTo(n) => size <= n,
+        Fetch::Nothing => false,
+    }
 }
 
 /// Hands the engine the held attachments the user asked for (RP-3 §5.6), on a call to a gateway.

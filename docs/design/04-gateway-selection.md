@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.0 |
+| **Version** | 0.3.1 |
 | **Updated** | 2026-11-20 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -1442,30 +1442,37 @@ from all the evidence (§12.9). Recalibrating never destroys evidence.
 An attempt (§12.1), one line, here spread out:
 
 ```json
-{"v": 1, "id": "a-20261120-031522-7f3a", "start": 1795230922, "end": 1795231401,
- "gateway": "KK4ODA-1", "as": "WD5EMA",
- "channel": {"dial_hz": 7101000, "mode": "USB", "modem": "aether", "bandwidth_hz": 2300},
- "modem": "Aether HF 0.2.0-beta.168", "adapter": "radiopost-aether 0.1.0-beta.32",
- "place": {"lat": 33.7490, "lon": -84.3880, "source": "gps-tcp", "age_s": 2, "grid": "EM73tr"},
- "station": "st-mobile-ts480",
- "predicted": {"model": "radioprop-hf 0.1.0 voacapl 0.7.7", "snr_down_db": 6.5,
-               "snr_up_db": 4.0, "p_link": 0.86, "t80_s": 410, "class": "Moderate"},
- "transaction": {"out_bytes": 48210, "in_bytes_listed": 3120, "in_bytes_guess": 2000,
-                 "priority": 0},
- "call": {"busy_before": false, "call_s": null, "duration_s": 24.6, "result": "connected",
-          "heard_remote": true},
+{"v": 1, "id": "a-20261120-031522-7f3a", "start": 1795144522, "end": 1795145001,
+ "kind": "gateway", "remote": "KK4ODA-1", "as": "WD5EMA",
+ "channel": {"dial_hz": 7101000, "bandwidth_hz": 2300, "call_s": null},
+ "modem": "Aether HF 0.2.0-beta.168",
+ "place": {"grid": "EM73tr", "source": "typed"},
+ "station": null, "predicted": null,
+ "transaction": {"messages": 3, "out_bytes": 48210, "in_listed_bytes": 3120, "priority": 0},
+ "call": {"busy_before": false, "duration_s": 24.6, "result": "connected", "text": null,
+          "heard_remote": true, "heard_snr_db": 4.5, "refused": null},
  "link": {"bandwidth_hz": 2300, "duration_s": 452.3, "end": "local",
           "quality": [[3.1, 5.0, 1100, false], [61.0, 7.5, 1650, true]],
-          "stalls": 0, "bytes_out_delivered": 48450, "bytes_in": 5480},
- "session": {"online": true, "credential_whole": false, "errors": [], "notices": [],
-             "resumed": {"out": 0, "in": 0}},
- "outcome": {"class": "completed", "plan_done": true, "left_out": 0, "left_in": 0},
+          "snr_db": {"min": 3.5, "median": 6.5, "max": 9.0, "readings": 74},
+          "bytes_handed": 48450, "bytes_unacknowledged": 0, "deliveries": 12, "bytes_in": 5480},
+ "session": {"online": true, "errors": [], "notices": 0, "over": true, "refused_other": false,
+             "taken": 3, "queued": 0, "received": 2},
+ "outcome": {"class": "completed", "plan_done": true, "left_out": 0, "why": null},
  "classifier": 1}
 ```
 
 `quality` entries are `[seconds since the link came up, snr_db, rate_bps, receiving]`. `classifier`
 is the version of the rules that set `outcome.class`; a later version re-classifies from the
 evidence kept, so the class is recomputable too.
+
+That is the record as Phase 1 writes it (`app/client/src/selection/attempts.rs`). A line with
+`"stub": true` and only the call's identity is written first, when the call starts, so a call the
+program never finished still counts; a reader takes the last line of each `id`. `link` and
+`session` are `null` for a call that brought no link; `call.refused` names a request of the call's
+own (`connect`, `tune`, `dial`) the modem refused, and `outcome.why` the error a call ended in.
+Later phases fill what Phase 1 leaves empty: `place` gains the position and its source and age
+(§6), `station` the profile in use (§6.5), `predicted` the prediction made before the call (§10,
+§14), and `transaction` the estimate of new mail coming in (§13.1).
 
 A place, a station profile and an own gateway:
 
@@ -1491,7 +1498,7 @@ view reads:
    "delta_down_db": {"mean": 2.1, "sd": 2.8}, "delta_up_db": {"mean": -1.4, "sd": 3.9},
    "service": {"mean": 0.97, "n": 6.0}, "eta": {"median": 0.71, "sd_log": 0.25},
    "loss_per_hour": {"mean": 0.6, "n_hours": 2.3}, "changed_lately": false,
-   "evidence": "some", "as_of": 1795231401, "learning": 1}}
+   "evidence": "some", "as_of": 1795145001, "learning": 1}}
 ```
 
 ### 15.3 Interfaces between the parts
@@ -2069,3 +2076,4 @@ for size in (2000, 50000):
 | 0.2.0 | 2026-11-20 | §21: the author's answers to the ten questions, asked one at a time. Q1 to Q8 and Q10 as recommended; Q9, after a failure the client suggests the next candidate and never calls by itself, so §1, §12.8, §14.6, §17 and §18's Phase 6 no longer have an automatic fallback. |
 | 0.2.1 | 2026-11-20 | The passages that left a decision open now give the author's answer (§3, §7.2, §9.1, §11.2, §12.2, §13.5, §15.4, §19.3, §20.2, §20.4); §5.2's table, where 0.2.0 had added §21's answers by mistake, restored; three references to §19 corrected. No change of design. |
 | 0.3.0 | 2026-11-20 | Accepted by the author, with §21's answers; Phase 1 begun. The wishlist's W17 points here, and W55 to W58 are its parts. |
+| 0.3.1 | 2026-11-20 | §15.2: the attempt record as Phase 1 writes it (member names, the stub line, what later phases fill); the example's times corrected to 2026-11-20. |

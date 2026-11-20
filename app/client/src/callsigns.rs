@@ -98,6 +98,17 @@ pub fn home_of(base: &Path, id: u32) -> PathBuf {
     }
 }
 
+/// The first home, from any callsign's home: a home under [`DIR`] belongs to the one above it.
+#[must_use]
+pub fn base_of(home: &Path) -> PathBuf {
+    match home.parent() {
+        Some(dir) if dir.file_name().is_some_and(|n| n == DIR) => {
+            dir.parent().map_or_else(|| home.to_owned(), Path::to_owned)
+        }
+        _ => home.to_owned(),
+    }
+}
+
 /// The numbers of the homes added, in order.
 fn added(base: &Path) -> Vec<u32> {
     let mut ids: Vec<u32> = fs::read_dir(base.join(DIR))
@@ -285,7 +296,7 @@ pub fn find(base: &Path, who: &str) -> Result<Entry, Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::{FIRST, add, choose, chosen, chosen_id, find, home_of, list, remove};
+    use super::{FIRST, add, base_of, choose, chosen, chosen_id, find, home_of, list, remove};
     use crate::store::Store;
 
     fn scratch(name: &str) -> std::path::PathBuf {
@@ -405,5 +416,13 @@ mod tests {
         assert!(find(&base, "N0CALL").is_err());
         assert_eq!(list(&base)[1].label(), "WD5EMA (applied for)");
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn every_home_finds_the_first() {
+        let base = std::path::Path::new("/somewhere/.radiopost");
+        assert_eq!(base_of(base), base);
+        assert_eq!(base_of(&home_of(base, 3)), base);
+        assert_eq!(base_of(&home_of(base, FIRST)), base);
     }
 }

@@ -1,0 +1,118 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! The record of every call (choosing a gateway, §12.1), through the loopback adapter: a call that
+//! completes, one nobody answers and one whose modem cannot be reached each leave one record in
+//! the first home, classed by what happened, and none holds an address.
+
+mod common;
+
+use std::thread;
+use std::time::Duration;
+
+use radiopost_client::selection::attempts;
+use radiopost_client::session::{self, Kind, Options};
+use serde_json::Value;
+
+use common::{loopback, loopback_with, message, scratch, store_for};
+
+#[test]
+fn a_completed_call_is_recorded_with_its_link_and_what_it_carried() {
+    let dir = scratch("attempts-done");
+    let mut facundo = store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    let mut ana = store_for(&dir.join("ana"), "device:ana", "ana");
+    facundo.queue(&message("facundo-direct")).expect("queued");
+    facundo.set_grid(Some("EM73tr")).expect("a grid square");
+    let (_server, at_f, at_a) = loopback();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let ana_opts = Options::new(&at_a.to_string());
+    let listener = thread::spawn(move || {
+        session::answer(&mut ana, &ana_opts, &mut |s: &str| {
+            if s.starts_with("listening") {
+                let _ = tx.send(());
+            }
+        })
+        .expect("answered")
+    });
+    rx.recv_timeout(Duration::from_secs(10))
+        .expect("Ana's station listens");
+    let mut said = Vec::new();
+    let called = session::call(
+        &mut facundo,
+        "N0CALL",
+        Kind::Station,
+        &Options::new(&at_f.to_string()),
+        &mut |s| said.push(s.to_owned()),
+    )
+    .expect("called");
+    listener.join().expect("the listener");
+    assert_eq!(called.failed, None, "{said:?}");
+
+    let all = attempts::read(&dir.join("facundo"));
+    assert_eq!(all.len(), 1, "{all:?}");
+    let a = &all[0];
+    assert_eq!(a["outcome"]["class"], "completed", "{a}");
+    assert_eq!(a["outcome"]["plan_done"], true, "{a}");
+    assert_eq!(a["kind"], "station");
+    assert_eq!(a["remote"], "N0CALL");
+    assert_eq!(a["as"], "KK4ODA");
+    assert_eq!(a["modem"], "the loopback adapter");
+    assert_eq!(a["place"]["grid"], "EM73tr");
+    assert_eq!(a["transaction"]["messages"], 1);
+    assert!(a["transaction"]["out_bytes"].as_u64() > Some(0), "{a}");
+    assert_eq!(a["call"]["result"], "connected");
+    assert_eq!(a["session"]["taken"], 1);
+    assert_eq!(a["session"]["over"], true);
+    assert!(a["link"]["bytes_handed"].as_u64() > Some(0), "{a}");
+    assert_eq!(a["link"]["end"], "local", "the caller hangs up (RP-3 §8)");
+    assert_eq!(a["classifier"], 1);
+    let text = a.to_string();
+    assert!(!text.contains('@'), "no address in the record: {text}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_call_nobody_answers_is_recorded_as_no_answer() {
+    let dir = scratch("attempts-silent");
+    let mut facundo = store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    facundo.queue(&message("facundo-direct")).expect("queued");
+    let (_server, at_f, _at_a) = loopback_with(None, Duration::from_millis(300));
+    let called = session::call(
+        &mut facundo,
+        "N0CALL",
+        Kind::Station,
+        &Options::new(&at_f.to_string()),
+        &mut |_| {},
+    )
+    .expect("the call ends");
+    assert!(called.failed.is_some(), "nobody listened");
+    let all = attempts::read(&dir.join("facundo"));
+    assert_eq!(all.len(), 1, "{all:?}");
+    let a = &all[0];
+    assert_eq!(a["outcome"]["class"], "no-answer", "{a}");
+    assert_eq!(a["outcome"]["left_out"], 1, "{a}");
+    assert_eq!(a["call"]["result"], "timeout");
+    assert_eq!(a["call"]["heard_remote"], false);
+    assert_eq!(a["link"], Value::Null);
+    assert_eq!(a["session"], Value::Null);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_modem_that_cannot_be_reached_is_recorded_as_this_station_s() {
+    let dir = scratch("attempts-local");
+    let mut facundo = store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    // nothing listens on port 9 here
+    let e = session::call(
+        &mut facundo,
+        "N0CALL",
+        Kind::Station,
+        &Options::new("127.0.0.1:9"),
+        &mut |_| {},
+    )
+    .expect_err("no adapter");
+    let all = attempts::read(&dir.join("facundo"));
+    assert_eq!(all.len(), 1, "{all:?}");
+    assert_eq!(all[0]["outcome"]["class"], "local-station", "{}", all[0]);
+    assert_eq!(all[0]["outcome"]["why"], e.as_str());
+    assert_eq!(all[0]["modem"], Value::Null, "no hello was answered");
+    let _ = std::fs::remove_dir_all(&dir);
+}

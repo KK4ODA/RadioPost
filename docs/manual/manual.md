@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.23.1 |
-| **Updated** | 2026-11-19 |
+| **Version** | 1.24.0 |
+| **Updated** | 2026-11-20 |
 | **Describes** | RadioPost 0.1.0-beta.32 |
 | **Licence** | CC BY 4.0 |
 
@@ -235,6 +235,12 @@ release has just come out, click **Check for updates** in **Setup**, **Updates**
 **Where RadioPost keeps your things.** In the folder `.radiopost` in your home folder. On
 Windows that is `C:\Users\<you>\.radiopost`. It holds your key, your credential, your mail and
 the log `radiopost.log`. Back it up as you would any mail.
+
+It also keeps a record of every call you place, in its folder `selection/attempts`: the station
+called, the channel, your grid square, how much mail was waiting, and how the call ended and why
+(answered, no answer, the channel busy, refused, the link lost). RadioPost will use these records
+to suggest which gateway to call. They stay on this computer, and hold no addresses or subjects
+of your mail.
 
 > **Note.** Each computer needs its own enrollment. Do not copy the `.radiopost` folder to a
 > second computer: two computers would then share one key.
@@ -1889,6 +1895,8 @@ Attach the log:
 
 - the client's `radiopost.log`, in the `.radiopost` folder (it keeps no addresses or subjects of
   your mail);
+- for a call that failed, the client's call records, the folder `selection/attempts` in the same
+  folder;
 - the gateway's `gateway.log`, in the `.radiopost-gateway` folder.
 
 For a session that failed or was slow, turn on Aether's **Record** before you try again, then use
@@ -2051,3 +2059,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.22.0 | 2026-11-18 | §27: **New password** beside an account's mailbox, for someone who forgot theirs (the mail server has no reset of its own): a new password, shown once, only the password changed. §37 to match. |
 | 1.23.0 | 2026-11-19 | Each program's version beside its name at the top of its window (§1, §6, §19). §12 and §18: **Updates** in **Setup**, with **Check for updates**, which asks for a newer release now instead of at the next six-hourly check. §4 and §19 to match. Figures 7 and 30, and the windows that show the top bar, retaken. |
 | 1.23.1 | 2026-11-19 | §27: the desk's **Accounts** tab keeps a callsign, a date and an address whole (an address breaks only after its @), and a password shown under **Mailbox** wraps; it had squeezed the other columns until callsigns read one letter a line. Figure 34 retaken. |
+| 1.24.0 | 2026-11-20 | §4: the client keeps a record of every call it places (`selection/attempts`): what was called, how the call ended and why, on this computer only. §38: attach them for a call that failed. |
