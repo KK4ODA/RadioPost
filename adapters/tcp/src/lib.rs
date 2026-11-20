@@ -16,10 +16,11 @@ use std::io::{self, BufRead, BufReader, ErrorKind, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use rpmi::lobby::LEAVING;
 use rpmi::polled::{Closer, PolledStream};
 use rpmi::wire::{Caps, Message, Request, admit, answer, answer_with, error, line_of, parse_line};
 use rustls::{ClientConfig, ClientConnection, ServerConfig, ServerConnection, StreamOwned};
@@ -229,6 +230,8 @@ struct Shared {
 #[derive(Clone)]
 pub struct Adapter {
     shared: Arc<Mutex<Shared>>,
+    /// Told when the host that had the modem has gone.
+    freed: Arc<Condvar>,
     cfg: Arc<Config>,
 }
 
@@ -242,14 +245,23 @@ impl Adapter {
     pub fn new(cfg: Config) -> Adapter {
         Adapter {
             shared: Arc::new(Mutex::new(Shared::default())),
+            freed: Arc::new(Condvar::new()),
             cfg: Arc::new(cfg),
         }
     }
 
     fn lock(&self) -> MutexGuard<'_, Shared> {
-        self.shared
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.shared.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Waits up to [`LEAVING`] for a host other than `c` that has the modem to be gone: its close
+    /// may not have been read yet when `c` says `hello` (RP-4 §3 turns `c` away only while that
+    /// host is still connected).
+    fn wait_for_leaving<'a>(&self, g: MutexGuard<'a, Shared>, c: u64) -> MutexGuard<'a, Shared> {
+        self.freed
+            .wait_timeout_while(g, LEAVING, |s| s.owner.is_some_and(|o| o != c))
+            .unwrap_or_else(PoisonError::into_inner)
+            .0
     }
 
     /// Serves hosts: RPMI on `listener` (RP-4 §2).
@@ -350,6 +362,7 @@ impl Adapter {
         let mut g = self.lock();
         if g.owner == Some(c) {
             g.owner = None;
+            self.freed.notify_all();
         }
         if let Some(conn) = g.conns.remove(&c) {
             if let Some(call) = conn.call {
@@ -381,7 +394,12 @@ impl Adapter {
         };
         let id = m.get("id").cloned();
         match admit(&m, conn.hello) {
-            Ok(request) => self.request(&mut g, c, request, id.as_ref()),
+            Ok(request) => {
+                if matches!(request, Request::Hello { .. }) {
+                    g = self.wait_for_leaving(g, c);
+                }
+                self.request(&mut g, c, request, id.as_ref());
+            }
             Err(refusal) => conn.emit(refusal),
         }
     }

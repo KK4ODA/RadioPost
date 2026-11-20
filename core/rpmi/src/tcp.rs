@@ -14,13 +14,14 @@ use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::mpsc::{Sender, channel};
-use std::sync::{Arc, Mutex, MutexGuard, Weak};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::channel::{Channel, Out};
+use crate::lobby::LEAVING;
 use crate::polled::PolledStream;
-use crate::wire::{Message, line_of};
+use crate::wire::{Message, line_of, parse_line};
 
 /// The most a line may hold: a `send` of `max_queue` bytes is well under it.
 pub const MAX_LINE: usize = 1 << 20;
@@ -37,11 +38,15 @@ struct Inner {
     streams: HashMap<(usize, String), TcpStream>,
     calls: Vec<(u64, Instant)>,
     connections: u64,
+    /// Told after each change to the channel, which may have let a host go (a `hello` waits for
+    /// one: [`LEAVING`]).
+    changed: Arc<Condvar>,
 }
 
 impl Inner {
     /// Sends what the channel said to the connections it was said on.
     fn route(&mut self) {
+        self.changed.notify_all();
         for out in self.channel.take() {
             match out {
                 Out::Line {
@@ -80,9 +85,15 @@ pub struct Server {
 }
 
 fn lock(inner: &Mutex<Inner>) -> MutexGuard<'_, Inner> {
-    inner
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    inner.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Whether a host's line is its `hello`.
+fn says_hello(line: &[u8]) -> bool {
+    std::str::from_utf8(line)
+        .ok()
+        .and_then(|text| parse_line(text).ok())
+        .is_some_and(|m| m.get("op").and_then(serde_json::Value::as_str) == Some("hello"))
 }
 
 impl Server {
@@ -95,6 +106,7 @@ impl Server {
             streams: HashMap::new(),
             calls: Vec::new(),
             connections: 0,
+            changed: Arc::new(Condvar::new()),
         }));
         let weak = Arc::downgrade(&inner);
         thread::spawn(move || give_up_late_calls(&weak, call_timeout));
@@ -276,6 +288,20 @@ fn serve(inner: &Arc<Mutex<Inner>>, station: usize, stream: TcpStream) {
                 Ok(_) => {
                     if buf.last() == Some(&b'\n') {
                         buf.pop();
+                    }
+                    if says_hello(&buf) {
+                        // another host's close may not have been read yet (RP-4 §3 turns this
+                        // one away only while that host is still connected)
+                        let changed = Arc::clone(&g.changed);
+                        g = changed
+                            .wait_timeout_while(g, LEAVING, |g| {
+                                g.channel.held_by_another(station, &name)
+                            })
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .0;
+                        if !g.writers.contains_key(&key) {
+                            return;
+                        }
                     }
                     g.channel.request_bytes(station, &name, &buf);
                     g.route();

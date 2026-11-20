@@ -244,6 +244,17 @@ impl Channel {
         }
     }
 
+    /// Whether a `hello` from `host` would now be turned away `busy`: the station is not shared and
+    /// another of its hosts has said `hello` (§3).
+    #[must_use]
+    pub fn held_by_another(&self, station: usize, host: &str) -> bool {
+        let s = &self.stations[station];
+        !s.cfg.caps.shared
+            && s.hosts
+                .iter()
+                .any(|other| other.name != host && other.hello)
+    }
+
     /// A line from a host as the bytes it sent, without its LF: text that is not UTF-8 is not
     /// JSON.
     pub fn request_bytes(&mut self, station: usize, host: &str, line: &[u8]) {
@@ -509,13 +520,7 @@ impl Channel {
             self.close(station, &name);
             return;
         }
-        let s = &self.stations[station];
-        let unshared_and_taken = !s.cfg.caps.shared
-            && s.hosts
-                .iter()
-                .enumerate()
-                .any(|(i, other)| i != h && other.hello);
-        if unshared_and_taken {
+        if self.held_by_another(station, &name) {
             self.emit(
                 station,
                 &name,

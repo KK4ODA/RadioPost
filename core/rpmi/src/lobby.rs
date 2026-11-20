@@ -6,13 +6,51 @@
 
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread;
+use std::time::Duration;
 
 use crate::tcp::MAX_LINE;
 use crate::wire::{Message, Request, VERSION, admit, error, line_of, parse_line, speaks};
+
+/// How long a `hello` that finds the modem taken waits for its host to be gone before it is
+/// turned away `busy`. RP-4 §3 turns a second host away only while the first is still connected,
+/// and a host that leaves and comes back at once (or a program that hands the modem to the next)
+/// has closed its first connection before it says `hello` on the second, but the thread reading
+/// the first may not have read that close yet. It always arrives first, so a moment is enough; a
+/// second host that is really there waits that moment longer for its `busy`.
+pub const LEAVING: Duration = Duration::from_secs(1);
+
+/// Whether a host has the modem.
+#[derive(Default)]
+pub struct Occupied {
+    taken: Mutex<bool>,
+    freed: Condvar,
+}
+
+impl Occupied {
+    /// Takes the modem for a host that has said `hello`, waiting up to [`LEAVING`] for the host
+    /// that has it to be gone. False: it is still taken.
+    pub fn take(&self) -> bool {
+        let taken = self.taken.lock().unwrap_or_else(PoisonError::into_inner);
+        let (mut taken, _) = self
+            .freed
+            .wait_timeout_while(taken, LEAVING, |taken| *taken)
+            .unwrap_or_else(PoisonError::into_inner);
+        if *taken {
+            return false;
+        }
+        *taken = true;
+        true
+    }
+
+    /// The host that had the modem is gone.
+    pub fn free(&self) {
+        *self.taken.lock().unwrap_or_else(PoisonError::into_inner) = false;
+        self.freed.notify_all();
+    }
+}
 
 /// Listens for hosts at `addr`: each that says `hello` while no other has the modem arrives on
 /// the receiver. Returns the address taken; the lobby runs on threads of its own.
@@ -23,7 +61,7 @@ use crate::wire::{Message, Request, VERSION, admit, error, line_of, parse_line, 
 pub fn hosts(addr: impl ToSocketAddrs) -> io::Result<(SocketAddr, Receiver<Arrival>)> {
     let listener = TcpListener::bind(addr)?;
     let local = listener.local_addr()?;
-    let occupied = Arc::new(AtomicBool::new(false));
+    let occupied = Arc::new(Occupied::default());
     let (arrivals, arrived) = mpsc::channel();
     thread::spawn(move || {
         for stream in listener.incoming().flatten() {
@@ -85,7 +123,7 @@ pub fn read_line(reader: &mut BufReader<TcpStream>, buf: &mut Vec<u8>) -> FromHo
 
 /// One host's connection until its `hello` (RP-4 §3): what is not a `hello` is answered here,
 /// and a `hello` takes the modem if no host has it. From then on its lines go to the station.
-pub fn lobby(stream: &TcpStream, occupied: &AtomicBool, arrivals: &Sender<Arrival>) {
+pub fn lobby(stream: &TcpStream, occupied: &Occupied, arrivals: &Sender<Arrival>) {
     let _ = stream.set_nodelay(true);
     let Ok(reading) = stream.try_clone() else {
         return;
@@ -113,13 +151,13 @@ pub fn lobby(stream: &TcpStream, occupied: &AtomicBool, arrivals: &Sender<Arriva
                 let closing = if !speaks(low, high) {
                     let text = format!("this adapter speaks {VERSION}");
                     error(id.as_ref(), "unsupported-version", &text)
-                } else if occupied.swap(true, Ordering::SeqCst) {
+                } else if !occupied.take() {
                     error(id.as_ref(), "busy", "another program has this modem")
                 } else {
                     let (tx, rx) = mpsc::channel();
                     let _ = tx.send(FromHost::Line(line));
                     let Ok(writing) = stream.try_clone() else {
-                        occupied.store(false, Ordering::SeqCst);
+                        occupied.free();
                         return;
                     };
                     let arrival = Arrival {
@@ -127,7 +165,7 @@ pub fn lobby(stream: &TcpStream, occupied: &AtomicBool, arrivals: &Sender<Arriva
                         lines: rx,
                     };
                     if arrivals.send(arrival).is_err() {
-                        occupied.store(false, Ordering::SeqCst);
+                        occupied.free();
                         return;
                     }
                     break tx;
@@ -150,7 +188,7 @@ pub fn lobby(stream: &TcpStream, occupied: &AtomicBool, arrivals: &Sender<Arriva
         let said = read_line(&mut reader, &mut buf);
         let last = !matches!(said, FromHost::Line(_));
         if lines.send(said).is_err() || last {
-            occupied.store(false, Ordering::SeqCst);
+            occupied.free();
             return;
         }
     }
