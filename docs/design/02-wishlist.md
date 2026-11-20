@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.47 |
-| **Updated** | 2026-11-18 |
+| **Version** | 0.3.48 |
+| **Updated** | 2026-11-20 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §9 and §10 |
@@ -120,7 +120,7 @@ rules:
 | W14 | Choosing a gateway tunes the radio | Radio | Medium | Optional addition (RP-4) | Implemented |
 | W15 | Keep listening for stations | Radio | Medium | Fits today | Implemented |
 | W16 | Scheduled connections | Radio | Low | Fits today | Planned |
-| W17 | Gateways ranked by propagation | Radio | Low | Fits today; optional addition for measurements | Planned |
+| W17 | Gateways ranked by propagation | Radio | Medium | Fits today; optional additions (RP-4, RP-5) sharpen it | Accepted |
 | W18 | Mail coming down compressed | Radio | High | Fits today | Implemented |
 | W19 | Shorter short messages: a dictionary | Radio | Low | Optional addition; breaking if made required | Planned |
 | W20 | An adapter for VARA-style modems: VARA and Mercury | Adapters | Medium | Fits today; G11 to name Mercury | Implemented |
@@ -158,6 +158,10 @@ rules:
 | W52 | Time-sensitive alerts between stations that share a keyword | Applications | Medium | Optional addition: RP-8 (Draft), RP-0 1.1.0, RP-4 1.3.0; G22 | Implemented |
 | W53 | Print a message, a form as its paper form, and save its files | Mail | High | Fits today | Implemented |
 | W54 | Unregister a gateway, and choose the account that registers it | Operation | High | Optional addition (RP-5 1.2.0 §6.4, §7.7); G23 | Implemented |
+| W55 | Saved places, and the position from a GPS | Setup | Medium | Fits today | In progress |
+| W56 | VHF and UHF gateways judged by the terrain | Radio | Medium | Fits today; optional addition (RP-5 `site`, `station`) | Accepted |
+| W57 | Learning from every call | Radio | High | Fits today; optional additions (RP-4 `peer_snr_db`, `failed.heard`; RP-5 `seen`) | In progress |
+| W58 | Gateways ranked by how soon the mail is done | Radio | Medium | Fits today | Accepted |
 
 Groups: *Mail* (§4), *Setup* (§5), *Radio* (§6), *Operation* (§7), *Offline* (§8),
 *Applications* (§9), *Adapters* (§10), *Rules* (§11). Consolidated and deferred wishes are in §14.
@@ -460,6 +464,25 @@ answered.
 | Author decision | 2026-11-13: the callsigns are on separate accounts (W7); the list at the top of the window, not a page at start; *Listen* answers the callsign chosen only, for now (2026-11-15: any of them); one address list for the computer; one device key. |
 | Notes | Which identity a session used is kept with its record, so a session report (RP-5 §6.6) goes to that account's post office: each home keeps its own reports. Listening under several callsigns answers one call at a time, as Aether runs one session at a time. One account under two callsigns (a club callsign on one's own address) would split that account's mail between two homes, by which callsign picked it up: it needs one home holding several credentials, not built. |
 
+### W55. Saved places, and the position from a GPS
+
+The client knows where the station is: a saved place (Home, Mobile, Field Day), or a GPS read live,
+and says when a GPS has gone quiet rather than trusting an old fix.
+
+| | |
+|---|---|
+| Requested by | The author, 2026-11-20 (the gateway-selection brief). Requesters: 1. |
+| Component | Client; hf-predict's libraries (hf-predict wants the same). |
+| Compatibility | **Fits today**: nothing of the position crosses the air or reaches a post office. |
+| Existing coverage | One typed grid square (`Store::grid`). |
+| Dependencies | None. |
+| Effort | Medium: places, station profiles, four GPS readers (serial, TCP, UDP, gpsd) on one NMEA parser, freshness. |
+| Priority | **Medium.** Distance from a 4-character square is off by up to 100 km; VHF needs metres. |
+| Recommendation | **Accept**, as [choosing a gateway](04-gateway-selection.md) §6 designs it. |
+| Status | In progress (its Phase 1). |
+| Author decision | Accepted with the proposal, 2026-11-20. |
+| Notes | GPS2IP on an iPhone over TCP or UDP; Android apps over Bluetooth serial, TCP or UDP. The operating systems' location services are left out: Windows' does not see a receiver on a COM port. |
+
 ---
 
 ## 6. Sessions and radio operation
@@ -520,20 +543,22 @@ Call a gateway at set times to collect and send mail, unattended.
 
 ### W17. Gateways ranked by propagation
 
-The gateway list puts first the gateways the user can probably reach now, not just the nearest.
+The gateway list puts first the gateways the user can probably reach now, not just the nearest:
+on HF, by a propagation prediction made both ways and read in the modem's own terms.
 
 | | |
 |---|---|
-| Requested by | The plan: concept §9 and §10, later. Requesters: 0. |
-| Component | Client; for measurements, gateways and post offices too. |
-| Compatibility | **Fits today** for a prediction: grid and channels are in the list (RP-5 §4.4). Ranking by what gateways measured is an **optional protocol addition** to RP-5 §4.4 or a new public document. |
-| Existing coverage | Planned; ranking by distance is built. The list holds the gateways of every post office the user's own knows (gap G13, built 2026-11-12). |
-| Dependencies | None for a prediction. |
-| Effort | Medium for a prediction; large for measurements. |
-| Priority | **Low.** |
-| Recommendation | **Modify**: a prediction only; defer measurements until a prediction proves too poor. |
-| Status | Planned. |
-| Author decision | None yet. |
+| Requested by | The plan: concept §9 and §10, later. The author, 2026-11-20: a design for choosing a gateway better than Winlink Express does. Requesters: 1. |
+| Component | Client; hf-predict's libraries. |
+| Compatibility | **Fits today**: grid and channels are in the list (RP-5 §4.4). Optional additions sharpen it: a gateway's `site` and `station`, its listening windows and the post office's `seen` (RP-5), the other station's SNR and a probe (RP-4). |
+| Existing coverage | Ranking by distance is built. The list holds the gateways of every post office the user's own knows (gap G13, built 2026-11-12). |
+| Dependencies | hf-predict's code moved into libraries without Tauri (the proposal, §11); W55 for the position. |
+| Effort | Medium: VOACAP both ways for each channel, batched and cached, turned into each rung's probability by the modem's ladder. |
+| Priority | **Medium.** A gateway that scans two bands at two bandwidths is already four candidates to choose among. |
+| Recommendation | **Accept**, as [choosing a gateway](04-gateway-selection.md) designs it (its §10, §11): one part of a design whose other parts are W55 to W58. |
+| Status | Accepted; its Phase 3. |
+| Author decision | Accepted with the proposal, 2026-11-20, and its ten answers (its §21): hf-predict's libraries MIT OR Apache-2.0, in hf-predict's repository; the VOACAP engine bundled with the client. |
+| Notes | The earlier recommendation (a prediction only, measurements deferred) is kept in spirit: what is learned stays on the user's computer, and no gateway publishes measurements of its callers. |
 
 ### W18. Mail coming down compressed
 
@@ -626,6 +651,64 @@ take.
 | Status | Implemented. |
 | Author decision | Build it (2026-11-12). |
 | Notes | The gateway's panel could show its sessions the same way; its engine does not count yet. |
+
+### W56. VHF and UHF gateways judged by the terrain
+
+A VHF or UHF gateway behind a ridge is not ranked first because it is near; the client draws the
+path's profile, its Fresnel clearance and its diffraction loss, and lets the operator see what
+raising the antenna would do.
+
+| | |
+|---|---|
+| Requested by | The author, 2026-11-20. Requesters: 1. |
+| Component | Client; hf-predict's libraries. |
+| Compatibility | **Fits today** with a gateway's grid square, coarsely. An **optional protocol addition** to RP-5 §4.4 makes it useful: `site` (position and antenna height, at the precision the operator chooses) and a channel's `station`. |
+| Existing coverage | New. |
+| Dependencies | W55 (the position); Copernicus elevation data, fetched and cached. |
+| Effort | Large: elevation tiles, profiles, ITU-R P.526 §4.5, link budgets, the profile view. |
+| Priority | **Medium.** It matters as soon as VHF gateways (packet, VARA FM, Aether FM) are listed. |
+| Recommendation | **Accept**, as [choosing a gateway](04-gateway-selection.md) §8 and §9 design it. |
+| Status | Accepted; its Phase 2. |
+| Author decision | Accepted with the proposal, 2026-11-20: Copernicus everywhere; `site` and `station` proposed for RP-5 with Phase 2. |
+| Notes | Copernicus is a surface model (trees and buildings as the radar saw them), said so on every view. |
+
+### W57. Learning from every call
+
+The client records every call it makes, why each failed, and how fast the mail moved, and learns
+from it which gateways and channels work from where.
+
+| | |
+|---|---|
+| Requested by | The author, 2026-11-20. Requesters: 1. |
+| Component | Client. |
+| Compatibility | **Fits today** from what RP-4 §5 already reports. **Optional protocol additions** sharpen it: RP-4 `quality.peer_snr_db` and `failed.heard`, a probe; RP-5's `seen` from the post office. |
+| Existing coverage | A call's outcome is a sentence in the window and the log. |
+| Dependencies | None for the records; W17 and W56 for learning against a model. |
+| Effort | Large: records, failure classes, the learned estimates, their views and forgetting. |
+| Priority | **High.** Everything learned later rests on records kept from the start; a call not recorded is lost. |
+| Recommendation | **Accept**, as [choosing a gateway](04-gateway-selection.md) §12 designs it. |
+| Status | In progress: the records (its Phase 1); the learning in its Phase 4. |
+| Author decision | Accepted with the proposal, 2026-11-20: records kept on the computer with full positions; `seen` and `listens` proposed for RP-5 with Phase 1, the RP-4 additions with Phase 4 and the probe with Phase 6; no automatic transmission, ever. |
+| Notes | The records hold no correspondent's address and no subject, as the log does not. |
+
+### W58. Gateways ranked by how soon the mail is done
+
+The list is ordered by when this call's mail is likely to be done, four times in five: a reliable
+slow gateway first for a short message, a faster one for a large attachment.
+
+| | |
+|---|---|
+| Requested by | The author, 2026-11-20. Requesters: 1. |
+| Component | Client. |
+| Compatibility | **Fits today**. |
+| Existing coverage | New. |
+| Dependencies | W17, W56 and W57. |
+| Effort | Medium: the transaction, the simulation, explanations and ties. |
+| Priority | **Medium.** |
+| Recommendation | **Accept**, as [choosing a gateway](04-gateway-selection.md) §13 and §14 design it. |
+| Status | Accepted; its Phase 5. |
+| Author decision | Accepted with the proposal, 2026-11-20: the time done four times in five; 30 minutes for priority mail and 10 for emergency; after a failure the client suggests the next candidate and never calls by itself. |
+| Notes | Expected time is a straight line in the transaction's size, so where two gateways swap places can be shown. |
 
 ---
 
@@ -1240,3 +1323,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.45 | 2026-11-18 | W53, at the author's ask after the 40 m sessions: **Print** (a PDF by the system's print dialog, an ICS-213 as FEMA's ICS 213) and **Save** for a message's files, built. |
 | 0.3.46 | 2026-11-18 | W54 implemented, at a tester's report through the author: a gateway unregistered from RadioPost Gateway or the post office's desk, and the account it registers with chosen; gap G23 settled by RP-5 1.2.0. |
 | 0.3.47 | 2026-11-18 | W49's coverage: **New password** for a user who lost their mailbox's password, at a user's ask through the author. |
+| 0.3.48 | 2026-11-20 | The author accepted [choosing a gateway](04-gateway-selection.md): W17 rewritten to point to it; W55 (places and GPS), W56 (terrain at VHF and UHF), W57 (learning from every call) and W58 (ranking by when the mail is done) added; W55 and W57 in progress. |

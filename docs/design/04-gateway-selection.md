@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Draft |
-| **Version** | 0.2.1 |
+| **Status** | Accepted, in progress |
+| **Version** | 0.3.0 |
 | **Updated** | 2026-11-20 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -16,8 +16,8 @@ The question this document answers is the operator's:
 
 Today the client answers it by distance from a typed grid square. This document proposes how to
 answer it properly, for HF and for VHF and UHF, and how hf-predict should change to help. It is a
-proposal for the author's review: nothing here is built, and no specification changes. The
-author answered its ten questions on 2026-11-20 (§21).
+proposal the author accepted on 2026-11-20, with the ten answers in §21; no specification has
+changed yet. The wishlist carries it as W17 and W55 to W58. Phase 1 is in progress (§18).
 
 **How facts are marked.** Facts about RadioPost, Aether and hf-predict were read in their
 repositories on 2026-11-20. Outside facts were researched the same day: **[P]** checked on a primary
@@ -2068,3 +2068,4 @@ for size in (2000, 50000):
 | 0.1.0 | 2026-11-20 | First draft, for the author's review: the selection problem; position and GPS; the directory and optional RP-5 members; VHF terrain (Copernicus, P.526 §4.5, link budgets); HF (VOACAP both ways through the modem's ladder); hf-predict's crates; attempt records, failure classification and learning; the transaction model and T80; the ranking; the panel; roadmap, validation, risks and ten decisions. Research of 2026-11-20 on Winlink Express, Pat, GPS sources, elevation data and propagation models. |
 | 0.2.0 | 2026-11-20 | §21: the author's answers to the ten questions, asked one at a time. Q1 to Q8 and Q10 as recommended; Q9, after a failure the client suggests the next candidate and never calls by itself, so §1, §12.8, §14.6, §17 and §18's Phase 6 no longer have an automatic fallback. |
 | 0.2.1 | 2026-11-20 | The passages that left a decision open now give the author's answer (§3, §7.2, §9.1, §11.2, §12.2, §13.5, §15.4, §19.3, §20.2, §20.4); §5.2's table, where 0.2.0 had added §21's answers by mistake, restored; three references to §19 corrected. No change of design. |
+| 0.3.0 | 2026-11-20 | Accepted by the author, with §21's answers; Phase 1 begun. The wishlist's W17 points here, and W55 to W58 are its parts. |
