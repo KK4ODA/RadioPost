@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.2.0 |
+| **Version** | 0.2.1 |
 | **Updated** | 2026-11-20 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -151,8 +151,8 @@ Limits that matter for this design:
    prediction uses, and it scores no probability (no Brier score or log loss).
 6. **Licence.** Apache-2.0 only, where RadioPost's code is MIT OR Apache-2.0. A RadioPost binary
    that links Apache-2.0-only crates is still distributable, but the MIT option is lost for those
-   parts. The author is hf-predict's only committer, so relicensing the extracted crates is the
-   author's decision alone (§21, Q1).
+   parts. The author is hf-predict's only committer, and chose MIT OR Apache-2.0 for the extracted
+   crates (§21, Q1).
 
 ---
 
@@ -237,7 +237,7 @@ Winlink Express's auto-connect.
 *method* does not make a better *network*, and no claim about completed transactions can be made
 across two networks with different gateways and modems. The comparison this design can make
 honestly is of methods, on RadioPost's own records: Winlink Express's method (VOACAP reliability at
-SNR 40, then distance) as one of the baselines, replayed against the same attempts (§19.2).
+SNR 40, then distance) as one of the baselines, replayed against the same attempts (§19.1).
 
 ---
 
@@ -261,14 +261,14 @@ last on 40 m at midnight. Ranking callsigns hides exactly the differences that d
 
 | # | Quantity | What it is | Main evidence |
 |---|---|---|---|
-| Q1 | RF path viability | Can a signal get there and back at all, each way? | Propagation (HF), terrain and link budget (VHF), signals heard | As recommended: the crates MIT OR Apache-2.0 |
-| Q2 | Connection probability | Does a call end in a link? | Q1, the gateway being there and listening, the channel being free, the modem's call | As recommended: hf-predict's repository, as a workspace |
-| Q3 | Link stability | How often does a link that is up break before the work is done? | Session histories | As recommended: phased |
-| Q4 | Effective throughput | Bytes of mail a second, after acknowledgements, retransmissions and turnarounds, each way | The modem's ladder and the SNR (prior), measured sessions | As recommended: phased |
-| Q5 | Service availability | Is the gateway program answering and reaching its post office? | The post office's view (§7.4), `ERROR` codes in sessions | As recommended: Copernicus everywhere |
-| Q6 | Completion probability | Does *this* transaction finish within the time the operator gives it? | Q2–Q5 and the transaction's size | As recommended: T80; 30 and 10 minutes |
-| Q7 | Expected completion time | Including failed calls, reconnections and overhead | Q2–Q5 and the size | As recommended: bundled |
-| Q8 | Confidence | How much evidence stands behind each of the above | The amount, age and relevance of the evidence | As recommended: local, full positions |
+| Q1 | RF path viability | Can a signal get there and back at all, each way? | Propagation (HF), terrain and link budget (VHF), signals heard |
+| Q2 | Connection probability | Does a call end in a link? | Q1, the gateway being there and listening, the channel being free, the modem's call |
+| Q3 | Link stability | How often does a link that is up break before the work is done? | Session histories |
+| Q4 | Effective throughput | Bytes of mail a second, after acknowledgements, retransmissions and turnarounds, each way | The modem's ladder and the SNR (prior), measured sessions |
+| Q5 | Service availability | Is the gateway program answering and reaching its post office? | The post office's view (§7.4), `ERROR` codes in sessions |
+| Q6 | Completion probability | Does *this* transaction finish within the time the operator gives it? | Q2–Q5 and the transaction's size |
+| Q7 | Expected completion time | Including failed calls, reconnections and overhead | Q2–Q5 and the size |
+| Q8 | Confidence | How much evidence stands behind each of the above | The amount, age and relevance of the evidence |
 
 Q1 to Q5 are learned and predicted separately because each has different evidence, changes at a
 different speed, and fails for different reasons. Q6 and Q7 are computed from them (§13). Q8 is
@@ -417,7 +417,8 @@ a latitude and longitude for each gateway (§4.2): gateway operators there are u
 These are MINOR additions to a Stable specification (RP-0 §8.2), announced as §8.4 asks, with
 vectors. They change nothing for a reader that ignores them, nothing for a gateway that leaves them
 out, and nothing on the air. `seen` adds a small privacy cost (when a gateway's computer is on);
-`site` is the operator's choice of precision. Both are for the author to decide (§21, Q3).
+`site` is the operator's choice of precision. The author chose to propose them in phases: `seen`
+and `listens` with Phase 1, `site` and `station` with Phase 2 (§21, Q3).
 
 **Not proposed:** a single "range" figure, as Winlink's records have. It folds power, antenna,
 terrain and the remote station into one number that is wrong for most callers; the terrain
@@ -517,7 +518,7 @@ classes are shown beside it, never instead of it.
 | Single knife edge (ITU-R P.526 §4.1) | Loss of the one highest obstacle, from v = h √(2/λ · (1/d₁ + 1/d₂)): J(v) = 6.9 + 20 log₁₀(√((v − 0.1)² + 1) + v − 0.1) dB for v > −0.78 | Trivial | Good for explaining; wrong for several ridges |
 | Two isolated edges, the predominant edge first (P.526 §4.3) | The classic Deygout-style construction | Small | Better on two ridges; no smooth-earth term |
 | **General terrestrial path (P.526-16 §4.5)** | A Bullington construction on the actual profile and on a smooth fitted profile, combined with spherical-Earth diffraction (P.526 §3.2); "for a completely smooth path, the result will be the same as the spherical Earth model". Commonly called delta-Bullington | O(n) on the profile | **Recommended first model**: one standard, deterministic, no tuning, smooth across line-of-sight and over the horizon, and it reduces to one equivalent obstacle that can be drawn and explained |
-| ITS Irregular Terrain Model, point to point (NTIA's C++ v1.3, public domain in the US and permissively licensed elsewhere) | Reference attenuation from the profile with horizons, effective heights, climate and refractivity; time, location and situation variability | Small; a C++ dependency or a port | **Second model**, for comparison and for its variability figures; adopted as primary only if outcomes show it ranks better (§19.3) |
+| ITS Irregular Terrain Model, point to point (NTIA's C++ v1.3, public domain in the US and permissively licensed elsewhere) | Reference attenuation from the profile with horizons, effective heights, climate and refractivity; time, location and situation variability | Small; a C++ dependency or a port | **Second model**, for comparison and for its variability figures; adopted as primary only if outcomes show it ranks better (§19.5) |
 | ITU-R P.1812, P.452 | Path-specific prediction with clutter and ducting | Needs ITU's digital maps, which may not be redistributed without ITU's written permission | Not used |
 
 No reference implementation of P.526 §4.5 was found; it is written from the text, tested against
@@ -595,7 +596,7 @@ seconds at negligible cost once the tiles are local.
 ### 8.10 Validating it
 
 Terrain modelling earns its place only if it ranks VHF gateways better than distance does. The
-test, on recorded attempts, is in §19.3: connection rate of the top choice, false "unreachable"
+test, on recorded attempts, is in §19.5: connection rate of the top choice, false "unreachable"
 (predicted blocked, connected) and false "viable" (predicted fine, failed), with complete and with
 missing antenna information, against distance alone. If it does not beat distance, it is shown as
 information and not used in the score.
@@ -622,7 +623,7 @@ source [P]; [S] secondhand).
 | Terrain Tiles (Mapzen, AWS) | Mixed sources by area | Mixed | Each source's attribution [P] | Yes: `elevation-tiles-prod` [P][T] | 4.2 MB (Skadi `.hgt.gz`) [T] |
 | OpenTopography API | — | — | — | Key needed; 50 calls a day for non-academic users [P] | — |
 
-**Recommendation.**
+**Recommendation**, which the author took (§21, Q5):
 
 * **Copernicus GLO-30 as the one source, everywhere**, with **GLO-90 for the first pass** and where
   a GLO-30 tile is missing (the AWS copy has none over Armenia and Azerbaijan [T]). It is the only
@@ -817,7 +818,8 @@ NOAA's three-day forecast, when held, adds its storm warning to the evening's ro
 
 ### 11.2 Recommendation: shared Rust libraries, embedded; one narrow local API
 
-**hf-predict's repository becomes a Cargo workspace of libraries plus the app.** Its domain code
+**hf-predict's repository becomes a Cargo workspace of libraries plus the app** (the author's
+choice, §21, Q2). Its domain code
 moves out of the Tauri crate, unchanged at first, into crates with no Tauri dependency. RadioPost
 depends on them by git tag. Each app embeds them and works alone.
 
@@ -838,11 +840,12 @@ are RadioPost's alone.
 building on all three systems in CI). hf-predict's release attaches the engine for each platform as
 an artifact with its checksum; RadioPost's release fetches the version it pins, checks it, and
 bundles it (about 9 MB installed; its data compresses to 1.4 MB). Bundled rather than downloaded
-on first use, because HF ranking must work at a Field Day site with no Internet.
+on first use, because HF ranking must work at a Field Day site with no Internet (the author's choice, §21,
+Q7).
 
 **The licence.** The crates are relicensed MIT OR Apache-2.0, matching RadioPost; hf-predict
-the app may stay Apache-2.0. The author is the only committer, so this is the author's call alone
-(§21, Q1). Without it, RadioPost's binaries carry Apache-2.0-only parts.
+the app may stay Apache-2.0. The author, its only committer, chose this (§21, Q1), so RadioPost's
+binaries keep one licence choice throughout.
 
 ### 11.3 How to get there without breaking hf-predict
 
@@ -929,7 +932,8 @@ Aether already knows each of them.
 | `probe` request, `probed` event, `caps.probe` | An operator's measurement of both directions in two short frames each way (about 11 s), without a session. | `probe {remote}` and its result (Aether's ADR-0006) |
 
 None is needed to start (§18): Phases 1 to 4 work with RP-4 as it is, and these make the learning
-sharper when present.
+sharper when present. The author chose to propose them in phases: the first two with Phase 4, the
+probe with Phase 6 (§21, Q4).
 
 ### 12.3 Failure classification
 
@@ -1264,7 +1268,8 @@ cannot.
 | Fewest failed attempts | Short messages, crowded channels | Large transfers (A at 50 kB) |
 | Shortest expected time among those meeting a reliability floor | Most cases | Needs two numbers, a floor and a deadline, to explain |
 
-**Recommended default: the time by which the transaction is done four times in five** (the 80th
+**The default, as the author chose it (§21, Q6): the time by which the transaction is done four
+times in five** (the 80th
 percentile of the simulated completion time, "T80"). It is one number in minutes that an operator
 reads directly ("likely done within 9 minutes"), it grows with the size, it counts failed calls and
 broken links, and it penalises thin evidence more than the mean does, which suits a choice made
@@ -1554,8 +1559,8 @@ The client's panel gains, behind its existing rules (loopback, the `Host` checke
 
 Nothing here changes what crosses the air or what another RadioPost implementation must do.
 Selection is a client's own business. Three things touch the specifications, all optional and
-MINOR, each for the author to decide: the gateway record's members (§7.2, RP-5), the modem
-interface's additions (§12.2, RP-4), and, if wanted later, an informative document describing the
+MINOR: the gateway record's members (§7.2, RP-5) and the modem interface's additions (§12.2, RP-4),
+each proposed in the phase that uses it (§21, Q3 and Q4), and, if wanted later, an informative document describing the
 attempt record so that other clients (RadioPostKit) could read and share the same evidence.
 
 ---
@@ -1833,8 +1838,9 @@ records) and with much; by place; by band; on days of disturbed conditions.
    happened. This is the honest test of calibration and of whether learning improves the forecast
    (M5 against M1 and M3; for VHF, M2 against M0). It cannot score candidates nobody called.
 3. **A field study, for the choices.** With volunteers' consent and for a set period, when there
-   are two or more eligible candidates within a tie or near it, the client takes one at random
-   between the two methods' top choices (M6 against M0 or M1w), and records which. Randomised, so
+   are two or more eligible candidates within a tie or near it, the client puts one of the two methods' top
+   choices first at random (M6 against M0 or M1w), and records which; the operator still presses
+   Call (§21, Q9). Randomised, so
    the comparison is fair; limited to near-ties, so no operator is sent to a poor choice.
 
 ### 19.4 Pitfalls, and what is done about them
@@ -1891,8 +1897,9 @@ method, the numbers with their intervals, and what changes because of them.
   far more records and would forget every season.
 * **The 80th percentile as the default score.** One number, risk-aware, honest about thin evidence.
   The mean is faster on average and riskier; it is available as a setting.
-* **No automatic transmission to learn.** Probing only on the operator's click: the learning is
-  slower, the band is quieter, and the rules are simpler.
+* **No automatic transmission at all.** Probing and calling only on the operator's click (§21,
+  Q9): the learning is slower, a failed call costs the operator a click, the band is quieter, and
+  the rules are simpler.
 * **No central collection of outcomes.** Each client learns alone. A shared data set could help new
   users a great deal and is the obvious next question (§20.4), but it is a privacy and governance
   choice, not a technical one.
@@ -1937,8 +1944,9 @@ Asked of every part: does it earn its place, and what would be lost by cutting i
   availability should be learned per channel or for the gateway (the scan's dwell is known from
   `scan_s`) is open until scanning gateways have records.
 * **The wishlist.** W17 (*Gateways ranked by propagation*) recommended a prediction only; this
-  design goes further. If accepted, W17 is rewritten to point here, and the new wishes (places and
-  GPS, terrain, learning, transaction ranking) are added with their compatibility notes.
+  design goes further. Once the proposal is accepted, W17 is rewritten to point here, and the new
+  wishes (places and GPS, terrain, learning, transaction ranking) are added with their
+  compatibility notes (the author's answer, §21, Q10).
 
 ---
 
@@ -2059,3 +2067,4 @@ for size in (2000, 50000):
 |---|---|---|
 | 0.1.0 | 2026-11-20 | First draft, for the author's review: the selection problem; position and GPS; the directory and optional RP-5 members; VHF terrain (Copernicus, P.526 §4.5, link budgets); HF (VOACAP both ways through the modem's ladder); hf-predict's crates; attempt records, failure classification and learning; the transaction model and T80; the ranking; the panel; roadmap, validation, risks and ten decisions. Research of 2026-11-20 on Winlink Express, Pat, GPS sources, elevation data and propagation models. |
 | 0.2.0 | 2026-11-20 | §21: the author's answers to the ten questions, asked one at a time. Q1 to Q8 and Q10 as recommended; Q9, after a failure the client suggests the next candidate and never calls by itself, so §1, §12.8, §14.6, §17 and §18's Phase 6 no longer have an automatic fallback. |
+| 0.2.1 | 2026-11-20 | The passages that left a decision open now give the author's answer (§3, §7.2, §9.1, §11.2, §12.2, §13.5, §15.4, §19.3, §20.2, §20.4); §5.2's table, where 0.2.0 had added §21's answers by mistake, restored; three references to §19 corrected. No change of design. |
