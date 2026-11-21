@@ -108,6 +108,11 @@ jobs:
           node --check "$RUNNER_TEMP/app.mjs"
           cp app/gateway/ui/app.js "$RUNNER_TEMP/gateway.mjs"
           node --check "$RUNNER_TEMP/gateway.mjs"
+          cp app/ui/map.js "$RUNNER_TEMP/map.mjs"
+          node --check "$RUNNER_TEMP/map.mjs"
+
+      - name: The client's world map against cases worked by hand
+        run: node tools/map/check.mjs
 
   app:
     name: app · ${{ matrix.name }}

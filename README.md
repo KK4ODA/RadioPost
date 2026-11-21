@@ -107,12 +107,13 @@ FEMA's paper ICS 213, and someone reading by email gets it as text with its labe
 <p align="center"><img src="docs/images/readme-form.png" width="620" alt="The New message form with ICS-213 General Message chosen: To, Subject, and the form's fields filled in for a shelter asking a county EOC for cots and water"></p>
 
 **Find a gateway near you.** The list comes from your post office and the ones it knows, sorted
-by distance from your grid square, with each gateway's channels and hours. It is kept for when
-there is no Internet. Pick a channel and RadioPost tunes the radio there, and keys a tuner tone
-when you ask. A gateway that scans several channels is reached on any of them: RadioPost keeps
-calling until it comes round.
+by distance from where you are (a place you saved, or your GPS), with each gateway's channels and
+hours. It is kept for when there is no Internet. A map shows the gateways, you, the night side as
+it is now and the great circle to the one you pick; it needs no Internet either. Pick a channel
+and RadioPost tunes the radio there, and keys a tuner tone when you ask. A gateway that scans
+several channels is reached on any of them: RadioPost keeps calling until it comes round.
 
-<p align="center"><img src="docs/images/readme-gateways.png" width="700" alt="The Gateways list: three gateways with where they are, how far, their channels and their hours, each with a Choose button"></p>
+<p align="center"><img src="docs/images/readme-gateways.png" width="700" alt="The Gateways page's map: the gateways round Atlanta in their Maidenhead squares, you, and the great circle to N1CALL-10 in Austin, 1309 km at 257 degrees, with a Choose button"></p>
 
 **Mail station to station**, with no gateway and no Internet. Switch on **Listen for P2P** and
 RadioPost answers calls to any of your callsigns, session after session, until you switch it off.

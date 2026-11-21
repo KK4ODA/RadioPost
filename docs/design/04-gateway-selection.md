@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.3 |
+| **Version** | 0.3.4 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -869,7 +869,7 @@ hf-predict is a workspace; `geo.rs` moved unchanged into `radioprop-geo` (step 1
 crate), and `radioprop-place` holds places, the NMEA and gpsd parsers, the four readers, freshness
 and the choice of position (step 4). RadioPost depends on both by git revision until step 5 tags
 them. The engine and the predictor move into `radioprop-hf` in Phase 3. Station profiles (§6.5)
-are not built yet.
+followed the same day, in `radioprop-place` (`StationProfile`, kept in the same book).
 
 ### 11.4 The one local API: today's observations
 
@@ -1650,6 +1650,16 @@ Replaces today's Gateways view.
   turns on, used under their provider's policy (no prefetching of OpenStreetMap's tiles).
 * Selecting on the map selects in the list, and the reverse.
 
+**Done in Phase 1 (2026-11-21):** the HF map without its predictions. The client's Gateways page
+draws the gateways of the view, the position in use, the night side as it is now, the Maidenhead
+fields (and the squares, named, when zoomed in), and the great circle to the gateway picked, with
+its distance and bearing; picking works both ways, **Choose** works from the map, and a place can
+be saved from it (§16.5's *Add from the map*). The land is Natural Earth's 1:110m, as world-atlas
+2.0.2 redistributes it, written into one 44 kB SVG path by `tools/map/world.py`; hf-predict's
+1:50m was 545 kB of TopoJSON, too large for a panel with no build step. No library: `app/ui/map.js`
+draws it. Lines coloured by score and the coverage shading wait for predictions (Phase 3), the
+hillshade map for VHF terrain (Phase 2).
+
 ### 16.3 The VHF terrain profile
 
 ```
@@ -2093,3 +2103,4 @@ for size in (2000, 50000):
 | 0.3.1 | 2026-11-20 | §15.2: the attempt record as Phase 1 writes it (member names, the stub line, what later phases fill); the example's times corrected to 2026-11-20. |
 | 0.3.2 | 2026-11-21 | §11.3: what Phase 1 built in hf-predict: the workspace, `radioprop-geo` and `radioprop-place` (places, readers, freshness, the position in use), used by RadioPost by revision. |
 | 0.3.3 | 2026-11-21 | §7.2: `seen` and `listens` done, as RP-5 1.4.0. |
+| 0.3.4 | 2026-11-21 | §11.3: station profiles done, in `radioprop-place`. §16.2: the HF map of Phase 1 done (the land, the night side, the grid, great circles, picking both ways, a place saved from the map); what waits for Phases 2 and 3. |

@@ -196,7 +196,8 @@ fn add_own(
 /// The gateways as the panel lists them: the post offices' records ranked by distance (`ranked`,
 /// from the store), the operator's own added in order, and on each `own`, `favourite`, `blocked`
 /// (the gateway, and each channel), the age of its list (`list_fetched`, `list_old`), the last call
-/// to it (`last`) and whether it was `worked` from within reach of `here`.
+/// to it (`last`), whether it was `worked` from within reach of `here`, its grid square's centre
+/// (`at`, for the map) and its `bearing` from `here` in degrees from true north.
 #[must_use]
 pub fn annotate(
     ranked: Vec<Value>,
@@ -225,6 +226,11 @@ pub fn annotate(
     let home = gateway_list["domain"].as_str().unwrap_or("");
     for g in &mut all {
         let callsign = g["callsign"].as_str().unwrap_or("").to_owned();
+        let there = g["grid"].as_str().and_then(crate::grid::centre);
+        g["at"] = there.map_or(Value::Null, |(lat, lon)| json!({"lat": lat, "lon": lon}));
+        g["bearing"] = here.zip(there).map_or(Value::Null, |(a, b)| {
+            json!(crate::grid::bearing(a, b).round().rem_euclid(360.0))
+        });
         g["own"] = json!(g["own"] == true);
         g["favourite"] = json!(marks.favourite(&callsign, None));
         g["blocked"] = json!(marks.blocked(&callsign, None));
@@ -417,6 +423,25 @@ mod tests {
         let order: Vec<&str> = all.iter().filter_map(|g| g["callsign"].as_str()).collect();
         assert_eq!(order, ["KK4ODA-1", "N0CALL-10", "N1CALL-10"]);
         assert_eq!(all[1]["own"], true);
+        // each carries its square's centre, for the map, and its bearing from here: EM74 is due
+        // north of EM73, EM10 west-south-west
+        assert_eq!(all[1]["at"], json!({"lat": 34.5, "lon": -85.0}));
+        assert_eq!(all[1]["bearing"].as_f64(), Some(0.0));
+        let west = all[2]["bearing"].as_f64().expect("a bearing");
+        assert!((240.0..265.0).contains(&west), "{west}");
+        let all = annotate(
+            vec![json!({"callsign": "N9X"})],
+            &json!({}),
+            &marks,
+            &[],
+            here,
+            0,
+        );
+        let nowhere = all.iter().find(|g| g["callsign"] == "N9X").expect("listed");
+        assert_eq!(
+            (&nowhere["at"], &nowhere["bearing"]),
+            (&Value::Null, &Value::Null)
+        );
         request(
             &base,
             &json!({"op": "remove-own", "callsign": "N0CALL-10"}),

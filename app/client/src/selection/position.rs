@@ -199,7 +199,7 @@ impl Position {
     }
 
     /// A change from the panel: `op` is `add` (`name`, `where`: a grid square or a latitude and
-    /// longitude), `add-gps` (`name`: the GPS's present fix), `remove` or `default` (`id`),
+    /// longitude; `from` `map` when it was picked on the map), `add-gps` (`name`: the GPS's present fix), `remove` or `default` (`id`),
     /// `choice` (`use`: `automatic`, `gps` or `place` with `id`), `gps` (`source`, or null for
     /// none), or one of the station profiles' (`station_request`).
     ///
@@ -220,7 +220,12 @@ impl Position {
                     if name.is_empty() {
                         return Err("a name for the place".into());
                     }
-                    let place = place_at(&name, &text("where"), now_s)?;
+                    let picked = if text("from") == "map" {
+                        Origin::Map
+                    } else {
+                        Origin::Typed
+                    };
+                    let place = place_at(&name, &text("where"), picked, now_s)?;
                     g.book.add(place);
                 }
                 "add-gps" => {
@@ -341,8 +346,9 @@ pub fn saved(base: &Path) -> Option<radioprop_place::Here> {
     choose(&book, None, now_ms()).here
 }
 
-/// A place from what was typed: a grid square, or a latitude and longitude.
-fn place_at(name: &str, at: &str, now_s: u64) -> Result<Place, Error> {
+/// A place from what was typed or picked: a grid square, or a latitude and longitude, which keeps
+/// `picked` as its origin (typed, or picked on the map).
+fn place_at(name: &str, at: &str, picked: Origin, now_s: u64) -> Result<Place, Error> {
     if at.is_empty() {
         return Err("where: a grid square such as EM73tr, or a latitude and longitude".into());
     }
@@ -350,7 +356,7 @@ fn place_at(name: &str, at: &str, now_s: u64) -> Result<Place, Error> {
         Place::from_grid(name, at, now_s)
     } else {
         let p = parse_position(at)?;
-        Place::at(name, p.lat, p.lon, Origin::Typed, now_s)
+        Place::at(name, p.lat, p.lon, picked, now_s)
     }
 }
 
@@ -463,10 +469,14 @@ mod tests {
             .expect("added");
         p.request(&json!({"op": "add", "name": "EOC", "where": "EM74ua"}))
             .expect("added");
+        // one picked on the map keeps where it came from
+        p.request(&json!({"op": "add", "name": "Hill", "where": "34.2, -84.1", "from": "map"}))
+            .expect("added");
         let v = p.json(false);
         assert_eq!(v["places"][0]["source"], "typed");
         assert_eq!(v["places"][0]["square"], "EM73vx");
         assert_eq!(v["places"][1]["source"], "grid");
+        assert_eq!(v["places"][2]["source"], "map");
         p.request(&json!({"op": "choice", "use": "place", "id": "pl-eoc"}))
             .expect("chosen");
         assert_eq!(p.json(false)["here"]["grid"], "EM74ua");

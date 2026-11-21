@@ -155,6 +155,28 @@ const GATEWAYS = {domain: "radiopost.org", fetched: T - 2 * DAY, others: ["hampo
      list_fetched: T - 2 * DAY, list_old: false, last: null, worked: false,
      channels: [{dial_hz: 7101000, bandwidth_hz: 2300, favourite: false, blocked: false}]},
   ]};
+// each gateway's grid square's centre, for the map, and its bearing from here, as the client
+// adds them (app/client/src/selection/directory.rs, app/client/src/grid.rs)
+for (const gw of GATEWAYS.gateways) Object.assign(gw, placedFrom(HERE, gw.grid));
+function placedFrom(here, grid) {
+  const g = grid.toUpperCase();
+  let lon = (g.charCodeAt(0) - 65) * 20 - 180 + Number(g[2]) * 2;
+  let lat = (g.charCodeAt(1) - 65) * 10 - 90 + Number(g[3]);
+  if (g.length === 6) {
+    lon += (g.charCodeAt(4) - 65) * 2 / 24 + 1 / 24;
+    lat += (g.charCodeAt(5) - 65) / 24 + 0.5 / 24;
+  } else {
+    lon += 1;
+    lat += 0.5;
+  }
+  const r = Math.PI / 180;
+  const dl = (lon - here.lon) * r;
+  const y = Math.sin(dl) * Math.cos(lat * r);
+  const x = Math.cos(here.lat * r) * Math.sin(lat * r)
+    - Math.sin(here.lat * r) * Math.cos(lat * r) * Math.cos(dl);
+  const bearing = (Math.round(Math.atan2(y, x) / r) + 360) % 360;
+  return {at: {lat, lon}, bearing};
+}
 // the calls placed, as the Recent view lists them
 const RECENT = {recent: [
   {id: "a-5", at: T - 1600, kind: "gateway", remote: "KK4ODA-1", dial_hz: 7101000,
@@ -821,8 +843,24 @@ const SHOTS = {
                                                  height: 900});
     await spreadLog(page, "log", T - 1300, 19);
     await page.click("#gateways-open");
+    await page.evaluate(() => { document.getElementById("map-card").open = false; });
     await page.waitForTimeout(200);
     await shot(page, "client-gateways");
+    await context.close();
+  },
+
+  // the map: the gateways of the view round Atlanta, N1CALL-10 picked in the list, its great
+  // circle drawn and what it is under the map
+  async "client-gateway-map"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+                                                 height: 1000});
+    await page.click("#gateways-open");
+    await page.waitForTimeout(300);
+    await page.locator("#gateway-rows tr", {hasText: "N1CALL-10"}).locator("td").nth(1).click();
+    // the click scrolled down to the row: the map back in view
+    await page.locator("#map-card").evaluate((card) => card.scrollIntoView({block: "start"}));
+    await page.waitForTimeout(300);
+    await shot(page, "client-gateway-map", "#map-card");
     await context.close();
   },
 
@@ -1161,12 +1199,17 @@ const SHOTS = {
     await context.close();
   },
 
+  // the Gateways page down to its map, N1CALL-10 picked in the list
   async "readme-gateways"(browser) {
     const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
-                                                 width: 1280, height: 700});
+                                                 width: 1280, height: 1000});
     await page.click("#gateways-open");
-    await page.waitForTimeout(200);
-    await readmeShot(page, "readme-gateways", ["#gateways-view > *"]);
+    await page.waitForTimeout(300);
+    await page.locator("#gateway-rows tr", {hasText: "N1CALL-10"}).locator("td").nth(1).click();
+    await page.locator("#gateways-view").evaluate((view) => view.scrollIntoView({block: "start"}));
+    await page.waitForTimeout(300);
+    await readmeShot(page, "readme-gateways",
+                     ["#gateways-view > h1", "#gateways-view > .tabs", "#map-card"]);
     await context.close();
   },
 

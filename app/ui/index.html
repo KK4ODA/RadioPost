@@ -141,6 +141,28 @@
           <button role="tab" data-gview="worked" title="Gateways you finished a session with from within 50 km of where you are now, 2 km on channels of 30 MHz and up">Worked from here</button>
         </div>
         <p class="note" id="gateways-view-note"></p>
+        <details class="card" id="map-card" open>
+          <summary title="The gateways of this view on a map of the world, with you, the night side as it is now and the great circle to the one picked">Map</summary>
+          <div class="row map-tools">
+            <button type="button" class="quiet" id="map-fit" title="Show you and the gateways of this view">Fit</button>
+            <button type="button" class="quiet" id="map-world" title="Show the whole world">World</button>
+            <button type="button" class="quiet narrow-button" id="map-in" title="Zoom in: the mouse wheel does it too, about the pointer" aria-label="Zoom in">+</button>
+            <button type="button" class="quiet narrow-button" id="map-out" title="Zoom out" aria-label="Zoom out">−</button>
+            <button type="button" class="quiet" id="map-place" aria-pressed="false" title="Click a spot on the map to save it as a place">Save a place from the map</button>
+            <span class="note map-legend" title="What the marks mean">◎ you · ○ listed · ■ yours · ★ favourite · ◆ worked from here · faded: not seen for days · shaded: night now</span>
+          </div>
+          <svg id="world-map" role="img" aria-label="A map of the gateways of this view and the position in use. Pick a gateway in the list to see it here, or click one here to pick it in the list"></svg>
+          <div class="row" id="map-picked" hidden>
+            <span id="map-picked-text"></span>
+            <button type="button" id="map-choose" title="Call it: its channel goes in the call box, and the radio is tuned there at once when the modem can">Choose</button>
+          </div>
+          <div class="row" id="map-point" hidden>
+            <span id="map-point-text"></span>
+            <input id="map-point-name" class="short" placeholder="Name" title="What to call the place: Home, Mobile, Field Day">
+            <button type="button" id="map-point-save" title="Save the spot marked as a place">Save as a place</button>
+            <button type="button" class="quiet" id="map-point-cancel">Cancel</button>
+          </div>
+        </details>
         <div class="scroll" id="gateway-table"><table class="list" aria-label="Gateways">
           <thead><tr>
             <th title="Its callsign, and the post office that lists it. The star marks a favourite">Gateway</th><th title="Where it is, when it answers, and how old its record is">Where</th>
@@ -666,6 +688,7 @@
             <input id="place-where" class="grow" placeholder="EM73tr, or 33.75, -84.39" spellcheck="false" title="A grid square (its centre is used), or a latitude and longitude in degrees: north and east positive, or with N, S, E, W">
             <button type="button" id="place-add">Add</button>
             <button type="button" class="quiet" id="place-add-gps" title="Save the GPS's present fix as a place, with its height" disabled>Add from GPS</button>
+            <button type="button" class="quiet" id="place-add-map" title="Pick the place on the map of the Gateways page">Add from the map</button>
           </div>
           <label title="Automatic: the GPS while its fix is less than two minutes old, otherwise the place saved nearest its last fix, otherwise the default place">Position
             <select id="place-choice"></select>

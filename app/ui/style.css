@@ -481,6 +481,50 @@ details.hint code, .note code { font-family: var(--mono); font-size: 12px; backg
 .chan { display: flex; align-items: center; gap: 2px; white-space: nowrap; }
 .chan.struck span { text-decoration: line-through; color: var(--muted); }
 #gateway-rows tr.blocked td, #gateway-rows tr.old td { opacity: 0.55; }
+#gateway-rows tr { cursor: pointer; }
+#gateway-rows tr.picked td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+/* the map (§16.2): the land and the sea from the page's own colours, the night a shade over both */
+#map-card { margin-bottom: 12px; }
+#map-card .map-tools { flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+#map-card .map-tools .narrow-button { width: var(--control-h); padding: 0; }
+#map-card .map-legend { margin: 0 0 0 auto; }
+#map-place.on { border-color: var(--accent); color: var(--accent); }
+#world-map { display: block; width: 100%; aspect-ratio: 2 / 1; max-height: 52vh;
+             border: 1px solid var(--line); border-radius: 6px; touch-action: none;
+             cursor: grab; user-select: none; background: var(--panel); }
+#world-map.dragging { cursor: grabbing; }
+#world-map.placing { cursor: crosshair; }
+#world-map .m-sea { fill: color-mix(in srgb, var(--accent) 7%, var(--panel)); }
+#world-map .m-land { fill: color-mix(in srgb, var(--muted) 22%, var(--panel));
+                     stroke: color-mix(in srgb, var(--muted) 45%, var(--panel));
+                     stroke-width: 0.6; vector-effect: non-scaling-stroke; }
+#world-map .m-night { fill: var(--text); opacity: 0.09; pointer-events: none; }
+#world-map .m-fields { fill: none; stroke: var(--muted); stroke-width: 0.5; opacity: 0.35;
+                       vector-effect: non-scaling-stroke; }
+#world-map .m-squares { fill: none; stroke: var(--muted); stroke-width: 0.5; opacity: 0.18;
+                        vector-effect: non-scaling-stroke; pointer-events: none; }
+#world-map .m-grid-name { fill: var(--muted); font-family: var(--mono); opacity: 0.8;
+                          pointer-events: none; }
+#world-map .m-path { fill: none; stroke: var(--accent); stroke-width: 2;
+                     vector-effect: non-scaling-stroke; }
+#world-map .m-hit { fill: transparent; }
+#world-map .m-gw { cursor: pointer; }
+#world-map .m-shape { fill: var(--panel); stroke: var(--text); stroke-width: 1.4;
+                      vector-effect: non-scaling-stroke; }
+#world-map .m-gw.fav .m-shape { fill: var(--busy); stroke: var(--busy); }
+#world-map .m-gw.worked .m-shape { fill: var(--ok); stroke: var(--ok); }
+#world-map .m-gw.own .m-shape { fill: var(--text); }
+#world-map .m-gw.old, #world-map .m-gw.blocked { opacity: 0.45; }
+#world-map .m-gw.blocked .m-shape { stroke-dasharray: 2 2; }
+#world-map .m-gw.picked .m-shape { stroke: var(--accent); stroke-width: 2.5; }
+#world-map .m-gw text { fill: var(--text); font-family: var(--mono); paint-order: stroke;
+                        stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round;
+                        vector-effect: non-scaling-stroke; }
+#world-map .m-here .ring { fill: none; stroke: var(--accent); stroke-width: 2;
+                           vector-effect: non-scaling-stroke; }
+#world-map .m-here .dot { fill: var(--accent); }
+#world-map .m-point { stroke: var(--bad); stroke-width: 2; vector-effect: non-scaling-stroke; }
+#map-picked, #map-point { margin-top: 8px; gap: 8px; align-items: center; flex-wrap: wrap; }
 #gateway-rows .acts > div { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
 #gateway-rows td:nth-child(2) { min-width: 10em; }
 #recent-rows .warn { color: var(--busy); }

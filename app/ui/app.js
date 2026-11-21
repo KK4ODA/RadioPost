@@ -2,6 +2,8 @@
 // The RadioPost client's panel: the folders, a reader, a composer, the station's calls and its
 // setup, over the client's JSON API (app/client/src/panel.rs). No build step.
 
+import { WorldMap } from "./map.js";
+
 const $ = (id) => document.getElementById(id);
 
 // The panel stacks its parts in one column at this width and under (style.css's @media rule for
@@ -402,6 +404,15 @@ function wirePlaces() {
     }
   });
   $("gps-save").addEventListener("click", () => placeRequest({op: "gps", source: gpsSource()}, true));
+  $("place-add-map").addEventListener("click", async () => {
+    if (gwView === "recent") gwView = "recommended";
+    await openGateways();
+    $("map-card").open = true;
+    $("map-point-name").value = $("place-name").value;
+    setPlacing(true);
+    $("map-card").scrollIntoView({block: "start"});
+    toast("Click the spot on the map, then name it and save it.");
+  });
   $("places-open").addEventListener("click", () => {
     show("setup");
     $("places-card").scrollIntoView({block: "start"});
@@ -413,6 +424,7 @@ function wirePlaces() {
       try {
         const v = await api("places");
         $("gateways-here").textContent = hereWords(v.here, v.note);
+        if (worldMap) worldMap.setHere(v.here);
       } catch { /* shown at the next */ }
     }
   }, 2000);
@@ -1033,6 +1045,7 @@ async function renderGatewaysPage() {
   $("gateway-table").hidden = recent;
   $("recent-table").hidden = !recent;
   $("own-form").hidden = recent;
+  $("map-card").hidden = recent;
   $("gateways-left-out").hidden = true;
   if (recent) {
     await renderRecent();
@@ -1053,6 +1066,124 @@ async function renderGatewaysPage() {
   }
   const twice = new Set(g.ambiguous || []);
   $("gateway-rows").replaceChildren(...rows.map((gw) => gatewayRow(gw, twice)));
+  showMap(rows);
+}
+
+// -- the map (§16.2): the rows of the view, the one picked in the list or on the map, and places
+// picked on it --
+
+let worldMap = null;
+let mapFitted = false;
+let pickedGateway = null;
+let mapPoint = null;
+
+// a gateway as the map draws it
+function mapGateway(gw) {
+  return {callsign: gw.callsign, at: gw.at, own: gw.own, worked: gw.worked, blocked: gw.blocked,
+          favourite: gw.favourite || (gw.channels || []).some((c) => c.favourite),
+          old: Boolean(gw.seen_old || gw.list_old), km: gw.km, bearing: gw.bearing,
+          where: [gw.place, gw.grid].filter(Boolean).join(", ")};
+}
+
+function showMap(rows) {
+  if (!worldMap) {
+    worldMap = new WorldMap($("world-map"), {
+      onPick: (callsign) => pickGateway(callsign, "map"),
+      onPoint: pointPicked,
+    });
+    // the night side moves a degree every four minutes
+    setInterval(() => worldMap.drawNight(), 4 * 60 * 1000);
+  }
+  worldMap.show({here: gatewaysData.here, gateways: rows.map(mapGateway)});
+  if (!mapFitted && (rows.length || gatewaysData.here)) {
+    worldMap.fit();
+    mapFitted = true;
+  }
+  const off = rows.filter((gw) => !gw.at).length;
+  $("map-card").querySelector("summary").textContent = off
+    ? `Map: ${off} of the gateways here ${off === 1 ? "gives" : "give"} no grid square and ${off === 1 ? "is" : "are"} not on it`
+    : "Map";
+  pickGateway(rows.some((gw) => gw.callsign === pickedGateway) ? pickedGateway : null, "page");
+}
+
+// one gateway picked, in the list or on the map: marked in both, with what it is under the map
+function pickGateway(callsign, from) {
+  pickedGateway = callsign;
+  if (from !== "map" && worldMap) worldMap.pick(callsign);
+  for (const tr of $("gateway-rows").children) {
+    const on = tr.dataset.callsign === callsign;
+    tr.classList.toggle("picked", on);
+    tr.setAttribute("aria-selected", String(on));
+    if (on && from === "map") tr.scrollIntoView({block: "nearest"});
+  }
+  const gw = callsign && (gatewaysData.gateways || []).find((g) => g.callsign === callsign);
+  $("map-picked").hidden = !gw;
+  if (!gw) return;
+  const far = gw.km == null ? "" : `${gw.km} km${gw.bearing == null ? "" : ` at ${gw.bearing}°`}`;
+  $("map-picked-text").textContent =
+    [gw.callsign, [gw.place, gw.grid].filter(Boolean).join(", "), far].filter(Boolean).join(" · ");
+  $("map-choose").disabled = gw.blocked;
+}
+
+function setPlacing(on) {
+  if (worldMap) worldMap.placing(on);
+  $("map-place").setAttribute("aria-pressed", String(on));
+  $("map-place").classList.toggle("on", on);
+  $("map-place").textContent = on ? "Click a spot on the map" : "Save a place from the map";
+  if (!on) {
+    mapPoint = null;
+    $("map-point").hidden = true;
+  }
+}
+
+function pointPicked(lat, lon) {
+  mapPoint = {lat, lon};
+  $("map-point").hidden = false;
+  $("map-point-text").textContent = `${Math.abs(lat).toFixed(4)}° ${lat >= 0 ? "N" : "S"}, `
+    + `${Math.abs(lon).toFixed(4)}° ${lon >= 0 ? "E" : "W"}`;
+  $("map-point-name").focus();
+}
+
+async function savePoint() {
+  const name = $("map-point-name").value.trim();
+  if (!mapPoint) return;
+  if (!name) {
+    toast("A name for the place: Home, Mobile, Field Day.", true);
+    $("map-point-name").focus();
+    return;
+  }
+  try {
+    await api("places", {op: "add", name, from: "map",
+                         where: `${mapPoint.lat.toFixed(5)}, ${mapPoint.lon.toFixed(5)}`});
+    $("map-point-name").value = "";
+    $("place-name").value = "";
+    setPlacing(false);
+    toast(`${name} saved as a place. Setup's Places and GPS card has it.`);
+    await openGateways();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function wireMap() {
+  const card = $("map-card");
+  card.open = kept("gmap", "open") === "open";
+  card.addEventListener("toggle", () => keep("gmap", card.open ? "open" : "closed"));
+  $("map-fit").addEventListener("click", () => worldMap && worldMap.fit());
+  $("map-world").addEventListener("click", () => worldMap && worldMap.world());
+  $("map-in").addEventListener("click", () => worldMap && worldMap.zoom(1.5));
+  $("map-out").addEventListener("click", () => worldMap && worldMap.zoom(1 / 1.5));
+  $("map-place").addEventListener("click", () =>
+    setPlacing($("map-place").getAttribute("aria-pressed") !== "true"));
+  $("map-point-save").addEventListener("click", savePoint);
+  $("map-point-name").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") savePoint();
+  });
+  $("map-point-cancel").addEventListener("click", () => setPlacing(false));
+  $("map-choose").addEventListener("click", () => {
+    const gw = (gatewaysData.gateways || []).find((g) => g.callsign === pickedGateway);
+    if (gw) chooseGateway(gw);
+  });
 }
 
 // a small toggle: the star, or the block of one channel
@@ -1076,6 +1207,11 @@ async function markGateway(body) {
 function gatewayRow(gw, twice) {
   const tr = document.createElement("tr");
   if (gw.blocked) tr.classList.add("blocked");
+  tr.dataset.callsign = gw.callsign;
+  // a click on the row, not on one of its buttons, picks it on the map
+  tr.addEventListener("click", (event) => {
+    if (!event.target.closest("button, input, select, a")) pickGateway(gw.callsign, "list");
+  });
   const star = toggle(gw.favourite, ["★", "☆"],
     gw.favourite ? `${gw.callsign} is a favourite: click to unmark it` : `Mark ${gw.callsign} a favourite`,
     () => markGateway({op: gw.favourite ? "unfavourite" : "favourite", callsign: gw.callsign}));
@@ -1238,6 +1374,7 @@ function wireGateways() {
       await renderGatewaysPage();
     });
   }
+  wireMap();
   $("gateways-show-blocked").addEventListener("click", async () => {
     showBlocked = !showBlocked;
     await renderGatewaysPage();

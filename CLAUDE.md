@@ -510,6 +510,10 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   Its icons come from `tools/figures/icons.py` (`--check` compares pixels, not zlib's bytes).
   Check the panel in headless Chromium (Playwright, `NODE_PATH=$(npm root -g)`); CI checks the
   script parses as a module.
+- `tools/map/` — the client's world map (the gateway selection design §16.2): `world.py` writes
+  `app/ui/world.js` (Natural Earth's 1:110m land as world-atlas 2.0.2 gives it, one SVG path, rings
+  across the antimeridian drawn twice, the ISC notice inside; `--check`), and `check.mjs` (CI)
+  holds `app/ui/map.js`'s sun, night side, great circles and land to cases worked by hand.
 - `tools/figures/` — `style.py` (the shared drawing kit), `concept.py`, `design.py`, `icons.py`, `manual.py`, `server.py`. Standard
   library only; `ruff.toml` holds the lint settings.
 - `vectors/` — the test vectors (`vectors/README.md`), **generated** by `tools/vectors/make.py`

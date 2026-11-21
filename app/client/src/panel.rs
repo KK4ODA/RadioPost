@@ -77,6 +77,16 @@ const FILES: &[(&str, &str, &str)] = &[
         "text/css; charset=utf-8",
         include_str!("../../ui/style.css"),
     ),
+    (
+        "/map.js",
+        "text/javascript; charset=utf-8",
+        include_str!("../../ui/map.js"),
+    ),
+    (
+        "/world.js",
+        "text/javascript; charset=utf-8",
+        include_str!("../../ui/world.js"),
+    ),
 ];
 
 /// The panel's requests that reach the post office over the Internet (RP-5 §6).

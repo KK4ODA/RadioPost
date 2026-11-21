@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Maidenhead grid squares (`EM73`, `EM73tt`), as amateurs give where they are: the centre of a
-//! square, and the distance between two, to rank gateways by how near they are (design §5.1).
+//! square, and the distance and bearing between two, to rank gateways by how near they are
+//! (design §5.1) and to say which way they lie.
 
 /// The centre of a grid square of four or six characters, as (latitude, longitude) in degrees.
 #[must_use]
@@ -49,9 +50,20 @@ pub fn km_between((lat1, lon1): (f64, f64), (lat2, lon2): (f64, f64)) -> f64 {
     2.0 * 6371.0 * h.sqrt().asin()
 }
 
+/// The initial bearing of the great circle from one position to another, (latitude, longitude)
+/// in degrees, in degrees clockwise from true north, 0 up to 360: where a beam would point.
+#[must_use]
+pub fn bearing((lat1, lon1): (f64, f64), (lat2, lon2): (f64, f64)) -> f64 {
+    let (p1, p2) = (lat1.to_radians(), lat2.to_radians());
+    let dl = (lon2 - lon1).to_radians();
+    let y = dl.sin() * p2.cos();
+    let x = p1.cos() * p2.sin() - p1.sin() * p2.cos() * dl.cos();
+    y.atan2(x).to_degrees().rem_euclid(360.0)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{centre, km};
+    use super::{bearing, centre, km};
 
     #[test]
     fn centres() {
@@ -79,5 +91,21 @@ mod tests {
         let d = km("EM73", "EM74").expect("a distance");
         assert!((110.0..112.5).contains(&d), "{d}");
         assert_eq!(km("EM73", "nowhere"), None);
+    }
+
+    #[test]
+    fn bearings() {
+        let near = |b: f64, want: f64| (b - want).abs() < 0.5;
+        // due north, east, south and west along a meridian and the equator
+        assert!(near(bearing((10.0, 20.0), (30.0, 20.0)), 0.0));
+        assert!(near(bearing((0.0, 20.0), (0.0, 30.0)), 90.0));
+        assert!(near(bearing((30.0, 20.0), (10.0, 20.0)), 180.0));
+        assert!(near(bearing((0.0, 30.0), (0.0, 20.0)), 270.0));
+        // Atlanta to London leaves north-east, about 49 degrees, not east along the latitude
+        let b = bearing((33.75, -84.39), (51.51, -0.13));
+        assert!((45.0..53.0).contains(&b), "{b}");
+        // across the antimeridian: Fiji to Samoa is east, not west round the world
+        let b = bearing((-18.1, 178.4), (-13.8, -171.8));
+        assert!((60.0..80.0).contains(&b), "{b}");
     }
 }
