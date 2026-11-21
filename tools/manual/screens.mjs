@@ -290,27 +290,32 @@ const CLIENT_LOG = [
 // alerts (RP-8): Ana's two circles, and what she sent and heard this afternoon
 const answer = (kind, from, ago, text) => ({kind, from, time: T - ago, text: text ?? null});
 const alert = (a) => ({out: false, to: null, level: "time-sensitive", quiet: false, sent_at: null,
-                       tries: 1, answers: [], reply: null, why: null, alarm: false, ...a});
+                       tries: 1, answers: [], reply: null, why: null, alarm: false,
+                       dial_hz: null, outlast_s: null, ...a});
 const ALERT_LOG = [
   alert({tag: "a1", out: true, circle: "Riverside net", from: "N0CALL", to: null,
     text: "Shelter 3 needs cots: who has some?", time: T - 600, at: T - 600, state: "heard",
+    dial_hz: 3591500,
     answers: [answer("heard", "N3CALL", 575), answer("heard", "KE4QCM", 571)]}),
-  alert({tag: "a2", circle: "Family", from: "KK4ODA", to: "N0CALL",
+  alert({tag: "a2", circle: "Family", from: "KK4ODA", to: "N0CALL", dial_hz: 7101000,
     text: "Please call me on 146.52 now", time: T - 2400, at: T - 2390, state: "replied",
     reply: "Calling you now"}),
   alert({tag: "a3", out: true, circle: "Family", from: "N0CALL", to: "KK4ODA",
     text: "Home safe, the roads are clear", time: T - 6000, at: T - 6000, state: "replied",
+    dial_hz: 7101000, outlast_s: 49,
     answers: [answer("heard", "KK4ODA", 5975), answer("seen", "KK4ODA", 5900),
               answer("reply", "KK4ODA", 5880, "Good, thanks")]}),
   alert({tag: "a4", out: true, circle: "Riverside net", from: "N0CALL", to: "W4XYZ",
     text: "Net control tonight?", time: T - DAY, at: T - DAY, state: "not heard", tries: 2}),
 ];
 const ALERT_CIRCLES = [
-  {name: "Family", check: "9853 7abf", level: "time-sensitive", answer: true},
-  {name: "Riverside net", check: "8aec 0d0e", level: "important", answer: false},
+  {name: "Family", check: "9853 7abf", level: "time-sensitive", answer: true, watch_hz: 7101000},
+  {name: "Riverside net", check: "8aec 0d0e", level: "important", answer: false,
+   watch_hz: 3591500},
 ];
 const ARRIVING = alert({tag: "a0", circle: "Family", from: "KK4ODA", to: "N0CALL",
-  text: "Please call me on 146.52 now", time: T - 20, at: T - 4, state: "new", alarm: true});
+  text: "Please call me on 146.52 now", time: T - 20, at: T - 4, state: "new", alarm: true,
+  dial_hz: 7101000});
 const NOTIFY = {
   sounds: {on: true, volume: 60, events: {}},
   quiet: {on: true, from: "22:30", to: "06:30"},
@@ -549,7 +554,8 @@ function clientApi(world) {
       case "tone": return {on: body.on, seconds: body.on ? 10 : 0};
       case "alerts": case "circles":
         return {seq: s.alerts.seq, circles: ALERT_CIRCLES, log: world.alerts,
-                alarming: world.alerts.some((e) => e.alarm)};
+                alarming: world.alerts.some((e) => e.alarm),
+                radio_hz: 7101000, scanned_hz: []};
       case "notify": return NOTIFY;
       case "backups": return {on: true, computer: "shack-pc", folder: "D:\\RadioPost backups",
         key: "k1", key_file: "C:\\Users\\you\\.radiopost\\backup.key",
@@ -1107,11 +1113,13 @@ const SHOTS = {
 
   // the Alerts view: what Ana sent and heard, and her two circles with their checks
   async "client-alerts"(browser) {
-    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+    const {page, context} = await open(browser, {ui: CLIENT_UI,
+                                                 api: clientApi(clientWorld({hf: true})),
                                                  height: 1700});
     await page.click("button[data-folder=alerts]");
     await page.waitForTimeout(400);
     await page.fill("#alert-to", "KK4ODA");
+    await page.locator("#alert-to").dispatchEvent("input");
     await page.fill("#alert-text", "Net in 10 minutes on 3.590");
     await page.locator("#alert-text").dispatchEvent("input");
     await page.locator("body").click({position: {x: 1250, y: 30}});

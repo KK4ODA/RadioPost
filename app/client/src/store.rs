@@ -1084,6 +1084,58 @@ impl Store {
         }
     }
 
+    /// How long copies of an alert on `dial_hz` must go on for the station alerted to hear one
+    /// whole (RP-8 §5): the `scan_s` of a listed gateway whose callsign has the base of `to` and
+    /// which scans that dial; for an alert to the whole circle (`to` none), the longest of any
+    /// listed gateway's on it, since a member may run one. `None` when no such gateway scans it.
+    #[must_use]
+    pub fn outlast_s(&self, to: Option<&str>, dial_hz: u64) -> Option<u64> {
+        let list = self.gateway_list.as_ref()?;
+        list["gateways"]
+            .as_array()?
+            .iter()
+            .filter(|g| {
+                to.is_none_or(|to| {
+                    g["callsign"]
+                        .as_str()
+                        .is_some_and(|c| radiopost::callsign::same_base(c, to))
+                })
+            })
+            .filter_map(|g| g["channels"].as_array())
+            .flatten()
+            .filter(|c| c["dial_hz"].as_u64() == Some(dial_hz))
+            .filter_map(|c| c["scan_s"].as_u64())
+            .max()
+    }
+
+    /// The dials the listed gateways of these callsigns scan (RP-5 §4.4, a channel's `scan_s`):
+    /// at a station whose gateway scans, where the circles' watch dials must be (RP-8 §7).
+    #[must_use]
+    pub fn scanned_dials_of(&self, mine: &[String]) -> Vec<u64> {
+        let Some(gateways) = self
+            .gateway_list
+            .as_ref()
+            .and_then(|l| l["gateways"].as_array())
+        else {
+            return Vec::new();
+        };
+        let mut dials: Vec<u64> = gateways
+            .iter()
+            .filter(|g| {
+                g["callsign"]
+                    .as_str()
+                    .is_some_and(|c| mine.iter().any(|m| radiopost::callsign::same_base(c, m)))
+            })
+            .filter_map(|g| g["channels"].as_array())
+            .flatten()
+            .filter(|c| c["scan_s"].is_u64())
+            .filter_map(|c| c["dial_hz"].as_u64())
+            .collect();
+        dials.sort_unstable();
+        dials.dedup();
+        dials
+    }
+
     /// The gateways kept from the post office's list, each with `km`, its distance from the
     /// operator's grid square when both are known, nearest first; the others after, as listed.
     #[must_use]
@@ -1403,6 +1455,25 @@ mod tests {
         assert_eq!(store.scan_s_of("KK4ODA-1", None), Some(20));
         assert_eq!(store.scan_s_of("W4MID-1", None), None);
         assert_eq!(store.scan_s_of("N0NE-1", None), None);
+        // RP-8 §5: an alert's copies go on for the scan of the station alerted, found by its
+        // callsign's base; for the whole circle, the longest scan of any gateway on the dial
+        assert_eq!(store.outlast_s(Some("KK4ODA"), 7_101_000), Some(20));
+        assert_eq!(store.outlast_s(Some("kk4oda-7"), 3_590_000), Some(20));
+        assert_eq!(
+            store.outlast_s(Some("KK4ODA"), 14_105_000),
+            None,
+            "not scanned"
+        );
+        assert_eq!(store.outlast_s(Some("W4MID"), 7_101_000), None, "no scan");
+        assert_eq!(store.outlast_s(None, 7_101_000), Some(20));
+        assert_eq!(store.outlast_s(Some("N0NE"), 7_101_000), None);
+        // RP-8 §7: the dials a station's own gateway scans
+        assert_eq!(
+            store.scanned_dials_of(&["KK4ODA".to_owned()]),
+            [3_590_000, 7_101_000]
+        );
+        let none = store.scanned_dials_of(&["W4MID".to_owned()]);
+        assert!(none.is_empty(), "{none:?}");
         store.gateway_list = None;
         let again = Store::open(&home).expect("the home");
         assert_eq!(again.grid.as_deref(), Some("EM73tt"), "kept");

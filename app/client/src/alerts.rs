@@ -105,12 +105,15 @@ pub struct Kept {
     pub level: Level,
     /// The station says `heard` by itself (RP-8 §5, §8).
     pub answer: bool,
+    /// The circle's watch dial, agreed with the others like the keyword: where an alert to the
+    /// whole circle, or to a station with no listed gateway, goes (RP-8 §7, D46).
+    pub watch_hz: Option<u64>,
 }
 
 impl Kept {
     fn json(&self) -> Value {
         json!({"name": self.name, "key": hex(&self.circle.key), "level": self.level.name(),
-               "answer": self.answer})
+               "answer": self.answer, "watch_hz": self.watch_hz})
     }
 
     fn from_json(v: &Value) -> Option<Kept> {
@@ -123,13 +126,14 @@ impl Kept {
                 .and_then(Level::named)
                 .unwrap_or(Level::TimeSensitive),
             answer: v["answer"].as_bool().unwrap_or(true),
+            watch_hz: v["watch_hz"].as_u64().filter(|&hz| hz > 0),
         })
     }
 
     /// What the page shows of it: never the key.
     fn shown(&self) -> Value {
         json!({"name": self.name, "check": self.circle.check(), "level": self.level.name(),
-               "answer": self.answer})
+               "answer": self.answer, "watch_hz": self.watch_hz})
     }
 }
 
@@ -178,6 +182,13 @@ struct Entry {
     me: String,
     /// Sent and failed: why.
     why: Option<String>,
+    /// Sent: the dial it goes on. Heard: the dial the modem heard it on, where its answers go
+    /// (RP-8 §5). `None`: where the radio is, or a modem that says no dial.
+    dial_hz: Option<u64>,
+    /// Sent: how long its copies keep going, the `scan_s` of the station alerted (RP-8 §5).
+    outlast_s: Option<u64>,
+    /// Sent: until when this sending's copies go on, set as its first copy goes to the modem.
+    copies_until: Option<u64>,
 }
 
 impl Entry {
@@ -190,6 +201,7 @@ impl Entry {
             "answers": self.answers.iter().map(|a| json!({"kind": a.kind.name(), "from": a.from,
                 "time": a.time, "text": a.text})).collect::<Vec<_>>(),
             "reply": self.reply, "why": self.why, "me": self.me,
+            "dial_hz": self.dial_hz, "outlast_s": self.outlast_s,
         })
     }
 
@@ -248,6 +260,9 @@ impl Entry {
             reply: text("reply"),
             why: text("why"),
             me: text("me").unwrap_or_default(),
+            dial_hz: v["dial_hz"].as_u64().filter(|&hz| hz > 0),
+            outlast_s: v["outlast_s"].as_u64(),
+            copies_until: None,
         })
     }
 
@@ -275,6 +290,35 @@ struct Outgoing {
     not_before: u64,
     /// The alert it is, when it is one this station sent (answers have none).
     alert: Option<[u8; 8]>,
+    /// The alert it answers, when it is an answer.
+    answers: Option<[u8; 8]>,
+    /// The dial it belongs on (RP-4 §6's `dial_hz`).
+    dial_hz: Option<u64>,
+}
+
+/// How an alert goes (RP-8 §5, §7): on a dial, the radio tuned there to send it; and, when the
+/// station alerted scans that dial, its copies going on for `outlast_s`, its gateway's `scan_s`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Sending {
+    /// The dial; `None` is wherever the radio is.
+    pub dial_hz: Option<u64>,
+    /// How long its copies go on, from the first (only with a dial).
+    pub outlast_s: Option<u64>,
+}
+
+/// A frame due for the modem: its reference for `broadcast`, its bytes, and its dial. An alert
+/// of this station's has the radio tuned there first (`tune`); an answer names the dial it was
+/// heard on, which a scanning modem goes back to (RP-8 §5).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Due {
+    /// The reference to report `broadcast-sent` with ([`Alerts::went`]).
+    pub reference: String,
+    /// The frame.
+    pub frame: Vec<u8>,
+    /// The dial it belongs on.
+    pub dial_hz: Option<u64>,
+    /// Tune the radio to `dial_hz` before it goes: an alert this station sends.
+    pub tune: bool,
 }
 
 /// A frame the modem has, until `broadcast-sent`.
@@ -438,6 +482,7 @@ impl Alerts {
             circle,
             level,
             answer: true,
+            watch_hz: None,
         };
         let shown = kept.shown();
         s.circles.push(kept);
@@ -446,7 +491,8 @@ impl Alerts {
         Ok(shown)
     }
 
-    /// Changes how a circle's alerts arrive, and whether the station says `heard` by itself.
+    /// Changes how a circle's alerts arrive, whether the station says `heard` by itself, and its
+    /// watch dial (`Some(None)` clears it).
     ///
     /// # Errors
     /// No such circle, or a file that cannot be written.
@@ -455,6 +501,7 @@ impl Alerts {
         name: &str,
         level: Option<Level>,
         answer: Option<bool>,
+        watch_hz: Option<Option<u64>>,
     ) -> Result<(), Error> {
         let mut s = self.lock();
         let c = s
@@ -467,6 +514,9 @@ impl Alerts {
         }
         if let Some(a) = answer {
             c.answer = a;
+        }
+        if let Some(w) = watch_hz {
+            c.watch_hz = w.filter(|&hz| hz > 0);
         }
         s.save_circles()?;
         s.seq += 1;
@@ -489,7 +539,8 @@ impl Alerts {
         Ok(())
     }
 
-    /// Writes an alert from `from` to `to` (or the whole circle), queued for the modem.
+    /// Writes an alert from `from` to `to` (or the whole circle), queued for the modem, on
+    /// whatever dial the radio is on.
     ///
     /// # Errors
     /// No such circle, or a line or callsign RP-8 §3 refuses.
@@ -500,6 +551,23 @@ impl Alerts {
         text: &str,
         from: &str,
         now: u64,
+    ) -> Result<String, Error> {
+        self.send_on(circle, to, text, from, now, Sending::default())
+    }
+
+    /// Writes an alert as [`Alerts::send`] does, on a dial, its copies going on for as long as
+    /// the station alerted takes to scan round to it (RP-8 §5).
+    ///
+    /// # Errors
+    /// No such circle, or a line or callsign RP-8 §3 refuses.
+    pub fn send_on(
+        &self,
+        circle: &str,
+        to: Option<&str>,
+        text: &str,
+        from: &str,
+        now: u64,
+        how: Sending,
     ) -> Result<String, Error> {
         let text = text.trim();
         let to = to
@@ -552,11 +620,16 @@ impl Alerts {
             reply: None,
             why: None,
             me: from.to_owned(),
+            dial_hz: how.dial_hz,
+            outlast_s: how.outlast_s.filter(|_| how.dial_hz.is_some()),
+            copies_until: None,
         });
         s.queue.push_back(Outgoing {
             frame,
             not_before: now,
             alert: Some(tag),
+            answers: None,
+            dial_hz: how.dial_hz,
         });
         s.changed();
         Ok(hex(&tag))
@@ -600,13 +673,17 @@ impl Alerts {
             .ok_or("no such alert heard")?;
         let (circle, frame) = s.frame_of(i)?;
         let me = s.entries[i].me.clone();
-        // a seen already sent is not sent again; a reply is sent each time it is written
+        let dial_hz = s.entries[i].dial_hz;
+        // a seen already sent is not sent again; a reply is sent each time it is written; both
+        // go on the dial the alert was heard on, wherever a scan has taken the radio since
         if kind == Kind::Reply || s.entries[i].state == "new" {
             let raw = alert::answer(&circle, &frame, kind, &me, now, text)?;
             s.queue.push_back(Outgoing {
                 frame: raw,
                 not_before: now,
                 alert: None,
+                answers: Some(tag),
+                dial_hz,
             });
         }
         let e = &mut s.entries[i];
@@ -664,6 +741,19 @@ impl Alerts {
     /// station's callsigns ([`callsigns_of`]). Returns a line for the log, when there is one.
     #[must_use = "a line for the log"]
     pub fn heard(&self, data: &[u8], mine: &[String], now: u64) -> Option<String> {
+        self.heard_on(data, mine, now, None)
+    }
+
+    /// A broadcast heard as [`Alerts::heard`] takes it, with the dial the modem heard it on
+    /// (RP-4 §6's `dial_hz`): where its answers go.
+    #[must_use = "a line for the log"]
+    pub fn heard_on(
+        &self,
+        data: &[u8],
+        mine: &[String],
+        now: u64,
+        dial_hz: Option<u64>,
+    ) -> Option<String> {
         let mut s = self.lock();
         if s.circles.is_empty() {
             return None;
@@ -685,14 +775,14 @@ impl Alerts {
         match verdict {
             Heard::New(frame) => {
                 s.heard.insert(frame.tag, now);
-                s.take(frame, mine, now)
+                s.take(frame, mine, now, dial_hz)
             }
             Heard::HeardAgain(frame) => {
                 let last = s.heard.insert(frame.tag, now);
                 if last.is_some_and(|t| now.saturating_sub(t) < SAME_TRANSMISSION_S) {
                     return None;
                 }
-                s.again(&frame, mine, now)
+                s.again(&frame, mine, now, dial_hz)
             }
             Heard::ForAnotherStation(_) | Heard::NotAnAlert => None,
             other => {
@@ -708,18 +798,36 @@ impl Alerts {
     /// sends it and reports `broadcast-sent` with [`Alerts::went`].
     #[must_use]
     pub fn due(&self, now: u64) -> Option<(String, Vec<u8>)> {
+        self.due_with(now).map(|d| (d.reference, d.frame))
+    }
+
+    /// A frame due for the modem now, with its dial ([`Due`]). The first copy of a sending
+    /// starts the time its copies go on for (RP-8 §5).
+    #[must_use]
+    pub fn due_with(&self, now: u64) -> Option<Due> {
         let mut s = self.lock();
         let i = s.queue.iter().position(|o| o.not_before <= now)?;
         let outgoing = s.queue.remove(i)?;
         s.references += 1;
         let reference = format!("alert{}", s.references);
-        let frame = outgoing.frame.clone();
-        s.flying.push(Flying {
+        if let Some(tag) = outgoing.alert
+            && let Some(e) = s.entries.iter_mut().find(|e| e.out && e.tag == tag)
+            && e.copies_until.is_none()
+        {
+            e.copies_until = e.outlast_s.map(|o| now + o);
+        }
+        let due = Due {
             reference: reference.clone(),
+            frame: outgoing.frame.clone(),
+            dial_hz: outgoing.dial_hz,
+            tune: outgoing.alert.is_some() && outgoing.dial_hz.is_some(),
+        };
+        s.flying.push(Flying {
+            reference,
             outgoing,
             at: now,
         });
-        Some((reference, frame))
+        Some(due)
     }
 
     /// Whether a frame waits for the modem now.
@@ -739,10 +847,21 @@ impl Alerts {
         let Some(tag) = f.outgoing.alert else {
             return;
         };
+        let mut copy = None;
         if let Some(e) = s.entries.iter_mut().find(|e| e.out && e.tag == tag) {
             if sent {
                 e.sent_at = Some(now);
-                if e.state == "waiting" {
+                // a copy more while the station alerted may still be scanning round to the
+                // dial, unless a heard has come meanwhile (RP-8 §5)
+                if e.state == "waiting" && e.copies_until.is_some_and(|until| now < until) {
+                    copy = Some(Outgoing {
+                        frame: e.frame.clone(),
+                        not_before: now,
+                        alert: Some(tag),
+                        answers: None,
+                        dial_hz: e.dial_hz,
+                    });
+                } else if e.state == "waiting" {
                     e.state = "sent";
                 }
             } else {
@@ -750,6 +869,7 @@ impl Alerts {
                 e.why = Some(text.unwrap_or("the modem did not send it").to_owned());
             }
         }
+        s.queue.extend(copy);
         s.changed();
     }
 
@@ -799,10 +919,13 @@ impl Alerts {
             if e.tries < TRIES {
                 e.tries += 1;
                 e.state = "waiting";
+                e.copies_until = None;
                 again.push(Outgoing {
                     frame: e.frame.clone(),
                     not_before: now,
                     alert: Some(e.tag),
+                    answers: None,
+                    dial_hz: e.dial_hz,
                 });
             } else {
                 e.state = "not heard";
@@ -887,7 +1010,14 @@ impl State {
         ))
     }
 
-    fn queue_answer(&mut self, circle: &Circle, frame: &Frame, kind: Kind, me: &str, now: u64) {
+    fn queue_answer(
+        &mut self,
+        circle: &Circle,
+        frame: &Frame,
+        kind: Kind,
+        (me, dial_hz): (&str, Option<u64>),
+        now: u64,
+    ) {
         let reply = (kind == Kind::Reply)
             .then(|| {
                 self.entries
@@ -908,11 +1038,25 @@ impl State {
             frame: raw,
             not_before: now + spread,
             alert: None,
+            answers: Some(frame.tag),
+            dial_hz,
         });
     }
 
+    /// Whether an answer to the alert `tag` is still to go out: queued, or with the modem.
+    fn answer_pending(&self, tag: [u8; 8]) -> bool {
+        self.queue.iter().any(|o| o.answers == Some(tag))
+            || self.flying.iter().any(|f| f.outgoing.answers == Some(tag))
+    }
+
     /// A new frame for this station: an alert kept and answered, or an answer to one of its own.
-    fn take(&mut self, frame: Frame, mine: &[String], now: u64) -> Option<String> {
+    fn take(
+        &mut self,
+        frame: Frame,
+        mine: &[String],
+        now: u64,
+        dial_hz: Option<u64>,
+    ) -> Option<String> {
         let kept = self.circle_named_for(frame.circle)?.clone();
         if frame.kind == Kind::Alert {
             let loud_lately = self
@@ -925,7 +1069,7 @@ impl State {
             let quiet = loud_lately >= LOUD_AT_MOST || kept.level == Level::Silent;
             let me = answering_as(mine, &frame);
             if kept.answer {
-                self.queue_answer(&kept.circle, &frame, Kind::Heard, &me, now);
+                self.queue_answer(&kept.circle, &frame, Kind::Heard, (&me, dial_hz), now);
             }
             let line = format!(
                 "alert from {} in {}{}: {}",
@@ -953,12 +1097,20 @@ impl State {
                 reply: None,
                 why: None,
                 me,
+                dial_hz,
+                outlast_s: None,
+                copies_until: None,
             });
             self.changed();
             return Some(line);
         }
         let re = frame.re?;
+        // an answer has come: no more copies of the alert (RP-8 §5)
+        self.queue.retain(|o| o.alert != Some(re));
         let e = self.entries.iter_mut().find(|e| e.out && e.tag == re)?;
+        if e.state == "waiting" {
+            e.state = "sent";
+        }
         e.answers.push(Answer {
             kind: frame.kind,
             from: frame.from.clone(),
@@ -991,25 +1143,34 @@ impl State {
         Some(line)
     }
 
-    /// An alert heard again: the sender is trying again, so its answers were lost (RP-8 §5).
-    fn again(&mut self, frame: &Frame, mine: &[String], now: u64) -> Option<String> {
+    /// An alert heard again: the sender is still sending, a copy or a try, so it has not heard
+    /// the answers that went out (RP-8 §5). Answered again, unless the last answer is still to go:
+    /// the copies a sender sends to outlast a scan come while it waits for the channel.
+    fn again(
+        &mut self,
+        frame: &Frame,
+        mine: &[String],
+        now: u64,
+        dial_hz: Option<u64>,
+    ) -> Option<String> {
         if frame.kind != Kind::Alert {
             return None;
         }
         let kept = self.circle_named_for(frame.circle)?.clone();
-        if !kept.answer {
+        if !kept.answer || self.answer_pending(frame.tag) {
             return None;
         }
-        let state = self
+        let (state, was_on) = self
             .entries
             .iter()
             .find(|e| !e.out && e.tag == frame.tag)
-            .map(|e| e.state);
+            .map_or((None, None), |e| (Some(e.state), e.dial_hz));
         let me = answering_as(mine, frame);
-        self.queue_answer(&kept.circle, frame, Kind::Heard, &me, now);
+        let on = (me.as_str(), dial_hz.or(was_on));
+        self.queue_answer(&kept.circle, frame, Kind::Heard, on, now);
         match state {
-            Some("seen") => self.queue_answer(&kept.circle, frame, Kind::Seen, &me, now),
-            Some("replied") => self.queue_answer(&kept.circle, frame, Kind::Reply, &me, now),
+            Some("seen") => self.queue_answer(&kept.circle, frame, Kind::Seen, on, now),
+            Some("replied") => self.queue_answer(&kept.circle, frame, Kind::Reply, on, now),
             _ => {}
         }
         Some(format!(
@@ -1021,7 +1182,7 @@ impl State {
 
 #[cfg(test)]
 mod tests {
-    use super::{Alerts, Level, callsigns_of};
+    use super::{Alerts, Level, Sending, callsigns_of};
     use radiopost::cbor::hex;
 
     fn scratch(name: &str) -> std::path::PathBuf {
@@ -1148,5 +1309,158 @@ mod tests {
             ana.acknowledge(&tag, t + 2).expect("acknowledged");
         }
         let _ = (std::fs::remove_dir_all(&a), std::fs::remove_dir_all(&b));
+    }
+
+    const DIAL: u64 = 7_101_000;
+
+    /// An alert to a station whose gateway scans (RP-8 0.2.0 §5): it goes on its dial, the radio
+    /// tuned there, and copies go on until the gateway's `scan_s` has passed since the first,
+    /// unless a `heard` comes first. Ana's station hears one partway through the copies; her
+    /// `heard` goes on the dial she heard it on, without a tune, and stops the copies.
+    #[test]
+    fn copies_go_on_for_the_scan_and_a_heard_stops_them() {
+        let (a, b) = (scratch("copies-a"), scratch("copies-b"));
+        let facundo = Alerts::open(&a);
+        let ana = Alerts::open(&b);
+        facundo
+            .add_circle("Family", KEYWORD, Level::TimeSensitive)
+            .expect("kept");
+        ana.add_circle("Family", KEYWORD, Level::TimeSensitive)
+            .expect("kept");
+        let how = Sending {
+            dial_hz: Some(DIAL),
+            outlast_s: Some(49),
+        };
+        facundo
+            .send_on("Family", Some("N0CALL"), "Call me", "KK4ODA", T, how)
+            .expect("written");
+        let first = facundo.due_with(T).expect("due");
+        assert_eq!((first.dial_hz, first.tune), (Some(DIAL), true));
+        // gone out at T + 16: well inside the scan, so a copy follows at once
+        facundo.went(&first.reference, true, None, T + 16);
+        let second = facundo.due_with(T + 16).expect("a copy");
+        assert_eq!(second.frame, first.frame, "a copy is the same frame");
+        assert_eq!((second.dial_hz, second.tune), (Some(DIAL), true));
+        facundo.went(&second.reference, true, None, T + 32);
+        let third = facundo.due_with(T + 32).expect("another copy");
+        // Ana's station came round to the dial during the second copy, and heard the third
+        let mine = vec!["N0CALL".to_owned()];
+        ana.heard_on(&third.frame, &mine, T + 48, Some(DIAL))
+            .expect("heard");
+        let heard = ana.due_with(T + 48).expect("heard, at once");
+        assert_eq!((heard.dial_hz, heard.tune), (Some(DIAL), false));
+        ana.went(&heard.reference, true, None, T + 59);
+        facundo
+            .heard(&heard.frame, &["KK4ODA".to_owned()], T + 59)
+            .expect("told");
+        // the copy on the air when the heard came is the last
+        facundo.went(&third.reference, true, None, T + 60);
+        assert!(facundo.due_with(T + 60).is_none(), "copied after a heard");
+        assert_eq!(facundo.json()["log"][0]["state"], "heard");
+        assert_eq!(facundo.json()["log"][0]["dial_hz"], DIAL);
+        // the scan's time runs out with no heard: the copies stop, and the sending is over
+        let lone = Alerts::open(&scratch("copies-lone"));
+        lone.add_circle("Family", KEYWORD, Level::TimeSensitive)
+            .expect("kept");
+        lone.send_on("Family", Some("N0CALL"), "Anyone?", "KK4ODA", T, how)
+            .expect("written");
+        let mut copies = 0;
+        let mut t = T;
+        while let Some(d) = lone.due_with(t) {
+            copies += 1;
+            t += 16;
+            lone.went(&d.reference, true, None, t);
+        }
+        assert_eq!(copies, 4, "copies until 49 s had passed since the first");
+        assert_eq!(lone.json()["log"][0]["state"], "sent");
+        let _ = (std::fs::remove_dir_all(&a), std::fs::remove_dir_all(&b));
+    }
+
+    /// Answers go on the dial the alert was heard on, though the scan has moved on by the time
+    /// the operator acts; a copy heard while the `heard` still waits for the channel is not
+    /// answered again, one heard after it went out is (RP-8 0.2.0 §5).
+    #[test]
+    fn answers_go_on_the_dial_heard_and_a_waiting_answer_is_not_doubled() {
+        let (a, b) = (scratch("dial-a"), scratch("dial-b"));
+        let facundo = Alerts::open(&a);
+        let ana = Alerts::open(&b);
+        facundo
+            .add_circle("Family", KEYWORD, Level::TimeSensitive)
+            .expect("kept");
+        ana.add_circle("Family", KEYWORD, Level::TimeSensitive)
+            .expect("kept");
+        let mine = vec!["N0CALL".to_owned()];
+        let tag = facundo
+            .send("Family", Some("N0CALL"), "Call me", "KK4ODA", T)
+            .expect("written");
+        let (_, frame) = facundo.due(T).expect("due");
+        ana.heard_on(&frame, &mine, T + 16, Some(DIAL))
+            .expect("heard");
+        // a copy heard while her heard waits: nothing more is queued
+        assert!(ana.heard_on(&frame, &mine, T + 32, Some(DIAL)).is_none());
+        let heard = ana.due_with(T + 32).expect("one heard");
+        assert!(ana.due_with(T + 32).is_none(), "answered twice");
+        ana.went(&heard.reference, true, None, T + 43);
+        // heard again after it went: the sender did not hear it, so it goes again
+        ana.heard_on(&frame, &mine, T + 60, Some(DIAL))
+            .expect("answered again");
+        let again = ana.due_with(T + 60).expect("again");
+        assert_eq!(again.dial_hz, Some(DIAL));
+        ana.went(&again.reference, true, None, T + 71);
+        // minutes later, on another dial: seen and a reply go back to the alert's
+        ana.acknowledge(&tag, T + 300).expect("acknowledged");
+        let seen = ana.due_with(T + 300).expect("seen");
+        assert_eq!((seen.dial_hz, seen.tune), (Some(DIAL), false));
+        ana.reply(&tag, "On my way", T + 310).expect("replied");
+        let reply = ana.due_with(T + 310).expect("reply");
+        assert_eq!(reply.dial_hz, Some(DIAL));
+        assert_eq!(ana.json()["log"][0]["dial_hz"], DIAL);
+        // an alert sent with no dial names none and tunes nothing, and has no copies
+        facundo
+            .send_on(
+                "Family",
+                None,
+                "Net in 10",
+                "KK4ODA",
+                T + 400,
+                Sending {
+                    dial_hz: None,
+                    outlast_s: Some(49),
+                },
+            )
+            .expect("written");
+        let plain = facundo.due_with(T + 400).expect("due");
+        assert_eq!((plain.dial_hz, plain.tune), (None, false));
+        facundo.went(&plain.reference, true, None, T + 416);
+        assert!(facundo.due_with(T + 416).is_none(), "copies with no dial");
+        let _ = (std::fs::remove_dir_all(&a), std::fs::remove_dir_all(&b));
+    }
+
+    /// A circle's watch dial is kept with it, changed and cleared (RP-8 §7).
+    #[test]
+    fn a_circle_keeps_its_watch_dial() {
+        let a = scratch("watch");
+        let alerts = Alerts::open(&a);
+        alerts
+            .add_circle("Family", KEYWORD, Level::TimeSensitive)
+            .expect("kept");
+        assert!(alerts.circles()[0]["watch_hz"].is_null());
+        alerts
+            .set_circle("Family", None, None, Some(Some(DIAL)))
+            .expect("set");
+        assert_eq!(Alerts::open(&a).circles()[0]["watch_hz"], DIAL);
+        alerts
+            .set_circle("Family", None, Some(false), None)
+            .expect("set");
+        assert_eq!(
+            Alerts::open(&a).circles()[0]["watch_hz"],
+            DIAL,
+            "left as it was"
+        );
+        alerts
+            .set_circle("Family", None, None, Some(None))
+            .expect("cleared");
+        assert!(Alerts::open(&a).circles()[0]["watch_hz"].is_null());
+        let _ = std::fs::remove_dir_all(&a);
     }
 }

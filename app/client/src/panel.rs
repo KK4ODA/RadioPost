@@ -420,6 +420,20 @@ impl Panel {
         }
     }
 
+    /// The alerts for the page, with what its dials are checked against (RP-8 §7): the radio's
+    /// dial as the modem last said it (`radio_hz`), and the dials the station's own listed
+    /// gateway scans (`scanned_hz`), where the circles' watch dials must be at such a station.
+    fn alerts_view(&self) -> Value {
+        let mut view = self.alerts.json();
+        let mine = crate::alerts::callsigns_of(&self.base);
+        let scanned = Store::open(&self.home())
+            .map(|store| store.scanned_dials_of(&mine))
+            .unwrap_or_default();
+        view["radio_hz"] = json!(self.presence.dial());
+        view["scanned_hz"] = json!(scanned);
+        view
+    }
+
     /// `/api/alerts`: send an alert, acknowledge one heard (or all), or reply to one (RP-8).
     fn alert_request(&self, body: &Value) -> Result<Value, Error> {
         let now = now();
@@ -431,7 +445,13 @@ impl Panel {
             let circle = send["circle"].as_str().unwrap_or("");
             let to = send["to"].as_str().filter(|t| !t.trim().is_empty());
             let text = send["text"].as_str().unwrap_or("");
-            self.alerts.send(circle, to, text, &me.operator, now)?;
+            // the dial it goes on (RP-8 §7), and how long its copies go on: the scan of the
+            // station alerted, or of any member's gateway for the whole circle (§5)
+            let dial_hz = dial_member(&send["dial_hz"], "dial_hz")?;
+            let outlast_s = dial_hz.and_then(|hz| store.outlast_s(to, hz));
+            let how = crate::alerts::Sending { dial_hz, outlast_s };
+            self.alerts
+                .send_on(circle, to, text, &me.operator, now, how)?;
         } else if let Some(tag) = body["ack"].as_str() {
             self.alerts.acknowledge(tag, now)?;
         } else if body["ack_all"] == true {
@@ -443,7 +463,7 @@ impl Panel {
         } else {
             return Err("send, ack, ack_all or reply".into());
         }
-        Ok(self.alerts.json())
+        Ok(self.alerts_view())
     }
 
     /// `/api/circles`: add a circle from its keyword, change how it arrives, or forget it.
@@ -458,17 +478,27 @@ impl Panel {
             let name = add["name"].as_str().unwrap_or("");
             let keyword = add["keyword"].as_str().unwrap_or("");
             let level = level(&add["level"])?.unwrap_or(Level::TimeSensitive);
+            let watch = dial_member(&add["watch_hz"], "watch_hz")?;
             self.alerts.add_circle(name, keyword, level)?;
+            if watch.is_some() {
+                self.alerts
+                    .set_circle(name.trim(), None, None, Some(watch))?;
+            }
         } else if let Some(set) = body.get("set") {
             let name = set["name"].as_str().unwrap_or("");
+            // the watch dial: a number sets it, null clears it, absent leaves it
+            let watch = match set.get("watch_hz") {
+                None => None,
+                Some(v) => Some(dial_member(v, "watch_hz")?),
+            };
             self.alerts
-                .set_circle(name, level(&set["level"])?, set["answer"].as_bool())?;
+                .set_circle(name, level(&set["level"])?, set["answer"].as_bool(), watch)?;
         } else if let Some(name) = body["remove"].as_str() {
             self.alerts.remove_circle(name)?;
         } else {
             return Err("add, set or remove a circle".into());
         }
-        Ok(self.alerts.json())
+        Ok(self.alerts_view())
     }
 
     /// The program is ending: the connection between calls closes, so Aether says the app has
@@ -983,7 +1013,7 @@ impl Panel {
                 self.updates.check_now();
                 self.state()
             }
-            (Method::Get, "/api/alerts") => Ok(self.alerts.json()),
+            (Method::Get, "/api/alerts") => Ok(self.alerts_view()),
             (Method::Post, "/api/alerts") => self.alert_request(body),
             (Method::Post, "/api/circles") => self.circle_request(body),
             (_, p) if p.starts_with("/api/terrain") => self.terrain_api(method, p, &param, body),
@@ -2377,6 +2407,18 @@ fn form_of(form: &Value) -> Result<Option<radiopost::forms::Form>, Error> {
     }
     values.sort_by_key(|(n, _)| *n);
     Ok(Some(radiopost::forms::Form { template, values }))
+}
+
+/// A dial member of a request: absent or null is none, else a whole number of hertz above 0.
+fn dial_member(v: &Value, name: &str) -> Result<Option<u64>, Error> {
+    match v {
+        Value::Null => Ok(None),
+        _ => v
+            .as_u64()
+            .filter(|&hz| hz > 0)
+            .map(Some)
+            .ok_or_else(|| format!("{name}: the dial in hertz, a whole number above 0")),
+    }
 }
 
 #[cfg(test)]

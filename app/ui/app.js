@@ -4241,6 +4241,8 @@ let alertsSeq = -1;
 let alertsKnown = null;  // each alert's state and answers when last read, to tell what is new
 let alertsLog = [];
 let alertCircles = [];
+let alertDials = {radio: null, scanned: []};  // the radio's dial, and the dials this station's gateway scans
+let alertGateways = [];  // the gateway list, for an alert's Dial (RP-8 §7)
 
 const OUT_STATES = {waiting: "waiting for the modem", sent: "on the air", heard: "heard",
                     seen: "seen", replied: "answered", "not heard": "not heard",
@@ -4252,6 +4254,7 @@ async function syncAlerts(summary, force = false) {
   alertsSeq = data.seq;
   alertCircles = data.circles;
   alertsLog = data.log;
+  alertDials = {radio: data.radio_hz ?? null, scanned: data.scanned_hz || []};
   const before = alertsKnown;
   alertsKnown = new Map(data.log.map((e) => [e.tag, {state: e.state, answers: e.answers.length}]));
   if (before) {
@@ -4323,7 +4326,8 @@ function showAlarm() {
   $("alarm-head").textContent = `Alert from ${e.from} · ${e.circle}`;
   $("alarm-text").textContent = e.text;
   $("alarm-when").textContent = `${e.to ? `To ${e.to}` : "To everyone in the circle"} · `
-    + `sent ${new Date(e.time * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}`;
+    + `sent ${new Date(e.time * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}`
+    + (e.dial_hz ? ` · heard on ${mhzOf(e.dial_hz)} MHz` : "");
   $("alarm-more").textContent = waiting.length > 1 ? `${waiting.length - 1} more waiting after this one` : "";
   box.hidden = false;
   if (fresh) {
@@ -4349,6 +4353,80 @@ async function openAlerts() {
   await syncAlerts(null, true);
   renderAlerts();
   show("alerts-view");
+  // the gateways' channels, with their predictions, for the alert's Dial
+  api("gateways").then((list) => {
+    alertGateways = list.gateways || [];
+    fillAlertDials();
+  }).catch(() => {});
+}
+
+// a callsign's base (RP-0 §6.1), as the post office compares them: the SSID off; of three parts
+// the middle one, of two the longer
+function callBase(call) {
+  const parts = String(call).trim().toUpperCase().split("-")[0].split("/");
+  if (parts.length === 3) return parts[1];
+  return parts.reduce((best, p) => (p.length >= best.length ? p : best), "");
+}
+
+// the dials an alert may go on (RP-8 §7): the channels of the station's listed gateways, the
+// best predicted first; the circle's watch dial; wherever the radio is
+function alertDialChoices() {
+  const to = $("alert-to").value.trim();
+  const circle = alertCircles.find((c) => c.name === $("alert-circle").value);
+  const choices = [];
+  if (to) {
+    const base = callBase(to);
+    const channels = [];
+    for (const g of alertGateways) {
+      if (callBase(g.callsign) !== base) continue;
+      for (const c of g.channels || []) {
+        if (!c.dial_hz) continue;
+        const h = c.hf && c.hf.state === "predicted" ? c.hf : null;
+        const words = [`${mhzOf(c.dial_hz)} MHz`, g.callsign];
+        if (h) words.push(h.chance_words);
+        if (c.scan_s) words.push("scans");
+        channels.push({hz: c.dial_hz, chance: h ? h.chance : -1, label: words.join(" · ")});
+      }
+    }
+    channels.sort((a, b) => b.chance - a.chance);
+    choices.push(...channels);
+  }
+  if (circle && circle.watch_hz && !choices.some((c) => c.hz === circle.watch_hz)) {
+    choices.push({hz: circle.watch_hz,
+                  label: `${mhzOf(circle.watch_hz)} MHz · ${circle.name}'s watch dial`});
+  }
+  choices.push({hz: null, label: alertDials.radio
+    ? `Where the radio is, ${mhzOf(alertDials.radio)} MHz` : "Where the radio is"});
+  return choices;
+}
+
+function fillAlertDials() {
+  const select = $("alert-dial");
+  const was = select.value;
+  const choices = alertDialChoices();
+  select.replaceChildren(...choices.map((c) => new Option(c.label, c.hz ? String(c.hz) : "")));
+  // a dial the operator picked stays while it is offered; else the first, the best
+  const offered = choices.some((c) => (c.hz ? String(c.hz) : "") === was);
+  if (select.dataset.picked && offered) select.value = was;
+  else delete select.dataset.picked;
+}
+
+// what the circles' watch dials miss here (RP-8 §7): at a station whose gateway scans, a watch
+// dial among the dials it scans; at another, the radio on it
+function alertDialWarnings() {
+  const out = [];
+  const scanned = alertDials.scanned || [];
+  for (const c of alertCircles.filter((x) => x.watch_hz)) {
+    const watch = `${mhzOf(c.watch_hz)} MHz`;
+    if (scanned.length) {
+      if (!scanned.includes(c.watch_hz)) {
+        out.push(`Your gateway scans ${scanned.map(mhzOf).join(", ")} MHz: ${c.name}'s watch dial, ${watch}, is not one of them, so alerts to the whole circle are not heard here.`);
+      }
+    } else if (alertDials.radio && alertDials.radio !== c.watch_hz) {
+      out.push(`The radio is on ${mhzOf(alertDials.radio)} MHz: ${c.name}'s alerts to the whole circle go on ${watch}.`);
+    }
+  }
+  return out;
 }
 
 function stateTag(e) {
@@ -4379,7 +4457,11 @@ function renderAlerts() {
   circleSelect.replaceChildren(...alertCircles.map((c) => new Option(c.name, c.name)));
   if (alertCircles.some((c) => c.name === chosen)) circleSelect.value = chosen;
   const none = !alertCircles.length;
-  for (const id of ["alert-circle", "alert-to", "alert-text", "alert-send"]) $(id).disabled = none;
+  for (const id of ["alert-circle", "alert-to", "alert-dial", "alert-text", "alert-send"]) $(id).disabled = none;
+  fillAlertDials();
+  const warnings = alertDialWarnings();
+  $("alerts-dials").textContent = warnings.join(" ");
+  $("alerts-dials").hidden = !warnings.length;
   $("alert-left").textContent = none ? "Add a circle below first." : alertLeft();
   const modem = adapter();
   $("alerts-modem").textContent = modem.startsWith("ws://")
@@ -4389,7 +4471,12 @@ function renderAlerts() {
   $("alert-rows").replaceChildren(...alertsLog.map((e) => {
     const tr = el("tr", {class: e.alarm ? "alarming" : e.quiet ? "quiet" : ""});
     tr.append(el("td", {class: "date", text: when(e.at), title: new Date(e.at * 1000).toLocaleString()}));
-    tr.append(el("td", {class: "way", text: `${e.out ? "You" : e.from} → ${e.to || "everyone"}`}));
+    const way = el("td", {class: "way", text: `${e.out ? "You" : e.from} → ${e.to || "everyone"}`});
+    if (e.dial_hz) {
+      way.append(el("span", {class: "note", text: ` · ${mhzOf(e.dial_hz)} MHz`,
+        title: e.out ? "The dial it went on" : "The dial it was heard on, where the answers go"}));
+    }
+    tr.append(way);
     tr.append(el("td", {class: "text", text: e.text}));
     tr.append(el("td", {text: e.circle}));
     const cell = el("td", {class: "answers"}, stateTag(e), answersOf(e));
@@ -4409,6 +4496,16 @@ function renderAlerts() {
     level.value = c.level;
     level.addEventListener("change", () => api("circles", {set: {name: c.name, level: level.value}})
       .then(() => syncAlerts(null, true)).catch((e) => toast(e.message, true)));
+    const watch = el("input", {class: "dial", inputmode: "decimal", placeholder: "none",
+      title: `${c.name}'s watch dial, in MHz; empty for none`});
+    watch.value = c.watch_hz ? mhzOf(c.watch_hz) : "";
+    watch.addEventListener("change", () => {
+      const text = watch.value.trim();
+      const hz = text ? hzOf(text) : null;
+      if (text && !hz) { toast("The watch dial is a frequency in MHz, such as 7.101.", true); return; }
+      api("circles", {set: {name: c.name, watch_hz: hz}})
+        .then(() => syncAlerts(null, true)).catch((e) => toast(e.message, true));
+    });
     const answer = el("input", {type: "checkbox", title: "Say heard by itself when an alert for this station arrives"});
     answer.checked = c.answer;
     answer.addEventListener("change", () => api("circles", {set: {name: c.name, answer: answer.checked}})
@@ -4424,6 +4521,7 @@ function renderAlerts() {
     return el("tr", {},
       el("td", {text: c.name}),
       el("td", {class: "check-text", text: c.check}),
+      el("td", {}, watch),
       el("td", {}, level),
       el("td", {}, answer),
       el("td", {class: "acts"}, forget));
@@ -4443,11 +4541,14 @@ async function sendAlert(event) {
   const to = $("alert-to").value.trim().toUpperCase();
   const text = $("alert-text").value.trim();
   if (!text) { toast("A line to send", true); return; }
+  const dial = $("alert-dial").value;
+  const dial_hz = dial ? Number(dial) : null;
   keep("alertCircle", circle);
   try {
-    await api("alerts", {send: {circle, to, text}});
+    await api("alerts", {send: {circle, to, text, dial_hz}});
     $("alert-text").value = "";
-    toast(`Alert to ${to || `everyone in ${circle}`} waiting for the modem`);
+    delete $("alert-dial").dataset.picked;
+    toast(`Alert to ${to || `everyone in ${circle}`} waiting for the modem${dial_hz ? `, on ${mhzOf(dial_hz)} MHz` : ""}`);
   } catch (e) {
     toast(e.message, true);
   }
@@ -4485,12 +4586,16 @@ async function addCircle(event) {
   event.preventDefault();
   const name = $("circle-name").value.trim();
   const keyword = $("circle-keyword").value;
+  const watchText = $("circle-watch").value.trim();
+  const watch_hz = watchText ? hzOf(watchText) : null;
+  if (watchText && !watch_hz) { toast("The watch dial is a frequency in MHz, such as 7.101.", true); return; }
   const add = $("circle-add");
   add.disabled = true;
   try {
-    await api("circles", {add: {name, keyword, level: $("circle-level").value}});
+    await api("circles", {add: {name, keyword, level: $("circle-level").value, watch_hz}});
     $("circle-name").value = "";
     $("circle-keyword").value = "";
+    $("circle-watch").value = "";
     keywordStrength();
     toast(`${name} kept: read its check to the others`);
   } catch (e) {
@@ -4558,6 +4663,9 @@ function wireAlerts() {
   for (const kind of ["pointerdown", "keydown"]) document.addEventListener(kind, wakeAudio);
   $("alert-form").addEventListener("submit", sendAlert);
   $("alert-text").addEventListener("input", () => { $("alert-left").textContent = alertLeft(); });
+  $("alert-to").addEventListener("input", fillAlertDials);
+  $("alert-dial").addEventListener("change", () => { $("alert-dial").dataset.picked = "1"; });
+  $("alert-circle").addEventListener("change", fillAlertDials);
   $("circle-form").addEventListener("submit", addCircle);
   $("circle-keyword").addEventListener("input", keywordStrength);
   $("circle-make").addEventListener("click", () => {
@@ -4575,11 +4683,18 @@ function wireAlerts() {
   $("alarm-call").addEventListener("click", async () => {
     if (!alarmShown) return;
     const who = alarmShown.from;
+    const dial = alarmShown.dial_hz;
     await alertDo({ack: alarmShown.tag});
     document.querySelector("input[name=kind][value=station]").checked = true;
     showKind();
     $("callsign").value = who;
-    toast(`Press Call to call ${who}`);
+    // the dial the alert was heard on, where its sender listens for the answers
+    if (dial) {
+      $("dial").value = mhzOf(dial);
+      keep("dial", $("dial").value);
+      showTuning();
+    }
+    toast(`Press Call to call ${who}${dial ? ` on ${mhzOf(dial)} MHz` : ""}`);
   });
   for (const b of document.querySelectorAll("#alarm-quick [data-reply]")) {
     b.addEventListener("click", () => {

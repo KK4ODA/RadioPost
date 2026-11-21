@@ -607,3 +607,6 @@ li.forgotten, tr.forgotten td { text-decoration: line-through; color: var(--mute
 .area-key .k-none { color: var(--muted); }
 .area-key .k-partly { color: var(--busy); }
 .area-key .k-mark { color: var(--bad); }
+
+/* a circle's watch dial in its row: a frequency in MHz */
+#circle-rows input.dial { width: calc(9ch + 20px); }

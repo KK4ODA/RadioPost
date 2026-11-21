@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.39.0 |
+| **Version** | 1.40.0 |
 | **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.32 |
 | **Licence** | CC BY 4.0 |
@@ -902,6 +902,11 @@ An alert needs no call and no session. Aether sends it once, to everyone listeni
 broadcast: about 16 seconds on the air, and 11 for each answer. It gets through on a path too weak
 for a session, and it can reach a whole group at once.
 
+An alert goes on one dial, and only stations listening there hear it. RadioPost picks the dial
+for you (section 10.3): the other station's gateway channel when it runs a listed gateway,
+otherwise the circle's **watch dial**, the dial its stations agree to keep their radios on.
+Every answer goes back on the dial the alert was heard on.
+
 Only stations that share a **keyword** can alert each other. Stations that typed the same keyword
 make a **circle**: a family, a net, a team. Every alert carries a short check that only that
 keyword can make, so RadioPost sounds only for alerts from your circles. Anyone listening can
@@ -926,10 +931,13 @@ more. RadioPost can make one for you.
 2. Under **Circles**, type a **Name** for it, such as `Family`. The others may name it otherwise.
 3. Type the **Keyword**, or click **Make one** and tell the others the words it shows. Capitals and
    extra spaces do not count.
-4. Choose **When an alert arrives**: **Time-sensitive** sounds the alarm. The others are quieter
+4. Type the **Watch dial, MHz**, if the circle keeps one: the dial its stations keep their radios
+   on, such as `7.101`. Agree on it with the keyword. You can leave it empty, and change it later
+   in the circle's row.
+5. Choose **When an alert arrives**: **Time-sensitive** sounds the alarm. The others are quieter
    (see [Sounds and notifications](#sounds-and-notifications)).
-5. Click **Add the circle**.
-6. Read the circle's **Check**, such as `9853 7abf`, to the others. The same check at every station
+6. Click **Add the circle**.
+7. Read the circle's **Check**, such as `9853 7abf`, to the others. The same check at every station
    means the same keyword. A different check means a typing mistake: forget it and add it again.
 
 RadioPost keeps the circle's key, not the keyword. Short keywords can be guessed from one alert
@@ -939,19 +947,40 @@ heard on the air, so RadioPost refuses one under 8 characters and warns under fo
 is at the radio. That is an automatic transmission: untick it where your rules allow those only in
 some segments ([section 36](#36-the-rules)). The trash can forgets a circle.
 
+**Keep your radio on the watch dial.** Alerts to the whole circle go there. If your radio is on
+another dial, a red line at the top of the Alerts view says so. If your station also runs
+RadioPost Gateway and the gateway scans, make the watch dial one of the gateway's channels:
+the scan then visits it, and the red line says when a circle's watch dial is not one of them.
+
 ### 10.3 Send an alert
 
 1. Under **Send an alert**, choose the **Circle**.
 2. In **To**, type the callsign of the station to alert. Leave it empty to alert everyone in the
    circle.
-3. Type the **Message**: one line, up to 100 bytes. Plain words: anyone can read it.
-4. Click **Send alert**. While it goes out the state reads *Sending an alert*; a call cannot start
+3. Check the **Dial**. RadioPost offers, in this order:
+   - the channels of the other station's gateway, when it runs one in your gateway list, the one
+     predicted best first;
+   - the circle's watch dial;
+   - **Where the radio is**.
+4. Type the **Message**: one line, up to 100 bytes. Plain words: anyone can read it.
+5. Click **Send alert**. While it goes out the state reads *Sending an alert*; a call cannot start
    meanwhile.
+
+RadioPost tunes the radio to the dial to send the alert, and leaves it there to hear the answers.
+A modem that cannot set the radio's dial sends it where the radio is, and the log says so. If your
+own RadioPost Gateway scans this radio, tuning it stops the scan, as any tuning does.
+
+**A station whose gateway scans** visits each of its dials for only a few seconds, less than an
+alert takes on the air. So when the other station's gateway scans the dial you send on, RadioPost
+sends the same alert again and again until the gateway has had time to come round to that dial,
+at most about a minute. It stops as soon as a *heard* comes back. An alert to the whole circle
+does the same when any gateway in your list scans the watch dial.
 
 The list shows what each alert became:
 
 - *on the air*, then *heard* when the other station's RadioPost has it, *seen* when its operator
-  has answered the alarm, and *answered* with their line;
+  has answered the alarm, and *answered* with their line. The dial it went on shows beside the
+  callsigns;
 - *not heard* when no *heard* came: RadioPost sent it a second time after a minute, then gave up;
 - *not sent* when it could not go out, with the reason: the station was busy with a session for
   five minutes, or the modem carries no alerts.
@@ -959,7 +988,7 @@ The list shows what each alert became:
 ### 10.4 When an alert arrives
 
 For a time-sensitive circle, an alarm sounds every 20 seconds, RadioPost's window comes to the
-front, and a red box shows the alert.
+front, and a red box shows the alert, with the dial it was heard on.
 
 ![An alert from KK4ODA in the circle Family, with Acknowledge, Call back, three quick replies and a line of your own](screens/client-alarm.png)
 
@@ -968,8 +997,12 @@ front, and a red box shows the alert.
 - **Acknowledge** stops the alarm. The other station sees *seen*.
 - **Received**, **Calling you now** and **Can't now** answer with that line, and stop the alarm.
 - Type a line of your own and click **Reply** to answer with it.
-- **Call back** stops the alarm and puts the sender's callsign in **Call**, as a P2P call. Check
-  the **Dial, MHz** and click **Call** ([section 10](#10-station-to-station)).
+- **Call back** stops the alarm, puts the sender's callsign in **Call**, as a P2P call, and the
+  dial the alert was heard on in **Dial, MHz**. Check it and click **Call**
+  ([section 10](#10-station-to-station)).
+
+Your answers go on the dial the alert was heard on, even minutes later. If your station's gateway
+scans, the scan goes back to that dial to send them.
 
 If several alerts wait, the oldest shows first. An alert from a circle at another level shows as
 a banner instead, with its own sound. If one callsign sends more than five alerts in ten minutes,
@@ -2411,3 +2444,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.37.0 | 2026-11-21 | §8.1: the VOACAP engine comes with the installers, with NTIA's notice; where the command-line panel looks for it. |
 | 1.38.0 | 2026-11-21 | §8.1 *What your calls teach*: an HF channel's line worked out with what your calls taught once you have called the gateway on that band, a VHF channel's line under its terrain, what each kind of call teaches; **Details** beside each gateway, the model, what was learned and what was measured side by side (new Figure 16; later figures renumbered); the warning when your own station looks at fault; forgetting, by gateway, place, day or everything, with **Undo** and **Show forgotten calls** (Figure 14 retaken). §4: `selection/learned.json` and `selection/forgotten.json`. §37: the station's warning. Figure 13 retaken with **Details**. |
 | 1.39.0 | 2026-11-21 | RadioPost Gateway reports its status to its post office (RP-5 1.6.0): Setup's **Report its status to its post office, for anyone to see** (section 18), what it says and when under *Its status, for anyone to see*, the line under **Registration** (section 19), and `status --off` (section 23). Figures 37 and 38 retaken. |
+| 1.40.0 | 2026-11-21 | §10: an alert goes on a **Dial** (the other station's gateway channel predicted best, the circle's watch dial, or where the radio is), the radio tuned there; copies sent while the other station's gateway scans round; a circle's **Watch dial, MHz**, and the red line when the radio or the gateway's scan is not on it; answers go on the dial the alert was heard on, shown in the alarm, and **Call back** fills **Dial, MHz** with it (RP-8 0.2.0). |

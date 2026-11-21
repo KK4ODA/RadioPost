@@ -482,6 +482,16 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   carrier's `gate`) and opens a second, short connection that claims the chosen callsign and
   broadcasts; the listening one stays open (closing it to drop the claim lost a `heard` that came
   in the gap, found by CI on Linux).
+  **Dials (D46, RP-8 0.2.0, RP-4 1.5.0; Aether's ADR-0129 §14, §15):** an alert goes on a dial
+  (`alerts::Sending`, `Alerts::send_on`): the page offers the listed gateway channels of the base of
+  **To**, ranked by `hf.chance`, then the circle's watch dial (`Kept::watch_hz`), then where the
+  radio is; the connection that sends it `tune`s first (`Due::tune`). When the gateway scans that
+  dial, copies go on for its `scan_s` (`Store::outlast_s`; for the whole circle the longest of any
+  listed gateway on the dial), stopped by a `heard`. A broadcast heard carries its `dial_hz`
+  (`Alerts::heard_on`) and every answer names it (`broadcast_on`); a heard-again alert is answered
+  unless an answer to it is still to go (`answer_pending`). `presence` keeps the radio's dial
+  (`Presence::dial`); the page warns when it, or the own gateway's scanned dials
+  (`Store::scanned_dials_of`), miss a circle's watch dial.
   The panel's `/api/alerts`, `/api/circles`, `/api/notify`; the page plays synthesized sounds by
   Web Audio on the output chosen (`setSinkId`: the radio's sound card would put them on the air),
   and decides mail's level from `notify.json`; the Tauri shell brings the window forward when
@@ -622,6 +632,12 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   a challenge keeps that proof, and `/direct` takes it with the `HELLO` nonce (`Proofs::nonce`);
   RPMI lines are I-JSON, integers within ±(2^53−1); a list's repeated callsign counts once; the
   300 seconds of RP-3 §8 count from the last bytes (`rpmi::host::Silence`).
+- (2026-11-21) An alert to a station whose gateway scans (D46): it goes on the gateway's channel
+  predicted best, else the circle's optional watch dial, else where the radio is; copies for the
+  gateway's `scan_s`, also for a circle alert when any listed gateway scans the watch dial; answers,
+  late ones too, go back to the dial the alert was heard on; at a non-gateway station the operator
+  keeps the radio on the watch dial, with a reminder; at a scanning station the watch dial is one
+  of the gateway's channels, which the client checks.
 - (2026-11-15) The forwarding trial on the air (stage 5, `docs/user/on-air-forwarding.md`) is
   deferred until later: too early in the process.
 - (2026-11-12) With more than one post office: a client's gateway list read from every post

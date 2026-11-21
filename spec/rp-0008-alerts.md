@@ -3,11 +3,11 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.1.0 |
-| **Updated** | 2026-11-18 |
+| **Version** | 0.2.0 |
+| **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
-| **Depends on** | RP-0, RP-4 |
+| **Depends on** | RP-0, RP-4, RP-5 |
 
 How one station tells another, or a group of stations, that it needs them now: a line of text that
 the other station's program shows as an alarm, with a way to answer. An alert is a **broadcast**
@@ -167,10 +167,10 @@ Test vectors: `vectors/alerts.json`, `hearing`.
 ## 5. Answering
 
 * **Heard.** A station that hears an alert for it sends `heard` at once, by itself, whether or not
-  its operator is there. It sends it again each time it hears the same alert again (step 7), since
-  the sender is trying again because its first `heard` was lost. To an alert for the circle, every
-  station that hears it waits a random time from 0 to 10 seconds first, so their answers are less
-  likely to collide.
+  its operator is there. It sends it again when it hears the same alert again (step 7), unless its
+  `heard` to that alert has not gone out yet: a sender still sending is one whose first `heard` was
+  lost, or that has not heard it yet. To an alert for the circle, every station that hears it waits
+  a random time from 0 to 10 seconds first, so their answers are less likely to collide.
 * **Seen.** When the operator acknowledges the alert, the station sends `seen`.
 * **Reply.** The operator may answer with a line of text: a `reply`.
 
@@ -178,10 +178,27 @@ An answer goes in the alert's circle, tagged with its key: `to` is the alert's `
 alert's tag, `from` the answering station's callsign, `time` its own clock. A station never answers
 a `heard`, a `seen` or a `reply`, and never an alert that was not for it.
 
+**The dial.** An answer goes on the dial the alert was heard on, which the modem says (RP-4 §6's
+`dial_hz`): the `heard` at once, and `seen` or a reply whenever the operator acts, though a
+station that scans its channels has moved on by then. The answer's `broadcast` names that dial, and
+a modem that scans takes its scan there to send it. A modem that says no dial sends it where the
+radio is.
+
 **The sender.** A station that sent an alert to one station and has not heard its `heard` within 60
 seconds of the broadcast going out (`broadcast-sent`, RP-4 §6) sends the same frame once more. An
 alert for the circle is sent again once if no station's `heard` came. After that the program tells
 its operator the alert was not heard.
+
+**Copies, to outlast a scan.** A station that scans its channels stays a few seconds on each, and
+an alert takes longer than that on the air: a scan that arrives partway through one cannot join it,
+since the station needs every piece. So a sender that knows the station it alerts scans the dial it
+sends on sends copies of the frame, one after another, until `scan_s` seconds (RP-5 §4.4) have
+passed since the first went out, and stops as soon as a `heard` comes. It knows from the gateway
+lists it reads: a listed gateway whose callsign has the base of `to` (RP-0 §6.1) and whose
+channel on that dial has a `scan_s`. An alert for the circle goes on for the longest `scan_s` of
+any listed gateway that scans the dial, since a member may run one. The copies are one frame: a
+station takes the first it hears whole, and the rest are heard again (§4 step 7). The sending
+again after 60 seconds is a sending of copies too.
 
 ---
 
@@ -194,6 +211,9 @@ holds no callsign and answers no call.
 
 Only modems that carry broadcasts (`caps.broadcast`) carry alerts: of those RP-4 §9 maps, Aether.
 A program on another modem cannot alert or be alerted, and says so.
+
+With `caps.dial` a broadcast heard carries the dial it was heard on, and a `broadcast` may name the
+dial it belongs on (RP-4 1.5.0 §6): how an answer goes back to the alert's dial (§5).
 
 ---
 
@@ -208,7 +228,15 @@ An alert is meant to be hard to miss. The RadioPost client:
   quietly, and sounds through quiet hours only for alerts;
 * sounds an alarm for at most five alerts from one callsign in ten minutes, and shows the rest
   quietly, since a member's station gone wrong should not keep the others' alarms ringing;
-* shows the sender each alert's answers: sent, heard, seen, replied, or not heard.
+* shows the sender each alert's answers: sent, heard, seen, replied, or not heard;
+* sends an alert on a **dial**: when `to` names a station with a listed gateway, the gateway's
+  channel the client predicts best, else the circle's **watch dial**, else wherever the radio is.
+  It tunes the radio there to send, and leaves it there to hear the answers;
+* lets each circle have a watch dial, agreed with the others like the keyword. A member's station
+  that is not a gateway keeps its radio there; one whose gateway scans has the watch dial among
+  the gateway's channels, which the client checks, since an automatic answer must go in an
+  automatic-control segment (§8);
+* puts the dial an alert was heard on beside it, and **Call back** fills the call's dial with it.
 
 Any member of a circle can make an alert from any callsign: the tag says the alert came from the
 circle, not from whom. A circle of two members knows. Where proof of the person matters, that is
@@ -251,3 +279,4 @@ A gateway program does not alert and does not answer alerts: nobody is there to 
 | Version | Date | Change |
 |---|---|---|
 | 0.1.0 | 2026-11-18 | First draft (wishlist W52): circles from a keyword, the alert frame and its tag, the order of checks, the answers, the sender trying again, carried as RP-4 broadcasts. Sizes and air times measured. |
+| 0.2.0 | 2026-11-21 | An alert to a station whose gateway scans (D46): §5, answers go on the dial the alert was heard on; copies sent for the gateway's `scan_s`, stopped by a `heard`; a `heard` sent again unless the last has not gone out. §6, the dial (RP-4 1.5.0). §7, the dial an alert goes on and a circle's watch dial. No frame or check changes, and the test vectors stand. |

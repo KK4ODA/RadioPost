@@ -69,10 +69,11 @@ impl std::fmt::Debug for Carrier {
 }
 
 impl Carrier {
-    /// A broadcast heard on any connection: checked, kept, answered (RP-8 §4, §5).
-    pub fn heard(&self, data: &[u8]) {
+    /// A broadcast heard on any connection: checked, kept, answered (RP-8 §4, §5), on the dial
+    /// the modem heard it on, where its answers go.
+    pub fn heard(&self, data: &[u8], dial_hz: Option<u64>) {
         let mine = alerts::callsigns_of(&self.base);
-        if let Some(line) = self.alerts.heard(data, &mine, unix_now()) {
+        if let Some(line) = self.alerts.heard_on(data, &mine, unix_now(), dial_hz) {
             (self.say)(&line);
         }
     }
@@ -129,6 +130,9 @@ struct Shared {
     /// An adapter other than Aether's found not shared: no connection is held to it again until
     /// the modem changes.
     unshared_modem: Mutex<Option<String>>,
+    /// The radio's dial, as the modem last said it (RP-4 §4.1): read at `hello`, and told at
+    /// every change. `None` with no connection, or a modem with no dial.
+    dial: Mutex<Option<u64>>,
 }
 
 /// Why a connection ended.
@@ -166,9 +170,21 @@ impl Presence {
                 ended: AtomicBool::new(false),
                 carrier: Mutex::new(None),
                 unshared_modem: Mutex::new(None),
+                dial: Mutex::new(None),
             }),
             retry: RETRY,
         }
+    }
+
+    /// The radio's dial as the modem last said it, while the connection is held: what the
+    /// Alerts view checks a circle's watch dial against (RP-8 §7).
+    #[must_use]
+    pub fn dial(&self) -> Option<u64> {
+        *self
+            .shared
+            .dial
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
     }
 
     /// The same, trying again after `retry` rather than [`RETRY`]: for tests, which cannot wait.
@@ -232,6 +248,10 @@ impl Presence {
 }
 
 impl Shared {
+    fn set_dial(&self, dial: Option<u64>) {
+        *self.dial.lock().unwrap_or_else(PoisonError::into_inner) = dial;
+    }
+
     /// An adapter other than Aether's that serves one program at a time: let go at once, and not
     /// held again until the modem changes, or it would turn the app's own call away (RP-4 §3).
     fn not_shared(&self, modem: &str) -> Ended {
@@ -351,6 +371,56 @@ fn next(conn: &mut Connection) -> Result<Option<Event>, String> {
     }
 }
 
+/// Waits for the adapter's answer to `hello`: the connection, whether it passes broadcasts and
+/// whether it tells the dial, or how the connection ended.
+fn answered(
+    shared: &Shared,
+    mut conn: Connection,
+    modem: &str,
+    retry: Duration,
+) -> Result<(Connection, bool, bool), Ended> {
+    let lost = |why: String| Ended::Lost { why, wait: retry };
+    let asked = Instant::now();
+    let aether = modem.starts_with("ws://");
+    loop {
+        if shared.stopping() {
+            conn.close();
+            return Err(Ended::Stopped);
+        }
+        match next(&mut conn) {
+            Ok(Some(Event::Hello { caps, .. })) if caps.shared => {
+                return Ok((conn, caps.broadcast, caps.dial));
+            }
+            Ok(Some(Event::Hello { .. })) if !aether => {
+                conn.close();
+                return Err(shared.not_shared(modem));
+            }
+            Ok(Some(Event::Hello { .. })) => {
+                conn.close();
+                return Err(Ended::Lost {
+                    why: "this Aether is older than 0.2.0-beta.146 and names no programs".into(),
+                    wait: NOT_SHARED,
+                });
+            }
+            Ok(Some(Event::Error {
+                id: Some(_),
+                code,
+                text,
+            })) => {
+                conn.close();
+                let text = text.map(|t| format!(" ({t})")).unwrap_or_default();
+                return Err(lost(format!("the adapter answered hello {code}{text}")));
+            }
+            Ok(_) if asked.elapsed() < ANSWER => {}
+            Ok(_) => {
+                conn.close();
+                return Err(lost("the adapter did not answer hello".into()));
+            }
+            Err(why) => return Err(lost(why)),
+        }
+    }
+}
+
 /// Opens the connection, says `hello`, and holds it until it ends.
 fn hold(shared: &Shared, modem: &str, retry: Duration, said: &mut Said) -> Ended {
     let lost = |why: String| Ended::Lost { why, wait: retry };
@@ -365,46 +435,15 @@ fn hold(shared: &Shared, modem: &str, retry: Duration, said: &mut Said) -> Ended
     if let Err(e) = conn.set_timeout(Some(TICK)) {
         return lost(e.to_string());
     }
-    let hello = Host::new().hello(&shared.app);
+    let mut host = Host::new();
+    let hello = host.hello(&shared.app);
     if let Err(e) = conn.send(&hello) {
         return lost(format!("the adapter's connection failed: {e}"));
     }
-    let asked = Instant::now();
     let aether = modem.starts_with("ws://");
-    let broadcasts = loop {
-        if shared.stopping() {
-            conn.close();
-            return Ended::Stopped;
-        }
-        match next(&mut conn) {
-            Ok(Some(Event::Hello { caps, .. })) if caps.shared => break caps.broadcast,
-            Ok(Some(Event::Hello { .. })) if !aether => {
-                conn.close();
-                return shared.not_shared(modem);
-            }
-            Ok(Some(Event::Hello { .. })) => {
-                conn.close();
-                return Ended::Lost {
-                    why: "this Aether is older than 0.2.0-beta.146 and names no programs".into(),
-                    wait: NOT_SHARED,
-                };
-            }
-            Ok(Some(Event::Error {
-                id: Some(_),
-                code,
-                text,
-            })) => {
-                conn.close();
-                let text = text.map(|t| format!(" ({t})")).unwrap_or_default();
-                return lost(format!("the adapter answered hello {code}{text}"));
-            }
-            Ok(_) if asked.elapsed() < ANSWER => {}
-            Ok(_) => {
-                conn.close();
-                return lost("the adapter did not answer hello".into());
-            }
-            Err(why) => return lost(why),
-        }
+    let (mut conn, broadcasts, dials) = match answered(shared, conn, modem, retry) {
+        Ok(caps) => caps,
+        Err(ended) => return ended,
     };
     if aether {
         say(
@@ -413,9 +452,14 @@ fn hold(shared: &Shared, modem: &str, retry: Duration, said: &mut Said) -> Ended
             &format!("Aether at {modem} names this app among the programs using the station"),
         );
     }
+    // the radio's dial, read once; every change after is told (RP-4 §4.1)
+    if dials && let Err(e) = conn.send(&host.dial()) {
+        return lost(format!("the adapter's connection failed: {e}"));
+    }
     let mut checked = Instant::now();
     loop {
         if shared.stopping() {
+            shared.set_dial(None);
             conn.close();
             return Ended::Stopped;
         }
@@ -434,16 +478,20 @@ fn hold(shared: &Shared, modem: &str, retry: Duration, said: &mut Said) -> Ended
         // may be alerts; a connection that stopped reading would fill and stall the adapter
         let carrier = shared.carrier();
         match next(&mut conn) {
-            Ok(Some(Event::Broadcast { data, .. })) => {
+            Ok(Some(Event::Broadcast { data, dial_hz, .. })) => {
                 if let Some(c) = &carrier {
-                    c.heard(&data);
+                    c.heard(&data, dial_hz);
                 }
             }
+            Ok(Some(Event::Dial { dial_hz, .. })) => shared.set_dial(Some(dial_hz)),
             Ok(_) => {}
-            Err(why) => return lost(why),
+            Err(why) => {
+                shared.set_dial(None);
+                return lost(why);
+            }
         }
         if let Some(c) = carrier.filter(|_| broadcasts) {
-            alerts_due(&adapter, &shared.app, &c);
+            alerts_due(&adapter, &shared.app, &c, dials);
         }
     }
 }
@@ -451,7 +499,7 @@ fn hold(shared: &Shared, modem: &str, retry: Duration, said: &mut Said) -> Ended
 /// Sends the alerts due, when the station is idle (RP-8 §6), on a connection of their own to the
 /// adapter at `adapter`: it claims a callsign to send, and closes when they have gone, so the
 /// claim goes with it. What could not go fails with why; nothing is tried again for it.
-fn alerts_due(adapter: &str, app: &str, c: &Carrier) {
+fn alerts_due(adapter: &str, app: &str, c: &Carrier, dials: bool) {
     c.alerts.tick(unix_now());
     if !c.alerts.wants(unix_now()) || !(c.gate)(true) {
         return;
@@ -463,7 +511,7 @@ fn alerts_due(adapter: &str, app: &str, c: &Carrier) {
                 .set_timeout(Some(TICK))
                 .map_err(|e| e.to_string())
                 .and_then(|()| greet(&mut conn, app))
-                .and_then(|()| send_alerts(&mut conn, c));
+                .and_then(|()| send_alerts(&mut conn, c, dials));
             conn.close();
             result
         });
@@ -474,6 +522,49 @@ fn alerts_due(adapter: &str, app: &str, c: &Carrier) {
         (c.say)(&format!("alerts: not sent: {why}"));
     }
     (c.gate)(false);
+}
+
+/// Tunes the radio to `hz` for an alert, waiting for the modem's answer. A modem with no dial, or
+/// one that refuses (a link up on the station), leaves the radio where it is, and the log says the
+/// alert goes there.
+fn tune_for_alert(
+    conn: &mut Connection,
+    c: &Carrier,
+    host: &mut Host,
+    hz: u64,
+    dials: bool,
+) -> Result<(), String> {
+    let mhz = format!("{} MHz", session::mhz(hz));
+    if !dials {
+        (c.say)(&format!(
+            "alerts: the modem cannot tune the radio to {mhz}: the alert goes where the radio is"
+        ));
+        return Ok(());
+    }
+    let request = host.tune(hz);
+    let id = request.get("id").cloned().unwrap_or(Value::Null);
+    conn.send(&request)
+        .map_err(|e| format!("the adapter's connection failed: {e}"))?;
+    let mut refused = None;
+    let answered = wait_for(conn, ANSWER, |e| match e {
+        Event::Ok { id: i } => *i == id,
+        Event::Error {
+            id: Some(i),
+            code,
+            text,
+        } if *i == id => {
+            refused = Some(text.clone().unwrap_or_else(|| code.clone()));
+            true
+        }
+        _ => false,
+    })?;
+    if let Some(why) = refused.or_else(|| (!answered).then(|| "no answer".into())) {
+        (c.say)(&format!(
+            "alerts: the radio could not be tuned to {mhz} ({why}): the alert goes where the \
+             radio is"
+        ));
+    }
+    Ok(())
 }
 
 /// `hello` on the connection that sends alerts, and its answer.
@@ -521,7 +612,7 @@ fn wait_for(
 
 /// Claims the chosen callsign (RP-4 §4: a broadcast needs one) and sends what waits, each frame
 /// awaited to its `broadcast-sent`. A claim refused fails what waits, with the modem's words.
-fn send_alerts(conn: &mut Connection, c: &Carrier) -> Result<(), String> {
+fn send_alerts(conn: &mut Connection, c: &Carrier, dials: bool) -> Result<(), String> {
     let write_line = |conn: &mut Connection, m: &rpmi::wire::Message| {
         conn.send(m)
             .map_err(|e| format!("the adapter's connection failed: {e}"))
@@ -556,8 +647,15 @@ fn send_alerts(conn: &mut Connection, c: &Carrier) -> Result<(), String> {
         fail_all(&format!("{me} could not be claimed: {why}"));
         return Ok(());
     }
-    while let Some((reference, frame)) = c.alerts.due(unix_now()) {
-        let request = host.broadcast(&frame, Some(&reference));
+    while let Some(due) = c.alerts.due_with(unix_now()) {
+        let (reference, frame) = (due.reference.clone(), due.frame.clone());
+        // an alert of this station's goes on its dial: the radio tuned there first (RP-8 §7)
+        if due.tune
+            && let Some(hz) = due.dial_hz
+        {
+            tune_for_alert(conn, c, &mut host, hz, dials)?;
+        }
+        let request = host.broadcast_on(&frame, Some(&reference), due.dial_hz);
         let id = request.get("id").cloned().unwrap_or(Value::Null);
         write_line(conn, &request)?;
         let mut outcome: Option<(bool, Option<String>)> = None;

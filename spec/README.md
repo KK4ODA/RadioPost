@@ -22,7 +22,7 @@ adapter from them.
 | [RP-5](rp-0005-post-office-api.md) | Post office API | Stable | 1.6.0 | Gateway or client ↔ post office over HTTPS |
 | [RP-6](rp-0006-email.md) | Email interoperation | Stable | 1.1.0 | Post office ↔ ordinary email |
 | [RP-7](rp-0007-forwarding.md) | Forwarding | Draft | 0.11.0 | Gateway ↔ gateway by radio |
-| [RP-8](rp-0008-alerts.md) | Alerts | Draft | 0.1.0 | Station → station or circle, by broadcast |
+| [RP-8](rp-0008-alerts.md) | Alerts | Draft | 0.2.0 | Station → station or circle, by broadcast |
 
 ## What to implement
 

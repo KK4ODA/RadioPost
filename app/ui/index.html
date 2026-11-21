@@ -279,6 +279,7 @@
         <div class="head"><h1>Alerts</h1></div>
         <p class="note">An alert reaches the stations that share a circle's keyword at once, as a broadcast: no call, no session. There it sounds until its operator answers. Anyone listening can read it; only the circle can make one. About 16 seconds on the air with Aether.</p>
         <p class="note trouble" id="alerts-modem" hidden></p>
+        <p class="note trouble" id="alerts-dials" hidden></p>
         <form class="card" id="alert-form">
           <h2>Send an alert</h2>
           <div class="grid2">
@@ -287,6 +288,9 @@
             </label>
             <label title="The station to alert, by callsign; left empty, every station in the circle">To
               <input id="alert-to" placeholder="Everyone in the circle" spellcheck="false" autocomplete="off">
+            </label>
+            <label title="Where the alert goes on the air: for a station with a listed gateway, its channels, the best predicted first; else the circle's watch dial; or wherever the radio is. The radio is tuned there to send, and stays there for the answers">Dial
+              <select id="alert-dial"></select>
             </label>
           </div>
           <label title="One line, up to 100 bytes. Plain text: anyone listening can read it">Message
@@ -309,6 +313,9 @@
             <label title="What you call it here; the others may call it something else">Name
               <input id="circle-name" placeholder="Family" spellcheck="false" autocomplete="off">
             </label>
+            <label title="The dial the circle's stations keep their radios on, agreed with the keyword; at a station whose gateway scans, one of the gateway's channels. Alerts to the whole circle go there. Optional">Watch dial, MHz
+              <input id="circle-watch" inputmode="decimal" placeholder="7.101" autocomplete="off" spellcheck="false">
+            </label>
             <label title="How its alerts arrive here">When an alert arrives
               <select id="circle-level">
             <option value="silent">Silent</option>
@@ -329,7 +336,7 @@
           <div class="row"><button type="submit" id="circle-add" title="Keep the circle: its key is kept, never the keyword">Add the circle</button></div>
         </form>
         <table class="list" aria-label="Circles">
-          <thead><tr><th title="Its name here">Circle</th><th title="Read it to the others: the same check means the same keyword">Check</th><th title="How its alerts arrive here">When an alert arrives</th><th title="This station says heard by itself when an alert for it arrives: an automatic transmission">Answer by itself</th><th class="acts"></th></tr></thead>
+          <thead><tr><th title="Its name here">Circle</th><th title="Read it to the others: the same check means the same keyword">Check</th><th title="The dial its stations keep their radios on; alerts to the whole circle go there">Watch dial, MHz</th><th title="How its alerts arrive here">When an alert arrives</th><th title="This station says heard by itself when an alert for it arrives: an automatic transmission">Answer by itself</th><th class="acts"></th></tr></thead>
           <tbody id="circle-rows"></tbody>
         </table>
         <p class="empty" id="circles-empty" hidden></p>
@@ -953,7 +960,7 @@
       <p class="note" id="alarm-when"></p>
       <div class="row">
         <button class="primary" id="alarm-ack" title="Stop the alarm; the other station hears that you have seen it">Acknowledge</button>
-        <button id="alarm-call" title="Put the sender's callsign in Call, as another client's station">Call back</button>
+        <button id="alarm-call" title="Put the sender's callsign in Call, as another client's station, and the dial the alert was heard on in Dial, MHz">Call back</button>
       </div>
       <div class="row quick" id="alarm-quick">
         <button data-reply="Received" title="Answer with this line">Received</button>

@@ -1556,8 +1556,10 @@ fn wait_for_call(
         .conn
         .set_timeout(Some(Duration::from_millis(250)))
         .map_err(|e| e.to_string())?;
-    // alerts sent on this connection, by their requests' `id`, to their references (RP-8 §6)
+    // alerts sent on this connection, by their requests' `id`, to their references (RP-8 §6);
+    // and the tunes asked for them, by `id`, to the dial asked for
     let mut alerting: HashMap<String, String> = HashMap::new();
+    let mut tuning: HashMap<String, u64> = HashMap::new();
     let called = loop {
         if stopped(opts) {
             return Ok(None);
@@ -1565,8 +1567,23 @@ fn wait_for_call(
         if let Some(c) = opts.alerts.as_ref().filter(|_| modem.caps.broadcast) {
             let now = crate::presence::unix_now();
             c.alerts.tick(now);
-            while let Some((reference, frame)) = c.alerts.due(now) {
-                let request = modem.host.broadcast(&frame, Some(&reference));
+            while let Some(due) = c.alerts.due_with(now) {
+                // an alert of this station's goes on its dial: the radio tuned there first; the
+                // adapter takes the two in order (RP-8 §7)
+                if due.tune
+                    && let Some(hz) = due.dial_hz
+                    && modem.caps.dial
+                {
+                    let tune = modem.host.tune(hz);
+                    if let Some(id) = tune.get("id") {
+                        tuning.insert(id.to_string(), hz);
+                    }
+                    modem.send(&tune)?;
+                }
+                let (reference, frame) = (due.reference, due.frame);
+                let request = modem
+                    .host
+                    .broadcast_on(&frame, Some(&reference), due.dial_hz);
                 if let Some(id) = request.get("id") {
                     alerting.insert(id.to_string(), reference);
                 }
@@ -1579,7 +1596,10 @@ fn wait_for_call(
         if let Some(c) = &opts.alerts {
             let now = crate::presence::unix_now();
             match &e {
-                Event::Broadcast { data, .. } => c.heard(data),
+                Event::Broadcast { data, dial_hz, .. } => c.heard(data, *dial_hz),
+                Event::Ok { id } => {
+                    tuning.remove(&id.to_string());
+                }
                 Event::BroadcastSent {
                     reference: Some(r),
                     sent,
@@ -1594,9 +1614,15 @@ fn wait_for_call(
                     code,
                     text,
                 } => {
+                    let why = text.clone().unwrap_or_else(|| code.clone());
                     if let Some(r) = alerting.remove(&i.to_string()) {
-                        let why = text.clone().unwrap_or_else(|| code.clone());
                         c.alerts.went(&r, false, Some(&why), now);
+                    } else if let Some(hz) = tuning.remove(&i.to_string()) {
+                        (c.say)(&format!(
+                            "alerts: the radio could not be tuned to {} MHz ({why}): the \
+                             alert goes where the radio is",
+                            mhz(hz)
+                        ));
                     }
                 }
                 _ => {}

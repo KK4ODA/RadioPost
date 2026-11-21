@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Alerts (RP-8) between two clients' connections between calls (`presence`), through the
 //! loopback adapter shared as Aether is (RP-4 §1.1): Facundo alerts Ana; her station says heard by
-//! itself; she acknowledges and replies; each answer reaches him. A modem that serves one program
-//! at a time is let go at once.
+//! itself; she acknowledges and replies; each answer reaches him. The alert goes on a dial, the
+//! radio tuned there, and her answers name the dial she heard it on (RP-8 0.2.0, RP-4 1.5.0). A
+//! modem that serves one program at a time is let go at once.
 
 mod common;
 
@@ -13,7 +14,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use radiopost_client::alerts::{Alerts, Level};
+use radiopost_client::alerts::{Alerts, Level, Sending};
 use radiopost_client::presence::{Carrier, Presence, unix_now};
 use rpmi::channel::{Channel, StationConfig};
 use rpmi::tcp::Server;
@@ -24,7 +25,11 @@ use common::{scratch, store_for};
 
 const KEYWORD: &str = "kimo dali sune pato";
 
-/// Two stations, KK4ODA and N0CALL, on a simulated modem that carries broadcasts and is shared.
+/// The dial both stations' radios are on.
+const DIAL: u64 = 7_101_000;
+
+/// Two stations, KK4ODA and N0CALL, on a simulated modem that carries broadcasts, has a dial and
+/// is shared.
 fn shared_loopback() -> (Server, String, String) {
     let caps = Caps {
         bandwidths: vec![2300],
@@ -36,7 +41,7 @@ fn shared_loopback() -> (Server, String, String) {
         regulatory: false,
         max_queue: 65536,
         shared: true,
-        dial: false,
+        dial: true,
         scan: false,
         call_s: false,
         tone: false,
@@ -47,7 +52,7 @@ fn shared_loopback() -> (Server, String, String) {
         caps: caps.clone(),
         prefix: prefix.into(),
         frame_bytes: 128,
-        dial_hz: None,
+        dial_hz: Some(DIAL),
     };
     let mut ch = Channel::new();
     let f = ch.add_station(station("KK4ODA", "c"));
@@ -140,18 +145,25 @@ fn an_alert_crosses_between_two_panels_and_is_answered() {
     // both connections hold the modem before anything is sent
     thread::sleep(Duration::from_millis(600));
 
+    // the connections between calls know where the radio is
+    assert_eq!(a_presence.dial(), Some(DIAL));
     let tag = facundo
-        .send(
+        .send_on(
             "Family",
             Some("N0CALL"),
             "Please call me on 146.52 now",
             "KK4ODA",
             unix_now(),
+            Sending {
+                dial_hz: Some(DIAL),
+                outlast_s: None,
+            },
         )
         .expect("written");
     let heard_there = until(&ana, Duration::from_secs(10), |e| e["tag"] == tag);
     assert_eq!(heard_there["from"], "KK4ODA");
     assert_eq!(heard_there["state"], "new");
+    assert_eq!(heard_there["dial_hz"], DIAL, "the dial it was heard on");
     assert!(ana.alarming(), "it sounds until acknowledged");
     until(&facundo, Duration::from_secs(10), |e| e["state"] == "heard");
     lends.settled();
