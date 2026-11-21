@@ -1,0 +1,18 @@
+{
+  "repository": "KK4ODA/hf-predict",
+  "release": "engine-voacapl-0.7.7-1",
+  "files": {
+    "linux-x64": {
+      "name": "voacapl-linux-x64.tar.gz",
+      "sha256": "4a217d29d24956721defc1ef5f0ad469e7fcd1a42e891eafa77a1237f6fe7662"
+    },
+    "macos-arm64": {
+      "name": "voacapl-macos-arm64.tar.gz",
+      "sha256": "d7978c08ce2c25b4db4999c308199d608179f42a12eaf28571beedeed8f1ed40"
+    },
+    "windows-x64": {
+      "name": "voacapl-windows-x64.tar.gz",
+      "sha256": "5f6117cc4bd4afd146242a4415553a6140b16d67c8ff52b6bb7c914fb925f863"
+    }
+  }
+}
