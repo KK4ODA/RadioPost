@@ -1804,7 +1804,8 @@ impl Panel {
         if terrain {
             let (here, station, bands) = self.position.for_hf();
             let when = i64::try_from(when).unwrap_or(i64::MAX);
-            self.hf.judge(here, &station, &bands, &mut gateways, when);
+            self.hf
+                .judge(here, &station, &bands, &mut gateways, (when, at.is_none()));
         }
         Ok(json!({
             "domain": list["domain"], "fetched": list["fetched"], "grid": store.grid,

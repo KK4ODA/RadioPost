@@ -25,6 +25,8 @@ use radioprop_hf::timeutil;
 use radioprop_hf::voacap::VoacaplEngine;
 use radioprop_place::station::{AntennaKind, DIPOLE_DBI, HF_FEEDLINE_DB, Noise, Resolved, Said};
 use radioprop_terrain::budget::phi;
+
+use super::evidence::{self, Evidence};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -495,6 +497,8 @@ pub struct Hf {
     engine: Result<Box<dyn PropagationEngine + Send + Sync>, String>,
     kept: Mutex<HashMap<String, Kept>>,
     workers: usize,
+    /// hf-predict's evidence API (§ 11.4).
+    evidence: Evidence,
 }
 
 impl Default for Hf {
@@ -512,7 +516,14 @@ impl Hf {
             VoacaplEngine::new(&dir, &runs)
                 .map(|e| Box::new(e) as Box<dyn PropagationEngine + Send + Sync>)
         });
-        Self::with(engine)
+        Self::with(engine).with_evidence(Evidence::new())
+    }
+
+    /// The same, asking `evidence` what was heard: tests give a stand-in for hf-predict.
+    #[must_use]
+    pub fn with_evidence(mut self, evidence: Evidence) -> Self {
+        self.evidence = evidence;
+        self
     }
 
     /// With this engine: tests give one that makes its predictions up.
@@ -532,16 +543,19 @@ impl Hf {
             engine,
             kept: Mutex::new(HashMap::new()),
             workers: std::thread::available_parallelism().map_or(2, usize::from),
+            evidence: Evidence::off(),
         }
     }
 
-    /// Whether the engine is there, and how many predictions are kept.
+    /// Whether the engine is there, how many predictions are kept, and whether hf-predict
+    /// answered when last asked what was heard (`null`, not asked).
     #[must_use]
     pub fn status(&self) -> Value {
         let kept = self.kept.lock().map_or(0, |k| k.len());
+        let heard = self.evidence.answered();
         match &self.engine {
-            Ok(e) => json!({"engine": e.name(), "kept": kept}),
-            Err(why) => json!({"engine": Value::Null, "why": why, "kept": kept}),
+            Ok(e) => json!({"engine": e.name(), "kept": kept, "heard": heard}),
+            Err(why) => json!({"engine": Value::Null, "why": why, "kept": kept, "heard": heard}),
         }
     }
 
@@ -549,33 +563,55 @@ impl Hf {
     /// prediction at the whole hour nearest `now` (seconds since 1970), from `here` with the
     /// operator's `station`, or why there is none. `bands`, the station profile's (empty, all):
     /// a channel on another band is not predicted. Runs the engine once for every prediction
-    /// not kept, all in one batch.
+    /// not kept, all in one batch. `today` when `now` is the present: what this station heard in
+    /// the last hour counts then (§ 10.5), never at another time.
     pub fn judge(
         &self,
         here: Option<LatLon>,
         station: &Resolved,
         bands: &[String],
         gateways: &mut [Value],
-        now: i64,
+        (now, today): (i64, bool),
     ) {
         let (year, month, _, hour) = timeutil::civil(now + 1800);
         let plans = self.plan(here, station, bands, gateways, year, month);
         self.run_missing(&plans);
+        let heard = if today {
+            self.heard(here, &plans, now)
+        } else {
+            None
+        };
         let kept = self.kept.lock().map(|k| k.clone()).unwrap_or_default();
-        for plan in &plans {
+        for (p, plan) in plans.iter().enumerate() {
             let Some(result) = kept.get(&plan.key) else {
                 continue;
             };
+            let toward = heard.as_ref().and_then(|h| h.get(p));
             for (i, &c) in plan.channels.iter().enumerate() {
                 let channel = &gateways[plan.gateway]["channels"][c];
                 let hf = match result.as_ref() {
-                    Ok(both) => read(plan, both, channel, i, hour),
+                    Ok(both) => read(plan, both, channel, (i, hour), toward),
                     Err(why) => json!({"state": "failed", "why": why,
                                        "words": "HF not predicted: the engine failed"}),
                 };
                 gateways[plan.gateway]["channels"][c]["hf"] = hf;
             }
         }
+    }
+
+    /// What this station heard in the last hour toward each planned run's gateway, from
+    /// hf-predict when it runs (§ 11.4), by the run's index.
+    fn heard(&self, here: Option<LatLon>, plans: &[Planned], now: i64) -> Option<evidence::Heard> {
+        let places: Vec<LatLon> = plans.iter().map(|p| p.to).collect();
+        let mut bands: Vec<String> = plans
+            .iter()
+            .filter_map(|p| p.request.frequencies_mhz.as_ref())
+            .flatten()
+            .filter_map(|&f| hf_station::hf_band_at(f).map(|b| b.name.to_owned()))
+            .collect();
+        bands.sort();
+        bands.dedup();
+        self.evidence.ask(here?, &places, &bands, now)
     }
 
     /// The runs `gateways` need, each channel that cannot have one given its reason now.
@@ -777,8 +813,16 @@ fn round2(x: f64) -> f64 {
 }
 
 /// One HF channel's prediction at `hour` (UTC, 0–23), read from both ways of a run: its class,
-/// the SNR each way, and with a modem profile the chance of a link and the rate each way.
-fn read(plan: &Planned, both: &BothWays, channel: &Value, index: usize, hour: u32) -> Value {
+/// the SNR each way, and with a modem profile the chance of a link and the rate each way. `heard`,
+/// what this station heard lately toward the gateway, band by band: moderate or strong evidence on
+/// the channel's band raises the share of days it is open (§ 10.5).
+fn read(
+    plan: &Planned,
+    both: &BothWays,
+    channel: &Value,
+    (index, hour): (usize, u32),
+    heard: Option<&HashMap<String, Value>>,
+) -> Value {
     let label = if hour == 0 { 24 } else { hour };
     let at = |p: &predictor::PathPrediction| {
         p.run
@@ -803,57 +847,40 @@ fn read(plan: &Planned, both: &BothWays, channel: &Value, index: usize, hour: u3
         plan.them.gain_db - plan.them.feed_db + plan.you.gain_db,
     );
     let distance = both.there.distance_km;
-    let from = both.there.tx;
-    let (class, class_words) = class_of(distance, &there, reach_deg(from, plan.to));
-    let open = there.muf_day.min(back.muf_day);
+    let (class, class_words) = class_of(distance, &there, reach_deg(both.there.tx, plan.to));
+    let modelled = there.muf_day.min(back.muf_day);
+    let evidence = heard.and_then(|h| h.get(band));
+    let open = evidence.map_or(modelled, |b| evidence::open_with(modelled, b));
     let notes = notes_of(distance, (class, &class_words));
     let mut assumed = plan.you.assumed.clone();
     assumed.extend(plan.them.assumed.iter().cloned());
-    let modem = channel["modem"].as_str().unwrap_or("");
-    let bandwidth = channel["bandwidth_hz"].as_u64().unwrap_or(0);
-    let way = |s: Spread, bps: Option<f64>, rung: Option<Step<'_>>, p_call: Option<f64>| {
-        json!({
-            "snr_db": round1(s.median), "lower_db": round1(s.lower), "upper_db": round1(s.upper),
-            "bps": bps.map(f64::round), "rung": rung.map(|r| r.name), "p_call": p_call.map(round2),
-        })
-    };
     let mut out = json!({
         "band": band, "hour": hour,
         "month": format!("{}-{:02}", plan.request.year, plan.request.month),
         "distance_km": distance.round(), "class": class.name(), "class_words": class_words,
-        "open": round2(open), "ssn": both.there.ssn.value.round(), "engine": both.there.engine,
-        "assumed": assumed, "notes": notes,
+        "open": round2(open), "open_model": round2(modelled), "ssn": both.there.ssn.value.round(),
+        "engine": both.there.engine, "assumed": assumed, "notes": notes,
     });
+    if let Some(b) = evidence {
+        out["heard"] = json!({
+            "tier": b["tier"], "stations": b["stations"], "best_snr_db": b["best_snr_db"],
+            "examples": b["examples"], "hearing_stations": b["hearing_stations"],
+            "hearing_you": b["hearing_you"], "words": evidence::words(b),
+        });
+    }
+    let modem = channel["modem"].as_str().unwrap_or("");
+    let bandwidth = channel["bandwidth_hz"].as_u64().unwrap_or(0);
     let steps = Profile::of_modem(modem)
         .map(|p| (p, p.steps(bandwidth, class)))
         .filter(|(_, steps)| !steps.is_empty());
     if let Some((profile, steps)) = steps {
-        let call = profile.call_db(class);
-        let (p_up, p_down) = (up.above(call), down.above(call));
-        let chance = p_up * p_down * open;
-        let (up_bps, down_bps) = (
-            linked_rate(up, &steps, call),
-            linked_rate(down, &steps, call),
+        through_profile(
+            &mut out,
+            (up, down),
+            profile.call_db(class),
+            &steps,
+            (open, hour),
         );
-        out["state"] = json!("predicted");
-        out["chance"] = json!(round2(chance));
-        out["chance_words"] = json!(likely(chance));
-        out["up"] = way(up, up_bps, median_rung(up, &steps), Some(p_up));
-        out["down"] = way(down, down_bps, median_rung(down, &steps), Some(p_down));
-        let mut words = format!(
-            "{}: links on {:.0} % of days at {hour:02}Z",
-            capital(likely(chance)),
-            chance * 100.0
-        );
-        if chance >= 0.01 {
-            let (sending, receiving) = (rate_words(up_bps), rate_words(down_bps));
-            if sending == receiving {
-                let _ = write!(words, ", about {sending} each way");
-            } else {
-                let _ = write!(words, ", about {sending} sending, {receiving} receiving");
-            }
-        }
-        out["words"] = json!(words);
     } else {
         out["state"] = json!("no-modem");
         out["up"] = way(up, None, None, None);
@@ -868,6 +895,48 @@ fn read(plan: &Planned, both: &BothWays, channel: &Value, index: usize, hour: u3
         ));
     }
     out
+}
+
+/// One way of a path as the panel gets it: the SNR's median and deciles, and with a profile the
+/// rate once linked, the rung of a median day and the share of days the call gets through.
+fn way(s: Spread, bps: Option<f64>, rung: Option<Step<'_>>, p_call: Option<f64>) -> Value {
+    json!({
+        "snr_db": round1(s.median), "lower_db": round1(s.lower), "upper_db": round1(s.upper),
+        "bps": bps.map(f64::round), "rung": rung.map(|r| r.name), "p_call": p_call.map(round2),
+    })
+}
+
+/// The chance of a link and the rate each way through a modem's profile (§ 10.3), into `out`:
+/// both ways' calls get through (`call`, dB in 3 kHz) on a day the band is `open`.
+fn through_profile(
+    out: &mut Value,
+    (up, down): (Spread, Spread),
+    call: f64,
+    steps: &[Step<'_>],
+    (open, hour): (f64, u32),
+) {
+    let (p_up, p_down) = (up.above(call), down.above(call));
+    let chance = p_up * p_down * open;
+    let (up_bps, down_bps) = (linked_rate(up, steps, call), linked_rate(down, steps, call));
+    out["state"] = json!("predicted");
+    out["chance"] = json!(round2(chance));
+    out["chance_words"] = json!(likely(chance));
+    out["up"] = way(up, up_bps, median_rung(up, steps), Some(p_up));
+    out["down"] = way(down, down_bps, median_rung(down, steps), Some(p_down));
+    let mut words = format!(
+        "{}: links on {:.0} % of days at {hour:02}Z",
+        capital(likely(chance)),
+        chance * 100.0
+    );
+    if chance >= 0.01 {
+        let (sending, receiving) = (rate_words(up_bps), rate_words(down_bps));
+        if sending == receiving {
+            let _ = write!(words, ", about {sending} each way");
+        } else {
+            let _ = write!(words, ", about {sending} sending, {receiving} receiving");
+        }
+    }
+    out["words"] = json!(words);
 }
 
 /// What the prediction leaves out on a path: ground wave on a short one, and on a near-vertical

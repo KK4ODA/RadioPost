@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.12 |
+| **Version** | 0.3.13 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -18,7 +18,7 @@ Today the client answers it by distance from a typed grid square. This document 
 answer it properly, for HF and for VHF and UHF, and how hf-predict should change to help. It is a
 proposal the author accepted on 2026-11-20, with the ten answers in §21; no specification has
 changed yet. The wishlist carries it as W17 and W55 to W58. Phases 1 and 2 are built; Phase 3 is
-in progress (§18).
+built but for one piece, bundling the VOACAP engine with RadioPost's installers (§18).
 
 **How facts are marked.** Facts about RadioPost, Aether and hf-predict were read in their
 repositories on 2026-11-20. Outside facts were researched the same day: **[P]** checked on a primary
@@ -959,6 +959,30 @@ GET http://127.0.0.1:<port>/v1/evidence?toward=<lat>,<lon>&since=<unix>&bands=40
 RadioPost works identically without it; the row's explanation simply has no observation line. An
 API rather than reading hf-predict's database file, because the file's schema is hf-predict's to
 change, and an API keeps that freedom.
+
+**Built in Phase 3 (2026-11-21).** hf-predict's app serves it on `127.0.0.1:8625` while it runs
+(hf-predict's pull request 41; its manual, *Other programs on this computer*), with three changes
+from the sketch above. It takes `from` as well, this station's position, since the path's bearing is
+reckoned from it. `toward` may be repeated, up to 200 places, so the whole list is one round trip.
+And it answers the observed side of hf-predict's own Compare view for each place, not a summary
+of its own: the tier with Compare's thresholds (`notSampled`, `none`, `limited`, `moderate`,
+`strong`), the periods listened, the stations heard near the place or along the way and the
+strongest of them, and the stations there heard reporting this station's area:
+
+```
+GET http://127.0.0.1:8625/v1/evidence?from=33.75,-84.39&toward=41.71,-72.73&since=<unix>&bands=40m
+→ {"provider": "hf-predict 0.14.0", "as_of": …, "since": …, "from": {…}, "places": [{"toward": {…},
+   "bands": [{"band": "40 m", "tier": "moderate", "periods_listened": 40, "stations": 3,
+              "best_snr_db": -8, "examples": […], "hearing_stations": 1, "hearing_you": 0}]}]}
+```
+
+Only requests addressed to `127.0.0.1` or `localhost` by name are answered, so a page in a browser
+cannot rebind a name of its own onto the port. The client (`selection/evidence.rs`) asks once for
+the list, keeps the answer, or hf-predict's absence, a minute (a closed port on Windows takes about
+two seconds to refuse), and asks only for the present, never for another time. Moderate or strong
+evidence raises the band's share of open days toward that gateway by the fixed 2 : 1 in odds of
+§10.5; the rate is never touched. The row says what was heard, and the line's title gives both
+shares of open days.
 
 ### 11.5 Changes that RadioPost needs, and changes worth making anyway
 
@@ -2229,3 +2253,4 @@ for size in (2000, 50000):
 | 0.3.10 | 2026-11-21 | §16.3: a path with ground close to an antenna said *less certain*, its chance read against 14 dB (the report's §6, the author's yes). |
 | 0.3.11 | 2026-11-21 | §10.2: the runs measured (12 ms a month's run; 100 gateways both ways in 0.34 s), so no coverage-grid stage. §10.3: HF channels predicted in the client, Aether's profile from its measured curves, the rules as built, the NVIS echo limits not applied (the air's sessions climbed past them), one path checked against the air. §11.3: steps 1 to 3 done for HF. |
 | 0.3.12 | 2026-11-21 | §16.7: the time picker built (*At*, `?at=`): HF at that hour and month, listening times then, ages and the night side today's. |
+| 0.3.13 | 2026-11-21 | §11.4: the evidence API built in hf-predict and read by the client (`from` added, several places a request, Compare's observed tiers), the 2 : 1 raise of §10.5 applied. Phase 3 built but for bundling the engine. |

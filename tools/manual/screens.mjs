@@ -163,10 +163,21 @@ for (const gw of GATEWAYS.gateways) Object.assign(gw, placedFrom(HERE, gw.grid))
 // none
 const HF_CHANNELS = JSON.parse(readFileSync(join(ROOT, "tools", "manual", "hf-channels.json"),
                                             "utf8")).channels;
-const GATEWAYS_HF = {...GATEWAYS, hf: {engine: "voacapl", kept: 5},
+// and what hf-predict heard toward two of them in the last hour (evidence.rs's words), made up:
+// neither tier raises the band, so the engine's figures stand
+const HEARD = {
+  "N2CALL-5 7103500": {tier: "limited", stations: 1, best_snr_db: -14, examples: ["N8CALL"],
+    hearing_stations: 0, hearing_you: 0,
+    words: "FT8 from 1 station near it heard here on 40 m in the last hour, the strongest at -14 dB"},
+  "N1CALL-10 7101000": {tier: "none", stations: 0, best_snr_db: null, examples: [],
+    hearing_stations: 0, hearing_you: 0,
+    words: "Nothing from near it heard here on 40 m in the last hour, in 25 min of listening"},
+};
+const GATEWAYS_HF = {...GATEWAYS, hf: {engine: "voacapl", kept: 5, heard: true},
   gateways: GATEWAYS.gateways.map((gw) => ({...gw, channels: gw.channels.map((c) => {
-    const hf = HF_CHANNELS[`${gw.callsign} ${c.dial_hz}`];
-    return hf && !c.blocked ? {...c, hf} : c;
+    const key = `${gw.callsign} ${c.dial_hz}`;
+    const hf = HF_CHANNELS[key];
+    return hf && !c.blocked ? {...c, hf: HEARD[key] ? {...hf, heard: HEARD[key]} : hf} : c;
   })}))};
 function placedFrom(here, grid) {
   const g = grid.toUpperCase();

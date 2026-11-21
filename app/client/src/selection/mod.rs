@@ -6,6 +6,7 @@
 //! * [`classify`]: why a call ended as it did, from what the modem and the session said.
 //! * [`directory`]: the gateway list as the operator sees it: favourites, blocks, gateways of their
 //!   own, ages, and what the call records say of each.
+//! * [`evidence`]: what this station heard lately toward each gateway, from hf-predict.
 //! * [`hf`]: HF channels predicted both ways by VOACAP and read through the modem's profile.
 //! * [`hillshade`]: the terrain map's background, drawn from the tiles held.
 //! * [`position`]: the places, the GPS and the position in use.
@@ -15,6 +16,7 @@
 pub mod attempts;
 pub mod classify;
 pub mod directory;
+pub mod evidence;
 pub mod hf;
 pub mod hillshade;
 pub mod position;

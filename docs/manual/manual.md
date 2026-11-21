@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.35.0 |
+| **Version** | 1.36.0 |
 | **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.32 |
 | **Licence** | CC BY 4.0 |
@@ -575,6 +575,15 @@ was 6 to 8 dB stronger than what was read. A later version of RadioPost corrects
 calls. If the line says *HF not predicted*, it says why: where you are is not known, the channel
 is outside 80 m to 10 m, or your station profile does not cover that band. Without the VOACAP
 engine installed, the line above the list says so once.
+
+**What your own receiver heard.** If [hf-predict](https://github.com/KK4ODA/hf-predict) runs on
+this computer and listens to FT8 with WSJT-X, RadioPost asks it what you heard in the last hour from
+stations near each gateway. The answer goes in a second line under the channel: *FT8 from 3 stations
+near it heard here on 40 m in the last hour, the strongest at -8 dB*, or *Nothing from near it heard
+here on 40 m in the last hour, in 25 min of listening*. Three stations or more raise the chance that
+the band is open toward the gateway, by a fixed amount for now. They never change the rate: FT8 is
+heard far below what a link needs. A band not listened to says nothing. Without hf-predict, or at
+another time, the line is simply not there.
 
 **Another time.** To see which gateway to try tonight, or on another day, pick it in **At** beside
 **Places**: the next evening at 20:00, the next morning at 08:00, or **A date and hour…**, which
@@ -2325,3 +2334,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.33.0 | 2026-11-21 | §8.1: a VHF path with ground close to an antenna is *less certain*, says where, and has its chance read against a 14 dB spread. |
 | 1.34.0 | 2026-11-21 | §8.1: *The chance on an HF channel*, VOACAP both ways at this hour read through Aether's measured ladder, with the rate each way, what is assumed and why a channel is not predicted; Figure 13 retaken with them. |
 | 1.35.0 | 2026-11-21 | §8.1: *Another time*, the **At** picker: the gateways judged for an evening, a morning or any date and hour, and what is assumed then; Figure 13 retaken with it. |
+| 1.36.0 | 2026-11-21 | §8.1: *What your own receiver heard*, hf-predict's FT8 of the last hour toward each gateway under its HF channel, raising the band's chance when three stations or more were heard; Figure 13 retaken with it. |

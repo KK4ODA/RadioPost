@@ -1020,7 +1020,8 @@ function age(seconds) {
 function hfNote(hf) {
   if (!hf) return "";
   if (!hf.engine) return ` HF channels are not predicted: ${hf.why}.`;
-  return " Each HF channel shows VOACAP's prediction for the hour, both ways.";
+  return " Each HF channel shows VOACAP's prediction for the hour, both ways"
+    + (hf.heard ? ", and what hf-predict heard here in the last hour." : ".");
 }
 
 // -- another time (§§14.7, 16.7): the gateways judged for a chosen hour --
@@ -1436,7 +1437,14 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 // an HF channel's prediction in a line under it; its title says how it was worked out
 function hfLine(h) {
   const cls = h.state === "predicted" ? chanceClass(h.chance_words) : "";
-  return el("div", {class: `note verdict ${cls}`, text: h.words, title: hfTitle(h)});
+  const line = el("div", {class: `note verdict ${cls}`, text: h.words, title: hfTitle(h)});
+  const heard = h.heard && h.heard.words;
+  if (!heard) return line;
+  return el("div", {}, line, el("div", {class: "note", text: heard,
+    title: "From hf-predict, running on this computer: the FT8 your receiver decoded in the last hour "
+      + "from stations near this gateway or along the way to it"
+      + (h.heard.examples && h.heard.examples.length ? `, such as ${h.heard.examples.join(", ")}` : "")
+      + (h.heard.hearing_stations ? `; ${h.heard.hearing_stations} there heard reporting you or your neighbours` : "")}));
 }
 
 function hfTitle(h) {
@@ -1448,7 +1456,9 @@ function hfTitle(h) {
   return [
     `VOACAP for ${month} at ${String(h.hour).padStart(2, "0")}Z, sunspot number ${h.ssn}, `
       + `${h.distance_km} km: ${h.class_words}, read as ITU ${h.class}`,
-    `The band is open on ${Math.round(h.open * 100)} % of days`,
+    h.open === h.open_model ? `The band is open on ${Math.round(h.open * 100)} % of days`
+      : `The band is open on ${Math.round(h.open_model * 100)} % of days, taken as `
+        + `${Math.round(h.open * 100)} % with what was heard here (2:1 in odds, until learned)`,
     way(h.up, "Sending"), way(h.down, "Receiving"),
     ...h.notes,
     "Nothing is learned from your sessions yet",

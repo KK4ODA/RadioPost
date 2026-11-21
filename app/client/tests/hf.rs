@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use radiopost_client::panel::Panel;
+use radiopost_client::selection::evidence::Evidence;
 use radiopost_client::selection::hf::{Hf, IN_3_KHZ_DB};
 use radioprop_hf::propagation::{
     EngineRun, FrequencyPrediction, HourPrediction, Prediction, PredictionRequest,
@@ -359,6 +360,104 @@ fn another_time_is_judged_at_its_own_hour_and_month() {
     assert_eq!(first, 12, "this month's and that one's");
     http(at, "GET", &format!("/api/gateways?at={then}"), &Value::Null);
     assert_eq!(runs.load(Ordering::SeqCst), first);
+}
+
+/// A stand-in for hf-predict's evidence API: each place asked about gets 40 m, the first with three
+/// stations heard near it (moderate) and the others nothing; each request's head is kept.
+fn hf_predict() -> (SocketAddr, Arc<std::sync::Mutex<Vec<String>>>) {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a port");
+    let at = listener.local_addr().expect("bound");
+    let asked = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let kept = Arc::clone(&asked);
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let mut head = String::new();
+            let mut reader = std::io::BufReader::new(stream.try_clone().expect("a copy"));
+            loop {
+                let mut line = String::new();
+                if std::io::BufRead::read_line(&mut reader, &mut line).map_or(true, |n| n == 0)
+                    || line == "\r\n"
+                {
+                    break;
+                }
+                head.push_str(&line);
+            }
+            let places = head.matches("toward=").count();
+            let body = json!({"places": (0..places).map(|i| json!({"bands": [
+                {"band": "40 m", "tier": if i == 0 { "moderate" } else { "none" },
+                 "stations": if i == 0 { 3 } else { 0 }, "best_snr_db": if i == 0 { json!(-8) } else { json!(null) },
+                 "periods_listened": 40.0, "examples": ["W1AAA"], "hearing_stations": 1, "hearing_you": 0}]}))
+                .collect::<Vec<_>>()})
+            .to_string();
+            kept.lock().expect("kept").push(head);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\
+                 Connection: close\r\n\r\n{body}",
+                body.len()
+            );
+        }
+    });
+    (at, asked)
+}
+
+#[test]
+fn what_hf_predict_heard_in_the_last_hour_raises_the_band() {
+    let runs = Arc::new(AtomicUsize::new(0));
+    let (stand_in, asked) = hf_predict();
+    let hf = Hf::with_engine(Box::new(MadeUp {
+        runs: Arc::clone(&runs),
+    }))
+    .with_evidence(Evidence::at(Some(stand_in)));
+    let at = panel("hf-evidence", hf, Some("EM73tr"));
+    let v = http(at, "GET", "/api/gateways", &Value::Null);
+    assert_eq!(v["hf"]["heard"], true, "{}", v["hf"]);
+    // one request for the whole list: each run's gateway a place, every band predicted
+    let heads = asked.lock().expect("asked").clone();
+    assert_eq!(heads.len(), 1, "{heads:?}");
+    let head = &heads[0];
+    assert!(head.starts_with("GET /v1/evidence?from="), "{head}");
+    assert_eq!(head.matches("toward=").count(), 3, "{head}");
+    assert!(head.contains("&bands=20m,40m,80m"), "{head}");
+    assert!(head.contains(&format!("Host: {stand_in}\r\n")), "{head}");
+    // the list is nearest first, so the first place asked about is N0SITE-10: its 40 m channel
+    // open on 0.9 of days by the model, raised 2:1 in odds by three stations heard near it
+    let near = &channel(&v, "N0SITE-10", 7_102_000)["hf"];
+    assert_eq!(near["heard"]["tier"], "moderate", "{near}");
+    assert_eq!(near["open_model"], 0.9);
+    let raised = 2.0 * 0.9 / 1.9;
+    assert!(
+        (near["open"].as_f64().expect("open") - raised).abs() < 0.006,
+        "{near}"
+    );
+    assert!(
+        near["heard"]["words"]
+            .as_str()
+            .is_some_and(|w| w.starts_with("FT8 from 3 stations near it heard here on 40 m"))
+    );
+    // nothing heard toward W1AW-10: said, and the band left as modelled
+    let far = &channel(&v, "W1AW-10", 7_101_000)["hf"];
+    assert_eq!(far["heard"]["tier"], "none", "{far}");
+    assert_eq!(far["open"], far["open_model"]);
+    // 80 m: hf-predict said nothing of it
+    assert!(
+        channel(&v, "W1AW-10", 3_590_000)["hf"]
+            .get("heard")
+            .is_none()
+    );
+    // another time: today's evidence does not count, and hf-predict is not asked
+    let later = radioprop_hf::timeutil::now() + 86_400;
+    let v = http(
+        at,
+        "GET",
+        &format!("/api/gateways?at={later}"),
+        &Value::Null,
+    );
+    let near = &channel(&v, "N0SITE-10", 7_102_000)["hf"];
+    assert!(near.get("heard").is_none(), "{near}");
+    assert_eq!(near["open"], near["open_model"]);
+    assert_eq!(asked.lock().expect("asked").len(), 1);
 }
 
 /// The real engine, when `RADIOPOST_VOACAP` names it (hf-predict's `.work/engine`, say): a
