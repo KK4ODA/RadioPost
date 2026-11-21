@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.3.1 |
-| **Updated** | 2026-11-19 |
+| **Version** | 1.4.0 |
+| **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -318,12 +318,12 @@ rule it checks, §8); `text` says why. A stop is never refused for being busy.
 |---|---|---|
 | `incoming` | `remote`, `local` | A call to one of this host's callsigns is being answered (optional; for display). |
 | `connected` | `link`, `remote`, `local`, `direction` (`in` or `out`), `bandwidth`? | A link is up. For an outgoing call, it answers the `connect` (and carries its `id`). |
-| `failed` | `id`, `code`, `text`? | An outgoing call ended without a link: `timeout` (no answer), `refused` (the modem or the other station refused), `busy`, or `aborted` (the host's `abort`). |
+| `failed` | `id`, `code`, `text`?, `heard`?, `snr_db`? | An outgoing call ended without a link: `timeout` (no answer), `refused` (the modem or the other station refused), `busy`, or `aborted` (the host's `abort`). `heard` (bool) says whether anything the station called sent was heard during the call, and `snr_db` the strongest it was heard at: "nothing heard" and "heard, but no link" point to different causes. An adapter that cannot tell leaves both out. |
 | `received` | `link`, `data` | Bytes arrived on a link, in order. A `received` may hold any part of the stream: it keeps no `send` boundaries, and the host joins them. |
 | `queued` | `link`, `bytes` | Bytes still queued on the link, when it changes. `0` means everything sent has been handed over (and, with `delivery`, acknowledged). |
 | `delivered` | `link`, `ref` | The other station holds every byte up to the end of the send with this `ref`. Only with `delivery`. |
 | `disconnected` | `link`, `reason`, `text`? | The link is gone. `reason`: `local` (the host asked), `remote` (the other station hung up), `timeout`, `failure`. |
-| `quality` | `link`?, `snr_db`?, `rate_bps`?, `receiving`? | What the modem knows about the path: the last SNR heard, the data rate it is using, and whether it is receiving right now (RP-3 §8 uses this to tell a slow link from a dead one). Only with `quality`. |
+| `quality` | `link`?, `snr_db`?, `rate_bps`?, `receiving`?, `peer_snr_db`? | What the modem knows about the path: the last SNR heard, the data rate it is using, whether it is receiving right now (RP-3 §8 uses this to tell a slow link from a dead one), and the SNR the other station reports hearing this one at, where the modem learns it: a link is two paths, and `snr_db` is only the one this station hears. Only with `quality`. |
 | `busy` | `busy` (bool) | Whether the channel is in use by others, including other programs on a shared modem (§1.1). Only with `busy`. |
 | `heard` | `callsign`, `snr_db`?, `bandwidth`? | A station was heard (a beacon, a call to someone else). Optional. |
 | `dial` | `dial_hz`, `id`? | The radio's dial: the answer to `dial`, with its `id`, and, without one, each time the dial changes (§4.1). Only with `caps.dial`. |
@@ -431,13 +431,13 @@ end of this section.
 | `listen` | `listen {enabled}` on that claim. A claim starts with it off, as RPMI's does. |
 | `connect` | `connect {remote, callsign}`, with `callsign` set to `as`. The call and its session are the host's. Aether's `claimed`, and `bad_params` for a callsign the claim does not hold, are RPMI's `not-authorized`. `already_connected` is `busy`. `refused` (an answer-only station) and `regulatory` are `refused`. |
 | `connected` | A `state` event `connected` whose `owner` is the claim's `id`. A `detail` of `<remote> (master)` is a call the host placed (`direction` `out`), and `<remote> (slave)` one it answered (`in`). The event's `callsign` is `local`. |
-| `failed` | A `state` event `disconnected` with the claim's `owner` before any `connected`: `no answer` is `timeout`, `aborted` after the host's `abort` is `aborted`, and anything else `refused`. |
+| `failed` | A `state` event `disconnected` with the claim's `owner` before any `connected`: `no answer` is `timeout`, `aborted` after the host's `abort` is `aborted`, and anything else `refused`. `heard` is whether a `frame` event decoded `from` the station called (whatever its case) arrived during the call, and `snr_db` the strongest of their `snr_db`. |
 | `disconnected` | The same event after `connected`. `peer disconnected` is `remote`. The end of the host's own `disconnect` or `abort` (`closed`, `aborted`, `closed (no DISC_ACK)`) is `local`. `link timeout` and `no response` are `timeout`, and anything else is `failure`. |
 | `send` with `ref` | `send {data, ref}`. The `sent` event with `delivered: true` and the same `ref` is RPMI's `delivered`. Aether's `ref` is 1 to 64 printable ASCII characters with no spaces, and RPMI's a string or an integer (§4), so the adapter gives Aether a reference of its own and remembers which `ref` it stands for. Aether's `not_owner` and `not_connected` are `not-connected`. |
 | `disconnect` / `abort` | `disconnect` / `abort`. Aether refuses either `not_owner` on another program's session (RPMI's `not-connected`). It answers an `abort` with nothing under way as done, so the adapter answers RPMI's `not-connected` itself. |
 | `received` | The `data` events while the host's session is up. Aether runs one session at a time, so they are the host's link. |
 | `queued` | `metrics.queued_bytes` while the host's session is up: the host's own bytes not yet acknowledged, counted before compression. |
-| `quality` | `metrics` (`snr_db`, `throughput_bps`, `receiving`). |
+| `quality` | `metrics` (`snr_db`, `peer_snr_db`, `throughput_bps`, `receiving`). |
 | `busy` | `metrics.channel_busy`, and true while a session whose `owner` is not the host's is up (`status.owner`, or a `metrics.link` during another's session). While the host's own link is up, `channel_busy` is mostly the other station's signal and is not reported; when that link ends, the readings taken during it are dropped and the next `metrics` says how the channel stands. |
 | `broadcast` | `datagram.send` with `frame_type` 2, Aether's unformatted datagram; the `datagram` and `datagram-sent` events. |
 | `dial` | `status.frequency_hz`, the dial Aether reads from the radio over CAT, `rigctld` or FLRig; `refused` while it is null. `caps.dial` is `status.can_tune` at `hello`. Aether's `dial` event (`frequency_hz`) is RPMI's `dial` event. |
@@ -735,3 +735,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 1.2.0 | 2026-11-17 | The tuner tone (§4.3): `caps.tone` and the `tone` request, refused `busy` while any link or call is up on the station, a stop always taken (§1.1, §8). §1.1: a `connect` in another bandwidth moves the whole station for the call and back, refused `busy` while another program's is up. §4.1: a channel the operator picks in the host is the operator's choice, and the radio stays. §9.1: Aether's bandwidths and a call's move (`bandwidth.set`), and the tone as Aether's `tune`. From the RadioPost mail of 2026-11-17, whose mobile could not be told to set its tuner before a call. Test vectors: the tone in the dial conversation and in `rpmi-lines.json`. MINOR, announced (RP-0 §8.4): nothing for an implementation to do. |
 | 1.3.0 | 2026-11-18 | §6: every host that has said `hello` hears each broadcast, callsigns or none; sending one needs callsigns; what `source` names; RadioPost's broadcasts are RP-8's alerts. MINOR, announced (RP-0 §8.4): nothing for an implementation to do, since the reference's simulated modem and the Aether adapter already pass broadcasts to every host. |
 | 1.3.1 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 7; D43). §1: an adapter built into the host may skip §2's transport and framing. §2: lines are I-JSON, and an integer has no fraction or exponent and fits in ±(2^53−1) (the reference and the Rust adapter had parted on `NaN`, lone surrogates and large integers); a request without `id` gets no `ok` but does get an `error`, `status` or `dial` without one; a `data` member is its bytes, its pad bits written as zero. §9.5: what each form of `remote` calls, a name mapped to a bare address calling the name, IPv6 in brackets; the opening line ASCII, its 200 bytes before the LF, its 30 seconds from the connection; the fingerprint is the leaf certificate's; plain TCP only by choice. Test vectors (`rpmi-lines.json`; `rpmi-conversations.json`'s rule: a host's ids and refs are its own, and `data` compares as bytes). PATCH, announced (RP-0 §8.4): nothing for an implementation to do. |
+| 1.4.0 | 2026-11-21 | §5: `failed`'s `heard` and `snr_db`, whether the station called was heard during a call that brought no link and how strongly; `quality`'s `peer_snr_db`, what the other station reports hearing this one at. §9.1: Aether's sources for both (its `frame` events during the call, `metrics.peer_snr_db`). From choosing a gateway (the design's §12.2, Phase 4), which learns each direction of a path and tells "nothing heard" from "heard, but no link". Test vectors: the simulated modem's `failed` `timeout` says `heard` false. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; an adapter that says neither and a host that ignores both lose nothing they had. |

@@ -239,6 +239,11 @@ pub enum Event {
         code: String,
         /// For people.
         text: Option<String>,
+        /// Whether the station called was heard during the call; `None`, the adapter cannot
+        /// tell (RP-4 1.4.0).
+        heard: Option<bool>,
+        /// The strongest SNR it was heard at.
+        snr_db: Option<f64>,
     },
     /// Bytes arrived on a link, in order, with no `send` boundaries.
     Received {
@@ -280,6 +285,8 @@ pub enum Event {
         rate_bps: Option<f64>,
         /// Whether it is receiving now.
         receiving: Option<bool>,
+        /// What the other station reports hearing this one at (RP-4 1.4.0).
+        peer_snr_db: Option<f64>,
     },
     /// Whether others use the channel.
     Busy(bool),
@@ -455,6 +462,8 @@ impl Event {
                 id,
                 code: text(m, "code")?,
                 text: optional_text(m, "text"),
+                heard: m.get("heard").and_then(Value::as_bool),
+                snr_db: m.get("snr_db").and_then(Value::as_f64),
             },
             "received" => Event::Received {
                 link: text(m, "link")?,
@@ -478,6 +487,7 @@ impl Event {
                 snr_db: m.get("snr_db").and_then(Value::as_f64),
                 rate_bps: m.get("rate_bps").and_then(Value::as_f64),
                 receiving: m.get("receiving").and_then(Value::as_bool),
+                peer_snr_db: m.get("peer_snr_db").and_then(Value::as_f64),
             },
             "busy" => Event::Busy(flag(m, "busy")?),
             "heard" => Event::Heard {
@@ -703,6 +713,7 @@ mod silence {
             snr_db: None,
             rate_bps: None,
             receiving: Some(r),
+            peer_snr_db: None,
         };
         std::thread::sleep(quiet);
         s.heard(&Event::Busy(false));

@@ -111,8 +111,10 @@ pub const ALL: [Class; 12] = [
     Class::Unknown,
 ];
 
-/// What the client knows of one call.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// What the client knows of one call. A record (from its version 2) keeps it whole, so a later
+/// version of the rules classes it again exactly ([`class_of`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 #[allow(
     clippy::struct_excessive_bools,
     reason = "each a separate fact the modem or the session reported"
@@ -192,6 +194,22 @@ pub fn classify(e: &Evidence) -> Class {
             None => Class::Unknown,
         },
     }
+}
+
+/// A record's class by these rules: from the evidence it keeps, so a record classed by an earlier
+/// version of them is classed again; a record that keeps none (version 1, or a call the program
+/// never finished) has the class it was given.
+#[must_use]
+pub fn class_of(record: &serde_json::Value) -> Class {
+    let given = || {
+        Class::from_name(record["outcome"]["class"].as_str().unwrap_or(""))
+            .unwrap_or(Class::Unknown)
+    };
+    if record["stub"] == true || !record["evidence"].is_object() {
+        return given();
+    }
+    serde_json::from_value::<Evidence>(record["evidence"].clone())
+        .map_or_else(|_| given(), |e| classify(&e))
 }
 
 /// The class of a session ended by an `ERROR` (RP-0 §9.3): a refusal of policy or credential, a
@@ -348,5 +366,29 @@ mod tests {
             ..linked()
         };
         assert_eq!(classify(&open), Class::Unknown);
+    }
+
+    #[test]
+    fn a_record_is_classed_again_from_the_evidence_it_keeps() {
+        // a version 2 record: its evidence says the station was heard, whatever class it was given
+        let heard = Evidence {
+            heard_remote: true,
+            ..calling("timeout")
+        };
+        let record = serde_json::json!({
+            "outcome": {"class": "no-answer"},
+            "classifier": 0,
+            "evidence": serde_json::to_value(&heard).expect("JSON"),
+        });
+        assert_eq!(class_of(&record), Class::NoAnswerHeard);
+        // a version 1 record, with no evidence, keeps the class it was given
+        let old = serde_json::json!({"outcome": {"class": "link-lost"}, "classifier": 1});
+        assert_eq!(class_of(&old), Class::LinkLost);
+        // and a call the program never finished stays unknown
+        let stub = serde_json::json!({"stub": true, "outcome": {"class": "unknown"}});
+        assert_eq!(class_of(&stub), Class::Unknown);
+        // evidence missing a member reads it as not seen
+        let partial = serde_json::json!({"evidence": {"opened": true, "failed": "busy"}});
+        assert_eq!(class_of(&partial), Class::ChannelBusy);
     }
 }

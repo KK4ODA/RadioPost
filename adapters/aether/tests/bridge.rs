@@ -524,7 +524,8 @@ fn a_call_carries_a_session_and_ends() {
     assert_eq!(send["params"], json!({"data": "AQID", "ref": "rp1"}));
     let metrics = |q: u64| {
         json!({"queued_bytes": q, "channel_busy": true, "link": {},
-                                  "snr_db": 12.5, "throughput_bps": 300, "receiving": false})
+                                  "snr_db": 12.5, "throughput_bps": 300, "receiving": false,
+                                  "peer_snr_db": 8.0})
     };
     let said = event(&mut b, &mut a, "metrics", &metrics(3));
     assert_eq!(
@@ -532,7 +533,7 @@ fn a_call_carries_a_session_and_ends() {
         [
             json!({"op": "queued", "link": "a1", "bytes": 3}),
             json!({"op": "quality", "link": "a1", "snr_db": 12.5, "rate_bps": 300,
-                   "receiving": false})
+                   "receiving": false, "peer_snr_db": 8.0})
         ],
         "the peer's signal is no busy channel"
     );
@@ -614,10 +615,43 @@ fn calls_that_fail_say_how() {
         let said = event(&mut b, &mut a, "state", &mine("disconnected", detail));
         assert_eq!(
             lines(&said),
-            [json!({"op": "failed", "id": 3, "code": code})],
+            [json!({"op": "failed", "id": 3, "code": code, "heard": false})],
             "{detail}"
         );
     }
+}
+
+#[test]
+fn a_call_that_fails_says_whether_the_station_called_was_heard() {
+    let (mut b, mut a) = opened(true, false);
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":3,"remote":"N1CALL-10"}"#,
+    );
+    // a frame not decoded, and one decoded from another station, say nothing of it
+    let frame = |from: &str, decoded: bool, snr: f64| json!({"kind": "beacon", "decoded": decoded, "from": from, "snr_db": snr});
+    event(&mut b, &mut a, "frame", &frame("N1CALL-10", false, 9.0));
+    event(&mut b, &mut a, "frame", &frame("W1AW", true, 12.0));
+    // two decoded from it: the strongest is said, whatever its case
+    event(&mut b, &mut a, "frame", &frame("n1call-10", true, -3.5));
+    event(&mut b, &mut a, "frame", &frame("N1CALL-10", true, 1.5));
+    let said = event(&mut b, &mut a, "state", &mine("disconnected", "no answer"));
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "failed", "id": 3, "code": "timeout", "heard": true, "snr_db": 1.5})]
+    );
+    // the next call starts with nothing heard
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":4,"remote":"N1CALL-10"}"#,
+    );
+    let said = event(&mut b, &mut a, "state", &mine("disconnected", "no answer"));
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "failed", "id": 4, "code": "timeout", "heard": false})]
+    );
 }
 
 #[test]
@@ -1157,7 +1191,7 @@ fn a_call_in_another_bandwidth_moves_the_station_and_back() {
     let said = event(&mut b, &mut a, "state", &mine("disconnected", "no answer"));
     assert_eq!(
         lines(&said),
-        [json!({"op": "failed", "id": 4, "code": "timeout"})]
+        [json!({"op": "failed", "id": 4, "code": "timeout", "heard": false})]
     );
     assert_eq!(
         asked_since(&a, from),

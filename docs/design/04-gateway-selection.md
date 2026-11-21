@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.14 |
+| **Version** | 0.3.15 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -18,7 +18,7 @@ Today the client answers it by distance from a typed grid square. This document 
 answer it properly, for HF and for VHF and UHF, and how hf-predict should change to help. It is a
 proposal the author accepted on 2026-11-20, with the ten answers in §21; no specification has
 changed yet. The wishlist carries it as W17 and W55 to W58. Phases 1 to 3 are built; the client's
-installers carry the VOACAP engine from the next release (§§11.2, 18).
+installers carry the VOACAP engine from the next release (§§11.2, 18). Phase 4 is in progress.
 
 **How facts are marked.** Facts about RadioPost, Aether and hf-predict were read in their
 repositories on 2026-11-20. Outside facts were researched the same day: **[P]** checked on a primary
@@ -1055,6 +1055,17 @@ Aether already knows each of them.
 None is needed to start (§18): Phases 1 to 4 work with RP-4 as it is, and these make the learning
 sharper when present. The author chose to propose them in phases: the first two with Phase 4, the
 probe with Phase 6 (§21, Q4).
+
+**Done in Phase 4 (2026-11-21):** the first two are RP-4 1.4.0, MINOR and announced: `failed`'s
+`heard` and `snr_db`, and `quality`'s `peer_snr_db`. The Aether adapter says `heard` from Aether's
+`frame` events decoded from the station called during the call, and passes `metrics.peer_snr_db`
+through; the reference's simulated modem says `heard` false on a timeout, and the vectors' verdicts
+say so. The attempt record (§12.1) is version 2: it keeps the classifier's whole evidence, so a
+later version of the rules classes every record again exactly (`classify::class_of`); the other
+station's readings of this one, in each `quality` reading and as a spread; what the modem said of
+hearing the station called (`call.heard_said`); and the prediction made for the channel when the
+call was placed (`predicted`: the HF line's `hf`, or the VHF path's `terrain`), so learning needs no
+engine and the same records always give the same estimates.
 
 ### 12.3 Failure classification
 
@@ -2269,3 +2280,4 @@ for size in (2000, 50000):
 | 0.3.12 | 2026-11-21 | §16.7: the time picker built (*At*, `?at=`): HF at that hour and month, listening times then, ages and the night side today's. |
 | 0.3.13 | 2026-11-21 | §11.4: the evidence API built in hf-predict and read by the client (`from` added, several places a request, Compare's observed tiers), the 2 : 1 raise of §10.5 applied. Phase 3 built but for bundling the engine. |
 | 0.3.14 | 2026-11-21 | §11.2: the engine bundled: hf-predict publishes it with checksums, RadioPost pins one, checks it, and puts it in the client's installers. Phase 3 built. |
+| 0.3.15 | 2026-11-21 | §12.2: the first two additions done (RP-4 1.4.0); the attempt record's version 2 (evidence, prediction, the peer's readings). Phase 4 begun. |

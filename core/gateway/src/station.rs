@@ -2103,7 +2103,9 @@ fn call_up(modem: &mut Modem, partner: &str, monitor: &Monitor) -> Result<Event,
             .map_err(|e| format!("the modem's adapter: {e}"))?
         {
             Some(e @ Event::Connected { id: Some(_), .. }) if e_id(&e) == id => return Ok(e),
-            Some(Event::Failed { id: i, code, text }) if i == id => {
+            Some(Event::Failed {
+                id: i, code, text, ..
+            }) if i == id => {
                 return Err(format!(
                     "the call failed: {code}{}",
                     text.map(|t| format!(" ({t})")).unwrap_or_default()

@@ -31,8 +31,10 @@ use super::classify::{self, Class, Evidence};
 /// Where the records are, under the first home.
 pub const DIR: &str = "selection/attempts";
 
-/// The records' format version.
-pub const VERSION: u64 = 1;
+/// The records' format version. 2 (Phase 4) adds the classifier's `evidence`, the prediction made
+/// for the call (`predicted`), the other station's readings of this one (`peer_snr_db`) and
+/// whether the modem said it heard the station called (`call.heard_said`).
+pub const VERSION: u64 = 2;
 
 /// A reading of the link's quality is kept no oftener than this, in seconds; the SNR's spread is
 /// kept over every reading.
@@ -74,6 +76,9 @@ pub struct Call {
     pub station: Option<String>,
     /// What it sets out to carry.
     pub plan: Plan,
+    /// What was predicted for the channel when the call was placed (choosing a gateway, §12.1):
+    /// the HF channel's `hf` or the VHF channel's `terrain`, as the gateway list showed them.
+    pub predicted: Option<Value>,
 }
 
 /// What the session said, for the record.
@@ -104,6 +109,7 @@ struct Reading {
     snr_db: Option<f64>,
     rate_bps: Option<f64>,
     receiving: Option<bool>,
+    peer_snr_db: Option<f64>,
 }
 
 /// What the modem said during one call, as the connection to its adapter saw it.
@@ -125,12 +131,15 @@ pub struct Trace {
     dial_hz: Option<u64>,
     heard_remote: bool,
     heard_snr_db: Option<f64>,
+    /// What the modem said of hearing the station called, with its `failed` (RP-4 1.4.0).
+    heard_said: Option<bool>,
     connected: Option<Instant>,
     bandwidth_hz: Option<i64>,
     failed: Option<(String, Option<String>)>,
     disconnected: Option<(Instant, String)>,
     quality: Vec<Reading>,
     snrs: Vec<f64>,
+    peer_snrs: Vec<f64>,
     handed: u64,
     queued: Option<u64>,
     delivered: u64,
@@ -162,12 +171,14 @@ impl Trace {
             dial_hz: None,
             heard_remote: false,
             heard_snr_db: None,
+            heard_said: None,
             connected: None,
             bandwidth_hz: None,
             failed: None,
             disconnected: None,
             quality: Vec::new(),
             snrs: Vec::new(),
+            peer_snrs: Vec::new(),
             handed: 0,
             queued: None,
             delivered: 0,
@@ -208,9 +219,22 @@ impl Trace {
                 self.call_ended = Some(now);
                 self.bandwidth_hz = *bandwidth;
             }
-            Event::Failed { code, text, .. } if self.connected.is_none() => {
+            Event::Failed {
+                code,
+                text,
+                heard,
+                snr_db,
+                ..
+            } if self.connected.is_none() => {
                 self.failed = Some((code.clone(), text.clone()));
                 self.call_ended = Some(now);
+                self.heard_said = *heard;
+                if *heard == Some(true) {
+                    self.heard_remote = true;
+                    if let Some(s) = snr_db {
+                        self.heard_snr_db = Some(self.heard_snr_db.map_or(*s, |b| b.max(*s)));
+                    }
+                }
             }
             Event::Disconnected { reason, .. }
                 if self.connected.is_some() && self.disconnected.is_none() =>
@@ -221,12 +245,16 @@ impl Trace {
                 snr_db,
                 rate_bps,
                 receiving,
+                peer_snr_db,
                 ..
             } => {
                 let Some(up) = self.connected else { return };
                 let t = seconds(up, now);
                 if let Some(s) = snr_db {
                     self.snrs.push(*s);
+                }
+                if let Some(s) = peer_snr_db {
+                    self.peer_snrs.push(*s);
                 }
                 let due = self
                     .quality
@@ -238,6 +266,7 @@ impl Trace {
                         snr_db: *snr_db,
                         rate_bps: *rate_bps,
                         receiving: *receiving,
+                        peer_snr_db: *peer_snr_db,
                     });
                 }
             }
@@ -326,6 +355,7 @@ impl Trace {
             "text": self.failed.as_ref().and_then(|(_, t)| t.clone()),
             "heard_remote": self.heard_remote,
             "heard_snr_db": self.heard_snr_db,
+            "heard_said": self.heard_said,
             "refused": self.refused.as_ref().map(|(op, code)| json!({"op": op, "code": code})),
         })
     }
@@ -335,12 +365,14 @@ impl Trace {
             return Value::Null;
         };
         let end = self.disconnected.as_ref().map_or(ended, |(at, _)| *at);
-        let mut snrs = self.snrs.clone();
-        snrs.sort_by(f64::total_cmp);
-        let snr = (!snrs.is_empty()).then(|| {
-            json!({"min": snrs[0], "median": snrs[snrs.len() / 2],
-                   "max": snrs[snrs.len() - 1], "readings": snrs.len()})
-        });
+        let spread = |readings: &[f64]| {
+            let mut v = readings.to_vec();
+            v.sort_by(f64::total_cmp);
+            (!v.is_empty()).then(|| {
+                json!({"min": v[0], "median": v[v.len() / 2],
+                       "max": v[v.len() - 1], "readings": v.len()})
+            })
+        };
         json!({
             "bandwidth_hz": self.bandwidth_hz,
             "duration_s": seconds(up, end),
@@ -348,9 +380,10 @@ impl Trace {
             "quality": self
                 .quality
                 .iter()
-                .map(|r| json!([r.at_s, r.snr_db, r.rate_bps, r.receiving]))
+                .map(|r| json!([r.at_s, r.snr_db, r.rate_bps, r.receiving, r.peer_snr_db]))
                 .collect::<Vec<_>>(),
-            "snr_db": snr,
+            "snr_db": spread(&self.snrs),
+            "peer_snr_db": spread(&self.peer_snrs),
             "bytes_handed": self.handed,
             "bytes_unacknowledged": self.queued,
             "deliveries": self.delivered,
@@ -420,7 +453,8 @@ impl Recorder {
         let plan = &self.call.plan;
         let taken = t.session.as_ref().map_or(0, |s| s.taken);
         let left_out = plan.messages.saturating_sub(taken);
-        let class = classify::classify(&t.evidence(left_out));
+        let evidence = t.evidence(left_out);
+        let class = classify::classify(&evidence);
         let elapsed = ended.duration_since(t.begun).as_secs();
         let session = t.session.as_ref().map(|s| {
             json!({
@@ -441,7 +475,7 @@ impl Recorder {
             "modem": t.modem,
             "place": self.call.place,
             "station": self.call.station,
-            "predicted": Value::Null,
+            "predicted": self.call.predicted,
             "transaction": {
                 "messages": plan.messages, "out_bytes": plan.out_bytes,
                 "in_listed_bytes": plan.in_listed_bytes, "priority": plan.priority,
@@ -456,6 +490,7 @@ impl Recorder {
                 "why": why,
             },
             "classifier": classify::RULES,
+            "evidence": serde_json::to_value(&evidence).unwrap_or(Value::Null),
         });
         drop(t);
         self.append(&record);
@@ -611,6 +646,8 @@ mod tests {
                 id: None,
                 code: "timeout".into(),
                 text: Some("no answer".into()),
+                heard: Some(false),
+                snr_db: None,
             });
         }
         let written = done.finish(None);
@@ -649,6 +686,7 @@ mod tests {
                 snr_db: Some(snr),
                 rate_bps: Some(900.0),
                 receiving: Some(true),
+                peer_snr_db: Some(snr - 2.0),
             });
         }
         let link = t.link_json(Instant::now());
@@ -657,6 +695,9 @@ mod tests {
         assert_eq!(link["snr_db"]["min"], 3.0);
         assert_eq!(link["snr_db"]["median"], 6.0);
         assert_eq!(link["snr_db"]["max"], 9.0);
+        // the other station's readings of this one, beside this station's own
+        assert_eq!(link["peer_snr_db"]["median"], 4.0);
+        assert_eq!(link["quality"][0][4], 1.0);
         assert_eq!(link["bandwidth_hz"], 2300);
     }
 

@@ -257,7 +257,9 @@ class World:
         """The modems give up on every call nobody answered."""
         for call in self.calls:
             call.adapter.emit(
-                call.host, answer("failed", call.rid, code="timeout", text="no answer")
+                call.host,
+                # nothing of the station called was heard: RP-4 1.4.0's `heard`
+                answer("failed", call.rid, code="timeout", text="no answer", heard=False),
             )
         self.calls.clear()
 

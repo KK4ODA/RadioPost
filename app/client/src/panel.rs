@@ -1926,6 +1926,25 @@ impl Panel {
         Ok(out)
     }
 
+    /// What the gateway list predicts for `callsign` on the channel at `dial` now, for the call's
+    /// record (choosing a gateway, §12.1): its HF prediction, or its path over the terrain.
+    fn prediction_for(&self, callsign: &str, dial: Option<u64>) -> Option<Value> {
+        let dial = dial?;
+        let all = self.gateways_judged(true, None).ok()?;
+        let gw = all["gateways"]
+            .as_array()?
+            .iter()
+            .find(|g| g["callsign"] == callsign)?;
+        if gw["terrain"]["dial_hz"].as_u64() == Some(dial) {
+            return Some(json!({"terrain": gw["terrain"]}));
+        }
+        let channel = gw["channels"]
+            .as_array()?
+            .iter()
+            .find(|c| c["dial_hz"].as_u64() == Some(dial))?;
+        channel.get("hf").map(|hf| json!({"hf": hf}))
+    }
+
     /// The modem as the page names it, for a request outside a session: settings with the
     /// program's own clock, and the app's connection between calls following it.
     fn modem_options(&self, adapter: &str) -> Options {
@@ -2025,6 +2044,9 @@ impl Panel {
         opts.dial_hz = dial_hz;
         opts.call_s = call_s;
         opts.bandwidth = bandwidth;
+        if kind == Kind::Gateway {
+            opts.predicted = self.prediction_for(&remote, dial_hz);
+        }
         // read once the activity is set, so the callsign chosen cannot change before it is opened
         let home = self.home();
         let activity = Arc::clone(&self.activity);

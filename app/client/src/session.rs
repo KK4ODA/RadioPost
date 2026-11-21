@@ -109,6 +109,9 @@ pub struct Options {
     pub place: Option<Value>,
     /// The station profile in use, by its id, as the call's record keeps it (§15.2).
     pub station: Option<String>,
+    /// What was predicted for the channel called, as the gateway list showed it, for the call's
+    /// record (choosing a gateway, §12.1).
+    pub predicted: Option<Value>,
 }
 
 /// A session as it runs: how far its messages have crossed both ways, and what the modem says.
@@ -218,6 +221,7 @@ impl Options {
             also: Vec::new(),
             place: None,
             station: None,
+            predicted: None,
         }
     }
 
@@ -1297,6 +1301,7 @@ fn attempt(store: &Store, remote: &str, kind: Kind, opts: &Options) -> attempts:
         place: opts.place.clone().or_else(|| saved_place(store)),
         station: opts.station.clone(),
         plan,
+        predicted: opts.predicted.clone(),
     }
 }
 
@@ -1375,7 +1380,9 @@ fn place(
                 say_at(say, &format!("connected to {remote}"), *bandwidth);
                 return Ok(Some(e));
             }
-            Event::Failed { id: i, code, text } if *i == id => {
+            Event::Failed {
+                id: i, code, text, ..
+            } if *i == id => {
                 let why = format!(
                     "the call failed: {code}{}",
                     text.as_deref()
@@ -1962,6 +1969,7 @@ mod tests {
             snr_db: Some(3.0),
             rate_bps: Some(310.0),
             receiving: Some(true),
+            peer_snr_db: None,
         });
         let s = l.summary();
         assert_eq!(

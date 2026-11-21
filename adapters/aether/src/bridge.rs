@@ -116,6 +116,11 @@ enum Waiting {
 struct Call {
     id: Option<Value>,
     aborted: bool,
+    /// The station called; whether a frame decoded from it was heard during the call, and the
+    /// strongest SNR one was heard at (RP-4 §5 `failed`'s `heard` and `snr_db`).
+    remote: String,
+    heard: bool,
+    heard_snr_db: Option<f64>,
 }
 
 /// The host's link while it is up.
@@ -628,6 +633,9 @@ impl Bridge {
         self.call = Some(Call {
             id: rid.clone(),
             aborted: false,
+            remote: remote.to_owned(),
+            heard: false,
+            heard_snr_db: None,
         });
         let mut params = json!({"remote": remote, "callsign": local,
                                 "keep_bandwidth": bandwidth.is_some()});
@@ -1043,6 +1051,7 @@ impl Bridge {
                 }
             }
             "metrics" => self.on_metrics(data, &mut out),
+            "frame" => self.on_frame(data),
             "datagram" => {
                 if let (Some(source), Some(bytes)) = (
                     data["source"].as_str(),
@@ -1209,18 +1218,38 @@ impl Bridge {
                     self.update_busy(out);
                     self.restore_bandwidth(out);
                 } else if let Some(call) = self.call.take() {
-                    out.push(Out::Host(answer_with(
+                    let mut m = answer_with(
                         "failed",
                         call.id.as_ref(),
                         &[
                             ("code", failure_code(detail, call.aborted).into()),
                             ("text", detail.into()),
+                            ("heard", call.heard.into()),
                         ],
-                    )));
+                    );
+                    if let Some(snr) = call.heard_snr_db {
+                        m.insert("snr_db".into(), snr.into());
+                    }
+                    out.push(Out::Host(m));
                     self.restore_bandwidth(out);
                 }
             }
             _ => {}
+        }
+    }
+
+    /// A frame the receiver found: one decoded from the station called, during the call, says it
+    /// was heard (RP-4 §5 `failed`'s `heard`), however the call ends.
+    fn on_frame(&mut self, data: &Value) {
+        let Some(call) = self.call.as_mut() else {
+            return;
+        };
+        let from = data["from"].as_str().unwrap_or("");
+        if data["decoded"] == true && from.eq_ignore_ascii_case(&call.remote) {
+            call.heard = true;
+            if let Some(snr) = data["snr_db"].as_f64() {
+                call.heard_snr_db = Some(call.heard_snr_db.map_or(snr, |s| s.max(snr)));
+            }
         }
     }
 
@@ -1242,6 +1271,7 @@ impl Bridge {
             let mut q = answer_with("quality", None, &[("link", l.id.clone().into())]);
             for (theirs, ours) in [
                 ("snr_db", "snr_db"),
+                ("peer_snr_db", "peer_snr_db"),
                 ("throughput_bps", "rate_bps"),
                 ("receiving", "receiving"),
             ] {

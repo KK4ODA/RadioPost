@@ -2531,6 +2531,11 @@ def rpmi_answers(steps: list[dict[str, Any]]) -> dict[str, str]:
             said += (
                 ", then connected" if end["op"] == "connected" else f", then failed {end['code']}"
             )
+            # RP-4 1.4.0: whether the station called was heard, when the adapter says
+            if end.get("heard") is False:
+                said += ", nothing heard"
+            elif end.get("heard") is True:
+                said += ", heard"
         out[f"{step['station']} {step['host']} {m['op']} {m['id']}"] = said
     return out
 
@@ -2595,7 +2600,7 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "KK4ODA client abort 11": "not-connected",  # nothing to abort
                 "KK4ODA client connect 12": "ok, then failed aborted",
                 "KK4ODA client abort 13": "ok",
-                "KK4ODA client connect 14": "ok, then failed timeout",
+                "KK4ODA client connect 14": "ok, then failed timeout, nothing heard",
                 "KK4ODA client connect 15": "ok, then connected",
                 "KK4ODA client connect 16": "busy",  # max_links is 1
                 "KK4ODA client abort 17": "ok",
@@ -2615,14 +2620,14 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "N1CALL other callsigns 3": "ok",
                 "N3CALL client hello 1": "hello",
                 "N3CALL client callsigns 2": "ok",
-                "N3CALL client connect 3": "ok, then failed timeout",
+                "N3CALL client connect 3": "ok, then failed timeout, nothing heard",
                 "N1CALL other listen 4": "ok",
                 "N3CALL client connect 4": "ok, then connected",
                 "N1CALL radiopost status 4": "status",
                 "N1CALL radiopost send 5": "not-connected",
                 "N1CALL radiopost connect 6": "busy",
                 "N3CALL client disconnect 5": "ok",
-                "N3CALL client connect 6": "ok, then failed timeout",
+                "N3CALL client connect 6": "ok, then failed timeout, nothing heard",
             },
         ),
         (broadcast, gateway_start | client_start | {"KK4ODA client broadcast 3": "ok"}),

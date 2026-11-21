@@ -353,11 +353,15 @@ impl Channel {
     }
 
     fn fail(&mut self, call: &Call, code: &str, text: &str) {
-        let m = answer_with(
+        let mut m = answer_with(
             "failed",
             call.id.as_ref(),
             &[("code", code.into()), ("text", text.into())],
         );
+        // nobody answered, and nothing of the station called was heard (RP-4 1.4.0)
+        if code == "timeout" {
+            m.insert("heard".into(), false.into());
+        }
         self.emit(call.station, &call.host, m);
     }
 

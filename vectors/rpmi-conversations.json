@@ -1142,7 +1142,8 @@
             "op": "failed",
             "id": 14,
             "code": "timeout",
-            "text": "no answer"
+            "text": "no answer",
+            "heard": false
           }
         },
         {
@@ -1711,7 +1712,8 @@
             "op": "failed",
             "id": 3,
             "code": "timeout",
-            "text": "no answer"
+            "text": "no answer",
+            "heard": false
           }
         },
         {
@@ -1986,7 +1988,8 @@
             "op": "failed",
             "id": 6,
             "code": "timeout",
-            "text": "no answer"
+            "text": "no answer",
+            "heard": false
           }
         }
       ]
