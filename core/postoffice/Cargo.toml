@@ -44,6 +44,9 @@ radiopost-tester = { path = "../tester" }
 sha2 = "0.11"
 # `test`: a lookup the tests have not given an answer is NXDOMAIN, never the network.
 mail-auth = { version = "0.13", default-features = false, features = ["rust-crypto", "dns-hickory", "test"] }
+# a port held for a check that must find nothing there (bound, not listening), so no other test's
+# listener takes it
+socket2 = "0.6"
 
 [lints]
 workspace = true

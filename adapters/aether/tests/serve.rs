@@ -6,14 +6,32 @@
 //! kept RadioPost Gateway's connection open and answered nothing, and the gateway listened for
 //! calls for an hour and a half that Aether, its claim gone, answered for nobody.
 
-use std::net::{TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use rpmi::tcp::Connection;
 use serde_json::{Value, json};
+use socket2::{Domain, Socket, Type};
 use tungstenite::Message;
+
+/// A port of this machine that refuses every connection, as one with no Aether on it does, and
+/// that nothing else can take while the socket is kept: bound, not listening. A port that is only
+/// freed (a listener bound and dropped) can be given to another test's listener in between, and
+/// the adapter then reaches that listener, which never answers.
+fn refusing_port() -> (Socket, SocketAddr) {
+    let socket = Socket::new(Domain::IPV4, Type::STREAM, None).expect("a socket");
+    socket
+        .bind(&SocketAddr::from(([127, 0, 0, 1], 0)).into())
+        .expect("a port");
+    let at = socket
+        .local_addr()
+        .expect("bound")
+        .as_socket()
+        .expect("an IP address");
+    (socket, at)
+}
 
 /// Aether's answer to what the adapter asks while a host opens, as its control API gives it.
 fn answer(request: &Value) -> Value {
@@ -166,10 +184,9 @@ fn aether_going_away_closes_the_hosts_connection() {
 
 #[test]
 fn an_aether_that_cannot_be_reached_is_said_so() {
-    // a port nobody listens on
-    let free = TcpListener::bind("127.0.0.1:0").expect("a port");
-    let aether = format!("ws://{}/v1", free.local_addr().expect("bound"));
-    drop(free);
+    // a port nobody listens on, held until the test ends
+    let (_held, port) = refusing_port();
+    let aether = format!("ws://{port}/v1");
     let (note, said) = notes();
     let at = radiopost_aether::serve::listen_noting("127.0.0.1:0", &aether, note, None)
         .expect("an adapter");
@@ -192,9 +209,8 @@ fn an_aether_that_cannot_be_reached_is_said_so() {
 /// log is told once, and told again when Aether is back.
 #[test]
 fn an_aether_away_is_said_once_and_its_return_too() {
-    let free = TcpListener::bind("127.0.0.1:0").expect("a port");
-    let port = free.local_addr().expect("bound");
-    drop(free);
+    // Aether's port, held while Aether is away
+    let (held, port) = refusing_port();
     let aether = format!("ws://{port}/v1");
     let (note, said) = notes();
     let at = radiopost_aether::serve::listen_noting("127.0.0.1:0", &aether, note, None)
@@ -205,8 +221,9 @@ fn an_aether_away_is_said_once_and_its_return_too() {
         assert_eq!(ask(&mut host, hello)["code"], "no-modem");
         host.close();
     }
-    // Aether starts on its port
-    let listener = TcpListener::bind(port).expect("the same port again");
+    // Aether starts on its port: the socket that held it listens
+    held.listen(128).expect("listening on the same port");
+    let listener = TcpListener::from(held);
     let (tx, _asked) = mpsc::channel();
     thread::spawn(move || {
         for stream in listener.incoming().flatten() {

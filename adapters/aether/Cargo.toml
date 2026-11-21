@@ -19,6 +19,8 @@ tungstenite = { version = "0.30.0", default-features = false, features = ["hands
 [dev-dependencies]
 radiopost = { path = "../../core/radiopost" }
 ed25519-dalek = "3"
+# a port held while Aether is away (bound, not listening), so no other test's listener takes it
+socket2 = "0.6"
 
 [lints]
 workspace = true

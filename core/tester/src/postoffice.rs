@@ -31,11 +31,19 @@ const DOMAIN: &str = "radiopost.org";
 const GATEWAY: &str = "N1CALL-10";
 const SESSION_ID: &str = "ec7b31841ec47c47";
 
-fn free_port() -> Result<u16, String> {
-    TcpListener::bind("127.0.0.1:0")
-        .and_then(|l| l.local_addr())
-        .map(|a| a.port())
-        .map_err(|e| e.to_string())
+/// `N` ports free now, all different: each is held until every one is chosen. The post office
+/// binds them itself once `init` has named them, so they are freed for it, not held for it, and
+/// whatever else listens is started before they are chosen, or it could be given one of them.
+fn free_ports<const N: usize>() -> Result<[u16; N], String> {
+    let mut held = Vec::with_capacity(N);
+    let mut ports = [0; N];
+    for port in &mut ports {
+        let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
+        *port = listener.local_addr().map_err(|e| e.to_string())?.port();
+        held.push(listener);
+    }
+    drop(held);
+    Ok(ports)
 }
 
 /// One HTTP request: the status and the body as text.
@@ -505,10 +513,10 @@ impl Run<'_> {
         let home = self.scratch.join(test);
         let _ = std::fs::remove_dir_all(&home);
         std::fs::create_dir_all(self.scratch.as_path()).map_err(|e| e.to_string())?;
-        let (api, admin, door) = (free_port()?, free_port()?, free_port()?);
+        let mail = MailServer::start()?;
+        let [api, admin, door] = free_ports()?;
         let host = format!("127.0.0.1:{api}");
         let base = format!("http://{host}/rp/v1");
-        let mail = MailServer::start()?;
         let h = home.to_string_lossy().into_owned();
         let vars = [
             ("home", h.as_str()),

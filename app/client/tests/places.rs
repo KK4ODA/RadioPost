@@ -103,16 +103,18 @@ fn the_position_in_use_comes_from_places_or_the_gps_and_ranks_the_gateways() {
     assert_eq!(g["here"]["grid"], "EM74sc");
     assert_eq!(order(at), ["N4NORTH-1", "KK4ODA-1", "W1AW-10"]);
 
-    // a GPS over UDP, automatic: its fix at Newington, Connecticut takes over
+    // a GPS over UDP, automatic: its fix at Newington, Connecticut takes over. The client binds the
+    // port it is told itself, so the port is freed for it rather than held; the phone's socket is
+    // bound while it is still held, or it could be given that very port
     let free = UdpSocket::bind("127.0.0.1:0").expect("a port");
     let port = free.local_addr().expect("bound").port();
+    let phone = UdpSocket::bind("127.0.0.1:0").expect("a port");
     drop(free);
     post(at, &json!({"op": "choice", "use": "automatic"}));
     post(
         at,
         &json!({"op": "gps", "source": {"kind": "udp", "port": port}}),
     );
-    let phone = UdpSocket::bind("127.0.0.1:0").expect("a port");
     let start = Instant::now();
     let v = loop {
         let datagram = nmea("GPGGA,031522.00,4143.7520,N,07242.4980,W,1,08,0.9,25.0,M,0.0,M,,")
