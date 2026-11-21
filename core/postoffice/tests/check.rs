@@ -4,7 +4,7 @@
 //! PLAIN. DNS and HTTPS are checked against the real domain by hand (the operator's guide).
 
 use std::io::{BufRead as _, BufReader, Write as _};
-use std::net::TcpListener;
+use std::net::{SocketAddr, TcpListener};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -12,6 +12,7 @@ use radiopost_postoffice::check::{self, Verdict};
 use radiopost_postoffice::documents::Info;
 use radiopost_postoffice::serve::{self, Files, Running, Settings};
 use serde_json::json;
+use socket2::{Domain, Socket, Type};
 
 fn scratch(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("radiopost-check-{name}-{}", std::process::id()));
@@ -63,9 +64,20 @@ fn post_office(dir: &Path) -> Arc<Running> {
     Arc::new(Running::load(dir, serve::system_draw()).expect("loaded"))
 }
 
-fn unused_port() -> String {
-    let l = TcpListener::bind("127.0.0.1:0").expect("a port");
-    l.local_addr().expect("an address").to_string()
+/// A port of this machine that refuses every connection, and that nothing else can take while the
+/// socket is kept: bound, not listening. A port that is only freed (a listener bound and dropped)
+/// can be given to another test's listener in between, and the check then reaches that.
+fn refusing_port() -> (Socket, String) {
+    let socket = Socket::new(Domain::IPV4, Type::STREAM, None).expect("a socket");
+    socket
+        .bind(&SocketAddr::from(([127, 0, 0, 1], 0)).into())
+        .expect("a port");
+    let at = socket
+        .local_addr()
+        .expect("bound")
+        .as_socket()
+        .expect("an IP address");
+    (socket, at.to_string())
 }
 
 #[test]
@@ -79,8 +91,9 @@ fn the_door_is_checked_with_its_token() {
     assert_eq!(line.verdict, Verdict::Fail);
     assert!(line.text.contains("refuses the token"), "{}", line.text);
     assert_eq!(check::door(&at, None, &domains).verdict, Verdict::Fail);
+    let (_held, nobody) = refusing_port();
     assert_eq!(
-        check::door(&unused_port(), Some("door-secret"), &domains).verdict,
+        check::door(&nobody, Some("door-secret"), &domains).verdict,
         Verdict::Fail
     );
 }
@@ -169,8 +182,9 @@ fn the_submission_port_is_signed_in_to_and_asked_for_mail_from() {
     assert_eq!(line.verdict, Verdict::Fail);
     assert!(line.text.contains("Must Match Sender"), "{}", line.text);
 
+    let (_held, nobody) = refusing_port();
     let line = check::smtp(
-        &format!("smtp://radiopost:secret@{}", unused_port()),
+        &format!("smtp://radiopost:secret@{nobody}"),
         "localhost",
         &domains,
     );
