@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.24.0 |
-| **Updated** | 2026-11-20 |
+| **Version** | 1.25.0 |
+| **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.32 |
 | **Licence** | CC BY 4.0 |
 
@@ -237,7 +237,7 @@ Windows that is `C:\Users\<you>\.radiopost`. It holds your key, your credential,
 the log `radiopost.log`. Back it up as you would any mail.
 
 It also keeps a record of every call you place, in its folder `selection/attempts`: the station
-called, the channel, your grid square, how much mail was waiting, and how the call ended and why
+called, the channel, where you were, how much mail was waiting, and how the call ended and why
 (answered, no answer, the channel busy, refused, the link lost). RadioPost will use these records
 to suggest which gateway to call. They stay on this computer, and hold no addresses or subjects
 of your mail.
@@ -494,8 +494,10 @@ A call to a gateway sends your outbox and fetches what waits for you, in one ses
 1. Under **Station**, choose **A gateway**, then click **Choose a gateway**.
 2. Click **Refresh over the Internet**. The list comes from your post office, and from the post
    offices it knows. RadioPost keeps it for when there is no Internet.
-3. Type **Your grid**, your Maidenhead grid square such as `EM73`, and click **Save**. The
-   nearest gateways move to the top, with their distance.
+3. The nearest gateways are at the top, with their distance from where you are. The line beside
+   **Places** says which position that is, such as *In use: the GPS, EM73tr, 2 s ago* or *In use:
+   Home, EM73tr*. Your places and your GPS are set in **Setup**, under
+   [Places and GPS](#places-and-gps); **Places** takes you there.
 4. Each gateway shows its **Channels** (dial frequency, upper sideband, and the bandwidth Aether
    uses there) and its **Hours**. A channel marked *scanned* is one of several the gateway listens
    on in turn with one radio. Click **Choose** beside the one you want. Its callsign goes in
@@ -872,13 +874,59 @@ there while the Internet or your post office is down
 
 The list needs the Internet and a gateway list ([section 8.1](#81-choose-a-gateway)).
 
+### Places and GPS
+
+Where your station is. The gateway list is in order of distance from it
+([section 8.1](#81-choose-a-gateway)), and each call's record keeps it, on this computer only.
+
+![Setup's Places and GPS: two places saved, the GPS read from an iPhone over TCP, and the position in use](screens/client-places.png)
+
+*Figure 25. Places and GPS.*
+
+The line at the top says which position is in use, and why when it is not the GPS's present fix:
+*In use: the GPS, EM73tr, 2 s ago*, or *GPS silent for 6 minutes: using Home, EM73tr.*
+
+**Places.** Type a **Name** and where the place is: a grid square such as `EM73tr`, or a latitude
+and longitude such as `33.75, -84.39` (or `33.75N 84.39W`). Click **Add**. A grid square is used
+by its centre, and **Set from** says so: a 6-character square is about 5 by 8 km. **Add from GPS**
+saves the GPS's present fix as a place, with its height. The **Default** place is used when
+nothing better is known. **Remove** forgets a place. If you had typed a grid square on the
+Gateways page before, it is your first place, *Home*.
+
+**Position** chooses what is used:
+
+- *Automatic*: the GPS while its fix is less than two minutes old. Otherwise the place you saved
+  nearest the GPS's last fix, within 2 km. Otherwise the default place.
+- *The GPS*: the same, but it says that the GPS gives no position when there is no GPS.
+- *Always Home* (one for each place): that place, whatever the GPS says.
+
+**GPS.** In **Read from**, choose where the position comes from, then click **Save**:
+
+- *A serial port: USB or Bluetooth*: a GPS receiver on USB, or a Bluetooth receiver paired as a
+  serial port. Pick its **Port** (click **List again** after plugging it in). Leave **Speed** on
+  *Find*: RadioPost tries 4800, 9600, 38400 and 115200 baud and keeps the one that works.
+- *A phone or program, over TCP*: an app that serves NMEA, such as GPS2IP on an iPhone (its
+  socket mode) or Share GPS on Android. Type the phone's address and port. Over the iPhone's own
+  hotspot the address is `172.20.10.1`; GPS2IP's examples use port `11123`.
+- *A phone or program, over UDP*: an app that sends NMEA to this computer. Type the port it
+  sends to.
+- *gpsd*: on Linux, when gpsd already reads the receiver. Its port is 2947.
+- *No GPS*: places only.
+
+The line under the settings says what the GPS is doing: *reading: fix, 2 s ago*, *no fix for 30 s*
+(the receiver is still finding satellites), *silent for 2 minutes*, or *not connected* and why. The
+free GPS2IP Lite stops sending after four minutes; RadioPost says so and uses your places.
+
+Your position stays on this computer. The log says only the 6-character grid square, and nothing
+is sent to a post office or a gateway. The call records keep the position itself.
+
 ### Sounds and notifications
 
 RadioPost plays a sound when something happens, and tells you about new mail by its sender.
 
 ![Setup's Sounds and notifications: speakers chosen, a sound for each event, quiet hours, and how mail arrives](screens/client-sounds.png)
 
-*Figure 25. Sounds and notifications.*
+*Figure 26. Sounds and notifications.*
 
 **Mind the radio's sound card.** If this computer's sound goes to the radio's sound card (a
 SignaLink, or the radio's own USB audio), these sounds go on the air, and with VOX they key the
@@ -974,7 +1022,7 @@ RadioPost keeps working when the Internet fails at a gateway.
 
 ![Before: the post office copies your mail to your usual gateway. During: the gateway serves the copies and keeps what you send. After: it reports](fig/cutoff.svg)
 
-*Figure 26. When the Internet is down.*
+*Figure 27. When the Internet is down.*
 
 **Before.** Name your usual gateways in Setup ([section 12](#usual-gateways)). Your post office
 then copies each new message for you to them as it arrives.
@@ -1017,7 +1065,7 @@ licensed operator can run one.
 
 ![Two users call the gateway by radio; the gateway's computer runs RadioPost Gateway and Aether HF and reaches each caller's post office](fig/gateway.svg)
 
-*Figure 27. A gateway station.*
+*Figure 28. A gateway station.*
 
 A gateway is usually left answering with nobody at the radio. It is then under **automatic
 control**, and the rules for that apply ([The rules](#36-the-rules)).
@@ -1053,13 +1101,13 @@ Open RadioPost Gateway. Until it is set up and registered, it says what is missi
 
 ![A new RadioPost Gateway: the notice says it is not set up, with Set up the gateway](screens/gateway-first.png)
 
-*Figure 28. RadioPost Gateway before setup.*
+*Figure 29. RadioPost Gateway before setup.*
 
 Click **Set up the gateway**. Setup has three steps.
 
 ![The gateway's Setup page: the gateway, its registration with two channels, and post offices](screens/gateway-setup.png)
 
-*Figure 29. Setting up the gateway.*
+*Figure 30. Setting up the gateway.*
 
 ### Step 1. The gateway
 
@@ -1173,7 +1221,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 ![The RadioPost Gateway window with numbered marks on its parts](screens/gateway-window.png)
 
-*Figure 30. The RadioPost Gateway window.*
+*Figure 31. The RadioPost Gateway window.*
 
 1. **The gateway's callsign**, and the account it is registered under. To its left, beside
    *RadioPost Gateway*, is the version you are running.
@@ -1207,7 +1255,7 @@ While a session runs, a box shows who called, the account, since when, and the m
 
 ![The window during a session, with the Session under way box](screens/gateway-session.png)
 
-*Figure 31. A session at the gateway.*
+*Figure 32. A session at the gateway.*
 
 **Stopping and closing.** **Stop** ends a session under way and lets Aether go. Closing the
 window stops the gateway too. If it is answering, it asks first and says what closing stops.
@@ -1285,7 +1333,7 @@ text), each session waiting to be reported with its last try, and the last repor
 
 ![The Partners, Callers refused and Copies placed ahead panels, opened](screens/gateway-held.png)
 
-*Figure 32. What the gateway holds, its partners and the callers it refuses.*
+*Figure 33. What the gateway holds, its partners and the callers it refuses.*
 
 ## 22. Partners: forwarding by radio
 
@@ -1421,7 +1469,7 @@ on this tab.
 
 ![The Applications tab: one application waiting with its licence check, and the Decided list](screens/desk-applications.png)
 
-*Figure 33. Applications.*
+*Figure 34. Applications.*
 
 Each application shows the person's name, callsign and when they asked, the **Address** they
 want, their **Email now**, and what the post office found of the callsign:
@@ -1465,7 +1513,7 @@ the mailbox was made (*mailbox*, or *no mailbox* in red) and the applicant email
 
 ![The Accounts tab: five accounts with their names, devices and mail waiting](screens/desk-accounts.png)
 
-*Figure 34. Accounts.*
+*Figure 35. Accounts.*
 
 Every account, one a row:
 
@@ -1503,7 +1551,7 @@ Revoking the computer you are using takes the desk away from it: the button says
 
 ![The Gateways tab: two gateways, the account each was registered from, and Unregister](screens/desk-gateways.png)
 
-*Figure 35. Gateways.*
+*Figure 36. Gateways.*
 
 The **Gateways** tab lists each gateway registered with your post office, one a row:
 
@@ -1527,7 +1575,7 @@ that exists. Use it for someone you know holds the callsign.
 
 ![The New code tab: an address, a callsign and a name filled in, the licence checked, and the code made](screens/desk-code.png)
 
-*Figure 36. Making a code.*
+*Figure 37. Making a code.*
 
 1. Open **New code**.
 2. Fill in:
@@ -1577,7 +1625,7 @@ Know only post offices whose operators you trust to check callsigns. At first no
 
 ![The Post offices tab: one post office known, one seen, none blocked](screens/desk-others.png)
 
-*Figure 37. Other post offices.*
+*Figure 38. Other post offices.*
 
 - **Known**: the post offices you know, who runs each, when its records were last fetched, and
   whether DNSSEC signed them. They are fetched again every six hours. **Forget** stops knowing one;
@@ -1598,7 +1646,7 @@ when a check turns red, and again when all pass.
 
 ![The Health tab: eleven checks passed and one amber line about backups](screens/desk-health.png)
 
-*Figure 38. Health.*
+*Figure 39. Health.*
 
 Each line is one check:
 
@@ -1626,7 +1674,7 @@ The **Server** tab lets you look after the server without logging in to it.
 
 ![The Server tab: the jobs, one with its output open, and When you need more](screens/desk-server.png)
 
-*Figure 39. Jobs and a terminal.*
+*Figure 40. Jobs and a terminal.*
 
 **Jobs** are a fixed list of tasks the server's administrator account runs for you:
 
@@ -1661,7 +1709,7 @@ says the one command to run on the server, once.
 
 ![The Backups and DKIM keys boxes on the Server tab](screens/desk-backups.png)
 
-*Figure 40. Backups and DKIM keys.*
+*Figure 41. Backups and DKIM keys.*
 
 ### Backups
 
@@ -1718,7 +1766,7 @@ when they are older than 180 days.
 
 ![The Settings tab: applications, licence lookups, mailboxes and this post office](screens/desk-settings.png)
 
-*Figure 41. Settings.*
+*Figure 42. Settings.*
 
 ### Applications
 
@@ -1896,7 +1944,7 @@ Attach the log:
 - the client's `radiopost.log`, in the `.radiopost` folder (it keeps no addresses or subjects of
   your mail);
 - for a call that failed, the client's call records, the folder `selection/attempts` in the same
-  folder;
+  folder (they say where you were, to about a metre);
 - the gateway's `gateway.log`, in the `.radiopost-gateway` folder.
 
 For a session that failed or was slow, turn on Aether's **Record** before you try again, then use
@@ -2060,3 +2108,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.23.0 | 2026-11-19 | Each program's version beside its name at the top of its window (§1, §6, §19). §12 and §18: **Updates** in **Setup**, with **Check for updates**, which asks for a newer release now instead of at the next six-hourly check. §4 and §19 to match. Figures 7 and 30, and the windows that show the top bar, retaken. |
 | 1.23.1 | 2026-11-19 | §27: the desk's **Accounts** tab keeps a callsign, a date and an address whole (an address breaks only after its @), and a password shown under **Mailbox** wraps; it had squeezed the other columns until callsigns read one letter a line. Figure 34 retaken. |
 | 1.24.0 | 2026-11-20 | §4: the client keeps a record of every call it places (`selection/attempts`): what was called, how the call ended and why, on this computer only. §38: attach them for a call that failed. |
+| 1.25.0 | 2026-11-21 | §12 *Places and GPS* (new Figure 25; later figures renumbered): saved places by grid square or latitude and longitude, the default, the GPS read over a serial port, TCP, UDP or gpsd, and the position in use and why. §8.1: the gateways are listed by distance from that position, said beside **Places**, in place of **Your grid** (a grid square typed there becomes the place *Home*). §4, §38: the call records say where you were. Figure 13 retaken. |

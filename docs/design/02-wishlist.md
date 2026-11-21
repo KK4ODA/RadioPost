@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.48 |
-| **Updated** | 2026-11-20 |
+| **Version** | 0.3.49 |
+| **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §9 and §10 |
@@ -479,7 +479,7 @@ and says when a GPS has gone quiet rather than trusting an old fix.
 | Effort | Medium: places, station profiles, four GPS readers (serial, TCP, UDP, gpsd) on one NMEA parser, freshness. |
 | Priority | **Medium.** Distance from a 4-character square is off by up to 100 km; VHF needs metres. |
 | Recommendation | **Accept**, as [choosing a gateway](04-gateway-selection.md) §6 designs it. |
-| Status | In progress (its Phase 1). |
+| Status | In progress (its Phase 1): places and the GPS built (hf-predict's `radioprop-place`, the client's Setup, *Places and GPS*); station profiles to come. |
 | Author decision | Accepted with the proposal, 2026-11-20. |
 | Notes | GPS2IP on an iPhone over TCP or UDP; Android apps over Bluetooth serial, TCP or UDP. The operating systems' location services are left out: Windows' does not see a receiver on a COM port. |
 
@@ -1324,3 +1324,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.46 | 2026-11-18 | W54 implemented, at a tester's report through the author: a gateway unregistered from RadioPost Gateway or the post office's desk, and the account it registers with chosen; gap G23 settled by RP-5 1.2.0. |
 | 0.3.47 | 2026-11-18 | W49's coverage: **New password** for a user who lost their mailbox's password, at a user's ask through the author. |
 | 0.3.48 | 2026-11-20 | The author accepted [choosing a gateway](04-gateway-selection.md): W17 rewritten to point to it; W55 (places and GPS), W56 (terrain at VHF and UHF), W57 (learning from every call) and W58 (ranking by when the mail is done) added; W55 and W57 in progress. |
+| 0.3.49 | 2026-11-21 | W55: places and the GPS built; station profiles to come. |

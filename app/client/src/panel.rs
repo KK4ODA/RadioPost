@@ -50,6 +50,7 @@ use crate::callsigns;
 use crate::compose::{self, Answer, Draft, File, media_type};
 use crate::online;
 use crate::presence::{Carrier, Presence};
+use crate::selection::position::Position;
 use crate::session::{self, Fetch, Kind, Options};
 use crate::store::{Error, Folder, Store, unhex};
 
@@ -134,6 +135,8 @@ pub struct Panel {
     backups_every: std::time::Duration,
     /// Where a received attachment is saved: [`crate::downloads::folder`], elsewhere in tests.
     downloads: PathBuf,
+    /// The places, the GPS and the position in use (choosing a gateway, §6).
+    position: Arc<Position>,
 }
 
 /// When the panel renews the credential: first after `first`, then every `every`, once it has
@@ -214,6 +217,16 @@ fn modem_or_default(adapter: &str) -> String {
     }
 }
 
+/// The places kept under the first home `home`; the grid square set there before places existed
+/// becomes the first (choosing a gateway, §6.1).
+fn position_of(home: &Path) -> Position {
+    let position = Position::open(home);
+    if let Ok(store) = Store::open(home) {
+        position.adopt_grid(store.grid.as_deref());
+    }
+    position
+}
+
 impl Panel {
     /// A panel for the home at `home` and the callsigns it holds, serving its page from `ui` when
     /// given.
@@ -245,6 +258,7 @@ impl Panel {
             backups_now: Arc::new(AtomicBool::new(true)),
             backups_every: crate::backups::EVERY,
             downloads: crate::downloads::folder(home),
+            position: Arc::new(position_of(home)),
         }
     }
 
@@ -852,6 +866,8 @@ impl Panel {
             (Method::Get, "/api/alerts") => Ok(self.alerts.json()),
             (Method::Post, "/api/alerts") => self.alert_request(body),
             (Method::Post, "/api/circles") => self.circle_request(body),
+            (Method::Get, "/api/places") => Ok(self.position.json(param("ports") == "1")),
+            (Method::Post, "/api/places") => self.position.request(body),
             (Method::Get, "/api/notify") => Ok(alerts::notify_settings(&self.base)),
             (Method::Post, "/api/notify") => {
                 alerts::set_notify_settings(&self.base, body)?;
@@ -1642,10 +1658,13 @@ impl Panel {
             .as_object()
             .map(|l| l.keys().collect())
             .unwrap_or_default();
+        let here = self.position.here();
+        let from = here.here.as_ref().map(|h| (h.lat, h.lon));
         Ok(json!({
             "domain": list["domain"], "fetched": list["fetched"], "grid": store.grid,
-            "gateways": store.gateways_ranked(), "others": others,
+            "gateways": store.gateways_ranked_from(from), "others": others,
             "errors": list["errors"], "ambiguous": list["ambiguous"],
+            "here": here.here, "note": here.note,
         }))
     }
 
@@ -1728,6 +1747,7 @@ impl Panel {
             .into_iter()
             .map(|c| c.home)
             .collect();
+        opts.place = self.position.for_record();
         opts
     }
 

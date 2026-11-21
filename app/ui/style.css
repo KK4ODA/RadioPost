@@ -191,6 +191,8 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 #tone[data-on] { border-color: var(--tx); color: var(--tx); }
 label.inline { display: flex; align-items: center; gap: 6px; margin: 0; }
 label.inline input { width: 7em; margin: 0; }
+#gps-host { width: 11em; }
+#gps-port { width: auto; min-width: 10em; }
 .list .n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 #waiting-view .list td, #gateways-view .list td, #o-others .list td { cursor: default; }
 #o-others td.acts button { margin-left: 6px; }
@@ -469,3 +471,5 @@ details.hint code, .note code { font-family: var(--mono); font-size: 12px; backg
 .quiet-hours label.check { margin: 0; color: var(--text); font-size: 14px; }
 .quiet-hours input[type=time] { width: 8rem; }
 #snd-volume { padding: 0; }
+#gateways-view .row { align-items: center; }
+#gateways-view #gateways-here { margin: 0; }

@@ -122,7 +122,191 @@ function show(view) {
     $(id).hidden = id !== view;
   }
   // the usual gateways are read afresh each time, for the callsign in use now
-  if (view === "setup") loadUsual();
+  if (view === "setup") {
+    loadUsual();
+    loadPlaces(true);
+  }
+}
+
+// -- where the station is (choosing a gateway, §6): places, the GPS, the position in use --------
+
+const PLACE_SOURCES = {typed: "Typed", grid: "A grid square's centre", gps: "The GPS", map: "The map"};
+
+// the position in use in a line: where it comes from, its square, and why, when it is not the
+// GPS's present fix
+function hereWords(here, note) {
+  const said = note ? `${note[0].toUpperCase()}${note.slice(1)}` : "";
+  if (!here) return said ? `${said}.` : "No position: add a place, or set up a GPS.";
+  if (here.from === "gps") return `In use: the GPS, ${here.grid}, ${here.age_s} s ago.`;
+  // a note says why a place stands in, and names it: "GPS silent for 6 minutes: using Home"
+  return said ? `${said}, ${here.grid}.` : `In use: ${here.name}, ${here.grid}.`;
+}
+
+// what the panel says of the GPS, in a line
+function gpsWords(v) {
+  if (!v.gps) return "No GPS.";
+  const st = v.status;
+  const what = {serial: "Serial", tcp: "TCP", udp: "UDP", gpsd: "gpsd"}[v.gps.kind] || v.gps.kind;
+  const where = v.gps.kind === "serial" ? v.gps.port
+    : v.gps.kind === "udp" ? `port ${v.gps.port}` : `${v.gps.host}:${v.gps.port}`;
+  return `${what}, ${where}: ${st ? st.words : "starting"}.`;
+}
+
+// `fill`: the GPS's settings are put in the form too, with the serial ports listed; otherwise only
+// what changes by itself (the position, the GPS's state) is shown, so typing is not undone
+async function loadPlaces(fill) {
+  let v;
+  try {
+    v = await api(fill ? "places?ports=1" : "places");
+  } catch (e) {
+    $("here-line").textContent = e.message;
+    return;
+  }
+  renderPlaces(v, fill);
+}
+
+function renderPlaces(v, fill) {
+  $("here-line").textContent = v.broken ? v.broken : hereWords(v.here, v.note);
+  $("here-line").classList.toggle("warn", Boolean(v.broken));
+  $("gps-state").textContent = gpsWords(v);
+  const fresh = v.status && ["current", "recent"].includes(v.status.freshness);
+  $("place-add-gps").disabled = !fresh;
+  if (!fill && !placesChanged(v)) return;
+  lastPlaces = JSON.stringify([v.places, v.choice]);
+  $("place-rows").replaceChildren(...v.places.map((p) => {
+    const tr = document.createElement("tr");
+    const name = document.createElement("td");
+    name.textContent = p.name;
+    const square = document.createElement("td");
+    square.textContent = p.square;
+    square.title = `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`
+      + (p.source === "grid" ? `: the centre of ${p.grid}` : "");
+    const from = document.createElement("td");
+    from.textContent = PLACE_SOURCES[p.source] || p.source;
+    const def = document.createElement("td");
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "place-default";
+    radio.checked = p.default;
+    radio.title = "Make this the default place";
+    radio.addEventListener("change", () => placeRequest({op: "default", id: p.id}));
+    def.append(radio);
+    const acts = document.createElement("td");
+    acts.className = "acts";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "quiet";
+    remove.textContent = "Remove";
+    remove.title = `Forget ${p.name}`;
+    remove.addEventListener("click", () => placeRequest({op: "remove", id: p.id}));
+    acts.append(remove);
+    tr.append(name, square, from, def, acts);
+    return tr;
+  }));
+  const choice = $("place-choice");
+  const options = [["automatic", "Automatic: the GPS, else a saved place"],
+                   ["gps", "The GPS, a saved place only while it has no fix"],
+                   ...v.places.map((p) => [`place:${p.id}`, `Always ${p.name}`])];
+  choice.replaceChildren(...options.map(([value, label]) => new Option(label, value)));
+  choice.value = v.choice.use === "place" ? `place:${v.choice.id}` : v.choice.use;
+  if (!fill) return;
+  const g = v.gps || {kind: ""};
+  $("gps-kind").value = g.kind;
+  if (v.ports) fillPorts(v.ports, g.kind === "serial" ? g.port : "");
+  $("gps-baud").value = g.baud ? String(g.baud) : "";
+  $("gps-host").value = g.host || "";
+  $("gps-net-port").value = g.port && g.kind !== "serial" ? g.port : "";
+  showGpsKind();
+}
+
+let lastPlaces = "";
+function placesChanged(v) {
+  return JSON.stringify([v.places, v.choice]) !== lastPlaces;
+}
+
+function fillPorts(ports, current) {
+  const names = current && !ports.includes(current) ? [current, ...ports] : ports;
+  $("gps-port").replaceChildren(...(names.length ? names : [""]).map((n) =>
+    new Option(n || "No serial ports found", n)));
+  $("gps-port").value = current || names[0] || "";
+}
+
+function showGpsKind() {
+  const k = $("gps-kind").value;
+  $("gps-serial").hidden = k !== "serial";
+  $("gps-net").hidden = !["tcp", "udp", "gpsd"].includes(k);
+  $("gps-host-label").hidden = k === "udp";
+  $("gps-net-port").placeholder = k === "gpsd" ? "2947" : "11123";
+  if (k === "gpsd" && !$("gps-host").value) $("gps-host").value = "localhost";
+}
+
+async function placeRequest(body, fill = false) {
+  try {
+    renderPlaces(await api("places", body), fill);
+    lastPlaces = "";
+    await loadPlaces(fill);
+    return true;
+  } catch (e) {
+    toast(e.message, true);
+    return false;
+  }
+}
+
+function gpsSource() {
+  const kind = $("gps-kind").value;
+  const port = Number($("gps-net-port").value || ($("gps-net-port").placeholder));
+  switch (kind) {
+    case "": return null;
+    case "serial": {
+      const baud = $("gps-baud").value;
+      return baud ? {kind, port: $("gps-port").value, baud: Number(baud)}
+        : {kind, port: $("gps-port").value};
+    }
+    case "udp": return {kind, port};
+    default: return {kind, host: $("gps-host").value.trim(), port};
+  }
+}
+
+function wirePlaces() {
+  $("place-add").addEventListener("click", async () => {
+    const done = await placeRequest(
+      {op: "add", name: $("place-name").value, where: $("place-where").value});
+    if (done) {
+      $("place-name").value = "";
+      $("place-where").value = "";
+    }
+  });
+  $("place-add-gps").addEventListener("click", async () => {
+    if (await placeRequest({op: "add-gps", name: $("place-name").value})) $("place-name").value = "";
+  });
+  $("place-choice").addEventListener("change", () => {
+    const [use, id] = $("place-choice").value.split(":");
+    placeRequest(id ? {op: "choice", use, id} : {op: "choice", use});
+  });
+  $("gps-kind").addEventListener("change", showGpsKind);
+  $("gps-ports").addEventListener("click", async () => {
+    try {
+      const v = await api("places?ports=1");
+      fillPorts(v.ports || [], $("gps-port").value);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  });
+  $("gps-save").addEventListener("click", () => placeRequest({op: "gps", source: gpsSource()}, true));
+  $("places-open").addEventListener("click", () => {
+    show("setup");
+    $("places-card").scrollIntoView({block: "start"});
+  });
+  // the position and the GPS's state move by themselves: shown while they are on screen
+  setInterval(async () => {
+    if (!$("setup").hidden) await loadPlaces(false);
+    else if (!$("gateways-view").hidden) {
+      try {
+        const v = await api("places");
+        $("gateways-here").textContent = hereWords(v.here, v.note);
+      } catch { /* shown at the next */ }
+    }
+  }, 2000);
 }
 
 // a choice kept in this browser: whom to call, what to fetch
@@ -687,7 +871,7 @@ async function openGateways(refreshing = false) {
         + (missed.length ? ` Not taken this time: ${missed.join("; ")}.` : "")
       : "No list yet: refresh it while you have the Internet. It is kept for when you do not.";
     const twice = new Set(g.ambiguous || []);
-    if (!$("grid").matches(":focus")) $("grid").value = g.grid || "";
+    $("gateways-here").textContent = hereWords(g.here, g.note);
     $("gateway-rows").replaceChildren(...g.gateways.map((gw) => {
       const tr = document.createElement("tr");
       // the dial in MHz to the kilohertz, or finer when it needs it: 7.101, 3.5915
@@ -3444,14 +3628,7 @@ function wire() {
     await openGateways(true);
     $("gateways-refresh").disabled = false;
   });
-  $("grid-save").addEventListener("click", async () => {
-    try {
-      await api("grid", {grid: $("grid").value});
-      await openGateways();
-    } catch (e) {
-      toast(e.message, true);
-    }
-  });
+  wirePlaces();
   // the channels are the chosen gateway's: another callsign typed has none here
   $("callsign").addEventListener("input", showChannels);
   // a channel picked, or a station call's dial typed, is tuned at once (W14)

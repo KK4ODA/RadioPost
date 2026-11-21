@@ -21,6 +21,10 @@ radiopost-api = { path = "../../core/api" }
 radiopost-update = { path = "../../core/update" }
 rpmi = { path = "../../core/rpmi" }
 radiopost-aether = { path = "../../adapters/aether" }
+# places and the GPS, shared with hf-predict (choosing a gateway, §6 and §11): its libraries, by
+# revision, until hf-predict tags them
+radioprop-geo = { git = "https://github.com/KK4ODA/hf-predict", rev = "cc61e934788df97bd177782859cfadabb26320b1" }
+radioprop-place = { git = "https://github.com/KK4ODA/hf-predict", rev = "cc61e934788df97bd177782859cfadabb26320b1" }
 ed25519-dalek = "3"
 getrandom = "0.3"
 serde_json = { version = "1", features = ["preserve_order"] }

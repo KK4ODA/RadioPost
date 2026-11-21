@@ -35,12 +35,18 @@ pub fn centre(grid: &str) -> Option<(f64, f64)> {
 /// The distance between the centres of two grid squares, in kilometres, on a sphere.
 #[must_use]
 pub fn km(a: &str, b: &str) -> Option<f64> {
-    let ((lat1, lon1), (lat2, lon2)) = (centre(a)?, centre(b)?);
+    Some(km_between(centre(a)?, centre(b)?))
+}
+
+/// The distance between two positions, (latitude, longitude) in degrees, in kilometres, on a
+/// sphere.
+#[must_use]
+pub fn km_between((lat1, lon1): (f64, f64), (lat2, lon2): (f64, f64)) -> f64 {
     let (p1, p2) = (lat1.to_radians(), lat2.to_radians());
     let dp = p2 - p1;
     let dl = (lon2 - lon1).to_radians();
     let h = (dp / 2.0).sin().powi(2) + p1.cos() * p2.cos() * (dl / 2.0).sin().powi(2);
-    Some(2.0 * 6371.0 * h.sqrt().asin())
+    2.0 * 6371.0 * h.sqrt().asin()
 }
 
 #[cfg(test)]

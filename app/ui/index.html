@@ -131,15 +131,13 @@
         <p class="note" id="gateways-note"></p>
         <div class="row">
           <button id="gateways-refresh" title="Fetch the lists from your post office, and from the post offices it knows, now over the Internet; they are kept for when there is none">Refresh over the Internet</button>
-          <label class="inline" title="Your Maidenhead grid square, to list the nearest gateways first">Your grid
-            <input id="grid" maxlength="6" placeholder="EM73" spellcheck="false">
-          </label>
-          <button class="quiet" id="grid-save">Save</button>
+          <span class="note" id="gateways-here" title="Where the distances are measured from: a place you saved, or your GPS"></span>
+          <button class="quiet" id="places-open" title="Your places and your GPS, in Setup">Places</button>
         </div>
         <div class="scroll"><table class="list" aria-label="Gateways">
           <thead><tr>
             <th title="Its callsign, and the post office that lists it">Gateway</th><th title="Where it is">Where</th>
-            <th class="n" title="From your grid square">Distance</th>
+            <th class="n" title="From the position in use: a place you saved, or your GPS">Distance</th>
             <th title="Each dial frequency, upper sideband, and Aether's bandwidth there">Channels</th>
             <th title="When it answers">Hours</th><th></th>
           </tr></thead>
@@ -607,6 +605,66 @@
           <div class="row">
             <button id="usual-save" title="Save at your post office, over the Internet; it waits until your settings have been read" disabled>Save</button>
             <button class="quiet" id="usual-load" title="Read your settings from your post office, and the gateways from the list kept here">Read</button>
+          </div>
+        </div>
+        <div class="card" id="places-card">
+          <h2 title="Where the station is. The gateways are listed nearest first from it, and each call's record keeps it, on this computer only">Places and GPS</h2>
+          <p class="note" id="here-line"></p>
+          <table class="list places" aria-label="Places">
+            <thead><tr>
+              <th title="Its name">Place</th>
+              <th title="Its Maidenhead grid square">Grid</th>
+              <th title="How it was set">Set from</th>
+              <th title="The place used when the GPS has no fix and no other place is near">Default</th>
+              <th class="acts"></th>
+            </tr></thead>
+            <tbody id="place-rows"></tbody>
+          </table>
+          <div class="row">
+            <input id="place-name" class="short" placeholder="Name" title="What to call it: Home, Mobile, Field Day">
+            <input id="place-where" class="grow" placeholder="EM73tr, or 33.75, -84.39" spellcheck="false" title="A grid square (its centre is used), or a latitude and longitude in degrees: north and east positive, or with N, S, E, W">
+            <button type="button" id="place-add">Add</button>
+            <button type="button" class="quiet" id="place-add-gps" title="Save the GPS's present fix as a place, with its height" disabled>Add from GPS</button>
+          </div>
+          <label title="Automatic: the GPS while its fix is less than two minutes old, otherwise the place saved nearest its last fix, otherwise the default place">Position
+            <select id="place-choice"></select>
+          </label>
+          <h3>GPS</h3>
+          <label title="A GPS receiver on a USB or Bluetooth serial port, a phone app that sends NMEA over the network (GPS2IP on an iPhone, Share GPS on Android), or gpsd on Linux">Read from
+            <select id="gps-kind">
+              <option value="">No GPS</option>
+              <option value="serial">A serial port: USB or Bluetooth</option>
+              <option value="tcp">A phone or program, over TCP</option>
+              <option value="udp">A phone or program, over UDP</option>
+              <option value="gpsd">gpsd</option>
+            </select>
+          </label>
+          <div class="row" id="gps-serial" hidden>
+            <label class="inline" title="The receiver's port: COM5 on Windows, /dev/ttyUSB0 or /dev/ttyACM0 on Linux, /dev/cu.usbmodem… on a Mac">Port
+              <select id="gps-port"></select>
+            </label>
+            <button type="button" class="quiet" id="gps-ports" title="List this computer's serial ports again">List again</button>
+            <label class="inline" title="Find tries 4800, 9600, 38400 and 115200 baud and keeps the one that gives NMEA">Speed
+              <select id="gps-baud" class="narrow">
+                <option value="">Find</option>
+                <option value="4800">4800</option>
+                <option value="9600">9600</option>
+                <option value="38400">38400</option>
+                <option value="115200">115200</option>
+              </select>
+            </label>
+          </div>
+          <div class="row" id="gps-net" hidden>
+            <label class="inline" id="gps-host-label" title="The phone's or program's address: 172.20.10.1 is an iPhone's own hotspot">Host
+              <input id="gps-host" spellcheck="false" placeholder="172.20.10.1">
+            </label>
+            <label class="inline" title="GPS2IP's examples use 11123; gpsd's port is 2947">Port
+              <input id="gps-net-port" class="short" type="number" min="1" max="65535" placeholder="11123">
+            </label>
+          </div>
+          <p class="note" id="gps-state"></p>
+          <div class="row">
+            <button type="button" id="gps-save" title="Start reading from this GPS, or stop">Save</button>
           </div>
         </div>
         <div class="card" id="sounds-card">

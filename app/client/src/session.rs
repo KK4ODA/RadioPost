@@ -103,6 +103,10 @@ pub struct Options {
     /// The client's other homes, one a callsign (wishlist W46): listening, it answers calls to
     /// their callsigns too, each session carried by the home whose callsign was called.
     pub also: Vec<std::path::PathBuf>,
+    /// Where the station is, as the call's record keeps it (choosing a gateway, §15.2): the
+    /// panel's position in use, its GPS included. None: the places saved, without a GPS, or the
+    /// grid square set before places.
+    pub place: Option<Value>,
 }
 
 /// A session as it runs: how far its messages have crossed both ways, and what the modem says.
@@ -210,6 +214,7 @@ impl Options {
             live: None,
             alerts: None,
             also: Vec::new(),
+            place: None,
         }
     }
 
@@ -1286,8 +1291,21 @@ fn attempt(store: &Store, remote: &str, kind: Kind, opts: &Options) -> attempts:
                 .then(|| store.scan_s_of(remote, opts.dial_hz))
                 .flatten()
         }),
-        grid: store.grid.clone(),
+        place: opts.place.clone().or_else(|| saved_place(store)),
         plan,
+    }
+}
+
+/// Where the station is with no GPS at hand (the command line): the position the places saved
+/// give, or the grid square set before there were places.
+fn saved_place(store: &Store) -> Option<Value> {
+    let base = crate::callsigns::base_of(store.home());
+    match crate::selection::position::saved(&base) {
+        Some(h) => Some(json!({"lat": h.lat, "lon": h.lon, "grid": h.grid, "source": "place"})),
+        None => store
+            .grid
+            .as_ref()
+            .map(|g| json!({"grid": g, "source": "grid"})),
     }
 }
 

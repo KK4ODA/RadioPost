@@ -10,7 +10,8 @@
 //!
 //! A record says what happened, never what was said: callsigns, the channel, times, counts and
 //! sizes, the modem's readings and codes; no correspondent's address and no subject, as the log
-//! keeps none. The position is the operator's grid square as typed, for now.
+//! keeps none. The position is where the station was, a GPS's fix or the place in use, to about a
+//! metre: the records stay on this computer (§15.1).
 //!
 //! Why the records start before anything reads them: every later part of choosing a gateway
 //! (learning, the ranking, its validation) rests on them, and a call not recorded is lost.
@@ -66,8 +67,9 @@ pub struct Call {
     pub bandwidth_hz: Option<i64>,
     /// How long the call's tries keep starting, for a gateway that scans (RP-5 §4.4).
     pub call_s: Option<u64>,
-    /// The operator's grid square.
-    pub grid: Option<String>,
+    /// Where the station is (§15.2): latitude, longitude and grid square, where they came from
+    /// and, for a GPS's fix, its age; the grid square alone when that is all there is.
+    pub place: Option<Value>,
     /// What it sets out to carry.
     pub plan: Plan,
 }
@@ -435,7 +437,7 @@ impl Recorder {
             "as": t.as_call,
             "channel": self.channel_json(t.dial_hz),
             "modem": t.modem,
-            "place": self.call.grid.as_ref().map(|g| json!({"grid": g, "source": "typed"})),
+            "place": self.call.place,
             "station": Value::Null,
             "predicted": Value::Null,
             "transaction": {

@@ -83,8 +83,26 @@ const WAITING = {via: "KK4ODA-1", at: T - 1150, entries: [
   {serial: 43, from: "ken@example.net", subject: "Re: Battery box wiring", size: 2900,
    priority: 0, fetch: false, held: false},
 ]};
+// where the station is: two places saved, and an iPhone's GPS over its own hotspot, read now
+const HERE = {lat: 33.74901, lon: -84.38802, grid: "EM73tr", from: "gps", age_s: 2,
+              freshness: "current"};
+const PLACES = {
+  places: [
+    {id: "pl-home", name: "Home", lat: 33.72917, lon: -84.375, default: true, source: "grid",
+     grid: "EM73tr", saved_at: T - 30 * DAY, square: "EM73tr"},
+    {id: "pl-field-day", name: "Field Day", lat: 34.10021, lon: -84.50113, default: false,
+     source: "typed", saved_at: T - 5 * DAY, square: "EM74sc"},
+  ],
+  choice: {use: "automatic"},
+  gps: {kind: "tcp", host: "172.20.10.1", port: 11123},
+  status: {link: {state: "open", since_ms: (T - 600) * 1000}, hearing: {state: "positions"},
+           fix: {lat: HERE.lat, lon: HERE.lon, alt_m: 318.2, quality: "gps", at_ms: (T - 2) * 1000},
+           freshness: "current", age_s: 2, held: false, refused: 0,
+           words: "reading: fix, 2 s ago"},
+  here: HERE, note: null, broken: null, ports: ["/dev/ttyUSB0", "/dev/ttyACM0"],
+};
 const GATEWAYS = {domain: "radiopost.org", fetched: T - 2 * DAY, others: ["hampost.org"],
-  errors: {}, ambiguous: [], grid: "EM73", gateways: [
+  errors: {}, ambiguous: [], grid: "EM73", here: HERE, note: null, gateways: [
     {callsign: "KK4ODA-1", post_office: "radiopost.org", place: "Atlanta, Georgia", grid: "EM73",
      km: 14, hours: "always", copies: {users: 50, days: 7},
      channels: [{dial_hz: 3591500, bandwidth_hz: 2300, scan_s: 20},
@@ -289,6 +307,7 @@ function clientApi(world) {
       case "message": return MESSAGES[query.get("id")] || {...INBOX[1], files: [], held: [], body: ""};
       case "waiting": return WAITING;
       case "gateways": return GATEWAYS;
+      case "places": return PLACES;
       case "settings": return {usual_gateways: ["KK4ODA-1"], radio_skips_read: false};
       case "accept": return {entries: ["maria@example.com", "jim@hampost.org", "@hampost.org"]};
       case "addresses": return {entries: ADDRESSES};
@@ -854,7 +873,18 @@ const SHOTS = {
                                                  height: 2200});
     await page.click("#setup-open");
     await page.waitForTimeout(400);
+    await page.evaluate(() => document.getElementById("sounds-card").scrollIntoView());
     await shot(page, "client-sounds", "#sounds-card");
+    await context.close();
+  },
+
+  async "client-places"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+                                                 height: 1500});
+    await page.click("#setup-open");
+    await page.waitForTimeout(400);
+    await page.evaluate(() => document.getElementById("places-card").scrollIntoView());
+    await shot(page, "client-places", "#places-card");
     await context.close();
   },
 

@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.1 |
-| **Updated** | 2026-11-20 |
+| **Version** | 0.3.2 |
+| **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The wishlist](02-wishlist.md), W17; [the concept](../concept/00-concept.md), §9 and §10 |
@@ -861,6 +861,13 @@ binaries keep one licence choice throughout.
 
 Step 1 is a few days' work and is checked entirely by the existing tests. Nothing in RadioPost
 waits on more than steps 1 to 3 for HF (§18, Phase 3).
+
+**Done in Phase 1 (2026-11-21), by the author's choice to build places in hf-predict at once:**
+hf-predict is a workspace; `geo.rs` moved unchanged into `radioprop-geo` (step 1, its first
+crate), and `radioprop-place` holds places, the NMEA and gpsd parsers, the four readers, freshness
+and the choice of position (step 4). RadioPost depends on both by git revision until step 5 tags
+them. The engine and the predictor move into `radioprop-hf` in Phase 3. Station profiles (§6.5)
+are not built yet.
 
 ### 11.4 The one local API: today's observations
 
@@ -2077,3 +2084,4 @@ for size in (2000, 50000):
 | 0.2.1 | 2026-11-20 | The passages that left a decision open now give the author's answer (§3, §7.2, §9.1, §11.2, §12.2, §13.5, §15.4, §19.3, §20.2, §20.4); §5.2's table, where 0.2.0 had added §21's answers by mistake, restored; three references to §19 corrected. No change of design. |
 | 0.3.0 | 2026-11-20 | Accepted by the author, with §21's answers; Phase 1 begun. The wishlist's W17 points here, and W55 to W58 are its parts. |
 | 0.3.1 | 2026-11-20 | §15.2: the attempt record as Phase 1 writes it (member names, the stub line, what later phases fill); the example's times corrected to 2026-11-20. |
+| 0.3.2 | 2026-11-21 | §11.3: what Phase 1 built in hf-predict: the workspace, `radioprop-geo` and `radioprop-place` (places, readers, freshness, the position in use), used by RadioPost by revision. |

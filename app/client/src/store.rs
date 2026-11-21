@@ -1088,6 +1088,14 @@ impl Store {
     /// operator's grid square when both are known, nearest first; the others after, as listed.
     #[must_use]
     pub fn gateways_ranked(&self) -> Vec<Value> {
+        self.gateways_ranked_from(None)
+    }
+
+    /// The same, the distances from `from` (latitude and longitude, the position in use) when
+    /// given, else from the operator's grid square.
+    #[must_use]
+    pub fn gateways_ranked_from(&self, from: Option<(f64, f64)>) -> Vec<Value> {
+        let here = from.or_else(|| self.grid.as_deref().and_then(crate::grid::centre));
         let mut list: Vec<Value> = self
             .gateway_list
             .as_ref()
@@ -1095,10 +1103,8 @@ impl Store {
             .cloned()
             .unwrap_or_default();
         for g in &mut list {
-            let km = match (&self.grid, g["grid"].as_str()) {
-                (Some(mine), Some(theirs)) => crate::grid::km(mine, theirs),
-                _ => None,
-            };
+            let there = g["grid"].as_str().and_then(crate::grid::centre);
+            let km = here.zip(there).map(|(a, b)| crate::grid::km_between(a, b));
             g["km"] = km.map_or(Value::Null, |k| json!(k.round()));
         }
         list.sort_by(|a, b| match (a["km"].as_f64(), b["km"].as_f64()) {

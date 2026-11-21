@@ -989,7 +989,14 @@ fn run(words: &[String]) -> Result<(), Error> {
             for (d, why) in list["errors"].as_object().into_iter().flatten() {
                 println!("  not taken now: {d}: {}", why.as_str().unwrap_or(""));
             }
-            for g in store.gateways_ranked() {
+            // by distance from the places saved (no GPS here), else from the grid square
+            let here = radiopost_client::selection::position::saved(
+                &callsigns::base_of(store.home()),
+            );
+            if let Some(h) = &here {
+                println!("distances from {}", h.grid);
+            }
+            for g in store.gateways_ranked_from(here.map(|h| (h.lat, h.lon))) {
                 println!("{}", gateway_line(&g));
             }
         }
