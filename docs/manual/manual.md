@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.40.1 |
+| **Version** | 1.40.2 |
 | **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.33 |
 | **Licence** | CC BY 4.0 |
@@ -380,8 +380,8 @@ Every button and box has a tooltip: rest the mouse on it to read what it does.
 
 When the window is narrow (720 pixels wide or less, at 100 % display scale), its parts stack in
 one column: **Write**, the folders side by side, **Station**, then the folder or message you are
-looking at. The buttons keep their own widths there: **Call** and **Listen for P2P** are as wide as
-their words, not the window.
+looking at. The buttons keep their own widths there, **Call** and **Listen for P2P** among them,
+not the window's.
 
 ## 7. Writing a message
 
@@ -2447,3 +2447,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.39.0 | 2026-11-21 | RadioPost Gateway reports its status to its post office (RP-5 1.6.0): Setup's **Report its status to its post office, for anyone to see** (section 18), what it says and when under *Its status, for anyone to see*, the line under **Registration** (section 19), and `status --off` (section 23). Figures 37 and 38 retaken. |
 | 1.40.0 | 2026-11-21 | §10: an alert goes on a **Dial** (the other station's gateway channel predicted best, the circle's watch dial, or where the radio is), the radio tuned there; copies sent while the other station's gateway scans round; a circle's **Watch dial, MHz**, and the red line when the radio or the gateway's scan is not on it; answers go on the dial the alert was heard on, shown in the alarm, and **Call back** fills **Dial, MHz** with it (RP-8 0.2.0). |
 | 1.40.1 | 2026-11-21 | From the session of 2026-11-21. §6: in a narrow window **Call** and **Listen for P2P** are as wide as their words, as **Write** and **Setup** are; they had stretched across the window. Figure 12 retaken. |
+| 1.40.2 | 2026-11-21 | **Call** is as wide as its word in the left column too, under **Fetch**; **Listen for P2P** still spans the column. §6 reworded. Figures 5, 6, 7, 9, 10, 11, 13, 19, 20, 21, 22, 24, 25 and 27 retaken. |

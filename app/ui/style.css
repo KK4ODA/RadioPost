@@ -176,9 +176,10 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 .kinds label.check { margin: 0; color: var(--text); font-size: 14px; }
 #gateways-open { margin: -4px 0 10px; padding: 0; height: auto; border: 0; color: var(--accent); }
 /* the call box: a station call's dial and bandwidth side by side, where the radio is, the tone */
-/* Call, and Listen for P2P on a row of its own under it, so that the box keeps its shape when it
-   reads Listening. Both as wide as the column; stacked, as wide as their words (above) */
+/* Call, as wide as its word, and Listen for P2P on a row of its own under it, so that the box keeps
+   its shape when it reads Listening: as wide as the column, and stacked as wide as its words (above) */
 .station .row { flex-direction: column; }
+.station .row #call { align-self: flex-start; }
 .station .row #listen { justify-content: center; }
 .pair { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .pair select { width: auto; }
