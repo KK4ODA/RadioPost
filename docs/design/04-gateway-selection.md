@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.6 |
+| **Version** | 0.3.7 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -1704,6 +1704,16 @@ the tile store); the client's side is `app/client/src/selection/terrain.rs`, `/a
 times the size), not GLO-30 everywhere; and a path that crosses a tile GLO-30 has not released is
 read wholly at 90 m, since a profile reads one data set.
 
+**Measured (2026-11-21), Phase 2's acceptance:** the client's own `Terrain::judge` judged 100 VHF
+gateways up to 45 km away from tiles already held in 25 to 42 ms from cold and 15 to 22 ms warm
+(four cores of a 2.3 GHz Xeon), against the one second asked. The 50 real paths are drawn by
+`tools/terrain/paths.py` (a fixed seed, ten in each of five regions: the Georgia piedmont, the
+southern Appalachians, the Colorado Front Range, Tampa Bay and Puget Sound; lengths stratified 2 to
+10, 10 to 30 and 30 to 80 km, so line of sight and beyond the horizon are both in the set) and
+worked out by the client's `terrain_paths` example on GLO-90: 11 partly obstructed, 39 blocked,
+P.526 losses 0 to 59 dB. It writes each profile as P.526 read it, for ITM to be run on the same
+one. **Owed:** that ITM run and its report, and the hillshade map (§16.2).
+
 ### 16.4 Gateway details
 
 ```
@@ -2124,3 +2134,4 @@ for size in (2000, 50000):
 | 0.3.4 | 2026-11-21 | §11.3: station profiles done, in `radioprop-place`. §16.2: the HF map of Phase 1 done (the land, the night side, the grid, great circles, picking both ways, a place saved from the map); what waits for Phases 2 and 3. |
 | 0.3.5 | 2026-11-21 | §7.2: `site` and `station` done (RP-5 1.5.0, RP-0 1.3.0 §9.6). §9.3: the local tile form is half-metres (decimetres stop at 3 276.7 m in 16 bits), with the sizes measured on a real tile, and a missing tile is the sea. |
 | 0.3.6 | 2026-11-21 | §16.3: Phase 2's client done (the terrain line, the profile, the budget each way, the slider, fetching, Setup's **Terrain**), with its two deviations: GLO-90 first, and one data set a path. |
+| 0.3.7 | 2026-11-21 | §16.3: Phase 2 measured: 100 candidates judged in 42 ms or less; the 50 real paths drawn and worked out with P.526 (`tools/terrain/paths.py`, the client's `terrain_paths` example); the ITM run and the hillshade map owed. |
