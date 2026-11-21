@@ -89,9 +89,9 @@ const HERE = {lat: 33.74901, lon: -84.38802, grid: "EM73tr", from: "gps", age_s:
 const PLACES = {
   places: [
     {id: "pl-home", name: "Home", lat: 33.72917, lon: -84.375, default: true, source: "grid",
-     grid: "EM73tr", saved_at: T - 30 * DAY, square: "EM73tr"},
+     grid: "EM73tr", saved_at: T - 30 * DAY, square: "EM73tr", station: "st-home-ftdx10"},
     {id: "pl-field-day", name: "Field Day", lat: 34.10021, lon: -84.50113, default: false,
-     source: "typed", saved_at: T - 5 * DAY, square: "EM74sc"},
+     source: "typed", saved_at: T - 5 * DAY, square: "EM74sc", station: "st-mobile-ts-480"},
   ],
   choice: {use: "automatic"},
   gps: {kind: "tcp", host: "172.20.10.1", port: 11123},
@@ -100,6 +100,30 @@ const PLACES = {
            freshness: "current", age_s: 2, held: false, refused: 0,
            words: "reading: fix, 2 s ago"},
   here: HERE, note: null, broken: null, ports: ["/dev/ttyUSB0", "/dev/ttyACM0"],
+  // two profiles: the mobile one in use (Field Day names it), the home one mostly assumed
+  stations: [
+    {id: "st-mobile-ts-480", name: "Mobile, TS-480", radio: "Kenwood TS-480", vehicle: true,
+     hf: {power_w: 65, antenna: {kind: "whip", agl_m: 2.5}}, vhf: {antenna: {}}, noise: "residential",
+     used: {
+       hf: {power_w: {value: 65, said: "set"}, antenna: {value: "whip", said: "set"},
+            agl_m: {value: 2.5, said: "set"}, gain_dbi: {value: 2.15, said: "assumed"},
+            feedline_db: {value: 1, said: "assumed"}},
+       vhf: {power_w: {value: 25, said: "assumed"}, antenna: {value: "whip", said: "assumed"},
+             agl_m: {value: 2, said: "assumed"}, gain_dbi: {value: 0, said: "assumed"},
+             feedline_db: {value: 2, said: "assumed"}},
+       noise: {value: "residential", said: "set"}}},
+    {id: "st-home-ftdx10", name: "Home, FTDX10", radio: "Yaesu FTDX10", vehicle: false,
+     hf: {power_w: 50, antenna: {kind: "dipole", agl_m: 12}}, vhf: {antenna: {}},
+     used: {
+       hf: {power_w: {value: 50, said: "set"}, antenna: {value: "dipole", said: "set"},
+            agl_m: {value: 12, said: "set"}, gain_dbi: {value: 2.15, said: "assumed"},
+            feedline_db: {value: 1, said: "assumed"}},
+       vhf: {power_w: {value: 25, said: "assumed"}, antenna: {value: "vertical", said: "assumed"},
+             agl_m: {value: 5, said: "assumed"}, gain_dbi: {value: 0, said: "assumed"},
+             feedline_db: {value: 2, said: "assumed"}},
+       noise: {value: "residential", said: "assumed"}}},
+  ],
+  station: null, station_in_use: "st-home-ftdx10",
 };
 const GATEWAYS = {domain: "radiopost.org", fetched: T - 2 * DAY, others: ["hampost.org"],
   errors: {}, ambiguous: [], grid: "EM73", here: HERE, note: null, marks_error: null, gateways: [
@@ -932,6 +956,16 @@ const SHOTS = {
     await page.waitForTimeout(400);
     await page.evaluate(() => document.getElementById("places-card").scrollIntoView());
     await shot(page, "client-places", "#places-card");
+    await context.close();
+  },
+
+  async "client-stations"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+                                                 height: 1500});
+    await page.click("#setup-open");
+    await page.waitForTimeout(400);
+    await page.evaluate(() => document.getElementById("stations-card").scrollIntoView());
+    await shot(page, "client-stations", "#stations-card");
     await context.close();
   },
 

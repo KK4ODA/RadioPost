@@ -107,6 +107,8 @@ pub struct Options {
     /// panel's position in use, its GPS included. None: the places saved, without a GPS, or the
     /// grid square set before places.
     pub place: Option<Value>,
+    /// The station profile in use, by its id, as the call's record keeps it (§15.2).
+    pub station: Option<String>,
 }
 
 /// A session as it runs: how far its messages have crossed both ways, and what the modem says.
@@ -215,6 +217,7 @@ impl Options {
             alerts: None,
             also: Vec::new(),
             place: None,
+            station: None,
         }
     }
 
@@ -1292,6 +1295,7 @@ fn attempt(store: &Store, remote: &str, kind: Kind, opts: &Options) -> attempts:
                 .flatten()
         }),
         place: opts.place.clone().or_else(|| saved_place(store)),
+        station: opts.station.clone(),
         plan,
     }
 }

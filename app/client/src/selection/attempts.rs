@@ -70,6 +70,8 @@ pub struct Call {
     /// Where the station is (§15.2): latitude, longitude and grid square, where they came from
     /// and, for a GPS's fix, its age; the grid square alone when that is all there is.
     pub place: Option<Value>,
+    /// The station profile in use, by its id.
+    pub station: Option<String>,
     /// What it sets out to carry.
     pub plan: Plan,
 }
@@ -438,7 +440,7 @@ impl Recorder {
             "channel": self.channel_json(t.dial_hz),
             "modem": t.modem,
             "place": self.call.place,
-            "station": Value::Null,
+            "station": self.call.station,
             "predicted": Value::Null,
             "transaction": {
                 "messages": plan.messages, "out_bytes": plan.out_bytes,

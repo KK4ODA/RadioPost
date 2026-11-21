@@ -172,7 +172,7 @@ function renderPlaces(v, fill) {
   const fresh = v.status && ["current", "recent"].includes(v.status.freshness);
   $("place-add-gps").disabled = !fresh;
   if (!fill && !placesChanged(v)) return;
-  lastPlaces = JSON.stringify([v.places, v.choice]);
+  lastPlaces = JSON.stringify([v.places, v.choice, v.stations, v.station]);
   $("place-rows").replaceChildren(...v.places.map((p) => {
     const tr = document.createElement("tr");
     const name = document.createElement("td");
@@ -191,6 +191,13 @@ function renderPlaces(v, fill) {
     radio.title = "Make this the default place";
     radio.addEventListener("change", () => placeRequest({op: "default", id: p.id}));
     def.append(radio);
+    // the station profile this place uses (§6.5)
+    const st = document.createElement("td");
+    const pick = el("select", {class: "narrow", title: `The station profile ${p.name} uses`});
+    pick.append(new Option("—", ""), ...(v.stations || []).map((x) => new Option(x.name, x.id)));
+    pick.value = p.station || "";
+    pick.addEventListener("change", () => placeRequest({op: "place-station", id: p.id, station: pick.value}));
+    st.append(pick);
     const acts = document.createElement("td");
     acts.className = "acts";
     const remove = document.createElement("button");
@@ -200,7 +207,7 @@ function renderPlaces(v, fill) {
     remove.title = `Forget ${p.name}`;
     remove.addEventListener("click", () => placeRequest({op: "remove", id: p.id}));
     acts.append(remove);
-    tr.append(name, square, from, def, acts);
+    tr.append(name, square, from, def, st, acts);
     return tr;
   }));
   const choice = $("place-choice");
@@ -209,6 +216,7 @@ function renderPlaces(v, fill) {
                    ...v.places.map((p) => [`place:${p.id}`, `Always ${p.name}`])];
   choice.replaceChildren(...options.map(([value, label]) => new Option(label, value)));
   choice.value = v.choice.use === "place" ? `place:${v.choice.id}` : v.choice.use;
+  renderStations(v);
   if (!fill) return;
   const g = v.gps || {kind: ""};
   $("gps-kind").value = g.kind;
@@ -221,7 +229,93 @@ function renderPlaces(v, fill) {
 
 let lastPlaces = "";
 function placesChanged(v) {
-  return JSON.stringify([v.places, v.choice]) !== lastPlaces;
+  return JSON.stringify([v.places, v.choice, v.stations, v.station]) !== lastPlaces;
+}
+
+// -- station profiles (choosing a gateway, §6.5): every value used, set or assumed ---------------
+
+const ANTENNAS = {dipole: "dipole", vertical: "vertical", whip: "whip", yagi: "Yagi", "j-pole": "J-pole",
+                  collinear: "collinear", loop: "loop", nvis: "NVIS", other: "other"};
+
+// one side of a profile in a line: what is set plainly, what is assumed faint
+function sideWords(u) {
+  const part = (used, text) => el("span", {class: used.said === "assumed" ? "assumed" : "",
+    text, title: used.said === "assumed" ? "Assumed: not set in the profile" : "Set in the profile"});
+  return el("div", {},
+    part(u.power_w, `${u.power_w.value} W`), ", ",
+    part(u.antenna, ANTENNAS[u.antenna.value] || u.antenna.value), " ",
+    part(u.agl_m, `${u.agl_m.value} m up`), ", ",
+    part(u.gain_dbi, `${u.gain_dbi.value} dBi`), ", ",
+    part(u.feedline_db, `${u.feedline_db.value} dB feed line`));
+}
+
+function renderStations(v) {
+  const stations = v.stations || [];
+  const inUse = stations.find((x) => x.id === v.station_in_use);
+  $("station-line").textContent = inUse
+    ? `In use: ${inUse.name}${v.station ? "" : ", by the place in use"}.`
+    : "No profile: every value is assumed (100 W at HF with a dipole 10 m up, 25 W at VHF).";
+  $("station-rows").replaceChildren(...stations.map((x) => {
+    const tr = el("tr", {});
+    const name = el("div", {}, el("span", {text: x.name}),
+      el("div", {class: "note", text: [x.radio, x.vehicle ? "in a vehicle" : ""].filter(Boolean).join(", ")}));
+    const noise = el("span", {class: x.used.noise.said === "assumed" ? "assumed" : "",
+      text: x.used.noise.value});
+    const editB = el("button", {type: "button", class: "quiet", text: "Edit", title: `Change ${x.name}`});
+    editB.addEventListener("click", () => fillStationForm(x));
+    const removeB = el("button", {type: "button", class: "quiet", text: "Remove", title: `Forget ${x.name}`});
+    removeB.addEventListener("click", () => placeRequest({op: "station-remove", id: x.id}));
+    const acts = el("td", {class: "acts"}, editB, removeB);
+    for (const c of [name, sideWords(x.used.hf), sideWords(x.used.vhf), noise]) tr.append(el("td", {}, c));
+    tr.append(acts);
+    return tr;
+  }));
+  const choice = $("station-choice");
+  choice.replaceChildren(new Option("Automatic: the place's, else the first", ""),
+    ...stations.map((x) => new Option(x.name, x.id)));
+  choice.value = v.station || "";
+}
+
+function fillStationForm(x) {
+  const p = x || {hf: {antenna: {}}, vhf: {antenna: {}}};
+  $("st-id").value = p.id || "";
+  $("st-name").value = p.name || "";
+  $("st-radio").value = p.radio || "";
+  $("st-vehicle").checked = Boolean(p.vehicle);
+  for (const k of ["hf", "vhf"]) {
+    const side = p[k] || {antenna: {}};
+    const a = side.antenna || {};
+    $(`st-${k}-power`).value = side.power_w ?? "";
+    $(`st-${k}-kind`).value = a.kind || "";
+    $(`st-${k}-agl`).value = a.agl_m ?? "";
+    $(`st-${k}-gain`).value = a.gain_dbi ?? "";
+    $(`st-${k}-feed`).value = side.feedline_db ?? "";
+  }
+  $("st-noise").value = p.noise || "";
+  $("station-form-title").textContent = x ? `Change ${x.name}` : "Add a profile";
+  $("station-form").open = true;
+}
+
+// the form as a profile: what is empty stays unset, and is assumed
+function stationFromForm() {
+  const num = (id) => {
+    const t = $(id).value.trim().replace(",", ".");
+    if (t === "") return undefined;
+    const n = Number(t);
+    if (!Number.isFinite(n)) {
+      $(id).focus();
+      throw new Error(`${$(id).closest("label").textContent.trim()}: a number, or empty`);
+    }
+    return n;
+  };
+  const side = (k) => {
+    const antenna = {kind: $(`st-${k}-kind`).value || undefined, agl_m: num(`st-${k}-agl`),
+                     gain_dbi: num(`st-${k}-gain`)};
+    return {power_w: num(`st-${k}-power`), antenna, feedline_db: num(`st-${k}-feed`)};
+  };
+  return {id: $("st-id").value, name: $("st-name").value, radio: $("st-radio").value || undefined,
+          vehicle: $("st-vehicle").checked, hf: side("hf"), vhf: side("vhf"),
+          noise: $("st-noise").value || undefined};
 }
 
 function fillPorts(ports, current) {
@@ -284,6 +378,21 @@ function wirePlaces() {
     placeRequest(id ? {op: "choice", use, id} : {op: "choice", use});
   });
   $("gps-kind").addEventListener("change", showGpsKind);
+  $("st-save").addEventListener("click", async () => {
+    let profile;
+    try {
+      profile = stationFromForm();
+    } catch (e) {
+      toast(e.message, true);
+      return;
+    }
+    if (await placeRequest({op: "station-put", profile})) {
+      fillStationForm(null);
+      $("station-form").open = false;
+    }
+  });
+  $("station-choice").addEventListener("change", () =>
+    placeRequest({op: "station-choice", id: $("station-choice").value}));
   $("gps-ports").addEventListener("click", async () => {
     try {
       const v = await api("places?ports=1");

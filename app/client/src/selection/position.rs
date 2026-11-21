@@ -12,7 +12,8 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use radioprop_geo::parse_position;
 use radioprop_place::{
-    Book, Choice, Chosen, Gps, Hearing, Link, Origin, Place, Source, choose, now_ms, serial_ports,
+    Book, Choice, Chosen, Gps, Hearing, Link, Origin, Place, Source, StationProfile, choose,
+    now_ms, serial_ports,
 };
 use serde_json::{Value, json};
 
@@ -112,6 +113,14 @@ impl Position {
         self.here().here.map(|h| (h.lat, h.lon))
     }
 
+    /// The station profile in use, by its id, as a call's record keeps it (§15.2's `station`).
+    #[must_use]
+    pub fn station_for_record(&self) -> Option<String> {
+        let chosen = self.here();
+        let g = self.lock();
+        g.book.station_in_use(&chosen).map(|st| st.id.clone())
+    }
+
     /// The position in use as a call's record keeps it (choosing a gateway, §15.2).
     #[must_use]
     pub fn for_record(&self) -> Option<Value> {
@@ -159,8 +168,23 @@ impl Position {
             v["words"] = json!(state_words(&s));
             v
         });
+        // each profile with every value a model would use, set or assumed (§6.5)
+        let stations: Vec<Value> = g
+            .book
+            .stations
+            .iter()
+            .map(|st| {
+                let mut v = serde_json::to_value(st).unwrap_or(Value::Null);
+                v["used"] = serde_json::to_value(st.resolve()).unwrap_or(Value::Null);
+                v
+            })
+            .collect();
+        let in_use = g.book.station_in_use(&chosen).map(|st| st.id.clone());
         let mut out = json!({
             "places": places,
+            "stations": stations,
+            "station": g.book.station,
+            "station_in_use": in_use,
             "choice": g.book.choice,
             "gps": g.book.gps,
             "status": status,
@@ -176,8 +200,8 @@ impl Position {
 
     /// A change from the panel: `op` is `add` (`name`, `where`: a grid square or a latitude and
     /// longitude), `add-gps` (`name`: the GPS's present fix), `remove` or `default` (`id`),
-    /// `choice` (`use`: `automatic`, `gps` or `place` with `id`), or `gps` (`source`, or null for
-    /// none).
+    /// `choice` (`use`: `automatic`, `gps` or `place` with `id`), `gps` (`source`, or null for
+    /// none), or one of the station profiles' (`station_request`).
     ///
     /// # Errors
     ///
@@ -254,12 +278,56 @@ impl Position {
                         g.said.clear();
                     }
                 }
+                op if op.starts_with("station") || op == "place-station" => {
+                    station_request(&mut g.book, op, body)?;
+                }
                 other => return Err(format!("no place request {other:?}")),
             }
             g.book.save(&self.path)?;
         }
         Ok(self.json(false))
     }
+}
+
+/// The station profiles' part of [`Position::request`] (§6.5): one added or changed
+/// (`station-put`, `profile`), removed (`station-remove`, `id`), chosen (`station-choice`, `id` or
+/// empty for none), or named by a place (`place-station`, `id` and `station`).
+fn station_request(book: &mut Book, op: &str, body: &Value) -> Result<(), Error> {
+    let text = |name: &str| body[name].as_str().unwrap_or("").trim().to_owned();
+    match op {
+        "station-put" => {
+            let profile: StationProfile = serde_json::from_value(body["profile"].clone())
+                .map_err(|e| format!("not a station profile: {e}"))?;
+            book.put_station(profile)?;
+        }
+        "station-remove" => {
+            if !book.remove_station(&text("id")) {
+                return Err("no such station profile".into());
+            }
+        }
+        "station-choice" => {
+            let id = text("id");
+            if !id.is_empty() && book.station(&id).is_none() {
+                return Err("no such station profile".into());
+            }
+            book.station = (!id.is_empty()).then_some(id);
+        }
+        "place-station" => {
+            let station = text("station");
+            if !station.is_empty() && book.station(&station).is_none() {
+                return Err("no such station profile".into());
+            }
+            let place = text("id");
+            let p = book
+                .places
+                .iter_mut()
+                .find(|p| p.id == place)
+                .ok_or("no such place")?;
+            p.station = (!station.is_empty()).then_some(station);
+        }
+        other => return Err(format!("no place request {other:?}")),
+    }
+    Ok(())
 }
 
 /// The position the places saved under the first home `base` give, with no GPS: for the command
@@ -416,6 +484,49 @@ mod tests {
         assert!(
             p.request(
                 &json!({"op": "gps", "source": {"kind": "serial", "port": "COM5", "baud": 1200}})
+            )
+            .is_err()
+        );
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn station_profiles_are_kept_chosen_and_named_by_places() {
+        let base = scratch("stations");
+        let p = Position::open(&base);
+        p.adopt_grid(Some("EM73tr"));
+        let profile = json!({"name": "Mobile, TS-480", "vehicle": true,
+                             "hf": {"power_w": 65, "antenna": {"kind": "whip", "agl_m": 2.5}}});
+        let v = p
+            .request(&json!({"op": "station-put", "profile": profile}))
+            .expect("kept");
+        let st = &v["stations"][0];
+        assert_eq!(st["id"], "st-mobile-ts-480");
+        assert_eq!(
+            st["used"]["hf"]["power_w"],
+            json!({"value": 65.0, "said": "set"})
+        );
+        assert_eq!(
+            st["used"]["vhf"]["agl_m"],
+            json!({"value": 2.0, "said": "assumed"})
+        );
+        assert_eq!(v["station_in_use"], "st-mobile-ts-480", "the only one");
+        p.request(&json!({"op": "station-put", "profile": {"name": "Home, FTDX10"}}))
+            .expect("kept");
+        p.request(&json!({"op": "place-station", "id": "pl-home", "station": "st-home-ftdx10"}))
+            .expect("named");
+        assert_eq!(p.station_for_record().as_deref(), Some("st-home-ftdx10"));
+        p.request(&json!({"op": "station-choice", "id": "st-mobile-ts-480"}))
+            .expect("chosen");
+        assert_eq!(p.station_for_record().as_deref(), Some("st-mobile-ts-480"));
+        p.request(&json!({"op": "station-remove", "id": "st-mobile-ts-480"}))
+            .expect("removed");
+        let v = p.json(false);
+        assert_eq!(v["station"], Value::Null);
+        assert_eq!(v["station_in_use"], "st-home-ftdx10");
+        assert!(
+            p.request(
+                &json!({"op": "station-put", "profile": {"name": "x", "hf": {"power_w": -1}}})
             )
             .is_err()
         );

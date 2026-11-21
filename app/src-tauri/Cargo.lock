@@ -2694,7 +2694,7 @@ dependencies = [
 [[package]]
 name = "radioprop-geo"
 version = "0.1.0"
-source = "git+https://github.com/KK4ODA/hf-predict?rev=cc61e934788df97bd177782859cfadabb26320b1#cc61e934788df97bd177782859cfadabb26320b1"
+source = "git+https://github.com/KK4ODA/hf-predict?rev=d9f1739bf9787e49797534d7d72c6b21d88a5e59#d9f1739bf9787e49797534d7d72c6b21d88a5e59"
 dependencies = [
  "serde",
 ]
@@ -2702,7 +2702,7 @@ dependencies = [
 [[package]]
 name = "radioprop-place"
 version = "0.1.0"
-source = "git+https://github.com/KK4ODA/hf-predict?rev=cc61e934788df97bd177782859cfadabb26320b1#cc61e934788df97bd177782859cfadabb26320b1"
+source = "git+https://github.com/KK4ODA/hf-predict?rev=d9f1739bf9787e49797534d7d72c6b21d88a5e59#d9f1739bf9787e49797534d7d72c6b21d88a5e59"
 dependencies = [
  "radioprop-geo",
  "serde",

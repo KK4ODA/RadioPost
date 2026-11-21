@@ -656,6 +656,7 @@
               <th title="Its Maidenhead grid square">Grid</th>
               <th title="How it was set">Set from</th>
               <th title="The place used when the GPS has no fix and no other place is near">Default</th>
+              <th title="The station profile this place uses, unless one is chosen below">Station</th>
               <th class="acts"></th>
             </tr></thead>
             <tbody id="place-rows"></tbody>
@@ -706,6 +707,58 @@
           <div class="row">
             <button type="button" id="gps-save" title="Start reading from this GPS, or stop">Save</button>
           </div>
+        </div>
+        <div class="card" id="stations-card">
+          <h2 title="What your station is, so a prediction need not assume one. Every field is optional: what is left empty is assumed, and said so">Station profiles</h2>
+          <p class="note" id="station-line"></p>
+          <table class="list stations" aria-label="Station profiles">
+            <thead><tr>
+              <th title="Its name">Profile</th>
+              <th title="Power, antenna, height and feed line at HF. Faint: assumed">HF</th>
+              <th title="Power, antenna, height and feed line at VHF and above. Faint: assumed">VHF</th>
+              <th title="Man-made noise where it is">Noise</th>
+              <th class="acts"></th>
+            </tr></thead>
+            <tbody id="station-rows"></tbody>
+          </table>
+          <label title="The profile used: automatic takes the one the place in use names, else the default place's, else the first">Profile in use
+            <select id="station-choice"></select>
+          </label>
+          <details id="station-form">
+            <summary id="station-form-title">Add a profile</summary>
+            <input type="hidden" id="st-id">
+            <div class="row">
+              <input id="st-name" class="short" placeholder="Name" title="What to call it: Home, FTDX10; Mobile, TS-480">
+              <input id="st-radio" class="grow" placeholder="Radio" title="The radio, for you">
+              <label class="check" title="A vehicle: its VHF antenna is assumed lower, 2 m"><input type="checkbox" id="st-vehicle"> In a vehicle</label>
+            </div>
+          <h3>HF</h3>
+          <div class="row">
+            <label class="inline" title="Transmit power, watts">Power, W <input id="st-hf-power" class="short" inputmode="decimal"></label>
+            <label class="inline" title="The antenna's kind">Antenna <select id="st-hf-kind" class="narrow"><option value="">Not said</option><option value="dipole">Dipole</option><option value="vertical">Vertical</option><option value="whip">Whip</option><option value="yagi">Yagi</option><option value="j-pole">J-pole</option><option value="collinear">Collinear</option><option value="loop">Loop</option><option value="nvis">NVIS</option><option value="other">Other</option></select></label>
+            <label class="inline" title="Height above the ground, metres">Height, m <input id="st-hf-agl" class="short" inputmode="decimal"></label>
+            <label class="inline" title="Gain, dBi">Gain, dBi <input id="st-hf-gain" class="short" inputmode="decimal"></label>
+            <label class="inline" title="Loss in the feed line, dB">Feed line, dB <input id="st-hf-feed" class="short" inputmode="decimal"></label>
+          </div>
+          <h3>VHF and above</h3>
+          <div class="row">
+            <label class="inline" title="Transmit power, watts">Power, W <input id="st-vhf-power" class="short" inputmode="decimal"></label>
+            <label class="inline" title="The antenna's kind">Antenna <select id="st-vhf-kind" class="narrow"><option value="">Not said</option><option value="dipole">Dipole</option><option value="vertical">Vertical</option><option value="whip">Whip</option><option value="yagi">Yagi</option><option value="j-pole">J-pole</option><option value="collinear">Collinear</option><option value="loop">Loop</option><option value="nvis">NVIS</option><option value="other">Other</option></select></label>
+            <label class="inline" title="Height above the ground, metres">Height, m <input id="st-vhf-agl" class="short" inputmode="decimal"></label>
+            <label class="inline" title="Gain, dBi">Gain, dBi <input id="st-vhf-gain" class="short" inputmode="decimal"></label>
+            <label class="inline" title="Loss in the feed line, dB">Feed line, dB <input id="st-vhf-feed" class="short" inputmode="decimal"></label>
+          </div>
+          <label class="inline" title="Man-made noise where the station is (ITU-R P.372): business, residential, rural, quiet rural">Noise
+            <select id="st-noise" class="narrow">
+              <option value="">Not said</option>
+              <option value="industrial">Industrial</option>
+              <option value="residential">Residential</option>
+              <option value="rural">Rural</option>
+              <option value="remote">Remote</option>
+            </select>
+          </label>
+          <div class="row"><button type="button" id="st-save">Save profile</button></div>
+          </details>
         </div>
         <div class="card" id="sounds-card">
           <h2>Sounds and notifications</h2>

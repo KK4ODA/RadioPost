@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.27.0 |
+| **Version** | 1.28.0 |
 | **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.32 |
 | **Licence** | CC BY 4.0 |
@@ -925,8 +925,9 @@ The line at the top says which position is in use, and why when it is not the GP
 and longitude such as `33.75, -84.39` (or `33.75N 84.39W`). Click **Add**. A grid square is used
 by its centre, and **Set from** says so: a 6-character square is about 5 by 8 km. **Add from GPS**
 saves the GPS's present fix as a place, with its height. The **Default** place is used when
-nothing better is known. **Remove** forgets a place. If you had typed a grid square on the
-Gateways page before, it is your first place, *Home*.
+nothing better is known. **Station** names the station profile the place uses (below). **Remove**
+forgets a place. If you had typed a grid square on the Gateways page before, it is your first
+place, *Home*.
 
 **Position** chooses what is used:
 
@@ -955,13 +956,36 @@ free GPS2IP Lite stops sending after four minutes; RadioPost says so and uses yo
 Your position stays on this computer. The log says only the 6-character grid square, and nothing
 is sent to a post office or a gateway. The call records keep the position itself.
 
+### Station profiles
+
+What your station is, so that a prediction of a path need not guess. RadioPost will use them to
+suggest gateways. For now each call's record names the profile in use.
+
+![Setup's Station profiles: a mobile profile and a home one, each value set or assumed](screens/client-stations.png)
+
+*Figure 27. Station profiles.*
+
+Each profile shows what a prediction would use at **HF** and at **VHF** and above: the power, the
+antenna and its height, its gain, and the feed line's loss, and the **Noise** where it is. A value
+in plain type is one you set. One in faint italics is assumed, because you left it empty: 100 W at
+HF with a dipole 10 m up, 25 W at VHF with 0 dBi 5 m up (2 m in a vehicle), 1 dB and 2 dB of feed
+line, a residential neighbourhood's noise.
+
+To add one, open **Add a profile**. Give it a **Name**, and fill in what you know: **Radio**, **In
+a vehicle**, then **Power, W**, **Antenna**, **Height, m**, **Gain, dBi** and **Feed line, dB** at
+HF and at VHF, and **Noise** (industrial, residential, rural, remote). Leave the rest empty. Click
+**Save profile**. **Edit** changes one, and **Remove** forgets it.
+
+**Profile in use**: *Automatic* takes the profile the place in use names in its **Station**, else
+the default place's, else the first. Or pick one.
+
 ### Sounds and notifications
 
 RadioPost plays a sound when something happens, and tells you about new mail by its sender.
 
 ![Setup's Sounds and notifications: speakers chosen, a sound for each event, quiet hours, and how mail arrives](screens/client-sounds.png)
 
-*Figure 27. Sounds and notifications.*
+*Figure 28. Sounds and notifications.*
 
 **Mind the radio's sound card.** If this computer's sound goes to the radio's sound card (a
 SignaLink, or the radio's own USB audio), these sounds go on the air, and with VOX they key the
@@ -1057,7 +1081,7 @@ RadioPost keeps working when the Internet fails at a gateway.
 
 ![Before: the post office copies your mail to your usual gateway. During: the gateway serves the copies and keeps what you send. After: it reports](fig/cutoff.svg)
 
-*Figure 28. When the Internet is down.*
+*Figure 29. When the Internet is down.*
 
 **Before.** Name your usual gateways in Setup ([section 12](#usual-gateways)). Your post office
 then copies each new message for you to them as it arrives.
@@ -1100,7 +1124,7 @@ licensed operator can run one.
 
 ![Two users call the gateway by radio; the gateway's computer runs RadioPost Gateway and Aether HF and reaches each caller's post office](fig/gateway.svg)
 
-*Figure 29. A gateway station.*
+*Figure 30. A gateway station.*
 
 A gateway is usually left answering with nobody at the radio. It is then under **automatic
 control**, and the rules for that apply ([The rules](#36-the-rules)).
@@ -1136,13 +1160,13 @@ Open RadioPost Gateway. Until it is set up and registered, it says what is missi
 
 ![A new RadioPost Gateway: the notice says it is not set up, with Set up the gateway](screens/gateway-first.png)
 
-*Figure 30. RadioPost Gateway before setup.*
+*Figure 31. RadioPost Gateway before setup.*
 
 Click **Set up the gateway**. Setup has three steps.
 
 ![The gateway's Setup page: the gateway, its registration with two channels, and post offices](screens/gateway-setup.png)
 
-*Figure 31. Setting up the gateway.*
+*Figure 32. Setting up the gateway.*
 
 ### Step 1. The gateway
 
@@ -1259,7 +1283,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 ![The RadioPost Gateway window with numbered marks on its parts](screens/gateway-window.png)
 
-*Figure 32. The RadioPost Gateway window.*
+*Figure 33. The RadioPost Gateway window.*
 
 1. **The gateway's callsign**, and the account it is registered under. To its left, beside
    *RadioPost Gateway*, is the version you are running.
@@ -1293,7 +1317,7 @@ While a session runs, a box shows who called, the account, since when, and the m
 
 ![The window during a session, with the Session under way box](screens/gateway-session.png)
 
-*Figure 33. A session at the gateway.*
+*Figure 34. A session at the gateway.*
 
 **Stopping and closing.** **Stop** ends a session under way and lets Aether go. Closing the
 window stops the gateway too. If it is answering, it asks first and says what closing stops.
@@ -1371,7 +1395,7 @@ text), each session waiting to be reported with its last try, and the last repor
 
 ![The Partners, Callers refused and Copies placed ahead panels, opened](screens/gateway-held.png)
 
-*Figure 34. What the gateway holds, its partners and the callers it refuses.*
+*Figure 35. What the gateway holds, its partners and the callers it refuses.*
 
 ## 22. Partners: forwarding by radio
 
@@ -1507,7 +1531,7 @@ on this tab.
 
 ![The Applications tab: one application waiting with its licence check, and the Decided list](screens/desk-applications.png)
 
-*Figure 35. Applications.*
+*Figure 36. Applications.*
 
 Each application shows the person's name, callsign and when they asked, the **Address** they
 want, their **Email now**, and what the post office found of the callsign:
@@ -1551,7 +1575,7 @@ the mailbox was made (*mailbox*, or *no mailbox* in red) and the applicant email
 
 ![The Accounts tab: five accounts with their names, devices and mail waiting](screens/desk-accounts.png)
 
-*Figure 36. Accounts.*
+*Figure 37. Accounts.*
 
 Every account, one a row:
 
@@ -1589,7 +1613,7 @@ Revoking the computer you are using takes the desk away from it: the button says
 
 ![The Gateways tab: two gateways, the account each was registered from, and Unregister](screens/desk-gateways.png)
 
-*Figure 37. Gateways.*
+*Figure 38. Gateways.*
 
 The **Gateways** tab lists each gateway registered with your post office, one a row:
 
@@ -1613,7 +1637,7 @@ that exists. Use it for someone you know holds the callsign.
 
 ![The New code tab: an address, a callsign and a name filled in, the licence checked, and the code made](screens/desk-code.png)
 
-*Figure 38. Making a code.*
+*Figure 39. Making a code.*
 
 1. Open **New code**.
 2. Fill in:
@@ -1663,7 +1687,7 @@ Know only post offices whose operators you trust to check callsigns. At first no
 
 ![The Post offices tab: one post office known, one seen, none blocked](screens/desk-others.png)
 
-*Figure 39. Other post offices.*
+*Figure 40. Other post offices.*
 
 - **Known**: the post offices you know, who runs each, when its records were last fetched, and
   whether DNSSEC signed them. They are fetched again every six hours. **Forget** stops knowing one;
@@ -1684,7 +1708,7 @@ when a check turns red, and again when all pass.
 
 ![The Health tab: eleven checks passed and one amber line about backups](screens/desk-health.png)
 
-*Figure 40. Health.*
+*Figure 41. Health.*
 
 Each line is one check:
 
@@ -1712,7 +1736,7 @@ The **Server** tab lets you look after the server without logging in to it.
 
 ![The Server tab: the jobs, one with its output open, and When you need more](screens/desk-server.png)
 
-*Figure 41. Jobs and a terminal.*
+*Figure 42. Jobs and a terminal.*
 
 **Jobs** are a fixed list of tasks the server's administrator account runs for you:
 
@@ -1747,7 +1771,7 @@ says the one command to run on the server, once.
 
 ![The Backups and DKIM keys boxes on the Server tab](screens/desk-backups.png)
 
-*Figure 42. Backups and DKIM keys.*
+*Figure 43. Backups and DKIM keys.*
 
 ### Backups
 
@@ -1804,7 +1828,7 @@ when they are older than 180 days.
 
 ![The Settings tab: applications, licence lookups, mailboxes and this post office](screens/desk-settings.png)
 
-*Figure 43. Settings.*
+*Figure 44. Settings.*
 
 ### Applications
 
@@ -2149,3 +2173,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.25.0 | 2026-11-21 | §12 *Places and GPS* (new Figure 25; later figures renumbered): saved places by grid square or latitude and longitude, the default, the GPS read over a serial port, TCP, UDP or gpsd, and the position in use and why. §8.1: the gateways are listed by distance from that position, said beside **Places**, in place of **Your grid** (a grid square typed there becomes the place *Home*). §4, §38: the call records say where you were. Figure 13 retaken. |
 | 1.26.0 | 2026-11-21 | §8.1: the Gateways page's views (*Recommended*, *Favourites*, *Recent*, *Worked from here*; new Figure 14, later figures renumbered), favourites and blocks by gateway or by channel, the last call to each gateway, the record's and the list's age, and gateways of your own; **Hours** shown under **Where**. §4: `selection/gateways.json`. Figure 13 retaken. |
 | 1.27.0 | 2026-11-21 | RP-5 1.4.0's `listens` and `seen`. §8.1: under **Where**, whether a gateway listens now by its listening times, and when its post office last saw it; one not seen for two days faded. §18 step 5: **Listening times, UTC**, and **Hours** filled from them. §23: `register --listens`. Figures 13 and 31 retaken. |
+| 1.28.0 | 2026-11-21 | §12 *Station profiles* (new Figure 27; later figures renumbered): power, antennas, feed line and noise at HF and VHF, every value set or assumed, the profile in use; *Places and GPS*: each place's **Station**. Figure 26 retaken. |

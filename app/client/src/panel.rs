@@ -1781,6 +1781,7 @@ impl Panel {
             .map(|c| c.home)
             .collect();
         opts.place = self.position.for_record();
+        opts.station = self.position.station_for_record();
         opts
     }
 

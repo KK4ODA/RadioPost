@@ -486,3 +486,6 @@ details.hint code, .note code { font-family: var(--mono); font-size: 12px; backg
 #recent-rows .warn { color: var(--busy); }
 #own-form summary { cursor: pointer; font-weight: 600; }
 #gateway-rows .note, #recent-rows .note { margin: 0; }
+.assumed { color: var(--muted); font-style: italic; }
+#station-rows td { vertical-align: top; }
+#station-rows td:first-child > div > span { white-space: nowrap; }
