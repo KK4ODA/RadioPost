@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.7 |
+| **Version** | 0.3.8 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -528,7 +528,10 @@ classes are shown beside it, never instead of it.
 | ITU-R P.1812, P.452 | Path-specific prediction with clutter and ducting | Needs ITU's digital maps, which may not be redistributed without ITU's written permission | Not used |
 
 No reference implementation of P.526 §4.5 was found; it is written from the text, tested against
-hand-worked profiles and against ITM on a set of paths (§18, Phase 2).
+hand-worked profiles and against ITM on a set of paths (§18, Phase 2). **Done (2026-11-21):**
+[the report](05-vhf-terrain-validation.md) compares the two on 50 real paths: within 1.4 dB on
+average (a spread of 4.9 dB) where ITM holds, and 8.5 dB more hopeful than ITM where an obstruction
+stands close to a low antenna, which ITM calls outside its ranges.
 
 ### 8.6 The link budget
 
@@ -1712,7 +1715,8 @@ southern Appalachians, the Colorado Front Range, Tampa Bay and Puget Sound; leng
 10, 10 to 30 and 30 to 80 km, so line of sight and beyond the horizon are both in the set) and
 worked out by the client's `terrain_paths` example on GLO-90: 11 partly obstructed, 39 blocked,
 P.526 losses 0 to 59 dB. It writes each profile as P.526 read it, for ITM to be run on the same
-one. **Owed:** that ITM run and its report, and the hillshade map (§16.2).
+one. ITM, run on the same profiles, agrees where it holds:
+[the report](05-vhf-terrain-validation.md). **Owed:** the hillshade map (§16.2).
 
 ### 16.4 Gateway details
 
@@ -2135,3 +2139,4 @@ for size in (2000, 50000):
 | 0.3.5 | 2026-11-21 | §7.2: `site` and `station` done (RP-5 1.5.0, RP-0 1.3.0 §9.6). §9.3: the local tile form is half-metres (decimetres stop at 3 276.7 m in 16 bits), with the sizes measured on a real tile, and a missing tile is the sea. |
 | 0.3.6 | 2026-11-21 | §16.3: Phase 2's client done (the terrain line, the profile, the budget each way, the slider, fetching, Setup's **Terrain**), with its two deviations: GLO-90 first, and one data set a path. |
 | 0.3.7 | 2026-11-21 | §16.3: Phase 2 measured: 100 candidates judged in 42 ms or less; the 50 real paths drawn and worked out with P.526 (`tools/terrain/paths.py`, the client's `terrain_paths` example); the ITM run and the hillshade map owed. |
+| 0.3.8 | 2026-11-21 | §8.5, §16.3: P.526 compared with ITM on the 50 paths ([report](05-vhf-terrain-validation.md)); the hillshade map still owed. |
