@@ -608,3 +608,72 @@ fn the_terrain_map_is_shaded_where_the_terrain_is_held() {
     }
     let _ = std::fs::remove_dir_all(&b.dir);
 }
+
+/// Φ, the standard normal distribution, by Abramowitz and Stegun 7.1.26 (within 1.5 × 10⁻⁷).
+fn phi(x: f64) -> f64 {
+    let z = x.abs() / std::f64::consts::SQRT_2;
+    let t = 1.0 / (1.0 + 0.327_591_1 * z);
+    let poly = t
+        * (0.254_829_592
+            + t * (-0.284_496_736
+                + t * (1.421_413_741 + t * (-1.453_152_027 + t * 1.061_405_429))));
+    let erf = 1.0 - poly * (-z * z).exp();
+    f64::midpoint(1.0, if x >= 0.0 { erf } else { -erf })
+}
+
+#[test]
+fn ground_close_to_your_antenna_makes_the_chance_less_certain() {
+    let b = bench("terrain-close");
+    let at = b.at;
+    ridge_tile(&b.tiles);
+    // from the hill, the ridge is 18 km off: the chance read against the usual 10 dB
+    on_the_hill(at);
+    let far = get(at, "/api/terrain/path?callsign=KK4ODA-10");
+    assert_eq!(far["close"], Value::Null, "{far}");
+    assert_eq!(far["spread_db"], 10.0);
+    // from a gully 0.65 km west of the crest, 345 m below it
+    post(
+        at,
+        "/api/places",
+        &json!({"op": "add", "name": "Gully", "where": "33.5, -84.607"}),
+    );
+    post(
+        at,
+        "/api/places",
+        &json!({"op": "choice", "use": "place", "id": "pl-gully"}),
+    );
+    let near = get(at, "/api/terrain/path?callsign=KK4ODA-10");
+    let close = near["close"].as_str().expect("said");
+    assert!(
+        close.starts_with("ground 0.6 km from your antenna"),
+        "{close}"
+    );
+    assert!(
+        close.contains("° up"),
+        "steep, so its angle is said: {close}"
+    );
+    assert_eq!(near["spread_db"], 14.0);
+    assert!(
+        near["words"]
+            .as_str()
+            .is_some_and(|w| w.ends_with(&format!(" · less certain: {close}"))),
+        "{near}"
+    );
+    // each way's chance read against 14 dB: Φ(margin / 14)
+    for way in ["up", "down"] {
+        let margin = near[way]["margin_db"].as_f64().expect("a margin");
+        let p = near[way]["p"].as_f64().expect("a chance");
+        assert!(
+            (p - phi(margin / 14.0)).abs() < 0.006,
+            "{way}: {p} against Φ({margin}/14)"
+        );
+    }
+    // and the list's line says so too
+    let list = get(at, "/api/gateways");
+    let line = find(&list, "KK4ODA-10")["terrain"]["words"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
+    assert!(line.contains("less certain"), "{line}");
+    let _ = std::fs::remove_dir_all(&b.dir);
+}

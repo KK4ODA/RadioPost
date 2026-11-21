@@ -1088,5 +1088,7 @@
   ]
  },
  "callsign": "N3CALL-10",
- "dial_hz": 145050000
+ "dial_hz": 145050000,
+ "close": null,
+ "spread_db": 10.0
 }

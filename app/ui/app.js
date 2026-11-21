@@ -1425,7 +1425,10 @@ function renderTerrain(t) {
   };
   $("terrain-rows").replaceChildren(way(`You to ${t.callsign}`, t.up), way(`${t.callsign} to you`, t.down));
   $("terrain-assumed").textContent = `Free-space loss ${t.fspl_db} dB, diffraction ${t.diffraction_db} dB `
-    + `(ITU-R P.526-16 § 4.5). Assumed: ${t.assumed.join("; ")}.`;
+    + `(ITU-R P.526-16 § 4.5). `
+    + (t.close ? `Less certain: ${t.close}, where no terrain model is checked, so the chance is read `
+      + `against a ${t.spread_db} dB spread, not 10 dB. ` : "")
+    + `Assumed: ${t.assumed.join("; ")}.`;
 }
 
 // fetching: what is being fetched, in a line, until it is done; then what it changes is shown

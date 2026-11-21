@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.9 |
+| **Version** | 0.3.10 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -1725,6 +1725,14 @@ P.526 losses 0 to 59 dB. It writes each profile as P.526 read it, for ITM to be 
 one. ITM, run on the same profiles, agrees where it holds:
 [the report](05-vhf-terrain-validation.md). The hillshade map is §16.2's.
 
+**Built after the report (2026-11-21, the author's answer to its §6 question):** where ground
+stands close to an antenna (ITM's own range checks: an antenna's horizon under a tenth of a smooth
+Earth's, or over 0.2 rad up, its height taken above ITM's fitted terrain), the terrain line ends
+*less certain: ground 0.1 km from the gateway's antenna, 13° up*, and the chance is read against
+14 dB, √(10² + 9.8²): the location spread and the spread of P.526's difference from ITM on such
+paths. The client's check (`terrain::close_ground`) flags the same 27 of the 50 paths ITM flags for
+its terrain; ITM's other two are outside its range only by the refractivity at Colorado's height.
+
 ### 16.4 Gateway details
 
 ```
@@ -2148,3 +2156,4 @@ for size in (2000, 50000):
 | 0.3.7 | 2026-11-21 | §16.3: Phase 2 measured: 100 candidates judged in 42 ms or less; the 50 real paths drawn and worked out with P.526 (`tools/terrain/paths.py`, the client's `terrain_paths` example); the ITM run and the hillshade map owed. |
 | 0.3.8 | 2026-11-21 | §8.5, §16.3: P.526 compared with ITM on the 50 paths ([report](05-vhf-terrain-validation.md)); the hillshade map still owed. |
 | 0.3.9 | 2026-11-21 | §16.2: the VHF terrain map done; Phase 2 is built. |
+| 0.3.10 | 2026-11-21 | §16.3: a path with ground close to an antenna said *less certain*, its chance read against 14 dB (the report's §6, the author's yes). |

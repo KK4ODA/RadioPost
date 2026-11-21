@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.32.0 |
+| **Version** | 1.33.0 |
 | **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.32 |
 | **Licence** | CC BY 4.0 |
@@ -581,7 +581,11 @@ buildings count as ground, as the radar saw them between 2010 and 2015.
 *Figure 16. The terrain to a VHF gateway.*
 
 The diffraction is worked out by ITU-R P.526-16, and the chance from the margin against a 10 dB
-spread over places. It is a guide, not a promise: buildings near you, the antenna's pattern, and the
+spread over places. Where ground stands close to an antenna (trees or a building a few hundred
+metres away, or a slope rising steeply from it), the line ends *less certain*, with where: *less
+certain: ground 0.1 km from the gateway's antenna, 13° up*. No terrain model has been checked on
+such paths, and two of them can differ there by 10 dB or more, so the chance is read against a
+14 dB spread instead, and **Terrain** says so under the table. It is a guide, not a promise: buildings near you, the antenna's pattern, and the
 gateway's real power all count. The radio's own threshold is assumed too, since no modem publishes
 one as a measurement.
 
@@ -2288,3 +2292,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.30.0 | 2026-11-21 | RP-5 1.5.0's `site` and a channel's `station`. §18 step 2: each channel's **Station** (power, antenna, height, gain, where a beam points) and the gateway's **Site** (latitude, longitude, antenna height), which must be in its grid square. §23: `register --site` and `--station`. Figure 33 retaken. |
 | 1.31.0 | 2026-11-21 | VHF paths over the terrain. §8.1: a gateway's distance is to its site when its record gives one; FM channels; *The terrain of a VHF path*: the line under a VHF channel, **Terrain**, the profile, the budget each way, **Your antenna**, fetching the tiles (new Figure 16). §12: **Terrain** (new Figure 30), **Prepare this area**; Station profiles' VHF side is what a path is worked out with. §39: Fresnel zone, Link budget, Terrain. Later figures renumbered. |
 | 1.32.0 | 2026-11-21 | §8.1: *The terrain map*, the VHF gateways of the view over a hillshade of the terrain held, each path in the colour of its chance and marked where it is obstructed, picking shared with the list and the world map, and the data's notice under it (new Figure 17; later figures renumbered). |
+| 1.33.0 | 2026-11-21 | §8.1: a VHF path with ground close to an antenna is *less certain*, says where, and has its chance read against a 14 dB spread. |

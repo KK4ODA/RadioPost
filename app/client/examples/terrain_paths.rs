@@ -133,6 +133,12 @@ fn work_out(store: &Store, p: &Value) -> Value {
     out["smooth_db"] = json!(d.smooth.loss_db);
     out["spherical_db"] = json!(d.spherical_db);
     out["line_of_sight"] = json!(d.actual.line_of_sight);
+    // where the client says the prediction is less certain
+    out["close"] = json!(radiopost_client::selection::terrain::close_ground(
+        &prof,
+        (h1, h2),
+        worked.re_km
+    ));
     out
 }
 

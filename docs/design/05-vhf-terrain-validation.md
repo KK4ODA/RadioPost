@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Measured |
-| **Version** | 1.0.0 |
+| **Version** | 1.1.0 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -129,9 +129,13 @@ opened, and 15 to 22 ms warm, on four cores of a 2.3 GHz Xeon. The design asks f
 * On paths with an obstruction close to a low antenna, the commonest case outside ITM's ranges,
   P.526 is the more hopeful of the two by about 8 dB. Neither is checked there. Phase 4's recorded
   outcomes decide it (§19.5): the attempts of VHF calls on such paths, against what P.526 said.
-* A question for the author, not built: whether the client should say, on such a path, that the
-  loss is less certain (a wider spread than the 10 dB the chance is read against, or a word in the
-  terrain line).
+* Whether the client should say, on such a path, that the loss is less certain. The author said
+  yes, and it is built: the terrain line ends *less certain*, with where the ground is, and the
+  chance is read against 14 dB, √(10² + 9.8²): the location spread, and the spread of P.526's
+  difference from ITM on the 27 paths the check flags (mean −8.9 dB). The client's check, ITM's terrain checks with ITM's
+  effective antenna heights, flags the same 27 of these 50 paths ITM flags for its terrain (the
+  `close` member the `terrain_paths` example writes); ITM's other two, colorado-02 and colorado-09,
+  are outside its range only by the surface refractivity at their height.
 
 ## 7. Running it again
 
@@ -212,3 +216,4 @@ Difference is P.526 less ITM. Antennas are yours, then the gateway's, above the 
 | Version | Date | Change |
 |---|---|---|
 | 1.0.0 | 2026-11-21 | The 50 paths and the 100 gateways measured, ITM run on the same profiles. |
+| 1.1.0 | 2026-11-21 | §6: the author's yes to saying such paths are less certain; built, and its check flags the same 27 paths ITM flags for its terrain. |

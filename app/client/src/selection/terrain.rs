@@ -31,6 +31,10 @@ pub const VHF_FROM_HZ: u64 = 30_000_000;
 pub const FAR_KM: f64 = 150.0;
 /// The location variability a margin is read against, dB (§ 8.6).
 pub const SPREAD_DB: f64 = 10.0;
+/// The spread read against where ground stands close to an antenna, dB: the 10 dB over locations
+/// and the 9.8 dB spread of P.526's difference from ITM on the 27 such paths of `docs/design/05`,
+/// together (√(10² + 9.8²)). No model is checked there.
+pub const CLOSE_SPREAD_DB: f64 = 14.0;
 /// What a gateway's record does not say, assumed: power, antenna height and feed line.
 const GATEWAY_POWER_W: f64 = 25.0;
 const GATEWAY_AGL_M: f64 = 10.0;
@@ -507,8 +511,15 @@ impl Terrain {
         let path = terrain_path::analyse(&found.profile, f_mhz, s.your_agl, s.gw_agl, K_STANDARD);
         let fspl = budget::fspl_db(f_mhz, found.length);
         let loss = fspl + path.diffraction.loss_db;
-        let up = budget::one_way(s.up, loss, s.threshold, SPREAD_DB);
-        let down = budget::one_way(s.down, loss, s.threshold, SPREAD_DB);
+        // ground close to an antenna: the prediction is less certain, and said to be
+        let close = close_ground(&found.profile, (s.your_agl, s.gw_agl), path.re_km);
+        let spread = if close.is_some() {
+            CLOSE_SPREAD_DB
+        } else {
+            SPREAD_DB
+        };
+        let up = budget::one_way(s.up, loss, s.threshold, spread);
+        let down = budget::one_way(s.down, loss, s.threshold, spread);
         let weaker = if up.margin_db <= down.margin_db {
             up
         } else {
@@ -532,12 +543,15 @@ impl Terrain {
             "margin_db": round1(weaker.margin_db),
             "chance": likely(weaker.p_viable),
             "words": format!(
-                "{} · diffraction about {:.0} dB (P.526) · margin about {:.0} dB · {}",
+                "{} · diffraction about {:.0} dB (P.526) · margin about {:.0} dB · {}{}",
                 path.words(),
                 path.diffraction.loss_db,
                 weaker.margin_db,
-                likely(weaker.p_viable)
+                likely(weaker.p_viable),
+                close.as_ref().map_or(String::new(), |why| format!(" · less certain: {why}"))
             ),
+            "close": close,
+            "spread_db": spread,
             "ends": {"you": {"agl_m": s.your_agl, "said": s.your_said},
                      "gateway": {"agl_m": s.gw_agl, "said": s.gw_said}},
             "assumed": s.assumed,
@@ -678,6 +692,99 @@ impl Terrain {
             .filter(|&t| self.glo90.have(t) == Have::Missing)
             .collect()
     }
+}
+
+/// Ground close to either antenna, in words, or `None`: where an antenna's horizon is under a
+/// tenth of a smooth Earth's, or more than 0.2 rad (11°) above it. These are ITM's own checks of
+/// its range (NTIA's `lrprop`), each antenna's smooth-Earth horizon taken from its height above a
+/// line fitted to the ground before its horizon (`qlrpfl`); on the 50 paths of `docs/design/05`
+/// they flag the same paths ITM does. A path in line of sight from an antenna has no horizon
+/// there. `agl` is each antenna's height above its ground, `re_km` the effective Earth radius.
+#[must_use]
+pub fn close_ground(
+    p: &radioprop_terrain::profile::Profile,
+    agl: (f64, f64),
+    re_km: f64,
+) -> Option<String> {
+    let n = p.h_m.len();
+    if n < 3 || p.length_km <= 0.0 {
+        return None;
+    }
+    let length = p.length_km;
+    #[allow(clippy::cast_precision_loss, reason = "a few thousand samples at most")]
+    let dx = length / (n - 1) as f64;
+    let ends = (p.h_m[0] + agl.0, p.h_m[n - 1] + agl.1);
+    let mut found = Vec::new();
+    for (whose, from_you) in [("your antenna", true), ("the gateway's antenna", false)] {
+        let (top, other, hg) = if from_you {
+            (ends.0, ends.1, agl.0)
+        } else {
+            (ends.1, ends.0, agl.1)
+        };
+        let height = |i: usize| if from_you { p.h_m[i] } else { p.h_m[n - 1 - i] };
+        // the angle up to a point d km away, the Earth's curve taken off
+        let angle = |h: f64, d: f64| (h - top) / (d * 1000.0) - d / (2.0 * re_km);
+        let to_other = angle(other, length);
+        let (mut best, mut horizon) = (f64::NEG_INFINITY, 0.0);
+        for i in 1..n - 1 {
+            #[allow(clippy::cast_precision_loss, reason = "a few thousand samples at most")]
+            let d = i as f64 * dx;
+            let a = angle(height(i), d);
+            if a > best {
+                (best, horizon) = (a, d);
+            }
+        }
+        if best <= to_other {
+            continue;
+        }
+        // the antenna's height above a line fitted to the ground before its horizon
+        let (x1, x2) = ((15.0 * hg / 1000.0).min(0.1 * horizon), 0.9 * horizon);
+        let fitted = fitted_at_zero(&height, dx, x1, x2, n);
+        let effective = hg + (height(0) - fitted).max(0.0);
+        let smooth = (2.0 * re_km * effective / 1000.0).sqrt();
+        let near = horizon < 0.1 * smooth;
+        let steep = best > 0.2;
+        if near || steep {
+            found.push(if steep {
+                format!(
+                    "ground {horizon:.1} km from {whose}, {:.0}° up",
+                    best.to_degrees()
+                )
+            } else {
+                format!("ground {horizon:.1} km from {whose}")
+            });
+        }
+    }
+    (!found.is_empty()).then(|| found.join(", and "))
+}
+
+/// The least-squares line through the ground from `x1` to `x2` km, its height at 0 km.
+fn fitted_at_zero(height: &dyn Fn(usize) -> f64, dx: f64, x1: f64, x2: f64, n: usize) -> f64 {
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "distances along the profile, inside it"
+    )]
+    let index = |x: f64| ((x / dx).floor().max(0.0) as usize).min(n - 1);
+    let (i1, i2) = (index(x1), index(x2).max(index(x1) + 1).min(n - 1));
+    #[allow(clippy::cast_precision_loss, reason = "a few thousand samples at most")]
+    let points: Vec<(f64, f64)> = (i1..=i2).map(|i| (i as f64 * dx, height(i))).collect();
+    if points.len() < 2 {
+        return height(0);
+    }
+    #[allow(clippy::cast_precision_loss, reason = "a few thousand samples at most")]
+    let count = points.len() as f64;
+    let (mx, my) = (
+        points.iter().map(|p| p.0).sum::<f64>() / count,
+        points.iter().map(|p| p.1).sum::<f64>() / count,
+    );
+    let sxx: f64 = points.iter().map(|p| (p.0 - mx).powi(2)).sum();
+    let slope = if sxx > 0.0 {
+        points.iter().map(|p| (p.0 - mx) * (p.1 - my)).sum::<f64>() / sxx
+    } else {
+        0.0
+    };
+    my - slope * mx
 }
 
 /// A path found, with its profile read from the finest data held for all of it.
@@ -961,5 +1068,71 @@ mod tests {
         );
         assert!((tile_mb(t(55), Source::Glo30) - 30.0).abs() < 1e-9);
         assert!((tile_mb(t(-89), Source::Glo90) - 0.5).abs() < 1e-9);
+    }
+}
+
+#[cfg(test)]
+mod close_tests {
+    use radioprop_geo::LatLon;
+    use radioprop_terrain::profile::Profile;
+    use radioprop_terrain::store::Source;
+
+    use radioprop_terrain::path::K_STANDARD;
+
+    use super::close_ground;
+
+    const RE: f64 = K_STANDARD * 6371.0;
+
+    /// A 20 km profile sampled every 100 m, its heights from `ground`.
+    fn profile(ground: impl Fn(f64) -> f64) -> Profile {
+        let n = 201;
+        let d_km: Vec<f64> = (0..n).map(|i| f64::from(i) * 0.1).collect();
+        Profile {
+            from: LatLon {
+                lat: 33.0,
+                lon: -84.0,
+            },
+            to: LatLon {
+                lat: 33.0,
+                lon: -83.8,
+            },
+            length_km: 20.0,
+            h_m: d_km.iter().map(|&d| ground(d)).collect(),
+            d_km,
+            source: Source::Glo90,
+        }
+    }
+
+    #[test]
+    fn ground_close_to_an_antenna_is_found_and_said() {
+        // flat ground: the horizon of a 5 m antenna is 9.2 km away, and no point stands above it
+        assert_eq!(close_ground(&profile(|_| 100.0), (5.0, 20.0), RE), None);
+        // trees 15 m tall 300 m from your 5 m antenna: under a tenth of 9.2 km away
+        let trees = profile(|d| {
+            if (0.25..0.45).contains(&d) {
+                115.0
+            } else {
+                100.0
+            }
+        });
+        assert_eq!(
+            close_ground(&trees, (5.0, 20.0), RE).as_deref(),
+            Some("ground 0.3 km from your antenna")
+        );
+        // a hill 200 m high 700 m from the gateway's end, 16° up from its antenna
+        let hill = profile(|d| {
+            if (19.25..19.35).contains(&d) {
+                300.0
+            } else {
+                100.0
+            }
+        });
+        let said = close_ground(&hill, (5.0, 10.0), RE).expect("found");
+        assert!(
+            said.contains("0.7 km from the gateway's antenna, 16° up"),
+            "{said}"
+        );
+        // the same hill below the line between two tall masts: in sight, no horizon to judge
+        assert_eq!(close_ground(&hill, (400.0, 400.0), RE), None);
     }
 }
