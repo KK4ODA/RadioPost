@@ -26,6 +26,9 @@ pub const WORKED_HF_KM: f64 = 50.0;
 pub const WORKED_VHF_KM: f64 = 2.0;
 /// A list older than this is shown dimmed, with its age.
 pub const OLD_LIST_S: u64 = 7 * 86_400;
+/// A gateway its post office has not seen for longer is shown dimmed, with how long (RP-5 §4.4
+/// `seen`): its computer may be off, or it may be cut off and still serving by radio.
+pub const OLD_SEEN_S: u64 = 2 * 86_400;
 
 type Error = String;
 
@@ -241,6 +244,18 @@ pub fn annotate(
         g["list_old"] = json!(fetched.is_some_and(|f| now.saturating_sub(f) > OLD_LIST_S));
         g["last"] = last_call(records, &callsign);
         g["worked"] = json!(worked(records, &callsign, here));
+        // when it listens, from the windows its record lists (RP-5 §4.4); none, as `hours` says
+        g["listening"] = if radiopost::gateway_list::listens(g).is_some() {
+            let l = radiopost::gateway_list::listening(g, now);
+            json!({"open": l.open, "changes": l.changes})
+        } else {
+            Value::Null
+        };
+        g["seen_old"] = json!(
+            g["seen"]
+                .as_u64()
+                .is_some_and(|seen| now.saturating_sub(seen) > OLD_SEEN_S)
+        );
     }
     all
 }
@@ -452,6 +467,36 @@ mod tests {
         assert_eq!(r[0]["remote"], "N4VHF-1");
         assert_eq!(r[1]["words"], "completed, some mail left in the outbox");
         assert_eq!(r[1]["took_s"], 60);
+    }
+
+    #[test]
+    fn when_a_gateway_listens_and_was_seen_are_shown() {
+        let day = 86_400;
+        let now = 20_000 * day + 20 * 3600; // 20:00 UTC
+        let gateways = vec![
+            json!({"callsign": "A-1", "seen": now - 120,
+                   "listens": [{"every_s": day, "at_s": 18 * 3600, "length_s": 8 * 3600}]}),
+            json!({"callsign": "B-1", "seen": now - 3 * day,
+                   "listens": [{"every_s": day, "at_s": 8 * 3600, "length_s": 3600}]}),
+            json!({"callsign": "C-1"}),
+        ];
+        let all = annotate(gateways, &json!({}), &Marks::default(), &[], None, now);
+        assert_eq!(
+            all[0]["listening"],
+            json!({"open": true, "changes": now + 6 * 3600})
+        );
+        assert_eq!(all[0]["seen_old"], false);
+        assert_eq!(
+            all[1]["listening"],
+            json!({"open": false, "changes": now + 12 * 3600})
+        );
+        assert_eq!(all[1]["seen_old"], true);
+        assert_eq!(
+            all[2]["listening"],
+            Value::Null,
+            "no windows: as its hours say"
+        );
+        assert_eq!(all[2]["seen_old"], false, "never seen is not old");
     }
 
     #[test]

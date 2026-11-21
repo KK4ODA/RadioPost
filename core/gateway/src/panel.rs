@@ -543,7 +543,18 @@ impl Panel {
                 s.save(dir)?;
             }
         }
+        // when it listens, for programs (RP-5 §4.4 `listens`), and the same in words for people
+        // when the hours were left as they came
+        let listens = crate::listens::parse(text(body, "listens"))?;
+        let hours = if listens.is_empty() || !matches!(hours, "always" | "") {
+            hours.to_owned()
+        } else {
+            crate::listens::words(&listens)
+        };
         let mut record = json!({"channels": channels, "hours": hours, "internet": true});
+        if !listens.is_empty() {
+            record["listens"] = json!(listens);
+        }
         for key in ["grid", "place"] {
             if !text(body, key).is_empty() {
                 record[key] = text(body, key).into();

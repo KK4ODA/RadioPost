@@ -914,5 +914,268 @@
         "left_out": {}
       }
     }
+  ],
+  "listens_rule": "RP-5 §4.4: a record's `listens` are windows of RP-7 §5's form. One holds with integer `every_s` of 1 or more, `at_s` below it and `length_s` from 1 to `every_s`; the others are ignored (`kept`, null when none holds or there is no `listens`: the gateway listens as `hours` says, and `open` is true with no change). A window opens `at_s` seconds after each multiple of `every_s` since the Unix epoch, for `length_s` seconds. At `now`, `open` says whether any window is open, and `changes` when that changes: when the stretch of windows open at `now`, following on or overlapping, ends; else when the next window opens. Windows that cover every moment never close: `changes` is null.",
+  "listens_cases": [
+    {
+      "what": "no `listens`: it listens as `hours` says",
+      "record": {
+        "callsign": "N2CALL-5",
+        "hours": "1800-0200 UTC"
+      },
+      "now": 1794099600,
+      "kept": null,
+      "expect": {
+        "open": true,
+        "changes": null
+      }
+    },
+    {
+      "what": "18:00 to 02:00 UTC, at 20:00",
+      "record": {
+        "callsign": "N2CALL-5",
+        "hours": "1800-0200 UTC",
+        "listens": [
+          {
+            "every_s": 86400,
+            "at_s": 64800,
+            "length_s": 28800
+          }
+        ]
+      },
+      "now": 1794168000,
+      "kept": [
+        {
+          "every_s": 86400,
+          "at_s": 64800,
+          "length_s": 28800
+        }
+      ],
+      "expect": {
+        "open": true,
+        "changes": 1794189600
+      }
+    },
+    {
+      "what": "18:00 to 02:00 UTC, at noon",
+      "record": {
+        "callsign": "N2CALL-5",
+        "hours": "1800-0200 UTC",
+        "listens": [
+          {
+            "every_s": 86400,
+            "at_s": 64800,
+            "length_s": 28800
+          }
+        ]
+      },
+      "now": 1794139200,
+      "kept": [
+        {
+          "every_s": 86400,
+          "at_s": 64800,
+          "length_s": 28800
+        }
+      ],
+      "expect": {
+        "open": false,
+        "changes": 1794160800
+      }
+    },
+    {
+      "what": "18:00 to 02:00 UTC, at 01:00 the next day",
+      "record": {
+        "callsign": "N2CALL-5",
+        "hours": "1800-0200 UTC",
+        "listens": [
+          {
+            "every_s": 86400,
+            "at_s": 64800,
+            "length_s": 28800
+          }
+        ]
+      },
+      "now": 1794186000,
+      "kept": [
+        {
+          "every_s": 86400,
+          "at_s": 64800,
+          "length_s": 28800
+        }
+      ],
+      "expect": {
+        "open": true,
+        "changes": 1794189600
+      }
+    },
+    {
+      "what": "two windows one after the other, at 10:00",
+      "record": {
+        "callsign": "N2CALL-5",
+        "hours": "1800-0200 UTC",
+        "listens": [
+          {
+            "every_s": 86400,
+            "at_s": 28800,
+            "length_s": 14400
+          },
+          {
+            "every_s": 86400,
+            "at_s": 43200,
+            "length_s": 7200
+          }
+        ]
+      },
+      "now": 1794132000,
+      "kept": [
+        {
+          "every_s": 86400,
+          "at_s": 28800,
+          "length_s": 14400
+        },
+        {
+          "every_s": 86400,
+          "at_s": 43200,
+          "length_s": 7200
+        }
+      ],
+      "expect": {
+        "open": true,
+        "changes": 1794146400
+      }
+    },
+    {
+      "what": "windows that do not hold are ignored",
+      "record": {
+        "callsign": "N2CALL-5",
+        "hours": "1800-0200 UTC",
+        "listens": [
+          {
+            "every_s": 86400,
+            "at_s": 86400,
+            "length_s": 3600
+          },
+          {
+            "every_s": 86400,
+            "at_s": 3600,
+            "length_s": 0
+          },
+          {
+            "every_s": 86400,
+            "at_s": 3600,
+            "length_s": 86401
+          },
+          {
+            "every_s": "3600",
+            "at_s": 0,
+            "length_s": 600
+          },
+          {
+            "every_s": 0,
+            "at_s": 0,
+            "length_s": 0
+          },
+          {
+            "every_s": 3600,
+            "at_s": 0,
+            "length_s": 600
+          }
+        ]
+      },
+      "now": 1794103500,
+      "kept": [
+        {
+          "every_s": 3600,
+          "at_s": 0,
+          "length_s": 600
+        }
+      ],
+      "expect": {
+        "open": true,
+        "changes": 1794103800
+      }
+    },
+    {
+      "what": "none holds: as if there were none",
+      "record": {
+        "callsign": "N2CALL-5",
+        "hours": "1800-0200 UTC",
+        "listens": [
+          {
+            "every_s": 0,
+            "at_s": 0,
+            "length_s": 0
+          }
+        ]
+      },
+      "now": 1794096000,
+      "kept": null,
+      "expect": {
+        "open": true,
+        "changes": null
+      }
+    },
+    {
+      "what": "a window as long as its period",
+      "record": {
+        "callsign": "N2CALL-5",
+        "hours": "1800-0200 UTC",
+        "listens": [
+          {
+            "every_s": 86400,
+            "at_s": 0,
+            "length_s": 86400
+          }
+        ]
+      },
+      "now": 1794096005,
+      "kept": [
+        {
+          "every_s": 86400,
+          "at_s": 0,
+          "length_s": 86400
+        }
+      ],
+      "expect": {
+        "open": true,
+        "changes": null
+      }
+    },
+    {
+      "what": "two windows that cover the day",
+      "record": {
+        "callsign": "N2CALL-5",
+        "hours": "1800-0200 UTC",
+        "listens": [
+          {
+            "every_s": 86400,
+            "at_s": 0,
+            "length_s": 43200
+          },
+          {
+            "every_s": 86400,
+            "at_s": 43200,
+            "length_s": 43200
+          }
+        ]
+      },
+      "now": 1794099600,
+      "kept": [
+        {
+          "every_s": 86400,
+          "at_s": 0,
+          "length_s": 43200
+        },
+        {
+          "every_s": 86400,
+          "at_s": 43200,
+          "length_s": 43200
+        }
+      ],
+      "expect": {
+        "open": true,
+        "changes": null
+      }
+    }
   ]
 }

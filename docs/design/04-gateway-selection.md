@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.2 |
+| **Version** | 0.3.3 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -418,7 +418,9 @@ These are MINOR additions to a Stable specification (RP-0 §8.2), announced as �
 vectors. They change nothing for a reader that ignores them, nothing for a gateway that leaves them
 out, and nothing on the air. `seen` adds a small privacy cost (when a gateway's computer is on);
 `site` is the operator's choice of precision. The author chose to propose them in phases: `seen`
-and `listens` with Phase 1, `site` and `station` with Phase 2 (§21, Q3).
+and `listens` with Phase 1, `site` and `station` with Phase 2 (§21, Q3). **Done (2026-11-21):**
+`seen` and `listens` are RP-5 1.4.0: the post office stamps `seen`, RadioPost Gateway publishes its
+**Listening times, UTC** as daily windows, and the client shows both.
 
 **Not proposed:** a single "range" figure, as Winlink's records have. It folds power, antenna,
 terrain and the remote station into one number that is wrong for most callers; the terrain
@@ -2085,3 +2087,4 @@ for size in (2000, 50000):
 | 0.3.0 | 2026-11-20 | Accepted by the author, with §21's answers; Phase 1 begun. The wishlist's W17 points here, and W55 to W58 are its parts. |
 | 0.3.1 | 2026-11-20 | §15.2: the attempt record as Phase 1 writes it (member names, the stub line, what later phases fill); the example's times corrected to 2026-11-20. |
 | 0.3.2 | 2026-11-21 | §11.3: what Phase 1 built in hf-predict: the workspace, `radioprop-geo` and `radioprop-place` (places, readers, freshness, the position in use), used by RadioPost by revision. |
+| 0.3.3 | 2026-11-21 | §7.2: `seen` and `listens` done, as RP-5 1.4.0. |

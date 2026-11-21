@@ -153,3 +153,92 @@ pub fn merge(home: &str, home_gateways: &[Value], others: &[(String, Vec<Value>)
             .collect(),
     }
 }
+
+/// RP-5 §4.4: the windows a record lists in `listens`, those that do not hold left out. A window
+/// holds with an integer `every_s` of 1 or more, `at_s` below it and `length_s` from 1 to
+/// `every_s`. `None` when no window holds or the record lists none: `hours` says, for people.
+#[must_use]
+pub fn listens(record: &Value) -> Option<Vec<crate::forwarding::Window>> {
+    let kept: Vec<crate::forwarding::Window> = record
+        .get("listens")?
+        .as_array()?
+        .iter()
+        .filter_map(|w| {
+            let n = |k: &str| w.get(k).and_then(Value::as_u64);
+            let (every_s, at_s, length_s) = (n("every_s")?, n("at_s")?, n("length_s")?);
+            (every_s >= 1 && at_s < every_s && (1..=every_s).contains(&length_s)).then_some(
+                crate::forwarding::Window {
+                    every_s,
+                    at_s,
+                    length_s,
+                },
+            )
+        })
+        .collect();
+    (!kept.is_empty()).then_some(kept)
+}
+
+/// Whether a gateway listens at a moment, and when that changes (RP-5 §4.4).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Listening {
+    /// It listens now.
+    pub open: bool,
+    /// When that changes; `None` when it never does (no `listens`, or windows that cover every
+    /// moment).
+    pub changes: Option<u64>,
+}
+
+/// Whether the gateway of `record` listens at `now`, and when that changes. Windows that follow
+/// on, or overlap, are one stretch of listening.
+#[must_use]
+pub fn listening(record: &Value, now: u64) -> Listening {
+    let Some(windows) = listens(record) else {
+        return Listening {
+            open: true,
+            changes: None,
+        };
+    };
+    // when the window open at `t` closes, if one is: the period's start counted from `at_s`
+    let start = |w: &crate::forwarding::Window, t: u64| {
+        let t = i128::from(t);
+        let phase = (t - i128::from(w.at_s)).rem_euclid(i128::from(w.every_s));
+        u64::try_from(t - phase).unwrap_or(0)
+    };
+    let mut t = now;
+    let mut closes = false;
+    for _ in 0..64 {
+        let ends = windows
+            .iter()
+            .map(|w| start(w, t) + w.length_s)
+            .filter(|&end| t < end)
+            .max();
+        let Some(end) = ends else {
+            closes = true;
+            break;
+        };
+        t = end;
+    }
+    if !closes {
+        return Listening {
+            open: true,
+            changes: None,
+        };
+    }
+    if t > now {
+        return Listening {
+            open: true,
+            changes: Some(t),
+        };
+    }
+    let opens = windows
+        .iter()
+        .map(|w| {
+            let s = start(w, now);
+            if s <= now { s + w.every_s } else { s }
+        })
+        .min();
+    Listening {
+        open: false,
+        changes: opens,
+    }
+}

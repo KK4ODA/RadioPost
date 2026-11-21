@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.26.0 |
+| **Version** | 1.27.0 |
 | **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.32 |
 | **Licence** | CC BY 4.0 |
@@ -529,9 +529,12 @@ one of its channels to make only that channel one. A favourite channel is offere
 choose the gateway. **Block** leaves a gateway out of the list; the line under the list counts
 what is left out, and **Show them** brings them back so you can **Unblock** one. **⊘** beside a
 channel leaves only that channel out. **Last call** says how your last call to each gateway
-ended. Under **Where**, each gateway says when it answers and how long ago its record changed. A
-gateway whose post office's list has not been fetched for a week is shown faded, with the list's
-age.
+ended. Under **Where**, each gateway says when it answers and how long ago its record *changed*.
+One that gives listening times says whether it listens now (*listening now, until 02:00*, or *not
+listening now: from 18:00*). Each says when it was last *seen* by its post office, that is when
+its computer was last on and online. A gateway not seen for two days is shown faded: its computer
+may be off, or it may be cut off from the Internet and still answering by radio. So is one whose
+post office's list has not been fetched for a week, with the list's age.
 
 **A gateway of your own.** For a station no post office lists, such as a partner for
 station-to-station mail, a test gateway, or a club's station not yet registered, open **Add a
@@ -1195,7 +1198,10 @@ that account's address. A gateway is registered with one post office at a time.
    record then says how long a caller's call must keep trying to find it; the gateway adds that,
    registering again from this computer, the first time it scans.
 5. **Grid** and **Place** help callers choose a gateway near them. **Hours** says when it answers:
-   `always`, or in words such as `1800-0200 UTC`.
+   `always`, or in words such as `1800-0200 UTC`. **Listening times, UTC** says the same for
+   callers' programs, so they can tell whether the gateway listens now: each day's times such as
+   `18:00-02:00`, several with commas. Leave it empty if the gateway listens always. Left as
+   `always`, **Hours** then says the same times in words.
 6. Click **Register with …**.
 
 List only channels the gateway listens on: the ones it scans, or the one its radio sits on. A
@@ -1429,7 +1435,7 @@ Useful commands:
 |---|---|
 | `radiopost-gateway held` | What the gateway holds. |
 | `radiopost-gateway accounts` | The client's accounts the gateway can register with, and where it is registered now. |
-| `radiopost-gateway register --account facundo@radiopost.org --channel 7101000,USB,aether,2300` | Register with that account's post office. `--account` takes the address, the callsign or the number `accounts` gives, and is needed when the client holds more than one. |
+| `radiopost-gateway register --account facundo@radiopost.org --channel 7101000,USB,aether,2300` | Register with that account's post office. `--account` takes the address, the callsign or the number `accounts` gives, and is needed when the client holds more than one. `--listens 18:00-02:00` gives each day's listening times in UTC; without it the gateway listens always. |
 | `radiopost-gateway unregister` | Withdraw the registration, as **Unregister** does. Stop the gateway first. `--here` forgets it on this computer only, for a post office that cannot be reached. |
 | `radiopost-gateway block --caller N3CALL --note "why"` | Refuse a caller. `unblock --caller N3CALL` carries it again. |
 | `radiopost-gateway blocked` | The callers and post offices refused. |
@@ -2142,3 +2148,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.24.0 | 2026-11-20 | §4: the client keeps a record of every call it places (`selection/attempts`): what was called, how the call ended and why, on this computer only. §38: attach them for a call that failed. |
 | 1.25.0 | 2026-11-21 | §12 *Places and GPS* (new Figure 25; later figures renumbered): saved places by grid square or latitude and longitude, the default, the GPS read over a serial port, TCP, UDP or gpsd, and the position in use and why. §8.1: the gateways are listed by distance from that position, said beside **Places**, in place of **Your grid** (a grid square typed there becomes the place *Home*). §4, §38: the call records say where you were. Figure 13 retaken. |
 | 1.26.0 | 2026-11-21 | §8.1: the Gateways page's views (*Recommended*, *Favourites*, *Recent*, *Worked from here*; new Figure 14, later figures renumbered), favourites and blocks by gateway or by channel, the last call to each gateway, the record's and the list's age, and gateways of your own; **Hours** shown under **Where**. §4: `selection/gateways.json`. Figure 13 retaken. |
+| 1.27.0 | 2026-11-21 | RP-5 1.4.0's `listens` and `seen`. §8.1: under **Where**, whether a gateway listens now by its listening times, and when its post office last saw it; one not seen for two days faded. §18 step 5: **Listening times, UTC**, and **Hours** filled from them. §23: `register --listens`. Figures 13 and 31 retaken. |

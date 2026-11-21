@@ -13,7 +13,7 @@ use radiopost::crypto::{self, ContentId, context};
 use radiopost::message::{Compression, Message};
 use radiopost::pdu;
 use radiopost::statement::{self, Freshness, Statement};
-use serde_json::Value as Json;
+use serde_json::{Value as Json, json};
 
 fn vectors(name: &str) -> Json {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -606,6 +606,31 @@ fn dns_records_are_read_and_post_offices_trusted_as_rp1_7_says() {
             Meets::Ignored => "ignored",
         };
         assert_eq!(got, text(c, "expect"), "{}", text(c, "what"));
+    }
+}
+
+#[test]
+fn when_a_gateway_listens_is_read_as_rp5_4_4_says() {
+    use radiopost::gateway_list::{listening, listens};
+    let file = vectors("gateway-lists.json");
+    for c in file["listens_cases"].as_array().expect("listens cases") {
+        let what = text(c, "what");
+        let kept = listens(&c["record"]).map(|ws| {
+            ws.iter()
+                .map(|w| json!({"every_s": w.every_s, "at_s": w.at_s, "length_s": w.length_s}))
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(
+            kept.map_or(Json::Null, Json::from),
+            c["kept"],
+            "{what}: kept"
+        );
+        let l = listening(&c["record"], c["now"].as_u64().expect("now"));
+        assert_eq!(
+            json!({"open": l.open, "changes": l.changes}),
+            c["expect"],
+            "{what}"
+        );
     }
 }
 

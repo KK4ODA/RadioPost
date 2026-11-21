@@ -85,6 +85,64 @@ def refused(cid: str, name: str, text: str) -> dict[str, Any]:
     return {"id": cid, "status": "refused", "code": rp.ERRORS[name], "name": name, "text": text}
 
 
+def listens(record: dict[str, Any]) -> list[dict[str, int]] | None:
+    """RP-5 §4.4: the windows a record lists in `listens`, those that do not hold left out.
+
+    A window holds with integer `every_s` of 1 or more, `at_s` below it and `length_s` from 1 to
+    `every_s`. None when no window holds or there is no `listens`: `hours` says, for people.
+    """
+    windows = record.get("listens")
+    if not isinstance(windows, list):
+        return None
+    kept = []
+    for w in windows:
+        if not isinstance(w, dict):
+            continue
+        n = [w.get(k) for k in ("every_s", "at_s", "length_s")]
+        if not all(isinstance(x, int) and not isinstance(x, bool) for x in n):
+            continue
+        every, at, length = n
+        if every >= 1 and 0 <= at < every and 1 <= length <= every:
+            kept.append({"every_s": every, "at_s": at, "length_s": length})
+    return kept or None
+
+
+def _open_until(w: dict[str, int], t: int) -> int | None:
+    """When the window open at `t` closes; None when it is not open then."""
+    start = t - (t - w["at_s"]) % w["every_s"]
+    return start + w["length_s"] if t < start + w["length_s"] else None
+
+
+def _opens(w: dict[str, int], t: int) -> int:
+    """When the window next opens after `t`."""
+    start = t - (t - w["at_s"]) % w["every_s"]
+    return start + w["every_s"] if start <= t else start
+
+
+def listening(record: dict[str, Any], now: int) -> dict[str, Any]:
+    """RP-5 §4.4: whether a gateway listens at `now`, and when that changes (`changes`).
+
+    A gateway that lists no `listens` listens as `hours` says: `open` true and `changes` None.
+    Windows that follow on, or overlap, are one stretch of listening; windows that cover every
+    moment never close, and `changes` is None.
+    """
+    windows = listens(record)
+    if windows is None:
+        return {"open": True, "changes": None}
+    t = now
+    for _ in range(64):
+        ends = [e for e in (_open_until(w, t) for w in windows) if e is not None]
+        if not ends:
+            break
+        t = max(ends)
+    else:
+        # the windows cover every moment (one as long as its period, or several end to end)
+        return {"open": True, "changes": None}
+    if t > now:
+        return {"open": True, "changes": t}
+    return {"open": False, "changes": min(_opens(w, now) for w in windows)}
+
+
 def gateway_list(
     home: str,
     home_gateways: list[dict[str, Any]],

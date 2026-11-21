@@ -353,6 +353,9 @@ pub struct State {
     pub copies: BTreeMap<String, Vec<Json>>,
     /// When each gateway last polled for copies (RP-7 §4.1).
     pub last_poll: BTreeMap<String, u64>,
+    /// When each registered gateway last reached this post office, by logging in or polling for
+    /// copies: the list's `seen` (RP-5 §4.4).
+    pub gateways_seen: BTreeMap<String, u64>,
     /// Enrollment codes not yet used.
     pub codes: BTreeMap<String, Code>,
     /// Login nonces issued, base64url, and when each ends.
@@ -1117,6 +1120,9 @@ impl PostOffice {
                 expires,
             },
         );
+        if cbody.flags & flags::GATEWAY != 0 {
+            self.saw(&cbody.operator);
+        }
         let mut answer = json!({"token": token, "expires": expires, "address": cbody.address,
                                 "operator": cbody.operator, "flags": cbody.flags});
         if !self.config.operators.is_empty()
@@ -1931,6 +1937,7 @@ impl PostOffice {
     /// poll answered `placing` false is not counted (RP-7 §4.1), and a credential from a post
     /// office that did not list the gateway gets nothing, uncounted.
     fn poll(&mut self, gateway: &Holder, query: &str) -> Response {
+        self.saw(&gateway.operator);
         if !self.theirs(gateway) {
             return Response::ok(200, json!({"cursor": "c_0", "placing": false, "items": []}));
         }
@@ -2042,6 +2049,10 @@ impl PostOffice {
             return problem(ErrorCode::SignatureInvalid, None);
         }
         record["updated"] = self.now.into();
+        // `seen` is the post office's to say (RP-5 §6.4)
+        if let Some(m) = record.as_object_mut() {
+            m.remove("seen");
+        }
         self.state.gateways.insert(callsign.clone(), record);
         let credential = self.issue(
             &user.address,
@@ -2050,6 +2061,13 @@ impl PostOffice {
             flags::SEND | flags::GATEWAY,
         );
         Response::ok(201, json!({"credential": base64url::encode(&credential)}))
+    }
+
+    /// A registered gateway reached this post office now (RP-5 §4.4, `seen`).
+    fn saw(&mut self, callsign: &str) {
+        if let Some(found) = self.registered(callsign) {
+            self.state.gateways_seen.insert(found, self.now);
+        }
     }
 
     /// The callsign a gateway's record is kept under, compared without regard to case (RP-0 §6.1).
@@ -2113,6 +2131,7 @@ impl PostOffice {
         self.state.copies.remove(&found);
         self.state.acked.remove(&found);
         self.state.last_poll.remove(&found);
+        self.state.gateways_seen.remove(&found);
         self.state.cut.remove(&found);
         for (via, address, serial) in self.state.forwarded.remove(&found).unwrap_or_default() {
             self.state

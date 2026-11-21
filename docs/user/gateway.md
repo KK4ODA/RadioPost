@@ -102,7 +102,12 @@ starts it again after. When the scan ends, or Aether drops a channel the radio w
 gateway registers again with what it still listens on: once the scan has ended, the channel the
 radio stays on alone, with no `scan_s`. When the scan runs again, it registers all its channels
 again. **Grid** and **Place** help callers choose
-a gateway near them; **Hours** says when it answers (`always`, or in words). Click **Register**.
+a gateway near them; **Hours** says when it answers (`always`, or in words). **Listening times,
+UTC** says the same for callers' programs, so their lists can show whether the gateway listens now:
+each day's times such as `18:00-02:00`, several with commas, or empty if it listens always (RP-5
+§4.4 `listens`; `--listens` on the command line). Your post office adds when the gateway last
+reached it, to the minute, so callers can tell a gateway whose computer has been off for days
+(`seen`). Click **Register**.
 Your post office lists the gateway for its users and issues it a credential, valid for 90 days.
 While the gateway answers, it renews that credential by itself in its last month, with your
 account's post office, and uses the new one from its next session; the log says so. If renewing

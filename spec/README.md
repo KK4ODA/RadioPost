@@ -19,7 +19,7 @@ adapter from them.
 | [RP-2](rp-0002-messages.md) | Messages | Stable | 1.2.0 | The message, its air form, its content ID |
 | [RP-3](rp-0003-session.md) | Session protocol | Stable | 1.1.0 | Client ↔ gateway over the radio |
 | [RP-4](rp-0004-modem-interface.md) | Modem interface | Stable | 1.3.1 | Client or gateway ↔ modem adapter |
-| [RP-5](rp-0005-post-office-api.md) | Post office API | Stable | 1.3.0 | Gateway or client ↔ post office over HTTPS |
+| [RP-5](rp-0005-post-office-api.md) | Post office API | Stable | 1.4.0 | Gateway or client ↔ post office over HTTPS |
 | [RP-6](rp-0006-email.md) | Email interoperation | Stable | 1.1.0 | Post office ↔ ordinary email |
 | [RP-7](rp-0007-forwarding.md) | Forwarding | Draft | 0.11.0 | Gateway ↔ gateway by radio |
 | [RP-8](rp-0008-alerts.md) | Alerts | Draft | 0.1.0 | Station → station or circle, by broadcast |

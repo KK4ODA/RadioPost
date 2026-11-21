@@ -239,6 +239,7 @@ function fillForms(s) {
   const last = s.last_record;
   if (last) {
     for (const k of ["grid", "place", "hours"]) if (last[k]) r[k].value = last[k];
+    r.listens.value = listensText(last.listens);
   }
   if (!$("channel-rows").children.length) {
     const channels = (last && last.channels) || [];
@@ -700,6 +701,13 @@ $("gateway-form").addEventListener("submit", (e) => {
   }, (s) => { render(s); toast(s.credential ? "Saved. Register again so the post office knows." : "Saved."); });
 });
 
+// a record's daily listening windows (RP-5 §4.4) as the form types them: 18:00-02:00, 08:00-10:00
+function listensText(windows) {
+  const clock = (s) => `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}`;
+  return (windows || []).filter((w) => w.every_s === 86400)
+    .map((w) => `${clock(w.at_s)}-${clock((w.at_s + w.length_s) % 86400)}`).join(", ");
+}
+
 $("register-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const f = e.target.elements;
@@ -709,7 +717,7 @@ $("register-form").addEventListener("submit", (e) => {
             modem: modem.value, bandwidth_hz: Number(bw.value)};
   }).filter((c) => c.dial_hz > 0);
   act("register", {home: f.home.value, account: f.account.value, grid: f.grid.value, place: f.place.value,
-                   hours: f.hours.value, channels,
+                   hours: f.hours.value, listens: f.listens.value, channels,
                    scan: f.scan.checked ? channels.map((c) => c.dial_hz) : []},
       (a) => { render(a.state); toast(a.said); });
 });

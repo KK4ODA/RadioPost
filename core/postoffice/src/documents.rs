@@ -92,7 +92,14 @@ impl PostOffice {
             "/post-offices" => json!({"issued": now, "post_offices": info.post_offices}),
             "/gateways" => json!({
                 "issued": now,
-                "gateways": self.state.gateways.values().collect::<Vec<_>>(),
+                "gateways": self.state.gateways.iter().map(|(callsign, record)| {
+                    let mut record = record.clone();
+                    // when it last reached this post office, to the minute (RP-5 §4.4)
+                    if let Some(t) = self.state.gateways_seen.get(callsign) {
+                        record["seen"] = json!(t / 60 * 60);
+                    }
+                    record
+                }).collect::<Vec<_>>(),
             }),
             "/routes" => json!({"issued": now, "routes": self.state.routes}),
             _ => return None,

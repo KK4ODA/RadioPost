@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.3.0 |
-| **Updated** | 2026-11-19 |
+| **Version** | 1.4.0 |
+| **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-3 |
@@ -213,8 +213,27 @@ A record's members:
 | `copies` | map | Copies placed ahead it holds (§5.8): `users`, `days` and `max_air_bytes`, integers. |
 | `forwarding` | array | Its windows for cut-off partners (RP-7 §5). |
 | `updated` | integer | When the record last changed. |
+| `listens` | array of window | When it listens, for programs: windows of RP-7 §5's form without a `channel` (`every_s`, `at_s`, `length_s`, integers), on all its channels. Absent: `hours` says, for people. |
+| `seen` | integer | When the gateway last reached its post office, to the minute. The post office's, not the operator's (below). |
 
 A reader ignores a member of another type, as it ignores one it does not know (RP-0 §4.2).
+
+**When it listens.** `hours` is for people, and a program cannot read it. A gateway whose operator
+wants programs to know when it listens lists `listens`: each window opens `at_s` seconds after each
+multiple of `every_s` since the Unix epoch, and lasts `length_s` seconds, as RP-7 §5 says of a
+forwarding window; the gateway listens on all its channels during any of them. A window has
+`length_s` from 1 to `every_s` and `at_s` below `every_s`; a reader ignores one that does not.
+Listening from 18:00 to 02:00 UTC each day is
+`{"every_s": 86400, "at_s": 64800, "length_s": 28800}`. A gateway that listens always leaves
+`listens` out. It SHOULD keep `hours` saying the same in words.
+
+**When it was last seen.** A post office that serves the list sets `seen` in each record to when
+the gateway last reached it: its last login with its gateway credential (§3), or its last poll for
+copies (§5.8), whichever is later, rounded down to the minute (a multiple of 60). A gateway that has
+not reached it since registering has no `seen`. A client shows it, so that a gateway whose computer
+has been off for days is not taken for one that answers; a gateway cut off from the Internet
+still serves by radio (RP-7), so an old `seen` with `internet` true says the gateway may be cut
+off, not that it is gone. The minute is all it says: when the gateway's computer is on.
 
 `modem` names the modem from the registry of RP-0 §9.4. A reader ignores a channel whose `modem`
 it does not know: the modem may have been added after the reader was written. `mode` is the
@@ -561,6 +580,7 @@ A licensed user registers a gateway they operate:
   `operator` and the user's address as `address`.
   Registering a callsign again replaces its record, and issues a new credential.
 * **`PUT /gateways/{callsign}`** updates the record.
+* A record registered or updated with `seen` has it ignored: the post office sets `seen` (§4.4).
 * **`DELETE /gateways/{callsign}`** with a user token withdraws the registration: the gateway's
   operator takes it off the air, or moves it to another post office. The token's credential has
   the record's `operator` as its `operator`. A post office SHOULD offer it. The post office:
@@ -925,3 +945,4 @@ read from the home's and every post office it knows) and `vectors/api.json` (the
 | 1.1.0 | 2026-11-17 | §4.4: a channel's `scan_s` (a gateway that scans, RP-4 1.1.0 §4.2), a client's call that lasts that long, and a gateway that lists only the channels it listens on (wishlist W50, gap G21). MINOR, announced (RP-0 §8.4): nothing for an implementation to do. |
 | 1.2.0 | 2026-11-18 | §6.4: `DELETE /gateways/{callsign}` withdraws a gateway's registration, for the user whose callsign is its `operator`: the record leaves the gateway list, the credentials issued for the gateway are revoked, and the items placed at it are dropped; registering a callsign again replaces its record; a gateway is registered with one post office at a time, reports what it holds before it is withdrawn, and looks in the list after a `404`. §7.7: `DELETE /office/gateways/{callsign}`, the operators' withdrawal. §1: `404` for a gateway not registered. §8: who may withdraw one. 1.0.0 named `DELETE` and said no more, so a gateway registered by mistake could not be taken off (a tester's, at radiopost.org, 2026-11-18). Test vectors (`api-exchanges.json`, `api-office.json`). MINOR, announced (RP-0 §8.4): nothing for an implementation to do. A post office of 1.1.0 answers a withdrawal `404` and keeps the record; one of 1.2.0 SHOULD offer it. |
 | 1.3.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 8; D43). §1: the base URL signed as the record gives it, with no `/` after it; how a reader reads an error whose `code` it does not know, or an answer with no problem body; `Retry-After` in seconds. §4.4: a record's members and their types; entries sharing an `api` are one post office (the first domain, any entry's keys, every domain left out together); the home's own entry passed over; a callsign a list names twice counts once (the reference and the Rust library had made it ambiguous). §6.3: `PUT /settings` replaces the settings whole. §6.6: a caller's statement in challenge form, with the caller's `nonce`, is taken (no station-to-station session in which the station called asked for a challenge could be reported); addresses compared as RP-0 1.2.0 §6.2 says. Test vectors (`gateway-lists.json`, `direct.json`). MINOR, announced (RP-0 §8.4): `nonce` is a new optional member, and a post office of 1.2.0 refuses such a report `signature-invalid` or `time-skew`. Post offices should take it, and clients send it. |
+| 1.4.0 | 2026-11-21 | §4.4: `listens`, when a gateway listens, as windows of RP-7 §5's form, for programs where `hours` is for people; `seen`, set by the post office that serves the list, when the gateway last logged in or polled for copies, to the minute. §6.4: a registered record's `seen` is ignored. From choosing a gateway (the design's §7.2). Test vectors: the example record lists `listens` and the example list `seen`. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; a post office SHOULD set `seen`, and a reader that ignores both loses nothing it had. |

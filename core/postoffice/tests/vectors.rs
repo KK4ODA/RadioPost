@@ -12,9 +12,10 @@ use radiopost::base64url;
 use radiopost::credential::{PostOfficeKey, Trust};
 use radiopost::crypto;
 use radiopost::message::{Compression, Message, key};
+use radiopost_postoffice::documents::Info;
 use radiopost_postoffice::office::Listed;
 use radiopost_postoffice::{Config, PostOffice, Request, State};
-use serde_json::Value as Json;
+use serde_json::{Value as Json, json};
 use sha2::{Digest as _, Sha256};
 
 const PO_RADIOPOST: &str = "https://po.radiopost.org/rp/v1";
@@ -353,12 +354,45 @@ fn the_api_story_replays_exactly() {
     let w = world();
     let file = vectors("api-exchanges.json");
     let mut office = post_office(&w, 1050);
-    replay(
-        &mut office,
-        file["story"].as_array().expect("story"),
-        "story",
-        arrivals(&w),
-    );
+    let story = file["story"].as_array().expect("story");
+    replay(&mut office, story, "story", arrivals(&w));
+    // the gateway list says when KK4ODA-1 last reached the post office: its last login or poll
+    // that was let in, to the minute (RP-5 §4.4, `seen`)
+    let last = story
+        .iter()
+        .filter(|e| e["who"].as_str().is_some_and(|w| w.starts_with("KK4ODA-1")))
+        .filter(|e| e["response"]["status"] == 200)
+        .filter(|e| {
+            let path = e["request"]["path"].as_str().unwrap_or("");
+            path == "/auth/token" || path.starts_with("/copies?")
+        })
+        .filter_map(|e| e["at"].as_u64())
+        .max()
+        .expect("KK4ODA-1 reached the post office");
+    let info = Info {
+        operator: "KK4ODA".into(),
+        contact: "postmaster@radiopost.org".into(),
+        country: "US".into(),
+        max_air_bytes: 65_536,
+        max_email_bytes: 100_000,
+        gateways: "any".into(),
+        mail: json!({}),
+        updated: 0,
+        not_before: 0,
+        not_after: u64::MAX,
+        post_offices: Vec::new(),
+        applications: None,
+    };
+    let served = office
+        .document(&info, "/gateways", last + 600)
+        .expect("a gateway list");
+    let kk = served["gateways"]
+        .as_array()
+        .expect("gateways")
+        .iter()
+        .find(|g| g["callsign"] == "KK4ODA-1")
+        .expect("KK4ODA-1 listed");
+    assert_eq!(kk["seen"], json!(last / 60 * 60), "{kk}");
 }
 
 #[test]

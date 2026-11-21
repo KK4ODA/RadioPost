@@ -32,12 +32,14 @@ directory, as the RadioPost Gateway app has it.
                      the accounts of the RadioPost app on this computer (HOME, else
                      $RADIOPOST_HOME or .radiopost in your home directory): the gateway
                      registers with one of them, and so with its post office
-  register [--home HOME] [--account WHO] [--grid G] [--place TEXT]
+  register [--home HOME] [--account WHO] [--grid G] [--place TEXT] [--listens 18:00-02:00,…]
            [--channel HZ,MODE,MODEM,BW]...
                      register the gateway with an account's post office (RP-5 §6.4), logged
                      in as that account with your client's key and credential, and keep the
                      gateway's credential. WHO is the account's address, callsign or number
-                     (`accounts` lists them); needed when the app holds more than one
+                     (`accounts` lists them); needed when the app holds more than one.
+                     --listens: each day's listening times in UTC, for callers' programs
+                     (RP-5 §4.4); without it, the gateway listens always
   unregister [--here]
                      withdraw the gateway's registration at its post office (RP-5 §6.4), as
                      the account it was registered from: it leaves the gateway list, its
@@ -209,6 +211,11 @@ fn accounts(dir: &Path, a: &Args) {
 
 fn register(dir: &Path, a: &Args) -> Result<(), String> {
     let mut record = json!({"channels": channels(a)?, "hours": "always", "internet": true});
+    let listens = radiopost_gateway::listens::parse(a.one("--listens").as_deref().unwrap_or(""))?;
+    if !listens.is_empty() {
+        record["hours"] = radiopost_gateway::listens::words(&listens).into();
+        record["listens"] = json!(listens);
+    }
     for (flag, key) in [("--grid", "grid"), ("--place", "place")] {
         if let Some(v) = a.one(flag) {
             record[key] = v.into();

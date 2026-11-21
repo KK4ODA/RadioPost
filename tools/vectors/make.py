@@ -3058,7 +3058,25 @@ def documents() -> list[tuple[str, str, dict[str, Any], str]]:
     }
     gateways = {
         "issued": T_DOCUMENTS,
-        "gateways": [{**GATEWAY_RECORD, "updated": T_ISSUED + 7200}],
+        "gateways": [
+            # `seen` is the post office's: the gateway's last login or poll, to the minute
+            {**GATEWAY_RECORD, "updated": T_ISSUED + 7200, "seen": T_DOCUMENTS - 180},
+            {
+                "callsign": "N2CALL-5",
+                "operator": "N2CALL",
+                "grid": "EM82",
+                "place": "Macon, GA",
+                "channels": [
+                    {"dial_hz": 7103500, "mode": "USB", "modem": "aether", "bandwidth_hz": 500}
+                ],
+                "hours": "1800-0200 UTC",
+                # the same for programs: 18:00 to 02:00 UTC each day (RP-5 §4.4)
+                "listens": [{"every_s": DAY, "at_s": 18 * 3600, "length_s": 8 * 3600}],
+                "internet": True,
+                "updated": T_ISSUED + 9000,
+                "seen": T_DOCUMENTS - 2 * DAY,
+            },
+        ],
     }
     return [
         ("info", "/info", info, "po:radiopost.org"),
@@ -7871,7 +7889,108 @@ def make_gateway_lists() -> dict[str, Any]:
     out["post_offices"] = post_offices
     out["served"] = world
     out["cases"] = cases
+    out["listens_rule"] = (
+        "RP-5 §4.4: a record's `listens` are windows of RP-7 §5's form. One holds with integer "
+        "`every_s` of 1 or more, `at_s` below it and `length_s` from 1 to `every_s`; the others "
+        "are ignored (`kept`, null when none holds or there is no `listens`: the gateway listens "
+        "as `hours` says, and `open` is true with no change). A window opens `at_s` seconds after "
+        "each multiple of `every_s` since the Unix epoch, for `length_s` seconds. At `now`, "
+        "`open` says whether any window is open, and `changes` when that changes: when the "
+        "stretch of windows open at `now`, following on or overlapping, ends; else when the next "
+        "window opens. Windows that cover every moment never close: `changes` is null."
+    )
+    out["listens_cases"] = listens_cases()
     return out
+
+
+def listens_cases() -> list[dict[str, Any]]:
+    """RP-5 §4.4's `listens`, read: the windows kept, and whether the gateway listens now."""
+    d = T_DOCUMENTS // DAY * DAY  # a midnight, UTC
+    evening = {"every_s": DAY, "at_s": 18 * 3600, "length_s": 8 * 3600}  # 18:00 to 02:00 UTC
+    morning = [
+        {"every_s": DAY, "at_s": 8 * 3600, "length_s": 4 * 3600},  # 08:00 to 12:00
+        {"every_s": DAY, "at_s": 12 * 3600, "length_s": 2 * 3600},  # 12:00 to 14:00
+    ]
+    hourly = {"every_s": 3600, "at_s": 0, "length_s": 600}  # the first ten minutes of each hour
+    rows = [
+        ("no `listens`: it listens as `hours` says", None, d + 3600),
+        ("18:00 to 02:00 UTC, at 20:00", [evening], d + 20 * 3600),
+        ("18:00 to 02:00 UTC, at noon", [evening], d + 12 * 3600),
+        ("18:00 to 02:00 UTC, at 01:00 the next day", [evening], d + DAY + 3600),
+        ("two windows one after the other, at 10:00", morning, d + 10 * 3600),
+        (
+            "windows that do not hold are ignored",
+            [
+                {"every_s": DAY, "at_s": DAY, "length_s": 3600},
+                {"every_s": DAY, "at_s": 3600, "length_s": 0},
+                {"every_s": DAY, "at_s": 3600, "length_s": DAY + 1},
+                {"every_s": "3600", "at_s": 0, "length_s": 600},
+                {"every_s": 0, "at_s": 0, "length_s": 0},
+                hourly,
+            ],
+            d + 2 * 3600 + 300,
+        ),
+        ("none holds: as if there were none", [{"every_s": 0, "at_s": 0, "length_s": 0}], d),
+        ("a window as long as its period", [{"every_s": DAY, "at_s": 0, "length_s": DAY}], d + 5),
+        (
+            "two windows that cover the day",
+            [
+                {"every_s": DAY, "at_s": 0, "length_s": DAY // 2},
+                {"every_s": DAY, "at_s": DAY // 2, "length_s": DAY // 2},
+            ],
+            d + 3600,
+        ),
+    ]
+    cases = []
+    for what, windows, now in rows:
+        record: dict[str, Any] = {"callsign": "N2CALL-5", "hours": "1800-0200 UTC"}
+        if windows is not None:
+            record["listens"] = windows
+        cases.append(
+            {
+                "what": what,
+                "record": record,
+                "now": now,
+                "kept": po.listens(record),
+                "expect": po.listening(record, now),
+            }
+        )
+    confirm(  # RP-5 §4.4: worked out from the windows by hand
+        cases,
+        {
+            "no `listens`: it listens as `hours` says": {"open": True, "changes": None},
+            "18:00 to 02:00 UTC, at 20:00": {"open": True, "changes": d + DAY + 2 * 3600},
+            "18:00 to 02:00 UTC, at noon": {"open": False, "changes": d + 18 * 3600},
+            "18:00 to 02:00 UTC, at 01:00 the next day": {
+                "open": True,
+                "changes": d + DAY + 2 * 3600,
+            },
+            "two windows one after the other, at 10:00": {"open": True, "changes": d + 14 * 3600},
+            "windows that do not hold are ignored": {"open": True, "changes": d + 2 * 3600 + 600},
+            "none holds: as if there were none": {"open": True, "changes": None},
+            "a window as long as its period": {"open": True, "changes": None},
+            "two windows that cover the day": {"open": True, "changes": None},
+        },
+    )
+    confirm(
+        cases,
+        {
+            "no `listens`: it listens as `hours` says": None,
+            "18:00 to 02:00 UTC, at 20:00": [evening],
+            "18:00 to 02:00 UTC, at noon": [evening],
+            "18:00 to 02:00 UTC, at 01:00 the next day": [evening],
+            "two windows one after the other, at 10:00": morning,
+            "windows that do not hold are ignored": [hourly],
+            "none holds: as if there were none": None,
+            "a window as long as its period": [{"every_s": DAY, "at_s": 0, "length_s": DAY}],
+            "two windows that cover the day": [
+                {"every_s": DAY, "at_s": 0, "length_s": DAY // 2},
+                {"every_s": DAY, "at_s": DAY // 2, "length_s": DAY // 2},
+            ],
+        },
+        lambda c: c["kept"],
+    )
+    return cases
 
 
 def make_api() -> dict[str, Any]:

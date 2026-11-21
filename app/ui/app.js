@@ -980,8 +980,30 @@ function gatewayRow(gw, twice) {
   const where = el("div", {text: [gw.place, gw.grid].filter(Boolean).join(", ")});
   if (gw.hours) where.append(el("div", {class: "note", text: `answers ${gw.hours}`, title: "When it answers"}));
   if (gw.updated) {
-    where.append(el("div", {class: "note", text: `record changed ${age(gw.updated)}`,
+    where.append(el("div", {class: "note", text: `changed ${age(gw.updated)}`,
       title: "When its operator last changed its record"}));
+  }
+  // when it listens, from its windows (RP-5 §4.4); and when its post office last saw it
+  const clockAt = (t) => {
+    const d = new Date(t * 1000);
+    return new Date().toDateString() === d.toDateString()
+      ? d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})
+      : d.toLocaleString([], {weekday: "short", hour: "2-digit", minute: "2-digit"});
+  };
+  if (gw.listening) {
+    const l = gw.listening;
+    where.append(el("div", {class: l.open ? "note" : "note warn",
+      text: l.open ? (l.changes ? `listening now, until ${clockAt(l.changes)}` : "listening now")
+        : `not listening now: from ${clockAt(l.changes)}`,
+      title: "From the listening times its record gives"}));
+  }
+  if (gw.seen) {
+    where.append(el("div", {class: "note", text: `seen ${age(gw.seen)}`,
+      title: "When its post office last saw it: its computer was on, and online"}));
+  }
+  if (gw.seen_old) {
+    tr.classList.add("old");
+    where.lastChild.title = "Its post office has not seen it for days: its computer may be off, or it may be cut off and still serving by radio";
   }
   if (gw.list_old) {
     tr.classList.add("old");

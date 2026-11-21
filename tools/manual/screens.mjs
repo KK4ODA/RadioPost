@@ -107,6 +107,7 @@ const GATEWAYS = {domain: "radiopost.org", fetched: T - 2 * DAY, others: ["hampo
      km: 14, hours: "always", copies: {users: 50, days: 7}, updated: T - 12 * DAY,
      own: false, favourite: true, blocked: false, list_fetched: T - 2 * DAY, list_old: false,
      last: {at: T - 1300, class: "completed", words: "completed"}, worked: true,
+     seen: T - 120, seen_old: false, listening: null,
      channels: [{dial_hz: 3591500, bandwidth_hz: 2300, scan_s: 20, favourite: true, blocked: false},
                 {dial_hz: 7101000, bandwidth_hz: 2300, scan_s: 20, favourite: true, blocked: false}]},
     {callsign: "N0CALL-10", place: "The radio club", grid: "EM74", km: 46, hours: "evenings",
@@ -115,7 +116,8 @@ const GATEWAYS = {domain: "radiopost.org", fetched: T - 2 * DAY, others: ["hampo
      channels: [{dial_hz: 7103500, bandwidth_hz: 500, favourite: false, blocked: false}]},
     {callsign: "N2CALL-5", post_office: "radiopost.org", place: "Macon, Georgia", grid: "EM82",
      km: 128, hours: "1800-0200 UTC", updated: T - 40 * DAY, own: false, favourite: false,
-     blocked: false, list_fetched: T - 2 * DAY, list_old: false,
+     blocked: false, list_fetched: T - 2 * DAY, list_old: false, seen: T - 3 * DAY,
+     seen_old: true, listening: {open: false, changes: T + 3 * 3600 + 36 * 60},
      last: {at: T - 3 * DAY, class: "no-answer", words: "no answer, nothing heard"}, worked: false,
      channels: [{dial_hz: 7103500, bandwidth_hz: 500, favourite: false, blocked: false}]},
     {callsign: "N1CALL-10", post_office: "hampost.org", place: "Austin, Texas", grid: "EM10",
@@ -1127,7 +1129,7 @@ const SHOTS = {
 
   async "readme-gateways"(browser) {
     const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
-                                                 width: 1100, height: 700});
+                                                 width: 1280, height: 700});
     await page.click("#gateways-open");
     await page.waitForTimeout(200);
     await readmeShot(page, "readme-gateways", ["#gateways-view > *"]);

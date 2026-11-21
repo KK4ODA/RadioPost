@@ -213,8 +213,11 @@
         <label title="Where it is, in words: a town and state">Place
           <input name="place">
         </label>
-        <label title="When it answers: always, or in words such as 1800-0200 UTC">Hours
+        <label title="When it answers: always, or in words such as 1800-0200 UTC. Left as always, it says the listening times below">Hours
           <input name="hours" value="always">
+        </label>
+        <label title="When it listens, for callers' programs, so they can tell whether it listens now: each day's times in UTC, such as 18:00-02:00, several with commas. Empty: always">Listening times, UTC
+          <input name="listens" spellcheck="false" placeholder="always">
         </label>
         <div class="row"><button class="primary" type="submit" id="register-go">Register</button></div>
         <details>
