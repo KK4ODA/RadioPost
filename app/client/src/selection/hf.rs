@@ -192,6 +192,14 @@ pub enum Class {
 }
 
 impl Class {
+    /// The class a record names (`good`, `moderate`, `poor`).
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Class> {
+        [Class::Good, Class::Moderate, Class::Poor]
+            .into_iter()
+            .find(|c| c.name() == name)
+    }
+
     /// Its name, as the profile and the panel write it.
     #[must_use]
     pub fn name(self) -> &'static str {

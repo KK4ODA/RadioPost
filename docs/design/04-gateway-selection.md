@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.15 |
+| **Version** | 0.3.16 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -1166,26 +1166,52 @@ measured SNR = predicted median SNR (model, at that hour and month) + δ + day-t
 δ is learned for each gateway and band (HF), or each gateway and channel (VHF), each way. It
 starts at the offset learned over all gateways on that band, with a spread of 8 dB at HF (VOACAP's
 own day-to-day deciles are of that order) and 10 dB at VHF (the location variability of a
-terrain-diffraction path). It is kept as a posterior on a grid: δ from −30 to +30 dB in 1 dB steps,
-crossed with availability *A* in 19 steps, 1 159 cells in all. Each record multiplies the grid by
-its likelihood, raised to its weight (§12.4):
+terrain-diffraction path). It is kept as a posterior on a grid: the downlink's δ from −30 to +30 dB
+in 1 dB steps, the direction offset *D* (below) from −12 to +12 dB, availability *A* in 19 steps and
+the heard share *h* (below) in five (0.02, 0.1, 0.25, 0.5, 0.8), 144 875 cells in all; the uplink's
+offset is δ + *D*. Each record multiplies the grid by its likelihood, raised to its weight (§12.4):
 
-| Record | Likelihood of (δ, *A*) |
+| Record | Likelihood of (δ, *D*, *A*, *h*) |
 |---|---|
-| Linked, SNR *m* measured | *A* · f(*m* − μ − δ), f the day-to-day density (VOACAP's split normal from its deciles; at VHF a normal with the location spread) widened by 2 dB of measurement error |
-| Linked, no SNR from the modem | *A* · P(μ + δ + ε ≥ θ_connect) |
-| No answer, nothing heard | (1 − *A*) + *A* · P(the call fails at μ + δ) |
-| No answer, station heard at *m* | *A* · f(*m* − μ_down − δ_down) · P(the uplink fails) |
+| Linked, SNR *m* measured each way | *A* · f(*m* − μ − δ) for each way, f the day-to-day density (VOACAP's split normal from its deciles; at VHF a normal with the location spread) widened by 2 dB of measurement error |
+| Linked, no SNR from the modem | *A* · P(μ + δ + ε ≥ θ_connect), each way |
+| No answer, nothing heard | 1 − *A* · (P(the call links) + *h* · P(the downlink carries and the uplink fails)) |
+| No answer, station heard at *m* | *A* · *h* · f(*m* − μ_down − δ_down) · P(the uplink fails) |
 | Busy, cancelled, local, unknown | 1: no information |
 
 θ_connect is the modem's: for Aether, the threshold of its tone-floor call and acceptance on the
 channel class (§10.3). A failure is a *censored* observation: it says the SNR was below the
 threshold, not what it was, and the likelihood uses it exactly that way. The grid makes this exact
-with no approximation and no fitting: 1 159 multiplications a record, microseconds.
+with no approximation and no fitting: about a third of a millisecond a record in a release build
+(200 calls to one gateway in 75 ms).
 
-Direction. With `peer_snr_db` (§12.2) the uplink is measured directly. Without it, δ_up is δ_down
-plus a direction offset learned over all gateways (power and noise differ between the user's station
-and gateways in general), with a 6 dB spread.
+**The heard share.** A gateway that never heard the call does not answer it, so it is heard during
+the call only when it is on the air for another station. *h* is how often that happens, learned for
+each gateway with the rest. The first table had no *h*, and its two unanswered rows then counted the
+uplink's failure twice: a heard call said the uplink failed, while a silent call's likelihood never
+said that, had the uplink failed, more of the calls would have been heard. On a simulated stream
+where a third of such calls were heard, the uplink came out at −12 dB against a true −9; with *h*
+on the grid, −10.0 ± 1.2 (2026-11-21).
+
+**Direction.** With `peer_snr_db` (§12.2) the uplink is measured; without it, the calls still bear
+on it. *D* is learned on each grid, its prior centred on the direction offset over all gateways
+(power and noise differ between the user's station and gateways in general) with a 6 dB spread.
+That centre comes from the sessions that measured both ways, which cleared the call both ways, so
+it is biased toward nought where one way is often too weak; it is only a prior. The direction shown
+for all gateways is each channel's *D*, weighted by the calls behind it.
+
+**Availability twice.** Each gateway's availability (§12.4) is counted first with each silent call
+shared by the model's chance, as each grid's prior; then again with each silent call shared by what
+its grid learned: the chance the gateway was away, the call's own likelihood divided out of the
+posterior cell by cell. The first pass alone, on a path 6 and 9 dB worse than predicted, put a
+gateway that answers 4 calls in 5 at 0.63; the second at 0.71, its grid at 0.75.
+
+**Checked on simulated streams** (2026-11-21, `app/client/tests/learning.rs`). Streams of 200 calls
+over 60 days, each day's SNR drawn from the prediction's own spread moved by a known offset, with
+2 dB of measurement error and a gateway that answers a known share. On four paths (offsets from
+−10 to +3 dB each way, answering 60 to 95 %), 20 streams each, the error over the stated spread has
+a root mean square of 0.45 to 1.00 and a mean of −0.47 to +0.38 for the downlink, the uplink and
+*D*: the spreads are honest and the offsets unbiased. Availability's mean error is −0.07 to −0.005.
 
 **The place term at VHF.** A VHF path's offset changes over a few hundred metres when a vehicle
 moves behind a building. The VHF offset is δ for the gateway (its real power and antenna, learned
@@ -2281,3 +2307,4 @@ for size in (2000, 50000):
 | 0.3.13 | 2026-11-21 | §11.4: the evidence API built in hf-predict and read by the client (`from` added, several places a request, Compare's observed tiers), the 2 : 1 raise of §10.5 applied. Phase 3 built but for bundling the engine. |
 | 0.3.14 | 2026-11-21 | §11.2: the engine bundled: hf-predict publishes it with checksums, RadioPost pins one, checks it, and puts it in the client's installers. Phase 3 built. |
 | 0.3.15 | 2026-11-21 | §12.2: the first two additions done (RP-4 1.4.0); the attempt record's version 2 (evidence, prediction, the peer's readings). Phase 4 begun. |
+| 0.3.16 | 2026-11-21 | §12.5: the grid as built: *D* and the heard share *h* on it (the first table counted an uplink failure twice: 3 dB low on a simulated stream), availability counted again from what the grids learned, the direction shown from the grids, the check on simulated streams. |
