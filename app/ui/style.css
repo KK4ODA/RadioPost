@@ -30,7 +30,7 @@ button { height: var(--control-h); padding: 0 14px; border: 1px solid var(--line
 button:hover { border-color: var(--muted); }
 button.primary { background: var(--key); color: var(--key-text); border-color: var(--key); }
 button.quiet { background: transparent; }
-/* the one button that puts the station on the air: green, and as wide as its row allows */
+/* the one button that puts the station on the air: green */
 button.go { background: var(--go); color: var(--go-text); border-color: var(--go); font-weight: 600; }
 button.go:hover:not(:disabled) { border-color: var(--go); filter: brightness(1.08); }
 /* Listen for P2P: a push-on, push-off switch. Out, its lamp is dark. Pressed, it stays in, sunk,
@@ -160,6 +160,7 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
   .frame { grid-template-columns: 1fr; overflow: visible; }
   .side { border-right: 0; border-bottom: 1px solid var(--line); }
   .side > .primary, #office-open, #setup-open { width: auto; align-self: flex-start; }
+  .station .row { align-items: flex-start; }
   .folders { display: flex; flex-wrap: wrap; gap: 2px 4px; }
   .folders button { width: auto; gap: 6px; }
   .side .folders li.sep { border-top: 0; margin-top: 0; padding-top: 0; }
@@ -175,9 +176,10 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 .kinds label.check { margin: 0; color: var(--text); font-size: 14px; }
 #gateways-open { margin: -4px 0 10px; padding: 0; height: auto; border: 0; color: var(--accent); }
 /* the call box: a station call's dial and bandwidth side by side, where the radio is, the tone */
-.station .row #call { flex: 1; }
-/* Listen for P2P on a row of its own, so that the box keeps its shape when it reads Listening */
-.station .row #listen { flex: 1 0 100%; justify-content: center; }
+/* Call, and Listen for P2P on a row of its own under it, so that the box keeps its shape when it
+   reads Listening. Both as wide as the column; stacked, as wide as their words (above) */
+.station .row { flex-direction: column; }
+.station .row #listen { justify-content: center; }
 .pair { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .pair select { width: auto; }
 .tuning { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: -2px 0 10px; }

@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.40.0 |
+| **Version** | 1.40.1 |
 | **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.33 |
 | **Licence** | CC BY 4.0 |
@@ -380,7 +380,8 @@ Every button and box has a tooltip: rest the mouse on it to read what it does.
 
 When the window is narrow (720 pixels wide or less, at 100 % display scale), its parts stack in
 one column: **Write**, the folders side by side, **Station**, then the folder or message you are
-looking at.
+looking at. The buttons keep their own widths there: **Call** and **Listen for P2P** are as wide as
+their words, not the window.
 
 ## 7. Writing a message
 
@@ -2445,3 +2446,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.38.0 | 2026-11-21 | §8.1 *What your calls teach*: an HF channel's line worked out with what your calls taught once you have called the gateway on that band, a VHF channel's line under its terrain, what each kind of call teaches; **Details** beside each gateway, the model, what was learned and what was measured side by side (new Figure 16; later figures renumbered); the warning when your own station looks at fault; forgetting, by gateway, place, day or everything, with **Undo** and **Show forgotten calls** (Figure 14 retaken). §4: `selection/learned.json` and `selection/forgotten.json`. §37: the station's warning. Figure 13 retaken with **Details**. |
 | 1.39.0 | 2026-11-21 | RadioPost Gateway reports its status to its post office (RP-5 1.6.0): Setup's **Report its status to its post office, for anyone to see** (section 18), what it says and when under *Its status, for anyone to see*, the line under **Registration** (section 19), and `status --off` (section 23). Figures 37 and 38 retaken. |
 | 1.40.0 | 2026-11-21 | §10: an alert goes on a **Dial** (the other station's gateway channel predicted best, the circle's watch dial, or where the radio is), the radio tuned there; copies sent while the other station's gateway scans round; a circle's **Watch dial, MHz**, and the red line when the radio or the gateway's scan is not on it; answers go on the dial the alert was heard on, shown in the alarm, and **Call back** fills **Dial, MHz** with it (RP-8 0.2.0). |
+| 1.40.1 | 2026-11-21 | From the session of 2026-11-21. §6: in a narrow window **Call** and **Listen for P2P** are as wide as their words, as **Write** and **Setup** are; they had stretched across the window. Figure 12 retaken. |
