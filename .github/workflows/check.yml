@@ -101,6 +101,14 @@ jobs:
         working-directory: core
         run: cargo test --locked
 
+      # the VOACAP engine the release bundles, fetched and checked as the release does it, and
+      # the client's HF predictions run on it (choosing a gateway, §§10, 11.2)
+      - name: HF predictions with the pinned VOACAP engine
+        run: |
+          python3 tools/engine/fetch.py get linux-x64 "$RUNNER_TEMP/engine"
+          cd core
+          RADIOPOST_VOACAP="$RUNNER_TEMP/engine" cargo test --locked -p radiopost-client --test hf -- --ignored
+
       - name: The panels parse
         # modules, as the pages load them: .mjs copies, since node reads a .js file as a script
         run: |

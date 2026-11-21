@@ -2,7 +2,9 @@
 #
 # The installers of the two desktop applications (RadioPost, the client, and RadioPost Gateway)
 # and the command-line tools, for Windows, macOS and Linux; the user's manual and the server guide
-# as PDFs; and the update channel that tells installed programs a newer release is out.
+# as PDFs; and the update channel that tells installed programs a newer release is out. The
+# client's installers carry the VOACAP engine hf-predict publishes, at the release
+# tools/engine/voacapl.json pins and checked against its checksums.
 #
 # A pushed tag v* makes a pre-release of that name. Started by hand with a `tag` (v0.1.0-beta.5),
 # it makes that public pre-release and the tag, on the commit it ran on; started by hand without
@@ -113,10 +115,20 @@ jobs:
           echo "UPDATER={\"bundle\":{\"createUpdaterArtifacts\":true},\"plugins\":{\"updater\":{\"pubkey\":\"${pub}\"}}}" >> "$GITHUB_ENV"
           echo "VERSION=$(python3 tools/release.py version)" >> "$GITHUB_ENV"
 
+      # the VOACAP engine, for the client's HF predictions (choosing a gateway, §11.2): the
+      # release of hf-predict's that tools/engine/voacapl.json pins, refused unless its checksum is
+      # the pinned one, among the client's resources (the gateway does not predict)
+      - name: The VOACAP engine
+        shell: bash
+        run: |
+          python3 tools/engine/fetch.py get ${{ matrix.name }} app/src-tauri/engine
+          client=$(python3 -c 'import json, os; c = json.loads(os.environ["UPDATER"]); c["bundle"]["resources"] = {"engine/": "engine/"}; print(json.dumps(c))')
+          echo "CLIENT=${client}" >> "$GITHUB_ENV"
+
       - name: The client's installers
         working-directory: app/src-tauri
         shell: bash
-        run: npx --yes @tauri-apps/cli@2 build --bundles ${{ matrix.bundles }} --config "$UPDATER"
+        run: npx --yes @tauri-apps/cli@2 build --bundles ${{ matrix.bundles }} --config "$CLIENT"
 
       - name: The gateway's installers
         working-directory: app/gateway/src-tauri

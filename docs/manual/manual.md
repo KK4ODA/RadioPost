@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.36.0 |
+| **Version** | 1.37.0 |
 | **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.32 |
 | **Licence** | CC BY 4.0 |
@@ -573,8 +573,13 @@ It is a monthly average, not today's band. And nothing is learned from your sess
 is often optimistic: on one 69 km path on 80 m that Aether measured on the air, VOACAP's median
 was 6 to 8 dB stronger than what was read. A later version of RadioPost corrects it from your own
 calls. If the line says *HF not predicted*, it says why: where you are is not known, the channel
-is outside 80 m to 10 m, or your station profile does not cover that band. Without the VOACAP
-engine installed, the line above the list says so once.
+is outside 80 m to 10 m, or your station profile does not cover that band.
+
+The VOACAP engine comes with RadioPost's installers. It was developed by NTIA's Institute for
+Telecommunication Sciences; RadioPost carries the voacapl port of it, built by hf-predict, and NTIA's
+notice and the port's terms are installed with it. If the engine is missing, the line above the
+list says so once. The command-line `radiopost panel` looks for it where `RADIOPOST_VOACAP` says, or
+in a folder named `engine` beside the program.
 
 **What your own receiver heard.** If [hf-predict](https://github.com/KK4ODA/hf-predict) runs on
 this computer and listens to FT8 with WSJT-X, RadioPost asks it what you heard in the last hour from
@@ -2335,3 +2340,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.34.0 | 2026-11-21 | §8.1: *The chance on an HF channel*, VOACAP both ways at this hour read through Aether's measured ladder, with the rate each way, what is assumed and why a channel is not predicted; Figure 13 retaken with them. |
 | 1.35.0 | 2026-11-21 | §8.1: *Another time*, the **At** picker: the gateways judged for an evening, a morning or any date and hour, and what is assumed then; Figure 13 retaken with it. |
 | 1.36.0 | 2026-11-21 | §8.1: *What your own receiver heard*, hf-predict's FT8 of the last hour toward each gateway under its HF channel, raising the band's chance when three stations or more were heard; Figure 13 retaken with it. |
+| 1.37.0 | 2026-11-21 | §8.1: the VOACAP engine comes with the installers, with NTIA's notice; where the command-line panel looks for it. |

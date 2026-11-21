@@ -445,13 +445,14 @@ fn theirs(channel: &Value, site_agl: Option<f64>) -> End {
 }
 
 /// The VOACAP engine's folder (`bin/voacapl` and `itshfbc`, as hf-predict's
-/// `engines/voacapl/build.sh` makes it): `RADIOPOST_VOACAP` when set, else `engine` beside the
+/// `engines/voacapl/build.sh` makes it): `RADIOPOST_VOACAP` when set; else `bundled`, the folder
+/// the desktop application's installer put it in, when it holds one; else `engine` beside the
 /// program, or in its bundle's `Resources` on macOS.
 ///
 /// # Errors
 ///
 /// No folder holds the engine: said in words.
-pub fn engine_dir() -> Result<PathBuf, String> {
+pub fn engine_dir(bundled: Option<&Path>) -> Result<PathBuf, String> {
     if let Some(dir) = std::env::var_os("RADIOPOST_VOACAP") {
         let dir = PathBuf::from(dir);
         radioprop_hf::engine::Engine::at(&dir)?;
@@ -459,15 +460,16 @@ pub fn engine_dir() -> Result<PathBuf, String> {
     }
     let exe = std::env::current_exe().map_err(|e| format!("cannot find this program: {e}"))?;
     let beside = exe.parent().map(Path::to_path_buf).unwrap_or_default();
-    for dir in [
-        beside.join("engine"),
-        beside.join("..").join("Resources").join("engine"),
-    ] {
-        if radioprop_hf::engine::Engine::at(&dir).is_ok() {
-            return Ok(dir);
-        }
-    }
-    Err("the VOACAP engine is not installed with this program".into())
+    let candidates = [
+        bundled.map(Path::to_path_buf),
+        Some(beside.join("engine")),
+        Some(beside.join("..").join("Resources").join("engine")),
+    ];
+    candidates
+        .into_iter()
+        .flatten()
+        .find(|dir| radioprop_hf::engine::Engine::at(dir).is_ok())
+        .ok_or_else(|| "the VOACAP engine is not installed with this program".into())
 }
 
 /// One engine run planned: a gateway's HF channels (up to eleven) both ways.
@@ -511,8 +513,15 @@ impl Hf {
     /// With the engine found by [`engine_dir`], its runs in the computer's temporary folder.
     #[must_use]
     pub fn new() -> Self {
+        Self::bundled(None)
+    }
+
+    /// As [`Hf::new`], the desktop application's own copy of the engine, `bundled`, preferred to
+    /// one beside the program ([`engine_dir`]).
+    #[must_use]
+    pub fn bundled(bundled: Option<&Path>) -> Self {
         let runs = std::env::temp_dir().join("radiopost-voacap");
-        let engine = engine_dir().and_then(|dir| {
+        let engine = engine_dir(bundled).and_then(|dir| {
             VoacaplEngine::new(&dir, &runs)
                 .map(|e| Box::new(e) as Box<dyn PropagationEngine + Send + Sync>)
         });

@@ -38,6 +38,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use radiopost_client::panel::Panel;
+use radiopost_client::selection::hf::Hf;
 use radiopost_client::store;
 use radiopost_update::{Install, Product, Watch};
 use tauri::webview::{NewWindowFeatures, NewWindowResponse};
@@ -262,13 +263,17 @@ fn bring_forward(panel: Panel, window: tauri::WebviewWindow) {
 }
 
 /// Starts the panel's server for the home at `home`: where it is, and a handle on its state.
-fn start_panel(home: &Path) -> Result<(SocketAddr, Panel), String> {
+/// `engine`, the VOACAP engine the installer put among the program's resources, for HF
+/// predictions (choosing a gateway, §11.2).
+fn start_panel(home: &Path, engine: Option<&Path>) -> Result<(SocketAddr, Panel), String> {
     let updates = Watch::new(
         Product::Client,
         env!("CARGO_PKG_VERSION"),
         &radiopost_update::channel(),
     );
-    let panel = Panel::new(home, None).with_updates(updates);
+    let panel = Panel::new(home, None)
+        .with_updates(updates)
+        .with_hf(Hf::bundled(engine));
     let at = panel
         .clone()
         .start(&format!("127.0.0.1:{PORT}"))
@@ -323,7 +328,14 @@ fn main() {
     radiopost_client::logfile::keep_in(&home.join(radiopost_client::LOG_FILE));
     radiopost_client::logfile::record_panics();
     radiopost_client::logfile::line(&format!("RadioPost {} starts", env!("CARGO_PKG_VERSION")));
-    let (at, panel) = match start_panel(&home) {
+    // the context first: it says where the installer put the program's resources, the engine
+    // among them
+    let context = tauri::generate_context!();
+    let engine =
+        tauri::utils::platform::resource_dir(context.package_info(), &tauri::Env::default())
+            .ok()
+            .map(|dir| dir.join("engine"));
+    let (at, panel) = match start_panel(&home, engine.as_deref()) {
         Ok(started) => started,
         Err(e) => {
             eprintln!("RadioPost: the panel cannot start: {e}");
@@ -402,7 +414,7 @@ fn main() {
             });
             Ok(())
         })
-        .build(tauri::generate_context!());
+        .build(context);
     match result {
         // the program ends: its connection to Aether between calls closes first, so Aether says
         // the app has gone
@@ -501,7 +513,7 @@ mod tests {
     #[test]
     fn the_panel_the_window_shows() {
         let home = std::env::temp_dir().join(format!("radiopost-app-{}", std::process::id()));
-        let (at, panel) = start_panel(&home).expect("the panel starts");
+        let (at, panel) = start_panel(&home, None).expect("the panel starts");
         assert_eq!(panel.activity(), "idle");
         assert!(at.ip().is_loopback());
         let mut s = TcpStream::connect(at).expect("the panel answers");
@@ -515,7 +527,7 @@ mod tests {
         s.read_to_string(&mut page).expect("read");
         assert!(page.contains("<title>RadioPost</title>"), "{page}");
         // a second panel, as a second copy of the program would start, takes another port
-        let (other, _) = start_panel(&home).expect("another port");
+        let (other, _) = start_panel(&home, None).expect("another port");
         assert_ne!(other, at);
         let _ = std::fs::remove_dir_all(&home);
     }

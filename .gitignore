@@ -6,3 +6,5 @@ app/src-tauri/gen/
 app/gateway/src-tauri/gen/
 # tools/manual/build.py writes the manual's web page and PDF here
 build/
+# a VOACAP engine fetched for a build (tools/engine/fetch.py get)
+app/src-tauri/engine/

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.13 |
+| **Version** | 0.3.14 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -17,8 +17,8 @@ The question this document answers is the operator's:
 Today the client answers it by distance from a typed grid square. This document proposes how to
 answer it properly, for HF and for VHF and UHF, and how hf-predict should change to help. It is a
 proposal the author accepted on 2026-11-20, with the ten answers in §21; no specification has
-changed yet. The wishlist carries it as W17 and W55 to W58. Phases 1 and 2 are built; Phase 3 is
-built but for one piece, bundling the VOACAP engine with RadioPost's installers (§18).
+changed yet. The wishlist carries it as W17 and W55 to W58. Phases 1 to 3 are built; the client's
+installers carry the VOACAP engine from the next release (§§11.2, 18).
 
 **How facts are marked.** Facts about RadioPost, Aether and hf-predict were read in their
 repositories on 2026-11-20. Outside facts were researched the same day: **[P]** checked on a primary
@@ -911,6 +911,20 @@ an artifact with its checksum; RadioPost's release fetches the version it pins, 
 bundles it (about 9 MB installed; its data compresses to 1.4 MB). Bundled rather than downloaded
 on first use, because HF ranking must work at a Field Day site with no Internet (the author's choice, §21,
 Q7).
+
+**Built (2026-11-21).** hf-predict's `engine` workflow, started by hand with a name beginning
+`engine-`, builds the engine on the three systems, checks it against the engine reference cases
+and publishes `voacapl-<platform>.tar.gz` with `SHA256SUMS` as a pre-release of its own: never the
+latest release, which the app's updater reads, and never an app release (hf-predict's pull request
+42). RadioPost pins one in `tools/engine/voacapl.json`; `tools/engine/fetch.py get` downloads the
+platform's archive, refuses it unless its SHA-256 is the pinned one, and refuses any member outside
+its `engine/` folder or that is not a plain file or folder. The release workflow puts it among the
+client's resources (the gateway does not predict); the shell asks Tauri where its resources were
+installed and hands the panel that folder (`Hf::bundled`), `RADIOPOST_VOACAP` still first. CI
+fetches the pinned Linux engine the same way and runs the client's HF test on it. `fetch.py pin`
+rewrites the pin from a release's `SHA256SUMS`, so checksums are never copied by hand. The engine is
+NTIA's VOACAP in the voacapl port (CC0, with NTIA's disclaimer), built without the port's two GPL
+utilities; their notices are in the archive and installed with it.
 
 **The licence.** The crates are relicensed MIT OR Apache-2.0, matching RadioPost; hf-predict
 the app may stay Apache-2.0. The author, its only committer, chose this (§21, Q1), so RadioPost's
@@ -2254,3 +2268,4 @@ for size in (2000, 50000):
 | 0.3.11 | 2026-11-21 | §10.2: the runs measured (12 ms a month's run; 100 gateways both ways in 0.34 s), so no coverage-grid stage. §10.3: HF channels predicted in the client, Aether's profile from its measured curves, the rules as built, the NVIS echo limits not applied (the air's sessions climbed past them), one path checked against the air. §11.3: steps 1 to 3 done for HF. |
 | 0.3.12 | 2026-11-21 | §16.7: the time picker built (*At*, `?at=`): HF at that hour and month, listening times then, ages and the night side today's. |
 | 0.3.13 | 2026-11-21 | §11.4: the evidence API built in hf-predict and read by the client (`from` added, several places a request, Compare's observed tiers), the 2 : 1 raise of §10.5 applied. Phase 3 built but for bundling the engine. |
+| 0.3.14 | 2026-11-21 | §11.2: the engine bundled: hf-predict publishes it with checksums, RadioPost pins one, checks it, and puts it in the client's installers. Phase 3 built. |
