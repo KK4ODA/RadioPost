@@ -174,6 +174,64 @@
       "header_b64url": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0",
       "payload_b64url": "eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6IktLNE9EQS0xIiwib3BlcmF0b3IiOiJLSzRPREEiLCJncmlkIjoiRU03MyIsInBsYWNlIjoiQXRsYW50YSwgR0EiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwLCJzY2FuX3MiOjE0fSx7ImRpYWxfaHoiOjcxMDEwMDAsIm1vZGUiOiJVU0IiLCJtb2RlbSI6ImFldGhlciIsImJhbmR3aWR0aF9oeiI6MjMwMCwic2Nhbl9zIjoxNH1dLCJob3VycyI6ImFsd2F5cyIsImludGVybmV0Ijp0cnVlLCJjb3BpZXMiOnsidXNlcnMiOjUwLCJkYXlzIjo3LCJtYXhfYWlyX2J5dGVzIjoxNjM4NH0sInVwZGF0ZWQiOjE3OTM0OTg0MDAsInNlZW4iOjE3OTQxNDg2MjB9LHsiY2FsbHNpZ24iOiJOMkNBTEwtNSIsIm9wZXJhdG9yIjoiTjJDQUxMIiwiZ3JpZCI6IkVNODIiLCJwbGFjZSI6Ik1hY29uLCBHQSIsImNoYW5uZWxzIjpbeyJkaWFsX2h6Ijo3MTAzNTAwLCJtb2RlIjoiVVNCIiwibW9kZW0iOiJhZXRoZXIiLCJiYW5kd2lkdGhfaHoiOjUwMH0seyJkaWFsX2h6IjoxNDUwNTAwMDAsIm1vZGUiOiJGTSIsIm1vZGVtIjoiYXgyNSIsImJhbmR3aWR0aF9oeiI6MTI1MDAsInN0YXRpb24iOnsicG93ZXJfdyI6NTAsImFudGVubmEiOiJqLXBvbGUiLCJhZ2xfbSI6MTgsImdhaW5fZGJpIjozfX1dLCJzaXRlIjp7ImxhdCI6MzIuODQwNywibG9uIjotODMuNjMyNCwiYWdsX20iOjE4fSwiaG91cnMiOiIxODAwLTAyMDAgVVRDIiwibGlzdGVucyI6W3siZXZlcnlfcyI6ODY0MDAsImF0X3MiOjY0ODAwLCJsZW5ndGhfcyI6Mjg4MDB9XSwiaW50ZXJuZXQiOnRydWUsInVwZGF0ZWQiOjE3OTM1MDAyMDAsInNlZW4iOjE3OTM5NzYwMDB9XX0",
       "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6IktLNE9EQS0xIiwib3BlcmF0b3IiOiJLSzRPREEiLCJncmlkIjoiRU03MyIsInBsYWNlIjoiQXRsYW50YSwgR0EiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwLCJzY2FuX3MiOjE0fSx7ImRpYWxfaHoiOjcxMDEwMDAsIm1vZGUiOiJVU0IiLCJtb2RlbSI6ImFldGhlciIsImJhbmR3aWR0aF9oeiI6MjMwMCwic2Nhbl9zIjoxNH1dLCJob3VycyI6ImFsd2F5cyIsImludGVybmV0Ijp0cnVlLCJjb3BpZXMiOnsidXNlcnMiOjUwLCJkYXlzIjo3LCJtYXhfYWlyX2J5dGVzIjoxNjM4NH0sInVwZGF0ZWQiOjE3OTM0OTg0MDAsInNlZW4iOjE3OTQxNDg2MjB9LHsiY2FsbHNpZ24iOiJOMkNBTEwtNSIsIm9wZXJhdG9yIjoiTjJDQUxMIiwiZ3JpZCI6IkVNODIiLCJwbGFjZSI6Ik1hY29uLCBHQSIsImNoYW5uZWxzIjpbeyJkaWFsX2h6Ijo3MTAzNTAwLCJtb2RlIjoiVVNCIiwibW9kZW0iOiJhZXRoZXIiLCJiYW5kd2lkdGhfaHoiOjUwMH0seyJkaWFsX2h6IjoxNDUwNTAwMDAsIm1vZGUiOiJGTSIsIm1vZGVtIjoiYXgyNSIsImJhbmR3aWR0aF9oeiI6MTI1MDAsInN0YXRpb24iOnsicG93ZXJfdyI6NTAsImFudGVubmEiOiJqLXBvbGUiLCJhZ2xfbSI6MTgsImdhaW5fZGJpIjozfX1dLCJzaXRlIjp7ImxhdCI6MzIuODQwNywibG9uIjotODMuNjMyNCwiYWdsX20iOjE4fSwiaG91cnMiOiIxODAwLTAyMDAgVVRDIiwibGlzdGVucyI6W3siZXZlcnlfcyI6ODY0MDAsImF0X3MiOjY0ODAwLCJsZW5ndGhfcyI6Mjg4MDB9XSwiaW50ZXJuZXQiOnRydWUsInVwZGF0ZWQiOjE3OTM1MDAyMDAsInNlZW4iOjE3OTM5NzYwMDB9XX0.Spo2p-csHX7v0IhF9ezXbvJCD92XI-uGh4Ba-xhHaLY9NiPbfnw1kslFNo_YJAzqKEdVzRYhy77Qou8_zcy6CA"
+    },
+    {
+      "name": "gateways-status",
+      "path": "/gateways/status",
+      "signed_by": "po:radiopost.org",
+      "payload": {
+        "issued": 1794148800,
+        "status": [
+          {
+            "callsign": "KK4ODA-1",
+            "seen": 1794148620,
+            "reported": 1794148620,
+            "report": {
+              "state": "listening",
+              "channels": [
+                {
+                  "dial_hz": 3590000,
+                  "modem": "aether",
+                  "up": true
+                },
+                {
+                  "dial_hz": 7101000,
+                  "modem": "aether",
+                  "up": true
+                }
+              ],
+              "carried": 1794135600
+            }
+          },
+          {
+            "callsign": "N2CALL-5",
+            "seen": 1793976000,
+            "reported": 1793976000,
+            "report": {
+              "state": "listening",
+              "channels": [
+                {
+                  "dial_hz": 7103500,
+                  "modem": "aether",
+                  "up": true
+                },
+                {
+                  "dial_hz": 145050000,
+                  "modem": "ax25",
+                  "up": false
+                }
+              ],
+              "problems": [
+                "modem-away"
+              ],
+              "carried": 1793966400
+            }
+          }
+        ]
+      },
+      "header_b64url": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0",
+      "payload_b64url": "eyJpc3N1ZWQiOjE3OTQxNDg4MDAsInN0YXR1cyI6W3siY2FsbHNpZ24iOiJLSzRPREEtMSIsInNlZW4iOjE3OTQxNDg2MjAsInJlcG9ydGVkIjoxNzk0MTQ4NjIwLCJyZXBvcnQiOnsic3RhdGUiOiJsaXN0ZW5pbmciLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZW0iOiJhZXRoZXIiLCJ1cCI6dHJ1ZX0seyJkaWFsX2h6Ijo3MTAxMDAwLCJtb2RlbSI6ImFldGhlciIsInVwIjp0cnVlfV0sImNhcnJpZWQiOjE3OTQxMzU2MDB9fSx7ImNhbGxzaWduIjoiTjJDQUxMLTUiLCJzZWVuIjoxNzkzOTc2MDAwLCJyZXBvcnRlZCI6MTc5Mzk3NjAwMCwicmVwb3J0Ijp7InN0YXRlIjoibGlzdGVuaW5nIiwiY2hhbm5lbHMiOlt7ImRpYWxfaHoiOjcxMDM1MDAsIm1vZGVtIjoiYWV0aGVyIiwidXAiOnRydWV9LHsiZGlhbF9oeiI6MTQ1MDUwMDAwLCJtb2RlbSI6ImF4MjUiLCJ1cCI6ZmFsc2V9XSwicHJvYmxlbXMiOlsibW9kZW0tYXdheSJdLCJjYXJyaWVkIjoxNzkzOTY2NDAwfX1dfQ",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsInN0YXR1cyI6W3siY2FsbHNpZ24iOiJLSzRPREEtMSIsInNlZW4iOjE3OTQxNDg2MjAsInJlcG9ydGVkIjoxNzk0MTQ4NjIwLCJyZXBvcnQiOnsic3RhdGUiOiJsaXN0ZW5pbmciLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZW0iOiJhZXRoZXIiLCJ1cCI6dHJ1ZX0seyJkaWFsX2h6Ijo3MTAxMDAwLCJtb2RlbSI6ImFldGhlciIsInVwIjp0cnVlfV0sImNhcnJpZWQiOjE3OTQxMzU2MDB9fSx7ImNhbGxzaWduIjoiTjJDQUxMLTUiLCJzZWVuIjoxNzkzOTc2MDAwLCJyZXBvcnRlZCI6MTc5Mzk3NjAwMCwicmVwb3J0Ijp7InN0YXRlIjoibGlzdGVuaW5nIiwiY2hhbm5lbHMiOlt7ImRpYWxfaHoiOjcxMDM1MDAsIm1vZGVtIjoiYWV0aGVyIiwidXAiOnRydWV9LHsiZGlhbF9oeiI6MTQ1MDUwMDAwLCJtb2RlbSI6ImF4MjUiLCJ1cCI6ZmFsc2V9XSwicHJvYmxlbXMiOlsibW9kZW0tYXdheSJdLCJjYXJyaWVkIjoxNzkzOTY2NDAwfX1dfQ.4rwDvPSl0UZ0Zl8ELEmROBtCrRV4b3U6RQgJ-9hE6XqSmxaWPWuvdgFnN3TfLXj7xQLYEmVcxCIlcOgjlyXjBA"
     }
   ],
   "verification": [
@@ -216,6 +274,15 @@
     {
       "what": "gateways, `alg` none and no signature",
       "jws": "eyJhbGciOiJub25lIiwia2lkIjoiZmJiZDVmNWMifQ.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsImdhdGV3YXlzIjpbeyJjYWxsc2lnbiI6IktLNE9EQS0xIiwib3BlcmF0b3IiOiJLSzRPREEiLCJncmlkIjoiRU03MyIsInBsYWNlIjoiQXRsYW50YSwgR0EiLCJjaGFubmVscyI6W3siZGlhbF9oeiI6MzU5MDAwMCwibW9kZSI6IlVTQiIsIm1vZGVtIjoiYWV0aGVyIiwiYmFuZHdpZHRoX2h6IjoyMzAwLCJzY2FuX3MiOjE0fSx7ImRpYWxfaHoiOjcxMDEwMDAsIm1vZGUiOiJVU0IiLCJtb2RlbSI6ImFldGhlciIsImJhbmR3aWR0aF9oeiI6MjMwMCwic2Nhbl9zIjoxNH1dLCJob3VycyI6ImFsd2F5cyIsImludGVybmV0Ijp0cnVlLCJjb3BpZXMiOnsidXNlcnMiOjUwLCJkYXlzIjo3LCJtYXhfYWlyX2J5dGVzIjoxNjM4NH0sInVwZGF0ZWQiOjE3OTM0OTg0MDAsInNlZW4iOjE3OTQxNDg2MjB9LHsiY2FsbHNpZ24iOiJOMkNBTEwtNSIsIm9wZXJhdG9yIjoiTjJDQUxMIiwiZ3JpZCI6IkVNODIiLCJwbGFjZSI6Ik1hY29uLCBHQSIsImNoYW5uZWxzIjpbeyJkaWFsX2h6Ijo3MTAzNTAwLCJtb2RlIjoiVVNCIiwibW9kZW0iOiJhZXRoZXIiLCJiYW5kd2lkdGhfaHoiOjUwMH0seyJkaWFsX2h6IjoxNDUwNTAwMDAsIm1vZGUiOiJGTSIsIm1vZGVtIjoiYXgyNSIsImJhbmR3aWR0aF9oeiI6MTI1MDAsInN0YXRpb24iOnsicG93ZXJfdyI6NTAsImFudGVubmEiOiJqLXBvbGUiLCJhZ2xfbSI6MTgsImdhaW5fZGJpIjozfX1dLCJzaXRlIjp7ImxhdCI6MzIuODQwNywibG9uIjotODMuNjMyNCwiYWdsX20iOjE4fSwiaG91cnMiOiIxODAwLTAyMDAgVVRDIiwibGlzdGVucyI6W3siZXZlcnlfcyI6ODY0MDAsImF0X3MiOjY0ODAwLCJsZW5ndGhfcyI6Mjg4MDB9XSwiaW50ZXJuZXQiOnRydWUsInVwZGF0ZWQiOjE3OTM1MDAyMDAsInNlZW4iOjE3OTM5NzYwMDB9XX0.",
+      "dns_kids": [
+        "fbbd5f5c"
+      ],
+      "info_jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJ2ZXJzaW9uIjoxLCJkb21haW5zIjpbInJhZGlvcG9zdC5vcmciXSwib3BlcmF0b3IiOiJLSzRPREEiLCJjb250YWN0IjoicG9zdG1hc3RlckByYWRpb3Bvc3Qub3JnIiwiY291bnRyeSI6IlVTIiwia2V5cyI6W3sia2lkIjoiZmJiZDVmNWMiLCJwdWJsaWMiOiJkbURDazFtVHJTNzBuTmdfeVF1U1lheHExX0FSNm1vUHpwY2tRRE0tWEFZIiwibm90X2JlZm9yZSI6MTc2NzIyNTYwMCwibm90X2FmdGVyIjoxODMwMjk3NjAwfSx7ImtpZCI6IjAxMTJjNGVlIiwicHVibGljIjoiY2VEcEFla2JaU0ZqdGhPMnRZaDFOU3ZJMlpSQXdXNEF2S2hDWHlQelJZQSIsIm5vdF9iZWZvcmUiOjE3OTQwNjI0MDAsIm5vdF9hZnRlciI6MTg2MTgzMzYwMH1dLCJsaW1pdHMiOnsibWF4X2Fpcl9ieXRlcyI6NjU1MzYsIm1heF9lbWFpbF9ieXRlcyI6MTA0ODU3NjB9LCJnYXRld2F5cyI6ImFueSIsIm1haWwiOnsiam1hcCI6Imh0dHBzOi8vcG8ucmFkaW9wb3N0Lm9yZy9qbWFwL3Nlc3Npb24iLCJpbWFwIjoicG8ucmFkaW9wb3N0Lm9yZzo5OTMifSwidXBkYXRlZCI6MTc5NDE0ODgwMH0.LETIhfItfKvzdRXT-YyhgHwPzxnM3S6AYizv5Yql43WiompYMsRwIoFcRvJbCpGrg2nUTSIrsoqV4heDFecZCQ",
+      "expect": "signature-invalid"
+    },
+    {
+      "what": "gateways-status, a report changed after signing",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImZiYmQ1ZjVjIn0.eyJpc3N1ZWQiOjE3OTQxNDg4MDAsInN0YXR1cyI6W3siY2FsbHNpZ24iOiJLSzRPREEtMSIsInNlZW4iOjE3OTQxNDg2MjAsInJlcG9ydGVkIjoxNzk0MTQ4NjIwLCJyZXBvcnQiOnsic3RhdGUiOiJzdG9wcGVkIn19LHsiY2FsbHNpZ24iOiJOMkNBTEwtNSIsInNlZW4iOjE3OTM5NzYwMDAsInJlcG9ydGVkIjoxNzkzOTc2MDAwLCJyZXBvcnQiOnsic3RhdGUiOiJsaXN0ZW5pbmciLCJjaGFubmVscyI6W3siZGlhbF9oeiI6NzEwMzUwMCwibW9kZW0iOiJhZXRoZXIiLCJ1cCI6dHJ1ZX0seyJkaWFsX2h6IjoxNDUwNTAwMDAsIm1vZGVtIjoiYXgyNSIsInVwIjpmYWxzZX1dLCJwcm9ibGVtcyI6WyJtb2RlbS1hd2F5Il0sImNhcnJpZWQiOjE3OTM5NjY0MDB9fV19.4rwDvPSl0UZ0Zl8ELEmROBtCrRV4b3U6RQgJ-9hE6XqSmxaWPWuvdgFnN3TfLXj7xQLYEmVcxCIlcOgjlyXjBA",
       "dns_kids": [
         "fbbd5f5c"
       ],

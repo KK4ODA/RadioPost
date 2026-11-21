@@ -283,6 +283,13 @@ fn replay(
         if let Some(smtp) = step.get("smtp") {
             door(office, smtp, &format!("{what}, step {i}"));
         }
+        // a public document as the post office serves it then (RP-5 §4.6's status list)
+        if let Some(path) = step.get("document").and_then(Json::as_str) {
+            let at = step["at"].as_u64().expect("at");
+            let got = office.document(&info(), path, at).expect("a document");
+            assert_eq!(got, step["payload"], "{what}, step {i}: {path}");
+            continue;
+        }
         let Some(r) = step.get("request").filter(|r| r.is_object()) else {
             continue;
         };
@@ -315,6 +322,24 @@ fn replay(
             r["method"],
             r["path"]
         );
+    }
+}
+
+/// What the post office says of itself in its info document, for the documents a replay reads.
+fn info() -> Info {
+    Info {
+        operator: "KK4ODA".into(),
+        contact: "postmaster@radiopost.org".into(),
+        country: "US".into(),
+        max_air_bytes: 65_536,
+        max_email_bytes: 100_000,
+        gateways: "any".into(),
+        mail: json!({}),
+        updated: 0,
+        not_before: 0,
+        not_after: u64::MAX,
+        post_offices: Vec::new(),
+        applications: None,
     }
 }
 
@@ -369,22 +394,8 @@ fn the_api_story_replays_exactly() {
         .filter_map(|e| e["at"].as_u64())
         .max()
         .expect("KK4ODA-1 reached the post office");
-    let info = Info {
-        operator: "KK4ODA".into(),
-        contact: "postmaster@radiopost.org".into(),
-        country: "US".into(),
-        max_air_bytes: 65_536,
-        max_email_bytes: 100_000,
-        gateways: "any".into(),
-        mail: json!({}),
-        updated: 0,
-        not_before: 0,
-        not_after: u64::MAX,
-        post_offices: Vec::new(),
-        applications: None,
-    };
     let served = office
-        .document(&info, "/gateways", last + 600)
+        .document(&info(), "/gateways", last + 600)
         .expect("a gateway list");
     let kk = served["gateways"]
         .as_array()

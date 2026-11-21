@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.5.0 |
+| **Version** | 1.6.0 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -11,12 +11,13 @@
 | **Protocol version** | 1 (`/rp/v1/`) |
 
 The HTTPS interface of a post office. **Gateways** use it to carry their users' sessions, report
-pickups, hand in mail queued while offline and receive copies placed ahead. **Clients** use it to
+pickups, hand in mail queued while offline, receive copies placed ahead and say whether they are on
+the air. **Clients** use it to
 enroll, renew credentials, change their settings and register the gateways they operate.
 **Applicants** ask for an account, and the
 post office's **operators** decide, look after its accounts and issue codes. **Anyone** may read a
-post office's public documents: its keys, revocations, the post offices it knows, its gateways and
-its radio routes.
+post office's public documents: its keys, revocations, the post offices it knows, its gateways,
+their status and its radio routes.
 
 Reading and writing the mailbox itself, with a phone or a laptop when there is Internet, uses the
 standard mail protocols (JMAP, IMAP, SMTP submission) of the post office's mail server and is not
@@ -49,7 +50,7 @@ part of this API.
   | 400 | `unsupported-version`, `malformed` |
   | 401 | `not-authorized`, when the request has no token, or one unknown or expired |
   | 403 | `not-authorized` otherwise (the token may not do this), `refused-by-policy` |
-  | 404 | `unknown-message`: no such serial in the session, no such session of this gateway's, no such application (§6.7), or no such gateway registered (§6.4, §7.7) |
+  | 404 | `unknown-message`: no such serial in the session, no such session of this gateway's, no such application (§6.7), or no such gateway registered (§5.9, §6.4, §7.7) |
   | 409 | `already-have` |
   | 413 | `too-large` |
   | 422 | `credential-invalid`, `credential-expired`, `credential-revoked`, `credential-required`, `unknown-post-office`, `signature-invalid`, `time-skew` |
@@ -229,8 +230,9 @@ Listening from 18:00 to 02:00 UTC each day is
 `listens` out. It SHOULD keep `hours` saying the same in words.
 
 **When it was last seen.** A post office that serves the list sets `seen` in each record to when
-the gateway last reached it: its last login with its gateway credential (§3), or its last poll for
-copies (§5.8), whichever is later, rounded down to the minute (a multiple of 60). A gateway that has
+the gateway last reached it: its last login with its gateway credential (§3), its last poll for
+copies (§5.8) or its last status report (§5.9), whichever is latest, rounded down to the minute (a
+multiple of 60). A gateway that has
 not reached it since registering has no `seen`. A client shows it, so that a gateway whose computer
 has been off for days is not taken for one that answers; a gateway cut off from the Internet
 still serves by radio (RP-7), so an old `seen` with `internet` true says the gateway may be cut
@@ -309,6 +311,60 @@ Test vectors: `vectors/gateway-lists.json` (`site_cases` for `site` and `station
 
 This post office's radio routes, for forwarding when the Internet is down. The format is RP-7's
 (§6).
+
+### 4.6 `GET /gateways/status`
+
+Whether this post office's gateways are on the air now, as each reported it (§5.9):
+
+```json
+{"issued": 1794312000,
+ "status": [{
+   "callsign": "KK4ODA-1", "seen": 1794311940, "reported": 1794311880,
+   "report": {"state": "listening",
+              "channels": [{"dial_hz": 3590000, "modem": "aether", "up": true},
+                           {"dial_hz": 7101000, "modem": "aether", "up": true}],
+              "carried": 1794308400}}]}
+```
+
+It names, once each, the gateways registered with this post office (§6.4) that hold a report
+(§5.9). An entry's members:
+
+| Member | Type | Meaning |
+|---|---|---|
+| `callsign` | text | The gateway's callsign, as its record gives it (§4.4). |
+| `seen` | integer | When it last reached this post office, to the minute: §4.4's `seen`. |
+| `reported` | integer | When its last report came, by this post office's clock, to the minute. |
+| `report` | map | That report as the post office keeps it (§5.9): `state`, and as the gateway said, `channels`, `problems` and `carried`. |
+
+Only a gateway's own post office lists it, since only its own post office takes its reports
+(§5.9). A reader takes a gateway's status from the post office whose list gave the record it keeps
+(§4.4), checks it with that post office's keys as it checks the list, and ignores an entry whose
+callsign that list does not name. A post office SHOULD offer the status list. One that does not
+answers `404`, and has no status to give.
+
+**Reading a report.** A report is **current** while its `reported` is within **15 minutes** of the
+reader's clock: a gateway that reports does so at least every 5 minutes (§5.9), and after 15
+minutes without a poll its post office counts it cut off (RP-7 §4.1). An older report says what the
+gateway last said, not what it does now. When `seen` is old too, the gateway has not reached its
+post office since: its computer may be off, or it may be cut off from the Internet and still serve
+by radio (RP-7). When `seen` is recent, the gateway reaches its post office but no longer reports.
+
+What a current report says:
+
+* `state`: what the gateway is doing (§5.9). A reader that does not know the state takes the
+  report as saying nothing, since a later version may add one.
+* `channels`: a channel matches the record's channel with the same `dial_hz` and `modem`, and `up`
+  false says the gateway does not listen there now. A channel of the record the report does not
+  name is not known either way.
+* `problems`: names from RP-0 §9.7. A name the reader does not know is a problem all the same,
+  shown by its name.
+* A gateway `listening` with a channel down, or with any problem, is partly working.
+* `carried`: the hour in which its last session ended.
+
+A reader SHOULD fetch the list no more than once a minute.
+
+Test vectors: `vectors/jws.json` (the example list), `vectors/api-exchanges.json` (reports taken,
+refused and withdrawn, and the lists they make).
 
 ---
 
@@ -524,6 +580,67 @@ A gateway behind a home router uses only outgoing connections: the long poll is 
 Test vectors: `vectors/api-exchanges.json` (copies at N1CALL-10, a gateway registered with
 hampost.org), `vectors/forwarding.json` (`placing`).
 
+### 5.9 `PUT /status`: whether the gateway is on the air
+
+A gateway MAY report to its own post office (§4.4) what it is doing, for the status list (§4.6):
+
+```json
+{"state": "listening",
+ "channels": [{"dial_hz": 3590000, "modem": "aether", "up": true},
+              {"dial_hz": 7101000, "modem": "aether", "up": false}],
+ "problems": ["modem-away"],
+ "carried": 1794308400}
+```
+
+| Member | Type | Meaning |
+|---|---|---|
+| `state` | text | `listening`: it answers calls, between sessions, on each channel it reports `up`. `session`: it is carrying a session, or calling a partner (RP-7 §2), so a call now waits until that ends. `opening`: it is starting, or reaching its modem again, and answers no call yet. `stopped`: its operator stopped it, or it stopped itself, and it answers no call. |
+| `channels` | array of channel | Channels of its record (§4.4), each with `dial_hz` (integer) and `modem` (text) as the record gives them, and `up` (bool): true when it listens there between sessions, its modem answering and its radio on that dial or scanning it (RP-4 §4.2). Every channel is down while it is `opening` or `stopped`. A gateway that cannot tell leaves a channel out. |
+| `problems` | array of text | What keeps it from working fully, named from RP-0 §9.7. Absent or empty: nothing it knows of. |
+| `carried` | integer | When its last session ended, rounded down to the hour (a multiple of 3600): the last call it answered or placed whose link came up (RP-4 §5), whatever came of it. Absent: none it knows of. |
+
+Anyone can read what it reports (§4.6), so a gateway SHOULD let its operator turn reporting off.
+
+**Whose report.** The post office takes a report only from a gateway token whose credential's
+`operator` is a callsign registered with it (§6.4) and whose `address` is at one of its domains:
+its own gateway, credentialed by it. A callsign not registered with it is `404` `unknown-message`;
+a credential another post office issued for a callsign registered with it, `403`
+`not-authorized`.
+
+**What it keeps.** It checks the body: `state` one of the four above; `channels`, when present, an
+array of maps each with an integer `dial_hz`, a text `modem` and a bool `up`; `problems`, when
+present, an array of at most 16 names, each 1 to 32 characters of lower-case letters, digits and
+`-`; `carried`, when present, a non-negative integer. A body that fails is `400` `malformed`, and
+the report before it stands. Members it does not know are ignored (RP-0 §4.2).
+
+It keeps the report in place of the last, whole:
+
+* `state`;
+* the channels that its record of the gateway lists, matched by `dial_hz` and `modem`, in the
+  report's order, each once; the others are left out;
+* the problems, in the report's order, each once, names it does not know included: a problem
+  added to RP-0 §9.7 after it was written is a problem all the same;
+* `carried` rounded down to the hour, or its own clock rounded down to the hour when that is
+  earlier, so that it never says a session ended later than the post office has seen;
+* `reported`, its own clock rounded down to the minute.
+
+A list left empty, or a member the report leaves out, is not kept. It answers `204`. A report
+counts as the gateway reaching the post office (§4.4, `seen`), but it is not a poll for copies
+(RP-7 §4.1).
+
+**`DELETE /status`**, with the same token, withdraws the gateway's report: the status list no
+longer names it. `204`, whether or not there was one. A gateway whose operator turns reporting off
+sends it. A withdrawal of the gateway's registration withdraws its report too (§6.4, §7.7).
+
+**When.** A gateway that reports does so when its state, a channel's `up`, its problems or
+`carried` change, and at least every **5 minutes** while nothing changes, so that its report stays
+current (§4.6). It reports no more often than every **10 seconds**, and a post office MAY answer a
+report that comes sooner `429` `busy`, with `Retry-After`. A gateway its operator stopped reports
+`stopped`, and goes on reporting it while its program runs.
+
+Test vectors: `vectors/api-exchanges.json` (KK4ODA-1's reports and the status lists they make;
+reports refused).
+
 ---
 
 ## 6. Client endpoints
@@ -612,7 +729,8 @@ A licensed user registers a gateway they operate:
   * drops the items it placed at the gateway (§5.8) and places nothing more there. No other post
     office does either, once no list names the gateway. The mail itself stays in its users'
     mailboxes. Forward items it placed elsewhere for the gateway as a cut-off gateway (RP-7 §4.1)
-    are dropped, as when the gateway polls again.
+    are dropped, as when the gateway polls again;
+  * drops its status report (§5.9), so the status list (§4.6) no longer names it.
 
   It answers `200`:
 
@@ -911,6 +1029,12 @@ no record for is `404` `unknown-message`.
   never by the gateway's own credential (§6.4, §7.7): a stolen gateway key cannot take a gateway
   off its users' lists. Withdrawing it revokes its credentials, so a gateway its post office no
   longer lists cannot go on logging in and carrying sessions as that post office's gateway.
+* A gateway's status (§4.6) is what the gateway said, signed by its post office as said, not
+  checked on the air. Only a credential its own post office issued can report it (§5.9), so
+  another post office cannot speak for the gateway. It makes public whether the gateway answers
+  now, on which of its channels, what keeps it from working fully, and the hour of its last
+  session; never who called or what was carried. `reported` and `seen` are to the minute and
+  `carried` to the hour, whatever the gateway sent.
 * Copies placed ahead reach a gateway without a user's session, so they go only to the credential
   of the post office that listed the gateway (§5.8). A post office that lists a callsign another
   already lists makes it ambiguous wherever neither is the home, and copies stop there (§4.4): it
@@ -929,7 +1053,8 @@ revoked credential; the accept list read and changed, shared by a role mailbox's
 by mail sent, and its effect at the door), `vectors/api-exchanges.json` (enrollment, a gateway registered, logins, session-01
 at the post office, copies placed ahead and dropped, copies at a gateway registered with another
 post office and for whose credential, a gateway's registration withdrawn, an offline gateway's
-report, and the failures above), `vectors/jws.json` (§4), `vectors/gateway-lists.json` (§4.4: a gateway list
+report, a gateway's status reports and the status lists they make, and the failures above),
+`vectors/jws.json` (§4), `vectors/gateway-lists.json` (§4.4: a gateway list
 read from the home's and every post office it knows) and `vectors/api.json` (the signatures of
 §3.2, §6.1, §6.4 and §6.7).
 
@@ -968,3 +1093,4 @@ read from the home's and every post office it knows) and `vectors/api.json` (the
 | 1.3.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 8; D43). §1: the base URL signed as the record gives it, with no `/` after it; how a reader reads an error whose `code` it does not know, or an answer with no problem body; `Retry-After` in seconds. §4.4: a record's members and their types; entries sharing an `api` are one post office (the first domain, any entry's keys, every domain left out together); the home's own entry passed over; a callsign a list names twice counts once (the reference and the Rust library had made it ambiguous). §6.3: `PUT /settings` replaces the settings whole. §6.6: a caller's statement in challenge form, with the caller's `nonce`, is taken (no station-to-station session in which the station called asked for a challenge could be reported); addresses compared as RP-0 1.2.0 §6.2 says. Test vectors (`gateway-lists.json`, `direct.json`). MINOR, announced (RP-0 §8.4): `nonce` is a new optional member, and a post office of 1.2.0 refuses such a report `signature-invalid` or `time-skew`. Post offices should take it, and clients send it. |
 | 1.4.0 | 2026-11-21 | §4.4: `listens`, when a gateway listens, as windows of RP-7 §5's form, for programs where `hours` is for people; `seen`, set by the post office that serves the list, when the gateway last logged in or polled for copies, to the minute. §6.4: a registered record's `seen` is ignored. From choosing a gateway (the design's §7.2). Test vectors: the example record lists `listens` and the example list `seen`. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; a post office SHOULD set `seen`, and a reader that ignores both loses nothing it had. |
 | 1.5.0 | 2026-11-21 | §4.4: `site`, where a gateway's antennas are (`lat`, `lon` at the operator's precision, `agl_m`), and a channel's `station`, how it transmits and receives there (`power_w`, `antenna` from RP-0 1.3.0 §9.6, `agl_m`, `gain_dbi`, `azimuth_deg`), for programs judging a path over the terrain and its link budget each way; what a reader does with a member out of its range. From choosing a gateway (the design's §7.2, Phase 2). Test vectors: `site_cases`, and the example list's second gateway with a site and a VHF channel's station. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; a reader that ignores both loses nothing it had. |
+| 1.6.0 | 2026-11-21 | Whether a gateway is on the air. §5.9: `PUT /status`, a gateway's report to its own post office (its `state`, `listening`, `session`, `opening` or `stopped`; whether it listens on each channel; problems named from RP-0 1.4.0 §9.7; the hour its last session ended), taken only from a credential that post office issued for a gateway registered with it; what the post office keeps, to the minute and the hour; `DELETE /status`; reported on change and at least every 5 minutes. §4.6: `GET /gateways/status`, the signed list of its gateways' last reports, and how a reader reads one: current for 15 minutes (RP-7 §4.1's cut-off), an unknown state saying nothing, an unknown problem a problem all the same. §4.4: a status report counts for `seen`. §6.4: a withdrawal drops the report. §8: what a report makes public. For radiopost.org's gateway directory, which could say only that a gateway was registered (the author, 2026-11-20; D45). Test vectors (`api-exchanges.json`, `jws.json`). MINOR, announced (RP-0 §8.4): nothing for an implementation to do; a post office SHOULD offer both, and a gateway MAY report. |

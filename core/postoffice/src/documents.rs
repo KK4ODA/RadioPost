@@ -102,6 +102,7 @@ impl PostOffice {
                 }).collect::<Vec<_>>(),
             }),
             "/routes" => json!({"issued": now, "routes": self.state.routes}),
+            "/gateways/status" => self.status_list(now),
             _ => return None,
         })
     }

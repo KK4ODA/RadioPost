@@ -206,6 +206,7 @@ fn a_device_enrolls_logs_in_and_the_documents_are_signed() {
         "/revocations",
         "/post-offices",
         "/gateways",
+        "/gateways/status",
         "/routes",
     ] {
         let (status, jws) = http(&api, "GET", &format!("/rp/v1{path}"), None, None);
@@ -213,6 +214,10 @@ fn a_device_enrolls_logs_in_and_the_documents_are_signed() {
         let doc = radiopost::jws::verify(&jws, &keys).expect("signed by the post office");
         if path == "/info" {
             assert_eq!(doc["domains"], json!(["test.example"]));
+        }
+        // RP-5 §4.6: public, with no token, and no gateway has reported yet
+        if path == "/gateways/status" {
+            assert_eq!(doc["status"], json!([]));
         }
     }
 
