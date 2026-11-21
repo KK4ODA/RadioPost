@@ -3514,12 +3514,149 @@
           }
         },
         {
-          "note": "The gateway's connection closes: its scan goes with it; the radio is home already."
+          "note": "The gateway's host answers a broadcast heard on 10.145 MHz: the scan goes there to send it, and the client hears it with the dial it was heard on (§6)."
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "broadcast",
+            "id": 9,
+            "data": "c2Vlbg==",
+            "ref": "b1",
+            "dial_hz": 10145000
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 9
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "dial",
+            "dial_hz": 10145000
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "dial",
+            "dial_hz": 10145000
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "broadcast",
+            "source": "N1CALL-10",
+            "data": "c2Vlbg==",
+            "dial_hz": 7101000
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "broadcast-sent",
+            "sent": true,
+            "ref": "b1"
+          }
+        },
+        {
+          "note": "A dial off the scan's list goes where the radio is; a dial of 0 is malformed."
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "broadcast",
+            "id": 10,
+            "data": "c2Vlbg==",
+            "dial_hz": 14105000
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 10
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "broadcast",
+            "source": "N1CALL-10",
+            "data": "c2Vlbg==",
+            "dial_hz": 7101000
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "broadcast-sent",
+            "sent": true
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "adapter",
+          "message": {
+            "op": "broadcast",
+            "id": 11,
+            "data": "c2Vlbg==",
+            "dial_hz": 0
+          }
+        },
+        {
+          "station": "N1CALL",
+          "host": "radiopost",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 11,
+            "code": "malformed",
+            "text": "`dial_hz` is not of its type"
+          }
+        },
+        {
+          "note": "The gateway's connection closes: its scan goes with it, and the radio goes home."
         },
         {
           "station": "N1CALL",
           "host": "radiopost",
           "connection": "closed"
+        },
+        {
+          "station": "N1CALL",
+          "host": "other",
+          "to": "host",
+          "message": {
+            "op": "dial",
+            "dial_hz": 7101000
+          }
         },
         {
           "station": "N3CALL",

@@ -126,9 +126,22 @@ impl Host {
 
     /// `broadcast` (RP-4 §6).
     pub fn broadcast(&mut self, data: &[u8], reference: Option<&str>) -> Message {
+        self.broadcast_on(data, reference, None)
+    }
+
+    /// `broadcast` naming the dial it belongs on (§6): an answer to one heard there.
+    pub fn broadcast_on(
+        &mut self,
+        data: &[u8],
+        reference: Option<&str>,
+        dial_hz: Option<u64>,
+    ) -> Message {
         let mut members = vec![("data", Value::from(base64::encode(data)))];
         if let Some(r) = reference {
             members.push(("ref", r.into()));
+        }
+        if let Some(hz) = dial_hz {
+            members.push(("dial_hz", hz.into()));
         }
         self.with_id("broadcast", &members)
     }
@@ -307,6 +320,8 @@ pub enum Event {
         data: Vec<u8>,
         /// Its SNR.
         snr_db: Option<f64>,
+        /// The dial it was heard on, with `caps.dial`: where an answer to it belongs.
+        dial_hz: Option<u64>,
     },
     /// A broadcast of this host's has gone out, or will not.
     BroadcastSent {
@@ -383,6 +398,19 @@ fn bytes_of(m: &Message) -> Result<Vec<u8>, String> {
         .and_then(Value::as_str)
         .and_then(base64::decode)
         .ok_or_else(|| "no `data` in standard base64".into())
+}
+
+/// A broadcast heard (§6), with the dial it was heard on when the modem has one.
+fn broadcast(m: &Message) -> Result<Event, String> {
+    Ok(Event::Broadcast {
+        source: text(m, "source")?,
+        data: bytes_of(m)?,
+        snr_db: m.get("snr_db").and_then(Value::as_f64),
+        dial_hz: m
+            .get("dial_hz")
+            .and_then(Value::as_u64)
+            .filter(|&hz| hz > 0),
+    })
 }
 
 fn status(m: &Message, id: Option<Value>) -> Result<Event, String> {
@@ -495,11 +523,7 @@ impl Event {
                 snr_db: m.get("snr_db").and_then(Value::as_f64),
                 bandwidth: m.get("bandwidth").and_then(Value::as_i64),
             },
-            "broadcast" => Event::Broadcast {
-                source: text(m, "source")?,
-                data: bytes_of(m)?,
-                snr_db: m.get("snr_db").and_then(Value::as_f64),
-            },
+            "broadcast" => broadcast(m)?,
             "broadcast-sent" => Event::BroadcastSent {
                 reference: m.get("ref").cloned(),
                 sent: flag(m, "sent")?,

@@ -151,7 +151,11 @@ MEMBERS: dict[str, list[tuple[str, bool, Any]]] = {
     ],
     "disconnect": [("link", True, lambda v: isinstance(v, str))],
     "abort": [("link", False, lambda v: isinstance(v, str))],
-    "broadcast": [("data", True, lambda v: isinstance(v, str)), ("ref", False, is_id)],
+    "broadcast": [
+        ("data", True, lambda v: isinstance(v, str)),
+        ("ref", False, is_id),
+        ("dial_hz", False, lambda v: is_int(v) and v > 0),
+    ],
     "status": [],
     "dial": [],
     "tune": [
@@ -514,14 +518,20 @@ class Adapter:
             self.emit(h.name, error(rid, "refused", "no callsigns yet"))
             return
         self.ok(h, rid)
+        # RP-4 §6: a broadcast that names one of a running scan's dials goes out there (an
+        # answer to one heard there); any other dial, or no scan, and it goes where the radio is
+        scanning = self.scanning
+        if self.caps.get("dial") and "dial_hz" in m and scanning and m["dial_hz"] in scanning[1]:
+            self._go_to(m["dial_hz"])
         for adapter in self.world.adapters:
             if adapter is self:
                 continue
             for other in adapter.hosts.values():
                 if other.hello:
-                    adapter.emit(
-                        other.name, answer("broadcast", None, source=h.callsigns[0], data=m["data"])
-                    )
+                    heard = answer("broadcast", None, source=h.callsigns[0], data=m["data"])
+                    if adapter.caps.get("dial"):
+                        heard["dial_hz"] = adapter.dial_hz  # where it was heard (§6)
+                    adapter.emit(other.name, heard)
         sent = answer("broadcast-sent", None, sent=True)
         if "ref" in m:
             sent["ref"] = m["ref"]

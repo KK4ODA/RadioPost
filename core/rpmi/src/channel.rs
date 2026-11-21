@@ -301,8 +301,12 @@ impl Channel {
             } => self.on_send(station, host, &link, &data, reference, id),
             Request::Disconnect { link } => self.on_disconnect(station, host, &link, id),
             Request::Abort { link } => self.on_abort(station, host, link.as_deref(), id),
-            Request::Broadcast { data, reference } => {
-                self.on_broadcast(station, h, &data, reference, id);
+            Request::Broadcast {
+                data,
+                reference,
+                dial_hz,
+            } => {
+                self.on_broadcast(station, h, &data, reference, dial_hz, id);
             }
             Request::Status => self.on_status(station, h, id),
             Request::Dial => self.on_dial(station, host, None, id),
@@ -735,6 +739,7 @@ impl Channel {
         h: usize,
         data: &[u8],
         reference: Option<Value>,
+        dial_hz: Option<u64>,
         id: Option<&Value>,
     ) {
         let host = &self.stations[station].hosts[h];
@@ -749,6 +754,16 @@ impl Channel {
             return;
         };
         self.ok(station, &name, id);
+        // §6: a broadcast naming one of a running scan's dials goes out there (an answer to one
+        // heard there); any other dial, or no scan, and it goes where the radio is
+        if let Some(hz) = dial_hz.filter(|_| self.stations[station].cfg.caps.dial)
+            && self.stations[station]
+                .scanning
+                .as_ref()
+                .is_some_and(|(_, dials)| dials.contains(&hz))
+        {
+            self.go_to(station, hz);
+        }
         let text = base64::encode(data);
         for s in 0..self.stations.len() {
             if s == station {
@@ -760,8 +775,12 @@ impl Channel {
                 .filter(|o| o.hello)
                 .map(|o| o.name.clone())
                 .collect();
+            // where it was heard, for a modem with a dial (§6)
+            let heard_on = self.stations[s]
+                .dial_hz
+                .filter(|_| self.stations[s].cfg.caps.dial);
             for other in hearing {
-                let m = answer_with(
+                let mut m = answer_with(
                     "broadcast",
                     None,
                     &[
@@ -769,6 +788,9 @@ impl Channel {
                         ("data", text.clone().into()),
                     ],
                 );
+                if let Some(hz) = heard_on {
+                    m.insert("dial_hz".into(), hz.into());
+                }
                 self.emit(s, &other, m);
             }
         }

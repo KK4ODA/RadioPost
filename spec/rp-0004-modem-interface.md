@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.4.0 |
+| **Version** | 1.5.0 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -185,7 +185,7 @@ it is sent, such as `busy`.
 | `send` | `link`, `data`, `ref`? | Queues bytes on one of this host's links. With `ref`, the adapter later reports `delivered` (if it can) for the last byte of this send. |
 | `disconnect` | `link` | Closes this host's link in order: what is queued goes first, then the modem disconnects. |
 | `abort` | `link`? | Ends this host's link, or its call under way, now. Queued bytes are dropped. A call ended this way ends with `failed` `aborted`; with no call under way, `error` `not-connected`. |
-| `broadcast` | `data`, `ref`? | §6. |
+| `broadcast` | `data`, `ref`?, `dial_hz`? | §6. |
 | `status` | — | The adapter answers `status` (below). |
 | `dial` | — | The adapter answers `dial` with the radio's dial (§4.1). |
 | `tune` | `dial_hz` | Sets the radio's dial (§4.1). `ok` once the radio is there. |
@@ -328,7 +328,7 @@ rule it checks, §8); `text` says why. A stop is never refused for being busy.
 | `heard` | `callsign`, `snr_db`?, `bandwidth`? | A station was heard (a beacon, a call to someone else). Optional. |
 | `dial` | `dial_hz`, `id`? | The radio's dial: the answer to `dial`, with its `id`, and, without one, each time the dial changes (§4.1). Only with `caps.dial`. |
 | `scan` | `dials`, `scan_s`?, `why`?, `id`? | The answer to `scan`; and, without an `id`, when the scan's dials change or it ends (no dials, and `why`). Only with `caps.scan` (§4.2). |
-| `broadcast` | `source`, `data`, `snr_db`? | §6. |
+| `broadcast` | `source`, `data`, `snr_db`?, `dial_hz`? | §6. |
 | `broadcast-sent` | `ref`, `sent` (bool), `text`? | §6. |
 | `error` | `id`?, `code`, `text`? | A request failed, or something went wrong. `code` is from §7. |
 
@@ -352,6 +352,15 @@ has callsigns, and on a shared modem whichever program's callsigns it names: a b
 everyone listening. Sending one needs callsigns, as a call does (§4). `source` is the callsign the
 modem heard the sender's station by, which on a shared modem may be the station's own rather than
 the sending host's.
+
+**The dial.** With `caps.dial`, a broadcast heard carries `dial_hz`, the radio's dial when the
+modem heard it whole: where an answer to it belongs. A host answering one names that dial in its
+`broadcast`'s `dial_hz`. With `caps.scan`, while a scan runs and the dial is one of its dials, the
+modem takes the scan there to send it, once nothing holds the radio where it is, and goes on
+scanning from there: the answer goes where the frame it answers was heard, though the scan has
+moved on since. A dial the scan has not, or no scan, and the broadcast goes where the radio is: the
+modem never tunes for a broadcast otherwise. A `dial_hz` that is not an integer above 0 is
+`malformed` (§4); a modem without `caps.dial` ignores the member.
 
 RadioPost's broadcasts are CBOR maps whose key 0 says their kind (RP-0 §9.5): alerts first (RP-8).
 Bulletins and position reports would follow in later specifications.
@@ -439,7 +448,7 @@ end of this section.
 | `queued` | `metrics.queued_bytes` while the host's session is up: the host's own bytes not yet acknowledged, counted before compression. |
 | `quality` | `metrics` (`snr_db`, `peer_snr_db`, `throughput_bps`, `receiving`). |
 | `busy` | `metrics.channel_busy`, and true while a session whose `owner` is not the host's is up (`status.owner`, or a `metrics.link` during another's session). While the host's own link is up, `channel_busy` is mostly the other station's signal and is not reported; when that link ends, the readings taken during it are dropped and the next `metrics` says how the channel stands. |
-| `broadcast` | `datagram.send` with `frame_type` 2, Aether's unformatted datagram; the `datagram` and `datagram-sent` events. |
+| `broadcast` | `datagram.send` with `frame_type` 2, Aether's unformatted datagram, and `dial_hz` as given; the `datagram` event (its `dial_hz`, when Aether reads the dial) and `datagram-sent`. Aether takes its scan to the dial a datagram names (its ADR-0129 §15). |
 | `dial` | `status.frequency_hz`, the dial Aether reads from the radio over CAT, `rigctld` or FLRig; `refused` while it is null. `caps.dial` is `status.can_tune` at `hello`. Aether's `dial` event (`frequency_hz`) is RPMI's `dial` event. |
 | `tune` | `busy` at once while the host has a call or link, or another program's session is up (its `state` events); otherwise `status`, `busy` unless `state` is `idle` (another program's call is no event of Aether's), then `frequency.set {hz}`. Aether's refusals of it (a probe or a Test under way, something queued for this dial, a radio that did not answer) are `refused`, with Aether's message. |
 | `scan` | `scan.start {dials}`, or `scan.stop` for no dials, on the host's own connection to Aether, which the scan belongs to (its ADR-0129). Aether scans two to four dials (its ADR-0129 §11): about 4 s on a dial where it hears nothing, and a caller's gap between tries where it hears a call under way. `scan_s` is the answer's, rounded up to whole seconds. `caps.call_s` is true when `status` has `scan` (Aether 0.2.0-beta.162 and later), and `caps.scan` when it also has `can_tune`. Aether's `claimed` is `busy`; its `regulatory` and `bad_params` are `refused`, its `unsupported` `unsupported`. With no scan of its own the host's empty `scan` is answered without asking Aether: a `scan.stop` from a connection that holds no claim stops another program's scan as the operator's. |
@@ -736,3 +745,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 1.3.0 | 2026-11-18 | §6: every host that has said `hello` hears each broadcast, callsigns or none; sending one needs callsigns; what `source` names; RadioPost's broadcasts are RP-8's alerts. MINOR, announced (RP-0 §8.4): nothing for an implementation to do, since the reference's simulated modem and the Aether adapter already pass broadcasts to every host. |
 | 1.3.1 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 7; D43). §1: an adapter built into the host may skip §2's transport and framing. §2: lines are I-JSON, and an integer has no fraction or exponent and fits in ±(2^53−1) (the reference and the Rust adapter had parted on `NaN`, lone surrogates and large integers); a request without `id` gets no `ok` but does get an `error`, `status` or `dial` without one; a `data` member is its bytes, its pad bits written as zero. §9.5: what each form of `remote` calls, a name mapped to a bare address calling the name, IPv6 in brackets; the opening line ASCII, its 200 bytes before the LF, its 30 seconds from the connection; the fingerprint is the leaf certificate's; plain TCP only by choice. Test vectors (`rpmi-lines.json`; `rpmi-conversations.json`'s rule: a host's ids and refs are its own, and `data` compares as bytes). PATCH, announced (RP-0 §8.4): nothing for an implementation to do. |
 | 1.4.0 | 2026-11-21 | §5: `failed`'s `heard` and `snr_db`, whether the station called was heard during a call that brought no link and how strongly; `quality`'s `peer_snr_db`, what the other station reports hearing this one at. §9.1: Aether's sources for both (its `frame` events during the call, `metrics.peer_snr_db`). From choosing a gateway (the design's §12.2, Phase 4), which learns each direction of a path and tells "nothing heard" from "heard, but no link". Test vectors: the simulated modem's `failed` `timeout` says `heard` false. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; an adapter that says neither and a host that ignores both lose nothing they had. |
+| 1.5.0 | 2026-11-21 | §6, the dial: a broadcast heard carries `dial_hz`, where it was heard, and a `broadcast` may name a `dial_hz`; a scanning modem takes its scan there to send it, so an answer goes where the frame it answers was heard (RP-8 0.2.0, an alert to a station whose gateway scans). §9.1: Aether's `datagram.send` and `datagram` carry the dial (its ADR-0129 §15). Test vectors (`rpmi-conversations.json`, the scan conversation). MINOR, announced (RP-0 §8.4): two optional members; a modem or host that ignores them works as before, and its answers go where the radio is. |

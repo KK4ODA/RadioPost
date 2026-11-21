@@ -225,6 +225,8 @@ pub enum Request {
         data: Vec<u8>,
         /// The `ref` to report `broadcast-sent` with.
         reference: Option<Value>,
+        /// The dial it belongs on: a scanning modem goes there to send it (§6).
+        dial_hz: Option<u64>,
     },
     /// The adapter's `status`.
     Status,
@@ -256,6 +258,17 @@ fn optional_text(m: &Message, key: &str) -> Result<Option<String>, String> {
         text(m, key).map(Some)
     } else {
         Ok(None)
+    }
+}
+
+/// An optional `dial_hz` (§4, §6): absent, or an integer above 0.
+fn optional_dial(m: &Message) -> Result<Option<u64>, String> {
+    match m.get("dial_hz") {
+        None => Ok(None),
+        Some(v) => natural(v)
+            .filter(|&hz| hz > 0)
+            .map(Some)
+            .ok_or_else(|| "`dial_hz` is not an integer above 0".into()),
     }
 }
 
@@ -385,6 +398,7 @@ impl Request {
             "broadcast" => Request::Broadcast {
                 data: data(m)?,
                 reference: reference(m)?,
+                dial_hz: optional_dial(m)?,
             },
             "status" => Request::Status,
             "dial" | "tune" | "scan" | "tone" => radio(m)?,

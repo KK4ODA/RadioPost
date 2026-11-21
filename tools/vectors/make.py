@@ -2502,7 +2502,29 @@ def rpmi_scan() -> list[dict[str, Any]]:
     w.note("A client calls the gateway, which scans, for as long as its record's `scan_s` says.")
     client.request("client", {"op": "connect", "id": 3, "remote": "N1CALL-10", "call_s": 14})
     client.request("client", {"op": "disconnect", "id": 4, "link": link_of(client, "client")})
-    w.note("The gateway's connection closes: its scan goes with it; the radio is home already.")
+    w.note(
+        "The gateway's host answers a broadcast heard on 10.145 MHz: the scan goes there to send "
+        "it, and the client hears it with the dial it was heard on (§6)."
+    )
+    gateway.request(
+        "radiopost",
+        {
+            "op": "broadcast",
+            "id": 9,
+            "data": rpmi.encode_data(b"seen"),
+            "ref": "b1",
+            "dial_hz": 10_145_000,
+        },
+    )
+    w.note("A dial off the scan's list goes where the radio is; a dial of 0 is malformed.")
+    gateway.request(
+        "radiopost",
+        {"op": "broadcast", "id": 10, "data": rpmi.encode_data(b"seen"), "dial_hz": 14_105_000},
+    )
+    gateway.request(
+        "radiopost", {"op": "broadcast", "id": 11, "data": rpmi.encode_data(b"seen"), "dial_hz": 0}
+    )
+    w.note("The gateway's connection closes: its scan goes with it, and the radio goes home.")
     gateway.close("radiopost")
     rpmi_start(plain, "client", "RadioPost client 0.1.0", ["N3CALL"], listen=False)
     plain.request("client", {"op": "scan", "id": 3, "dials": [3_590_000, 7_101_000]})
@@ -2684,6 +2706,9 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "KK4ODA client callsigns 2": "ok",
                 "KK4ODA client connect 3": "ok, then connected",
                 "KK4ODA client disconnect 4": "ok",
+                "N1CALL radiopost broadcast 9": "ok",  # to a dial of its scan (§6)
+                "N1CALL radiopost broadcast 10": "ok",  # off its list: where the radio is
+                "N1CALL radiopost broadcast 11": "malformed",  # a dial above 0 (§4)
             },
         ),
     ]:
@@ -2709,6 +2734,28 @@ def make_rpmi_conversations() -> dict[str, Any]:
         True,
         [],
     ), status
+    # RP-4 §6: a broadcast heard says the dial it was heard on, where the modem has one; one that
+    # names a dial of the sender's scan takes the radio there before it goes, and one off the
+    # list goes where the radio is.
+    client_heard = [
+        s["message"]
+        for s in scan
+        if (s.get("station"), s.get("host"), s.get("to")) == ("KK4ODA", "client", "host")
+        and s["message"]["op"] == "broadcast"
+    ]
+    assert [m.get("dial_hz") for m in client_heard] == [RPMI_DIAL, RPMI_DIAL], client_heard
+    sender = [
+        s["message"]
+        for s in scan
+        if (s.get("station"), s.get("host"), s.get("to")) == ("N1CALL", "radiopost", "host")
+        and s["message"]["op"] in {"dial", "broadcast-sent"}
+    ]
+    sender = [(m["op"], m.get("dial_hz", m.get("ref"))) for m in sender]
+    assert sender[-3:] == [
+        ("dial", 10_145_000),  # the scan went to the broadcast's dial first
+        ("broadcast-sent", "b1"),
+        ("broadcast-sent", None),  # off the list: no move
+    ], sender
     # RP-4 §4.1: the dial read is the one the adapter has; every change is told, without an `id`,
     # to every host on the station that has said hello, and to no other station.
     read = next(
@@ -2749,8 +2796,13 @@ def make_rpmi_conversations() -> dict[str, Any]:
         ("radiopost", {"op": "scan", "id": 8, "dials": [7_101_000, 10_145_000], "scan_s": 10}),
         ("radiopost", {"op": "dial", "dial_hz": 7_101_000}),
         ("other", {"op": "dial", "dial_hz": 7_101_000}),
+        # a broadcast to another of the scan's dials takes the radio there (§6)
+        ("radiopost", {"op": "dial", "dial_hz": 10_145_000}),
+        ("other", {"op": "dial", "dial_hz": 10_145_000}),
+        # the host leaves, and its scan with it: the radio goes home, told to who is left
+        ("other", {"op": "dial", "dial_hz": 7_101_000}),
     ], said
-    # the last scan began from its first dial: the host's leaving moves nothing
+    # (the last scan began from its first dial; the broadcast moved it, so leaving sends it home)
     # RP-4 §4, §5: `delivered` only for a send with a `ref`, which it carries unchanged.
     reported = [
         s["message"]["ref"] for s in errors if s.get("message", {}).get("op") == "delivered"

@@ -399,8 +399,12 @@ impl Bridge {
                 }
             }
             Request::Abort { link } => self.on_abort(link.as_deref(), rid, &mut out),
-            Request::Broadcast { data, reference } => {
-                self.on_broadcast(&data, reference, rid, &mut out);
+            Request::Broadcast {
+                data,
+                reference,
+                dial_hz,
+            } => {
+                self.on_broadcast(&data, reference, dial_hz, rid, &mut out);
             }
             Request::Status => out.push(Out::Host(self.status(rid_ref))),
             radio @ (Request::Dial | Request::Tune(_) | Request::Scan(_)) => {
@@ -542,6 +546,7 @@ impl Bridge {
         &mut self,
         data: &[u8],
         reference: Option<Value>,
+        dial_hz: Option<u64>,
         rid: Option<Value>,
         out: &mut Vec<Out>,
     ) {
@@ -555,6 +560,10 @@ impl Bridge {
         }
         // RadioPost's frames are Aether's unformatted datagrams (type 2)
         let mut params = json!({"data": base64::encode(data), "frame_type": 2});
+        // the dial it belongs on: Aether takes its scan there to send it (its ADR-0129 §15)
+        if let Some(hz) = dial_hz {
+            params["dial_hz"] = hz.into();
+        }
         let aether_ref = reference.map(|r| {
             self.refs_made += 1;
             let ours = format!("rp{}", self.refs_made);
@@ -1067,6 +1076,10 @@ impl Bridge {
                     );
                     if let Some(snr) = data["snr_db"].as_f64() {
                         m.insert("snr_db".into(), snr.into());
+                    }
+                    // where Aether heard it whole, when it reads the dial (RP-4 §6)
+                    if let Some(hz) = data["dial_hz"].as_u64().filter(|&hz| hz > 0) {
+                        m.insert("dial_hz".into(), hz.into());
                     }
                     out.push(Out::Host(m));
                 }

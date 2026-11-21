@@ -779,6 +779,63 @@ fn broadcasts_are_datagrams() {
     );
 }
 
+/// RP-4 1.5.0 §6, Aether's ADR-0129 §15: a broadcast heard says the dial Aether heard it on,
+/// and an answer naming that dial asks Aether to send it there.
+#[test]
+fn a_broadcast_carries_its_dial_both_ways() {
+    let (mut b, mut a) = opened(true, false);
+    let said = event(
+        &mut b,
+        &mut a,
+        "datagram",
+        &json!({"source": "N1CALL-10", "frame_type": 2, "data": "BAUG", "bytes": 3,
+               "snr_db": 4.5, "rung": 1, "dial_hz": 7_101_000}),
+    );
+    assert_eq!(
+        lines(&said),
+        [
+            json!({"op": "broadcast", "source": "N1CALL-10", "data": "BAUG", "snr_db": 4.5,
+                "dial_hz": 7_101_000})
+        ]
+    );
+    // a dial Aether could not read says nothing of one
+    let said = event(
+        &mut b,
+        &mut a,
+        "datagram",
+        &json!({"source": "N1CALL-10", "frame_type": 2, "data": "BAUG", "bytes": 3,
+               "rung": 1, "dial_hz": null}),
+    );
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "broadcast", "source": "N1CALL-10", "data": "BAUG"})]
+    );
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"broadcast","id":3,"data":"AQID","ref":"b1","dial_hz":7101000}"#,
+    );
+    assert_eq!(lines(&said), [json!({"op": "ok", "id": 3})]);
+    let sent = a.asked.last().expect("a datagram");
+    assert_eq!(sent["method"], "datagram.send");
+    assert_eq!(
+        sent["params"],
+        json!({"data": "AQID", "frame_type": 2, "ref": "rp1", "dial_hz": 7_101_000})
+    );
+    // a dial of 0 is malformed, and Aether is not asked
+    let before = a.asked.len();
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"broadcast","id":4,"data":"AQID","dial_hz":0}"#,
+    );
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "error", "id": 4, "code": "malformed"})]
+    );
+    assert_eq!(a.asked.len(), before);
+}
+
 #[test]
 fn aether_going_away_ends_the_link() {
     let (mut b, mut a) = opened(true, false);
