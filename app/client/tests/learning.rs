@@ -13,7 +13,7 @@
 //! not answer it.
 
 use radiopost_client::selection::hf::{Class, Profile};
-use radiopost_client::selection::learning::{Forget, Forgotten, Learning, Seen};
+use radiopost_client::selection::learning::{self, Forget, Forgotten, Learning, Seen};
 use serde_json::{Value, json};
 
 /// `SplitMix64`: a small generator whose stream is the same everywhere.
@@ -354,6 +354,70 @@ fn the_same_records_always_give_the_same_estimates() {
     records.reverse();
     let reversed = Learning::learn(&records, &Forgotten::default(), &Seen::new(), NOW).json();
     assert_eq!(one.to_string(), reversed.to_string());
+}
+
+#[test]
+fn the_cache_gives_exactly_what_learning_gives() {
+    // learned.json holds the last result: read back, it must be the same to the last bit, and a
+    // change to the records or the rules must be learned again, not read
+    let base = std::env::temp_dir().join(format!("radiopost-learned-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let dir = base.join("selection/attempts");
+    std::fs::create_dir_all(&dir).expect("a folder");
+    let (_, mut records) = faulty_day();
+    let mut d = Draws(11);
+    records.extend(stream(
+        &mut d,
+        &gateway("W1AW-10", -3.0, -5.0, 0.85),
+        60,
+        30,
+        "w",
+    ));
+    let write = |records: &[Value]| {
+        let lines: Vec<String> = records.iter().map(Value::to_string).collect();
+        std::fs::write(dir.join("2026-11.jsonl"), lines.join("\n") + "\n").expect("written");
+    };
+    write(&records);
+    let seen: Seen = [("KK4ODA-1".to_owned(), NOW - 3600)].into_iter().collect();
+    let fresh = Learning::learn(&records, &Forgotten::default(), &seen, NOW);
+    let first = Learning::cached(&base, &seen, NOW);
+    assert!(base.join("selection/learned.json").exists());
+    let kept = Learning::cached(&base, &seen, NOW);
+    assert_eq!(first, fresh);
+    assert_eq!(kept, fresh, "read back from the cache");
+    assert_eq!(kept.json().to_string(), fresh.json().to_string());
+    // a record more, a rule, another sighting, an hour later: each learned again
+    records.truncate(records.len() - 1);
+    write(&records);
+    let fewer = Learning::cached(&base, &seen, NOW);
+    assert_eq!(
+        fewer,
+        Learning::learn(&records, &Forgotten::default(), &seen, NOW)
+    );
+    assert_ne!(fewer, kept);
+    let forget = Forgotten {
+        rules: vec![Forget::Gateway {
+            callsign: "W1AW-10".into(),
+            at: NOW,
+        }],
+    };
+    forget.save(&base).expect("kept");
+    let forgotten = Learning::cached(&base, &seen, NOW);
+    assert!(forgotten.channel("W1AW-10", "40 m").is_none());
+    std::fs::remove_file(base.join(learning::FORGOTTEN)).expect("removed");
+    let other: Seen = [("KK4ODA-1".to_owned(), NOW - 9 * DAY)]
+        .into_iter()
+        .collect();
+    assert_eq!(
+        Learning::cached(&base, &other, NOW),
+        Learning::learn(&records, &Forgotten::default(), &other, NOW)
+    );
+    let later = NOW + 2 * 3600;
+    assert_eq!(
+        Learning::cached(&base, &seen, later),
+        Learning::learn(&records, &Forgotten::default(), &seen, later)
+    );
+    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.17 |
+| **Version** | 0.3.18 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -19,7 +19,8 @@ answer it properly, for HF and for VHF and UHF, and how hf-predict should change
 proposal the author accepted on 2026-11-20, with the ten answers in §21; no specification has
 changed yet. The wishlist carries it as W17 and W55 to W58. Phases 1 to 3 are built; the client's
 installers carry the VOACAP engine from the next release (§§11.2, 18). Phase 4 is in progress:
-learning is built and shown (§§12.5, 16.4); its validation on recorded streams waits for records.
+learning is built and shown (§§12.5, 16.4) and passes its acceptance on simulated streams (§18);
+the same check on recorded streams waits for records.
 
 **How facts are marked.** Facts about RadioPost, Aether and hf-predict were read in their
 repositories on 2026-11-20. Outside facts were researched the same day: **[P]** checked on a primary
@@ -2017,6 +2018,27 @@ because every later phase learns from them and evidence not recorded is lost.
 | **5. Transaction ranking** | The transaction (§13.1); simulation; T80 and the priority objectives; reasons and ties; ranking pairs for "next one" | Phase 4 | The closed form and simulation agree (appendix A); the validation of §19 run on all records so far, reported with intervals, before the ranking becomes the default order |
 | **6. Refinement** | Probing on request (`caps.probe`, RP-4, §21 Q4); "suggest one to try"; obstruction data experiments; after a failure, the next candidate suggested with its reason | Phase 5 | Each experiment judged on recorded outcomes before it changes the default; no path in the client starts a call or a probe without the operator's click |
 
+**Phase 4's acceptance (2026-11-21).** Built: the classification rules versioned (`classifier`
+in each record, the evidence kept so a later version classes it again); δ, A, S, η, λ, O, H and the
+overheads learned with pooling, weights and forgetting (§§12.3–12.7); the details' three columns,
+forgetting and the station-health line (§16.4). Checked, in `app/client/tests/learning.rs` and
+`tests/hf.rs`, each check shown to fail with its fault planted:
+
+* *Known offsets within their stated spread*, on simulated streams: a path 6 and 9 dB under the
+  model learned at −6.1 ± 1.0 and −10.0 ± 1.2, its direction and availability too; over 80 streams
+  on four paths the error over the stated spread has a root mean square of 0.45 to 1.00 and a mean
+  of −0.47 to +0.38 (§12.5; the release-build test `the_spreads_are_honest_over_many_streams`).
+  *On recorded streams* it waits for records: version 2, which carries what learning needs, is
+  written from this release on.
+* *A planted station fault flagged and not blamed on the gateways*: four silent calls in a day to
+  two reliable gateways, each predicted to connect, give a fault chance over 0.9 and the warning,
+  and move neither gateway's availability by 0.02 nor its offset by 0.5 dB; spread over the month
+  instead, the same calls do move them (the test of the test).
+* *The same records always give the same estimates*: in any order, and from `learned.json` to the
+  last bit. That check found serde_json's default float parsing a bit off in the 15th digit, so a
+  learning from records read back from disk differed from one on the same records in memory; the
+  client parses floats exactly now (`float_roundtrip`).
+
 **After a failure (Phase 6).** The client names the next candidate of the pair order (§14.6), with
 why ("another band: 40 m failed, 80 m does not share today's ionosphere"), and puts it in the call
 box for one click. It never calls, retries or retunes by itself: the author's decision (§21, Q9).
@@ -2330,3 +2352,4 @@ for size in (2000, 50000):
 | 0.3.15 | 2026-11-21 | §12.2: the first two additions done (RP-4 1.4.0); the attempt record's version 2 (evidence, prediction, the peer's readings). Phase 4 begun. |
 | 0.3.16 | 2026-11-21 | §12.5: the grid as built: *D* and the heard share *h* on it (the first table counted an uplink failure twice: 3 dB low on a simulated stream), availability counted again from what the grids learned, the direction shown from the grids, the check on simulated streams. |
 | 0.3.17 | 2026-11-21 | §16.4: the details built (three columns per channel, availability by block, the last calls, forgetting), what was learned put beside the model's figures on the list's lines and never over them, `learned.json` as a cache under the learning's version, the station-health line, forgetting in the panel. §10.3: the model's line as built. |
+| 0.3.18 | 2026-11-21 | §18: Phase 4's acceptance, what was checked and how, and what waits for recorded streams; the cache found to need exact float parsing. |
