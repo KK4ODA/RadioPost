@@ -2067,9 +2067,14 @@ C_point = lambda rng: (0.8, 100.0, 1 / 900)
 
 for size in (2000, 50000):
     print(f"--- {size} bytes")
-    print("closed A", round(closed(0.95, 40, 1 / 1800, size)),
-          "B", round(closed(0.45, 150, 1 / 600, size)),
-          "C(point)", round(closed(0.8, 100, 1 / 900, size)))
+    print(
+        "closed A",
+        round(closed(0.95, 40, 1 / 1800, size)),
+        "B",
+        round(closed(0.45, 150, 1 / 600, size)),
+        "C(point)",
+        round(closed(0.8, 100, 1 / 900, size)),
+    )
     for name, d in (("A", A), ("B", B), ("C", C), ("C point", C_point)):
         r = sim(d, size)
         print(name, {k: (round(v, 3) if v != math.inf else "inf") for k, v in r.items()})
