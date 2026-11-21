@@ -924,7 +924,7 @@ impl Panel {
                 Ok(json!({}))
             }
             (_, "/api/gateways" | "/api/grid" | "/api/waiting" | "/api/fetch") => {
-                self.gateway_side(method, path, body)
+                self.gateway_side(method, path, body, param("at").parse().ok())
             }
             (Method::Post, "/api/gateway-marks") => {
                 let store = Store::open(&self.home())?;
@@ -937,7 +937,7 @@ impl Panel {
                     .filter_map(|g| g["callsign"].as_str().map(str::to_owned))
                     .collect();
                 directory::request(&self.base, body, &listed)?;
-                self.gateways()
+                self.gateways(param("at").parse().ok())
             }
             (Method::Get, "/api/attempts") => {
                 let limit: usize = param("limit").parse().unwrap_or(100);
@@ -1698,22 +1698,28 @@ impl Panel {
     /// Starts a call (`remote`) or listening (`None`) on a thread of its own.
     /// The gateways the post office lists, the operator's grid, what waited at the last call to
     /// a gateway, and the messages marked to fetch on the next.
-    fn gateway_side(&self, method: &Method, path: &str, body: &Value) -> Result<Value, Error> {
+    fn gateway_side(
+        &self,
+        method: &Method,
+        path: &str,
+        body: &Value,
+        at: Option<u64>,
+    ) -> Result<Value, Error> {
         let text = |name: &str| body[name].as_str().unwrap_or("").trim().to_owned();
         match (method, path) {
-            (Method::Get, "/api/gateways") => self.gateways(),
+            (Method::Get, "/api/gateways") => self.gateways(at),
             (Method::Post, "/api/gateways") => {
                 self.busy()?;
                 let mut store = Store::open(&self.home())?;
                 online::gateways(&mut store)?;
-                self.gateways()
+                self.gateways(at)
             }
             (Method::Post, "/api/grid") => {
                 let held = self.between_sessions()?;
                 let mut store = Store::open(&self.home())?;
                 store.set_grid(Some(&text("grid")))?;
                 drop(held);
-                self.gateways()
+                self.gateways(at)
             }
             (Method::Get, "/api/waiting") => {
                 let store = Store::open(&self.home())?;
@@ -1745,14 +1751,16 @@ impl Panel {
 
     /// The gateways kept from the post office's list and those of the post offices it knows
     /// (RP-5 §4.4), nearest first, and the grid they are ranked from; which post offices' lists
-    /// were taken, which could not be, and the callsigns listed twice.
-    fn gateways(&self) -> Result<Value, Error> {
-        self.gateways_judged(true)
+    /// were taken, which could not be, and the callsigns listed twice. `at`, seconds since 1970:
+    /// another time to judge them for (§§10.6, 14.7), as HF predictions and listening times go;
+    /// `None`, now.
+    fn gateways(&self, at: Option<u64>) -> Result<Value, Error> {
+        self.gateways_judged(true, at)
     }
 
     /// The gateway list, each VHF gateway's path over the terrain judged and each HF channel
-    /// predicted when `terrain` says.
-    fn gateways_judged(&self, terrain: bool) -> Result<Value, Error> {
+    /// predicted when `terrain` says, at `at` or now.
+    fn gateways_judged(&self, terrain: bool, at: Option<u64>) -> Result<Value, Error> {
         let store = Store::open(&self.home())?;
         let list = store.gateway_list.clone().unwrap_or(Value::Null);
         let others: Vec<&String> = list["lists"]
@@ -1777,26 +1785,33 @@ impl Panel {
             now,
         );
         // a VHF channel's path over the terrain, from the tiles already held (§ 8)
-        let (at, station) = self.position.for_terrain();
+        let (spot, station) = self.position.for_terrain();
         for g in gateways.iter_mut().filter(|_| terrain) {
             if let Some(channel) = terrain::vhf_channel(g) {
-                let mut t = self.terrain.judge(at, &station, g, &channel, None, false);
+                let mut t = self.terrain.judge(spot, &station, g, &channel, None, false);
                 t["dial_hz"] = channel["dial_hz"].clone();
                 g["terrain"] = t;
             }
         }
-        // each HF channel both ways at this hour, VOACAP's runs kept for the month (§ 10)
+        // another time (§ 14.7): whether each listens then; VHF paths do not change with it
+        let when = at.unwrap_or(now);
+        if at.is_some() {
+            for g in &mut gateways {
+                directory::listening_at(g, when);
+            }
+        }
+        // each HF channel both ways at the hour, VOACAP's runs kept for the month (§ 10)
         if terrain {
             let (here, station, bands) = self.position.for_hf();
-            let now = i64::try_from(now).unwrap_or(i64::MAX);
-            self.hf.judge(here, &station, &bands, &mut gateways, now);
+            let when = i64::try_from(when).unwrap_or(i64::MAX);
+            self.hf.judge(here, &station, &bands, &mut gateways, when);
         }
         Ok(json!({
             "domain": list["domain"], "fetched": list["fetched"], "grid": store.grid,
             "gateways": gateways, "others": others,
             "errors": list["errors"], "ambiguous": list["ambiguous"],
             "here": here.here, "note": here.note, "marks_error": marks_error,
-            "hf": if terrain { self.hf.status() } else { Value::Null },
+            "hf": if terrain { self.hf.status() } else { Value::Null }, "at": at,
         }))
     }
 
@@ -1885,7 +1900,7 @@ impl Panel {
         dial: Option<u64>,
         agl: Option<f64>,
     ) -> Result<Value, Error> {
-        let all = self.gateways_judged(false)?;
+        let all = self.gateways_judged(false, None)?;
         let gw = all["gateways"]
             .as_array()
             .into_iter()

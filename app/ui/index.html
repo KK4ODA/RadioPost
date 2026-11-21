@@ -133,6 +133,9 @@
           <button id="gateways-refresh" title="Fetch the lists from your post office, and from the post offices it knows, now over the Internet; they are kept for when there is none">Refresh over the Internet</button>
           <span class="note" id="gateways-here" title="Where the distances are measured from: a place you saved, or your GPS"></span>
           <button class="quiet" id="places-open" title="Your places and your GPS, in Setup">Places</button>
+          <label class="inline when" title="The time the gateways are judged for: HF predictions and listening times follow it; a VHF path does not change with it">At
+            <select class="narrow" id="gw-when"><option value="now">Now</option></select></label>
+          <input type="datetime-local" class="short" id="gw-at" step="3600" hidden title="A date and hour, your local time: the prediction is for the whole hour">
         </div>
         <div class="tabs" role="tablist" aria-label="Gateways">
           <button role="tab" data-gview="recommended" title="Every gateway listed, and your own, nearest first: nothing is learned yet to rank them better">Recommended</button>

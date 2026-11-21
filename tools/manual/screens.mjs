@@ -1330,7 +1330,8 @@ const SHOTS = {
 
   // the Gateways page down to its map, N1CALL-10 picked in the list
   async "readme-gateways"(browser) {
-    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+    const {page, context} = await open(browser, {ui: CLIENT_UI,
+                                                 api: clientApi(clientWorld({hf: true})),
                                                  width: 1280, height: 1000});
     await page.click("#gateways-open");
     await page.waitForTimeout(300);

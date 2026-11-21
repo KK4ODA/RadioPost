@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.11 |
+| **Version** | 0.3.12 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -1840,6 +1840,13 @@ records with positions cut to the grid square unless the operator asks otherwise
 it, and heads the list with what is assumed: "Tonight 20:00 local (01Z): monthly prediction; today's
 conditions not included; no storm forecast; your position as saved (Home)".
 
+**Built in Phase 3 (2026-11-21).** **At**, beside **Places**: *Now*, the next 20:00 and 08:00 local,
+or *A date and hour…*. The list is asked for again with `GET /api/gateways?at=<seconds>`: each HF
+channel is read at that hour of that month (its runs kept like the present month's), and each
+gateway's listening times are judged then. What is about today stays today's: the list's and the
+record's ages, the map's night side. The view is headed as above; the position is the one in use
+now. The NOAA forecast is not held yet, so the heading says *no storm forecast* whatever the time.
+
 ---
 
 ## 17. Architecture and data flow
@@ -2221,3 +2228,4 @@ for size in (2000, 50000):
 | 0.3.9 | 2026-11-21 | §16.2: the VHF terrain map done; Phase 2 is built. |
 | 0.3.10 | 2026-11-21 | §16.3: a path with ground close to an antenna said *less certain*, its chance read against 14 dB (the report's §6, the author's yes). |
 | 0.3.11 | 2026-11-21 | §10.2: the runs measured (12 ms a month's run; 100 gateways both ways in 0.34 s), so no coverage-grid stage. §10.3: HF channels predicted in the client, Aether's profile from its measured curves, the rules as built, the NVIS echo limits not applied (the air's sessions climbed past them), one path checked against the air. §11.3: steps 1 to 3 done for HF. |
+| 0.3.12 | 2026-11-21 | §16.7: the time picker built (*At*, `?at=`): HF at that hour and month, listening times then, ages and the night side today's. |

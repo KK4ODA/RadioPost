@@ -96,7 +96,8 @@ impl PropagationEngine for MadeUp {
 }
 
 /// A panel at `EM73tr` whose list has a gateway 1 300 km away with 1 kW on 40 m, an Aether channel
-/// at each bandwidth, a VARA one, a 160 m one, a VHF one and a blocked one; and one with no site.
+/// at each bandwidth, a VARA one, a 160 m one, a VHF one and a blocked one; and one with no site,
+/// listening from 02:00 to 04:00 UTC.
 fn panel(name: &str, hf: Hf, grid: Option<&str>) -> SocketAddr {
     let dir = scratch(name);
     let home = dir.join("facundo");
@@ -114,6 +115,7 @@ fn panel(name: &str, hf: Hf, grid: Option<&str>) -> SocketAddr {
                 {"dial_hz": 145_050_000, "mode": "FM", "modem": "aether-fm", "bandwidth_hz": 12_500},
                 {"dial_hz": 10_140_000, "mode": "USB", "modem": "aether", "bandwidth_hz": 2300}]},
             {"callsign": "N0SITE-10", "grid": "EM85",
+             "listens": [{"every_s": 86_400, "at_s": 7200, "length_s": 7200}],
              "channels": [{"dial_hz": 7_102_000, "mode": "USB", "modem": "aether", "bandwidth_hz": 500}]},
         ]}),
     );
@@ -309,6 +311,54 @@ fn without_an_engine_or_a_position_a_channel_says_why() {
         "no-position"
     );
     assert_eq!(runs.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn another_time_is_judged_at_its_own_hour_and_month() {
+    let runs = Arc::new(AtomicUsize::new(0));
+    let hf = Hf::with_engine(Box::new(MadeUp {
+        runs: Arc::clone(&runs),
+    }));
+    let at = panel("hf-another-time", hf, Some("EM73tr"));
+    let now = http(at, "GET", "/api/gateways", &Value::Null);
+    assert!(now["at"].is_null());
+    // 03:00 UTC two months on: that month's runs, the hour 03Z, and N0SITE-10 listening then
+    let day = 86_400;
+    let today = radioprop_hf::timeutil::now() / day * day;
+    let then = u64::try_from(today + 62 * day + 3 * 3600).expect("after 1970");
+    let (year, month, _, _) = radioprop_hf::timeutil::civil(today + 62 * day);
+    let v = http(at, "GET", &format!("/api/gateways?at={then}"), &Value::Null);
+    assert_eq!(v["at"], then);
+    let forty = &channel(&v, "W1AW-10", 7_101_000)["hf"];
+    assert_eq!(forty["month"], format!("{year}-{month:02}"), "{forty}");
+    assert_eq!(forty["hour"], 3);
+    assert!(
+        forty["words"]
+            .as_str()
+            .is_some_and(|w| w.contains("at 03Z")),
+        "{forty}"
+    );
+    let gw = v["gateways"]
+        .as_array()
+        .and_then(|g| g.iter().find(|g| g["callsign"] == "N0SITE-10"))
+        .expect("listed");
+    assert_eq!(
+        gw["listening"],
+        json!({"open": true, "changes": then + 3600})
+    );
+    // half past the hour reads the next one
+    let v = http(
+        at,
+        "GET",
+        &format!("/api/gateways?at={}", then + 1800),
+        &Value::Null,
+    );
+    assert_eq!(channel(&v, "W1AW-10", 7_101_000)["hf"]["hour"], 4);
+    // another month is another set of runs, kept like the first
+    let first = runs.load(Ordering::SeqCst);
+    assert_eq!(first, 12, "this month's and that one's");
+    http(at, "GET", &format!("/api/gateways?at={then}"), &Value::Null);
+    assert_eq!(runs.load(Ordering::SeqCst), first);
 }
 
 /// The real engine, when `RADIOPOST_VOACAP` names it (hf-predict's `.work/engine`, say): a

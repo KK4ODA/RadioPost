@@ -260,13 +260,7 @@ pub fn annotate(
         g["list_old"] = json!(fetched.is_some_and(|f| now.saturating_sub(f) > OLD_LIST_S));
         g["last"] = last_call(records, &callsign);
         g["worked"] = json!(worked(records, &callsign, here));
-        // when it listens, from the windows its record lists (RP-5 §4.4); none, as `hours` says
-        g["listening"] = if radiopost::gateway_list::listens(g).is_some() {
-            let l = radiopost::gateway_list::listening(g, now);
-            json!({"open": l.open, "changes": l.changes})
-        } else {
-            Value::Null
-        };
+        listening_at(g, now);
         g["seen_old"] = json!(
             g["seen"]
                 .as_u64()
@@ -274,6 +268,17 @@ pub fn annotate(
         );
     }
     all
+}
+
+/// Whether a gateway listens at `t`, seconds since 1970, and when that changes, from the windows
+/// its record lists (RP-5 §4.4), as its `listening`; none when it lists none (`hours` says).
+pub fn listening_at(g: &mut Value, t: u64) {
+    g["listening"] = if radiopost::gateway_list::listens(g).is_some() {
+        let l = radiopost::gateway_list::listening(g, t);
+        json!({"open": l.open, "changes": l.changes})
+    } else {
+        Value::Null
+    };
 }
 
 /// The last call to `callsign`: when it ended, its class and the class in words.

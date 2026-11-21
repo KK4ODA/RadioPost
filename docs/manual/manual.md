@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.34.0 |
+| **Version** | 1.35.0 |
 | **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.32 |
 | **Licence** | CC BY 4.0 |
@@ -575,6 +575,14 @@ was 6 to 8 dB stronger than what was read. A later version of RadioPost corrects
 calls. If the line says *HF not predicted*, it says why: where you are is not known, the channel
 is outside 80 m to 10 m, or your station profile does not cover that band. Without the VOACAP
 engine installed, the line above the list says so once.
+
+**Another time.** To see which gateway to try tonight, or on another day, pick it in **At** beside
+**Places**: the next evening at 20:00, the next morning at 08:00, or **A date and hour…**, which
+opens a box for any date and hour of your local time. Each HF channel then shows its chance at that
+hour of that month, and each gateway whether it listens then. A VHF path does not change with the
+time. The line above the list says what is assumed: *Today, 08:00 PM local (01Z): the month's
+prediction for that hour; today's conditions not included; no storm forecast; your position as in
+use now*. **Now** goes back to the present. The *Recent* view, your past calls, has no **At**.
 
 **The terrain of a VHF path.** Under a gateway's channel of 30 MHz or more, a line says how the
 path from you to it goes over the ground: *Fresnel zone partly obstructed at 1.5 km · diffraction
@@ -2316,3 +2324,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.32.0 | 2026-11-21 | §8.1: *The terrain map*, the VHF gateways of the view over a hillshade of the terrain held, each path in the colour of its chance and marked where it is obstructed, picking shared with the list and the world map, and the data's notice under it (new Figure 17; later figures renumbered). |
 | 1.33.0 | 2026-11-21 | §8.1: a VHF path with ground close to an antenna is *less certain*, says where, and has its chance read against a 14 dB spread. |
 | 1.34.0 | 2026-11-21 | §8.1: *The chance on an HF channel*, VOACAP both ways at this hour read through Aether's measured ladder, with the rate each way, what is assumed and why a channel is not predicted; Figure 13 retaken with them. |
+| 1.35.0 | 2026-11-21 | §8.1: *Another time*, the **At** picker: the gateways judged for an evening, a morning or any date and hour, and what is assumed then; Figure 13 retaken with it. |

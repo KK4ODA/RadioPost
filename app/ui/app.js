@@ -986,12 +986,14 @@ async function openWaiting() {
 
 let gatewaysData = null;
 let gwView = kept("gview", "recommended");
+let gwAt = null;  // the time the gateways are judged for (§14.7), seconds since 1970; null, now
 let showBlocked = false;
 
 async function openGateways(refreshing = false) {
   markFolder("");
   try {
-    gatewaysData = refreshing ? await api("gateways", {}) : await api("gateways");
+    whenOptions();
+    gatewaysData = refreshing ? await api(gatewaysPath(), {}) : await api(gatewaysPath());
     show("gateways-view");
     await renderGatewaysPage();
   } catch (e) {
@@ -1018,7 +1020,88 @@ function age(seconds) {
 function hfNote(hf) {
   if (!hf) return "";
   if (!hf.engine) return ` HF channels are not predicted: ${hf.why}.`;
-  return " Each HF channel shows VOACAP's prediction for this hour, both ways.";
+  return " Each HF channel shows VOACAP's prediction for the hour, both ways.";
+}
+
+// -- another time (§§14.7, 16.7): the gateways judged for a chosen hour --
+
+function atQuery() {
+  return gwAt == null ? "" : `?at=${gwAt}`;
+}
+
+function gatewaysPath() {
+  return `gateways${atQuery()}`;
+}
+
+// the next time the local clock reads `hour`:00, seconds since 1970
+function nextLocal(hour) {
+  const d = new Date();
+  d.setMinutes(0, 0, 0);
+  if (d.getHours() >= hour) d.setDate(d.getDate() + 1);
+  d.setHours(hour);
+  return Math.floor(d.getTime() / 1000);
+}
+
+// the choices: now, the next evening and morning, or a date and hour; the one in use kept
+function whenOptions() {
+  const today = new Date().toDateString();
+  const say = (t) => `${new Date(t * 1000).toDateString() === today ? "Today" : "Tomorrow"}, `
+    + new Date(t * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+  const times = [nextLocal(20), nextLocal(8)].sort((a, b) => a - b);
+  $("gw-when").replaceChildren(el("option", {value: "now", text: "Now"}),
+    ...times.map((t) => el("option", {value: String(t), text: say(t)})),
+    el("option", {value: "pick", text: "A date and hour…"}));
+  const listed = gwAt == null ? "now" : times.includes(gwAt) ? String(gwAt) : "pick";
+  $("gw-when").value = listed;
+  $("gw-at").hidden = listed !== "pick";
+}
+
+async function judgeAt(t) {
+  gwAt = t;
+  try {
+    gatewaysData = await api(gatewaysPath());
+    await renderGatewaysPage();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// a local date and time as a datetime-local input writes it
+function localInput(t) {
+  const d = new Date(t * 1000);
+  const two = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:00`;
+}
+
+function wireWhen() {
+  $("gw-when").addEventListener("change", async () => {
+    const v = $("gw-when").value;
+    $("gw-at").hidden = v !== "pick";
+    if (v === "pick") {
+      $("gw-at").value = localInput(gwAt ?? nextLocal((new Date().getHours() + 1) % 24));
+      $("gw-at").focus();
+      return;
+    }
+    await judgeAt(v === "now" ? null : Number(v));
+  });
+  $("gw-at").addEventListener("change", async () => {
+    const t = Date.parse($("gw-at").value);
+    if (Number.isNaN(t)) return;
+    const d = new Date(t);
+    d.setMinutes(0, 0, 0);
+    await judgeAt(Math.floor(d.getTime() / 1000));
+  });
+}
+
+// what is assumed at another time, heading the view (§16.7)
+function atNote(t) {
+  const d = new Date(t * 1000);
+  const day = d.toDateString() === new Date().toDateString() ? "Today"
+    : d.toLocaleDateString([], {weekday: "long", day: "numeric", month: "long"});
+  const local = d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+  const utc = `${String(d.getUTCHours()).padStart(2, "0")}Z`;
+  return `${day}, ${local} local (${utc}): the month's prediction for that hour; today's conditions `
+    + "not included; no storm forecast; your position as in use now.";
 }
 
 function viewNote(view, count, g) {
@@ -1056,6 +1139,9 @@ async function renderGatewaysPage() {
   $("gateway-table").hidden = recent;
   $("recent-table").hidden = !recent;
   $("own-form").hidden = recent;
+  // past calls are not judged for a time
+  $("gw-when").parentElement.hidden = recent;
+  $("gw-at").hidden = recent || $("gw-when").value !== "pick";
   $("map-card").hidden = recent;
   $("gateways-left-out").hidden = true;
   if (recent) {
@@ -1068,7 +1154,8 @@ async function renderGatewaysPage() {
     rows = rows.filter((gw) => gw.favourite || (gw.channels || []).some((c) => c.favourite));
   }
   if (gwView === "worked") rows = rows.filter((gw) => gw.worked);
-  $("gateways-view-note").textContent = viewNote(gwView, rows.length, g)
+  $("gateways-view-note").textContent = (g.at ? `${atNote(g.at)} ` : "")
+    + viewNote(gwView, rows.length, g)
     + (g.marks_error ? ` Your marks could not be read: ${g.marks_error}.` : "");
   if (blocked.length) {
     $("gateways-left-out").hidden = false;
@@ -1230,7 +1317,7 @@ function toggle(on, glyphs, title, run) {
 
 async function markGateway(body) {
   try {
-    gatewaysData = await api("gateway-marks", body);
+    gatewaysData = await api(`gateway-marks${atQuery()}`, body);
     await renderGatewaysPage();
   } catch (e) {
     toast(e.message, true);
@@ -1270,9 +1357,10 @@ function gatewayRow(gw, twice) {
   };
   if (gw.listening) {
     const l = gw.listening;
+    const then = gatewaysData && gatewaysData.at ? "then" : "now";
     where.append(el("div", {class: l.open ? "note" : "note warn",
-      text: l.open ? (l.changes ? `listening now, until ${clockAt(l.changes)}` : "listening now")
-        : `not listening now: from ${clockAt(l.changes)}`,
+      text: l.open ? (l.changes ? `listening ${then}, until ${clockAt(l.changes)}` : `listening ${then}`)
+        : `not listening ${then}: from ${clockAt(l.changes)}`,
       title: "From the listening times its record gives"}));
   }
   if (gw.seen) {
@@ -1493,7 +1581,7 @@ async function followTerrain() {
     if (!$("gateways-view").hidden) {
       if (terrainShown && !$("terrain-card").hidden) await openTerrain(terrainShown.callsign, terrainShown.dial);
       try {
-        gatewaysData = await api("gateways");
+        gatewaysData = await api(gatewaysPath());
         await renderGatewaysPage();
       } catch { /* shown at the next */ }
     }
@@ -1668,6 +1756,7 @@ function wireGateways() {
     });
   }
   wireMap();
+  wireWhen();
   $("gateways-show-blocked").addEventListener("click", async () => {
     showBlocked = !showBlocked;
     await renderGatewaysPage();
