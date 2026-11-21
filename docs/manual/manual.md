@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.40.2 |
+| **Version** | 1.41.0 |
 | **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.33 |
 | **Licence** | CC BY 4.0 |
@@ -754,9 +754,18 @@ gateway comes round. Call again, or call on another of its channels.
 The state at the top reads *Calling …*, then *In session with …*. A card at the bottom right
 shows how far the mail has got:
 
-- The **outer ring** is what you send. The **inner ring** is what comes in.
+- While RadioPost calls, and then while it finds out what there is to carry, a short arc spins
+  round the envelope: amber while it calls, blue once in session, like the state at the top.
+- The **outer ring** is what you send, in orange-red, the colour of transmitting. The **inner
+  ring** is what comes in, in green. The ring of the way not moving just now is faded, and so is
+  the dot on its line.
 - The lines say how many messages are whole, the kilobytes, and about how long is left.
 - The header shows the same as a small ring with the percentage.
+- When the session ends the card stays a few seconds, both rings in one colour: green with a tick
+  when everything crossed or there was nothing to carry, amber when some of it did not, red when
+  the session failed.
+
+Red on the card means only mail going out, or a session that failed.
 
 A message counts as sent once Aether has put it on the air, not when RadioPost hands it over.
 
@@ -2448,3 +2457,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.40.0 | 2026-11-21 | §10: an alert goes on a **Dial** (the other station's gateway channel predicted best, the circle's watch dial, or where the radio is), the radio tuned there; copies sent while the other station's gateway scans round; a circle's **Watch dial, MHz**, and the red line when the radio or the gateway's scan is not on it; answers go on the dial the alert was heard on, shown in the alarm, and **Call back** fills **Dial, MHz** with it (RP-8 0.2.0). |
 | 1.40.1 | 2026-11-21 | From the session of 2026-11-21. §6: in a narrow window **Call** and **Listen for P2P** are as wide as their words, as **Write** and **Setup** are; they had stretched across the window. Figure 12 retaken. |
 | 1.40.2 | 2026-11-21 | **Call** is as wide as its word in the left column too, under **Fetch**; **Listen for P2P** still spans the column. §6 reworded. Figures 5, 6, 7, 9, 10, 11, 13, 19, 20, 21, 22, 24, 25 and 27 retaken. |
+| 1.41.0 | 2026-11-21 | §8.3: the session card's colours. The arc that spins while calling is amber and blue once in session, no longer the colour of transmitting; the ring of the way not moving is faded; at the end both rings are green, amber or red by how the session went. Figure 20 retaken. |

@@ -801,6 +801,11 @@ async function changeCallsign(change) {
 // The envelope bobs up while sending and down while receiving, the little waves above it pulse
 // while the session runs, and a tick pops in when everything has crossed. Sent bytes count once
 // the modem has passed them on, not when they are handed to it (app/client/src/session.rs).
+// Colour is state only, as in Aether's panel: while it calls or checks the mail a segment spins
+// in the colour of the state at the top (amber calling, blue in session); while mail moves the
+// outer ring is the colour of sending and the inner of receiving, the way not moving now faded,
+// so the TX colour is bright only while sending; once it ends both rings say how (green all
+// carried, amber some, red failed).
 
 const RINGS = {out: 27, in: 19};
 
@@ -872,13 +877,15 @@ function showTransfer(a, p) {
   const crossed = q ? out.crossed + inc.crossed : 0;
   let mode = "carrying";
   let head = "";
+  // how it ended: all of it carried (or nothing to carry), some of it, or failed
+  let end = "";
   if (a.state === "calling") {
-    mode = "waiting";
+    mode = "calling";
     head = "Calling…";
   } else if (ending) {
     mode = "done";
     const all = total > 0 && out.whole === out.messages && inc.whole === inc.messages && !a.failed;
-    box.classList.toggle("all", all || (total === 0 && !a.failed));
+    end = a.failed ? "failed" : all || total === 0 ? "all" : "part";
     head = a.failed ? `Stopped at ${total ? Math.floor(100 * crossed / total) : 0}%`
       : total === 0 ? "Nothing to carry" : all ? "All carried" : "Carried what it could";
   } else if (total === 0) {
@@ -887,13 +894,13 @@ function showTransfer(a, p) {
   } else {
     head = `${Math.floor(100 * crossed / total)}% carried`;
   }
-  if (mode !== "done") box.classList.remove("all");
-  box.dataset.mode = mode;
-  box.dataset.dir = !q || mode !== "carrying" ? ""
+  const dir = !q || mode !== "carrying" ? ""
     : q.receiving_now ? "down" : out.crossed < out.bytes ? "up" : inc.crossed < inc.bytes ? "down" : "";
   for (const target of [box, mini]) {
     target.dataset.mode = mode;
-    if (mode === "waiting") {
+    target.dataset.dir = dir;
+    target.dataset.end = end;
+    if (mode === "calling" || mode === "waiting") {
       setRing(target, "out", 0.22);
       setRing(target, "in", 0);
     } else {
