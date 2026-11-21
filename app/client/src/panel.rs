@@ -51,6 +51,7 @@ use crate::compose::{self, Answer, Draft, File, media_type};
 use crate::online;
 use crate::presence::{Carrier, Presence};
 use crate::selection::position::Position;
+use crate::selection::{attempts, directory};
 use crate::session::{self, Fetch, Kind, Options};
 use crate::store::{Error, Folder, Store, unhex};
 
@@ -848,6 +849,23 @@ impl Panel {
             }
             (_, "/api/gateways" | "/api/grid" | "/api/waiting" | "/api/fetch") => {
                 self.gateway_side(method, path, body)
+            }
+            (Method::Post, "/api/gateway-marks") => {
+                let store = Store::open(&self.home())?;
+                let listed: Vec<String> = store
+                    .gateway_list
+                    .as_ref()
+                    .and_then(|l| l["gateways"].as_array())
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|g| g["callsign"].as_str().map(str::to_owned))
+                    .collect();
+                directory::request(&self.base, body, &listed)?;
+                self.gateways()
+            }
+            (Method::Get, "/api/attempts") => {
+                let limit: usize = param("limit").parse().unwrap_or(100);
+                Ok(json!({"recent": directory::recent(&attempts::read(&self.base), limit)}))
             }
             (Method::Post, p) if ONLINE.contains(&p) => self.online(path, body),
             (Method::Post, "/api/office") => self.office(body),
@@ -1660,11 +1678,26 @@ impl Panel {
             .unwrap_or_default();
         let here = self.position.here();
         let from = here.here.as_ref().map(|h| (h.lat, h.lon));
+        let (marks, marks_error) = match directory::Marks::load(&self.base) {
+            Ok(m) => (m, None),
+            Err(why) => (directory::Marks::default(), Some(why)),
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let gateways = directory::annotate(
+            store.gateways_ranked_from(from),
+            &list,
+            &marks,
+            &attempts::read(&self.base),
+            from,
+            now,
+        );
         Ok(json!({
             "domain": list["domain"], "fetched": list["fetched"], "grid": store.grid,
-            "gateways": store.gateways_ranked_from(from), "others": others,
+            "gateways": gateways, "others": others,
             "errors": list["errors"], "ambiguous": list["ambiguous"],
-            "here": here.here, "note": here.note,
+            "here": here.here, "note": here.note, "marks_error": marks_error,
         }))
     }
 

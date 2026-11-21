@@ -473,3 +473,16 @@ details.hint code, .note code { font-family: var(--mono); font-size: 12px; backg
 #snd-volume { padding: 0; }
 #gateways-view .row { align-items: center; }
 #gateways-view #gateways-here { margin: 0; }
+/* the Gateways page's marks (choosing a gateway, §16.1): a star, a channel left out, an old list */
+.toggle { border: 0; background: transparent; padding: 0 4px; height: auto; min-height: 0;
+          color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer; }
+.toggle.on { color: var(--busy); }
+.gw-name { display: flex; align-items: center; gap: 2px; }
+.chan { display: flex; align-items: center; gap: 2px; white-space: nowrap; }
+.chan.struck span { text-decoration: line-through; color: var(--muted); }
+#gateway-rows tr.blocked td, #gateway-rows tr.old td { opacity: 0.55; }
+#gateway-rows .acts > div { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+#gateway-rows td:nth-child(2) { min-width: 10em; }
+#recent-rows .warn { color: var(--busy); }
+#own-form summary { cursor: pointer; font-weight: 600; }
+#gateway-rows .note, #recent-rows .note { margin: 0; }

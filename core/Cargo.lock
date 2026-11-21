@@ -1467,6 +1467,7 @@ dependencies = [
  "radioprop-geo",
  "radioprop-place",
  "rpmi",
+ "serde",
  "serde_json",
  "tiny_http",
  "tungstenite",

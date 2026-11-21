@@ -859,76 +859,266 @@ async function openWaiting() {
   show("waiting-view");
 }
 
+// -- the Gateways page (choosing a gateway, §16.1): its views, and the marks laid over the lists --
+
+let gatewaysData = null;
+let gwView = kept("gview", "recommended");
+let showBlocked = false;
+
 async function openGateways(refreshing = false) {
   markFolder("");
   try {
-    const g = refreshing ? await api("gateways", {}) : await api("gateways");
-    const others = (g.others || []).length;
-    const missed = Object.entries(g.errors || {}).map(([d, why]) => `${d} (${why})`);
-    $("gateways-note").textContent = g.domain
-      ? `From ${g.domain}'s post office${others ? ` and ${others} it knows` : ""}, fetched `
-        + `${new Date(g.fetched * 1000).toLocaleString()}. Kept here for when there is no Internet.`
-        + (missed.length ? ` Not taken this time: ${missed.join("; ")}.` : "")
-      : "No list yet: refresh it while you have the Internet. It is kept for when you do not.";
-    const twice = new Set(g.ambiguous || []);
-    $("gateways-here").textContent = hereWords(g.here, g.note);
-    $("gateway-rows").replaceChildren(...g.gateways.map((gw) => {
-      const tr = document.createElement("tr");
-      // the dial in MHz to the kilohertz, or finer when it needs it: 7.101, 3.5915
-      const mhz = mhzOf;
-      // a channel with `scan_s` is one the gateway scans with others (RP-5 §4.4)
-      const scans = (c) => (c.scan_s != null ? ", scanned" : "");
-      const channels = (gw.channels || [])
-        .map((c) => `${mhz(c.dial_hz)} MHz, ${c.bandwidth_hz} Hz${scans(c)}`).join("\n");
-      const choose = document.createElement("button");
-      choose.textContent = "Choose";
-      choose.title = `Call ${gw.callsign}: its channel goes in the call box, and the radio is `
-        + "tuned there at once when the modem can";
-      choose.addEventListener("click", () => {
-        chosenGateway = {callsign: gw.callsign, channels: gw.channels || []};
-        $("callsign").value = gw.callsign;
-        document.querySelector("input[name=kind][value=gateway]").checked = true;
-        keep("kind", "gateway");
-        showKind();
-        $("channel").replaceChildren(...chosenGateway.channels.map((c) =>
-          el("option", {value: String(c.dial_hz),
-                        text: `${mhz(c.dial_hz)} MHz, ${c.bandwidth_hz} Hz${scans(c)}`})));
-        showChannels();
-        const first = chosenGateway.channels[0];
-        const scanned = first && first.scan_s != null
-          ? ` It scans its channels: the call keeps trying for ${first.scan_s} s or more.`
-          : "";
-        if (!chosenGateway.channels.length) {
-          toast(`${gw.callsign} chosen. Its record names no channel.`);
-        } else {
-          toast(`${gw.callsign} chosen, on ${mhz(first.dial_hz)} MHz.${scanned}`);
-          pickChannel();
-        }
-      });
-      const where = [gw.place, gw.grid].filter(Boolean).join(", ");
-      // which post office lists it; a callsign two other post offices list is shown from each
-      const by = el("div", {class: "note", text: gw.post_office || ""});
-      if (twice.has(gw.callsign)) {
-        by.append(" ", el("span", {class: "tag", text: "listed twice",
-          title: "Two post offices other than yours list this callsign, each its own way"}));
-      }
-      const name = el("div", {}, el("span", {text: gw.callsign}), by);
-      const cells = [name, where, gw.km === null ? "" : `${gw.km} km`, channels,
-                     gw.hours || "", choose];
-      cells.forEach((c, i) => {
-        const td = document.createElement("td");
-        if (typeof c === "string") td.textContent = c; else td.append(c);
-        if (i === 2) td.className = "n";
-        if (i === 0) td.className = "mono nowrap";
-        if (i === 3) td.className = "lines";
-        tr.append(td);
-      });
-      return tr;
-    }));
+    gatewaysData = refreshing ? await api("gateways", {}) : await api("gateways");
     show("gateways-view");
+    await renderGatewaysPage();
   } catch (e) {
     toast(e.message, true);
   }
+}
+
+// a channel as the page writes it: the dial in MHz to the kilohertz or finer, the bandwidth, and
+// whether the gateway scans it with others (RP-5 §4.4)
+function channelWords(c) {
+  return `${mhzOf(c.dial_hz)} MHz, ${c.bandwidth_hz} Hz${c.scan_s != null ? ", scanned" : ""}`;
+}
+
+// days or hours since a moment, for the ages the page shows
+function age(seconds) {
+  const s = Math.max(0, Date.now() / 1000 - seconds);
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 2 * 86400) return `${Math.round(s / 3600)} h ago`;
+  return `${Math.round(s / 86400)} days ago`;
+}
+
+function viewNote(view, count, g) {
+  switch (view) {
+    case "recommended":
+      return g.here ? "Nearest first: nothing is learned yet to rank them better."
+        : "As the post offices list them: save a place or set up a GPS to put the nearest first.";
+    case "favourites":
+      return count ? "" : "No favourites yet: click ☆ beside a gateway, or beside one of its channels.";
+    case "worked":
+      if (!g.here) return "Where you are is not known: save a place or set up a GPS.";
+      return count ? "Gateways you finished a session with from within 50 km of here (2 km on channels of 30 MHz and up)."
+        : "No session finished from within 50 km of here yet (2 km on channels of 30 MHz and up).";
+    default:
+      return "";
+  }
+}
+
+async function renderGatewaysPage() {
+  const g = gatewaysData;
+  if (!g) return;
+  const others = (g.others || []).length;
+  const missed = Object.entries(g.errors || {}).map(([d, why]) => `${d} (${why})`);
+  $("gateways-note").textContent = g.domain
+    ? `From ${g.domain}'s post office${others ? ` and ${others} it knows` : ""}, fetched `
+      + `${new Date(g.fetched * 1000).toLocaleString()}. Kept here for when there is no Internet.`
+      + (missed.length ? ` Not taken this time: ${missed.join("; ")}.` : "")
+    : "No list yet: refresh it while you have the Internet. It is kept for when you do not.";
+  $("gateways-here").textContent = hereWords(g.here, g.note);
+  for (const b of document.querySelectorAll("[data-gview]")) {
+    b.setAttribute("aria-selected", String(b.dataset.gview === gwView));
+  }
+  const recent = gwView === "recent";
+  $("gateway-table").hidden = recent;
+  $("recent-table").hidden = !recent;
+  $("own-form").hidden = recent;
+  $("gateways-left-out").hidden = true;
+  if (recent) {
+    await renderRecent();
+    return;
+  }
+  const blocked = g.gateways.filter((gw) => gw.blocked);
+  let rows = g.gateways.filter((gw) => showBlocked || !gw.blocked);
+  if (gwView === "favourites") {
+    rows = rows.filter((gw) => gw.favourite || (gw.channels || []).some((c) => c.favourite));
+  }
+  if (gwView === "worked") rows = rows.filter((gw) => gw.worked);
+  $("gateways-view-note").textContent = viewNote(gwView, rows.length, g)
+    + (g.marks_error ? ` Your marks could not be read: ${g.marks_error}.` : "");
+  if (blocked.length) {
+    $("gateways-left-out").hidden = false;
+    $("gateways-left-out-text").textContent = `Left out: ${blocked.length} blocked.`;
+    $("gateways-show-blocked").textContent = showBlocked ? "Hide them" : "Show them";
+  }
+  const twice = new Set(g.ambiguous || []);
+  $("gateway-rows").replaceChildren(...rows.map((gw) => gatewayRow(gw, twice)));
+}
+
+// a small toggle: the star, or the block of one channel
+function toggle(on, glyphs, title, run) {
+  const b = el("button", {type: "button", class: `toggle${on ? " on" : ""}`, title,
+                          "aria-label": title, "aria-pressed": String(on)});
+  b.textContent = on ? glyphs[0] : glyphs[1];
+  b.addEventListener("click", (event) => { event.stopPropagation(); run(); });
+  return b;
+}
+
+async function markGateway(body) {
+  try {
+    gatewaysData = await api("gateway-marks", body);
+    await renderGatewaysPage();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function gatewayRow(gw, twice) {
+  const tr = document.createElement("tr");
+  if (gw.blocked) tr.classList.add("blocked");
+  const star = toggle(gw.favourite, ["★", "☆"],
+    gw.favourite ? `${gw.callsign} is a favourite: click to unmark it` : `Mark ${gw.callsign} a favourite`,
+    () => markGateway({op: gw.favourite ? "unfavourite" : "favourite", callsign: gw.callsign}));
+  const by = el("div", {class: "note", text: gw.own ? "" : gw.post_office || ""});
+  if (gw.own) by.append(el("span", {class: "tag", text: "yours", title: "A gateway of your own: no post office lists it"}));
+  if (twice.has(gw.callsign)) {
+    by.append(" ", el("span", {class: "tag", text: "listed twice",
+      title: "Two post offices other than yours list this callsign, each its own way"}));
+  }
+  const name = el("div", {class: "gw-name"}, star, el("span", {text: gw.callsign}));
+  const where = el("div", {text: [gw.place, gw.grid].filter(Boolean).join(", ")});
+  if (gw.hours) where.append(el("div", {class: "note", text: `answers ${gw.hours}`, title: "When it answers"}));
+  if (gw.updated) {
+    where.append(el("div", {class: "note", text: `record changed ${age(gw.updated)}`,
+      title: "When its operator last changed its record"}));
+  }
+  if (gw.list_old) {
+    tr.classList.add("old");
+    where.append(el("div", {class: "note", text: `its list was fetched ${age(gw.list_fetched)}`,
+      title: "The post office's list could not be fetched since: refresh it over the Internet"}));
+  }
+  const channels = el("div", {}, ...(gw.channels || []).map((c) => {
+    const line = el("div", {class: c.blocked ? "chan struck" : "chan"});
+    line.append(
+      toggle(c.favourite, ["★", "☆"], c.favourite ? "A favourite channel: click to unmark it"
+        : "Mark this channel a favourite: it is offered first",
+        () => markGateway({op: c.favourite ? "unfavourite" : "favourite", callsign: gw.callsign,
+                           dial_hz: c.dial_hz})),
+      el("span", {text: channelWords(c)}),
+      toggle(c.blocked, ["⊘", "⊘"], c.blocked ? "Left out: click to put this channel back"
+        : "Leave this channel out when the gateway is chosen",
+        () => markGateway({op: c.blocked ? "unblock" : "block", callsign: gw.callsign,
+                           dial_hz: c.dial_hz})));
+    return line;
+  }));
+  const last = el("div", {});
+  if (gw.last) last.append(el("div", {text: `${gw.last.words}, ${when(gw.last.at)}`}));
+  if (gw.worked) {
+    last.append(el("span", {class: "tag", text: "worked from here",
+      title: "A session finished with it from within 50 km of here (2 km at VHF)"}));
+  }
+  const acts = el("div", {class: "pair-buttons"});
+  const choose = el("button", {type: "button", text: "Choose",
+    title: `Call ${gw.callsign}: its channel goes in the call box, and the radio is tuned there at once when the modem can`});
+  choose.addEventListener("click", () => chooseGateway(gw));
+  choose.disabled = gw.blocked;
+  const block = el("button", {type: "button", class: "quiet", text: gw.blocked ? "Unblock" : "Block",
+    title: gw.blocked ? `Put ${gw.callsign} back in the list` : `Leave ${gw.callsign} out of the list`});
+  block.addEventListener("click", () =>
+    markGateway({op: gw.blocked ? "unblock" : "block", callsign: gw.callsign}));
+  acts.append(choose, block);
+  if (gw.own) {
+    const remove = el("button", {type: "button", class: "quiet", text: "Remove",
+      title: `Forget ${gw.callsign}, a gateway of your own`});
+    remove.addEventListener("click", () => markGateway({op: "remove-own", callsign: gw.callsign}));
+    acts.append(remove);
+  }
+  const cells = [[el("div", {}, name, by), "mono nowrap"], [where, ""],
+                 [gw.km == null ? "" : `${gw.km} km`, "n"], [channels, "lines"],
+                 [last, ""], [acts, "acts"]];
+  for (const [c, cls] of cells) {
+    const td = document.createElement("td");
+    if (typeof c === "string") td.textContent = c; else td.append(c);
+    if (cls) td.className = cls;
+    tr.append(td);
+  }
+  return tr;
+}
+
+// a gateway chosen: its channels in the call box, favourites first and those left out dropped,
+// and the radio tuned to the first at once (W14)
+function chooseGateway(gw) {
+  const channels = (gw.channels || []).filter((c) => !c.blocked)
+    .sort((a, b) => Number(Boolean(b.favourite)) - Number(Boolean(a.favourite)));
+  chosenGateway = {callsign: gw.callsign, channels};
+  $("callsign").value = gw.callsign;
+  document.querySelector("input[name=kind][value=gateway]").checked = true;
+  keep("kind", "gateway");
+  showKind();
+  $("channel").replaceChildren(...channels.map((c) =>
+    el("option", {value: String(c.dial_hz), text: channelWords(c)})));
+  showChannels();
+  const first = channels[0];
+  const scanned = first && first.scan_s != null
+    ? ` It scans its channels: the call keeps trying for ${first.scan_s} s or more.`
+    : "";
+  if (!first) {
+    toast(`${gw.callsign} chosen. ${gw.channels && gw.channels.length ? "Every channel is left out." : "Its record names no channel."}`);
+  } else {
+    toast(`${gw.callsign} chosen, on ${mhzOf(first.dial_hz)} MHz.${scanned}`);
+    pickChannel();
+  }
+}
+
+async function renderRecent() {
+  let r;
+  try {
+    r = await api("attempts?limit=100");
+  } catch (e) {
+    toast(e.message, true);
+    return;
+  }
+  $("gateways-view-note").textContent = r.recent.length
+    ? "Your last calls, newest first. They are kept on this computer only."
+    : "No calls yet. Each call you place is kept here, with how it ended.";
+  const byCall = new Map((gatewaysData.gateways || []).map((gw) => [gw.callsign, gw]));
+  $("recent-rows").replaceChildren(...r.recent.map((a) => {
+    const tr = el("tr", {});
+    const gw = byCall.get(a.remote);
+    const called = el("div", {}, el("span", {class: "mono", text: a.remote}),
+      el("div", {class: "note", text: a.kind === "station" ? "a station" : "a gateway"}));
+    const channel = a.dial_hz ? `${mhzOf(a.dial_hz)} MHz${a.bandwidth_hz ? `, ${a.bandwidth_hz} Hz` : ""}` : "";
+    const ended = el("span", {text: a.words, class: a.completed ? "" : "warn"});
+    if (a.why) ended.title = a.why;
+    const took = a.took_s == null ? "" : a.took_s < 120 ? `${a.took_s} s` : `${Math.round(a.took_s / 60)} min`;
+    const acts = el("div", {});
+    if (gw && !gw.blocked) {
+      const again = el("button", {type: "button", class: "quiet", text: "Choose",
+        title: `Choose ${a.remote} again`});
+      again.addEventListener("click", () => chooseGateway(gw));
+      acts.append(again);
+    }
+    for (const [c, cls] of [[when(a.at), ""], [called, ""], [channel, ""], [ended, ""],
+                            [took, "n"], [acts, "acts"]]) {
+      const td = el("td", {class: cls});
+      if (typeof c === "string") td.textContent = c; else td.append(c);
+      tr.append(td);
+    }
+    return tr;
+  }));
+}
+
+function wireGateways() {
+  for (const b of document.querySelectorAll("[data-gview]")) {
+    b.addEventListener("click", async () => {
+      gwView = b.dataset.gview;
+      keep("gview", gwView);
+      await renderGatewaysPage();
+    });
+  }
+  $("gateways-show-blocked").addEventListener("click", async () => {
+    showBlocked = !showBlocked;
+    await renderGatewaysPage();
+  });
+  $("own-add").addEventListener("click", async () => {
+    const mhz = Number(String($("own-mhz").value).replace(",", "."));
+    await markGateway({op: "add-own", callsign: $("own-callsign").value, grid: $("own-grid").value,
+                       place: $("own-place").value, hours: $("own-hours").value,
+                       dial_hz: Number.isFinite(mhz) && mhz > 0 ? Math.round(mhz * 1e6) : 0,
+                       bandwidth_hz: Number($("own-bw").value)});
+    $("own-mhz").value = "";
+  });
 }
 
 // a row's buttons: the trash can, or in the trash put back and delete for good
@@ -1917,8 +2107,10 @@ async function loadUsual() {
     if (reading !== usualReading) return;
     usualChosen = new Set(settings.usual_gateways || []);
     $("skip-read").checked = settings.radio_skips_read === true;
-    const known = new Map(list.gateways.map((g) => [g.callsign, g]));
-    const names = [...new Set([...list.gateways.map((g) => g.callsign), ...usualChosen])];
+    // only listed gateways: the post office places copies at none of the operator's own
+    const listed = list.gateways.filter((g) => !g.own);
+    const known = new Map(listed.map((g) => [g.callsign, g]));
+    const names = [...new Set([...listed.map((g) => g.callsign), ...usualChosen])];
     $("usual").replaceChildren(...(names.length ? names : [null]).map((call) => {
       if (call === null) {
         return el("li", {class: "note",
@@ -3629,6 +3821,7 @@ function wire() {
     $("gateways-refresh").disabled = false;
   });
   wirePlaces();
+  wireGateways();
   // the channels are the chosen gateway's: another callsign typed has none here
   $("callsign").addEventListener("input", showChannels);
   // a channel picked, or a station call's dial typed, is tuned at once (W14)

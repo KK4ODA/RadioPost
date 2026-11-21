@@ -134,15 +134,55 @@
           <span class="note" id="gateways-here" title="Where the distances are measured from: a place you saved, or your GPS"></span>
           <button class="quiet" id="places-open" title="Your places and your GPS, in Setup">Places</button>
         </div>
-        <div class="scroll"><table class="list" aria-label="Gateways">
+        <div class="tabs" role="tablist" aria-label="Gateways">
+          <button role="tab" data-gview="recommended" title="Every gateway listed, and your own, nearest first: nothing is learned yet to rank them better">Recommended</button>
+          <button role="tab" data-gview="favourites" title="The gateways and channels you starred">Favourites</button>
+          <button role="tab" data-gview="recent" title="Your last calls, newest first, and how each ended">Recent</button>
+          <button role="tab" data-gview="worked" title="Gateways you finished a session with from within 50 km of where you are now, 2 km on channels of 30 MHz and up">Worked from here</button>
+        </div>
+        <p class="note" id="gateways-view-note"></p>
+        <div class="scroll" id="gateway-table"><table class="list" aria-label="Gateways">
           <thead><tr>
-            <th title="Its callsign, and the post office that lists it">Gateway</th><th title="Where it is">Where</th>
+            <th title="Its callsign, and the post office that lists it. The star marks a favourite">Gateway</th><th title="Where it is, when it answers, and how old its record is">Where</th>
             <th class="n" title="From the position in use: a place you saved, or your GPS">Distance</th>
-            <th title="Each dial frequency, upper sideband, and Aether's bandwidth there">Channels</th>
-            <th title="When it answers">Hours</th><th></th>
+            <th title="Each dial frequency, upper sideband, and Aether's bandwidth there. A star marks a favourite channel">Channels</th>
+            <th title="Your last call to it, and how it ended">Last call</th><th></th>
           </tr></thead>
           <tbody id="gateway-rows"></tbody>
         </table></div>
+        <p class="note" id="gateways-left-out" hidden><span id="gateways-left-out-text"></span>
+          <button type="button" class="quiet" id="gateways-show-blocked">Show them</button></p>
+        <div class="scroll" id="recent-table" hidden><table class="list" aria-label="Recent calls">
+          <thead><tr>
+            <th title="When the call started">When</th><th title="The gateway or station called">Called</th>
+            <th title="The dial and bandwidth it was placed on">Channel</th>
+            <th title="How it ended, and why">How it ended</th><th class="n" title="From the call to the end of the session">Took</th><th></th>
+          </tr></thead>
+          <tbody id="recent-rows"></tbody>
+        </table></div>
+        <details class="card" id="own-form">
+          <summary title="A station no post office lists: a partner for station-to-station mail, a test gateway, a club's station before it registers">Add a gateway of your own</summary>
+          <div class="row">
+            <input id="own-callsign" class="short" placeholder="Callsign" spellcheck="false" title="Its callsign, with its SSID: N0CALL-10">
+            <input id="own-grid" class="short" placeholder="Grid square" spellcheck="false" title="Its Maidenhead grid square, to place it by distance">
+            <input id="own-place" class="grow" placeholder="Where it is" title="Where it is, for you: a town, a club">
+          </div>
+          <div class="row">
+            <label class="inline" title="The dial frequency in MHz, upper sideband">Dial
+              <input id="own-mhz" class="short" placeholder="7.101" inputmode="decimal">
+            </label>
+            <label class="inline" title="Aether's bandwidth on this channel">Bandwidth
+              <select id="own-bw" class="narrow">
+                <option value="2300">2300 Hz</option>
+                <option value="500">500 Hz</option>
+                <option value="2750">2750 Hz</option>
+              </select>
+            </label>
+            <input id="own-hours" class="short" placeholder="Hours" title="When it answers, in your words">
+            <button type="button" id="own-add" title="Add it, or add this channel to it">Add</button>
+          </div>
+          <p class="note">The same callsign again adds a channel to it.</p>
+        </details>
       </section>
 
       <section id="alerts-view" hidden>

@@ -102,18 +102,51 @@ const PLACES = {
   here: HERE, note: null, broken: null, ports: ["/dev/ttyUSB0", "/dev/ttyACM0"],
 };
 const GATEWAYS = {domain: "radiopost.org", fetched: T - 2 * DAY, others: ["hampost.org"],
-  errors: {}, ambiguous: [], grid: "EM73", here: HERE, note: null, gateways: [
+  errors: {}, ambiguous: [], grid: "EM73", here: HERE, note: null, marks_error: null, gateways: [
     {callsign: "KK4ODA-1", post_office: "radiopost.org", place: "Atlanta, Georgia", grid: "EM73",
-     km: 14, hours: "always", copies: {users: 50, days: 7},
-     channels: [{dial_hz: 3591500, bandwidth_hz: 2300, scan_s: 20},
-                {dial_hz: 7101000, bandwidth_hz: 2300, scan_s: 20}]},
+     km: 14, hours: "always", copies: {users: 50, days: 7}, updated: T - 12 * DAY,
+     own: false, favourite: true, blocked: false, list_fetched: T - 2 * DAY, list_old: false,
+     last: {at: T - 1300, class: "completed", words: "completed"}, worked: true,
+     channels: [{dial_hz: 3591500, bandwidth_hz: 2300, scan_s: 20, favourite: true, blocked: false},
+                {dial_hz: 7101000, bandwidth_hz: 2300, scan_s: 20, favourite: true, blocked: false}]},
+    {callsign: "N0CALL-10", place: "The radio club", grid: "EM74", km: 46, hours: "evenings",
+     own: true, favourite: false, blocked: false, list_fetched: null, list_old: false, last: null,
+     worked: false,
+     channels: [{dial_hz: 7103500, bandwidth_hz: 500, favourite: false, blocked: false}]},
     {callsign: "N2CALL-5", post_office: "radiopost.org", place: "Macon, Georgia", grid: "EM82",
-     km: 128, hours: "1800-0200 UTC",
-     channels: [{dial_hz: 7103500, bandwidth_hz: 500}]},
+     km: 128, hours: "1800-0200 UTC", updated: T - 40 * DAY, own: false, favourite: false,
+     blocked: false, list_fetched: T - 2 * DAY, list_old: false,
+     last: {at: T - 3 * DAY, class: "no-answer", words: "no answer, nothing heard"}, worked: false,
+     channels: [{dial_hz: 7103500, bandwidth_hz: 500, favourite: false, blocked: false}]},
     {callsign: "N1CALL-10", post_office: "hampost.org", place: "Austin, Texas", grid: "EM10",
-     km: 1309, hours: "always", copies: {users: 20, days: 7},
-     channels: [{dial_hz: 7101000, bandwidth_hz: 2300}, {dial_hz: 14109000, bandwidth_hz: 2300}]},
+     km: 1309, hours: "always", copies: {users: 20, days: 7}, updated: T - 5 * DAY, own: false,
+     favourite: false, blocked: false, list_fetched: T - 2 * DAY, list_old: false, last: null,
+     worked: false,
+     channels: [{dial_hz: 7101000, bandwidth_hz: 2300, favourite: false, blocked: false},
+                {dial_hz: 14109000, bandwidth_hz: 2300, favourite: false, blocked: true}]},
+    {callsign: "W9OLD-1", post_office: "radiopost.org", place: "Chicago, Illinois", grid: "EN61",
+     km: 945, hours: "always", own: false, favourite: false, blocked: true,
+     list_fetched: T - 2 * DAY, list_old: false, last: null, worked: false,
+     channels: [{dial_hz: 7101000, bandwidth_hz: 2300, favourite: false, blocked: false}]},
   ]};
+// the calls placed, as the Recent view lists them
+const RECENT = {recent: [
+  {id: "a-5", at: T - 1600, kind: "gateway", remote: "KK4ODA-1", dial_hz: 7101000,
+   bandwidth_hz: 2300, grid: "EM73tr", class: "completed", words: "completed", completed: true,
+   took_s: 300, why: null},
+  {id: "a-4", at: T - DAY - 7200, kind: "station", remote: "WD5EMA", dial_hz: 7101000,
+   bandwidth_hz: 2300, grid: "EM73tr", class: "completed", words: "completed", completed: true,
+   took_s: 95, why: null},
+  {id: "a-3", at: T - 3 * DAY, kind: "gateway", remote: "N2CALL-5", dial_hz: 7103500,
+   bandwidth_hz: 500, grid: "EM73tr", class: "no-answer", words: "no answer, nothing heard",
+   completed: false, took_s: 76, why: "no answer"},
+  {id: "a-2", at: T - 3 * DAY - 600, kind: "gateway", remote: "KK4ODA-1", dial_hz: 3591500,
+   bandwidth_hz: 2300, grid: "EM73tr", class: "channel-busy", words: "the channel was busy",
+   completed: false, took_s: 4, why: "busy"},
+  {id: "a-1", at: T - 6 * DAY, kind: "gateway", remote: "KK4ODA-1", dial_hz: 7101000,
+   bandwidth_hz: 2300, grid: "EM74sc", class: "link-lost", words: "the link was lost",
+   completed: false, took_s: 410, why: "the link was lost"},
+]};
 const ADDRESSES = [
   {name: "Maria Perez", address: "maria@example.com", uses: 6, used: T - 420},
   {name: "Jim Ortega", address: "jim@hampost.org", uses: 3, used: T - DAY - 600},
@@ -308,6 +341,7 @@ function clientApi(world) {
       case "waiting": return WAITING;
       case "gateways": return GATEWAYS;
       case "places": return PLACES;
+      case "attempts": return RECENT;
       case "settings": return {usual_gateways: ["KK4ODA-1"], radio_skips_read: false};
       case "accept": return {entries: ["maria@example.com", "jim@hampost.org", "@hampost.org"]};
       case "addresses": return {entries: ADDRESSES};
@@ -875,6 +909,17 @@ const SHOTS = {
     await page.waitForTimeout(400);
     await page.evaluate(() => document.getElementById("sounds-card").scrollIntoView());
     await shot(page, "client-sounds", "#sounds-card");
+    await context.close();
+  },
+
+  async "client-recent"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+                                                 height: 900});
+    await page.click("#gateways-open");
+    await page.waitForTimeout(200);
+    await page.click("[data-gview=recent]");
+    await page.waitForTimeout(200);
+    await shot(page, "client-recent", "#gateways-view");
     await context.close();
   },
 
