@@ -219,8 +219,9 @@ fn main() {
     };
     app.run(move |_, event| {
         if let RunEvent::Exit = event {
-            // the modem is let go, and a session under way ends with a disconnect
-            runner.stop();
+            // the modem is let go, a session under way ends with a disconnect, and the post
+            // office is told the gateway stopped (RP-5 §5.9)
+            runner.close();
         }
     });
 }
@@ -271,6 +272,7 @@ mod tests {
             logged: 0,
             checks: Vec::new(),
             scan: None,
+            reported: None,
         };
         let call = Some("N1CALL-10");
         assert_eq!(interrupts(true, &at("stopped"), call), None);

@@ -104,6 +104,18 @@ function showVersion(u, name) {
   $("updates-check").disabled = Boolean(u.checking);
 }
 
+// what the gateway last told its post office about being on the air (RP-5 §5.9)
+function statusLine(settings, r) {
+  const to = r && r.to ? r.to : "its post office";
+  if (settings && settings.report_status === false) {
+    return r && r.off && r.at ? `Status: not reported, as Setup says; withdrawn from ${to}.`
+      : "Status: not reported, as Setup says.";
+  }
+  if (!r) return "Status: not reported yet.";
+  if (r.error) return `Status: not reported to ${to}: ${r.error}.`;
+  return `Status: reported to ${to} ${when(r.at)}: ${STATES[r.state] || r.state}.`;
+}
+
 function render(s) {
   state = s;
   showUpdate(s.update, "RadioPost Gateway");
@@ -167,6 +179,9 @@ function render(s) {
         ? `The credential runs out on ${day(s.credential.expires)} and has not renewed itself (the log says why): register again soon (Setup).`
         : `Registered with ${domainOf(s.credential.address)}'s post office for ${s.credential.address}: credential ${s.credential.serial}, until ${day(s.credential.expires)}.`;
   $("registration").className = s.credential && left < 14 * 86400 ? "bad" : "";
+  $("status-line").hidden = !s.credential;
+  $("status-line").textContent = statusLine(settings, st.reported);
+  $("status-line").className = st.reported && st.reported.error && !st.reported.off ? "note bad" : "note";
 
   const now = st.session;
   $("session").hidden = !now;
@@ -222,6 +237,7 @@ function fillForms(s) {
   g.country.value = settings ? settings.country : "US";
   g.operator_checks_rules.checked = settings ? settings.operator_checks_rules : false;
   g.answer_at_start.checked = settings ? settings.answer_at_start : true;
+  g.report_status.checked = settings ? settings.report_status !== false : true;
   const copies = settings && settings.copies;
   g.copies_on.checked = !!copies;
   if (copies) {
@@ -770,6 +786,7 @@ $("gateway-form").addEventListener("submit", (e) => {
     more_modems: f.more_modems.value.split("\n").map((m) => m.trim()).filter(Boolean),
     operator_checks_rules: f.operator_checks_rules.checked,
     answer_at_start: f.answer_at_start.checked,
+    report_status: f.report_status.checked,
     copies: f.copies_on.checked
       ? {users: Number(f.copies_users.value), days: Number(f.copies_days.value),
          max_air_bytes: Math.round(Number(f.copies_kb.value) * 1024)}

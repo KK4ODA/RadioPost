@@ -5,7 +5,8 @@
 //! [`radiopost::session::gateway::Gateway`] is the session's engine; [`upstream`] reaches the post
 //! office; [`station`] answers calls on an RPMI modem and keeps what outlives a session;
 //! [`operator`] registers the gateway with its operator's post office; [`monitor`] keeps what it
-//! is doing for its operator, [`runner`] runs it on a thread of its own, and [`panel`] shows it.
+//! is doing for its operator, [`runner`] runs it on a thread of its own, and [`panel`] shows it;
+//! [`status`] reports whether it is on the air to its post office (RP-5 §5.9).
 //! What it says goes to [`LOG_FILE`] in its folder too ([`logfile`]), when the program names it.
 
 /// The gateway's log file, in its folder: what it says, dated, and any panic.
@@ -25,6 +26,7 @@ pub mod rules;
 pub mod runner;
 pub mod site;
 pub mod station;
+pub mod status;
 pub mod store;
 pub mod upkeep;
 pub mod upstream;

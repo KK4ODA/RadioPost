@@ -95,6 +95,7 @@ fn gateway(
         only: None,
         operator_checks_rules: true,
         answer_at_start: true,
+        report_status: false,
         copies: Some(station::CopiesSettings {
             users: 10,
             days: 7,

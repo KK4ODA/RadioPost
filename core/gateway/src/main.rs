@@ -66,6 +66,12 @@ directory, as the RadioPost Gateway app has it.
                      hold copies placed ahead for at most N users, D days each, messages up
                      to B bytes with their text (RP-5 §5.8); register again to publish it
   held               what the gateway holds: copies placed ahead, the queue, the last reports
+  status [--on | --off]
+                     whether the gateway tells its post office if it is on the air: its
+                     state, which channels it listens on, what keeps it from working fully
+                     and the hour of its last session, for anyone to read (RP-5 §5.9;
+                     radiopost.org's gateway directory shows it). On unless turned off;
+                     off withdraws what it reported
   block --domain D   carry no sessions to a domain's post office (RP-1 §7.3)
   block --caller C [--note TEXT]
                      refuse a caller from its next call on: an address, or a callsign
@@ -138,6 +144,7 @@ fn init(dir: &Path, a: &Args) -> Result<(), String> {
         only: None,
         operator_checks_rules: a.has("--operator-checks-rules"),
         answer_at_start: true,
+        report_status: true,
         copies: None,
         partners: Vec::new(),
         windows: Vec::new(),
@@ -287,6 +294,24 @@ fn panel(dir: &Path, a: &Args) -> Result<(), String> {
     loop {
         std::thread::park();
     }
+}
+
+/// Whether the gateway reports its status to its post office (RP-5 §5.9): said, or set.
+fn status(dir: &Path, a: &Args) -> Result<(), String> {
+    let mut s = Settings::load(dir)?;
+    if a.has("--on") || a.has("--off") {
+        s.report_status = a.has("--on");
+        s.save(dir)?;
+    }
+    println!(
+        "{}",
+        if s.report_status {
+            "the gateway reports its status to its post office, for anyone to read"
+        } else {
+            "the gateway does not report its status: its post office publishes none"
+        }
+    );
+    Ok(())
 }
 
 /// Whether the gateway holds copies placed ahead, and its limits (RP-5 §4.4, §5.8).
@@ -611,6 +636,7 @@ fn run(dir: &Path, a: &Args, command: &str) -> Result<(), String> {
             s.save(dir)
         }
         "copies" => copies(dir, a),
+        "status" => status(dir, a),
         "held" => {
             held(dir);
             Ok(())

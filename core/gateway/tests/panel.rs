@@ -182,6 +182,8 @@ fn set_up(
     assert_eq!(state["settings"]["callsign"], "KK4ODA-1");
     assert_eq!(state["settings"]["country"], "US");
     assert_eq!(state["settings"]["answer_at_start"], true);
+    // its status reported unless the operator turns it off (RP-5 §5.9, D45)
+    assert_eq!(state["settings"]["report_status"], true);
     assert!(
         state["key"].as_str().is_some_and(|k| k.len() == 43),
         "{state}"

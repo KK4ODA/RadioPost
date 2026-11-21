@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.38.0 |
+| **Version** | 1.39.0 |
 | **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.32 |
 | **Licence** | CC BY 4.0 |
@@ -1367,10 +1367,13 @@ Click **Set up the gateway**. Setup has three steps.
    third-party mail the gateway may hand over.
 5. Leave **The modem does not check the band rules: I do** clear. Aether checks them.
 6. Keep **Answer calls when the app opens** ticked for a gateway left on its own.
-7. Tick **Hold copies of users' mail, for when the Internet is down** if the computer has room to
+7. Keep **Report its status to its post office, for anyone to see** ticked, unless you would
+   rather not. Callers then see whether the gateway is on the air (see *Its status* in
+   [section 19](#19-running-the-gateway)).
+8. Tick **Hold copies of users' mail, for when the Internet is down** if the computer has room to
    spare. Set how many **Users**, how many **Days** a copy is kept, and the **Largest message**
    kept with its text.
-8. Click **Save**. The gateway makes its key, shown under the form.
+9. Click **Save**. The gateway makes its key, shown under the form.
 
 If you change the copies setting later, register again (step 2) so your post office knows.
 
@@ -1495,7 +1498,8 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
    not scanning.
 6. **Post offices**: whether each post office let the gateway log in at the last check. It checks
    every ten minutes while it answers. **Check now** checks at once.
-7. **Registration**: the gateway's credential and when it runs out (red two weeks ahead).
+7. **Registration**: the gateway's credential and when it runs out (red two weeks ahead). Under
+   it, what the gateway last told its post office about being on the air, and when.
 8. **Held**: copies placed ahead and sessions waiting to be reported
    ([section 21](#21-when-the-internet-is-down-at-the-gateway)).
 9. **Refused**: callers you refuse ([section 20](#20-refusing-a-caller)).
@@ -1521,6 +1525,23 @@ While a session runs, a box shows who called, the account, since when, and the m
 
 **Stopping and closing.** **Stop** ends a session under way and lets Aether go. Closing the
 window stops the gateway too. If it is answering, it asks first and says what closing stops.
+
+**Its status, for anyone to see.** Unless you untick **Report its status to its post office, for
+anyone to see** in Setup, the gateway tells its post office whether it is on the air. The post
+office publishes it, and radiopost.org's gateway directory shows it beside the gateway. It says:
+
+- what the gateway is doing: **Listening**, in a **Session**, **Waiting for the modem**, or
+  **Stopped**;
+- which of its registered channels it listens on now;
+- what keeps it from working fully: a modem that does not answer, the radio outside the segments
+  where it may answer, or settings it cannot run with;
+- the hour in which its last session ended, such as *in the hour from 14:00*.
+
+It never says who called or what was carried. The gateway tells its post office when something
+changes, and every five minutes otherwise, while the app is open, started or stopped. Closing the
+app tells it the gateway stopped. A gateway not heard from for 15 minutes shows as *Not heard
+from*. **Registration** says what was last reported, and when. Untick the box and save, and what
+the gateway reported is withdrawn: its post office publishes nothing for it.
 
 **Left on its own.** With **Answer calls when the app opens** ticked, the gateway answers as soon
 as it opens. To open it when you sign in:
@@ -1667,6 +1688,7 @@ Useful commands:
 | `radiopost-gateway forward --to N1CALL-10` | Call a partner once, when the gateway is not answering. |
 | `radiopost-gateway windows` | The forwarding windows, and whether each may be published. |
 | `radiopost-gateway scan --dial 3.590 --dial 7.101` | Scan these channels from the next start, the first home (`--off` to stop; `scan` alone lists them). |
+| `radiopost-gateway status --off` | Stop reporting the gateway's status, and withdraw what it reported (`--on` to report again; `status` alone says which). |
 | `sudo radiopost-gateway update` | Install the newest release, then restart the service. |
 
 ## 24. What the gateway keeps
@@ -2388,3 +2410,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.36.0 | 2026-11-21 | §8.1: *What your own receiver heard*, hf-predict's FT8 of the last hour toward each gateway under its HF channel, raising the band's chance when three stations or more were heard; Figure 13 retaken with it. |
 | 1.37.0 | 2026-11-21 | §8.1: the VOACAP engine comes with the installers, with NTIA's notice; where the command-line panel looks for it. |
 | 1.38.0 | 2026-11-21 | §8.1 *What your calls teach*: an HF channel's line worked out with what your calls taught once you have called the gateway on that band, a VHF channel's line under its terrain, what each kind of call teaches; **Details** beside each gateway, the model, what was learned and what was measured side by side (new Figure 16; later figures renumbered); the warning when your own station looks at fault; forgetting, by gateway, place, day or everything, with **Undo** and **Show forgotten calls** (Figure 14 retaken). §4: `selection/learned.json` and `selection/forgotten.json`. §37: the station's warning. Figure 13 retaken with **Details**. |
+| 1.39.0 | 2026-11-21 | RadioPost Gateway reports its status to its post office (RP-5 1.6.0): Setup's **Report its status to its post office, for anyone to see** (section 18), what it says and when under *Its status, for anyone to see*, the line under **Registration** (section 19), and `status --off` (section 23). Figures 37 and 38 retaken. |

@@ -65,6 +65,10 @@ pub struct Settings {
     /// The gateway app answers calls as soon as it starts (the command line's `serve` always does).
     #[serde(default = "yes")]
     pub answer_at_start: bool,
+    /// It reports whether it is on the air to its own post office, which publishes it for anyone
+    /// to read (RP-5 §4.6, §5.9; D45): *Report its status*, on unless the operator turns it off.
+    #[serde(default = "yes")]
+    pub report_status: bool,
     /// Whether it holds copies placed ahead, and its limits (RP-5 §4.4 `copies`, §5.8); none, it
     /// holds none and polls no post office.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1330,7 +1334,10 @@ fn open_when_able(
 ///
 /// The gateway is not set up, or its modem never will open as it is set.
 pub fn serve(dir: &Path, say: &mut dyn FnMut(&str)) -> Result<(), String> {
-    run(dir, &Monitor::new(), say)
+    let monitor = std::sync::Arc::new(Monitor::new());
+    // its status reported beside it (RP-5 §5.9), as the gateway app's runner does
+    let _status = crate::status::start(dir, monitor.clone());
+    run(dir, &monitor, say)
 }
 
 /// Answers calls until `monitor` is asked to stop, carrying each session (RP-3 §9): it waits for
@@ -1382,6 +1389,16 @@ pub fn run(dir: &Path, monitor: &Monitor, say: &mut dyn FnMut(&str)) -> Result<(
             checked = Instant::now();
         }
         others.open_due(&station, &mut tell);
+        monitor.set_radio(crate::monitor::Radio {
+            at_hz: modem.at_hz,
+            several: !others.0.is_empty(),
+            others_away: others.0.iter().filter(|o| o.modem.is_none()).count(),
+            others_outside: others
+                .0
+                .iter()
+                .filter(|o| o.modem.as_ref().is_some_and(|m| m.outside.is_some()))
+                .count(),
+        });
         let busy_now = busy || others.busy();
         calls_between_sessions(
             &mut station,
@@ -1893,7 +1910,7 @@ fn calls_between_sessions(
     let asked = monitor.take_forward();
     let mut call = |partner: &str, records: bool, why: &str, tell: &mut dyn FnMut(&str)| {
         tell(&format!("calling {partner} {why}"));
-        monitor.begin(partner);
+        monitor.calling(partner);
         let dial = station.window_dial(partner, now());
         others.hold(None);
         let result = forward(station, modem, partner, monitor, (records, dial));
@@ -2192,6 +2209,7 @@ fn forward_here(
     let own = radiopost::cbor::hex(&radiopost::credential::hash(&station.account.credential));
     let client = forwarding_client(station, partner, (at, records), &own)?;
     let connected = call_up(modem, partner, monitor)?;
+    monitor.linked();
     let mut carrier = Carrier::new(Calling(client));
     let mut outcome = Outcome::default();
     let mut event = Some(connected);

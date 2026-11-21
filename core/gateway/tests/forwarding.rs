@@ -134,6 +134,7 @@ fn gateway_holding(
         only: None,
         operator_checks_rules: true,
         answer_at_start: true,
+        report_status: false,
         copies,
         partners: vec![station::PartnerSettings {
             callsign: partner.into(),

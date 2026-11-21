@@ -100,6 +100,7 @@ fn set_up_gateway(
         only: None,
         operator_checks_rules,
         answer_at_start: true,
+        report_status: false,
         copies: None,
         partners: Vec::new(),
         windows: Vec::new(),
@@ -303,6 +304,7 @@ fn a_gateway_that_scans_publishes_how_long_a_call_must_last() {
         only: None,
         operator_checks_rules: false,
         answer_at_start: true,
+        report_status: false,
         copies: None,
         partners: Vec::new(),
         windows: Vec::new(),
@@ -1523,4 +1525,63 @@ fn a_caller_the_operator_refuses_is_told_so_and_carried_again_once_taken_off() {
     assert!(radiopost_gateway::refused::remove(&gw, "wd5ema-7").expect("removed"));
     let (failed, said) = call(&mut user);
     assert_eq!(failed, None, "{said:?}");
+}
+
+/// The post office's status list (RP-5 §4.6), polled until `wanted` says it holds, for up to
+/// `secs` seconds: the last list read.
+fn status_until(
+    running: &Running,
+    secs: u64,
+    wanted: impl Fn(&serde_json::Value) -> bool,
+) -> serde_json::Value {
+    let until = std::time::Instant::now() + Duration::from_secs(secs);
+    loop {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let list = running.office().status_list(now);
+        if wanted(&list) || std::time::Instant::now() > until {
+            return list;
+        }
+        thread::sleep(Duration::from_millis(200));
+    }
+}
+
+#[test]
+fn the_gateway_reports_whether_it_is_on_the_air_unless_turned_off() {
+    let dir = scratch("status");
+    let (running, base, po_key) = post_office(&dir.join("po"));
+    let (_server, _at_user, at_gateway) = loopback();
+    let gw = set_up_gateway(&dir, &running, &base, &po_key, at_gateway, true);
+    // on, as a gateway's settings are unless its operator turns it off (D45)
+    let mut settings = station::Settings::load(&gw).expect("settings");
+    settings.report_status = true;
+    settings.save(&gw).expect("saved");
+    let gw_dir = gw.clone();
+    thread::spawn(move || {
+        let _ = station::serve(&gw_dir, &mut |_| {});
+    });
+    // opening, then listening on its one channel (RP-5 §5.9): no more often than every 10 s
+    let listening = |l: &serde_json::Value| l["status"][0]["report"]["state"] == "listening";
+    let list = status_until(&running, 30, listening);
+    assert!(listening(&list), "{list}");
+    let entry = &list["status"][0];
+    assert_eq!(entry["callsign"], "KK4ODA-1");
+    assert_eq!(
+        entry["report"],
+        json!({"state": "listening",
+               "channels": [{"dial_hz": 7_101_000, "modem": "tcp", "up": true}]})
+    );
+    // to the minute, and the report reached the post office: `seen` (RP-5 §4.4)
+    let reported = entry["reported"].as_u64().expect("reported");
+    assert_eq!(reported % 60, 0);
+    assert!(entry["seen"].as_u64().expect("seen") >= reported);
+
+    // the operator turns it off: the report is withdrawn
+    let mut settings = station::Settings::load(&gw).expect("settings");
+    settings.report_status = false;
+    settings.save(&gw).expect("saved");
+    let gone = |l: &serde_json::Value| l["status"] == json!([]);
+    let list = status_until(&running, 30, gone);
+    assert!(gone(&list), "{list}");
 }

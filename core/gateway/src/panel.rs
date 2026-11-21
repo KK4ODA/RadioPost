@@ -419,6 +419,7 @@ impl Panel {
         };
         let checks_rules = body["operator_checks_rules"].as_bool().unwrap_or(false);
         let at_start = body["answer_at_start"].as_bool().unwrap_or(true);
+        let report_status = body["report_status"].as_bool().unwrap_or(true);
         let copies = copies_of(&body["copies"])?;
         match Settings::load(dir) {
             Ok(mut s) => {
@@ -428,6 +429,7 @@ impl Panel {
                 s.country = country;
                 s.operator_checks_rules = checks_rules;
                 s.answer_at_start = at_start;
+                s.report_status = report_status;
                 s.copies = copies;
                 s.save(dir)
             }
@@ -444,6 +446,7 @@ impl Panel {
                     only: None,
                     operator_checks_rules: checks_rules,
                     answer_at_start: at_start,
+                    report_status,
                     copies,
                     partners: Vec::new(),
                     windows: Vec::new(),

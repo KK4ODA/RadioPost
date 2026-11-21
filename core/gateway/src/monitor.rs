@@ -44,6 +44,10 @@ pub struct SessionRecord {
     pub refused: Option<String>,
     /// How it ended: `over` when the caller hung up, else why; `None` while under way.
     pub result: Option<String>,
+    /// A call this gateway placed (RP-7 §2) whose link never came up: no session was carried, so
+    /// it is not the last session its status reports (RP-5 §5.9, `carried`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unlinked: bool,
 }
 
 /// How a post office answered the gateway's login.
@@ -75,6 +79,36 @@ pub struct Scanning {
     pub not: Option<String>,
 }
 
+/// Where the first modem's radio is, and how the other modems are (W26), as the answering loop
+/// last said: what the gateway's status report needs to say which channels it listens on (RP-5
+/// §5.9).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct Radio {
+    /// The first modem's radio's dial, as the modem last said (RP-4 §4.1).
+    pub at_hz: Option<u64>,
+    /// Whether the gateway has more modems than the first.
+    pub several: bool,
+    /// How many of the other modems do not answer.
+    pub others_away: usize,
+    /// How many of the other modems' radios are on a dial where it may not answer (RP-4 §8).
+    pub others_outside: usize,
+}
+
+/// The gateway's last status report to its post office (RP-5 §5.9), as the panel shows it.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct Reported {
+    /// The operator turned reporting off (Setup's *Report its status*).
+    pub off: bool,
+    /// The post office's domain, when known.
+    pub to: Option<String>,
+    /// The state last reported, and when, Unix seconds.
+    pub state: Option<String>,
+    /// When it last reached the post office, Unix seconds.
+    pub at: Option<u64>,
+    /// Why the last try failed, in words.
+    pub error: Option<String>,
+}
+
 /// The gateway's state, as the panel shows it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Status {
@@ -92,6 +126,8 @@ pub struct Status {
     pub checks: Vec<Check>,
     /// Its scan, when it is set to scan.
     pub scan: Option<Scanning>,
+    /// Its last status report (RP-5 §5.9), when it has tried one.
+    pub reported: Option<Reported>,
 }
 
 struct Inner {
@@ -106,6 +142,8 @@ struct Inner {
     scan: Option<Scanning>,
     /// A partner the operator asked to forward to (RP-7 §2), for the answering loop.
     forward: Option<String>,
+    radio: Radio,
+    reported: Option<Reported>,
 }
 
 /// What the gateway is doing, shared between its answering loop and its panel.
@@ -137,6 +175,8 @@ impl Monitor {
                 checks: Vec::new(),
                 scan: None,
                 forward: None,
+                radio: Radio::default(),
+                reported: None,
             }),
             stop: AtomicBool::new(false),
             keep: None,
@@ -207,6 +247,50 @@ impl Monitor {
         });
         i.state = "session";
         i.since = now();
+    }
+
+    /// The gateway calls a partner (RP-7 §2): a session under way, though its link is not up yet.
+    pub fn calling(&self, partner: &str) {
+        self.begin(partner);
+        if let Some(s) = self.lock().session.as_mut() {
+            s.unlinked = true;
+        }
+    }
+
+    /// The link of the call it placed came up.
+    pub fn linked(&self) {
+        if let Some(s) = self.lock().session.as_mut() {
+            s.unlinked = false;
+        }
+    }
+
+    /// When the last session it carried ended: the newest whose link came up (RP-5 §5.9,
+    /// `carried`).
+    #[must_use]
+    pub fn last_carried(&self) -> Option<u64> {
+        self.lock()
+            .sessions
+            .iter()
+            .rev()
+            .filter(|s| !s.unlinked)
+            .find_map(|s| s.ended)
+    }
+
+    /// Where the first modem's radio is, and how the other modems are, as the answering loop sees
+    /// them now.
+    pub fn set_radio(&self, radio: Radio) {
+        self.lock().radio = radio;
+    }
+
+    /// Where the radio is and how the other modems are, as last said.
+    #[must_use]
+    pub fn radio(&self) -> Radio {
+        self.lock().radio
+    }
+
+    /// How the last status report went.
+    pub fn set_reported(&self, reported: Reported) {
+        self.lock().reported = Some(reported);
     }
 
     /// What the session's engine said. An `ERROR` from the caller is logged with its text (RP-3
@@ -307,6 +391,7 @@ impl Monitor {
             logged: i.logged,
             checks: i.checks.clone(),
             scan: i.scan.clone(),
+            reported: i.reported.clone(),
         }
     }
 

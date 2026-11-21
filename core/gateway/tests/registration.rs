@@ -42,6 +42,7 @@ fn gateway(dir: &Path, offices: &[(&str, &str)]) -> PathBuf {
         only: None,
         operator_checks_rules: false,
         answer_at_start: true,
+        report_status: false,
         copies: None,
         partners: Vec::new(),
         windows: Vec::new(),

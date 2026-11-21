@@ -209,6 +209,7 @@ fn a_gateway_answers_on_two_modems_one_session_at_a_time() {
         only: None,
         operator_checks_rules: true,
         answer_at_start: true,
+        report_status: false,
         copies: None,
         partners: Vec::new(),
         windows: Vec::new(),

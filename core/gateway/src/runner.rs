@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! The gateway answering on a thread of its own, started and stopped by its operator, with its
-//! post offices checked beside it: what the gateway app and `radiopost-gateway panel` run.
+//! post offices checked beside it and its status reported to its own post office (RP-5 §5.9):
+//! what the gateway app and `radiopost-gateway panel` run.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -13,6 +14,8 @@ use crate::station::{self, Station};
 
 /// How often the post offices are checked while the gateway answers.
 pub const CHECK_EVERY: Duration = Duration::from_secs(600);
+/// How long a closing gateway waits to say it stopped (RP-5 §5.9).
+pub const CLOSE_WAIT: Duration = Duration::from_secs(5);
 
 /// A gateway's answering loop and its checks, for the gateway in one directory.
 pub struct Runner {
@@ -23,18 +26,23 @@ pub struct Runner {
     generation: Arc<AtomicU64>,
     /// What the gateway says goes to standard output too.
     echo: bool,
+    /// Its status, reported for as long as the runner lives, started or stopped (RP-5 §5.9).
+    status: Mutex<Option<crate::status::Guard>>,
 }
 
 impl Runner {
     /// A runner for the gateway in `dir`, keeping its sessions there.
     #[must_use]
     pub fn new(dir: &Path) -> Runner {
+        let monitor = Arc::new(Monitor::keeping(dir));
+        let status = crate::status::start(dir, monitor.clone());
         Runner {
             dir: dir.to_owned(),
-            monitor: Arc::new(Monitor::keeping(dir)),
+            monitor,
             answering: Mutex::new(None),
             generation: Arc::new(AtomicU64::new(0)),
             echo: false,
+            status: Mutex::new(Some(status)),
         }
     }
 
@@ -130,6 +138,20 @@ impl Runner {
         let answering = self.answering().take();
         if let Some(t) = answering {
             let _ = t.join();
+        }
+    }
+
+    /// Stops answering as [`Runner::stop`] does, then says so to the post office before the
+    /// program ends: its status `stopped`, waiting a few seconds at most (RP-5 §5.9).
+    pub fn close(&self) {
+        self.stop();
+        let status = self
+            .status
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some(mut s) = status {
+            s.finish(CLOSE_WAIT);
         }
     }
 

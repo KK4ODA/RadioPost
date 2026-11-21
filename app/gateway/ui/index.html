@@ -45,6 +45,7 @@
         <section class="card" aria-label="Registration">
           <h2 title="The gateway's own credential, from its registration with its operator's post office (RP-5 §6.4)">Registration</h2>
           <p id="registration"></p>
+          <p class="note" id="status-line" title="What the gateway last told its post office about being on the air, which the post office publishes for anyone to read (RP-5 §5.9). Setup turns it off" hidden></p>
         </section>
         <section class="card" aria-label="For when the Internet is down">
           <h2 title="What the gateway holds for when it cannot reach a post office: copies of users' mail placed ahead (RP-5 §5.8), and the sessions it carried while cut off, waiting to be reported (RP-5 §5.6)">Held</h2>
@@ -175,6 +176,9 @@
         </label>
         <label class="check" title="Answer calls as soon as the app opens, as an unattended gateway should">
           <input type="checkbox" name="answer_at_start" checked> Answer calls when the app opens
+        </label>
+        <label class="check" title="Tell its post office whether it is on the air: listening, in a session, waiting for the modem or stopped; which of its channels it listens on; what keeps it from working fully; and the hour its last session ended. Its post office publishes this for anyone to read, and radiopost.org's gateway directory shows it. Nothing about who called or what was carried (RP-5 §5.9). Turned off, what it reported is withdrawn">
+          <input type="checkbox" name="report_status" checked> Report its status to its post office, for anyone to see
         </label>
         <fieldset class="copies" title="Copies placed ahead (RP-5 §5.8): users who name this gateway as usual have their waiting mail copied here, to pick up while the Internet is down. Register again after a change, so the post office knows.">
           <label class="check"><input type="checkbox" name="copies_on"> Hold copies of users' mail, for when the Internet is down</label>

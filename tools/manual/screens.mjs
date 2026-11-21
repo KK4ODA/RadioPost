@@ -567,7 +567,7 @@ function clientApi(world) {
 // ── the gateway's example world ─────────────────────────────────────────────────────────────
 
 const GW_SETTINGS = {callsign: "KK4ODA-1", modem: "ws://127.0.0.1:8515/v1", country: "US",
-  operator_checks_rules: false, answer_at_start: true,
+  operator_checks_rules: false, answer_at_start: true, report_status: true,
   copies: {users: 50, days: 7, max_air_bytes: 16384}, post_offices: {}};
 const GW_SESSIONS = [
   {started: T - 1300, ended: T - 1148, remote: "N0CALL", account: "ana@radiopost.org",
@@ -604,7 +604,9 @@ function gatewayState(over = {}) {
       logged: GW_LOG.length,
       checks: [
         {domain: "radiopost.org", ok: true, at: T - 240, url: "https://po.radiopost.org/rp/v1"},
-        {domain: "hampost.org", ok: true, at: T - 240, url: "https://po.hampost.org/rp/v1"}]},
+        {domain: "hampost.org", ok: true, at: T - 240, url: "https://po.hampost.org/rp/v1"}],
+      // what it last told its post office about being on the air (RP-5 §5.9)
+      reported: {off: false, to: "radiopost.org", state: "listening", at: T - 95, error: null}},
     held: {copies: 5, users: 3, records: 0, queued: 0},
     key: "5a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a19",
     client: {home: "C:\\Users\\you\\.radiopost",

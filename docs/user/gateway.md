@@ -68,7 +68,9 @@ over (RP-6 §5.1). Leave *The modem does not check the band rules* clear: Aether
 a modem that does not, but says where the radio's dial is (RP-4 §4.1), the gateway checks the dial
 itself and answers only inside an automatic-control segment; the badge reads **Not answering
 here** while the radio is outside one. Keep
-*Answer calls when the app opens* ticked for a gateway left on its own. Tick *Hold copies of
+*Answer calls when the app opens* ticked for a gateway left on its own, and *Report its status to
+its post office, for anyone to see* unless you would rather not (§3, *Its status*). Tick *Hold
+copies of
 users' mail, for when the Internet is down* for a gateway with room to spare (§4), and say for how
 many users, how many days, and the largest message it holds with its text. Click **Save**. The
 gateway makes its key; it is shown under the form. Change the copies setting later, and register
@@ -186,6 +188,19 @@ first, and says what closing stops:
 | Waiting for the modem | Stops the wait: the gateway was not listening for calls yet. |
 | Listening | Stops listening: calls to the gateway's callsign go unanswered until it runs again. |
 | Session | Ends the session with the station named, and the gateway stops answering. |
+
+**Its status.** With *Report its status to its post office, for anyone to see* ticked (the
+default), the gateway tells its own post office whether it is on the air: listening, in a session,
+waiting for the modem or stopped; which of its registered channels it listens on; what keeps it
+from working fully (`modem-away`, `outside-segment`, `setup-error`, RP-0 §9.7); and the hour in
+which its last session ended (RP-5 §5.9). Never who called or what was carried. It reports when
+something changes and every five minutes otherwise, for as long as the app or `panel` runs, started
+or stopped, and closing the app reports it stopped. Its post office publishes the last report in a
+signed list beside its gateway list (RP-5 §4.6), which radiopost.org's directory reads; a report
+not renewed for 15 minutes reads as *Not heard from*. **Registration** shows what was last
+reported. Untick it, or `radiopost-gateway status --off`, and the report is withdrawn
+(`DELETE /status`). A post office older than RP-5 1.6.0 takes no reports: the gateway asks again
+hourly, and says so under **Registration**.
 
 **Unattended.** With *Answer calls when the app opens* ticked, the gateway answers as soon as the
 app opens. To have it open when you sign in: on Windows, put a shortcut to RadioPost Gateway in the
@@ -367,7 +382,9 @@ register --account kk4oda@radiopost.org --channel 7101000,USB,aether,2300 --grid
 callsign or the number `accounts` gives, and is needed only when the app holds more than one).
 `radiopost-gateway unregister` withdraws the registration; stop the gateway first. `unregister
 --here` forgets it on this computer only, without asking the post office: for a post office that
-cannot be reached any more, whose operators then remove the record themselves.
+cannot be reached any more, whose operators then remove the record themselves. `radiopost-gateway
+status --off` stops reporting the gateway's status and withdraws what it reported (§3), `--on`
+reports again, and `status` alone says which; a running gateway takes it within a second.
 
 `radiopost-gateway serve` answers calls with no panel at all, as before. `radiopost-gateway modem
 --add 127.0.0.1:8601` has it answer on one more modem, `modem --remove` no longer, and `modems`
