@@ -990,9 +990,8 @@ fn run(words: &[String]) -> Result<(), Error> {
                 println!("  not taken now: {d}: {}", why.as_str().unwrap_or(""));
             }
             // by distance from the places saved (no GPS here), else from the grid square
-            let here = radiopost_client::selection::position::saved(
-                &callsigns::base_of(store.home()),
-            );
+            let here =
+                radiopost_client::selection::position::saved(&callsigns::base_of(store.home()));
             if let Some(h) = &here {
                 println!("distances from {}", h.grid);
             }
