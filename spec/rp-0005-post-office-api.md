@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.4.0 |
+| **Version** | 1.5.0 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -207,7 +207,7 @@ A record's members:
 | `operator` | text | The callsign of the licensee who operates it (§6.4). |
 | `grid` | text | Its Maidenhead locator, 4 or 6 characters. |
 | `place` | text | Where it is, for people. |
-| `channels` | array of channel | Where it listens. A channel has `dial_hz` (integer), `mode` (`USB` or `FM`), `modem` (RP-0 §9.4), `bandwidth_hz` (integer) and, when it scans, `scan_s` (integer). |
+| `channels` | array of channel | Where it listens. A channel has `dial_hz` (integer), `mode` (`USB` or `FM`), `modem` (RP-0 §9.4), `bandwidth_hz` (integer), when it scans `scan_s` (integer), and if its operator says, `station` (map): how it transmits and receives there (below). |
 | `hours` | text | When it listens, for people: `always`, or what its operator writes. |
 | `internet` | bool | It usually reaches the Internet. |
 | `copies` | map | Copies placed ahead it holds (§5.8): `users`, `days` and `max_air_bytes`, integers. |
@@ -215,6 +215,7 @@ A record's members:
 | `updated` | integer | When the record last changed. |
 | `listens` | array of window | When it listens, for programs: windows of RP-7 §5's form without a `channel` (`every_s`, `at_s`, `length_s`, integers), on all its channels. Absent: `hours` says, for people. |
 | `seen` | integer | When the gateway last reached its post office, to the minute. The post office's, not the operator's (below). |
+| `site` | map | Where its antennas are, for programs: `lat` and `lon` (numbers, degrees, WGS 84) and `agl_m` (number, metres above the ground). Absent: `grid` says. |
 
 A reader ignores a member of another type, as it ignores one it does not know (RP-0 §4.2).
 
@@ -234,6 +235,26 @@ not reached it since registering has no `seen`. A client shows it, so that a gat
 has been off for days is not taken for one that answers; a gateway cut off from the Internet
 still serves by radio (RP-7), so an old `seen` with `internet` true says the gateway may be cut
 off, not that it is gone. The minute is all it says: when the gateway's computer is on.
+
+**Where it is, and how it transmits.** `grid` places a gateway for people and for distance, to a
+square 5 by 8 km at best. A program that judges a path over the terrain needs more, so a gateway
+whose operator wants its paths judged lists `site`: its antennas' latitude `lat`, from −90 to 90,
+and longitude `lon`, from −180 to 180, in degrees on WGS 84, north and east positive, and
+`agl_m`, their height above the ground there, from 0 to 1 000 metres. Two decimal places put it
+within about a kilometre and four within about 11 m: the operator gives the precision they are
+content to publish. `grid` stays, for people and for a reader that knows no `site`, and SHOULD be
+the square the site is in. A reader ignores a `site` whose `lat` or `lon` is missing, of another
+type or out of its range, and an `agl_m` out of its range, using the rest.
+
+A channel's `station` says how the gateway transmits and receives on it, for a program working out
+a link budget each way. Each member is optional: `power_w`, the transmitter's power in watts,
+above 0; `antenna`, a kind from RP-0 §9.6; `agl_m`, the antenna's height above the ground, from 0
+to 1 000 metres, which takes the place of the site's for this channel; `gain_dbi`, its gain over
+an isotropic antenna, from −30 to 60; and `azimuth_deg`, where a directional antenna points, in
+degrees east of true north, from 0 to below 360 (absent: it is taken to be the same all round). A
+reader ignores a member of another type or out of its range, and an `antenna` it does not know, and
+uses the others. A client that works out a budget says which values the record gave and which it
+assumed.
 
 `modem` names the modem from the registry of RP-0 §9.4. A reader ignores a channel whose `modem`
 it does not know: the modem may have been added after the reader was written. `mode` is the
@@ -282,7 +303,7 @@ serve them to.
 The reader refreshes the lists at least every **6 hours** while online, keeps the last it verified
 of each list it cannot fetch, and uses what it holds while offline.
 
-Test vectors: `vectors/gateway-lists.json`.
+Test vectors: `vectors/gateway-lists.json` (`site_cases` for `site` and `station`).
 
 ### 4.5 `GET /routes`
 
@@ -946,3 +967,4 @@ read from the home's and every post office it knows) and `vectors/api.json` (the
 | 1.2.0 | 2026-11-18 | §6.4: `DELETE /gateways/{callsign}` withdraws a gateway's registration, for the user whose callsign is its `operator`: the record leaves the gateway list, the credentials issued for the gateway are revoked, and the items placed at it are dropped; registering a callsign again replaces its record; a gateway is registered with one post office at a time, reports what it holds before it is withdrawn, and looks in the list after a `404`. §7.7: `DELETE /office/gateways/{callsign}`, the operators' withdrawal. §1: `404` for a gateway not registered. §8: who may withdraw one. 1.0.0 named `DELETE` and said no more, so a gateway registered by mistake could not be taken off (a tester's, at radiopost.org, 2026-11-18). Test vectors (`api-exchanges.json`, `api-office.json`). MINOR, announced (RP-0 §8.4): nothing for an implementation to do. A post office of 1.1.0 answers a withdrawal `404` and keeps the record; one of 1.2.0 SHOULD offer it. |
 | 1.3.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 8; D43). §1: the base URL signed as the record gives it, with no `/` after it; how a reader reads an error whose `code` it does not know, or an answer with no problem body; `Retry-After` in seconds. §4.4: a record's members and their types; entries sharing an `api` are one post office (the first domain, any entry's keys, every domain left out together); the home's own entry passed over; a callsign a list names twice counts once (the reference and the Rust library had made it ambiguous). §6.3: `PUT /settings` replaces the settings whole. §6.6: a caller's statement in challenge form, with the caller's `nonce`, is taken (no station-to-station session in which the station called asked for a challenge could be reported); addresses compared as RP-0 1.2.0 §6.2 says. Test vectors (`gateway-lists.json`, `direct.json`). MINOR, announced (RP-0 §8.4): `nonce` is a new optional member, and a post office of 1.2.0 refuses such a report `signature-invalid` or `time-skew`. Post offices should take it, and clients send it. |
 | 1.4.0 | 2026-11-21 | §4.4: `listens`, when a gateway listens, as windows of RP-7 §5's form, for programs where `hours` is for people; `seen`, set by the post office that serves the list, when the gateway last logged in or polled for copies, to the minute. §6.4: a registered record's `seen` is ignored. From choosing a gateway (the design's §7.2). Test vectors: the example record lists `listens` and the example list `seen`. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; a post office SHOULD set `seen`, and a reader that ignores both loses nothing it had. |
+| 1.5.0 | 2026-11-21 | §4.4: `site`, where a gateway's antennas are (`lat`, `lon` at the operator's precision, `agl_m`), and a channel's `station`, how it transmits and receives there (`power_w`, `antenna` from RP-0 1.3.0 §9.6, `agl_m`, `gain_dbi`, `azimuth_deg`), for programs judging a path over the terrain and its link budget each way; what a reader does with a member out of its range. From choosing a gateway (the design's §7.2, Phase 2). Test vectors: `site_cases`, and the example list's second gateway with a site and a VHF channel's station. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; a reader that ignores both loses nothing it had. |

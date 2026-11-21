@@ -107,6 +107,59 @@ def listens(record: dict[str, Any]) -> list[dict[str, int]] | None:
     return kept or None
 
 
+# RP-0 §9.6: the kinds of antenna a gateway's channel names in its `station`
+ANTENNAS = ("vertical", "dipole", "yagi", "j-pole", "collinear", "loop", "nvis", "whip", "other")
+
+
+def _number(v: Any, lo: float, hi: float, *, above: bool = False, below: bool = False) -> Any:
+    """`v` when it is a JSON number from `lo` to `hi` (strictly above `lo` with `above`, strictly
+    below `hi` with `below`); None otherwise. A boolean is not a number."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    if (v <= lo if above else v < lo) or (v >= hi if below else v > hi):
+        return None
+    return v
+
+
+def site(record: dict[str, Any]) -> dict[str, Any] | None:
+    """RP-5 §4.4: where a gateway's antennas are, `site` read.
+
+    `lat` from -90 to 90 and `lon` from -180 to 180, both needed; `agl_m` from 0 to 1000 kept when
+    it holds and left out when it does not. None when there is no `site` or it does not hold.
+    """
+    s = record.get("site")
+    if not isinstance(s, dict):
+        return None
+    lat, lon = _number(s.get("lat"), -90, 90), _number(s.get("lon"), -180, 180)
+    if lat is None or lon is None:
+        return None
+    out: dict[str, Any] = {"lat": lat, "lon": lon}
+    agl = _number(s.get("agl_m"), 0, 1000)
+    if agl is not None:
+        out["agl_m"] = agl
+    return out
+
+
+def station(channel: dict[str, Any]) -> dict[str, Any]:
+    """RP-5 §4.4: how a gateway transmits and receives on a channel, its `station` read.
+
+    Each member kept when it holds: `power_w` above 0, `antenna` a name of RP-0 §9.6, `agl_m` from
+    0 to 1000, `gain_dbi` from -30 to 60, `azimuth_deg` from 0 to below 360. The others are left
+    out, and `{}` when none holds or there is no `station`.
+    """
+    s = channel.get("station")
+    if not isinstance(s, dict):
+        return {}
+    kept = {
+        "power_w": _number(s.get("power_w"), 0, float("inf"), above=True),
+        "antenna": s.get("antenna") if s.get("antenna") in ANTENNAS else None,
+        "agl_m": _number(s.get("agl_m"), 0, 1000),
+        "gain_dbi": _number(s.get("gain_dbi"), -30, 60),
+        "azimuth_deg": _number(s.get("azimuth_deg"), 0, 360, below=True),
+    }
+    return {k: v for k, v in kept.items() if v is not None}
+
+
 def _open_until(w: dict[str, int], t: int) -> int | None:
     """When the window open at `t` closes; None when it is not open then."""
     start = t - (t - w["at_s"]) % w["every_s"]

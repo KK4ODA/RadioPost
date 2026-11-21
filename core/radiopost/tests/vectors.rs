@@ -610,6 +610,64 @@ fn dns_records_are_read_and_post_offices_trusted_as_rp1_7_says() {
 }
 
 #[test]
+fn where_a_gateway_is_and_how_it_transmits_are_read_as_rp5_4_4_says() {
+    use radiopost::gateway_list::{site, station};
+    let file = vectors("gateway-lists.json");
+    let cases = file["site_cases"].as_array().expect("site cases");
+    assert_ne!(cases.len(), 0, "no site cases in gateway-lists.json");
+    for c in cases {
+        let what = c["what"].as_str().unwrap_or("?");
+        let got = site(&c["record"]).map(|s| {
+            let mut v = json!({"lat": s.lat, "lon": s.lon});
+            if let Some(h) = s.agl_m {
+                v["agl_m"] = json!(h);
+            }
+            v
+        });
+        assert!(
+            same_numbers(&got.unwrap_or(Json::Null), &c["site"]),
+            "{what}: site"
+        );
+        let st = station(&c["record"]["channels"][0]);
+        let mut v = json!({});
+        for (k, x) in [
+            ("power_w", st.power_w),
+            ("agl_m", st.agl_m),
+            ("gain_dbi", st.gain_dbi),
+            ("azimuth_deg", st.azimuth_deg),
+        ] {
+            if let Some(x) = x {
+                v[k] = json!(x);
+            }
+        }
+        if let Some(a) = st.antenna {
+            v["antenna"] = json!(a);
+        }
+        assert!(
+            same_numbers(&v, &c["station"]),
+            "{what}: station {v} for {}",
+            c["station"]
+        );
+    }
+}
+
+/// Two JSON values equal, numbers compared as numbers (the reference writes 18, Rust reads 18.0).
+fn same_numbers(a: &Json, b: &Json) -> bool {
+    match (a, b) {
+        (Json::Number(x), Json::Number(y)) => x.as_f64() == y.as_f64(),
+        (Json::Object(x), Json::Object(y)) => {
+            x.len() == y.len()
+                && x.iter()
+                    .all(|(k, v)| y.get(k).is_some_and(|w| same_numbers(v, w)))
+        }
+        (Json::Array(x), Json::Array(y)) => {
+            x.len() == y.len() && x.iter().zip(y).all(|(v, w)| same_numbers(v, w))
+        }
+        _ => a == b,
+    }
+}
+
+#[test]
 fn when_a_gateway_listens_is_read_as_rp5_4_4_says() {
     use radiopost::gateway_list::{listening, listens};
     let file = vectors("gateway-lists.json");

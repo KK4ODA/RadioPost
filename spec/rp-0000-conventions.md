@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.2.0 |
-| **Updated** | 2026-11-19 |
+| **Version** | 1.3.0 |
+| **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
@@ -380,6 +380,28 @@ added after it was written.
 
 Position reports and bulletins (wishlist W33, W34) would take the next numbers.
 
+### 9.6 Antenna kinds
+
+A gateway's record may say, for each channel, what kind of antenna it transmits and receives on
+(RP-5 §4.4, a channel's `station`). The kind is a name from this list, so that a program can take
+a pattern and a typical gain for it when the record gives none.
+
+| Name | Antenna |
+|---|---|
+| `vertical` | A vertical monopole or ground plane: omnidirectional, low angles |
+| `dipole` | A half-wave dipole, or an inverted V |
+| `yagi` | A Yagi-Uda or other beam: directional |
+| `j-pole` | A J-pole or slim Jim: omnidirectional |
+| `collinear` | A collinear vertical: omnidirectional, gain at low angles |
+| `loop` | A loop, small or full-wave |
+| `nvis` | An antenna made for near-vertical incidence: high angles, at HF |
+| `whip` | A whip on a vehicle |
+| `other` | Anything else |
+
+A name is lower case: letters, digits and `-`. A program that meets a name it does not know
+ignores it, as if the kind were not given: a kind added after the program was written is not an
+error.
+
 ---
 
 ## Change log
@@ -402,3 +424,4 @@ Position reports and bulletins (wishlist W33, W34) would take the next numbers.
 | 1.0.0 | 2026-11-15 | Stable, with RP-1 to RP-6 (D41): §8.2 says how a Stable document's version moves, §8.4 that its changes are announced. |
 | 1.1.0 | 2026-11-18 | RP-8, alerts (§2): HMAC-SHA256 tags and PBKDF2 keys (§5); the contexts `RadioPost-circle-v1`, `RadioPost-circle-id-v1` and `RadioPost-alert-v1` (§9.2); broadcast types (§9.5); §8.6: the vectors cover RP-8. MINOR, announced (§8.4): nothing for an implementation to do. |
 | 1.2.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 3; D43). §3: a client implements RP-1 §7.1, §7.2 and §8 too, which RP-1 §5 already needed, and RP-3 §10 both ways, as the conformance tester had graded it; its MAY column names RP-5 §3 and §4. §6.1: of three parts, the base is the middle one (the length rule had made `W4/K1A/QRP`'s base `QRP`). §6.2: two addresses are one when they differ only in the case of ASCII letters, in either part (only the domain had been said, and programs compared local parts both ways). Test vectors (`statements.json`, `base_callsigns`). MINOR, announced (§8.4): a verifier that keeps the old base refuses some statements `not-authorized`, and a station that compares local parts exactly refuses a message `refused-by-policy`; nothing is taken that should not be. Implementations should take the new base and compare addresses so. |
+| 1.3.0 | 2026-11-21 | §9.6: the kinds of antenna a gateway's channel may name (RP-5 1.5.0 §4.4, a channel's `station`). From choosing a gateway (the gateway selection design's §7.2). MINOR, announced (§8.4): nothing for an implementation to do. |

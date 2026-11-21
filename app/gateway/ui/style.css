@@ -100,6 +100,11 @@ p.card.notice { margin: 0 0 14px; }
 .channels th { text-align: left; font-size: 13px; color: var(--muted); font-weight: 600; padding: 0 8px 4px 0; }
 .channels td { padding: 0 8px 6px 0; }
 .channels input { width: 9em; }
+.channels .station-open { max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.channels .station-row td { padding: 0 0 10px 12px; border-left: 2px solid var(--line); }
+.station-fields { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.station-fields label { font-size: 13px; }
+.station-fields input { width: 6em; }
 details { margin-top: 8px; color: var(--muted); font-size: 13px; }
 details summary { cursor: pointer; margin-bottom: 8px; }
 

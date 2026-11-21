@@ -33,13 +33,21 @@ directory, as the RadioPost Gateway app has it.
                      $RADIOPOST_HOME or .radiopost in your home directory): the gateway
                      registers with one of them, and so with its post office
   register [--home HOME] [--account WHO] [--grid G] [--place TEXT] [--listens 18:00-02:00,…]
-           [--channel HZ,MODE,MODEM,BW]...
+           [--site LAT,LON[,AGL]] [--channel HZ,MODE,MODEM,BW]...
+           [--station HZ,POWER,ANTENNA,AGL,GAIN[,AZIMUTH]]...
                      register the gateway with an account's post office (RP-5 §6.4), logged
                      in as that account with your client's key and credential, and keep the
                      gateway's credential. WHO is the account's address, callsign or number
                      (`accounts` lists them); needed when the app holds more than one.
                      --listens: each day's listening times in UTC, for callers' programs
-                     (RP-5 §4.4); without it, the gateway listens always
+                     (RP-5 §4.4); without it, the gateway listens always.
+                     --site: where its antennas are, in degrees, to the precision you want
+                     to publish (2 places is about 1 km, 4 about 11 m), and their height
+                     in metres. --station: how it transmits on the --channel at HZ, any
+                     field but HZ left empty: watts, an antenna kind (vertical, dipole,
+                     yagi, j-pole, collinear, loop, nvis, whip, other), metres up, dBi,
+                     and where a beam points. Callers' programs use both to judge a VHF
+                     path over the terrain
   unregister [--here]
                      withdraw the gateway's registration at its post office (RP-5 §6.4), as
                      the account it was registered from: it leaves the gateway list, its
@@ -220,6 +228,22 @@ fn register(dir: &Path, a: &Args) -> Result<(), String> {
         if let Some(v) = a.one(flag) {
             record[key] = v.into();
         }
+    }
+    // RP-5 §4.4: where its antennas are, and how it transmits on a channel
+    if let Some(s) = a.one("--site") {
+        let site = radiopost_gateway::site::site_flag(&s)?;
+        radiopost_gateway::site::agrees(record["grid"].as_str().unwrap_or(""), &site)?;
+        record["site"] = site;
+    }
+    for s in a.all("--station") {
+        let (hz, station) = radiopost_gateway::site::station_flag(&s)?;
+        let channel = record["channels"]
+            .as_array_mut()
+            .into_iter()
+            .flatten()
+            .find(|c| c["dial_hz"].as_u64() == Some(hz))
+            .ok_or_else(|| format!("--station {s}: no --channel at {hz} Hz"))?;
+        channel["station"] = station;
     }
     let account = operator::account(&client_base(a), a.one("--account").as_deref())?;
     println!(

@@ -178,6 +178,87 @@ pub fn listens(record: &Value) -> Option<Vec<crate::forwarding::Window>> {
     (!kept.is_empty()).then_some(kept)
 }
 
+/// The kinds of antenna a channel's `station` may name (RP-0 §9.6).
+pub const ANTENNAS: [&str; 9] = [
+    "vertical",
+    "dipole",
+    "yagi",
+    "j-pole",
+    "collinear",
+    "loop",
+    "nvis",
+    "whip",
+    "other",
+];
+
+/// Where a gateway's antennas are (RP-5 §4.4, `site`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Site {
+    /// Latitude, degrees on WGS 84, north positive, at the precision the operator gave.
+    pub lat: f64,
+    /// Longitude, east positive, likewise.
+    pub lon: f64,
+    /// The antennas' height above the ground there, metres.
+    pub agl_m: Option<f64>,
+}
+
+/// A JSON number from `lo` to `hi`, its ends included unless `above` or `below` says not.
+fn number(v: Option<&Value>, lo: f64, hi: f64, above: bool, below: bool) -> Option<f64> {
+    let x = v?.as_f64()?;
+    let low_ok = if above { x > lo } else { x >= lo };
+    let high_ok = if below { x < hi } else { x <= hi };
+    (low_ok && high_ok).then_some(x)
+}
+
+/// The record's `site`, read: `lat` from −90 to 90 and `lon` from −180 to 180, both needed;
+/// `agl_m` from 0 to 1 000 kept when it holds. `None` when there is none or it does not hold.
+#[must_use]
+pub fn site(record: &Value) -> Option<Site> {
+    let s = record.get("site")?.as_object()?;
+    Some(Site {
+        lat: number(s.get("lat"), -90.0, 90.0, false, false)?,
+        lon: number(s.get("lon"), -180.0, 180.0, false, false)?,
+        agl_m: number(s.get("agl_m"), 0.0, 1000.0, false, false),
+    })
+}
+
+/// How a gateway transmits and receives on a channel (RP-5 §4.4, a channel's `station`): each
+/// member `None` when the record does not give it, or gives one that does not hold.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Station {
+    /// The transmitter's power, watts, above 0.
+    pub power_w: Option<f64>,
+    /// A kind from [`ANTENNAS`].
+    pub antenna: Option<String>,
+    /// The antenna's height above the ground, metres: this channel's, in place of the site's.
+    pub agl_m: Option<f64>,
+    /// The antenna's gain over isotropic, dBi.
+    pub gain_dbi: Option<f64>,
+    /// Where a directional antenna points, degrees east of true north; `None`, all round.
+    pub azimuth_deg: Option<f64>,
+}
+
+/// The channel's `station`, read: each member kept when it holds (`power_w` above 0, `antenna` a
+/// kind of RP-0 §9.6, `agl_m` from 0 to 1 000, `gain_dbi` from −30 to 60, `azimuth_deg` from 0 to
+/// below 360), the others left out.
+#[must_use]
+pub fn station(channel: &Value) -> Station {
+    let Some(s) = channel.get("station").and_then(Value::as_object) else {
+        return Station::default();
+    };
+    Station {
+        power_w: number(s.get("power_w"), 0.0, f64::INFINITY, true, false),
+        antenna: s
+            .get("antenna")
+            .and_then(Value::as_str)
+            .filter(|a| ANTENNAS.contains(a))
+            .map(str::to_owned),
+        agl_m: number(s.get("agl_m"), 0.0, 1000.0, false, false),
+        gain_dbi: number(s.get("gain_dbi"), -30.0, 60.0, false, false),
+        azimuth_deg: number(s.get("azimuth_deg"), 0.0, 360.0, false, true),
+    }
+}
+
 /// Whether a gateway listens at a moment, and when that changes (RP-5 §4.4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Listening {

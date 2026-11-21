@@ -202,7 +202,7 @@
         <p class="note" id="enrolled"></p>
         <h2 title="Where callers find the gateway: each dial frequency, the modem callers use there, and its bandwidth">Channels</h2>
         <table class="channels" aria-label="Channels">
-          <thead><tr><th>Dial, MHz</th><th>Modem</th><th>Bandwidth</th><th></th></tr></thead>
+          <thead><tr><th>Dial, MHz</th><th>Modem</th><th>Bandwidth</th><th title="How the gateway transmits and receives on the channel, for callers' programs that work out a link budget each way. Each value is optional">Station</th><th></th></tr></thead>
           <tbody id="channel-rows"></tbody>
         </table>
         <div class="row"><button type="button" class="quiet" id="add-channel">Add a channel</button></div>
@@ -219,6 +219,19 @@
         <label title="When it listens, for callers' programs, so they can tell whether it listens now: each day's times in UTC, such as 18:00-02:00, several with commas. Empty: always">Listening times, UTC
           <input name="listens" spellcheck="false" placeholder="always">
         </label>
+        <h2 title="Where the gateway's antennas are, for callers' programs that judge a VHF path over the terrain. Leave it empty to publish only the grid square">Site</h2>
+        <p class="note">Give as many decimal places as you are content to publish: two are about a kilometre, four about 11 m. The site must be in the grid square above.</p>
+        <div class="row">
+          <label title="Degrees, north positive, such as 32.8407">Latitude
+            <input name="site_lat" inputmode="decimal" spellcheck="false" placeholder="32.8407">
+          </label>
+          <label title="Degrees, east positive (west is negative), such as -83.6324">Longitude
+            <input name="site_lon" inputmode="decimal" spellcheck="false" placeholder="-83.6324">
+          </label>
+          <label title="The antennas' height above the ground, in metres. A channel's station can give its own">Antenna height, m
+            <input name="site_agl" inputmode="decimal" spellcheck="false" placeholder="18">
+          </label>
+        </div>
         <div class="row"><button class="primary" type="submit" id="register-go">Register</button></div>
         <details>
           <summary>A credential issued by other means</summary>

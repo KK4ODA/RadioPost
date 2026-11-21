@@ -240,10 +240,14 @@ function fillForms(s) {
   if (last) {
     for (const k of ["grid", "place", "hours"]) if (last[k]) r[k].value = last[k];
     r.listens.value = listensText(last.listens);
+    const site = last.site || {};
+    for (const [field, k] of [["site_lat", "lat"], ["site_lon", "lon"], ["site_agl", "agl_m"]]) {
+      if (site[k] != null) r[field].value = String(site[k]);
+    }
   }
   if (!$("channel-rows").children.length) {
     const channels = (last && last.channels) || [];
-    if (channels.length) for (const c of channels) addChannel(c.dial_hz / 1e6, c.bandwidth_hz, c.modem);
+    if (channels.length) for (const c of channels) addChannel(c.dial_hz / 1e6, c.bandwidth_hz, c.modem, c.station);
     else if (scan.length) for (const hz of scan) addChannel(hz / 1e6, 2300);
     else addChannel(7.101, 2300);
   }
@@ -329,17 +333,89 @@ const MODEMS = [
   {name: "ax25", label: "Packet", mode: "FM", bandwidths: [12500, 25000]},
 ];
 const modemNamed = (name) => MODEMS.find((m) => m.name === name) || MODEMS[0];
+// the kinds of antenna a channel's station may name (RP-0 §9.6)
+const ANTENNAS = ["vertical", "dipole", "yagi", "j-pole", "collinear", "loop", "nvis", "whip", "other"];
+const STATION = [
+  ["power_w", "Power, W", "The transmitter's power, watts"],
+  ["antenna", "Antenna", "The kind of antenna"],
+  ["agl_m", "Height, m", "The antenna's height above the ground, metres: this channel's, in place of the site's"],
+  ["gain_dbi", "Gain, dBi", "The antenna's gain over isotropic"],
+  ["azimuth_deg", "Points to, °", "Where a beam points, degrees east of true north. Empty: the same all round"],
+];
 
-function addChannel(mhz = "", bandwidth = 2300, modemName = "aether") {
+// a channel's station (RP-5 §4.4): its fields in a row of their own under the channel's, opened
+// from a button in the channel's row that says what was given
+function stationFields(station, onChange) {
+  const fields = document.createElement("div");
+  fields.className = "station-fields";
+  for (const [k, label, title] of STATION) {
+    const l = document.createElement("label");
+    l.textContent = label;
+    l.title = title;
+    let input;
+    if (k === "antenna") {
+      input = document.createElement("select");
+      input.className = "narrow";
+      for (const a of ["", ...ANTENNAS]) {
+        const o = document.createElement("option");
+        o.value = a;
+        o.textContent = a || "—";
+        input.append(o);
+      }
+    } else {
+      input = document.createElement("input");
+      input.inputMode = "decimal";
+      input.spellcheck = false;
+    }
+    input.dataset.k = k;
+    input.value = station && station[k] != null ? String(station[k]) : "";
+    input.addEventListener("input", onChange);
+    input.addEventListener("change", onChange);
+    l.append(input);
+    fields.append(l);
+  }
+  return fields;
+}
+
+// what a station holds, in a few words: 50 W, j-pole, 18 m, 3 dBi, to 270°
+function stationWords(fields) {
+  const v = Object.fromEntries([...fields.querySelectorAll("[data-k]")].map((i) => [i.dataset.k, i.value.trim()]));
+  const words = [v.power_w && `${v.power_w} W`, v.antenna, v.agl_m && `${v.agl_m} m`,
+                 v.gain_dbi && `${v.gain_dbi} dBi`, v.azimuth_deg && `to ${v.azimuth_deg}°`].filter(Boolean);
+  return words.length ? words.join(", ") : "Not given";
+}
+
+function addChannel(mhz = "", bandwidth = 2300, modemName = "aether", station = null) {
   const tr = document.createElement("tr");
+  tr.className = "channel";
+  const sub = document.createElement("tr");
+  sub.className = "station-row";
+  sub.hidden = true;
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "quiet station-open";
+  open.title = "How the gateway transmits and receives on this channel: click to give or change it";
+  const fields = stationFields(station, () => { open.textContent = stationWords(fields); });
+  open.textContent = stationWords(fields);
+  open.setAttribute("aria-expanded", "false");
+  open.addEventListener("click", () => {
+    sub.hidden = !sub.hidden;
+    open.setAttribute("aria-expanded", String(!sub.hidden));
+  });
+  const cell = document.createElement("td");
+  cell.colSpan = 5;
+  cell.append(fields);
+  sub.append(cell);
+  tr.stationRow = sub;
   const dial = document.createElement("input");
+  dial.className = "ch-dial";
   dial.type = "number";
   dial.step = "0.0001";
   dial.min = "1.8";
   dial.placeholder = "7.101";
   dial.value = mhz;
   const modem = document.createElement("select");
-  modem.className = "narrow";
+  modem.className = "narrow ch-modem";
   for (const m of MODEMS) {
     const o = document.createElement("option");
     o.value = m.name;
@@ -349,7 +425,7 @@ function addChannel(mhz = "", bandwidth = 2300, modemName = "aether") {
   modem.value = modemNamed(modemName).name;
   modem.title = "The modem callers use on this channel";
   const bw = document.createElement("select");
-  bw.className = "narrow";
+  bw.className = "narrow ch-bw";
   const fill = (want) => {
     const m = modemNamed(modem.value);
     bw.replaceChildren(...m.bandwidths.map((hz) => {
@@ -372,13 +448,13 @@ function addChannel(mhz = "", bandwidth = 2300, modemName = "aether") {
   remove.type = "button";
   remove.className = "quiet";
   remove.textContent = "Remove";
-  remove.addEventListener("click", () => tr.remove());
-  for (const el of [dial, modem, bw, remove]) {
+  remove.addEventListener("click", () => { tr.remove(); sub.remove(); });
+  for (const el of [dial, modem, bw, open, remove]) {
     const td = document.createElement("td");
     td.append(el);
     tr.append(td);
   }
-  $("channel-rows").append(tr);
+  $("channel-rows").append(tr, sub);
 }
 
 // what the gateway holds: copies by user and the queue, never a message's text
@@ -711,13 +787,16 @@ function listensText(windows) {
 $("register-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const f = e.target.elements;
-  const channels = [...$("channel-rows").children].map((tr) => {
-    const [dial, modem, bw] = tr.querySelectorAll("input, select");
+  const channels = [...$("channel-rows").querySelectorAll("tr.channel")].map((tr) => {
+    const [dial, modem, bw] = [".ch-dial", ".ch-modem", ".ch-bw"].map((c) => tr.querySelector(c));
+    const station = Object.fromEntries([...tr.stationRow.querySelectorAll("[data-k]")]
+      .map((i) => [i.dataset.k, i.value.trim()]));
     return {dial_hz: Math.round(Number(dial.value) * 1e6), mode: modemNamed(modem.value).mode,
-            modem: modem.value, bandwidth_hz: Number(bw.value)};
+            modem: modem.value, bandwidth_hz: Number(bw.value), station};
   }).filter((c) => c.dial_hz > 0);
   act("register", {home: f.home.value, account: f.account.value, grid: f.grid.value, place: f.place.value,
                    hours: f.hours.value, listens: f.listens.value, channels,
+                   site: {lat: f.site_lat.value, lon: f.site_lon.value, agl_m: f.site_agl.value},
                    scan: f.scan.checked ? channels.map((c) => c.dial_hz) : []},
       (a) => { render(a.state); toast(a.said); });
 });

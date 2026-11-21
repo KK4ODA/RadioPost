@@ -107,7 +107,13 @@ UTC** says the same for callers' programs, so their lists can show whether the g
 each day's times such as `18:00-02:00`, several with commas, or empty if it listens always (RP-5
 §4.4 `listens`; `--listens` on the command line). Your post office adds when the gateway last
 reached it, to the minute, so callers can tell a gateway whose computer has been off for days
-(`seen`). Click **Register**.
+(`seen`). **Site** says where the antennas are, for callers' programs that judge a VHF path over
+the terrain: latitude and longitude in degrees to the precision you are content to publish (two
+places are about a kilometre, four about 11 m), inside the **Grid** square, and the antennas' height
+above the ground (RP-5 §4.4 `site`; `--site LAT,LON,AGL`). Each channel's **Station** says how the
+gateway transmits and receives there: power, antenna kind, height, gain, and where a beam points,
+each optional (a channel's `station`; `--station HZ,POWER,ANTENNA,AGL,GAIN,AZIMUTH`). Click
+**Register**.
 Your post office lists the gateway for its users and issues it a credential, valid for 90 days.
 While the gateway answers, it renews that credential by itself in its last month, with your
 account's post office, and uses the new one from its next session; the log says so. If renewing

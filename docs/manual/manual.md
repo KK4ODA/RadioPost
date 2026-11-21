@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.29.0 |
+| **Version** | 1.30.0 |
 | **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.32 |
 | **Licence** | CC BY 4.0 |
@@ -1236,7 +1236,12 @@ that account's address. A gateway is registered with one post office at a time.
 3. Under **Channels**, add each dial frequency where callers will find the gateway, in MHz, upper
    sideband, with the **Modem** callers use there and its **Bandwidth** (for Aether, 500 or
    2300 Hz). On an FM radio the frequency is the channel's, and the bandwidth the channel's width.
-   **Add a channel** adds a row.
+   **Add a channel** adds a row. **Station** opens to say how the gateway transmits and receives
+   there: **Power, W**, the **Antenna** (vertical, dipole, yagi, j-pole, collinear, loop, nvis,
+   whip or other), its **Height, m** above the ground, its **Gain, dBi**, and for a beam where it
+   **Points to**, in degrees from true north. Each is optional. Callers' programs use them to work
+   out a VHF link budget each way, and say which values they assumed. The button shows what you
+   gave, such as *100 W, dipole, 12 m*, and opens the fields in a row under the channel.
 4. Tick **Scan these channels** to listen on all of them with one radio. Aether moves the radio
    over them, a while on each, the first being home. It never leaves a channel while a call is
    arriving or a session is up. This needs Aether 0.2.0-beta.162 or later, a radio Aether can tune
@@ -1248,7 +1253,13 @@ that account's address. A gateway is registered with one post office at a time.
    callers' programs, so they can tell whether the gateway listens now: each day's times such as
    `18:00-02:00`, several with commas. Leave it empty if the gateway listens always. Left as
    `always`, **Hours** then says the same times in words.
-6. Click **Register with …**.
+6. **Site** says where the antennas are, for callers' programs that judge a VHF path over the
+   terrain: **Latitude** and **Longitude** in degrees (west is negative), and **Antenna height,
+   m** above the ground. Give as many decimal places as you are content to publish: two are about
+   a kilometre, four about 11 m. The site must be in the **Grid** square; if it is not, the gateway
+   says which square it is in and does not register. Leave it empty to publish only the grid
+   square: a caller's program then cannot check the terrain.
+7. Click **Register with …**.
 
 List only channels the gateway listens on: the ones it scans, or the one its radio sits on. A
 caller on any other channel is never answered.
@@ -1481,7 +1492,7 @@ Useful commands:
 |---|---|
 | `radiopost-gateway held` | What the gateway holds. |
 | `radiopost-gateway accounts` | The client's accounts the gateway can register with, and where it is registered now. |
-| `radiopost-gateway register --account facundo@radiopost.org --channel 7101000,USB,aether,2300` | Register with that account's post office. `--account` takes the address, the callsign or the number `accounts` gives, and is needed when the client holds more than one. `--listens 18:00-02:00` gives each day's listening times in UTC; without it the gateway listens always. |
+| `radiopost-gateway register --account facundo@radiopost.org --channel 7101000,USB,aether,2300` | Register with that account's post office. `--account` takes the address, the callsign or the number `accounts` gives, and is needed when the client holds more than one. `--listens 18:00-02:00` gives each day's listening times in UTC; without it the gateway listens always. `--site 33.79,-84.33,12` gives the site (latitude, longitude, antenna height in metres), and `--station 7101000,100,dipole,12,` a channel's station (dial in hertz, watts, antenna, metres, dBi, and where a beam points), any field after the dial left empty. |
 | `radiopost-gateway unregister` | Withdraw the registration, as **Unregister** does. Stop the gateway first. `--here` forgets it on this computer only, for a post office that cannot be reached. |
 | `radiopost-gateway block --caller N3CALL --note "why"` | Refuse a caller. `unblock --caller N3CALL` carries it again. |
 | `radiopost-gateway blocked` | The callers and post offices refused. |
@@ -2197,3 +2208,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.27.0 | 2026-11-21 | RP-5 1.4.0's `listens` and `seen`. §8.1: under **Where**, whether a gateway listens now by its listening times, and when its post office last saw it; one not seen for two days faded. §18 step 5: **Listening times, UTC**, and **Hours** filled from them. §23: `register --listens`. Figures 13 and 31 retaken. |
 | 1.28.0 | 2026-11-21 | §12 *Station profiles* (new Figure 27; later figures renumbered): power, antennas, feed line and noise at HF and VHF, every value set or assumed, the profile in use; *Places and GPS*: each place's **Station**. Figure 26 retaken. |
 | 1.29.0 | 2026-11-21 | §8.1 *The map* (new Figure 15; later figures renumbered): the gateways of the view on a map of the world with you, the night side and the Maidenhead grid; a gateway picked in the list or on the map, its great circle, distance and bearing; zoom, pan, **Fit** and **World**; **Save a place from the map**. *Places and GPS*: **Add from the map**. Figures 13 and 27 retaken. |
+| 1.30.0 | 2026-11-21 | RP-5 1.5.0's `site` and a channel's `station`. §18 step 2: each channel's **Station** (power, antenna, height, gain, where a beam points) and the gateway's **Site** (latitude, longitude, antenna height), which must be in its grid square. §23: `register --site` and `--station`. Figure 33 retaken. |

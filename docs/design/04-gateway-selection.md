@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.4 |
+| **Version** | 0.3.5 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -420,7 +420,11 @@ out, and nothing on the air. `seen` adds a small privacy cost (when a gateway's 
 `site` is the operator's choice of precision. The author chose to propose them in phases: `seen`
 and `listens` with Phase 1, `site` and `station` with Phase 2 (§21, Q3). **Done (2026-11-21):**
 `seen` and `listens` are RP-5 1.4.0: the post office stamps `seen`, RadioPost Gateway publishes its
-**Listening times, UTC** as daily windows, and the client shows both.
+**Listening times, UTC** as daily windows, and the client shows both. **Done (2026-11-21), with
+Phase 2:** `site` and a channel's `station` are RP-5 1.5.0, `antenna`'s kinds RP-0 1.3.0 §9.6 (the
+list above, with `whip` added, as the station profiles have it); RadioPost Gateway's Setup has
+**Site** (refused outside its **Grid** square) and each channel's **Station**, and `register
+--site`, `--station`.
 
 **Not proposed:** a single "range" figure, as Winlink's records have. It folds power, antenna,
 terrain and the remote station into one number that is wrong for most callers; the terrain
@@ -658,9 +662,13 @@ needs validating. The operator's own obstruction (§8.7) comes first.
 ### 9.3 Fetching and keeping it
 
 * **The tile is the unit**: one 1° tile, fetched over HTTPS from the public bucket, converted once
-  to a compact local form (16-bit heights in decimetres, compressed in blocks), and kept in the
-  operating system's cache directory under the source's name and version. A 1° GLO-30 tile becomes
-  roughly 10 to 25 MB locally (to be measured); a 150 km radius around a station needs four to nine.
+  to a compact local form (16-bit heights in half-metres, compressed in 256-sample blocks), and kept
+  in the operating system's cache directory under the source's name. Decimetres, as first written
+  here, do not fit: 16 bits of them stop at 3 276.7 m; half-metres reach 16 383 m, at a step well
+  under the data's 4 m accuracy. Measured on tile N33W085 (2026-11-21): GLO-30 fetched 45.5 MB,
+  kept as 9.9 MB, converted in 0.24 s; GLO-90 fetched 5.4 MB, kept as 1.3 MB. A 150 km radius
+  around a station needs four to nine tiles. A tile the data set does not have is the sea, at 0 m,
+  as Copernicus says of its missing tiles; GLO-30 Public's few unreleased tiles come from GLO-90.
 * **Fetched on first need**, in the background, with progress, and never on a metered connection
   without asking. An area can be fetched ahead ("prepare this region for Field Day") for use with no
   Internet.
@@ -2104,3 +2112,4 @@ for size in (2000, 50000):
 | 0.3.2 | 2026-11-21 | §11.3: what Phase 1 built in hf-predict: the workspace, `radioprop-geo` and `radioprop-place` (places, readers, freshness, the position in use), used by RadioPost by revision. |
 | 0.3.3 | 2026-11-21 | §7.2: `seen` and `listens` done, as RP-5 1.4.0. |
 | 0.3.4 | 2026-11-21 | §11.3: station profiles done, in `radioprop-place`. §16.2: the HF map of Phase 1 done (the land, the night side, the grid, great circles, picking both ways, a place saved from the map); what waits for Phases 2 and 3. |
+| 0.3.5 | 2026-11-21 | §7.2: `site` and `station` done (RP-5 1.5.0, RP-0 1.3.0 §9.6). §9.3: the local tile form is half-metres (decimetres stop at 3 276.7 m in 16 bits), with the sizes measured on a real tile, and a missing tile is the sea. |

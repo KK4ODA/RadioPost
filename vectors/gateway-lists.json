@@ -1177,5 +1177,295 @@
         "changes": null
       }
     }
+  ],
+  "site_cases": [
+    {
+      "what": "no `site`, no `station`",
+      "record": {
+        "callsign": "N2CALL-5",
+        "grid": "EM82",
+        "channels": [
+          {
+            "dial_hz": 145050000,
+            "mode": "FM",
+            "modem": "ax25",
+            "bandwidth_hz": 12500
+          }
+        ]
+      },
+      "site": null,
+      "station": {}
+    },
+    {
+      "what": "a site to four places, its antennas 18 m up",
+      "record": {
+        "callsign": "N2CALL-5",
+        "grid": "EM82",
+        "site": {
+          "lat": 32.8407,
+          "lon": -83.6324,
+          "agl_m": 18
+        },
+        "channels": [
+          {
+            "dial_hz": 145050000,
+            "mode": "FM",
+            "modem": "ax25",
+            "bandwidth_hz": 12500,
+            "station": {
+              "power_w": 50,
+              "antenna": "j-pole",
+              "agl_m": 18,
+              "gain_dbi": 6.5,
+              "azimuth_deg": 270
+            }
+          }
+        ]
+      },
+      "site": {
+        "lat": 32.8407,
+        "lon": -83.6324,
+        "agl_m": 18
+      },
+      "station": {
+        "power_w": 50,
+        "antenna": "j-pole",
+        "agl_m": 18,
+        "gain_dbi": 6.5,
+        "azimuth_deg": 270
+      }
+    },
+    {
+      "what": "a site to two places, no height",
+      "record": {
+        "callsign": "N2CALL-5",
+        "grid": "EM82",
+        "site": {
+          "lat": 32.84,
+          "lon": -83.63
+        },
+        "channels": [
+          {
+            "dial_hz": 145050000,
+            "mode": "FM",
+            "modem": "ax25",
+            "bandwidth_hz": 12500,
+            "station": {
+              "antenna": "vertical"
+            }
+          }
+        ]
+      },
+      "site": {
+        "lat": 32.84,
+        "lon": -83.63
+      },
+      "station": {
+        "antenna": "vertical"
+      }
+    },
+    {
+      "what": "a height out of range is left out",
+      "record": {
+        "callsign": "N2CALL-5",
+        "grid": "EM82",
+        "site": {
+          "lat": 32.84,
+          "lon": -83.63,
+          "agl_m": -3
+        },
+        "channels": [
+          {
+            "dial_hz": 145050000,
+            "mode": "FM",
+            "modem": "ax25",
+            "bandwidth_hz": 12500,
+            "station": {}
+          }
+        ]
+      },
+      "site": {
+        "lat": 32.84,
+        "lon": -83.63
+      },
+      "station": {}
+    },
+    {
+      "what": "a latitude out of range: no site",
+      "record": {
+        "callsign": "N2CALL-5",
+        "grid": "EM82",
+        "site": {
+          "lat": 91,
+          "lon": -83.63
+        },
+        "channels": [
+          {
+            "dial_hz": 145050000,
+            "mode": "FM",
+            "modem": "ax25",
+            "bandwidth_hz": 12500
+          }
+        ]
+      },
+      "site": null,
+      "station": {}
+    },
+    {
+      "what": "a longitude as text: no site",
+      "record": {
+        "callsign": "N2CALL-5",
+        "grid": "EM82",
+        "site": {
+          "lat": 32.84,
+          "lon": "-83.63"
+        },
+        "channels": [
+          {
+            "dial_hz": 145050000,
+            "mode": "FM",
+            "modem": "ax25",
+            "bandwidth_hz": 12500
+          }
+        ]
+      },
+      "site": null,
+      "station": {}
+    },
+    {
+      "what": "a latitude that is a boolean: no site",
+      "record": {
+        "callsign": "N2CALL-5",
+        "grid": "EM82",
+        "site": {
+          "lat": true,
+          "lon": -83.63
+        },
+        "channels": [
+          {
+            "dial_hz": 145050000,
+            "mode": "FM",
+            "modem": "ax25",
+            "bandwidth_hz": 12500
+          }
+        ]
+      },
+      "site": null,
+      "station": {}
+    },
+    {
+      "what": "no longitude: no site",
+      "record": {
+        "callsign": "N2CALL-5",
+        "grid": "EM82",
+        "site": {
+          "lat": 32.84
+        },
+        "channels": [
+          {
+            "dial_hz": 145050000,
+            "mode": "FM",
+            "modem": "ax25",
+            "bandwidth_hz": 12500
+          }
+        ]
+      },
+      "site": null,
+      "station": {}
+    },
+    {
+      "what": "the edges of the world hold",
+      "record": {
+        "callsign": "N2CALL-5",
+        "grid": "EM82",
+        "site": {
+          "lat": -90,
+          "lon": 180,
+          "agl_m": 1000
+        },
+        "channels": [
+          {
+            "dial_hz": 145050000,
+            "mode": "FM",
+            "modem": "ax25",
+            "bandwidth_hz": 12500
+          }
+        ]
+      },
+      "site": {
+        "lat": -90,
+        "lon": 180,
+        "agl_m": 1000
+      },
+      "station": {}
+    },
+    {
+      "what": "a station's members that do not hold are left out",
+      "record": {
+        "callsign": "N2CALL-5",
+        "grid": "EM82",
+        "channels": [
+          {
+            "dial_hz": 145050000,
+            "mode": "FM",
+            "modem": "ax25",
+            "bandwidth_hz": 12500,
+            "station": {
+              "power_w": 0,
+              "antenna": "rhombic",
+              "agl_m": 1001,
+              "gain_dbi": "6",
+              "azimuth_deg": 360
+            }
+          }
+        ]
+      },
+      "site": null,
+      "station": {}
+    },
+    {
+      "what": "an antenna named in another case: unknown",
+      "record": {
+        "callsign": "N2CALL-5",
+        "grid": "EM82",
+        "channels": [
+          {
+            "dial_hz": 145050000,
+            "mode": "FM",
+            "modem": "ax25",
+            "bandwidth_hz": 12500,
+            "station": {
+              "antenna": "Yagi",
+              "power_w": 25
+            }
+          }
+        ]
+      },
+      "site": null,
+      "station": {
+        "power_w": 25
+      }
+    },
+    {
+      "what": "a station that is not a map",
+      "record": {
+        "callsign": "N2CALL-5",
+        "grid": "EM82",
+        "channels": [
+          {
+            "dial_hz": 145050000,
+            "mode": "FM",
+            "modem": "ax25",
+            "bandwidth_hz": 12500,
+            "station": [
+              "power_w",
+              50
+            ]
+          }
+        ]
+      },
+      "site": null,
+      "station": {}
+    }
   ]
 }

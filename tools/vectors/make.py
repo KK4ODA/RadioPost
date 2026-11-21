@@ -3067,8 +3067,18 @@ def documents() -> list[tuple[str, str, dict[str, Any], str]]:
                 "grid": "EM82",
                 "place": "Macon, GA",
                 "channels": [
-                    {"dial_hz": 7103500, "mode": "USB", "modem": "aether", "bandwidth_hz": 500}
+                    {"dial_hz": 7103500, "mode": "USB", "modem": "aether", "bandwidth_hz": 500},
+                    # a VHF channel, and how the gateway transmits there (RP-5 §4.4)
+                    {
+                        "dial_hz": 145050000,
+                        "mode": "FM",
+                        "modem": "ax25",
+                        "bandwidth_hz": 12500,
+                        "station": {"power_w": 50, "antenna": "j-pole", "agl_m": 18, "gain_dbi": 3},
+                    },
                 ],
+                # where its antennas are, to four places: about 11 m
+                "site": {"lat": 32.8407, "lon": -83.6324, "agl_m": 18},
                 "hours": "1800-0200 UTC",
                 # the same for programs: 18:00 to 02:00 UTC each day (RP-5 §4.4)
                 "listens": [{"every_s": DAY, "at_s": 18 * 3600, "length_s": 8 * 3600}],
@@ -7900,6 +7910,7 @@ def make_gateway_lists() -> dict[str, Any]:
         "window opens. Windows that cover every moment never close: `changes` is null."
     )
     out["listens_cases"] = listens_cases()
+    out["site_cases"] = site_cases()
     return out
 
 
@@ -7989,6 +8000,102 @@ def listens_cases() -> list[dict[str, Any]]:
             ],
         },
         lambda c: c["kept"],
+    )
+    return cases
+
+
+def site_cases() -> list[dict[str, Any]]:
+    """RP-5 §4.4's `site` and a channel's `station`, read: what is kept of each."""
+    full = {"power_w": 50, "antenna": "j-pole", "agl_m": 18, "gain_dbi": 6.5, "azimuth_deg": 270}
+    rows = [
+        ("no `site`, no `station`", None, None),
+        (
+            "a site to four places, its antennas 18 m up",
+            {"lat": 32.8407, "lon": -83.6324, "agl_m": 18},
+            full,
+        ),
+        ("a site to two places, no height", {"lat": 32.84, "lon": -83.63}, {"antenna": "vertical"}),
+        ("a height out of range is left out", {"lat": 32.84, "lon": -83.63, "agl_m": -3}, {}),
+        ("a latitude out of range: no site", {"lat": 91, "lon": -83.63}, None),
+        ("a longitude as text: no site", {"lat": 32.84, "lon": "-83.63"}, None),
+        ("a latitude that is a boolean: no site", {"lat": True, "lon": -83.63}, None),
+        ("no longitude: no site", {"lat": 32.84}, None),
+        ("the edges of the world hold", {"lat": -90, "lon": 180, "agl_m": 1000}, None),
+        (
+            "a station's members that do not hold are left out",
+            None,
+            {
+                "power_w": 0,
+                "antenna": "rhombic",
+                "agl_m": 1001,
+                "gain_dbi": "6",
+                "azimuth_deg": 360,
+            },
+        ),
+        ("an antenna named in another case: unknown", None, {"antenna": "Yagi", "power_w": 25}),
+        ("a station that is not a map", None, ["power_w", 50]),
+    ]
+    cases = []
+    for what, site, station in rows:
+        record: dict[str, Any] = {"callsign": "N2CALL-5", "grid": "EM82"}
+        channel: dict[str, Any] = {
+            "dial_hz": 145050000,
+            "mode": "FM",
+            "modem": "ax25",
+            "bandwidth_hz": 12500,
+        }
+        if site is not None:
+            record["site"] = site
+        if station is not None:
+            channel["station"] = station
+        record["channels"] = [channel]
+        cases.append(
+            {
+                "what": what,
+                "record": record,
+                "site": po.site(record),
+                "station": po.station(channel),
+            }
+        )
+    confirm(  # RP-5 §4.4: worked out from the members' ranges by hand
+        cases,
+        {
+            "no `site`, no `station`": None,
+            "a site to four places, its antennas 18 m up": {
+                "lat": 32.8407,
+                "lon": -83.6324,
+                "agl_m": 18,
+            },
+            "a site to two places, no height": {"lat": 32.84, "lon": -83.63},
+            "a height out of range is left out": {"lat": 32.84, "lon": -83.63},
+            "a latitude out of range: no site": None,
+            "a longitude as text: no site": None,
+            "a latitude that is a boolean: no site": None,
+            "no longitude: no site": None,
+            "the edges of the world hold": {"lat": -90, "lon": 180, "agl_m": 1000},
+            "a station's members that do not hold are left out": None,
+            "an antenna named in another case: unknown": None,
+            "a station that is not a map": None,
+        },
+        lambda c: c["site"],
+    )
+    confirm(
+        cases,
+        {
+            "no `site`, no `station`": {},
+            "a site to four places, its antennas 18 m up": full,
+            "a site to two places, no height": {"antenna": "vertical"},
+            "a height out of range is left out": {},
+            "a latitude out of range: no site": {},
+            "a longitude as text: no site": {},
+            "a latitude that is a boolean: no site": {},
+            "no longitude: no site": {},
+            "the edges of the world hold": {},
+            "a station's members that do not hold are left out": {},
+            "an antenna named in another case: unknown": {"power_w": 25},
+            "a station that is not a map": {},
+        },
+        lambda c: c["station"],
     )
     return cases
 

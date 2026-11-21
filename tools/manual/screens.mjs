@@ -475,8 +475,10 @@ function gatewayState(over = {}) {
                    home: "C:\\Users\\you\\.radiopost"},
     last_record: {channels: [
       {dial_hz: 3591500, mode: "USB", modem: "aether", bandwidth_hz: 500},
-      {dial_hz: 7101000, mode: "USB", modem: "aether", bandwidth_hz: 2300}],
-      grid: "EM73", place: "Atlanta, Georgia", hours: "always", internet: true},
+      {dial_hz: 7101000, mode: "USB", modem: "aether", bandwidth_hz: 2300,
+       station: {power_w: 100, antenna: "dipole", agl_m: 12}}],
+      grid: "EM73", place: "Atlanta, Georgia", hours: "always", internet: true,
+      site: {lat: 33.79, lon: -84.33, agl_m: 12}},
     dir: "C:\\Users\\you\\.radiopost-gateway", version: VERSION,
     aether: "ws://127.0.0.1:8515/v1", update: UPDATE,
     ...over,
@@ -1141,6 +1143,9 @@ const SHOTS = {
     await page.click("#setup-open");
     await page.waitForTimeout(200);
     await page.locator("body").click({position: {x: 1270, y: 10}});
+    // the second channel's station open, to show what it holds
+    await page.locator("#channel-rows tr.channel").nth(1).locator(".station-open").click();
+    await page.waitForTimeout(100);
     await page.screenshot({path: join(OUT, "gateway-setup.png"), clip: await unionClip(page,
       ["#setup h1", "#po-form", "#updates-check"], 1100)});
     console.log("docs/manual/screens/gateway-setup.png");

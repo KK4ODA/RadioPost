@@ -508,10 +508,25 @@ impl Panel {
                 let named = modem
                     .bytes()
                     .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
+                // RP-5 §4.4: how it transmits there, each member optional
+                let t = |k: &str| c["station"][k].as_str().unwrap_or("");
+                let station = crate::site::station(
+                    t("power_w"),
+                    t("antenna"),
+                    t("agl_m"),
+                    t("gain_dbi"),
+                    t("azimuth_deg"),
+                )?;
                 match (hz, bw) {
-                    (Some(hz), Some(bw)) if named => Ok(json!({
-                        "dial_hz": hz, "mode": mode, "modem": modem, "bandwidth_hz": bw,
-                    })),
+                    (Some(hz), Some(bw)) if named => {
+                        let mut channel = json!({
+                            "dial_hz": hz, "mode": mode, "modem": modem, "bandwidth_hz": bw,
+                        });
+                        if let Some(station) = station {
+                            channel["station"] = station;
+                        }
+                        Ok(channel)
+                    }
                     _ => Err(
                         "each channel has its dial frequency in hertz, a modem's name, and a \
                          bandwidth: up to 3000 Hz on USB, or an FM channel of 12500 or 25000 Hz"
@@ -559,6 +574,12 @@ impl Panel {
             if !text(body, key).is_empty() {
                 record[key] = text(body, key).into();
             }
+        }
+        // where its antennas are (RP-5 §4.4 `site`), at the precision typed, in its grid square
+        let t = |k: &str| body["site"][k].as_str().unwrap_or("");
+        if let Some(site) = crate::site::site(t("lat"), t("lon"), t("agl_m"))? {
+            crate::site::agrees(text(body, "grid"), &site)?;
+            record["site"] = site;
         }
         operator::register(self.runner.dir(), &home, record)
     }
