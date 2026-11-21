@@ -1,0 +1,532 @@
+{
+ "modem": "aether",
+ "source": {
+  "repository": "https://github.com/KK4ODA/aether-hf",
+  "commit": "605b081afe8bf7003720c6ea62e1509d36fe76a3",
+  "files": [
+   "docs/spec/air-interface.md",
+   "bench/baselines/phy_fer_awgn14.csv",
+   "bench/baselines/phy_fer.csv",
+   "bench/baselines/phy_fer_500.csv",
+   "bench/baselines/tone_floor.csv"
+  ]
+ },
+ "snr_in": "dB in 3 kHz, where a rung's frames fail one time in ten",
+ "control_db": {
+  "awgn": -19.5,
+  "good": -11.1,
+  "moderate": -14.5,
+  "poor": -15.8
+ },
+ "airs": {
+  "2300": [
+   {
+    "rung": 0,
+    "name": "tone-24",
+    "net_bps": 36,
+    "threshold_db": {
+     "awgn": -19.0,
+     "good": -11.7,
+     "moderate": -13.2,
+     "poor": -14.5
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 1,
+    "name": "tone-36",
+    "net_bps": 54,
+    "threshold_db": {
+     "awgn": -17.3,
+     "good": -8.8,
+     "moderate": -10.3,
+     "poor": -10.9
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 2,
+    "name": "tone50-51",
+    "net_bps": 76,
+    "threshold_db": {
+     "awgn": -16.0,
+     "good": -8.6,
+     "moderate": -11.2,
+     "poor": -11.8
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 3,
+    "name": "tone50-75",
+    "net_bps": 112,
+    "threshold_db": {
+     "awgn": -14.2,
+     "good": -5.7,
+     "moderate": -8.2,
+     "poor": -7.5
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 4,
+    "name": "tone100-105",
+    "net_bps": 157,
+    "threshold_db": {
+     "awgn": -13.1,
+     "good": -6.5,
+     "moderate": -8.2,
+     "poor": -8.4
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 5,
+    "name": "tone100-153",
+    "net_bps": 228,
+    "threshold_db": {
+     "awgn": -11.2,
+     "good": -3.2,
+     "moderate": -4.3,
+     "poor": -4.1
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 6,
+    "name": "BPSK-1/5",
+    "net_bps": 197,
+    "threshold_db": {
+     "awgn": -5.1,
+     "good": 2.0,
+     "moderate": 1.2,
+     "poor": -0.3
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 7,
+    "name": "BPSK-1/3",
+    "net_bps": 349,
+    "threshold_db": {
+     "awgn": -3.2,
+     "good": 4.0,
+     "moderate": 3.3,
+     "poor": 1.2
+    },
+    "filled": [
+     "good",
+     "moderate",
+     "poor"
+    ],
+    "beyond": []
+   },
+   {
+    "rung": 8,
+    "name": "BPSK-1/2",
+    "net_bps": 531,
+    "threshold_db": {
+     "awgn": -1.8,
+     "good": 5.5,
+     "moderate": 4.8,
+     "poor": 2.3
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 9,
+    "name": "QPSK-1/3",
+    "net_bps": 721,
+    "threshold_db": {
+     "awgn": -0.4,
+     "good": 6.9,
+     "moderate": 6.4,
+     "poor": 3.9
+    },
+    "filled": [
+     "good",
+     "moderate",
+     "poor"
+    ],
+    "beyond": []
+   },
+   {
+    "rung": 10,
+    "name": "QPSK-1/2",
+    "net_bps": 1093,
+    "threshold_db": {
+     "awgn": 1.4,
+     "good": 8.7,
+     "moderate": 8.5,
+     "poor": 6.0
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 11,
+    "name": "QPSK-2/3",
+    "net_bps": 1465,
+    "threshold_db": {
+     "awgn": 2.9,
+     "good": 10.1,
+     "moderate": 10.2,
+     "poor": 7.7
+    },
+    "filled": [
+     "good",
+     "moderate",
+     "poor"
+    ],
+    "beyond": []
+   },
+   {
+    "rung": 12,
+    "name": "PSK8-1/2",
+    "net_bps": 1647,
+    "threshold_db": {
+     "awgn": 4.7,
+     "good": 11.7,
+     "moderate": 12.3,
+     "poor": 9.7
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 13,
+    "name": "PSK8-2/3",
+    "net_bps": 2209,
+    "threshold_db": {
+     "awgn": 6.9,
+     "good": 14.6,
+     "moderate": 14.3,
+     "poor": 13.4
+    },
+    "filled": [
+     "good",
+     "moderate",
+     "poor"
+    ],
+    "beyond": []
+   },
+   {
+    "rung": 14,
+    "name": "QAM16-1/2",
+    "net_bps": 2209,
+    "threshold_db": {
+     "awgn": 6.0,
+     "good": 13.7,
+     "moderate": 12.7,
+     "poor": 12.5
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 15,
+    "name": "QAM16-2/3",
+    "net_bps": 2953,
+    "threshold_db": {
+     "awgn": 8.9,
+     "good": 16.7,
+     "moderate": 18.0,
+     "poor": 15.4
+    },
+    "filled": [
+     "good",
+     "moderate",
+     "poor"
+    ],
+    "beyond": []
+   },
+   {
+    "rung": 16,
+    "name": "QAM16-3/4",
+    "net_bps": 3324,
+    "threshold_db": {
+     "awgn": 9.9,
+     "good": 17.7,
+     "moderate": 19.8,
+     "poor": 25.0
+    },
+    "filled": [],
+    "beyond": [
+     "poor"
+    ]
+   },
+   {
+    "rung": 17,
+    "name": "QAM64-2/3",
+    "net_bps": 4440,
+    "threshold_db": {
+     "awgn": 13.9,
+     "good": 21.8,
+     "moderate": 23.8,
+     "poor": 25.0
+    },
+    "filled": [
+     "good",
+     "moderate",
+     "poor"
+    ],
+    "beyond": []
+   },
+   {
+    "rung": 18,
+    "name": "QAM64-3/4",
+    "net_bps": 4994,
+    "threshold_db": {
+     "awgn": 15.6,
+     "good": 23.5,
+     "moderate": 25.5,
+     "poor": 25.0
+    },
+    "filled": [
+     "good",
+     "moderate",
+     "poor"
+    ],
+    "beyond": []
+   },
+   {
+    "rung": 19,
+    "name": "QAM64-5/6",
+    "net_bps": 5556,
+    "threshold_db": {
+     "awgn": 16.9,
+     "good": 24.8,
+     "moderate": 31.0,
+     "poor": 32.0
+    },
+    "filled": [],
+    "beyond": [
+     "moderate",
+     "poor"
+    ]
+   }
+  ],
+  "500": [
+   {
+    "rung": 0,
+    "name": "tone-24",
+    "net_bps": 36,
+    "threshold_db": {
+     "awgn": -19.0,
+     "good": -11.7,
+     "moderate": -13.2,
+     "poor": -14.5
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 1,
+    "name": "tone-36",
+    "net_bps": 54,
+    "threshold_db": {
+     "awgn": -17.3,
+     "good": -8.8,
+     "moderate": -10.3,
+     "poor": -10.9
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 2,
+    "name": "tone4x100-51",
+    "net_bps": 76,
+    "threshold_db": {
+     "awgn": -14.3,
+     "good": -7.8,
+     "moderate": -10.2,
+     "poor": -10.8
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 3,
+    "name": "tone4x100-75",
+    "net_bps": 112,
+    "threshold_db": {
+     "awgn": -13.0,
+     "good": -3.6,
+     "moderate": -6.2,
+     "poor": -7.2
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 4,
+    "name": "tone4x100-93",
+    "net_bps": 139,
+    "threshold_db": {
+     "awgn": -11.1,
+     "good": -0.7,
+     "moderate": -2.2,
+     "poor": -3.8
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 5,
+    "name": "QPSK-1/2",
+    "net_bps": 190,
+    "threshold_db": {
+     "awgn": -5.2,
+     "good": 4.0,
+     "moderate": 3.5,
+     "poor": -0.0
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 6,
+    "name": "QPSK-2/3",
+    "net_bps": 258,
+    "threshold_db": {
+     "awgn": -3.6,
+     "good": 5.5,
+     "moderate": 5.0,
+     "poor": 4.0
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 7,
+    "name": "PSK8-1/2",
+    "net_bps": 296,
+    "threshold_db": {
+     "awgn": -2.1,
+     "good": 7.0,
+     "moderate": 8.0,
+     "poor": 4.5
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 8,
+    "name": "PSK8-2/3",
+    "net_bps": 402,
+    "threshold_db": {
+     "awgn": 0.5,
+     "good": 10.0,
+     "moderate": 12.0,
+     "poor": 13.0
+    },
+    "filled": [],
+    "beyond": [
+     "moderate",
+     "poor"
+    ]
+   },
+   {
+    "rung": 9,
+    "name": "QAM16-1/2",
+    "net_bps": 402,
+    "threshold_db": {
+     "awgn": -0.1,
+     "good": 9.0,
+     "moderate": 9.5,
+     "poor": 8.0
+    },
+    "filled": [],
+    "beyond": []
+   },
+   {
+    "rung": 10,
+    "name": "QAM16-2/3",
+    "net_bps": 539,
+    "threshold_db": {
+     "awgn": 2.0,
+     "good": 12.0,
+     "moderate": 14.0,
+     "poor": 16.0
+    },
+    "filled": [],
+    "beyond": [
+     "poor"
+    ]
+   },
+   {
+    "rung": 11,
+    "name": "QAM16-3/4",
+    "net_bps": 615,
+    "threshold_db": {
+     "awgn": 3.5,
+     "good": 14.0,
+     "moderate": 16.0,
+     "poor": 17.0
+    },
+    "filled": [],
+    "beyond": [
+     "moderate",
+     "poor"
+    ]
+   },
+   {
+    "rung": 12,
+    "name": "QAM64-2/3",
+    "net_bps": 827,
+    "threshold_db": {
+     "awgn": 6.9,
+     "good": 17.0,
+     "moderate": 20.0,
+     "poor": 21.0
+    },
+    "filled": [],
+    "beyond": [
+     "moderate",
+     "poor"
+    ]
+   },
+   {
+    "rung": 13,
+    "name": "QAM64-3/4",
+    "net_bps": 934,
+    "threshold_db": {
+     "awgn": 8.8,
+     "good": 18.0,
+     "moderate": 22.0,
+     "poor": 23.0
+    },
+    "filled": [],
+    "beyond": [
+     "moderate",
+     "poor"
+    ]
+   },
+   {
+    "rung": 14,
+    "name": "QAM64-5/6",
+    "net_bps": 1040,
+    "threshold_db": {
+     "awgn": 10.4,
+     "good": 21.0,
+     "moderate": 23.0,
+     "poor": 24.0
+    },
+    "filled": [],
+    "beyond": [
+     "moderate",
+     "poor"
+    ]
+   }
+  ]
+ }
+}

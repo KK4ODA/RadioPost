@@ -158,6 +158,16 @@ const GATEWAYS = {domain: "radiopost.org", fetched: T - 2 * DAY, others: ["hampo
 // each gateway's grid square's centre, for the map, and its bearing from here, as the client
 // adds them (app/client/src/selection/directory.rs, app/client/src/grid.rs)
 for (const gw of GATEWAYS.gateways) Object.assign(gw, placedFrom(HERE, gw.grid));
+// each HF channel's prediction as the client adds it (app/client/src/selection/hf.rs), worked out
+// by the real VOACAP engine at the shot's clock (hf-channels.json says how); a blocked channel has
+// none
+const HF_CHANNELS = JSON.parse(readFileSync(join(ROOT, "tools", "manual", "hf-channels.json"),
+                                            "utf8")).channels;
+const GATEWAYS_HF = {...GATEWAYS, hf: {engine: "voacapl", kept: 5},
+  gateways: GATEWAYS.gateways.map((gw) => ({...gw, channels: gw.channels.map((c) => {
+    const hf = HF_CHANNELS[`${gw.callsign} ${c.dial_hz}`];
+    return hf && !c.blocked ? {...c, hf} : c;
+  })}))};
 function placedFrom(here, grid) {
   const g = grid.toUpperCase();
   let lon = (g.charCodeAt(0) - 65) * 20 - 180 + Number(g[2]) * 2;
@@ -449,7 +459,7 @@ function clientApi(world) {
       case "folder": return {inbox: INBOX, outbox: OUTBOX, sent: SENT, trash: []}[query.get("name")];
       case "message": return MESSAGES[query.get("id")] || {...INBOX[1], files: [], held: [], body: ""};
       case "waiting": return WAITING;
-      case "gateways": return world.vhf ? GATEWAYS_VHF : GATEWAYS;
+      case "gateways": return world.vhf ? GATEWAYS_VHF : world.hf ? GATEWAYS_HF : GATEWAYS;
       case "terrain": return TERRAIN_STATUS;
       case "terrain/path": return TERRAIN_PATH;
       case "places": return PLACES;
@@ -693,6 +703,7 @@ const GATEWAY_UI = join(ROOT, "app", "gateway", "ui");
 function clientWorld(over = {}) {
   return {state: clientState(over.state || {}), log: over.log || CLIENT_LOG,
           operator: over.operator || false, byHand: over.byHand || false, vhf: over.vhf || false,
+          hf: over.hf || false,
           alerts: over.alerts || ALERT_LOG};
 }
 
@@ -909,7 +920,8 @@ const SHOTS = {
   },
 
   async "client-gateways"(browser) {
-    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+    const {page, context} = await open(browser, {ui: CLIENT_UI,
+                                                 api: clientApi(clientWorld({hf: true})),
                                                  height: 900});
     await spreadLog(page, "log", T - 1300, 19);
     await page.click("#gateways-open");

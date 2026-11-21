@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.33.0 |
+| **Version** | 1.34.0 |
 | **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.32 |
 | **Licence** | CC BY 4.0 |
@@ -507,14 +507,15 @@ A call to a gateway sends your outbox and fetches what waits for you, in one ses
    **Call**, its channels in **Channel**, and the radio is tuned to the first channel at once
    ([8.2](#82-tune-and-call)).
 
-![The Gateways page: gateways with their place, distance, channels and last call, a favourite starred, a gateway of your own and one blocked](screens/client-gateways.png)
+![The Gateways page: gateways with their place, distance, channels and last call, each HF channel with its chance at 20Z, a favourite starred and a gateway of your own](screens/client-gateways.png)
 
 *Figure 13. Choosing a gateway.*
 
 **The views.** The tabs above the list show it four ways:
 
 - *Recommended*: every gateway listed, and your own, nearest first. RadioPost has learned
-  nothing yet to rank them better, and says so.
+  nothing yet to rank them better, and says so. Each HF channel shows its chance this hour
+  (below).
 - *Favourites*: the gateways and channels you starred.
 - *Recent*: your last calls, newest first: whom you called, on which channel, how it ended
   (*completed*, *no answer, nothing heard*, *the channel was busy*, *the link was lost*…) and how
@@ -553,6 +554,27 @@ RadioPost. Click **Map** to fold it away; RadioPost remembers.
 ![The map: the gateways round Atlanta in their Maidenhead squares, you, and N1CALL-10 in Austin picked, with its great circle, distance and bearing](screens/client-gateway-map.png)
 
 *Figure 15. The gateways on the map, one picked.*
+
+**The chance on an HF channel.** Under each of a gateway's HF channels a line says how likely a
+link is at this hour, and how fast it would go: *Likely to work: links on 98 % of days at 20Z,
+about 2.2 kbit/s each way*, in green, amber (*may work*) or red (*unlikely to work*). RadioPost
+works it out with VOACAP, the HF propagation model, run on this computer: once from you to the
+gateway and once back, since each way has its own transmitter and its own receiver's noise. Your
+end is the station profile in use (Setup, [Station profiles](#station-profiles)), and the
+gateway's is what its record says, else 100 W into a dipole 10 m up. The chance is the share of the
+month's days, at this hour, when your call and the gateway's answer both get through and the band
+is open. The rate is Aether's own at the strength VOACAP predicts, on the days it links, read from
+Aether's measured ladder for the kind of path: one hop, near-vertical, several hops. Point at the
+line to see the strength each way, the path, and what was assumed. A channel for another modem says
+how open the band is and how strong each way, without a rate: RadioPost has no measurements of
+that modem. The prediction is worked out for the month, once, and kept: it needs no Internet.
+
+It is a monthly average, not today's band. And nothing is learned from your sessions yet, so it
+is often optimistic: on one 69 km path on 80 m that Aether measured on the air, VOACAP's median
+was 6 to 8 dB stronger than what was read. A later version of RadioPost corrects it from your own
+calls. If the line says *HF not predicted*, it says why: where you are is not known, the channel
+is outside 80 m to 10 m, or your station profile does not cover that band. Without the VOACAP
+engine installed, the line above the list says so once.
 
 **The terrain of a VHF path.** Under a gateway's channel of 30 MHz or more, a line says how the
 path from you to it goes over the ground: *Fresnel zone partly obstructed at 1.5 km · diffraction
@@ -2293,3 +2315,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.31.0 | 2026-11-21 | VHF paths over the terrain. §8.1: a gateway's distance is to its site when its record gives one; FM channels; *The terrain of a VHF path*: the line under a VHF channel, **Terrain**, the profile, the budget each way, **Your antenna**, fetching the tiles (new Figure 16). §12: **Terrain** (new Figure 30), **Prepare this area**; Station profiles' VHF side is what a path is worked out with. §39: Fresnel zone, Link budget, Terrain. Later figures renumbered. |
 | 1.32.0 | 2026-11-21 | §8.1: *The terrain map*, the VHF gateways of the view over a hillshade of the terrain held, each path in the colour of its chance and marked where it is obstructed, picking shared with the list and the world map, and the data's notice under it (new Figure 17; later figures renumbered). |
 | 1.33.0 | 2026-11-21 | §8.1: a VHF path with ground close to an antenna is *less certain*, says where, and has its chance read against a 14 dB spread. |
+| 1.34.0 | 2026-11-21 | §8.1: *The chance on an HF channel*, VOACAP both ways at this hour read through Aether's measured ladder, with the rate each way, what is assumed and why a channel is not predicted; Figure 13 retaken with them. |

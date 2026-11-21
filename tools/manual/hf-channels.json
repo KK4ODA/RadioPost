@@ -1,0 +1,307 @@
+{
+ "how": "Worked out by the real VOACAP engine (hf-predict's voacapl) with `RADIOPOST_VOACAP=<engine> cargo run --release -p radiopost-client --example hf_gateways -- LIST EM73tr 1794687840`, LIST the Gateways shot's own list (screens.mjs's GATEWAYS) with each channel's modem (aether) and mode (USB), at the shot's clock (2026-11-14 20:24Z): each HF channel's prediction, by callsign and dial, with a station profile that says nothing.",
+ "channels": {
+  "KK4ODA-1 3591500": {
+   "band": "80 m",
+   "hour": 20,
+   "month": "2026-11",
+   "distance_km": 63.0,
+   "class": "poor",
+   "class_words": "near-vertical (1F2)",
+   "open": 1.0,
+   "ssn": 88.0,
+   "engine": "voacapl",
+   "assumed": [
+    "your power 100 W",
+    "your antenna a dipole 10 m up",
+    "your feed line 1 dB",
+    "your noise residential",
+    "its power 100 W",
+    "its antenna a dipole 10 m up",
+    "its feed line 1 dB",
+    "its noise residential"
+   ],
+   "notes": [
+    "A disturbed near-vertical path, two rays 7 ms apart, can hold Aether to its tone rungs (its ADR-0087)"
+   ],
+   "state": "predicted",
+   "chance": 1.0,
+   "chance_words": "likely to work",
+   "up": {
+    "snr_db": 17.2,
+    "lower_db": 12.6,
+    "upper_db": 10.5,
+    "bps": 2624.0,
+    "rung": "QAM16-2/3",
+    "p_call": 1.0
+   },
+   "down": {
+    "snr_db": 17.2,
+    "lower_db": 12.6,
+    "upper_db": 10.5,
+    "bps": 2624.0,
+    "rung": "QAM16-2/3",
+    "p_call": 1.0
+   },
+   "words": "Likely to work: links on 100 % of days at 20Z, about 2.6 kbit/s each way"
+  },
+  "KK4ODA-1 7101000": {
+   "band": "40 m",
+   "hour": 20,
+   "month": "2026-11",
+   "distance_km": 63.0,
+   "class": "poor",
+   "class_words": "near-vertical (1F2)",
+   "open": 0.99,
+   "ssn": 88.0,
+   "engine": "voacapl",
+   "assumed": [
+    "your power 100 W",
+    "your antenna a dipole 10 m up",
+    "your feed line 1 dB",
+    "your noise residential",
+    "its power 100 W",
+    "its antenna a dipole 10 m up",
+    "its feed line 1 dB",
+    "its noise residential"
+   ],
+   "notes": [
+    "A disturbed near-vertical path, two rays 7 ms apart, can hold Aether to its tone rungs (its ADR-0087)"
+   ],
+   "state": "predicted",
+   "chance": 0.99,
+   "chance_words": "likely to work",
+   "up": {
+    "snr_db": 34.2,
+    "lower_db": 12.6,
+    "upper_db": 7.8,
+    "bps": 4607.0,
+    "rung": "QAM64-3/4",
+    "p_call": 1.0
+   },
+   "down": {
+    "snr_db": 34.2,
+    "lower_db": 12.6,
+    "upper_db": 7.8,
+    "bps": 4607.0,
+    "rung": "QAM64-3/4",
+    "p_call": 1.0
+   },
+   "words": "Likely to work: links on 99 % of days at 20Z, about 4.6 kbit/s each way"
+  },
+  "N0CALL-10 7103500": {
+   "band": "40 m",
+   "hour": 20,
+   "month": "2026-11",
+   "distance_km": 103.0,
+   "class": "poor",
+   "class_words": "near-vertical (1F2)",
+   "open": 0.98,
+   "ssn": 88.0,
+   "engine": "voacapl",
+   "assumed": [
+    "your power 100 W",
+    "your antenna a dipole 10 m up",
+    "your feed line 1 dB",
+    "your noise residential",
+    "its power 100 W",
+    "its antenna a dipole 10 m up",
+    "its feed line 1 dB",
+    "its noise residential"
+   ],
+   "notes": [
+    "A disturbed near-vertical path, two rays 7 ms apart, can hold Aether to its tone rungs (its ADR-0087)"
+   ],
+   "state": "predicted",
+   "chance": 0.98,
+   "chance_words": "likely to work",
+   "up": {
+    "snr_db": 34.2,
+    "lower_db": 12.4,
+    "upper_db": 7.8,
+    "bps": 402.0,
+    "rung": "QAM16-1/2",
+    "p_call": 1.0
+   },
+   "down": {
+    "snr_db": 34.2,
+    "lower_db": 12.4,
+    "upper_db": 7.8,
+    "bps": 402.0,
+    "rung": "QAM16-1/2",
+    "p_call": 1.0
+   },
+   "words": "Likely to work: links on 98 % of days at 20Z, about 400 bit/s each way"
+  },
+  "N2CALL-5 7103500": {
+   "band": "40 m",
+   "hour": 20,
+   "month": "2026-11",
+   "distance_km": 187.0,
+   "class": "poor",
+   "class_words": "near-vertical (1F2)",
+   "open": 0.98,
+   "ssn": 88.0,
+   "engine": "voacapl",
+   "assumed": [
+    "your power 100 W",
+    "your antenna a dipole 10 m up",
+    "your feed line 1 dB",
+    "your noise residential",
+    "its power 100 W",
+    "its antenna a dipole 10 m up",
+    "its feed line 1 dB",
+    "its noise residential"
+   ],
+   "notes": [
+    "A disturbed near-vertical path, two rays 7 ms apart, can hold Aether to its tone rungs (its ADR-0087)"
+   ],
+   "state": "predicted",
+   "chance": 0.98,
+   "chance_words": "likely to work",
+   "up": {
+    "snr_db": 33.2,
+    "lower_db": 12.6,
+    "upper_db": 7.8,
+    "bps": 401.0,
+    "rung": "QAM16-1/2",
+    "p_call": 1.0
+   },
+   "down": {
+    "snr_db": 33.2,
+    "lower_db": 12.6,
+    "upper_db": 7.8,
+    "bps": 401.0,
+    "rung": "QAM16-1/2",
+    "p_call": 1.0
+   },
+   "words": "Likely to work: links on 98 % of days at 20Z, about 400 bit/s each way"
+  },
+  "N1CALL-10 7101000": {
+   "band": "40 m",
+   "hour": 20,
+   "month": "2026-11",
+   "distance_km": 1241.0,
+   "class": "poor",
+   "class_words": "2 hops (2F2)",
+   "open": 1.0,
+   "ssn": 88.0,
+   "engine": "voacapl",
+   "assumed": [
+    "your power 100 W",
+    "your antenna a dipole 10 m up",
+    "your feed line 1 dB",
+    "your noise residential",
+    "its power 100 W",
+    "its antenna a dipole 10 m up",
+    "its feed line 1 dB",
+    "its noise residential"
+   ],
+   "notes": [],
+   "state": "predicted",
+   "chance": 0.71,
+   "chance_words": "may work",
+   "up": {
+    "snr_db": -4.8,
+    "lower_db": 14.1,
+    "upper_db": 9.5,
+    "bps": 332.0,
+    "rung": "tone100-105",
+    "p_call": 0.84
+   },
+   "down": {
+    "snr_db": -4.8,
+    "lower_db": 14.1,
+    "upper_db": 9.5,
+    "bps": 332.0,
+    "rung": "tone100-105",
+    "p_call": 0.84
+   },
+   "words": "May work: links on 71 % of days at 20Z, about 330 bit/s each way"
+  },
+  "N1CALL-10 14109000": {
+   "band": "20 m",
+   "hour": 20,
+   "month": "2026-11",
+   "distance_km": 1241.0,
+   "class": "moderate",
+   "class_words": "one hop (1F2)",
+   "open": 0.97,
+   "ssn": 88.0,
+   "engine": "voacapl",
+   "assumed": [
+    "your power 100 W",
+    "your antenna a dipole 10 m up",
+    "your feed line 1 dB",
+    "your noise residential",
+    "its power 100 W",
+    "its antenna a dipole 10 m up",
+    "its feed line 1 dB",
+    "its noise residential"
+   ],
+   "notes": [],
+   "state": "predicted",
+   "chance": 0.97,
+   "chance_words": "likely to work",
+   "up": {
+    "snr_db": 23.2,
+    "lower_db": 14.0,
+    "upper_db": 7.7,
+    "bps": 3437.0,
+    "rung": "QAM16-3/4",
+    "p_call": 1.0
+   },
+   "down": {
+    "snr_db": 23.2,
+    "lower_db": 14.0,
+    "upper_db": 7.7,
+    "bps": 3437.0,
+    "rung": "QAM16-3/4",
+    "p_call": 1.0
+   },
+   "words": "Likely to work: links on 97 % of days at 20Z, about 3.4 kbit/s each way"
+  },
+  "W9OLD-1 7101000": {
+   "band": "40 m",
+   "hour": 20,
+   "month": "2026-11",
+   "distance_km": 894.0,
+   "class": "moderate",
+   "class_words": "one hop (1F2)",
+   "open": 1.0,
+   "ssn": 88.0,
+   "engine": "voacapl",
+   "assumed": [
+    "your power 100 W",
+    "your antenna a dipole 10 m up",
+    "your feed line 1 dB",
+    "your noise residential",
+    "its power 100 W",
+    "its antenna a dipole 10 m up",
+    "its feed line 1 dB",
+    "its noise residential"
+   ],
+   "notes": [],
+   "state": "predicted",
+   "chance": 0.98,
+   "chance_words": "likely to work",
+   "up": {
+    "snr_db": 16.2,
+    "lower_db": 16.9,
+    "upper_db": 9.0,
+    "bps": 2229.0,
+    "rung": "QAM16-1/2",
+    "p_call": 0.99
+   },
+   "down": {
+    "snr_db": 16.2,
+    "lower_db": 16.9,
+    "upper_db": 9.0,
+    "bps": 2229.0,
+    "rung": "QAM16-1/2",
+    "p_call": 0.99
+   },
+   "words": "Likely to work: links on 98 % of days at 20Z, about 2.2 kbit/s each way"
+  }
+ }
+}

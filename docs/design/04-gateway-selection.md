@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.10 |
+| **Version** | 0.3.11 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -17,7 +17,8 @@ The question this document answers is the operator's:
 Today the client answers it by distance from a typed grid square. This document proposes how to
 answer it properly, for HF and for VHF and UHF, and how hf-predict should change to help. It is a
 proposal the author accepted on 2026-11-20, with the ten answers in §21; no specification has
-changed yet. The wishlist carries it as W17 and W55 to W58. Phase 1 is in progress (§18).
+changed yet. The wishlist carries it as W17 and W55 to W58. Phases 1 and 2 are built; Phase 3 is
+in progress (§18).
 
 **How facts are marked.** Facts about RadioPost, Aether and hf-predict were read in their
 repositories on 2026-11-20. Outside facts were researched the same day: **[P]** checked on a primary
@@ -721,6 +722,16 @@ measurements instead (§10.5).
 * **Cached** by place (6-character square), month, gateway, station profiles, sunspot number and
   engine version. Moving more than 10 km or to another square re-runs it (§6.4).
 
+**Measured in Phase 3 (2026-11-21).** A run of a month's 24 hours takes about 12 ms. A hundred
+gateways, each with an 80 m and a 40 m channel, both ways: 0.34 s on four cores the first time,
+3 ms from what was kept (the client's `hf_gateways` example, `app/client/examples/`). The
+assessment's 90 ms was eight times too high, so the coverage-grid stage is not built: the
+point-to-point runs go in one batch at the first view of a month, in line with the request. VOACAP
+is not quite reciprocal either: hf-predict's engine gives the two ways up to 7 dB apart in loss at
+the edge of a band's opening, one more reason each way is its own run. The client keeps a run by
+your 6-character square, the gateway's position, the month, the frequencies and both stations
+(exactly VOACAP's input); one run covers a gateway's channels that share a station, up to eleven.
+
 ### 10.3 From SNR to what a modem does: the modem profile
 
 A propagation prediction answers "how strong", and the operator needs "how fast, and will it
@@ -772,6 +783,51 @@ measures them, and until then they get a generic profile (a floor and a rate cei
 efficiency is learned. VARA is a black box by the project's rule: only its published commands are
 used, so its profile is generic and everything about it is learned from this station's own
 sessions. The ranking says so ("VARA: no modem model; history only").
+
+**Built in Phase 3 (2026-11-21).** `app/client/src/selection/hf.rs` puts a prediction on each HF
+channel of the gateway list at the whole hour nearest now.
+
+* **Aether's profile** is `app/client/src/selection/aether.json`, written by
+  `tools/modems/aether_profile.py` from an Aether checkout (its commit recorded in the file): each
+  rung's threshold is where its measured frame-error curve (`bench/baselines/phy_fer_awgn14.csv`,
+  `phy_fer.csv`, `phy_fer_500.csv`, `tone_floor.csv`) falls through one frame in ten, and every
+  AWGN crossing is checked against the specification's table within 0.35 dB. A 2 300 Hz OFDM rung
+  measured on AWGN only gets the penalty of the measured rungs either side, interpolated
+  (`filled`). A curve that never fell to one in ten is only a lower bound (`beyond`): the rate
+  leaves that rung out on that class rather than trust it.
+* **The numbers as built.** Nothing is learned yet, so δ = 0, η = 1 and no margin. The chance is
+  P(SNR_up ≥ θ_call) · P(SNR_down ≥ θ_call) · MUFday, the call's threshold the tone floor's control
+  frame on the class, MUFday the smaller of the two ways'. Taking the two ways as independent
+  understates the chance on a path where both are marginal (one ionosphere carries both); Phase 4's
+  outcomes say by how much. The rate is E[g(SNR)] over the days the call links, so the chance and
+  the rate do not count the same failures twice.
+* **The class** as built: near-vertical under 500 km above 60°; two hops or more by VOACAP's mode
+  (its long-path model, `F2F2` and the like, counted as several); a great circle that reaches 60°;
+  a multipath probability of 0.5 or more (VOACAP gives either about 0 or above 0.5): Poor; one hop
+  otherwise: Moderate. No sky-wave path is Good. Under 30 km the line says ground wave may carry it
+  too, which VOACAP does not model.
+* **A deviation, with its evidence: the NVIS echo limits are not applied.** On ITU-R F.1487's
+  near-vertical channel (two rays 7 ms apart) Aether keeps to its tone rungs, about 112 bit/s at
+  2 300 Hz and 54 at 500 Hz (its `bench/baselines/echo.csv`). But the near-vertical sessions on the
+  air so far climbed onto OFDM: ND1J's 80 m Tests at 500 Hz to rungs 11 and 12, 413 and 579 bit/s
+  (Aether's report 16), and the 40 m and 80 m sessions of its reports 15 and 17. So a
+  near-vertical path takes Poor's thresholds, and its line says that a disturbed near-vertical path
+  can hold Aether to its tone rungs.
+* **The stations.** An antenna kind runs as hf-predict's antenna file: a dipole below 7.5 m as its
+  5 m one, else its 10 m one; a vertical, a whip; an NVIS antenna as the low dipole. A kind with no
+  file of its own (a Yagi, a loop) runs as a dipole at its height, its stated gain over 2.15 dBi
+  added to both ways. A feed line costs on transmit only: on receive, HF's noise comes in with the
+  signal. The operator's noise is P.372's at 3 MHz for the profile's environment. A gateway's end
+  is its record's channel `station`, else 100 W into a dipole 10 m up, residential noise, 1 dB of
+  feed line, each said as assumed.
+* **Checked once against the air.** ND1J to KK4ODA-1, 69 km on 80 m, 2026-10-23 at 16Z: VOACAP's
+  median 16 dB in 3 kHz with 100 W dipoles 10 m up at both ends, its lower decile 15.5 dB below;
+  Aether read 8 to 10 dB. The gap is inside VOACAP's own spread and is what δ learns (§12.5); the
+  manual tells the operator the figures are often optimistic until then.
+* **The order** stays nearest first: a model's order waits for Phase 5's validation (§18).
+* **The engine** is found where `RADIOPOST_VOACAP` says or beside the program. Bundling it with
+  the installers (hf-predict's release attaching it, RadioPost's fetching the version it pins by
+  checksum, §11.2) is still to do; without it, the view says once that HF is not predicted.
 
 ### 10.4 What VOACAP is, and is not
 
@@ -874,6 +930,13 @@ binaries keep one licence choice throughout.
 
 Step 1 is a few days' work and is checked entirely by the existing tests. Nothing in RadioPost
 waits on more than steps 1 to 3 for HF (§18, Phase 3).
+
+**Done in Phase 3 (2026-11-21):** step 1 for the engine (`radioprop-hf`: the runner, decks, the
+output parser, the sunspot table, coverage and the predictor, hf-predict's pull request 39) and
+steps 2 and 3 (its pull request 40): a required SNR in dB-Hz from any source, a program's own
+frequencies, both ways of a contact with a station at each end, and many contacts at once on
+several threads. RadioPost pins the four crates at the same revision (two revisions of one
+repository would build two `radioprop-geo`s whose positions do not match).
 
 **Done in Phase 1 (2026-11-21), by the author's choice to build places in hf-predict at once:**
 hf-predict is a workspace; `geo.rs` moved unchanged into `radioprop-geo` (step 1, its first
@@ -2157,3 +2220,4 @@ for size in (2000, 50000):
 | 0.3.8 | 2026-11-21 | §8.5, §16.3: P.526 compared with ITM on the 50 paths ([report](05-vhf-terrain-validation.md)); the hillshade map still owed. |
 | 0.3.9 | 2026-11-21 | §16.2: the VHF terrain map done; Phase 2 is built. |
 | 0.3.10 | 2026-11-21 | §16.3: a path with ground close to an antenna said *less certain*, its chance read against 14 dB (the report's §6, the author's yes). |
+| 0.3.11 | 2026-11-21 | §10.2: the runs measured (12 ms a month's run; 100 gateways both ways in 0.34 s), so no coverage-grid stage. §10.3: HF channels predicted in the client, Aether's profile from its measured curves, the rules as built, the NVIS echo limits not applied (the air's sessions climbed past them), one path checked against the air. §11.3: steps 1 to 3 done for HF. |

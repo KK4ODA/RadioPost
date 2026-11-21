@@ -1014,11 +1014,19 @@ function age(seconds) {
   return `${Math.round(s / 86400)} days ago`;
 }
 
+// what the view says of HF predictions, once: what they are, or why there are none
+function hfNote(hf) {
+  if (!hf) return "";
+  if (!hf.engine) return ` HF channels are not predicted: ${hf.why}.`;
+  return " Each HF channel shows VOACAP's prediction for this hour, both ways.";
+}
+
 function viewNote(view, count, g) {
   switch (view) {
     case "recommended":
-      return g.here ? "Nearest first: nothing is learned yet to rank them better."
-        : "As the post offices list them: save a place or set up a GPS to put the nearest first.";
+      return (g.here ? "Nearest first: nothing is learned yet to rank them better."
+        : "As the post offices list them: save a place or set up a GPS to put the nearest first.")
+        + hfNote(g.hf);
     case "favourites":
       return count ? "" : "No favourites yet: click ☆ beside a gateway, or beside one of its channels.";
     case "worked":
@@ -1292,9 +1300,11 @@ function gatewayRow(gw, twice) {
         : "Leave this channel out when the gateway is chosen",
         () => markGateway({op: c.blocked ? "unblock" : "block", callsign: gw.callsign,
                            dial_hz: c.dial_hz})));
+    const parts = [line];
+    if (c.hf && c.hf.state !== "no-engine") parts.push(hfLine(c.hf));
     const t = gw.terrain;
-    if (!t || t.dial_hz !== c.dial_hz) return line;
-    return el("div", {}, line, terrainLine(gw, t));
+    if (t && t.dial_hz === c.dial_hz) parts.push(terrainLine(gw, t));
+    return parts.length === 1 ? line : el("div", {}, ...parts);
   }));
   const last = el("div", {});
   if (gw.last) last.append(el("div", {text: `${gw.last.words}, ${when(gw.last.at)}`}));
@@ -1328,6 +1338,34 @@ function gatewayRow(gw, twice) {
     tr.append(td);
   }
   return tr;
+}
+
+// -- HF (choosing a gateway, §10): each HF channel predicted both ways by VOACAP at this hour
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August",
+  "September", "October", "November", "December"];
+
+// an HF channel's prediction in a line under it; its title says how it was worked out
+function hfLine(h) {
+  const cls = h.state === "predicted" ? chanceClass(h.chance_words) : "";
+  return el("div", {class: `note verdict ${cls}`, text: h.words, title: hfTitle(h)});
+}
+
+function hfTitle(h) {
+  if (h.state !== "predicted" && h.state !== "no-modem") return h.why ? `${h.words}: ${h.why}` : h.words;
+  const month = MONTHS[Number(String(h.month).slice(5)) - 1] || h.month;
+  const way = (w, name) => `${name}: SNR ${w.snr_db} dB in 3 kHz on a median day, one day in ten `
+    + `${w.lower_db} dB lower and one in ten ${w.upper_db} dB higher`
+    + (w.rung ? `; ${w.rung} on a median day` : "");
+  return [
+    `VOACAP for ${month} at ${String(h.hour).padStart(2, "0")}Z, sunspot number ${h.ssn}, `
+      + `${h.distance_km} km: ${h.class_words}, read as ITU ${h.class}`,
+    `The band is open on ${Math.round(h.open * 100)} % of days`,
+    way(h.up, "Sending"), way(h.down, "Receiving"),
+    ...h.notes,
+    "Nothing is learned from your sessions yet",
+    `Assumed: ${h.assumed.join("; ")}`,
+  ].join(".\n") + ".";
 }
 
 // -- terrain (choosing a gateway, §§8, 16.3): a VHF path over the ground, from elevation tiles

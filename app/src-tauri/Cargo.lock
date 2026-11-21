@@ -2671,6 +2671,7 @@ dependencies = [
  "radiopost-api",
  "radiopost-update",
  "radioprop-geo",
+ "radioprop-hf",
  "radioprop-place",
  "radioprop-terrain",
  "rpmi",
@@ -2697,15 +2698,25 @@ dependencies = [
 [[package]]
 name = "radioprop-geo"
 version = "0.1.0"
-source = "git+https://github.com/KK4ODA/hf-predict?rev=fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35#fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35"
+source = "git+https://github.com/KK4ODA/hf-predict?rev=0503d40f9a2a9577817559b1681d25b6dcf801cc#0503d40f9a2a9577817559b1681d25b6dcf801cc"
 dependencies = [
  "serde",
 ]
 
 [[package]]
+name = "radioprop-hf"
+version = "0.1.0"
+source = "git+https://github.com/KK4ODA/hf-predict?rev=0503d40f9a2a9577817559b1681d25b6dcf801cc#0503d40f9a2a9577817559b1681d25b6dcf801cc"
+dependencies = [
+ "radioprop-geo",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "radioprop-place"
 version = "0.1.0"
-source = "git+https://github.com/KK4ODA/hf-predict?rev=fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35#fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35"
+source = "git+https://github.com/KK4ODA/hf-predict?rev=0503d40f9a2a9577817559b1681d25b6dcf801cc#0503d40f9a2a9577817559b1681d25b6dcf801cc"
 dependencies = [
  "radioprop-geo",
  "serde",
@@ -2716,7 +2727,7 @@ dependencies = [
 [[package]]
 name = "radioprop-terrain"
 version = "0.1.0"
-source = "git+https://github.com/KK4ODA/hf-predict?rev=fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35#fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35"
+source = "git+https://github.com/KK4ODA/hf-predict?rev=0503d40f9a2a9577817559b1681d25b6dcf801cc#0503d40f9a2a9577817559b1681d25b6dcf801cc"
 dependencies = [
  "flate2",
  "radioprop-geo",

@@ -143,6 +143,30 @@ impl Position {
         (here, station)
     }
 
+    /// What HF predictions need (§ 10): where the station is (a grid square's centre will do),
+    /// the station profile in use with every value resolved, and the bands it covers (empty, all).
+    #[must_use]
+    pub fn for_hf(
+        &self,
+    ) -> (
+        Option<radioprop_geo::LatLon>,
+        radioprop_place::station::Resolved,
+        Vec<String>,
+    ) {
+        let chosen = self.here();
+        let profile = self
+            .lock()
+            .book
+            .station_in_use(&chosen)
+            .cloned()
+            .unwrap_or_default();
+        let here = chosen.here.map(|h| radioprop_geo::LatLon {
+            lat: h.lat,
+            lon: h.lon,
+        });
+        (here, profile.resolve(), profile.bands)
+    }
+
     /// The position in use as latitude and longitude, to rank gateways by.
     #[must_use]
     pub fn lat_lon(&self) -> Option<(f64, f64)> {

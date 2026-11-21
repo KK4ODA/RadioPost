@@ -50,6 +50,7 @@ use crate::callsigns;
 use crate::compose::{self, Answer, Draft, File, media_type};
 use crate::online;
 use crate::presence::{Carrier, Presence};
+use crate::selection::hf::Hf;
 use crate::selection::position::Position;
 use crate::selection::terrain::{self, Terrain};
 use crate::selection::{self, attempts, directory};
@@ -156,6 +157,8 @@ pub struct Panel {
     position: Arc<Position>,
     /// Terrain tiles for VHF paths, kept in the cache folder (choosing a gateway, §§8, 9).
     terrain: Arc<Terrain>,
+    /// HF channels predicted both ways by VOACAP, the runs kept (choosing a gateway, §10).
+    hf: Arc<Hf>,
 }
 
 /// When the panel renews the credential: first after `first`, then every `every`, once it has
@@ -279,7 +282,15 @@ impl Panel {
             downloads: crate::downloads::folder(home),
             position: Arc::new(position_of(home)),
             terrain: Arc::new(Terrain::new(&terrain::cache_dir())),
+            hf: Arc::new(Hf::new()),
         }
+    }
+
+    /// The same panel with its HF predictions made by `hf`: for tests, whose engine makes them up.
+    #[must_use]
+    pub fn with_hf(mut self, hf: Hf) -> Panel {
+        self.hf = Arc::new(hf);
+        self
     }
 
     /// The same panel with its terrain tiles kept as `terrain` says: for tests, which leave the
@@ -1739,7 +1750,8 @@ impl Panel {
         self.gateways_judged(true)
     }
 
-    /// The gateway list, each VHF gateway's path over the terrain judged when `terrain` says.
+    /// The gateway list, each VHF gateway's path over the terrain judged and each HF channel
+    /// predicted when `terrain` says.
     fn gateways_judged(&self, terrain: bool) -> Result<Value, Error> {
         let store = Store::open(&self.home())?;
         let list = store.gateway_list.clone().unwrap_or(Value::Null);
@@ -1773,11 +1785,18 @@ impl Panel {
                 g["terrain"] = t;
             }
         }
+        // each HF channel both ways at this hour, VOACAP's runs kept for the month (§ 10)
+        if terrain {
+            let (here, station, bands) = self.position.for_hf();
+            let now = i64::try_from(now).unwrap_or(i64::MAX);
+            self.hf.judge(here, &station, &bands, &mut gateways, now);
+        }
         Ok(json!({
             "domain": list["domain"], "fetched": list["fetched"], "grid": store.grid,
             "gateways": gateways, "others": others,
             "errors": list["errors"], "ambiguous": list["ambiguous"],
             "here": here.here, "note": here.note, "marks_error": marks_error,
+            "hf": if terrain { self.hf.status() } else { Value::Null },
         }))
     }
 
