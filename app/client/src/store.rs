@@ -1103,7 +1103,7 @@ impl Store {
             .cloned()
             .unwrap_or_default();
         for g in &mut list {
-            let there = g["grid"].as_str().and_then(crate::grid::centre);
+            let there = crate::selection::directory::position_of(g);
             let km = here.zip(there).map(|(a, b)| crate::grid::km_between(a, b));
             g["km"] = km.map_or(Value::Null, |k| json!(k.round()));
         }

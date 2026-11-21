@@ -23,13 +23,16 @@ rpmi = { path = "../../core/rpmi" }
 radiopost-aether = { path = "../../adapters/aether" }
 # places and the GPS, shared with hf-predict (choosing a gateway, §6 and §11): its libraries, by
 # revision, until hf-predict tags them
-radioprop-geo = { git = "https://github.com/KK4ODA/hf-predict", rev = "d9f1739bf9787e49797534d7d72c6b21d88a5e59" }
-radioprop-place = { git = "https://github.com/KK4ODA/hf-predict", rev = "d9f1739bf9787e49797534d7d72c6b21d88a5e59" }
+radioprop-geo = { git = "https://github.com/KK4ODA/hf-predict", rev = "fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35" }
+radioprop-place = { git = "https://github.com/KK4ODA/hf-predict", rev = "fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35" }
+radioprop-terrain = { git = "https://github.com/KK4ODA/hf-predict", rev = "fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35" }
 ed25519-dalek = "3"
 getrandom = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 tiny_http = "0.12"
+# terrain tiles from the Copernicus DEM's public bucket (selection::terrain)
+ureq = "3"
 unicode-normalization = "0.1"
 
 [dev-dependencies]

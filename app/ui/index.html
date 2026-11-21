@@ -163,6 +163,37 @@
             <button type="button" class="quiet" id="map-point-cancel">Cancel</button>
           </div>
         </details>
+        <div class="card" id="terrain-card" hidden>
+          <div class="row terrain-head">
+            <h2 id="terrain-title" title="The path from the position in use to the gateway's antennas, over the ground between them">Terrain</h2>
+            <button type="button" class="quiet" id="terrain-close" title="Close the terrain">Close</button>
+          </div>
+          <p id="terrain-words"></p>
+          <div id="terrain-judged">
+            <svg id="terrain-profile" role="img" aria-label="The ground between you and the gateway, the direct ray between the antennas and 60 % of the first Fresnel zone below it"></svg>
+            <p class="note terrain-key" title="What the lines are"><span class="k-ground">▬</span> ground, with the Earth's bulge for a standard atmosphere (k = 4/3) · <span class="k-ray">─</span> the direct ray · <span class="k-fresnel">┄</span> 60 % of the first Fresnel zone · <span class="k-mark">●</span> where it is obstructed</p>
+            <label class="terrain-agl" title="Try another height for your antenna: the path and the budget are worked out again. Your station profile keeps its own">Your antenna, <span id="terrain-agl-value"></span>
+              <input type="range" id="terrain-agl" min="1" max="60" step="1">
+            </label>
+            <table class="list terrain-budget" aria-label="The link budget each way">
+              <thead><tr>
+                <th title="Which way">Way</th>
+                <th class="n" title="What reaches the receiving radio: power and gains, less the feed lines, the free-space loss and the diffraction loss">Received</th>
+                <th class="n" title="What the receiving modem needs, assumed">Needs</th>
+                <th class="n" title="Received less what is needed">Margin</th>
+                <th title="The chance the path works, from the margin against a 10 dB spread over locations">Chance</th>
+              </tr></thead>
+              <tbody id="terrain-rows"></tbody>
+            </table>
+            <p class="note" id="terrain-assumed"></p>
+          </div>
+          <div class="row" id="terrain-fetch" hidden>
+            <button type="button" id="terrain-fetch-90" title="Fetch the elevation tiles this path crosses, at 90 m, from the Copernicus DEM. They are kept on this computer">Fetch the terrain</button>
+            <button type="button" class="quiet" id="terrain-fetch-30" title="Fetch the path's tiles at 30 m instead: finer, about nine times the size">Finer, 30 m</button>
+          </div>
+          <p class="note" id="terrain-progress" hidden></p>
+          <p class="note terrain-notice" id="terrain-notice"></p>
+        </div>
         <div class="scroll" id="gateway-table"><table class="list" aria-label="Gateways">
           <thead><tr>
             <th title="Its callsign, and the post office that lists it. The star marks a favourite">Gateway</th><th title="Where it is, when it answers, and how old its record is">Where</th>
@@ -782,6 +813,26 @@
           </label>
           <div class="row"><button type="button" id="st-save">Save profile</button></div>
           </details>
+        </div>
+        <div class="card" id="terrain-setup">
+          <h2 title="Elevation data for judging the paths to VHF and UHF gateways. It is fetched only when you ask, and kept on this computer">Terrain</h2>
+          <p class="note" id="ts-held"></p>
+          <div class="row">
+            <label class="inline" title="How far around the position in use">Within
+              <select id="ts-radius" class="narrow"></select>
+            </label>
+            <label class="inline" title="90 m is enough for most paths; 30 m is finer and about nine times the size">Data
+              <select id="ts-source" class="narrow">
+                <option value="glo90">90 m</option>
+                <option value="glo30">30 m, finer</option>
+              </select>
+            </label>
+            <button type="button" id="ts-prepare" title="Fetch the tiles around the position in use now, before you go where there is no Internet">Prepare this area</button>
+            <button type="button" class="quiet" id="ts-cancel" title="Fetch nothing more: the tile being fetched finishes" hidden>Cancel</button>
+          </div>
+          <p class="note" id="ts-size"></p>
+          <p class="note" id="ts-progress" hidden></p>
+          <div id="ts-notice" title="What the licence of the data held asks to be said"></div>
         </div>
         <div class="card" id="sounds-card">
           <h2>Sounds and notifications</h2>

@@ -7,8 +7,11 @@
 //! * [`directory`]: the gateway list as the operator sees it: favourites, blocks, gateways of their
 //!   own, ages, and what the call records say of each.
 //! * [`position`]: the places, the GPS and the position in use.
+//! * [`terrain`]: VHF and UHF gateways judged over the terrain, from Copernicus tiles fetched when
+//!   the operator asks.
 
 pub mod attempts;
 pub mod classify;
 pub mod directory;
 pub mod position;
+pub mod terrain;

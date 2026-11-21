@@ -107,6 +107,42 @@ impl Position {
         chosen
     }
 
+    /// What the terrain needs (§ 8): where the station is and whether that is better than a grid
+    /// square's centre, and the station profile in use with every value resolved.
+    #[must_use]
+    pub fn for_terrain(
+        &self,
+    ) -> (
+        Option<(radioprop_geo::LatLon, bool)>,
+        radioprop_place::station::Resolved,
+    ) {
+        let chosen = self.here();
+        let station = self
+            .lock()
+            .book
+            .station_in_use(&chosen)
+            .cloned()
+            .unwrap_or_default()
+            .resolve();
+        let here = chosen.here.map(|h| {
+            let exact = !matches!(
+                h.from,
+                radioprop_place::place::From::Place {
+                    source: Origin::Grid,
+                    ..
+                }
+            );
+            (
+                radioprop_geo::LatLon {
+                    lat: h.lat,
+                    lon: h.lon,
+                },
+                exact,
+            )
+        });
+        (here, station)
+    }
+
     /// The position in use as latitude and longitude, to rank gateways by.
     #[must_use]
     pub fn lat_lon(&self) -> Option<(f64, f64)> {

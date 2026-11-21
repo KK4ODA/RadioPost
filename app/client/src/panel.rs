@@ -51,6 +51,7 @@ use crate::compose::{self, Answer, Draft, File, media_type};
 use crate::online;
 use crate::presence::{Carrier, Presence};
 use crate::selection::position::Position;
+use crate::selection::terrain::{self, Terrain};
 use crate::selection::{attempts, directory};
 use crate::session::{self, Fetch, Kind, Options};
 use crate::store::{Error, Folder, Store, unhex};
@@ -86,6 +87,11 @@ const FILES: &[(&str, &str, &str)] = &[
         "/world.js",
         "text/javascript; charset=utf-8",
         include_str!("../../ui/world.js"),
+    ),
+    (
+        "/terrain.js",
+        "text/javascript; charset=utf-8",
+        include_str!("../../ui/terrain.js"),
     ),
 ];
 
@@ -148,6 +154,8 @@ pub struct Panel {
     downloads: PathBuf,
     /// The places, the GPS and the position in use (choosing a gateway, §6).
     position: Arc<Position>,
+    /// Terrain tiles for VHF paths, kept in the cache folder (choosing a gateway, §§8, 9).
+    terrain: Arc<Terrain>,
 }
 
 /// When the panel renews the credential: first after `first`, then every `every`, once it has
@@ -270,7 +278,16 @@ impl Panel {
             backups_every: crate::backups::EVERY,
             downloads: crate::downloads::folder(home),
             position: Arc::new(position_of(home)),
+            terrain: Arc::new(Terrain::new(&terrain::cache_dir())),
         }
+    }
+
+    /// The same panel with its terrain tiles kept as `terrain` says: for tests, which leave the
+    /// computer's cache alone and fetch from a server of their own.
+    #[must_use]
+    pub fn with_terrain(mut self, terrain: Terrain) -> Panel {
+        self.terrain = Arc::new(terrain);
+        self
     }
 
     /// The same panel, saving received attachments in `folder`: for tests, which leave the
@@ -894,6 +911,7 @@ impl Panel {
             (Method::Get, "/api/alerts") => Ok(self.alerts.json()),
             (Method::Post, "/api/alerts") => self.alert_request(body),
             (Method::Post, "/api/circles") => self.circle_request(body),
+            (_, p) if p.starts_with("/api/terrain") => self.terrain_api(method, p, &param, body),
             (Method::Get, "/api/places") => Ok(self.position.json(param("ports") == "1")),
             (Method::Post, "/api/places") => self.position.request(body),
             (Method::Get, "/api/notify") => Ok(alerts::notify_settings(&self.base)),
@@ -1680,6 +1698,11 @@ impl Panel {
     /// (RP-5 §4.4), nearest first, and the grid they are ranked from; which post offices' lists
     /// were taken, which could not be, and the callsigns listed twice.
     fn gateways(&self) -> Result<Value, Error> {
+        self.gateways_judged(true)
+    }
+
+    /// The gateway list, each VHF gateway's path over the terrain judged when `terrain` says.
+    fn gateways_judged(&self, terrain: bool) -> Result<Value, Error> {
         let store = Store::open(&self.home())?;
         let list = store.gateway_list.clone().unwrap_or(Value::Null);
         let others: Vec<&String> = list["lists"]
@@ -1695,7 +1718,7 @@ impl Panel {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs());
-        let gateways = directory::annotate(
+        let mut gateways = directory::annotate(
             store.gateways_ranked_from(from),
             &list,
             &marks,
@@ -1703,12 +1726,131 @@ impl Panel {
             from,
             now,
         );
+        // a VHF channel's path over the terrain, from the tiles already held (§ 8)
+        let (at, station) = self.position.for_terrain();
+        for g in gateways.iter_mut().filter(|_| terrain) {
+            if let Some(channel) = terrain::vhf_channel(g) {
+                let mut t = self.terrain.judge(at, &station, g, &channel, None, false);
+                t["dial_hz"] = channel["dial_hz"].clone();
+                g["terrain"] = t;
+            }
+        }
         Ok(json!({
             "domain": list["domain"], "fetched": list["fetched"], "grid": store.grid,
             "gateways": gateways, "others": others,
             "errors": list["errors"], "ambiguous": list["ambiguous"],
             "here": here.here, "note": here.note, "marks_error": marks_error,
         }))
+    }
+
+    /// `/api/terrain`: what is held and being fetched (`GET`), a request about it (`POST`), and one
+    /// gateway's path (`GET /api/terrain/path`).
+    fn terrain_api(
+        &self,
+        method: &Method,
+        path: &str,
+        param: &dyn Fn(&str) -> String,
+        body: &Value,
+    ) -> Result<Value, Error> {
+        match (method, path) {
+            (Method::Get, "/api/terrain") => Ok(self.terrain_status()),
+            (Method::Post, "/api/terrain") => self.terrain_request(body),
+            (Method::Get, "/api/terrain/path") => self.terrain_path(
+                &param("callsign"),
+                param("dial").parse().ok(),
+                param("agl").parse().ok(),
+            ),
+            _ => Err(format!("no {method} {path}")),
+        }
+    }
+
+    /// The terrain tiles held and being fetched, and what preparing the area around the position
+    /// in use would fetch.
+    fn terrain_status(&self) -> Value {
+        let mut out = self.terrain.status();
+        if let (Some((here, _)), _) = self.position.for_terrain() {
+            out["around"] = terrain::RADII_KM
+                .iter()
+                .map(|&r| {
+                    let tiles = Terrain::around(here, r);
+                    json!({"radius_km": r, "tiles": tiles.len(),
+                           "mb": {"glo90": Terrain::size_mb(&tiles, terrain::Source::Glo90),
+                                  "glo30": Terrain::size_mb(&tiles, terrain::Source::Glo30)}})
+                })
+                .collect();
+        }
+        out
+    }
+
+    /// The panel's terrain requests: `fetch` (`tiles` by name, `source` `glo90` or `glo30`),
+    /// `prepare` (`radius_km` around the position in use, `source`) and `cancel`.
+    fn terrain_request(&self, body: &Value) -> Result<Value, Error> {
+        let source = match body["source"].as_str().unwrap_or("glo90") {
+            "glo30" => terrain::Source::Glo30,
+            "glo90" => terrain::Source::Glo90,
+            other => return Err(format!("source: glo90 or glo30, not {other}")),
+        };
+        match body["op"].as_str().unwrap_or("") {
+            "fetch" => {
+                let tiles = body["tiles"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|t| {
+                        t.as_str()
+                            .and_then(terrain::tile_named)
+                            .ok_or("tiles: names such as N33W085")
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                self.terrain.fetch(&tiles, source);
+            }
+            "prepare" => {
+                let radius = body["radius_km"]
+                    .as_f64()
+                    .filter(|r| (1.0..=250.0).contains(r));
+                let radius = radius.ok_or("radius_km: 1 to 250")?;
+                let (Some((here, _)), _) = self.position.for_terrain() else {
+                    return Err("where you are is not known: save a place or set up a GPS".into());
+                };
+                self.terrain.fetch(&Terrain::around(here, radius), source);
+            }
+            "cancel" => self.terrain.cancel(),
+            other => return Err(format!("no terrain request {other:?}")),
+        }
+        Ok(self.terrain_status())
+    }
+
+    /// One gateway's path over the terrain on its channel at `dial` (its first VHF channel by
+    /// default), with the profile to draw; `agl` tries a height for the operator's antenna.
+    fn terrain_path(
+        &self,
+        callsign: &str,
+        dial: Option<u64>,
+        agl: Option<f64>,
+    ) -> Result<Value, Error> {
+        let all = self.gateways_judged(false)?;
+        let gw = all["gateways"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|g| g["callsign"] == callsign)
+            .ok_or_else(|| format!("no gateway {callsign} in the list"))?;
+        let channel = match dial {
+            Some(hz) => gw["channels"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|c| c["dial_hz"].as_u64() == Some(hz))
+                .cloned(),
+            None => terrain::vhf_channel(gw),
+        }
+        .ok_or("no such VHF channel")?;
+        let agl = agl.filter(|h| (0.5..=200.0).contains(h));
+        let (at, station) = self.position.for_terrain();
+        let mut out = self.terrain.judge(at, &station, gw, &channel, agl, true);
+        out["callsign"] = json!(callsign);
+        out["dial_hz"] = channel["dial_hz"].clone();
+        Ok(out)
     }
 
     /// The modem as the page names it, for a request outside a session: settings with the

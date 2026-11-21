@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.5 |
+| **Version** | 0.3.6 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -1694,6 +1694,16 @@ hillshade map for VHF terrain (Phase 2).
 * What the data is (surface or bare earth, its source and years), and every assumed input, are on
   the view.
 
+**Done (2026-11-21), Phase 2's client:** the line under each VHF channel in the list, the profile
+drawn as above with the budget each way, the slider (worked out again once it rests 150 ms, and the
+margin gained or lost against the profile's height), the fetch buttons, and Setup's **Terrain**
+with **Prepare this area** (§9.3). The terrain is hf-predict's `radioprop-terrain` (P.526-16 § 4.5,
+the tile store); the client's side is `app/client/src/selection/terrain.rs`, `/api/terrain` and
+`/api/terrain/path`, and `app/ui/terrain.js`. A gateway's distance and map mark now come from its
+`site` when it gives one. Deviations: GLO-90 is fetched first and GLO-30 on request (about nine
+times the size), not GLO-30 everywhere; and a path that crosses a tile GLO-30 has not released is
+read wholly at 90 m, since a profile reads one data set.
+
 ### 16.4 Gateway details
 
 ```
@@ -2113,3 +2123,4 @@ for size in (2000, 50000):
 | 0.3.3 | 2026-11-21 | §7.2: `seen` and `listens` done, as RP-5 1.4.0. |
 | 0.3.4 | 2026-11-21 | §11.3: station profiles done, in `radioprop-place`. §16.2: the HF map of Phase 1 done (the land, the night side, the grid, great circles, picking both ways, a place saved from the map); what waits for Phases 2 and 3. |
 | 0.3.5 | 2026-11-21 | §7.2: `site` and `station` done (RP-5 1.5.0, RP-0 1.3.0 §9.6). §9.3: the local tile form is half-metres (decimetres stop at 3 276.7 m in 16 bits), with the sizes measured on a real tile, and a missing tile is the sea. |
+| 0.3.6 | 2026-11-21 | §16.3: Phase 2's client done (the terrain line, the profile, the budget each way, the slider, fetching, Setup's **Terrain**), with its two deviations: GLO-90 first, and one data set a path. |

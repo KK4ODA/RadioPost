@@ -3,6 +3,7 @@
 // setup, over the client's JSON API (app/client/src/panel.rs). No build step.
 
 import { WorldMap } from "./map.js";
+import { drawProfile } from "./terrain.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -127,6 +128,7 @@ function show(view) {
   if (view === "setup") {
     loadUsual();
     loadPlaces(true);
+    loadTerrainSetup();
   }
 }
 
@@ -997,10 +999,11 @@ async function openGateways(refreshing = false) {
   }
 }
 
-// a channel as the page writes it: the dial in MHz to the kilohertz or finer, the bandwidth, and
-// whether the gateway scans it with others (RP-5 §4.4)
+// a channel as the page writes it: the dial in MHz to the kilohertz or finer, the bandwidth (an FM
+// channel's width in kHz), and whether the gateway scans it with others (RP-5 §4.4)
 function channelWords(c) {
-  return `${mhzOf(c.dial_hz)} MHz, ${c.bandwidth_hz} Hz${c.scan_s != null ? ", scanned" : ""}`;
+  const width = c.mode === "FM" ? `FM, ${c.bandwidth_hz / 1000} kHz` : `${c.bandwidth_hz} Hz`;
+  return `${mhzOf(c.dial_hz)} MHz, ${width}${c.scan_s != null ? ", scanned" : ""}`;
 }
 
 // days or hours since a moment, for the ages the page shows
@@ -1267,7 +1270,9 @@ function gatewayRow(gw, twice) {
         : "Leave this channel out when the gateway is chosen",
         () => markGateway({op: c.blocked ? "unblock" : "block", callsign: gw.callsign,
                            dial_hz: c.dial_hz})));
-    return line;
+    const t = gw.terrain;
+    if (!t || t.dial_hz !== c.dial_hz) return line;
+    return el("div", {}, line, terrainLine(gw, t));
   }));
   const last = el("div", {});
   if (gw.last) last.append(el("div", {text: `${gw.last.words}, ${when(gw.last.at)}`}));
@@ -1301,6 +1306,231 @@ function gatewayRow(gw, twice) {
     tr.append(td);
   }
   return tr;
+}
+
+// -- terrain (choosing a gateway, §§8, 16.3): a VHF path over the ground, from elevation tiles
+// fetched only when asked --
+
+let terrainShown = null;  // the path in the card: {callsign, dial}
+let terrainAgl = null;    // a height tried for your antenna, m, or null for the profile's
+let terrainWatch = null;  // the timer that follows a fetch
+let terrainTiles = null;  // what the card's buttons fetch: {glo90: [...], glo30: [...]}
+let terrainBase = null;   // the path at your profile's height: {agl, margin}, to compare a height tried
+let terrainTry = null;    // the timer that waits for the slider to rest
+
+// what the chance says, as a class for its colour
+function chanceClass(words) {
+  return {"likely to work": "likely", "may work": "may", "unlikely to work": "unlikely"}[words] || "";
+}
+
+// a VHF gateway's terrain in a line under the channel judged, with the button that shows it
+function terrainLine(gw, t) {
+  const line = el("div", {class: `note verdict ${t.state === "judged" ? chanceClass(t.chance) : ""}`,
+    text: t.words, title: t.state === "judged"
+      ? "Worked out from the terrain held on this computer, your station profile and the gateway's record. Terrain shows how"
+      : "Why the path is not worked out"});
+  if (["judged", "fetch"].includes(t.state)) {
+    const b = el("button", {type: "button", class: "quiet",
+      text: t.state === "fetch" ? "Terrain…" : "Terrain",
+      title: t.state === "fetch" ? "Fetch the terrain this path crosses, or see what it would take"
+        : `The ground between you and ${gw.callsign}, and the link budget each way`});
+    b.addEventListener("click", (event) => {
+      event.stopPropagation();
+      terrainAgl = null;
+      terrainBase = null;
+      openTerrain(gw.callsign, t.dial_hz);
+    });
+    line.append(b);
+  }
+  return line;
+}
+
+async function openTerrain(callsign, dial) {
+  terrainShown = {callsign, dial};
+  const agl = terrainAgl == null ? "" : `&agl=${terrainAgl}`;
+  let t;
+  try {
+    t = await api(`terrain/path?callsign=${encodeURIComponent(callsign)}&dial=${dial}${agl}`);
+  } catch (e) {
+    toast(e.message, true);
+    return;
+  }
+  renderTerrain(t);
+  const card = $("terrain-card");
+  const opening = card.hidden;
+  card.hidden = false;
+  if (opening) card.scrollIntoView({block: "nearest"});
+}
+
+function renderTerrain(t) {
+  $("terrain-title").textContent = `Terrain to ${t.callsign} on ${mhzOf(t.dial_hz)} MHz`;
+  $("terrain-words").textContent = t.state === "judged"
+    ? `${t.length_km} km at ${t.bearing_deg}° · ${t.words}` : t.words;
+  $("terrain-words").className = t.state === "judged" ? `verdict ${chanceClass(t.chance)}` : "";
+  const judged = t.state === "judged";
+  $("terrain-judged").hidden = !judged;
+  $("terrain-notice").textContent = judged ? `${t.data}: ${t.notice}` : "";
+  terrainTiles = {glo90: t.tiles || [], glo30: (t.finer || {}).tiles || t.all_tiles || []};
+  const fetchRow = $("terrain-fetch");
+  fetchRow.hidden = !(t.state === "fetch" || (judged && t.finer && t.finer.tiles.length));
+  $("terrain-fetch-90").hidden = t.state !== "fetch";
+  if (t.state === "fetch") {
+    $("terrain-fetch-90").textContent = `Fetch the terrain, about ${t.mb.glo90} MB`;
+    $("terrain-fetch-30").textContent = `Finer, 30 m, about ${t.mb.glo30} MB`;
+  } else if (judged && t.finer) {
+    $("terrain-fetch-30").textContent = `Fetch finer data, 30 m, about ${t.finer.mb} MB`;
+  }
+  if (!judged) return;
+  const mark = ["partly", "blocked"].includes(t.class.kind) ? t.class : null;
+  drawProfile($("terrain-profile"), t.profile, mark);
+  $("terrain-profile").setAttribute("aria-label", `${t.class_words}, over ${t.length_km} km`);
+  const you = t.ends.you;
+  if (you.said !== "tried") terrainBase = {agl: you.agl_m, margin: t.margin_db};
+  $("terrain-agl").value = String(Math.round(you.agl_m));
+  let said = you.said === "assumed" ? ", assumed" : ", from your station profile";
+  if (you.said === "tried" && terrainBase) {
+    const more = Math.round((t.margin_db - terrainBase.margin) * 10) / 10;
+    said = `, tried: ${Math.abs(more)} dB ${more >= 0 ? "more" : "less"} margin than at ${terrainBase.agl} m`;
+  }
+  $("terrain-agl-value").textContent = `${you.agl_m} m up${said}`;
+  const way = (name, b) => {
+    const tr = el("tr", {});
+    for (const [text, cls] of [[name, ""], [`${b.received_dbm} dBm`, "n"], [`${b.threshold_dbm} dBm`, "n"],
+                               [`${b.margin_db} dB`, "n"], [b.words, `verdict ${chanceClass(b.words)}`]]) {
+      tr.append(el("td", {class: cls, text}));
+    }
+    return tr;
+  };
+  $("terrain-rows").replaceChildren(way(`You to ${t.callsign}`, t.up), way(`${t.callsign} to you`, t.down));
+  $("terrain-assumed").textContent = `Free-space loss ${t.fspl_db} dB, diffraction ${t.diffraction_db} dB `
+    + `(ITU-R P.526-16 § 4.5). Assumed: ${t.assumed.join("; ")}.`;
+}
+
+// fetching: what is being fetched, in a line, until it is done; then what it changes is shown
+async function followTerrain() {
+  if (terrainWatch) return;
+  const step = async () => {
+    let s;
+    try {
+      s = await api("terrain");
+    } catch {
+      return;
+    }
+    const busy = Boolean(s.fetching) || s.queued > 0;
+    const words = terrainProgress(s);
+    for (const id of ["terrain-progress", "ts-progress"]) {
+      $(id).hidden = !words;
+      $(id).textContent = words;
+    }
+    $("ts-cancel").hidden = !busy;
+    if (busy) return;
+    clearInterval(terrainWatch);
+    terrainWatch = null;
+    if (!$("setup").hidden) renderTerrainSetup(s);
+    if (!$("gateways-view").hidden) {
+      if (terrainShown && !$("terrain-card").hidden) await openTerrain(terrainShown.callsign, terrainShown.dial);
+      try {
+        gatewaysData = await api("gateways");
+        await renderGatewaysPage();
+      } catch { /* shown at the next */ }
+    }
+  };
+  terrainWatch = setInterval(step, 1000);
+  await step();
+}
+
+function terrainProgress(s) {
+  const parts = [];
+  if (s.fetching) {
+    const mb = (n) => (n / 1e6).toFixed(1);
+    parts.push(`Fetching ${s.fetching.tile}: ${mb(s.fetching.read)}${s.fetching.of ? ` of ${mb(s.fetching.of)}` : ""} MB`);
+  }
+  if (s.queued) parts.push(`${s.queued} more to fetch`);
+  if (s.done && !s.fetching && !s.queued) parts.push(`${s.done} fetched`);
+  if (s.failed && s.failed.length) parts.push(`Not fetched: ${s.failed.join("; ")}`);
+  return parts.join(" · ");
+}
+
+async function terrainRequest(body) {
+  try {
+    const s = await api("terrain", body);
+    if (!$("setup").hidden) renderTerrainSetup(s);
+    await followTerrain();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// Setup's terrain card: what is held, and preparing the area around the position in use
+let terrainStatus = null;
+function renderTerrainSetup(s) {
+  terrainStatus = s;
+  const n = (k) => s.held[k];
+  const held = [n("glo90") && `${n("glo90")} at 90 m`, n("glo30") && `${n("glo30")} at 30 m`].filter(Boolean);
+  $("ts-held").textContent = held.length
+    ? `Held: ${held.join(" and ")} (tiles of a degree square), ${s.held_mb} MB, in ${s.dir}.`
+    : `None held yet. Tiles are kept in ${s.dir}.`;
+  const radius = $("ts-radius");
+  const was = radius.value || kept("tradius", "50");
+  radius.replaceChildren(...(s.around || []).map((a) => new Option(`${a.radius_km} km`, String(a.radius_km))));
+  radius.value = (s.around || []).some((a) => String(a.radius_km) === was) ? was : "50";
+  radius.disabled = !s.around;
+  $("ts-prepare").disabled = !s.around;
+  terrainSize();
+  $("ts-notice").replaceChildren(...(s.notices || []).map((n) =>
+    el("p", {class: "note terrain-notice", text: `${n.data}: ${n.notice}`})));
+  const words = terrainProgress(s);
+  $("ts-progress").hidden = !words;
+  $("ts-progress").textContent = words;
+  $("ts-cancel").hidden = !(s.fetching || s.queued);
+  // a fetch begun elsewhere is followed here too
+  if (s.fetching || s.queued) followTerrain();
+}
+
+function terrainSize() {
+  const s = terrainStatus;
+  if (!s || !s.around) {
+    $("ts-size").textContent = "Where you are is not known: save a place or set up a GPS first.";
+    return;
+  }
+  const a = s.around.find((x) => String(x.radius_km) === $("ts-radius").value) || s.around[0];
+  const source = $("ts-source").value;
+  $("ts-size").textContent = `${a.tiles} ${a.tiles === 1 ? "tile" : "tiles"}, about ${a.mb[source]} MB at most: `
+    + "the sea has no tiles, and what is held is not fetched again.";
+}
+
+async function loadTerrainSetup() {
+  try {
+    renderTerrainSetup(await api("terrain"));
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function wireTerrain() {
+  $("terrain-close").addEventListener("click", () => {
+    $("terrain-card").hidden = true;
+    terrainShown = null;
+  });
+  // worked out again as the slider moves, once it rests a moment
+  const agl = $("terrain-agl");
+  agl.addEventListener("input", () => {
+    $("terrain-agl-value").textContent = `${agl.value} m up, tried`;
+    clearTimeout(terrainTry);
+    terrainTry = setTimeout(() => {
+      terrainAgl = Number(agl.value);
+      if (terrainShown) openTerrain(terrainShown.callsign, terrainShown.dial);
+    }, 150);
+  });
+  $("terrain-fetch-90").addEventListener("click", () =>
+    terrainRequest({op: "fetch", tiles: terrainTiles.glo90, source: "glo90"}));
+  $("terrain-fetch-30").addEventListener("click", () =>
+    terrainRequest({op: "fetch", tiles: terrainTiles.glo30, source: "glo30"}));
+  $("ts-radius").addEventListener("change", () => { keep("tradius", $("ts-radius").value); terrainSize(); });
+  $("ts-source").addEventListener("change", terrainSize);
+  $("ts-prepare").addEventListener("click", () =>
+    terrainRequest({op: "prepare", radius_km: Number($("ts-radius").value), source: $("ts-source").value}));
+  $("ts-cancel").addEventListener("click", () => terrainRequest({op: "cancel"}));
 }
 
 // a gateway chosen: its channels in the call box, favourites first and those left out dropped,
@@ -4090,6 +4320,7 @@ function wire() {
   });
   wirePlaces();
   wireGateways();
+  wireTerrain();
   // the channels are the chosen gateway's: another callsign typed has none here
   $("callsign").addEventListener("input", showChannels);
   // a channel picked, or a station call's dial typed, is tuned at once (W14)

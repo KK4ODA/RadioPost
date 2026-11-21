@@ -368,6 +368,33 @@ function deskAnswer(method, path, body) {
   return DESK_GET[path] || {};
 }
 
+// a VHF gateway on Stone Mountain (made up), and its path from the GPS's fix downtown as the client
+// worked it out over the real Copernicus tile N33W085 (terrain-path.json says how)
+const TERRAIN_PATH = JSON.parse(readFileSync(join(ROOT, "tools", "manual", "terrain-path.json"), "utf8"));
+const VHF_GATEWAY = {callsign: "N3CALL-10", post_office: "radiopost.org", place: "Stone Mountain, Georgia",
+  grid: "EM73", km: 23, hours: "always", updated: T - 20 * DAY, own: false, favourite: false,
+  blocked: false, list_fetched: T - 2 * DAY, list_old: false, last: null, worked: false,
+  seen: T - 300, seen_old: false, listening: null,
+  site: {lat: 33.8053, lon: -84.1455, agl_m: 15},
+  channels: [{dial_hz: 145050000, mode: "FM", bandwidth_hz: 12500, modem: "aether-fm", favourite: false, blocked: false,
+              station: {power_w: 50, antenna: "collinear"}}],
+  terrain: {state: "judged", dial_hz: 145050000, chance: TERRAIN_PATH.chance, words: TERRAIN_PATH.words}};
+Object.assign(VHF_GATEWAY, placedFrom(HERE, VHF_GATEWAY.grid));
+const GATEWAYS_VHF = {...GATEWAYS, gateways: [VHF_GATEWAY, ...GATEWAYS.gateways]};
+// Setup's terrain: a few tiles held, the area being prepared, the radii as the client gives them
+// from downtown
+const NOTICE_90 = TERRAIN_PATH.notice;
+const NOTICE_30 = NOTICE_90.replaceAll("WorldDEM™-90", "WorldDEM-30");
+const TERRAIN_STATUS = {dir: "C:\\Users\\you\\AppData\\Local\\RadioPost\\terrain",
+  held: {glo30: 1, glo90: 3}, held_mb: 61.8,
+  fetching: {tile: "N34W085", read: 2100000, of: 5300000}, queued: 1, done: 2, failed: [],
+  notices: [{data: "Copernicus GLO-30", notice: NOTICE_30}, {data: "Copernicus GLO-90", notice: NOTICE_90}],
+  around: [
+    {radius_km: 25, tiles: 1, mb: {glo90: 5, glo30: 45}},
+    {radius_km: 50, tiles: 4, mb: {glo90: 20, glo30: 180}},
+    {radius_km: 100, tiles: 8, mb: {glo90: 40, glo30: 360}},
+    {radius_km: 150, tiles: 14, mb: {glo90: 70, glo30: 630}}]};
+
 // the forms the panel holds, as /api/forms gives them (RP-2 §8): ICS-213, its fingerprint from
 // vectors/forms.json
 const ICS_213 = JSON.parse(readFileSync(join(ROOT, "forms", "ics-213.json"), "utf8"));
@@ -387,7 +414,9 @@ function clientApi(world) {
       case "folder": return {inbox: INBOX, outbox: OUTBOX, sent: SENT, trash: []}[query.get("name")];
       case "message": return MESSAGES[query.get("id")] || {...INBOX[1], files: [], held: [], body: ""};
       case "waiting": return WAITING;
-      case "gateways": return GATEWAYS;
+      case "gateways": return world.vhf ? GATEWAYS_VHF : GATEWAYS;
+      case "terrain": return TERRAIN_STATUS;
+      case "terrain/path": return TERRAIN_PATH;
       case "places": return PLACES;
       case "attempts": return RECENT;
       case "settings": return {usual_gateways: ["KK4ODA-1"], radio_skips_read: false};
@@ -624,7 +653,7 @@ const GATEWAY_UI = join(ROOT, "app", "gateway", "ui");
 
 function clientWorld(over = {}) {
   return {state: clientState(over.state || {}), log: over.log || CLIENT_LOG,
-          operator: over.operator || false, byHand: over.byHand || false,
+          operator: over.operator || false, byHand: over.byHand || false, vhf: over.vhf || false,
           alerts: over.alerts || ALERT_LOG};
 }
 
@@ -986,6 +1015,31 @@ const SHOTS = {
     await page.click("[data-gview=recent]");
     await page.waitForTimeout(200);
     await shot(page, "client-recent", "#gateways-view");
+    await context.close();
+  },
+
+  // a VHF gateway's line in the list, and its terrain: the profile, the budget each way
+  async "client-terrain"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld({vhf: true})),
+                                                 height: 1900});
+    await page.click("#gateways-open");
+    await page.evaluate(() => { document.getElementById("map-card").open = false; });
+    await page.waitForTimeout(200);
+    await page.locator("#gateway-rows tr", {hasText: "N3CALL-10"}).getByRole("button", {name: "Terrain"}).click();
+    await page.waitForTimeout(400);
+    await page.screenshot({path: join(OUT, "client-terrain.png"), clip: await unionClip(page,
+      ["#terrain-card", "#gateway-rows tr:first-child"])});
+    console.log("docs/manual/screens/client-terrain.png");
+    await context.close();
+  },
+
+  async "client-terrain-setup"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+                                                 height: 1800});
+    await page.click("#setup-open");
+    await page.waitForTimeout(400);
+    await page.evaluate(() => document.getElementById("terrain-setup").scrollIntoView());
+    await shot(page, "client-terrain-setup", "#terrain-setup");
     await context.close();
   },
 

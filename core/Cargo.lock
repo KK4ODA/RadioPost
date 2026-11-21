@@ -1467,6 +1467,7 @@ dependencies = [
  "radiopost-update",
  "radioprop-geo",
  "radioprop-place",
+ "radioprop-terrain",
  "rpmi",
  "serde",
  "serde_json",
@@ -1474,6 +1475,7 @@ dependencies = [
  "tiny_http",
  "tungstenite",
  "unicode-normalization",
+ "ureq",
 ]
 
 [[package]]
@@ -1621,7 +1623,7 @@ dependencies = [
 [[package]]
 name = "radioprop-geo"
 version = "0.1.0"
-source = "git+https://github.com/KK4ODA/hf-predict?rev=d9f1739bf9787e49797534d7d72c6b21d88a5e59#d9f1739bf9787e49797534d7d72c6b21d88a5e59"
+source = "git+https://github.com/KK4ODA/hf-predict?rev=fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35#fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35"
 dependencies = [
  "serde",
 ]
@@ -1629,12 +1631,23 @@ dependencies = [
 [[package]]
 name = "radioprop-place"
 version = "0.1.0"
-source = "git+https://github.com/KK4ODA/hf-predict?rev=d9f1739bf9787e49797534d7d72c6b21d88a5e59#d9f1739bf9787e49797534d7d72c6b21d88a5e59"
+source = "git+https://github.com/KK4ODA/hf-predict?rev=fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35#fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35"
 dependencies = [
  "radioprop-geo",
  "serde",
  "serde_json",
  "serialport",
+]
+
+[[package]]
+name = "radioprop-terrain"
+version = "0.1.0"
+source = "git+https://github.com/KK4ODA/hf-predict?rev=fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35#fa17d2820d11d13f3f23a5d0c494ff00e6a4fb35"
+dependencies = [
+ "flate2",
+ "radioprop-geo",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

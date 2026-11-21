@@ -110,6 +110,8 @@ jobs:
           node --check "$RUNNER_TEMP/gateway.mjs"
           cp app/ui/map.js "$RUNNER_TEMP/map.mjs"
           node --check "$RUNNER_TEMP/map.mjs"
+          cp app/ui/terrain.js "$RUNNER_TEMP/terrain.mjs"
+          node --check "$RUNNER_TEMP/terrain.mjs"
 
       - name: The client's world map against cases worked by hand
         run: node tools/map/check.mjs

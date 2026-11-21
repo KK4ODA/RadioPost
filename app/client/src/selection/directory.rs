@@ -193,11 +193,21 @@ fn add_own(
     Ok(())
 }
 
+/// Where a gateway is: its `site` when its record gives one (RP-5 §4.4), else its grid square's
+/// centre.
+#[must_use]
+pub fn position_of(gateway: &Value) -> Option<(f64, f64)> {
+    radiopost::gateway_list::site(gateway)
+        .map(|s| (s.lat, s.lon))
+        .or_else(|| gateway["grid"].as_str().and_then(crate::grid::centre))
+}
+
 /// The gateways as the panel lists them: the post offices' records ranked by distance (`ranked`,
 /// from the store), the operator's own added in order, and on each `own`, `favourite`, `blocked`
 /// (the gateway, and each channel), the age of its list (`list_fetched`, `list_old`), the last call
-/// to it (`last`), whether it was `worked` from within reach of `here`, its grid square's centre
-/// (`at`, for the map) and its `bearing` from `here` in degrees from true north.
+/// to it (`last`), whether it was `worked` from within reach of `here`, where it is (`at`, for the
+/// map: its site, else its grid square's centre) and its `bearing` from `here` in degrees from
+/// true north.
 #[must_use]
 pub fn annotate(
     ranked: Vec<Value>,
@@ -226,7 +236,7 @@ pub fn annotate(
     let home = gateway_list["domain"].as_str().unwrap_or("");
     for g in &mut all {
         let callsign = g["callsign"].as_str().unwrap_or("").to_owned();
-        let there = g["grid"].as_str().and_then(crate::grid::centre);
+        let there = position_of(g);
         g["at"] = there.map_or(Value::Null, |(lat, lon)| json!({"lat": lat, "lon": lon}));
         g["bearing"] = here.zip(there).map_or(Value::Null, |(a, b)| {
             json!(crate::grid::bearing(a, b).round().rem_euclid(360.0))
