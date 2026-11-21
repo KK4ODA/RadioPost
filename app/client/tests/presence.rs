@@ -20,9 +20,26 @@ use radiopost_client::panel::Panel;
 use radiopost_client::presence::Presence;
 use radiopost_client::session;
 use serde_json::{Value, json};
+use socket2::{Domain, Socket, Type};
 use tungstenite::Message;
 
 use common::scratch;
+
+/// A port of this machine that refuses every connection, as one with no Aether on it does, and
+/// that nothing else can take while the socket is kept: bound, not listening. A port that is only
+/// freed (a listener bound and dropped) can be given to another test's listener in between.
+fn refusing_port() -> (Socket, SocketAddr) {
+    let socket = Socket::new(Domain::IPV4, Type::STREAM, None).expect("a socket");
+    socket
+        .bind(&SocketAddr::from(([127, 0, 0, 1], 0)).into())
+        .expect("a port");
+    let at = socket
+        .local_addr()
+        .expect("bound")
+        .as_socket()
+        .expect("an IP address");
+    (socket, at)
+}
 
 /// What the stand-in Aether saw: a request on a connection, or the connection's end.
 #[derive(Debug)]
@@ -223,14 +240,15 @@ fn the_app_is_named_on_aether_between_calls_and_claims_nothing() {
 #[test]
 fn an_aether_started_after_the_app_is_found() {
     let dir = scratch("presence-late");
-    let free = TcpListener::bind("127.0.0.1:0").expect("a port");
-    let port = free.local_addr().expect("bound");
-    drop(free);
+    // Aether's port, held until it starts
+    let (held, port) = refusing_port();
     let presence = Presence::new(&dir.join("facundo")).retrying_every(Duration::from_millis(200));
     presence.start();
     presence.set_modem(&format!("ws://{port}/v1"));
     thread::sleep(Duration::from_millis(700));
-    let aether = Aether::on(TcpListener::bind(port).expect("the same port again"));
+    // Aether starts on it: the socket that held it listens
+    held.listen(128).expect("listening on the same port");
+    let aether = Aether::on(TcpListener::from(held));
     let mut seen = Vec::new();
     assert!(
         aether.hello(Duration::from_secs(5), &mut seen).is_some(),
