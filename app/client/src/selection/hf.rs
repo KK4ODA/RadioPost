@@ -27,6 +27,7 @@ use radioprop_place::station::{AntennaKind, DIPOLE_DBI, HF_FEEDLINE_DB, Noise, R
 use radioprop_terrain::budget::phi;
 
 use super::evidence::{self, Evidence};
+use super::learning::{ForLine, Learning, Offset};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -589,8 +590,10 @@ impl Hf {
         bands: &[String],
         gateways: &mut [Value],
         (now, today): (i64, bool),
+        learning: Option<&Learning>,
     ) {
         let (year, month, _, hour) = timeutil::civil(now + 1800);
+        let at = u64::try_from(now).unwrap_or(0);
         let plans = self.plan(here, station, bands, gateways, year, month);
         self.run_missing(&plans);
         let heard = if today {
@@ -604,10 +607,15 @@ impl Hf {
                 continue;
             };
             let toward = heard.as_ref().and_then(|h| h.get(p));
+            let callsign = gateways[plan.gateway]["callsign"]
+                .as_str()
+                .unwrap_or("")
+                .to_owned();
+            let learned = |band: &str| learning.and_then(|l| l.for_line(&callsign, band, at));
             for (i, &c) in plan.channels.iter().enumerate() {
                 let channel = &gateways[plan.gateway]["channels"][c];
                 let hf = match result.as_ref() {
-                    Ok(both) => read(plan, both, channel, (i, hour), toward),
+                    Ok(both) => read(plan, both, channel, (i, hour), toward, &learned),
                     Err(why) => json!({"state": "failed", "why": why,
                                        "words": "HF not predicted: the engine failed"}),
                 };
@@ -839,6 +847,7 @@ fn read(
     channel: &Value,
     (index, hour): (usize, u32),
     heard: Option<&HashMap<String, Value>>,
+    learned: &dyn Fn(&str) -> Option<ForLine>,
 ) -> Value {
     let label = if hour == 0 { 24 } else { hour };
     let at = |p: &predictor::PathPrediction| {
@@ -898,6 +907,16 @@ fn read(
             &steps,
             (open, hour),
         );
+        if let Some(l) = learned(band) {
+            through_learning(
+                &mut out,
+                (up, down),
+                profile.call_db(class),
+                &steps,
+                (open, hour),
+                l,
+            );
+        }
     } else {
         out["state"] = json!("no-modem");
         out["up"] = way(up, None, None, None);
@@ -940,6 +959,40 @@ fn through_profile(
     out["chance_words"] = json!(likely(chance));
     out["up"] = way(up, up_bps, median_rung(up, steps), Some(p_up));
     out["down"] = way(down, down_bps, median_rung(down, steps), Some(p_down));
+    out["words"] = json!(link_words(chance, hour, (up_bps, down_bps)));
+}
+
+/// The same through what was learned (§12.5, §12.6), into `out["learned"]`, the model's own
+/// figures left as they are: they are what the call's record keeps and what learning compares
+/// with. Each way moves by its offset and widens by the offset's spread; the chance takes the
+/// gateway's availability at the hour, the rate the modem's efficiency.
+fn through_learning(
+    out: &mut Value,
+    (up, down): (Spread, Spread),
+    call: f64,
+    steps: &[Step<'_>],
+    (open, hour): (f64, u32),
+    l: ForLine,
+) {
+    let (up, down) = (ForLine::moved(up, l.up), ForLine::moved(down, l.down));
+    let (p_up, p_down) = (up.above(call), down.above(call));
+    let chance = l.there * p_up * p_down * open;
+    let rate = |s: Spread| linked_rate(s, steps, call).map(|b| b * l.eta);
+    let (up_bps, down_bps) = (rate(up), rate(down));
+    let offset = |o: Offset| json!({"mean": round1(o.mean), "sd": round1(o.sd)});
+    out["learned"] = json!({
+        "chance": round2(chance), "chance_words": likely(chance),
+        "up": way(up, up_bps, median_rung(up, steps), Some(p_up)),
+        "down": way(down, down_bps, median_rung(down, steps), Some(p_down)),
+        "up_offset": offset(l.up), "down_offset": offset(l.down),
+        "there": round2(l.there), "eta": round2(l.eta), "calls": round1(l.calls),
+        "words": format!("{} · learned from your calls", link_words(chance, hour, (up_bps, down_bps))),
+    });
+}
+
+/// A link's chance and rate in words: "Likely: links on 74 % of days at 21Z, about 900 bit/s
+/// each way".
+fn link_words(chance: f64, hour: u32, (up_bps, down_bps): (Option<f64>, Option<f64>)) -> String {
     let mut words = format!(
         "{}: links on {:.0} % of days at {hour:02}Z",
         capital(likely(chance)),
@@ -953,7 +1006,7 @@ fn through_profile(
             let _ = write!(words, ", about {sending} sending, {receiving} receiving");
         }
     }
-    out["words"] = json!(words);
+    words
 }
 
 /// What the prediction leaves out on a path: ground wave on a short one, and on a near-vertical

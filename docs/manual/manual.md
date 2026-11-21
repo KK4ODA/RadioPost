@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.37.0 |
+| **Version** | 1.38.0 |
 | **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.32 |
 | **Licence** | CC BY 4.0 |
@@ -239,9 +239,11 @@ the log `radiopost.log`. Back it up as you would any mail.
 Your favourites, blocks and gateways of your own are in `selection/gateways.json`. RadioPost
 also keeps a record of every call you place, in its folder `selection/attempts`: the station
 called, the channel, where you were, how much mail was waiting, and how the call ended and why
-(answered, no answer, the channel busy, refused, the link lost). RadioPost will use these records
-to suggest which gateway to call. They stay on this computer, and hold no addresses or subjects
-of your mail.
+(answered, no answer, the channel busy, refused, the link lost). RadioPost learns from them how
+each gateway works from your station ([8.1](#81-choose-a-gateway), *What your calls teach*); what it
+learned is kept in `selection/learned.json`, worked out again whenever the records change, and what
+you told it to forget in `selection/forgotten.json`. They stay on this computer, and hold no
+addresses or subjects of your mail.
 
 > **Note.** Each computer needs its own enrollment. Do not copy the `.radiopost` folder to a
 > second computer: two computers would then share one key.
@@ -513,17 +515,18 @@ A call to a gateway sends your outbox and fetches what waits for you, in one ses
 
 **The views.** The tabs above the list show it four ways:
 
-- *Recommended*: every gateway listed, and your own, nearest first. RadioPost has learned
-  nothing yet to rank them better, and says so. Each HF channel shows its chance this hour
-  (below).
+- *Recommended*: every gateway listed, and your own, nearest first. Each HF channel shows its
+  chance this hour, corrected by what your calls taught once there are some (below). Ranking the
+  list by them comes in a later version.
 - *Favourites*: the gateways and channels you starred.
 - *Recent*: your last calls, newest first: whom you called, on which channel, how it ended
   (*completed*, *no answer, nothing heard*, *the channel was busy*, *the link was lost*…) and how
-  long it took. **Choose** picks that gateway again.
+  long it took. **Choose** picks that gateway again. Under the list, *What your calls teach* says
+  how many calls learning uses, and forgets some of them (below).
 - *Worked from here*: the gateways you finished a session with from within 50 km of where you
   are now (2 km on channels of 30 MHz and up).
 
-![The Recent view: five calls with their channel, how each ended and how long it took](screens/client-recent.png)
+![The Recent view: five calls with their channel, how each ended and how long it took, and under them what your calls teach, with one rule forgetting the calls before a day](screens/client-recent.png)
 
 *Figure 14. Your last calls.*
 
@@ -569,11 +572,12 @@ line to see the strength each way, the path, and what was assumed. A channel for
 how open the band is and how strong each way, without a rate: RadioPost has no measurements of
 that modem. The prediction is worked out for the month, once, and kept: it needs no Internet.
 
-It is a monthly average, not today's band. And nothing is learned from your sessions yet, so it
-is often optimistic: on one 69 km path on 80 m that Aether measured on the air, VOACAP's median
-was 6 to 8 dB stronger than what was read. A later version of RadioPost corrects it from your own
-calls. If the line says *HF not predicted*, it says why: where you are is not known, the channel
-is outside 80 m to 10 m, or your station profile does not cover that band.
+It is a monthly average, not today's band, and often optimistic: on one 69 km path on 80 m that
+Aether measured on the air, VOACAP's median was 6 to 8 dB stronger than what was read. Once you
+have called a gateway on a band, RadioPost corrects it from your own calls (*What your calls
+teach*, below). If the line says *HF not predicted*, it says
+why: where you are is not known, the channel is outside 80 m to 10 m, or your station profile does
+not cover that band.
 
 The VOACAP engine comes with RadioPost's installers. It was developed by NTIA's Institute for
 Telecommunication Sciences; RadioPost carries the voacapl port of it, built by hf-predict, and NTIA's
@@ -597,6 +601,47 @@ hour of that month, and each gateway whether it listens then. A VHF path does no
 time. The line above the list says what is assumed: *Today, 08:00 PM local (01Z): the month's
 prediction for that hour; today's conditions not included; no storm forecast; your position as in
 use now*. **Now** goes back to the present. The *Recent* view, your past calls, has no **At**.
+
+**What your calls teach.** Every call you place is kept (section [4](#4-installing-radiopost)),
+and RadioPost learns from them how each gateway's path compares with the model, each way, how often
+the gateway answers at each time of day, and how fast Aether carries there. Once you have called a
+gateway on a band, the line under that channel is worked out with what was learned and ends
+*learned from your calls*: *Likely to work: links on 92 % of days at 20Z, about 2.3 kbit/s sending,
+2.7 kbit/s receiving · learned from your calls*. Point at it to see the model's own line and what
+was learned: how many decibels stronger or weaker each way is than predicted, with how sure that
+is, how often the gateway answered, and how much of Aether's expected rate it carried. A VHF
+channel gets a second line under its terrain, *Learned from your calls: margin about 31 dB · likely
+to work*. A call that failed teaches too: one with nothing heard is shared between the gateway being
+away and the path being too weak, by how likely each was then; one where the gateway was heard but
+did not answer says it was there and your signal did not reach it. A cancelled call, a busy
+channel or a fault at your own station teaches nothing about the gateway. Older calls count less:
+half as much after two months for the path, after two weeks for when it answers.
+
+**Details**, beside each gateway, shows what the model says now, what was learned and what your
+calls measured in the last 30 days, side by side for each of its channels: the signal each way,
+how often it answered, the chance of a link, the rate and the links lost. A disagreement shows
+there rather than being averaged away. Under them, how often it answered in each three hours of the
+day, and your last calls to it. **Close** puts the details away.
+
+![A gateway's details: on 40 m the model, what was learned and what was measured for the signal each way, answers, links, rate and links lost; 80 m not called yet; answers through the day and the last calls](screens/client-gateway-details.png)
+
+*Figure 16. What your calls taught about KK4ODA-1.*
+
+**When your own station is at fault.** If your last calls in a day, to two gateways or more, all
+failed with nothing heard though each was likely to work, the line under the list says so: *Your
+last 4 calls failed on 2 gateways that usually answer. Check the radio, antenna and audio before
+blaming the gateways.* Until it clears, those calls count less against the gateways. Check the
+cable to the radio, the antenna and Aether's levels.
+
+**Forgetting.** After a change to your station, a new antenna or more power, the old calls no
+longer say how your station works now. **Forget its history** in a gateway's details leaves your
+calls to it so far out of learning. In the *Recent* view, *What your calls teach* forgets the calls
+made within a kilometre of where you are now (**Forget calls made near here**, clicked twice), the
+calls before a day you pick (**Forget calls before** and **Forget them**), or every call so far
+(**Forget everything**, clicked twice). Forgetting deletes nothing: the calls stay in the list,
+and **Show forgotten calls** shows them struck through. Each rule is listed with an **Undo**, and
+**Bring its history back** in a gateway's details undoes its rule. Calls placed after a rule count
+as usual.
 
 **The terrain of a VHF path.** Under a gateway's channel of 30 MHz or more, a line says how the
 path from you to it goes over the ground: *Fresnel zone partly obstructed at 1.5 km · diffraction
@@ -622,7 +667,7 @@ buildings count as ground, as the radar saw them between 2010 and 2015.
 
 ![A VHF gateway's terrain: the path from downtown Atlanta to Stone Mountain drawn over the ground, the budget each way and what was assumed; under it the gateway's line in the list](screens/client-terrain.png)
 
-*Figure 16. The terrain to a VHF gateway.*
+*Figure 17. The terrain to a VHF gateway.*
 
 The diffraction is worked out by ITU-R P.526-16, and the chance from the margin against a 10 dB
 spread over places. Where ground stands close to an antenna (trees or a building a few hundred
@@ -647,10 +692,10 @@ map** to fold it away; RadioPost remembers.
 
 ![The terrain map round downtown Atlanta: five VHF gateways, three likely to work, one may work and is blocked 20 km out, its line picked](screens/client-area.png)
 
-*Figure 17. The terrain map.*
+*Figure 18. The terrain map.*
 
 Under the map, as under the terrain of a path, is the notice the elevation data's licence asks for.
-Figures 16 and 17 are drawn from Copernicus GLO-90: produced using Copernicus WorldDEM™-90 © DLR
+Figures 17 and 18 are drawn from Copernicus GLO-90: produced using Copernicus WorldDEM™-90 © DLR
 e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the
 European Union and ESA; all rights reserved. The organisations in charge of the Copernicus
 programme by law or by delegation do not incur any liability for any use of the Copernicus
@@ -696,7 +741,7 @@ computer: your post office never places mail at it.
 
 ![The Station box with KK4ODA-1 chosen: its channel, the radio tuned, Tuner tone and the green Call](screens/client-call.png)
 
-*Figure 18. The radio tuned to the channel picked.*
+*Figure 19. The radio tuned to the channel picked.*
 
 On a *scanned* channel the gateway may be on another channel when you call. RadioPost asks Aether
 to keep calling as long as the gateway's record says it takes to come round, often a minute or
@@ -716,7 +761,7 @@ A message counts as sent once Aether has put it on the air, not when RadioPost h
 
 ![The window during a session: 49% carried, with the transfer card at the bottom right](screens/client-session.png)
 
-*Figure 19. A session under way.*
+*Figure 20. A session under way.*
 
 The log says what happens: the call, each message delivered or received, what waits, and the end.
 A few short messages take a minute or two at 2300 Hz on a fair path, longer on a weak one. Your
@@ -731,7 +776,7 @@ Click a message in the **Inbox** to read it.
 
 ![A message open in the reader, with a file to save and an attachment held at the post office](screens/client-reader.png)
 
-*Figure 20. Reading a message.*
+*Figure 21. Reading a message.*
 
 - **Reply** answers the sender. The other end's mail program keeps the thread. RadioPost does not
   quote the message you answer, because every byte goes on the air: it shows the original under
@@ -779,7 +824,7 @@ kept for you has no tick box: it comes with what you fetch.
 
 ![The Waiting folder with three messages and one ticked to fetch](screens/client-waiting.png)
 
-*Figure 21. Choosing what to fetch next.*
+*Figure 22. Choosing what to fetch next.*
 
 ## 10. Station to station
 
@@ -789,7 +834,7 @@ credential.
 
 ![Station A calls, station B listens, mail crosses both ways, and each post office is told later](fig/direct.svg)
 
-*Figure 22. Station to station.*
+*Figure 23. Station to station.*
 
 Agree on a frequency and a bandwidth first.
 
@@ -809,7 +854,7 @@ Agree on a frequency and a bandwidth first.
 
 ![The Station box with Listening for P2P switched on: the switch sunk in, its lamp lit green, and Call greyed](screens/client-listening.png)
 
-*Figure 23. Listening for P2P, switched on.*
+*Figure 24. Listening for P2P, switched on.*
 
 While the switch is on, **Call** and **Tuner tone** are greyed: the radio is listening. Click
 **Listening for P2P** to stop listening, then call.
@@ -833,7 +878,7 @@ RadioPost renews your credential while it listens, as it does at other times
 
 ![The Station box for a station call: the callsign, the dial and the bandwidth, and the dial to set by hand](screens/client-call-station.png)
 
-*Figure 24. A station call on a radio whose dial Aether cannot set.*
+*Figure 25. A station call on a radio whose dial Aether cannot set.*
 
 Mail addressed to the other station's address crosses. Each side keeps a record of the session.
 When you next have the Internet, a line under the Station box says how many sessions wait to be
@@ -870,7 +915,7 @@ You need:
 
 ![The Alerts view: an alert sent and answered, one heard, and two circles with their checks](screens/client-alerts.png)
 
-*Figure 25. Alerts.*
+*Figure 26. Alerts.*
 
 ### 10.2 Set up a circle
 
@@ -918,7 +963,7 @@ front, and a red box shows the alert.
 
 ![An alert from KK4ODA in the circle Family, with Acknowledge, Call back, three quick replies and a line of your own](screens/client-alarm.png)
 
-*Figure 26. An alert arriving.*
+*Figure 27. An alert arriving.*
 
 - **Acknowledge** stops the alarm. The other station sees *seen*.
 - **Received**, **Calling you now** and **Can't now** answer with that line, and stop the alarm.
@@ -937,7 +982,7 @@ its own account, its own address and its own mail.
 
 ![One computer with three callsigns, each its own account, and a shared key, address list and log](fig/callsigns.svg)
 
-*Figure 27. Several callsigns on one computer.*
+*Figure 28. Several callsigns on one computer.*
 
 ### 11.1 Add a callsign
 
@@ -999,7 +1044,7 @@ Click **Setup** at the bottom of the left-hand column.
 
 ![The Setup page: enrollment, post office, accept list and usual gateways](screens/client-setup.png)
 
-*Figure 28. Setup.*
+*Figure 29. Setup.*
 
 ### Enroll with your post office
 
@@ -1040,7 +1085,7 @@ Where your station is. The gateway list is in order of distance from it
 
 ![Setup's Places and GPS: two places saved, the GPS read from an iPhone over TCP, and the position in use](screens/client-places.png)
 
-*Figure 29. Places and GPS.*
+*Figure 30. Places and GPS.*
 
 The line at the top says which position is in use, and why when it is not the GPS's present fix:
 *In use: the GPS, EM73tr, 2 s ago*, or *GPS silent for 6 minutes: using Home, EM73tr.*
@@ -1090,7 +1135,7 @@ names the profile in use.
 
 ![Setup's Station profiles: a mobile profile and a home one, each value set or assumed](screens/client-stations.png)
 
-*Figure 30. Station profiles.*
+*Figure 31. Station profiles.*
 
 Each profile shows what a prediction would use at **HF** and at **VHF** and above: the power, the
 antenna and its height, its gain, and the feed line's loss, and the **Noise** where it is. A value
@@ -1113,7 +1158,7 @@ when you ask, from the Copernicus DEM's public copy, and kept on this computer.
 
 ![Setup's Terrain: what is held, the area within 50 km being prepared at 90 m, and the notices of the data held](screens/client-terrain-setup.png)
 
-*Figure 31. Terrain.*
+*Figure 32. Terrain.*
 
 The first line says what is held: tiles of a degree square, at 90 m or 30 m, their size, and the
 folder. To have the terrain before you go where there is no Internet, pick how far around the place
@@ -1129,7 +1174,7 @@ RadioPost plays a sound when something happens, and tells you about new mail by 
 
 ![Setup's Sounds and notifications: speakers chosen, a sound for each event, quiet hours, and how mail arrives](screens/client-sounds.png)
 
-*Figure 32. Sounds and notifications.*
+*Figure 33. Sounds and notifications.*
 
 **Mind the radio's sound card.** If this computer's sound goes to the radio's sound card (a
 SignaLink, or the radio's own USB audio), these sounds go on the air, and with VOX they key the
@@ -1225,7 +1270,7 @@ RadioPost keeps working when the Internet fails at a gateway.
 
 ![Before: the post office copies your mail to your usual gateway. During: the gateway serves the copies and keeps what you send. After: it reports](fig/cutoff.svg)
 
-*Figure 33. When the Internet is down.*
+*Figure 34. When the Internet is down.*
 
 **Before.** Name your usual gateways in Setup ([section 12](#usual-gateways)). Your post office
 then copies each new message for you to them as it arrives.
@@ -1268,7 +1313,7 @@ licensed operator can run one.
 
 ![Two users call the gateway by radio; the gateway's computer runs RadioPost Gateway and Aether HF and reaches each caller's post office](fig/gateway.svg)
 
-*Figure 34. A gateway station.*
+*Figure 35. A gateway station.*
 
 A gateway is usually left answering with nobody at the radio. It is then under **automatic
 control**, and the rules for that apply ([The rules](#36-the-rules)).
@@ -1304,13 +1349,13 @@ Open RadioPost Gateway. Until it is set up and registered, it says what is missi
 
 ![A new RadioPost Gateway: the notice says it is not set up, with Set up the gateway](screens/gateway-first.png)
 
-*Figure 35. RadioPost Gateway before setup.*
+*Figure 36. RadioPost Gateway before setup.*
 
 Click **Set up the gateway**. Setup has three steps.
 
 ![The gateway's Setup page: the gateway, its registration with two channels, and post offices](screens/gateway-setup.png)
 
-*Figure 36. Setting up the gateway.*
+*Figure 37. Setting up the gateway.*
 
 ### Step 1. The gateway
 
@@ -1438,7 +1483,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 ![The RadioPost Gateway window with numbered marks on its parts](screens/gateway-window.png)
 
-*Figure 37. The RadioPost Gateway window.*
+*Figure 38. The RadioPost Gateway window.*
 
 1. **The gateway's callsign**, and the account it is registered under. To its left, beside
    *RadioPost Gateway*, is the version you are running.
@@ -1472,7 +1517,7 @@ While a session runs, a box shows who called, the account, since when, and the m
 
 ![The window during a session, with the Session under way box](screens/gateway-session.png)
 
-*Figure 38. A session at the gateway.*
+*Figure 39. A session at the gateway.*
 
 **Stopping and closing.** **Stop** ends a session under way and lets Aether go. Closing the
 window stops the gateway too. If it is answering, it asks first and says what closing stops.
@@ -1550,7 +1595,7 @@ text), each session waiting to be reported with its last try, and the last repor
 
 ![The Partners, Callers refused and Copies placed ahead panels, opened](screens/gateway-held.png)
 
-*Figure 39. What the gateway holds, its partners and the callers it refuses.*
+*Figure 40. What the gateway holds, its partners and the callers it refuses.*
 
 ## 22. Partners: forwarding by radio
 
@@ -1686,7 +1731,7 @@ on this tab.
 
 ![The Applications tab: one application waiting with its licence check, and the Decided list](screens/desk-applications.png)
 
-*Figure 40. Applications.*
+*Figure 41. Applications.*
 
 Each application shows the person's name, callsign and when they asked, the **Address** they
 want, their **Email now**, and what the post office found of the callsign:
@@ -1730,7 +1775,7 @@ the mailbox was made (*mailbox*, or *no mailbox* in red) and the applicant email
 
 ![The Accounts tab: five accounts with their names, devices and mail waiting](screens/desk-accounts.png)
 
-*Figure 41. Accounts.*
+*Figure 42. Accounts.*
 
 Every account, one a row:
 
@@ -1768,7 +1813,7 @@ Revoking the computer you are using takes the desk away from it: the button says
 
 ![The Gateways tab: two gateways, the account each was registered from, and Unregister](screens/desk-gateways.png)
 
-*Figure 42. Gateways.*
+*Figure 43. Gateways.*
 
 The **Gateways** tab lists each gateway registered with your post office, one a row:
 
@@ -1792,7 +1837,7 @@ that exists. Use it for someone you know holds the callsign.
 
 ![The New code tab: an address, a callsign and a name filled in, the licence checked, and the code made](screens/desk-code.png)
 
-*Figure 43. Making a code.*
+*Figure 44. Making a code.*
 
 1. Open **New code**.
 2. Fill in:
@@ -1842,7 +1887,7 @@ Know only post offices whose operators you trust to check callsigns. At first no
 
 ![The Post offices tab: one post office known, one seen, none blocked](screens/desk-others.png)
 
-*Figure 44. Other post offices.*
+*Figure 45. Other post offices.*
 
 - **Known**: the post offices you know, who runs each, when its records were last fetched, and
   whether DNSSEC signed them. They are fetched again every six hours. **Forget** stops knowing one;
@@ -1863,7 +1908,7 @@ when a check turns red, and again when all pass.
 
 ![The Health tab: eleven checks passed and one amber line about backups](screens/desk-health.png)
 
-*Figure 45. Health.*
+*Figure 46. Health.*
 
 Each line is one check:
 
@@ -1891,7 +1936,7 @@ The **Server** tab lets you look after the server without logging in to it.
 
 ![The Server tab: the jobs, one with its output open, and When you need more](screens/desk-server.png)
 
-*Figure 46. Jobs and a terminal.*
+*Figure 47. Jobs and a terminal.*
 
 **Jobs** are a fixed list of tasks the server's administrator account runs for you:
 
@@ -1926,7 +1971,7 @@ says the one command to run on the server, once.
 
 ![The Backups and DKIM keys boxes on the Server tab](screens/desk-backups.png)
 
-*Figure 47. Backups and DKIM keys.*
+*Figure 48. Backups and DKIM keys.*
 
 ### Backups
 
@@ -1983,7 +2028,7 @@ when they are older than 180 days.
 
 ![The Settings tab: applications, licence lookups, mailboxes and this post office](screens/desk-settings.png)
 
-*Figure 48. Settings.*
+*Figure 49. Settings.*
 
 ### Applications
 
@@ -2088,6 +2133,7 @@ These notes follow the US rules (Part 97). Check your own country's.
 | **Listening for P2P** is in, its lamp amber; the state reads *Waiting for the modem* | RadioPost cannot reach Aether. Start Aether, or check the **Modem** box. RadioPost tries again every 5 seconds and listens as soon as Aether answers. Point at the state to see why. |
 | *cannot reach the modem's adapter at ws://127.0.0.1:8515/v1* | Start Aether. Check the **Modem** box. |
 | The call goes out but nothing answers | Check the dial and the bandwidth against the gateway's channel. Check the gateway's hours. Try another gateway. |
+| *Your last 4 calls failed on 2 gateways that usually answer* | Your calls are probably not getting out. Check the radio, the antenna, the cable to the radio and Aether's levels before trying more gateways. Those calls count less against the gateways until it clears ([8.1](#81-choose-a-gateway)). |
 | Aether refuses RadioPost's calls | Aether is keyed by a host program. In Aether's Setup, step 2, choose CAT, serial, rigctld, FLRig, CM108 or VOX. |
 | Aether stops at start: *127.0.0.1:8515 is already in use* | Aether's host programs port was set to 8515. Put it back to 8300 ([Aether's ports](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#20-the-programs-and-their-ports)). |
 | *a session is under way: try again when it ends* | Wait for the session to end, or close the window to stop it. |
@@ -2341,3 +2387,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.35.0 | 2026-11-21 | §8.1: *Another time*, the **At** picker: the gateways judged for an evening, a morning or any date and hour, and what is assumed then; Figure 13 retaken with it. |
 | 1.36.0 | 2026-11-21 | §8.1: *What your own receiver heard*, hf-predict's FT8 of the last hour toward each gateway under its HF channel, raising the band's chance when three stations or more were heard; Figure 13 retaken with it. |
 | 1.37.0 | 2026-11-21 | §8.1: the VOACAP engine comes with the installers, with NTIA's notice; where the command-line panel looks for it. |
+| 1.38.0 | 2026-11-21 | §8.1 *What your calls teach*: an HF channel's line worked out with what your calls taught once you have called the gateway on that band, a VHF channel's line under its terrain, what each kind of call teaches; **Details** beside each gateway, the model, what was learned and what was measured side by side (new Figure 16; later figures renumbered); the warning when your own station looks at fault; forgetting, by gateway, place, day or everything, with **Undo** and **Show forgotten calls** (Figure 14 retaken). §4: `selection/learned.json` and `selection/forgotten.json`. §37: the station's warning. Figure 13 retaken with **Details**. |

@@ -38,7 +38,14 @@ fn main() {
     let mut gateways = list["gateways"].as_array().cloned().unwrap_or_default();
     let station = StationProfile::default().resolve();
     let hf = Hf::new();
-    hf.judge(Some(here), &station, &[], &mut gateways, (unix, false));
+    hf.judge(
+        Some(here),
+        &station,
+        &[],
+        &mut gateways,
+        (unix, false),
+        None,
+    );
     let mut out = Map::new();
     for gw in &gateways {
         for c in gw["channels"].as_array().into_iter().flatten() {
@@ -64,10 +71,10 @@ fn main() {
             })
             .collect();
         let start = Instant::now();
-        hf.judge(Some(here), &station, &[], &mut many, (unix, false));
+        hf.judge(Some(here), &station, &[], &mut many, (unix, false), None);
         let first = start.elapsed();
         let start = Instant::now();
-        hf.judge(Some(here), &station, &[], &mut many, (unix, false));
+        hf.judge(Some(here), &station, &[], &mut many, (unix, false), None);
         let kept = start.elapsed();
         let predicted = many
             .iter()

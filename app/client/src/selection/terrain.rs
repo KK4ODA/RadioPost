@@ -17,12 +17,13 @@ use std::time::Duration;
 
 use radioprop_geo::{LatLon, bearing_deg, distance_km};
 use radioprop_place::station::{Resolved, Said};
-use radioprop_terrain::budget::{self, Ends};
+use radioprop_terrain::budget::{self, Ends, phi};
 use radioprop_terrain::path::{self as terrain_path, Class, K_STANDARD};
 use radioprop_terrain::profile;
 use radioprop_terrain::store::{Have, Height, Store, TileId};
 
 use super::hillshade;
+use super::learning::{ForLine, Offset};
 use serde_json::{Value, json};
 
 /// Channels from this frequency up are judged over the terrain; below it the ionosphere decides.
@@ -939,6 +940,32 @@ fn likely(p: f64) -> &'static str {
     } else {
         "unlikely to work"
     }
+}
+
+/// The path through what was learned of its channel (§12.5), into `t["learned"]`: each way's
+/// margin moved by its offset and read against the location spread widened by the offset's own,
+/// both ways together, times the gateway's availability at the hour. The model's figures stay as
+/// they are: they are what a call's record keeps and what learning compares with.
+pub fn apply_learned(t: &mut Value, l: ForLine) {
+    let (Some(up), Some(down), Some(spread)) = (
+        t["up"]["margin_db"].as_f64(),
+        t["down"]["margin_db"].as_f64(),
+        t["spread_db"].as_f64(),
+    ) else {
+        return;
+    };
+    if t["state"] != "judged" {
+        return;
+    }
+    let read = |margin: f64, o: Offset| phi((margin + o.mean) / spread.hypot(o.sd));
+    let chance = l.there * read(up, l.up) * read(down, l.down);
+    let margin = (up + l.up.mean).min(down + l.down.mean);
+    let offset = |o: Offset| json!({"mean": round1(o.mean), "sd": round1(o.sd)});
+    t["learned"] = json!({
+        "chance": (chance * 100.0).round() / 100.0, "words": likely(chance),
+        "margin_db": round1(margin), "up_offset": offset(l.up), "down_offset": offset(l.down),
+        "there": (l.there * 100.0).round() / 100.0, "calls": round1(l.calls),
+    });
 }
 
 fn class_json(c: Class) -> Value {

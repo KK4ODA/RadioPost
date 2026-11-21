@@ -51,6 +51,7 @@ use crate::compose::{self, Answer, Draft, File, media_type};
 use crate::online;
 use crate::presence::{Carrier, Presence};
 use crate::selection::hf::Hf;
+use crate::selection::learning::{self, Forget, Forgotten, Learning, Seen};
 use crate::selection::position::Position;
 use crate::selection::terrain::{self, Terrain};
 use crate::selection::{self, attempts, directory};
@@ -191,6 +192,32 @@ fn now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
+}
+
+/// When each gateway's post office last saw it (RP-5 §4.4 `seen`), by callsign: availability's prior
+/// (§12.4).
+fn seen_of(gateways: &[Value]) -> Seen {
+    gateways
+        .iter()
+        .filter_map(|g| {
+            Some((
+                g["callsign"].as_str()?.to_ascii_uppercase(),
+                g["seen"].as_u64()?,
+            ))
+        })
+        .collect()
+}
+
+/// The recent calls, each marked whether the operator's rules forget its record (§12.9).
+fn marked(mut recent: Vec<Value>, records: &[Value], forgotten: &Forgotten) -> Vec<Value> {
+    for r in &mut recent {
+        let gone = records
+            .iter()
+            .find(|v| v["id"] == r["id"])
+            .is_some_and(|v| forgotten.forgets(v));
+        r["forgotten"] = json!(gone);
+    }
+    recent
 }
 
 /// A message's fields as the panel shows them.
@@ -939,10 +966,9 @@ impl Panel {
                 directory::request(&self.base, body, &listed)?;
                 self.gateways(param("at").parse().ok())
             }
-            (Method::Get, "/api/attempts") => {
-                let limit: usize = param("limit").parse().unwrap_or(100);
-                Ok(json!({"recent": directory::recent(&attempts::read(&self.base), limit)}))
-            }
+            (Method::Get, "/api/attempts") => Ok(self.attempts(param("limit").parse().ok())),
+            (Method::Get, "/api/learned") => self.learned(param("callsign").trim()),
+            (_, "/api/forget") => self.forget(method, body),
             (Method::Post, p) if ONLINE.contains(&p) => self.online(path, body),
             (Method::Post, "/api/office") => self.office(body),
             (Method::Post, "/api/office-backup") => self.office_backup(body),
@@ -1784,17 +1810,26 @@ impl Panel {
             from,
             now,
         );
+        // what the call records taught (§ 12), worked out again only when they or the rules changed
+        let learning = terrain.then(|| Learning::cached(&self.base, &seen_of(&gateways), now));
+        // another time (§ 14.7): whether each listens then; VHF paths do not change with it
+        let when = at.unwrap_or(now);
         // a VHF channel's path over the terrain, from the tiles already held (§ 8)
         let (spot, station) = self.position.for_terrain();
         for g in gateways.iter_mut().filter(|_| terrain) {
             if let Some(channel) = terrain::vhf_channel(g) {
                 let mut t = self.terrain.judge(spot, &station, g, &channel, None, false);
+                let learned = learning.as_ref().and_then(|l| {
+                    let dial = channel["dial_hz"].as_u64()?;
+                    l.for_line(g["callsign"].as_str()?, &learning::channel_of(dial)?, when)
+                });
+                if let Some(l) = learned {
+                    terrain::apply_learned(&mut t, l);
+                }
                 t["dial_hz"] = channel["dial_hz"].clone();
                 g["terrain"] = t;
             }
         }
-        // another time (§ 14.7): whether each listens then; VHF paths do not change with it
-        let when = at.unwrap_or(now);
         if at.is_some() {
             for g in &mut gateways {
                 directory::listening_at(g, when);
@@ -1804,8 +1839,14 @@ impl Panel {
         if terrain {
             let (here, station, bands) = self.position.for_hf();
             let when = i64::try_from(when).unwrap_or(i64::MAX);
-            self.hf
-                .judge(here, &station, &bands, &mut gateways, (when, at.is_none()));
+            self.hf.judge(
+                here,
+                &station,
+                &bands,
+                &mut gateways,
+                (when, at.is_none()),
+                learning.as_ref(),
+            );
         }
         Ok(json!({
             "domain": list["domain"], "fetched": list["fetched"], "grid": store.grid,
@@ -1813,7 +1854,150 @@ impl Panel {
             "errors": list["errors"], "ambiguous": list["ambiguous"],
             "here": here.here, "note": here.note, "marks_error": marks_error,
             "hf": if terrain { self.hf.status() } else { Value::Null }, "at": at,
+            "learning": learning.map(|l| json!({
+                "health": l.health, "records": l.records, "forgotten": l.forgotten,
+                "direction": l.direction,
+            })),
         }))
+    }
+
+    /// `GET /api/learned?callsign=`: a gateway's details (§16.4): for each of its channels, what the
+    /// model says now, what was learned and what was measured in the last 30 days; its
+    /// availability through the day, its service, its last ten calls, and this station's health.
+    fn learned(&self, callsign: &str) -> Result<Value, Error> {
+        if callsign.is_empty() {
+            return Err("which gateway: its callsign".into());
+        }
+        let judged = self.gateways_judged(true, None)?;
+        let listed = judged["gateways"].as_array().cloned().unwrap_or_default();
+        let gw = listed.iter().find(|g| {
+            g["callsign"]
+                .as_str()
+                .is_some_and(|c| c.eq_ignore_ascii_case(callsign))
+        });
+        let now = now();
+        let l = Learning::cached(&self.base, &seen_of(&listed), now);
+        let records = attempts::read(&self.base);
+        let forgotten = Forgotten::load(&self.base);
+        // its channels: those listed, with what the model says of each now, then any learned of
+        // that it no longer lists
+        let mut channels: Vec<(String, Value, Value)> = Vec::new();
+        for c in gw
+            .and_then(|g| g["channels"].as_array())
+            .into_iter()
+            .flatten()
+        {
+            let Some(name) = c["dial_hz"].as_u64().and_then(learning::channel_of) else {
+                continue;
+            };
+            let model = if c.get("hf").is_some() {
+                json!({"hf": c["hf"]})
+            } else if gw.is_some_and(|g| g["terrain"]["dial_hz"] == c["dial_hz"]) {
+                json!({"terrain": gw.map(|g| g["terrain"].clone())})
+            } else {
+                Value::Null
+            };
+            if !channels.iter().any(|(n, ..)| *n == name) {
+                channels.push((name, model, c.clone()));
+            }
+        }
+        let prefix = learning::key(callsign, "");
+        for k in l.channels.keys().filter(|k| k.starts_with(&prefix)) {
+            let name = k[prefix.len()..].to_owned();
+            if !channels.iter().any(|(n, ..)| *n == name) {
+                channels.push((name, Value::Null, Value::Null));
+            }
+        }
+        let upper = callsign.to_ascii_uppercase();
+        let channels: Vec<Value> = channels
+            .into_iter()
+            .map(|(name, model, channel)| {
+                json!({
+                    "channel": name, "listed": channel, "model": model,
+                    "learned": l.channel(callsign, &name),
+                    "measured": learning::measured(&records, &forgotten, (callsign, &name), now),
+                })
+            })
+            .collect();
+        let mine: Vec<Value> = records
+            .iter()
+            .filter(|r| {
+                r["remote"]
+                    .as_str()
+                    .is_some_and(|c| c.eq_ignore_ascii_case(callsign))
+            })
+            .cloned()
+            .collect();
+        Ok(json!({
+            "callsign": gw.map_or_else(|| json!(upper), |g| g["callsign"].clone()),
+            "gateway": gw, "channels": channels,
+            "availability": l.availability.get(&upper), "service": l.service.get(&upper),
+            "recent": marked(directory::recent(&mine, 10), &mine, &forgotten),
+            "health": l.health, "direction": l.direction,
+            "forgotten": forgotten.rules.iter().any(|r| matches!(r,
+                Forget::Gateway { callsign: c, .. } if c.eq_ignore_ascii_case(callsign))),
+        }))
+    }
+
+    /// `GET /api/attempts`: the last `limit` calls (100 unsaid), each marked whether it is
+    /// forgotten.
+    fn attempts(&self, limit: Option<usize>) -> Value {
+        let records = attempts::read(&self.base);
+        let forgotten = Forgotten::load(&self.base);
+        let recent = directory::recent(&records, limit.unwrap_or(100));
+        json!({"recent": marked(recent, &records, &forgotten)})
+    }
+
+    /// `/api/forget`: the operator's forgetting rules (§12.9), `GET` to list them with the counts,
+    /// `POST` `{"what": "gateway", "callsign"}`, `{"what": "place", "km"}` (around the position in
+    /// use), `{"what": "before", "before"}` or `{"what": "everything"}` to add one, or
+    /// `{"undo": n}` to take the n-th back, its records counting again.
+    fn forget(&self, method: &Method, body: &Value) -> Result<Value, Error> {
+        let mut rules = Forgotten::load(&self.base);
+        if *method == Method::Post {
+            let now = now();
+            if let Some(n) = body["undo"].as_u64() {
+                let n = usize::try_from(n).map_err(|_| "no such rule")?;
+                if n >= rules.rules.len() {
+                    return Err("no such rule".into());
+                }
+                rules.rules.remove(n);
+            } else {
+                let rule = match body["what"].as_str().unwrap_or("") {
+                    "gateway" => Forget::Gateway {
+                        callsign: body["callsign"]
+                            .as_str()
+                            .filter(|c| !c.trim().is_empty())
+                            .ok_or("which gateway: its callsign")?
+                            .trim()
+                            .to_ascii_uppercase(),
+                        at: now,
+                    },
+                    "place" => {
+                        let here = self.position.here();
+                        let h = here.here.ok_or("where you are is not known")?;
+                        Forget::Place {
+                            lat: h.lat,
+                            lon: h.lon,
+                            km: body["km"].as_f64().filter(|k| *k > 0.0).unwrap_or(1.0),
+                            at: now,
+                        }
+                    }
+                    "before" => Forget::Before {
+                        before: body["before"]
+                            .as_u64()
+                            .ok_or("before when: seconds since 1970")?,
+                    },
+                    "everything" => Forget::Everything { at: now },
+                    other => return Err(format!("nothing to forget by {other:?}")),
+                };
+                rules.rules.push(rule);
+            }
+            rules.save(&self.base)?;
+        }
+        let records = attempts::read(&self.base);
+        let forgotten = records.iter().filter(|r| rules.forgets(r)).count();
+        Ok(json!({"rules": rules.rules, "records": records.len(), "forgotten": forgotten}))
     }
 
     /// `/api/terrain`: what is held and being fetched (`GET`), a request about it (`POST`), and one

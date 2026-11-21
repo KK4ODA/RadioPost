@@ -179,6 +179,60 @@ const GATEWAYS_HF = {...GATEWAYS, hf: {engine: "voacapl", kept: 5, heard: true},
     const hf = HF_CHANNELS[key];
     return hf && !c.blocked ? {...c, hf: HEARD[key] ? {...hf, heard: HEARD[key]} : hf} : c;
   })}))};
+// what the call records taught of KK4ODA-1's 40 m channel (learning.rs, hf.rs's
+// through_learning), made up: the path 4 dB under the model coming in and 7 dB going out, the
+// gateway answering 93 % of calls at this hour, the modem carrying 71 % of its model's rate; the
+// model's own figures stay beside them
+const K40 = HF_CHANNELS["KK4ODA-1 7101000"];
+const widened = (w, sd) => ({...w, lower_db: Math.round(Math.hypot(w.lower_db, 1.28 * sd) * 10) / 10,
+                             upper_db: Math.round(Math.hypot(w.upper_db, 1.28 * sd) * 10) / 10});
+const K40_LEARNED = {
+  chance: 0.92, chance_words: "likely to work",
+  up: {...widened(K40.up, 2.7), snr_db: Math.round((K40.up.snr_db - 6.8) * 10) / 10, bps: 2310,
+       rung: "QAM16-3/4", p_call: 1.0},
+  down: {...widened(K40.down, 1.9), snr_db: Math.round((K40.down.snr_db - 4.1) * 10) / 10,
+         bps: 2650, rung: "QAM64-1/2", p_call: 1.0},
+  up_offset: {mean: -6.8, sd: 2.7}, down_offset: {mean: -4.1, sd: 1.9},
+  there: 0.93, eta: 0.71, calls: 6.4,
+  words: "Likely to work: links on 92 % of days at 20Z, about 2.3 kbit/s sending, 2.7 kbit/s "
+    + "receiving · learned from your calls",
+};
+for (const gw of GATEWAYS_HF.gateways.filter((g) => g.callsign === "KK4ODA-1")) {
+  gw.channels = gw.channels.map((c) => c.dial_hz === 7101000 && c.hf
+    ? {...c, hf: {...c.hf, learned: K40_LEARNED}} : c);
+}
+GATEWAYS_HF.learning = {health: {p_fault: 0.01, failures: 0, gateways: 0, warning: null},
+                        records: 14, forgotten: 3, direction: {mean: -2.7, sd: 2.2}};
+// KK4ODA-1's details (panel.rs's learned): the model, what was learned, what was measured
+const LEARNED = {
+  callsign: "KK4ODA-1",
+  gateway: GATEWAYS_HF.gateways.find((g) => g.callsign === "KK4ODA-1"),
+  channels: [
+    {channel: "40 m", listed: {dial_hz: 7101000, bandwidth_hz: 2300, mode: "USB", scan_s: 20},
+     model: {hf: {...K40, learned: K40_LEARNED}},
+     learned: {down: {mean: -4.1, sd: 1.9}, up: {mean: -6.8, sd: 2.7},
+               direction: {mean: -2.7, sd: 2.2}, there: 0.93, measured: 5.2, calls: 6.4,
+               losses_per_hour: 0.6, efficiency: {mean: 0.71, n: 4.8}, drift: false},
+     measured: {calls: 7, answered: 7, sessions: 7, lost: 1, down: {min: 24.6, max: 33.1, n: 7},
+                up: {min: 22.0, max: 29.4, n: 6}, bps: {min: 1850, max: 3420, n: 6}}},
+    {channel: "80 m", listed: {dial_hz: 3591500, bandwidth_hz: 2300, mode: "USB", scan_s: 20},
+     model: {hf: HF_CHANNELS["KK4ODA-1 3591500"]}, learned: null,
+     measured: {calls: 0, answered: 0, sessions: 0, lost: 0, down: null, up: null, bps: null}},
+  ],
+  availability: [{mean: 0.93, n: 7.1}, [0.91, 0.92, 0.93, 0.93, 0.94, 0.94, 0.93, 0.92]],
+  service: {mean: 0.97, n: 6.2},
+  recent: [
+    {id: "a-5", at: T - 1600, kind: "gateway", remote: "KK4ODA-1", dial_hz: 7101000,
+     words: "completed", completed: true, forgotten: false},
+    {id: "a-1", at: T - 5 * DAY, kind: "gateway", remote: "KK4ODA-1", dial_hz: 7101000,
+     words: "completed", completed: true, forgotten: false},
+    {id: "a-0", at: T - 9 * DAY, kind: "gateway", remote: "KK4ODA-1", dial_hz: 7101000,
+     words: "the link was lost", completed: false, forgotten: false},
+  ],
+  health: GATEWAYS_HF.learning.health, direction: GATEWAYS_HF.learning.direction, forgotten: false,
+};
+// the forgetting rules (panel.rs's forget): calls before a station change
+const FORGET = {rules: [{what: "before", before: T - 40 * DAY}], records: 14, forgotten: 3};
 function placedFrom(here, grid) {
   const g = grid.toUpperCase();
   let lon = (g.charCodeAt(0) - 65) * 20 - 180 + Number(g[2]) * 2;
@@ -475,6 +529,8 @@ function clientApi(world) {
       case "terrain/path": return TERRAIN_PATH;
       case "places": return PLACES;
       case "attempts": return RECENT;
+      case "learned": return LEARNED;
+      case "forget": return FORGET;
       case "settings": return {usual_gateways: ["KK4ODA-1"], radio_skips_read: false};
       case "accept": return {entries: ["maria@example.com", "jim@hampost.org", "@hampost.org"]};
       case "addresses": return {entries: ADDRESSES};
@@ -939,6 +995,20 @@ const SHOTS = {
     await page.evaluate(() => { document.getElementById("map-card").open = false; });
     await page.waitForTimeout(200);
     await shot(page, "client-gateways");
+    await context.close();
+  },
+
+  // a gateway's details: the model, what was learned and what was measured, side by side
+  async "client-gateway-details"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI,
+                                                 api: clientApi(clientWorld({hf: true})),
+                                                 height: 1100});
+    await page.click("#gateways-open");
+    await page.waitForTimeout(300);
+    await page.locator("#gateway-rows tr", {hasText: "KK4ODA-1"})
+      .getByRole("button", {name: "Details"}).click();
+    await page.waitForTimeout(300);
+    await shot(page, "client-gateway-details", "#details-card");
     await context.close();
   },
 

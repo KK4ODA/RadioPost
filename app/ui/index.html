@@ -129,6 +129,7 @@
       <section id="gateways-view" hidden>
         <h1>Gateways</h1>
         <p class="note" id="gateways-note"></p>
+        <p class="note warn" id="gateways-health" role="status" hidden title="From your last calls: several failed with nothing heard on gateways that usually answer. They count less against those gateways until this clears"></p>
         <div class="row">
           <button id="gateways-refresh" title="Fetch the lists from your post office, and from the post offices it knows, now over the Internet; they are kept for when there is none">Refresh over the Internet</button>
           <span class="note" id="gateways-here" title="Where the distances are measured from: a place you saved, or your GPS"></span>
@@ -138,7 +139,7 @@
           <input type="datetime-local" class="short" id="gw-at" step="3600" hidden title="A date and hour, your local time: the prediction is for the whole hour">
         </div>
         <div class="tabs" role="tablist" aria-label="Gateways">
-          <button role="tab" data-gview="recommended" title="Every gateway listed, and your own, nearest first: nothing is learned yet to rank them better">Recommended</button>
+          <button role="tab" data-gview="recommended" title="Every gateway listed, and your own, nearest first: what your calls teach shows on each channel, and ranks them in a later version">Recommended</button>
           <button role="tab" data-gview="favourites" title="The gateways and channels you starred">Favourites</button>
           <button role="tab" data-gview="recent" title="Your last calls, newest first, and how each ended">Recent</button>
           <button role="tab" data-gview="worked" title="Gateways you finished a session with from within 50 km of where you are now, 2 km on channels of 30 MHz and up">Worked from here</button>
@@ -203,6 +204,20 @@
           <p class="note" id="terrain-progress" hidden></p>
           <p class="note terrain-notice" id="terrain-notice"></p>
         </div>
+        <div class="card" id="details-card" hidden>
+          <div class="row terrain-head">
+            <h2 id="details-title" title="What the model says of this gateway, what your calls have taught, and what they measured">Gateway</h2>
+            <button type="button" class="quiet" id="details-close" title="Close the details">Close</button>
+          </div>
+          <p class="note" id="details-about"></p>
+          <div id="details-channels"></div>
+          <p class="note" id="details-day" title="How often it answered your calls in each three hours of the day, UTC, from what you saw and the gateway's own record"></p>
+          <h3 title="Your last calls to it, newest first">Last calls</h3>
+          <ul class="details-calls" id="details-calls"></ul>
+          <div class="row">
+            <button type="button" class="quiet" id="details-forget"></button>
+          </div>
+        </div>
         <div class="scroll" id="gateway-table"><table class="list" aria-label="Gateways">
           <thead><tr>
             <th title="Its callsign, and the post office that lists it. The star marks a favourite">Gateway</th><th title="Where it is, when it answers, and how old its record is">Where</th>
@@ -222,6 +237,19 @@
           </tr></thead>
           <tbody id="recent-rows"></tbody>
         </table></div>
+        <div class="card" id="learning-card" hidden>
+          <h2 title="Each call you place teaches how each gateway's path compares with the model, how often it answers and how fast it carries. Forgetting leaves calls out of that without deleting them">What your calls teach</h2>
+          <p class="note" id="learning-counts"></p>
+          <label class="check" title="Show the calls you told it to forget, struck through, in the list above"><input type="checkbox" id="learning-show-forgotten"> Show forgotten calls</label>
+          <div class="row">
+            <button type="button" class="quiet" id="forget-here" title="Leave out the calls made within a kilometre of where you are now: after moving a mobile antenna, say">Forget calls made near here</button>
+            <label class="inline nowrap" title="Leave out every call before this day: after changing your radio, antenna or power">Forget calls before
+              <input type="date" id="forget-date" class="short"></label>
+            <button type="button" class="quiet" id="forget-before" title="Leave out every call before the day chosen">Forget them</button>
+            <button type="button" class="quiet danger" id="forget-everything" title="Leave out every call so far: learning starts again from the model">Forget everything</button>
+          </div>
+          <ul class="forget-rules" id="forget-rules"></ul>
+        </div>
         <details class="card" id="own-form">
           <summary title="A station no post office lists: a partner for station-to-station mail, a test gateway, a club's station before it registers">Add a gateway of your own</summary>
           <div class="row">

@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! What the client learns from its call records (choosing a gateway, §12.4–12.7), on this computer
-//! with no service anywhere. Everything here is computed again from the records each time it is
-//! asked for: the records are never rewritten (§12.1), a better method applies to all past
-//! evidence at once (§12.9), and the same records always give the same estimates (records are taken
-//! in the order of their start and ID, and every map is ordered).
+//! with no service anywhere. Everything here is computed from the records: they are never
+//! rewritten (§12.1), a better method applies to all past evidence at once (§12.9), and the same
+//! records always give the same estimates (records are taken in the order of their start and ID,
+//! and every map is ordered). `learned.json` keeps the last result only as a cache of the same
+//! inputs, under the learning's [`VERSION`] (§15.1).
 //!
 //! * **Availability** A, a Beta for each gateway and three-hour block of the day, pooled toward the
 //!   gateway and all gateways; a silent call is shared between the gateway being away and the path
 //!   being too weak, by their odds just then (§12.3).
 //! * **The SNR offset** δ, each way, for each gateway and band (HF) or channel (VHF): a posterior on
-//!   a grid of δ from −30 to +30 dB crossed with A in 19 steps, each record multiplying it by its
-//!   likelihood raised to its weight (§12.5). The uplink is the downlink plus a direction offset,
-//!   learned from sessions that measure both ways, for the gateway and over all gateways.
+//!   a grid of the downlink's δ, the direction offset D (the uplink's is δ + D), A and the heard
+//!   share h, each record multiplying it by its likelihood raised to its weight (§12.5).
 //! * **Service** S, a Beta for each gateway pooled toward all gateways.
 //! * **The modem's efficiency** η, the measured goodput over what the modem's profile carries at the
 //!   SNR measured, log-normal, for each modem and bandwidth, pooled toward it for each gateway.
@@ -108,8 +108,14 @@ enum Predicted {
         call_db: Option<f64>,
         chance: Option<f64>,
     },
-    /// A VHF path over the terrain: each way's margin and the spread they are read against.
-    Vhf { up: f64, down: f64, spread: f64 },
+    /// A VHF path over the terrain: each way's margin and the spread they are read against, and
+    /// the chance shown when it was through what was learned.
+    Vhf {
+        up: f64,
+        down: f64,
+        spread: f64,
+        shown: Option<f64>,
+    },
 }
 
 impl Predicted {
@@ -135,7 +141,10 @@ impl Predicted {
                 call_db: class
                     .filter(|_| state == "predicted")
                     .map(|c| Profile::aether().call_db(c)),
-                chance: h["chance"].as_f64(),
+                // the chance shown: through what was learned, when it was
+                chance: h["learned"]["chance"]
+                    .as_f64()
+                    .or_else(|| h["chance"].as_f64()),
             });
         }
         let t = v.get("terrain")?;
@@ -146,6 +155,7 @@ impl Predicted {
             up: t["up"]["margin_db"].as_f64()?,
             down: t["down"]["margin_db"].as_f64()?,
             spread: t["spread_db"].as_f64()?,
+            shown: t["learned"]["chance"].as_f64(),
         })
     }
 
@@ -163,9 +173,9 @@ impl Predicted {
                 let call = (*call_db)?;
                 Some(shifted(*up, d_up).above(call) * shifted(*down, d_down).above(call) * open)
             }
-            Predicted::Vhf { up, down, spread } => {
-                Some(phi((up + d_up) / spread) * phi((down + d_down) / spread))
-            }
+            Predicted::Vhf {
+                up, down, spread, ..
+            } => Some(phi((up + d_up) / spread) * phi((down + d_down) / spread)),
         }
     }
 
@@ -197,7 +207,12 @@ impl Predicted {
     fn chance(&self) -> Option<f64> {
         match self {
             Predicted::Hf { chance, .. } => *chance,
-            Predicted::Vhf { up, down, spread } => Some(phi(up / spread) * phi(down / spread)),
+            Predicted::Vhf {
+                up,
+                down,
+                spread,
+                shown,
+            } => Some(shown.unwrap_or_else(|| phi(up / spread) * phi(down / spread))),
         }
     }
 
@@ -228,8 +243,7 @@ fn shifted(s: Spread, d: f64) -> Spread {
 /// 2 / (√(2π) (`σ_lower` + `σ_upper`)): each half's own σ there would make the density jump at the
 /// median, and an offset either side of it would be favoured for no reason.
 fn ln_split_density(s: Spread, m: f64) -> f64 {
-    let widened =
-        |decile: f64| ((decile / 1.281_551_565_544_6).powi(2) + MEASURE_SD.powi(2)).sqrt();
+    let widened = |decile: f64| ((decile / DECILE_SIGMAS).powi(2) + MEASURE_SD.powi(2)).sqrt();
     let (lower, upper) = (widened(s.lower), widened(s.upper));
     let sigma = if m < s.median { lower } else { upper };
     let x = (m - s.median) / sigma;
@@ -243,6 +257,18 @@ pub struct Candidate {
     pub callsign: String,
     /// `40 m` at HF; the dial in hertz at VHF.
     pub channel: String,
+}
+
+/// The channel a dial is learned under: its band at HF (`40 m`), the dial in hertz from 30 MHz
+/// up; `None` outside the amateur bands.
+#[must_use]
+pub fn channel_of(dial_hz: u64) -> Option<String> {
+    if dial_hz >= 30_000_000 {
+        return Some(dial_hz.to_string());
+    }
+    #[allow(clippy::cast_precision_loss, reason = "a dial in hertz")]
+    let mhz = dial_hz as f64 / 1e6;
+    radioprop_hf::station::hf_band_at(mhz).map(|b| b.name.to_owned())
 }
 
 /// One call, as learning reads its record.
@@ -310,14 +336,7 @@ impl Rec {
         let channel = if let Some(Predicted::Hf { band, .. }) = &self.predicted {
             band.clone()
         } else {
-            let dial = self.dial?;
-            if dial >= 30_000_000 {
-                dial.to_string()
-            } else {
-                #[allow(clippy::cast_precision_loss, reason = "a dial in hertz")]
-                let mhz = dial as f64 / 1e6;
-                radioprop_hf::station::hf_band_at(mhz)?.name.to_owned()
-            }
+            channel_of(self.dial?)?
         };
         Some(Candidate {
             callsign: self.callsign.clone(),
@@ -436,7 +455,7 @@ impl Forgotten {
 }
 
 /// Whether this station, not the gateways, looks to be at fault (§12.3).
-#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Health {
     /// The chance the station is at fault now.
     pub p_fault: f64,
@@ -449,7 +468,7 @@ pub struct Health {
 }
 
 /// A Beta's estimate: its mean and the weight of evidence behind it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Estimate {
     /// The mean.
     pub mean: f64,
@@ -458,7 +477,7 @@ pub struct Estimate {
 }
 
 /// The offset posterior's summary, dB.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Offset {
     /// Its mean.
     pub mean: f64,
@@ -467,7 +486,7 @@ pub struct Offset {
 }
 
 /// What was learned of one channel of one gateway.
-#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Learned {
     /// The downlink's offset from the model (the gateway heard here).
     pub down: Offset,
@@ -490,7 +509,7 @@ pub struct Learned {
 }
 
 /// Everything learned from the records.
-#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Learning {
     /// Each channel's.
     pub channels: BTreeMap<String, Learned>,
@@ -525,7 +544,121 @@ pub fn key(callsign: &str, channel: &str) -> String {
 /// 1970, by callsign.
 pub type Seen = BTreeMap<String, u64>;
 
+/// The learning's version: a change to its method changes it, and every cache is worked out again
+/// (§12.9, §15.1).
+pub const VERSION: u64 = 1;
+
+/// The cache of the last result, under the first home.
+pub const LEARNED: &str = "selection/learned.json";
+
+/// What a line under a channel takes from what was learned (§10.3): each way's offset, the
+/// gateway's availability at the hour, the modem's efficiency there, and the calls behind them.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ForLine {
+    /// The downlink's offset.
+    pub down: Offset,
+    /// The uplink's.
+    pub up: Offset,
+    /// The chance the gateway answers at the hour.
+    pub there: f64,
+    /// The modem's efficiency.
+    pub eta: f64,
+    /// Calls behind it, weighted.
+    pub calls: f64,
+}
+
+impl ForLine {
+    /// A prediction's spread for one way moved by `offset`, its deciles widened by the offset's
+    /// own uncertainty: what the model says, corrected by what this station saw.
+    #[must_use]
+    pub fn moved(s: Spread, offset: Offset) -> Spread {
+        let widen = |decile: f64| (decile.powi(2) + (DECILE_SIGMAS * offset.sd).powi(2)).sqrt();
+        Spread {
+            median: s.median + offset.mean,
+            lower: widen(s.lower),
+            upper: widen(s.upper),
+        }
+    }
+}
+
+/// A normal's tenth percentile, in standard deviations: VOACAP's deciles.
+const DECILE_SIGMAS: f64 = 1.281_551_565_544_6;
+
+/// FNV-1a over `bytes`, for the cache's key: the same everywhere, unlike the standard library's
+/// hasher.
+fn fnv(hash: u64, bytes: &[u8]) -> u64 {
+    bytes.iter().fold(hash, |h, &b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
 impl Learning {
+    /// What was learned at `now` from the records under `base`, less what the operator forgot,
+    /// availability's prior from `seen`: from `learned.json` when it was worked out from the same
+    /// records, rules and sightings, by this version of the learning, in the same hour (the
+    /// records' weights change with their age); otherwise learned again and kept there.
+    #[must_use]
+    pub fn cached(base: &Path, seen: &Seen, now: u64) -> Learning {
+        let records = super::attempts::read(base);
+        let forgotten = Forgotten::load(base);
+        let mut key = fnv(0xcbf2_9ce4_8422_2325, &VERSION.to_le_bytes());
+        key = fnv(key, &(now / 3600).to_le_bytes());
+        for r in &records {
+            key = fnv(key, r.to_string().as_bytes());
+        }
+        key = fnv(
+            key,
+            serde_json::to_string(&forgotten)
+                .unwrap_or_default()
+                .as_bytes(),
+        );
+        key = fnv(
+            key,
+            serde_json::to_string(seen).unwrap_or_default().as_bytes(),
+        );
+        let key = format!("{key:016x}");
+        let path = base.join(LEARNED);
+        let kept: Option<Value> = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok());
+        if let Some(k) = kept.filter(|k| k["version"] == VERSION && k["key"] == key.as_str())
+            && let Ok(l) = serde_json::from_value::<Learning>(k["learned"].clone())
+        {
+            return l;
+        }
+        let learned = Learning::learn(&records, &forgotten, seen, now);
+        let out = serde_json::json!({"version": VERSION, "key": key, "as_of": now,
+                                     "learned": learned});
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        // a cache: when it cannot be written, the next request learns again
+        let _ = std::fs::write(&path, out.to_string());
+        learned
+    }
+
+    /// What a line under `callsign`'s `channel` takes from what was learned, for the hour `t`;
+    /// `None` before any call to it was learned from.
+    #[must_use]
+    pub fn for_line(&self, callsign: &str, channel: &str, t: u64) -> Option<ForLine> {
+        let l = self.channel(callsign, channel)?;
+        if l.calls <= 0.0 {
+            return None;
+        }
+        let block = usize::try_from(t % 86_400 / 10_800).unwrap_or(0);
+        let there = self
+            .availability
+            .get(&callsign.to_ascii_uppercase())
+            .map_or(l.there, |a| a.1[block]);
+        Some(ForLine {
+            down: l.down,
+            up: l.up,
+            there,
+            eta: l.efficiency.mean,
+            calls: l.calls,
+        })
+    }
+
     /// Learns from `records` (as [`super::attempts::read`] gives them) at `now`, leaving out what
     /// `forgotten` forgets, availability's prior from `seen`.
     #[must_use]
@@ -582,6 +715,60 @@ impl Learning {
     pub fn json(&self) -> Value {
         serde_json::to_value(self).unwrap_or(Value::Null)
     }
+}
+
+/// What was measured on a gateway's channel in the 30 days before `now`, the forgotten left out
+/// (§16.4's third column): the calls and how many it answered, each way's SNR over the sessions
+/// that read it, the rate of the sessions long enough to judge, and the links lost.
+#[must_use]
+pub fn measured(
+    records: &[Value],
+    forgotten: &Forgotten,
+    (callsign, channel): (&str, &str),
+    now: u64,
+) -> Value {
+    let since = now.saturating_sub(30 * 86_400);
+    let (mut down, mut up, mut rates) = (Vec::new(), Vec::new(), Vec::new());
+    let (mut calls, mut answered, mut sessions, mut lost) = (0, 0, 0, 0);
+    for v in records.iter().filter(|v| !forgotten.forgets(v)) {
+        let Some(r) = Rec::read(v) else { continue };
+        if r.start < since
+            || !r.callsign.eq_ignore_ascii_case(callsign)
+            || r.candidate().is_none_or(|c| c.channel != channel)
+            || matches!(
+                r.class,
+                Class::Cancelled | Class::LocalStation | Class::ChannelBusy | Class::Unknown
+            )
+        {
+            continue;
+        }
+        calls += 1;
+        if r.linked() || r.class == Class::Refused {
+            answered += 1;
+        }
+        if r.linked() {
+            sessions += 1;
+            if r.class == Class::LinkLost {
+                lost += 1;
+            }
+            if r.link_s >= ETA_MIN_S && r.bytes >= ETA_MIN_BYTES {
+                rates.push(r.bytes * 8.0 / r.link_s);
+            }
+        }
+        down.extend(r.snr_down);
+        up.extend(r.snr_up);
+    }
+    let range = |v: &[f64]| {
+        if v.is_empty() {
+            return Value::Null;
+        }
+        let min = v.iter().copied().fold(f64::INFINITY, f64::min);
+        let max = v.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        serde_json::json!({"min": (min * 10.0).round() / 10.0, "max": (max * 10.0).round() / 10.0,
+                           "n": v.len()})
+    };
+    serde_json::json!({"calls": calls, "answered": answered, "sessions": sessions, "lost": lost,
+                       "down": range(&down), "up": range(&up), "bps": range(&rates)})
 }
 
 /// How many calls are in each record's episode: calls to one channel within ten minutes of the one

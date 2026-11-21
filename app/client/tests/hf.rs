@@ -10,6 +10,7 @@ mod common;
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -100,6 +101,11 @@ impl PropagationEngine for MadeUp {
 /// at each bandwidth, a VARA one, a 160 m one, a VHF one and a blocked one; and one with no site,
 /// listening from 02:00 to 04:00 UTC.
 fn panel(name: &str, hf: Hf, grid: Option<&str>) -> SocketAddr {
+    panel_at(name, hf, grid).0
+}
+
+/// [`panel`], and its home.
+fn panel_at(name: &str, hf: Hf, grid: Option<&str>) -> (SocketAddr, PathBuf) {
     let dir = scratch(name);
     let home = dir.join("facundo");
     let mut store = store_for(&home, "device:facundo", "facundo");
@@ -132,7 +138,7 @@ fn panel(name: &str, hf: Hf, grid: Option<&str>) -> SocketAddr {
         "/api/gateway-marks",
         &json!({"op": "block", "callsign": "W1AW-10", "dial_hz": 10_140_000}),
     );
-    at
+    (at, home)
 }
 
 fn channel<'a>(v: &'a Value, callsign: &str, dial: u64) -> &'a Value {
@@ -233,6 +239,175 @@ fn hf_channels_are_predicted_both_ways_at_the_hour_and_kept() {
     assert_eq!(
         channel(&again, "W1AW-10", 7_101_000)["hf"],
         channel(&v, "W1AW-10", 7_101_000)["hf"]
+    );
+}
+
+/// Twenty sessions with W1AW-10 on 40 m, a day apart over the last twenty days, each measuring
+/// the path 10 dB under what the model said each way.
+fn sessions_ten_under(home: &std::path::Path, model: &Value) -> usize {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("a clock")
+        .as_secs();
+    let down = model["down"]["snr_db"].as_f64().expect("down") - 10.0;
+    let up = model["up"]["snr_db"].as_f64().expect("up") - 10.0;
+    let lines: Vec<String> = (0..20u64)
+        .map(|k| {
+            let start = now - (20 - k) * 86_400;
+            json!({"v": 2, "id": format!("a-{k:02}"), "start": start, "end": start + 300,
+                   "kind": "gateway", "remote": "W1AW-10",
+                   "channel": {"dial_hz": 7_101_000, "bandwidth_hz": 2300},
+                   "modem": "Aether HF 0.2.0", "predicted": {"hf": model},
+                   "call": {"duration_s": 12.0, "result": "connected"},
+                   "link": {"duration_s": 240.0, "bytes_handed": 6000, "bytes_unacknowledged": 0,
+                            "bytes_in": 9000, "bandwidth_hz": 2300,
+                            "snr_db": {"median": down, "readings": 20},
+                            "peer_snr_db": {"median": up, "readings": 20}},
+                   "outcome": {"class": "completed"}, "classifier": 1,
+                   "evidence": {"opened": true, "connected": true, "over": true}})
+            .to_string()
+        })
+        .collect();
+    let dir = home.join("selection/attempts");
+    std::fs::create_dir_all(&dir).expect("a folder");
+    std::fs::write(dir.join("2026-11.jsonl"), lines.join("\n") + "\n").expect("written");
+    lines.len()
+}
+
+#[test]
+fn what_was_learned_goes_beside_the_model_and_can_be_forgotten() {
+    let hf = Hf::with_engine(Box::new(MadeUp {
+        runs: Arc::new(AtomicUsize::new(0)),
+    }));
+    let (at, home) = panel_at("hf-learned", hf, Some("EM73tr"));
+    let before = http(at, "GET", "/api/gateways", &Value::Null);
+    let model = channel(&before, "W1AW-10", 7_101_000)["hf"].clone();
+    assert!(
+        model.get("learned").is_none(),
+        "nothing learned yet: {model}"
+    );
+    assert_eq!(sessions_ten_under(&home, &model), 20);
+
+    // the line keeps the model's figures, and what was learned goes beside them
+    let v = http(at, "GET", "/api/gateways", &Value::Null);
+    let forty = &channel(&v, "W1AW-10", 7_101_000)["hf"];
+    for way in ["up", "down"] {
+        assert_eq!(
+            forty[way]["snr_db"], model[way]["snr_db"],
+            "the model's {way} kept"
+        );
+        let learned = forty["learned"][way]["snr_db"].as_f64().expect("learned");
+        let said = model[way]["snr_db"].as_f64().expect("the model");
+        assert!(
+            (learned - (said - 10.0)).abs() < 2.0,
+            "{way}: {learned} against {said}"
+        );
+    }
+    let learned = &forty["learned"];
+    assert!(
+        learned["chance"].as_f64() < forty["chance"].as_f64(),
+        "{learned}"
+    );
+    assert!(
+        learned["calls"].as_f64().is_some_and(|c| c > 0.0),
+        "{learned}"
+    );
+    assert!(
+        learned["words"]
+            .as_str()
+            .is_some_and(|w| w.ends_with("learned from your calls")),
+        "{learned}"
+    );
+    // a channel never called has nothing learned
+    assert!(
+        channel(&v, "W1AW-10", 3_590_000)["hf"]
+            .get("learned")
+            .is_none()
+    );
+    assert_eq!(v["learning"]["records"], 20, "{}", v["learning"]);
+    assert!(v["learning"]["health"]["warning"].is_null());
+    // the cache: kept under the learning's version
+    let kept: Value = serde_json::from_str(
+        &std::fs::read_to_string(home.join("selection/learned.json")).expect("kept"),
+    )
+    .expect("JSON");
+    assert_eq!(kept["version"], 1);
+    details_then_forgetting(at, &model);
+}
+
+/// The details of W1AW-10, then its history forgotten and brought back.
+fn details_then_forgetting(at: SocketAddr, model: &Value) {
+    // the details: the model, what was learned and what was measured, side by side
+    let d = http(at, "GET", "/api/learned?callsign=w1aw-10", &Value::Null);
+    assert_eq!(d["callsign"], "W1AW-10");
+    let channels = d["channels"].as_array().expect("channels");
+    let forty = channels
+        .iter()
+        .find(|c| c["channel"] == "40 m")
+        .expect("40 m");
+    assert_eq!(forty["model"]["hf"]["down"], model["down"], "{forty}");
+    let offset = forty["learned"]["down"]["mean"]
+        .as_f64()
+        .expect("an offset");
+    assert!((offset + 10.0).abs() < 2.0, "{forty}");
+    let m = &forty["measured"];
+    assert_eq!(
+        (m["calls"].as_u64(), m["answered"].as_u64()),
+        (Some(20), Some(20)),
+        "{m}"
+    );
+    assert_eq!(m["down"]["n"], 20, "{m}");
+    assert!(m["bps"]["min"].as_f64().is_some_and(|b| b > 0.0), "{m}");
+    assert!(
+        channels
+            .iter()
+            .any(|c| c["channel"] == "80 m" && c["learned"].is_null())
+    );
+    assert_eq!(d["recent"].as_array().map(Vec::len), Some(10));
+    assert!(
+        d["availability"][0]["mean"]
+            .as_f64()
+            .is_some_and(|a| a > 0.8),
+        "{d}"
+    );
+
+    // forgotten: the records stay, learning leaves them out, and they come back on undo
+    let f = http(
+        at,
+        "POST",
+        "/api/forget",
+        &json!({"what": "gateway", "callsign": "w1aw-10"}),
+    );
+    assert_eq!(
+        (f["records"].as_u64(), f["forgotten"].as_u64()),
+        (Some(20), Some(20)),
+        "{f}"
+    );
+    let v = http(at, "GET", "/api/gateways", &Value::Null);
+    assert!(
+        channel(&v, "W1AW-10", 7_101_000)["hf"]
+            .get("learned")
+            .is_none()
+    );
+    assert_eq!(v["learning"]["forgotten"], 20);
+    let recent = http(at, "GET", "/api/attempts", &Value::Null);
+    assert!(
+        recent["recent"]
+            .as_array()
+            .expect("calls")
+            .iter()
+            .all(|r| r["forgotten"] == true),
+        "{recent}"
+    );
+    let d = http(at, "GET", "/api/learned?callsign=W1AW-10", &Value::Null);
+    assert_eq!(d["forgotten"], true);
+    let f = http(at, "POST", "/api/forget", &json!({"undo": 0}));
+    assert_eq!(f["forgotten"], 0, "{f}");
+    let v = http(at, "GET", "/api/gateways", &Value::Null);
+    assert!(
+        channel(&v, "W1AW-10", 7_101_000)["hf"]
+            .get("learned")
+            .is_some()
     );
 }
 

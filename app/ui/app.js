@@ -1108,7 +1108,7 @@ function atNote(t) {
 function viewNote(view, count, g) {
   switch (view) {
     case "recommended":
-      return (g.here ? "Nearest first: nothing is learned yet to rank them better."
+      return (g.here ? "Nearest first: what your calls teach shows on each channel, and ranks them in a later version."
         : "As the post offices list them: save a place or set up a GPS to put the nearest first.")
         + hfNote(g.hf);
     case "favourites":
@@ -1133,6 +1133,9 @@ async function renderGatewaysPage() {
       + (missed.length ? ` Not taken this time: ${missed.join("; ")}.` : "")
     : "No list yet: refresh it while you have the Internet. It is kept for when you do not.";
   $("gateways-here").textContent = hereWords(g.here, g.note);
+  const warning = g.learning && g.learning.health && g.learning.health.warning;
+  $("gateways-health").hidden = !warning;
+  $("gateways-health").textContent = warning || "";
   for (const b of document.querySelectorAll("[data-gview]")) {
     b.setAttribute("aria-selected", String(b.dataset.gview === gwView));
   }
@@ -1144,6 +1147,7 @@ async function renderGatewaysPage() {
   $("gw-when").parentElement.hidden = recent;
   $("gw-at").hidden = recent || $("gw-when").value !== "pick";
   $("map-card").hidden = recent;
+  $("learning-card").hidden = !recent;
   $("gateways-left-out").hidden = true;
   if (recent) {
     await renderRecent();
@@ -1410,7 +1414,10 @@ function gatewayRow(gw, twice) {
     title: gw.blocked ? `Put ${gw.callsign} back in the list` : `Leave ${gw.callsign} out of the list`});
   block.addEventListener("click", () =>
     markGateway({op: gw.blocked ? "unblock" : "block", callsign: gw.callsign}));
-  acts.append(choose, block);
+  const details = el("button", {type: "button", class: "quiet", text: "Details",
+    title: `What the model says of ${gw.callsign}, what your calls have taught and what they measured`});
+  details.addEventListener("click", () => openDetails(gw.callsign));
+  acts.append(choose, details, block);
   if (gw.own) {
     const remove = el("button", {type: "button", class: "quiet", text: "Remove",
       title: `Forget ${gw.callsign}, a gateway of your own`});
@@ -1436,8 +1443,9 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 
 // an HF channel's prediction in a line under it; its title says how it was worked out
 function hfLine(h) {
-  const cls = h.state === "predicted" ? chanceClass(h.chance_words) : "";
-  const line = el("div", {class: `note verdict ${cls}`, text: h.words, title: hfTitle(h)});
+  const shown = h.learned || h;
+  const cls = h.state === "predicted" ? chanceClass(shown.chance_words) : "";
+  const line = el("div", {class: `note verdict ${cls}`, text: shown.words, title: hfTitle(h)});
   const heard = h.heard && h.heard.words;
   if (!heard) return line;
   return el("div", {}, line, el("div", {class: "note", text: heard,
@@ -1461,9 +1469,37 @@ function hfTitle(h) {
         + `${Math.round(h.open * 100)} % with what was heard here (2:1 in odds, until learned)`,
     way(h.up, "Sending"), way(h.down, "Receiving"),
     ...h.notes,
-    "Nothing is learned from your sessions yet",
+    learnedTitle(h),
     `Assumed: ${h.assumed.join("; ")}`,
   ].join(".\n") + ".";
+}
+
+// what was learned of an HF channel, in its line's title
+function learnedTitle(h) {
+  const l = h.learned;
+  if (!l) return "Nothing is learned from your calls on this band yet";
+  return `Learned from ${Math.round(l.calls * 10) / 10} of your calls: the path ${offsetWords(l.down_offset)} `
+    + `receiving and ${offsetWords(l.up_offset)} sending against the model, the gateway answering `
+    + `${pct(l.there)} of calls at this hour, the modem carrying ${pct(l.eta)} of its model's rate. `
+    + `The model alone said: ${h.words}`;
+}
+
+function pct(x) {
+  return x == null ? "—" : `${Math.round(x * 100)} %`;
+}
+
+function db(x) {
+  return x == null ? "—" : `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(Math.round(x))} dB`;
+}
+
+// an offset learned, with its spread: "−6 dB (±2)"
+function offsetWords(o) {
+  return o ? `${db(o.mean)} (±${Math.round(o.sd)})` : "—";
+}
+
+function bits(bps) {
+  if (bps == null) return "—";
+  return bps < 1000 ? `${Math.round(bps)} bit/s` : `${(bps / 1000).toFixed(1)} kbit/s`;
 }
 
 // -- terrain (choosing a gateway, §§8, 16.3): a VHF path over the ground, from elevation tiles
@@ -1500,7 +1536,13 @@ function terrainLine(gw, t) {
     });
     line.append(b);
   }
-  return line;
+  const l = t.learned;
+  if (!l) return line;
+  return el("div", {}, line, el("div", {class: `note verdict ${chanceClass(l.words)}`,
+    text: `Learned from your calls: margin about ${Math.round(l.margin_db)} dB · ${l.words}`,
+    title: `From ${Math.round(l.calls * 10) / 10} of your calls: the path ${offsetWords(l.down_offset)} `
+      + `receiving and ${offsetWords(l.up_offset)} sending against the terrain's budget, the gateway `
+      + `answering ${pct(l.there)} of calls at this hour: ${pct(l.chance)} in all`}));
 }
 
 async function openTerrain(callsign, dial) {
@@ -1731,8 +1773,10 @@ async function renderRecent() {
     ? "Your last calls, newest first. They are kept on this computer only."
     : "No calls yet. Each call you place is kept here, with how it ended.";
   const byCall = new Map((gatewaysData.gateways || []).map((gw) => [gw.callsign, gw]));
-  $("recent-rows").replaceChildren(...r.recent.map((a) => {
-    const tr = el("tr", {});
+  const shown = r.recent.filter((a) => showForgotten || !a.forgotten);
+  $("recent-rows").replaceChildren(...shown.map((a) => {
+    const tr = el("tr", {class: a.forgotten ? "forgotten" : ""});
+    if (a.forgotten) tr.title = "Forgotten: learning leaves this call out";
     const gw = byCall.get(a.remote);
     const called = el("div", {}, el("span", {class: "mono", text: a.remote}),
       el("div", {class: "note", text: a.kind === "station" ? "a station" : "a gateway"}));
@@ -1755,6 +1799,178 @@ async function renderRecent() {
     }
     return tr;
   }));
+  await renderLearning();
+}
+
+// -- what the call records teach (choosing a gateway, §§12.9, 16.4): one gateway's details, and
+// forgetting --
+
+let detailsShown = null;
+let showForgotten = false;
+
+async function openDetails(callsign) {
+  let d;
+  try {
+    d = await api(`learned?callsign=${encodeURIComponent(callsign)}`);
+  } catch (e) {
+    toast(e.message, true);
+    return;
+  }
+  detailsShown = callsign;
+  renderDetails(d);
+  const card = $("details-card");
+  const opening = card.hidden;
+  card.hidden = false;
+  if (opening) card.scrollIntoView({block: "nearest"});
+}
+
+function renderDetails(d) {
+  $("details-title").textContent = d.callsign;
+  const g = d.gateway;
+  const about = [];
+  if (g && g.post_office) about.push(`Listed by ${g.post_office}`);
+  if (g && g.seen) about.push(`its post office saw it ${age(g.seen)}`);
+  if (d.service) about.push(`sessions it served: ${pct(d.service.mean)}`);
+  if (d.forgotten) about.push("its history is forgotten");
+  $("details-about").textContent = about.join(" · ");
+  $("details-channels").replaceChildren(...d.channels.map(detailsTable));
+  const a = d.availability;
+  const hh = (h) => String(h).padStart(2, "0");
+  $("details-day").textContent = a
+    ? "Answers through the day: "
+      + a[1].map((p, i) => `${hh(i * 3)}–${hh(i * 3 + 3)}Z ${pct(p)}`).join(" · ")
+    : "";
+  $("details-calls").replaceChildren(...(d.recent.length ? d.recent.map((r) =>
+    el("li", {class: r.forgotten ? "forgotten" : "",
+      text: `${when(r.at)}: ${r.words}${r.dial_hz ? `, ${mhzOf(r.dial_hz)} MHz` : ""}`
+        + (r.forgotten ? " (forgotten)" : "")}))
+    : [el("li", {text: "No calls to it yet."})]));
+  const forget = $("details-forget");
+  forget.textContent = d.forgotten ? "Bring its history back" : "Forget its history";
+  forget.title = d.forgotten ? `Count your calls to ${d.callsign} in learning again`
+    : `Leave your calls to ${d.callsign} so far out of learning: after it changed its station, say. They stay in the Recent list`;
+  forget.onclick = async () => {
+    try {
+      if (d.forgotten) {
+        const rules = await api("forget");
+        const i = rules.rules.findIndex((r) => r.what === "gateway"
+          && r.callsign.toUpperCase() === d.callsign.toUpperCase());
+        if (i >= 0) await api("forget", {undo: i});
+      } else {
+        await api("forget", {what: "gateway", callsign: d.callsign});
+      }
+      await afterForgetting();
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+}
+
+// one channel's three columns (§16.4): the model, what was learned and what was measured
+function detailsTable(c) {
+  const hf = c.model && c.model.hf;
+  const t = c.model && c.model.terrain;
+  const l = c.learned;
+  const m = c.measured;
+  const learnedHf = hf && hf.learned;
+  const name = /^\d+$/.test(c.channel) ? `${mhzOf(Number(c.channel))} MHz` : c.channel;
+  const signed = (x) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(Math.round(x))}`;
+  const range = (r) => r ? `${signed(r.min)} … ${signed(r.max)} dB, ${r.n} session${r.n === 1 ? "" : "s"}` : "—";
+  const way = (key) => {
+    const learnedWay = l && l[key];
+    if (hf && hf[key]) {
+      const said = hf[key].snr_db;
+      return [db(said), learnedHf ? `${db(learnedHf[key].snr_db)} (±${Math.round(learnedWay.sd)})`
+        : learnedWay ? offsetWords(learnedWay) : "—"];
+    }
+    if (t && t[key]) {
+      const said = t[key].margin_db;
+      return [`${db(said)} margin`, learnedWay ? `${db(said + learnedWay.mean)} margin (±${Math.round(learnedWay.sd)})` : "—"];
+    }
+    return ["—", learnedWay ? `${offsetWords(learnedWay)} against the model` : "—"];
+  };
+  const [downModel, downLearned] = way("down");
+  const [upModel, upLearned] = way("up");
+  const rows = [
+    ["Signal there → here", downModel, downLearned, range(m.down),
+     "The gateway's signal as your modem hears it, dB in 3 kHz (VHF: the margin over what the modem needs)"],
+    ["Signal here → there", upModel, upLearned, m.up ? `${range(m.up)}, from its reports` : "—",
+     "Your signal as the gateway hears it, from what it reports during a session"],
+    ["Answers when called", "—", l ? `${pct(l.there)}, from about ${Math.max(1, Math.round(l.calls))} call${Math.round(l.calls) > 1 ? "s" : ""}` : "—",
+     m.calls ? `${m.answered} of ${m.calls}` : "—",
+     "How often it answered: on the grid of what was learned, and counted"],
+    ["Links made", hf && hf.chance != null ? pct(hf.chance) : t && t.chance ? t.chance : "—",
+     learnedHf ? pct(learnedHf.chance) : t && t.learned ? pct(t.learned.chance) : "—",
+     m.calls ? `${m.sessions} of ${m.calls} calls` : "—",
+     "The chance a call links now, at this hour: the model's, then with what was learned"],
+    ["Rate", hf && hf.down ? `${bits(hf.down.bps)} receiving` : "—",
+     learnedHf && learnedHf.down ? `${bits(learnedHf.down.bps)} receiving` : l ? `${pct(l.efficiency.mean)} of the model's` : "—",
+     m.bps ? `${bits(m.bps.min).replace(/ .*/, "")} … ${bits(m.bps.max)}` : "—",
+     "Data carried once linked: the modem's model, then with its efficiency learned here; measured over sessions long enough to judge"],
+    ["Links lost", "—", l ? `about ${l.losses_per_hour.toFixed(1)} an hour` : "—",
+     m.sessions ? `${m.lost} in ${m.sessions} session${m.sessions === 1 ? "" : "s"}` : "—",
+     "Sessions that ended early, the signal strong before: not fades"],
+  ];
+  const head = el("tr", {}, el("th", {text: name, title: c.listed ? channelWords(c.listed) : "A channel it no longer lists"}),
+    el("th", {text: "Model", title: "What the prediction says now"}),
+    el("th", {text: "Learned", title: "The model corrected by what your calls taught, with its spread"}),
+    el("th", {text: "Measured, last 30 days", title: "What your calls measured"}));
+  const body = rows.map(([what, model, learned, measured, title]) => el("tr", {},
+    el("th", {text: what, title}), el("td", {text: model}), el("td", {text: learned}),
+    el("td", {text: measured})));
+  return el("table", {class: "list details-table", "aria-label": `${name}: model, learned and measured`},
+    el("thead", {}, head), el("tbody", {}, ...body));
+}
+
+// the learning card in the Recent view: what is forgotten, and the ways to forget
+async function renderLearning() {
+  let f;
+  try {
+    f = await api("forget");
+  } catch (e) {
+    toast(e.message, true);
+    return;
+  }
+  $("learning-counts").textContent = f.records
+    ? `Learning uses ${f.records - f.forgotten} of your ${f.records} calls`
+      + (f.forgotten ? `; ${f.forgotten} forgotten.` : ".")
+    : "No calls yet: learning starts with your first.";
+  const day = (s) => new Date(s * 1000).toLocaleDateString();
+  const words = (r) => ({
+    gateway: () => `${r.callsign}'s calls up to ${day(r.at)}`,
+    place: () => `calls within ${r.km} km of ${r.lat.toFixed(3)}, ${r.lon.toFixed(3)}, up to ${day(r.at)}`,
+    before: () => `calls before ${day(r.before)}`,
+    everything: () => `every call up to ${day(r.at)}`,
+  }[r.what] || (() => r.what))();
+  $("forget-rules").replaceChildren(...f.rules.map((r, i) => {
+    const undo = el("button", {type: "button", class: "quiet", text: "Undo",
+      title: "Count these calls in learning again"});
+    undo.addEventListener("click", async () => {
+      try {
+        await api("forget", {undo: i});
+        await afterForgetting();
+      } catch (e) {
+        toast(e.message, true);
+      }
+    });
+    return el("li", {}, el("span", {text: `Forgotten: ${words(r)}`}), undo);
+  }));
+}
+
+async function forgetting(body) {
+  try {
+    await api("forget", body);
+    await afterForgetting();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// what forgetting changes: the lines learned, the open details and the Recent view
+async function afterForgetting() {
+  gatewaysData = await api(gatewaysPath());
+  await renderGatewaysPage();
+  if (detailsShown && !$("details-card").hidden) await openDetails(detailsShown);
 }
 
 function wireGateways() {
@@ -1771,6 +1987,26 @@ function wireGateways() {
     showBlocked = !showBlocked;
     await renderGatewaysPage();
   });
+  $("details-close").addEventListener("click", () => {
+    $("details-card").hidden = true;
+    detailsShown = null;
+  });
+  $("learning-show-forgotten").addEventListener("change", async (e) => {
+    showForgotten = e.currentTarget.checked;
+    await renderRecent();
+  });
+  $("forget-here").addEventListener("click", (e) => armed(e.currentTarget,
+    "Click again to forget them", () => forgetting({what: "place", km: 1})));
+  $("forget-before").addEventListener("click", () => {
+    const day = $("forget-date").value;
+    if (!day) {
+      toast("Choose the day first.", true);
+      return;
+    }
+    forgetting({what: "before", before: Math.floor(new Date(`${day}T00:00`).getTime() / 1000)});
+  });
+  $("forget-everything").addEventListener("click", (e) => armed(e.currentTarget,
+    "Click again to forget every call", () => forgetting({what: "everything"})));
   $("own-add").addEventListener("click", async () => {
     const mhz = Number(String($("own-mhz").value).replace(",", "."));
     await markGateway({op: "add-own", callsign: $("own-callsign").value, grid: $("own-grid").value,

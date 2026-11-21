@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.16 |
+| **Version** | 0.3.17 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -18,7 +18,8 @@ Today the client answers it by distance from a typed grid square. This document 
 answer it properly, for HF and for VHF and UHF, and how hf-predict should change to help. It is a
 proposal the author accepted on 2026-11-20, with the ten answers in §21; no specification has
 changed yet. The wishlist carries it as W17 and W55 to W58. Phases 1 to 3 are built; the client's
-installers carry the VOACAP engine from the next release (§§11.2, 18). Phase 4 is in progress.
+installers carry the VOACAP engine from the next release (§§11.2, 18). Phase 4 is in progress:
+learning is built and shown (§§12.5, 16.4); its validation on recorded streams waits for records.
 
 **How facts are marked.** Facts about RadioPost, Aether and hf-predict were read in their
 repositories on 2026-11-20. Outside facts were researched the same day: **[P]** checked on a primary
@@ -795,8 +796,9 @@ channel of the gateway list at the whole hour nearest now.
   measured on AWGN only gets the penalty of the measured rungs either side, interpolated
   (`filled`). A curve that never fell to one in ten is only a lower bound (`beyond`): the rate
   leaves that rung out on that class rather than trust it.
-* **The numbers as built.** Nothing is learned yet, so δ = 0, η = 1 and no margin. The chance is
-  P(SNR_up ≥ θ_call) · P(SNR_down ≥ θ_call) · MUFday, the call's threshold the tone floor's control
+* **The numbers as built.** The model's own line has δ = 0, η = 1 and no margin (what was learned
+  goes beside it: §12.5, Phase 4 below). The chance is P(SNR_up ≥ θ_call) · P(SNR_down ≥ θ_call) ·
+  MUFday, the call's threshold the tone floor's control
   frame on the class, MUFday the smaller of the two ways'. Taking the two ways as independent
   understates the chance on a path where both are marginal (one ionosphere carries both); Phase 4's
   outcomes say by how much. The rate is E[g(SNR)] over the days the call links, so the chance and
@@ -1894,6 +1896,25 @@ its terrain; ITM's other two are outside its range only by the refractivity at C
 The three columns are the point: what the model says, what has been learned, and what was
 measured, side by side, so a disagreement is visible rather than averaged away.
 
+**Built in Phase 4 (2026-11-21).** **Details** beside each gateway opens the card: for each channel
+it lists (and any it no longer lists but was called on), the signal each way, how often it answered,
+the chance of a link, the rate and the links lost, in the three columns; under them availability by
+three-hour block and the last ten calls, and **Forget its history** (`GET /api/learned?callsign=`,
+`learning::measured` for the third column). Left out for now: the day's chart of the band (the
+blocks are given as words), **Check this gateway** (Phase 6's probe) and **Correct its record**.
+What was learned also goes on the list's lines, *beside* the model's figures and never over them:
+`hf.learned` (each way's spread moved by δ and widened by its spread, the chance times A for the
+hour's block, the rate times η) and `terrain.learned` (each way's margin moved by δ, read against the
+location spread widened the same way, times A). The line shows the learned words; its title gives
+the model's. Kept apart because the call's record keeps the line as it was shown, and learning
+compares outcomes with the model: a corrected figure in its place would correct twice. The record's
+`chance`, for station health, is the one shown. Learning is worked out again only when the records,
+the forgetting rules, the post offices' sightings or the hour change, and kept in
+`selection/learned.json` under the learning's version (§15.1). The station-health warning is a line
+above the views; forgetting (§12.9) is **Forget its history** and the *Recent* view's card (near here,
+before a day, everything; each rule with **Undo**; **Show forgotten calls**), `/api/forget`. The
+Recommended view is still ordered by distance: ranking by what was learned is Phase 5's.
+
 ### 16.5 Places, GPS and station
 
 A Setup card: the list of places (name, position, grid, default, station profile) with *Add from
@@ -2308,3 +2329,4 @@ for size in (2000, 50000):
 | 0.3.14 | 2026-11-21 | §11.2: the engine bundled: hf-predict publishes it with checksums, RadioPost pins one, checks it, and puts it in the client's installers. Phase 3 built. |
 | 0.3.15 | 2026-11-21 | §12.2: the first two additions done (RP-4 1.4.0); the attempt record's version 2 (evidence, prediction, the peer's readings). Phase 4 begun. |
 | 0.3.16 | 2026-11-21 | §12.5: the grid as built: *D* and the heard share *h* on it (the first table counted an uplink failure twice: 3 dB low on a simulated stream), availability counted again from what the grids learned, the direction shown from the grids, the check on simulated streams. |
+| 0.3.17 | 2026-11-21 | §16.4: the details built (three columns per channel, availability by block, the last calls, forgetting), what was learned put beside the model's figures on the list's lines and never over them, `learned.json` as a cache under the learning's version, the station-health line, forgetting in the panel. §10.3: the model's line as built. |
