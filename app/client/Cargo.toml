@@ -32,6 +32,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 tiny_http = "0.12"
 # terrain tiles from the Copernicus DEM's public bucket (selection::terrain)
+# the terrain map's background, a PNG (and its CRC)
+flate2 = "1"
 ureq = "3"
 unicode-normalization = "0.1"
 

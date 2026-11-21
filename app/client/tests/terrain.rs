@@ -499,3 +499,112 @@ fn tiles_are_fetched_as_the_data_sets_have_them() {
     post(at, "/api/terrain", &json!({"op": "cancel"}));
     let _ = std::fs::remove_dir_all(&b.dir);
 }
+
+/// A GET whose answer is not JSON: its status, its type and its bytes.
+fn raw(at: SocketAddr, path: &str) -> (u16, String, Vec<u8>) {
+    let mut s = TcpStream::connect(at).expect("the panel");
+    write!(
+        s,
+        "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nConnection: close\r\n\r\n",
+        at.port()
+    )
+    .expect("sent");
+    let mut bytes = Vec::new();
+    s.read_to_end(&mut bytes).expect("an answer");
+    let split = bytes
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .expect("a head");
+    let head = String::from_utf8_lossy(&bytes[..split]).to_lowercase();
+    let status = head[9..12].parse().expect("a status");
+    let kind = head
+        .lines()
+        .find_map(|l| l.strip_prefix("content-type: "))
+        .unwrap_or("")
+        .to_owned();
+    (status, kind, bytes[split + 4..].to_vec())
+}
+
+/// A PNG's width, height and RGBA rows, read back (one IDAT, unfiltered rows, as the panel
+/// writes them).
+fn rows_of(png: &[u8]) -> (u32, u32, Vec<Vec<u8>>) {
+    let be = |b: &[u8]| u32::from_be_bytes(b.try_into().expect("four bytes"));
+    let (w, h) = (be(&png[16..20]), be(&png[20..24]));
+    let mut at = 8;
+    let mut data = Vec::new();
+    while at < png.len() {
+        let len = be(&png[at..at + 4]) as usize;
+        if &png[at + 4..at + 8] == b"IDAT" {
+            data.extend_from_slice(&png[at + 8..at + 8 + len]);
+        }
+        at += 12 + len;
+    }
+    let mut raw = Vec::new();
+    flate2::read::ZlibDecoder::new(&data[..])
+        .read_to_end(&mut raw)
+        .expect("zlib");
+    let row = w as usize * 4 + 1;
+    let rows = raw.chunks(row).map(|r| r[1..].to_vec()).collect();
+    (w, h, rows)
+}
+
+#[test]
+fn the_terrain_map_is_shaded_where_the_terrain_is_held() {
+    let b = bench("terrain-map");
+    ridge_tile(&b.tiles);
+    // half of it over N33W085, which is held, half over N34W085, which is not
+    let (status, kind, png) = raw(
+        b.at,
+        "/api/terrain/hillshade?south=33.8&west=-84.8&north=34.2&east=-84.4&width=120",
+    );
+    assert_eq!((status, kind.as_str()), (200, "image/png"));
+    let (w, h, rows) = rows_of(&png);
+    assert_eq!(w, 120);
+    // 0.4° by 0.4° at 34°: 120 × 110 540 / (111 320 × cos 34°)
+    assert_eq!(h, 144);
+    assert!(
+        rows[10].chunks(4).all(|p| p[3] == 0),
+        "north of 34°: nothing held"
+    );
+    assert!(
+        rows[130].chunks(4).all(|p| p[3] == 255),
+        "south of 34°: shaded"
+    );
+    // the ridge at 84.60° W, a kilometre wide, between columns 59 and 60 (a pixel is 0.0033°):
+    // its west face lighter than its east face, the plain either side between them
+    let shade = |c: usize| rows[130][c * 4];
+    assert!(
+        shade(59) > shade(30) && shade(30) > shade(60),
+        "{} {} {}",
+        shade(59),
+        shade(30),
+        shade(60)
+    );
+    // the same picture again, kept
+    let (_, _, again) = raw(
+        b.at,
+        "/api/terrain/hillshade?south=33.8&west=-84.8&north=34.2&east=-84.4&width=120",
+    );
+    assert_eq!(again, png);
+    // and another area drawn afresh: wholly north of the tile held, nothing to shade
+    let (_, _, north) = raw(
+        b.at,
+        "/api/terrain/hillshade?south=34.3&west=-84.8&north=34.7&east=-84.4&width=120",
+    );
+    let (_, _, rows) = rows_of(&north);
+    assert!(
+        rows.iter().flatten().skip(3).step_by(4).all(|&a| a == 0),
+        "nothing held there"
+    );
+    // what makes no sense is refused
+    for query in [
+        "south=34.2&west=-84.8&north=33.8&east=-84.4&width=120",
+        "south=30&west=-84.8&north=35&east=-84.4&width=120",
+        "south=33.8&west=-84.8&north=34.2&east=-84.4&width=5000",
+        "south=33.8&west=-84.8&north=34.2",
+    ] {
+        let (status, _, _) = raw(b.at, &format!("/api/terrain/hillshade?{query}"));
+        assert_eq!(status, 400, "{query}");
+    }
+    let _ = std::fs::remove_dir_all(&b.dir);
+}

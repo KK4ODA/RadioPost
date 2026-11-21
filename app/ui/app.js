@@ -3,7 +3,7 @@
 // setup, over the client's JSON API (app/client/src/panel.rs). No build step.
 
 import { WorldMap } from "./map.js";
-import { drawProfile } from "./terrain.js";
+import { AreaMap, drawProfile } from "./terrain.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -1070,6 +1070,24 @@ async function renderGatewaysPage() {
   const twice = new Set(g.ambiguous || []);
   $("gateway-rows").replaceChildren(...rows.map((gw) => gatewayRow(gw, twice)));
   showMap(rows);
+  showArea(rows);
+}
+
+// the terrain map: the VHF gateways of the view whose records give their site, from where you are
+let areaMap = null;
+function showArea(rows) {
+  const here = gatewaysData.here;
+  const vhf = rows.filter((gw) => gw.site && gw.terrain && gw.terrain.state !== "far");
+  $("area-card").hidden = !here || !vhf.length;
+  if ($("area-card").hidden) return;
+  if (!areaMap) areaMap = new AreaMap($("area-map"), {onPick: (c) => pickGateway(c, "area")});
+  areaMap.picked = pickedGateway;
+  areaMap.show({here, gateways: vhf});
+  // the notice the licence of the data held asks for, under the picture drawn from it
+  api("terrain").then((t) => {
+    $("area-notice").replaceChildren(...(t.notices || []).map((n) =>
+      el("p", {class: "note terrain-notice", text: `${n.data}: ${n.notice}`})));
+  }).catch(() => {});
 }
 
 // -- the map (§16.2): the rows of the view, the one picked in the list or on the map, and places
@@ -1113,11 +1131,12 @@ function showMap(rows) {
 function pickGateway(callsign, from) {
   pickedGateway = callsign;
   if (from !== "map" && worldMap) worldMap.pick(callsign);
+  if (areaMap) areaMap.pick(callsign);
   for (const tr of $("gateway-rows").children) {
     const on = tr.dataset.callsign === callsign;
     tr.classList.toggle("picked", on);
     tr.setAttribute("aria-selected", String(on));
-    if (on && from === "map") tr.scrollIntoView({block: "nearest"});
+    if (on && (from === "map" || from === "area")) tr.scrollIntoView({block: "nearest"});
   }
   const gw = callsign && (gatewaysData.gateways || []).find((g) => g.callsign === callsign);
   $("map-picked").hidden = !gw;
@@ -1172,6 +1191,9 @@ function wireMap() {
   const card = $("map-card");
   card.open = kept("gmap", "open") === "open";
   card.addEventListener("toggle", () => keep("gmap", card.open ? "open" : "closed"));
+  const area = $("area-card");
+  area.open = kept("garea", "open") === "open";
+  area.addEventListener("toggle", () => keep("garea", area.open ? "open" : "closed"));
   $("map-fit").addEventListener("click", () => worldMap && worldMap.fit());
   $("map-world").addEventListener("click", () => worldMap && worldMap.world());
   $("map-in").addEventListener("click", () => worldMap && worldMap.zoom(1.5));

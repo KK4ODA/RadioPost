@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.8 |
+| **Version** | 0.3.9 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -1668,8 +1668,15 @@ its distance and bearing; picking works both ways, **Choose** works from the map
 be saved from it (§16.5's *Add from the map*). The land is Natural Earth's 1:110m, as world-atlas
 2.0.2 redistributes it, written into one 44 kB SVG path by `tools/map/world.py`; hf-predict's
 1:50m was 545 kB of TopoJSON, too large for a panel with no build step. No library: `app/ui/map.js`
-draws it. Lines coloured by score and the coverage shading wait for predictions (Phase 3), the
-hillshade map for VHF terrain (Phase 2).
+draws it. Lines coloured by score and the coverage shading wait for predictions (Phase 3).
+
+**Done in Phase 2 (2026-11-21):** the VHF map. The Gateways page's **Terrain map** draws you and the
+VHF gateways of the view that give their `site` over a hillshade of the terrain held (Horn's
+method, lit from 315° at 45°, relief doubled, the sea pale blue, nothing where no tile is held),
+each path coloured by its chance and its obstacle marked where P.526's geometry puts it; picking is
+shared with the list and the world map. The hillshade is a PNG the panel draws
+(`/api/terrain/hillshade`, `selection/hillshade.rs`), about a second for 800 pixels from 90 m
+data, the last one kept. Online map tiles are not offered.
 
 ### 16.3 The VHF terrain profile
 
@@ -1716,7 +1723,7 @@ southern Appalachians, the Colorado Front Range, Tampa Bay and Puget Sound; leng
 worked out by the client's `terrain_paths` example on GLO-90: 11 partly obstructed, 39 blocked,
 P.526 losses 0 to 59 dB. It writes each profile as P.526 read it, for ITM to be run on the same
 one. ITM, run on the same profiles, agrees where it holds:
-[the report](05-vhf-terrain-validation.md). **Owed:** the hillshade map (§16.2).
+[the report](05-vhf-terrain-validation.md). The hillshade map is §16.2's.
 
 ### 16.4 Gateway details
 
@@ -2140,3 +2147,4 @@ for size in (2000, 50000):
 | 0.3.6 | 2026-11-21 | §16.3: Phase 2's client done (the terrain line, the profile, the budget each way, the slider, fetching, Setup's **Terrain**), with its two deviations: GLO-90 first, and one data set a path. |
 | 0.3.7 | 2026-11-21 | §16.3: Phase 2 measured: 100 candidates judged in 42 ms or less; the 50 real paths drawn and worked out with P.526 (`tools/terrain/paths.py`, the client's `terrain_paths` example); the ITM run and the hillshade map owed. |
 | 0.3.8 | 2026-11-21 | §8.5, §16.3: P.526 compared with ITM on the 50 paths ([report](05-vhf-terrain-validation.md)); the hillshade map still owed. |
+| 0.3.9 | 2026-11-21 | §16.2: the VHF terrain map done; Phase 2 is built. |

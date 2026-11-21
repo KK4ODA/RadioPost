@@ -52,7 +52,7 @@ use crate::online;
 use crate::presence::{Carrier, Presence};
 use crate::selection::position::Position;
 use crate::selection::terrain::{self, Terrain};
-use crate::selection::{attempts, directory};
+use crate::selection::{self, attempts, directory};
 use crate::session::{self, Fetch, Kind, Options};
 use crate::store::{Error, Folder, Store, unhex};
 
@@ -701,6 +701,10 @@ impl Panel {
             );
             return;
         }
+        if method == Method::Get && path == "/api/terrain/hillshade" {
+            let _ = request.respond(self.hillshade(query));
+            return;
+        }
         let mut body = String::new();
         let _ = request.as_reader().take(32 << 20).read_to_string(&mut body);
         let body: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
@@ -714,6 +718,40 @@ impl Panel {
             .with_header(Header::from_bytes("Content-Type", "application/json").expect("a header"))
             .with_header(Header::from_bytes("Cache-Control", "no-store").expect("a header"));
         let _ = request.respond(response);
+    }
+
+    /// The terrain map's background (`GET /api/terrain/hillshade?south=&west=&north=&east=&width=`),
+    /// a PNG drawn from the tiles held: the one answer of the API that is not JSON.
+    fn hillshade(&self, query: &str) -> Response<std::io::Cursor<Vec<u8>>> {
+        let number = |name: &str| {
+            query
+                .split('&')
+                .find_map(|kv| kv.strip_prefix(name)?.strip_prefix('='))
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(f64::NAN)
+        };
+        let area = selection::hillshade::Area::new(
+            number("south"),
+            number("west"),
+            number("north"),
+            number("east"),
+        );
+        let width = number("width");
+        match area {
+            Ok(area) if (1.0..=f64::from(selection::hillshade::MAX_PIXELS)).contains(&width) => {
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "1 to MAX_PIXELS, checked above"
+                )]
+                let png = self.terrain.hillshade(area, width as u32);
+                Response::from_data(png.as_slice())
+                    .with_header(Header::from_bytes("Content-Type", "image/png").expect("a header"))
+                    .with_header(Header::from_bytes("Cache-Control", "no-store").expect("a header"))
+            }
+            Ok(_) => Response::from_string("width: 1 to 1024 pixels").with_status_code(400),
+            Err(why) => Response::from_string(why).with_status_code(400),
+        }
     }
 
     fn file(&self, path: &str) -> Response<std::io::Cursor<Vec<u8>>> {

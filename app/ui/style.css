@@ -563,3 +563,32 @@ details.hint code, .note code { font-family: var(--mono); font-size: 12px; backg
 .terrain-key .k-ground { color: color-mix(in srgb, var(--ok) 55%, var(--panel)); }
 .terrain-key .k-ray, .terrain-key .k-fresnel { color: var(--accent); }
 .terrain-key .k-mark { color: var(--busy); }
+
+/* the terrain map (choosing a gateway, §16.2) */
+#area-map { display: block; width: 100%; max-height: 62vh; aspect-ratio: 1; margin-top: 8px;
+            border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+#area-map .a-path { stroke-width: 2.5; stroke-linecap: round; cursor: pointer; }
+#area-map .a-path.likely { stroke: var(--ok); }
+#area-map .a-path.may { stroke: var(--busy); }
+#area-map .a-path.unlikely { stroke: var(--bad); }
+#area-map .a-path.none { stroke: var(--muted); stroke-dasharray: 5 4; }
+#area-map .a-path.picked { stroke-width: 5; }
+#area-map .a-obstacle { fill: var(--busy); stroke: var(--panel); stroke-width: 1.2; }
+#area-map .a-obstacle.blocked { fill: var(--bad); }
+#area-map .a-gateway { cursor: pointer; outline: none; }
+#area-map .a-gateway:focus-visible circle { stroke: var(--accent); stroke-width: 3.5; }
+#area-map .a-gateway circle { fill: var(--panel); stroke: var(--text); stroke-width: 2; }
+#area-map .a-gateway text { font: 600 12px var(--face); fill: var(--text);
+                            paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
+#area-map .a-you { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+#area-map .a-you-dot { fill: var(--accent); }
+#area-map .a-scale { stroke: var(--text); stroke-width: 2; }
+#area-map .a-scale-text { font: 11px var(--face); fill: var(--text);
+                          paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
+.area-key { margin-top: 6px; }
+.area-key .k-likely { color: var(--ok); }
+.area-key .k-may { color: var(--busy); }
+.area-key .k-unlikely { color: var(--bad); }
+.area-key .k-none { color: var(--muted); }
+.area-key .k-partly { color: var(--busy); }
+.area-key .k-mark { color: var(--bad); }

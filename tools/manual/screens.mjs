@@ -380,7 +380,41 @@ const VHF_GATEWAY = {callsign: "N3CALL-10", post_office: "radiopost.org", place:
               station: {power_w: 50, antenna: "collinear"}}],
   terrain: {state: "judged", dial_hz: 145050000, chance: TERRAIN_PATH.chance, words: TERRAIN_PATH.words}};
 Object.assign(VHF_GATEWAY, placedFrom(HERE, VHF_GATEWAY.grid));
-const GATEWAYS_VHF = {...GATEWAYS, gateways: [VHF_GATEWAY, ...GATEWAYS.gateways]};
+// four more made up round Atlanta, two on public summits and two low, with the terms the client
+// worked out for each over the real tiles N33W085, N33W084, N34W085 and N34W084: the terrain map's
+// gateways. Its background, terrain-hillshade.jpg, is the client's own hillshade of that area
+function vhf(callsign, place, site, dial, modem, terrain) {
+  const gw = {callsign, post_office: "radiopost.org", place, grid: "EM73", hours: "always",
+    own: false, favourite: false, blocked: false, list_fetched: T - 2 * DAY, list_old: false,
+    last: null, worked: false, seen: T - 600, seen_old: false, listening: null, site,
+    km: Math.round(terrain.length_km),
+    channels: [{dial_hz: dial, mode: "FM", bandwidth_hz: 12500, modem, favourite: false,
+                blocked: false}],
+    terrain: {...terrain, dial_hz: dial}};
+  return Object.assign(gw, placedFrom(HERE, gw.grid));
+}
+const MORE_VHF = [
+  vhf("N4CALL-10", "Kennesaw Mountain, Georgia", {lat: 33.9763, lon: -84.5779, agl_m: 10}, 145070000,
+      "ax25", {state: "judged", chance: "likely to work", length_km: 30.8,
+               class: {kind: "partly", at_km: 1.2}, class_words: "Fresnel zone partly obstructed at 1.2 km",
+               words: "Fresnel zone partly obstructed at 1.2 km · diffraction about 8 dB (P.526) · margin about 43 dB · likely to work"}),
+  vhf("N5CALL-10", "Hapeville, Georgia", {lat: 33.6407, lon: -84.4277, agl_m: 12}, 145090000,
+      "aether-fm", {state: "judged", chance: "likely to work", length_km: 12.6,
+                    class: {kind: "partly", at_km: 8.8}, class_words: "Fresnel zone partly obstructed at 8.8 km",
+                    words: "Fresnel zone partly obstructed at 8.8 km · diffraction about 16 dB (P.526) · margin about 43 dB · likely to work"}),
+  vhf("N6CALL-10", "Stockbridge, Georgia", {lat: 33.60, lon: -84.20, agl_m: 6}, 440200000, "ax25",
+      {state: "judged", chance: "may work", length_km: 24.0,
+       class: {kind: "blocked", at_km: 20.2, above_ray_m: 42},
+       class_words: "Blocked by terrain 42 m above the direct ray at 20.2 km",
+       words: "Blocked by terrain 42 m above the direct ray at 20.2 km · diffraction about 40 dB (P.526) · margin about 4 dB · may work"}),
+  vhf("N7CALL-10", "Austell, Georgia", {lat: 33.62, lon: -84.60, agl_m: 8}, 145010000, "vara-fm",
+      {state: "judged", chance: "likely to work", length_km: 24.3,
+       class: {kind: "blocked", at_km: 6.1, above_ray_m: 8},
+       class_words: "Blocked by terrain 8 m above the direct ray at 6.1 km",
+       words: "Blocked by terrain 8 m above the direct ray at 6.1 km · diffraction about 25 dB (P.526) · margin about 29 dB · likely to work"}),
+];
+const GATEWAYS_VHF = {...GATEWAYS, gateways: [VHF_GATEWAY, ...MORE_VHF, ...GATEWAYS.gateways]};
+const HILLSHADE = readFileSync(join(ROOT, "tools", "manual", "terrain-hillshade.jpg"));
 // Setup's terrain: a few tiles held, the area being prepared, the radii as the client gives them
 // from downtown
 const NOTICE_90 = TERRAIN_PATH.notice;
@@ -558,6 +592,10 @@ async function open(browser, {ui, api, width = 1280, height = 800}) {
   await context.clock.setFixedTime(NOW);
   await context.route(`${ORIGIN}/**`, async (route) => {
     const url = new URL(route.request().url());
+    if (url.pathname === "/api/terrain/hillshade") {
+      await route.fulfill({body: HILLSHADE, contentType: "image/jpeg"});
+      return;
+    }
     if (url.pathname.startsWith("/api/")) {
       const path = url.pathname.slice(5);
       const body = route.request().postDataJSON?.() ?? null;
@@ -1023,13 +1061,32 @@ const SHOTS = {
     const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld({vhf: true})),
                                                  height: 1900});
     await page.click("#gateways-open");
-    await page.evaluate(() => { document.getElementById("map-card").open = false; });
+    // both maps folded away, as the operator can, so the card and the row fit
+    await page.evaluate(() => {
+      document.getElementById("map-card").open = false;
+      document.getElementById("area-card").open = false;
+    });
     await page.waitForTimeout(200);
     await page.locator("#gateway-rows tr", {hasText: "N3CALL-10"}).getByRole("button", {name: "Terrain"}).click();
     await page.waitForTimeout(400);
     await page.screenshot({path: join(OUT, "client-terrain.png"), clip: await unionClip(page,
       ["#terrain-card", "#gateway-rows tr:first-child"])});
     console.log("docs/manual/screens/client-terrain.png");
+    await context.close();
+  },
+
+  // the terrain map: five VHF gateways round Atlanta over the hillshade, N6CALL-10 picked
+  async "client-area"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld({vhf: true})),
+                                                 height: 1500});
+    await page.click("#gateways-open");
+    await page.evaluate(() => { document.getElementById("map-card").open = false; });
+    await page.waitForTimeout(400);
+    await page.locator("#area-map .a-gateway", {hasText: "N6CALL-10"}).click();
+    await page.evaluate(() => document.activeElement.blur());
+    await page.locator("#area-card").evaluate((card) => card.scrollIntoView({block: "start"}));
+    await page.waitForTimeout(400);
+    await shot(page, "client-area", "#area-card");
     await context.close();
   },
 

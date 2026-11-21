@@ -163,6 +163,12 @@
             <button type="button" class="quiet" id="map-point-cancel">Cancel</button>
           </div>
         </details>
+        <details class="card" id="area-card" open hidden>
+          <summary title="You and the VHF gateways of this view whose records say where their antennas are, over the terrain held on this computer">Terrain map</summary>
+          <svg id="area-map" role="img" aria-label="The VHF gateways of this view over the terrain: each path coloured by its chance, and marked where it is obstructed. Pick a gateway here or in the list"></svg>
+          <p class="note area-key" title="What the map shows"><span class="k-likely">━</span> likely to work · <span class="k-may">━</span> may work · <span class="k-unlikely">━</span> unlikely to work · <span class="k-none">┄</span> not worked out · <span class="k-partly">▲</span> where a path is partly obstructed, <span class="k-mark">▲</span> or blocked · shaded where the terrain is held, lit from the north-west and twice as steep as it is</p>
+          <div id="area-notice" title="What the licence of the data held asks to be said"></div>
+        </details>
         <div class="card" id="terrain-card" hidden>
           <div class="row terrain-head">
             <h2 id="terrain-title" title="The path from the position in use to the gateway's antennas, over the ground between them">Terrain</h2>

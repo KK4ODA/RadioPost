@@ -20,7 +20,9 @@ use radioprop_place::station::{Resolved, Said};
 use radioprop_terrain::budget::{self, Ends};
 use radioprop_terrain::path::{self as terrain_path, Class, K_STANDARD};
 use radioprop_terrain::profile;
-use radioprop_terrain::store::{Have, Store, TileId};
+use radioprop_terrain::store::{Have, Height, Store, TileId};
+
+use super::hillshade;
 use serde_json::{Value, json};
 
 /// Channels from this frequency up are judged over the terrain; below it the ionosphere decides.
@@ -170,6 +172,8 @@ pub struct Terrain {
     lists: Mutex<[Option<Arc<HashSet<String>>>; 2]>,
     /// Where the data sets are fetched from in place of their public buckets: tests serve them.
     origin: Option<String>,
+    /// The last map background drawn, by what it was drawn of: drawing takes a second or so.
+    drawn: Mutex<Option<(String, Arc<Vec<u8>>)>>,
 }
 
 impl Terrain {
@@ -183,6 +187,7 @@ impl Terrain {
             fetching: Mutex::new(Fetching::default()),
             lists: Mutex::new([None, None]),
             origin: None,
+            drawn: Mutex::new(None),
         }
     }
 
@@ -615,6 +620,44 @@ impl Terrain {
                 Err(json!({"state": "error", "words": format!("Terrain not checked: {why}")}))
             }
         }
+    }
+
+    /// The terrain map's background over `area`, `width` pixels across, as a PNG: the finest data
+    /// held at each point, nothing where no tile is held. The last one is kept, and drawn again
+    /// only for another area or once a tile has been fetched.
+    ///
+    /// # Panics
+    ///
+    /// A thread panicked while holding the fetching's lock.
+    #[must_use]
+    pub fn hillshade(&self, area: hillshade::Area, width: u32) -> Arc<Vec<u8>> {
+        let done = self.fetching.lock().expect("terrain").done;
+        let key = format!("{area:?} {width} {done}");
+        if let Some((k, png)) = &*self.drawn.lock().expect("terrain") {
+            if *k == key {
+                return Arc::clone(png);
+            }
+        }
+        let png = Arc::new(self.draw_hillshade(area, width));
+        *self.drawn.lock().expect("terrain") = Some((key, Arc::clone(&png)));
+        png
+    }
+
+    fn draw_hillshade(&self, area: hillshade::Area, width: u32) -> Vec<u8> {
+        let height = |at: LatLon| {
+            let t = TileId::of(at);
+            let store = if self.glo30.have(t) == Have::Held {
+                &self.glo30
+            } else {
+                &self.glo90
+            };
+            match store.height(at) {
+                Ok(Height::Metres(h)) => Some(h),
+                _ => None,
+            }
+        };
+        let (w, h, rgba) = hillshade::draw(area, width, &height);
+        hillshade::png(w, h, &rgba)
     }
 
     /// The tiles a path from `here` to a gateway's site reads, those not held at 90 m.
