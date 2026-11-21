@@ -353,9 +353,12 @@ pub struct State {
     pub copies: BTreeMap<String, Vec<Json>>,
     /// When each gateway last polled for copies (RP-7 §4.1).
     pub last_poll: BTreeMap<String, u64>,
-    /// When each registered gateway last reached this post office, by logging in or polling for
-    /// copies: the list's `seen` (RP-5 §4.4).
+    /// When each registered gateway last reached this post office with its own credential, by
+    /// logging in, polling for copies or reporting its status: the list's `seen` (RP-5 §4.4).
     pub gateways_seen: BTreeMap<String, u64>,
+    /// Each registered gateway's last status report, as kept (RP-5 §5.9), for the status list
+    /// (§4.6).
+    pub gateways_status: BTreeMap<String, crate::status::GatewayStatus>,
     /// Enrollment codes not yet used.
     pub codes: BTreeMap<String, Code>,
     /// Login nonces issued, base64url, and when each ends.
@@ -1034,7 +1037,7 @@ impl PostOffice {
             let asking = (user.address.as_str(), user.operator.as_str());
             return self.office(method, &parts[1..], body, Some(asking));
         }
-        let gateway_route = matches!(parts[0], "sessions" | "reports" | "copies");
+        let gateway_route = matches!(parts[0], "sessions" | "reports" | "copies" | "status");
         if route != "/credentials" && gateway_route != user.gateway() {
             return problem(ErrorCode::NotAuthorized, None);
         }
@@ -1043,6 +1046,7 @@ impl PostOffice {
             ("POST", "/reports") => return self.reports(&user, body),
             ("GET", "/copies") => return self.poll(&user, query),
             ("POST", "/copies/ack") => return self.ack(&user, body),
+            (m @ ("PUT" | "DELETE"), "/status") => return self.status_report(&user, m, body),
             ("PUT", "/settings") => {
                 self.state
                     .settings
@@ -1121,7 +1125,7 @@ impl PostOffice {
             },
         );
         if cbody.flags & flags::GATEWAY != 0 {
-            self.saw(&cbody.operator);
+            self.saw(&cbody.address, &cbody.operator);
         }
         let mut answer = json!({"token": token, "expires": expires, "address": cbody.address,
                                 "operator": cbody.operator, "flags": cbody.flags});
@@ -1937,7 +1941,7 @@ impl PostOffice {
     /// poll answered `placing` false is not counted (RP-7 §4.1), and a credential from a post
     /// office that did not list the gateway gets nothing, uncounted.
     fn poll(&mut self, gateway: &Holder, query: &str) -> Response {
-        self.saw(&gateway.operator);
+        self.saw(&gateway.address, &gateway.operator);
         if !self.theirs(gateway) {
             return Response::ok(200, json!({"cursor": "c_0", "placing": false, "items": []}));
         }
@@ -2063,15 +2067,30 @@ impl PostOffice {
         Response::ok(201, json!({"credential": base64url::encode(&credential)}))
     }
 
-    /// A registered gateway reached this post office now (RP-5 §4.4, `seen`).
-    fn saw(&mut self, callsign: &str) {
+    /// A registered gateway reached this post office now with its own credential, one this post
+    /// office issued (RP-5 §4.4, `seen`): another post office's credential for its callsign does
+    /// not say the gateway is on.
+    pub(crate) fn saw(&mut self, address: &str, callsign: &str) {
+        if !self.own_credential(address) {
+            return;
+        }
         if let Some(found) = self.registered(callsign) {
             self.state.gateways_seen.insert(found, self.now);
         }
     }
 
+    /// Whether a credential naming `address` is this post office's own: its address at one of its
+    /// domains (RP-5 §5.8, §5.9).
+    pub(crate) fn own_credential(&self, address: &str) -> bool {
+        let domain = domain_of(address).to_lowercase();
+        self.config
+            .domains
+            .iter()
+            .any(|d| d.eq_ignore_ascii_case(&domain))
+    }
+
     /// The callsign a gateway's record is kept under, compared without regard to case (RP-0 §6.1).
-    fn registered(&self, callsign: &str) -> Option<String> {
+    pub(crate) fn registered(&self, callsign: &str) -> Option<String> {
         self.state
             .gateways
             .keys()
@@ -2132,6 +2151,7 @@ impl PostOffice {
         self.state.acked.remove(&found);
         self.state.last_poll.remove(&found);
         self.state.gateways_seen.remove(&found);
+        self.state.gateways_status.remove(&found); // RP-5 §6.4: its report goes with it
         self.state.cut.remove(&found);
         for (via, address, serial) in self.state.forwarded.remove(&found).unwrap_or_default() {
             self.state

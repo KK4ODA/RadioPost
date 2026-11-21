@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.3.0 |
+| **Version** | 1.4.0 |
 | **Updated** | 2026-11-21 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -402,6 +402,22 @@ A name is lower case: letters, digits and `-`. A program that meets a name it do
 ignores it, as if the kind were not given: a kind added after the program was written is not an
 error.
 
+### 9.7 Gateway problems
+
+A gateway's status report names what keeps it from working fully (RP-5 §5.9, `problems`), so
+that anyone reading its post office's status list (RP-5 §4.6) can tell why it answers on fewer
+channels, or none. The name is from this list.
+
+| Name | Problem |
+|---|---|
+| `modem-away` | A modem it uses does not answer. It is trying to reach it again, and meanwhile does not listen on that modem's channels. |
+| `outside-segment` | Its radio is on a dial where it may not answer calls by itself under its country's rules (RP-4 §8): it does not answer there. |
+| `setup-error` | It stopped itself: its settings or its modem cannot work as they are set, and its operator must change them. |
+
+A name is lower case: letters, digits and `-`, at most 32 characters. A program that meets a name
+it does not know takes it as a problem all the same, and shows it by its name: a problem added
+after the program was written is not an error.
+
 ---
 
 ## Change log
@@ -425,3 +441,4 @@ error.
 | 1.1.0 | 2026-11-18 | RP-8, alerts (§2): HMAC-SHA256 tags and PBKDF2 keys (§5); the contexts `RadioPost-circle-v1`, `RadioPost-circle-id-v1` and `RadioPost-alert-v1` (§9.2); broadcast types (§9.5); §8.6: the vectors cover RP-8. MINOR, announced (§8.4): nothing for an implementation to do. |
 | 1.2.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 3; D43). §3: a client implements RP-1 §7.1, §7.2 and §8 too, which RP-1 §5 already needed, and RP-3 §10 both ways, as the conformance tester had graded it; its MAY column names RP-5 §3 and §4. §6.1: of three parts, the base is the middle one (the length rule had made `W4/K1A/QRP`'s base `QRP`). §6.2: two addresses are one when they differ only in the case of ASCII letters, in either part (only the domain had been said, and programs compared local parts both ways). Test vectors (`statements.json`, `base_callsigns`). MINOR, announced (§8.4): a verifier that keeps the old base refuses some statements `not-authorized`, and a station that compares local parts exactly refuses a message `refused-by-policy`; nothing is taken that should not be. Implementations should take the new base and compare addresses so. |
 | 1.3.0 | 2026-11-21 | §9.6: the kinds of antenna a gateway's channel may name (RP-5 1.5.0 §4.4, a channel's `station`). From choosing a gateway (the gateway selection design's §7.2). MINOR, announced (§8.4): nothing for an implementation to do. |
+| 1.4.0 | 2026-11-21 | §9.7: the problems a gateway's status report may name (RP-5 1.6.0 §5.9): `modem-away`, `outside-segment`, `setup-error`; a name a program does not know is a problem all the same. For radiopost.org's gateway directory, which could say only that a gateway was registered (D45). MINOR, announced (§8.4): nothing for an implementation to do. |

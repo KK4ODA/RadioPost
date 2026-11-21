@@ -57,6 +57,9 @@ CALLSIGN = re.compile(
     r"(?:[A-Z0-9]{1,10}/)?[A-Z0-9]{1,10}(?:/[A-Z0-9]{1,10})?(?:-(?:1[0-5]|[0-9]))?"
 )
 GRANTABLE = {"send", "receive", "role"}  # RP-5 §7.3: an operator never grants `gateway`
+STATES = ("listening", "session", "opening", "stopped")  # RP-5 §5.9
+PROBLEM = re.compile(r"[a-z0-9-]{1,32}")  # RP-0 §9.7's names
+MOST_PROBLEMS = 16  # RP-5 §5.9
 
 Response = tuple[int, dict[str, Any] | None]
 
@@ -83,6 +86,55 @@ def operates(callsign: str) -> Response:
 
 def refused(cid: str, name: str, text: str) -> dict[str, Any]:
     return {"id": cid, "status": "refused", "code": rp.ERRORS[name], "name": name, "text": text}
+
+
+def _integer(v: Any) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def status_report(body: Any, record: dict[str, Any], now: int) -> dict[str, Any] | None:
+    """RP-5 §5.9: a gateway's report as its post office keeps it, or None when it is malformed.
+
+    The record's channels only, matched by `dial_hz` and `modem`, each once, in the report's
+    order; the problems each once, unknown names kept; `carried` to the hour, no later than `now`;
+    empty lists and absent members left out; members it does not know ignored.
+    """
+    if not isinstance(body, dict) or body.get("state") not in STATES:
+        return None
+    channels = body.get("channels", [])
+    problems = body.get("problems", [])
+    carried = body.get("carried")
+    if not isinstance(channels, list) or not isinstance(problems, list):
+        return None
+    for c in channels:
+        if not (
+            isinstance(c, dict)
+            and _integer(c.get("dial_hz"))
+            and isinstance(c.get("modem"), str)
+            and isinstance(c.get("up"), bool)
+        ):
+            return None
+    if len(problems) > MOST_PROBLEMS or not all(
+        isinstance(n, str) and PROBLEM.fullmatch(n) for n in problems
+    ):
+        return None
+    if carried is not None and not (_integer(carried) and carried >= 0):
+        return None
+    listed = {(c.get("dial_hz"), c.get("modem")) for c in record.get("channels", [])}
+    kept_channels: list[dict[str, Any]] = []
+    for c in channels:
+        key = (c["dial_hz"], c["modem"])
+        if key in listed and all((k["dial_hz"], k["modem"]) != key for k in kept_channels):
+            kept_channels.append({"dial_hz": c["dial_hz"], "modem": c["modem"], "up": c["up"]})
+    kept: dict[str, Any] = {"state": body["state"]}
+    if kept_channels:
+        kept["channels"] = kept_channels
+    named = list(dict.fromkeys(problems))
+    if named:
+        kept["problems"] = named
+    if carried is not None:
+        kept["carried"] = min(carried, now) // 3600 * 3600
+    return kept
 
 
 def listens(record: dict[str, Any]) -> list[dict[str, int]] | None:
@@ -356,6 +408,11 @@ class PostOffice:
     names: dict[str, str] = field(default_factory=dict)  # display names (RP-6 §3.1)
     credentials: dict[int, dict[str, Any]] = field(default_factory=dict)  # issued, by serial
     serials_of: dict[bytes, list[int]] = field(default_factory=dict)  # by device key (RP-5 §6.2)
+    # RP-5 §4.4: when each registered gateway last reached it, its own credential's login, poll
+    # or status report
+    seen: dict[str, int] = field(default_factory=dict)
+    # RP-5 §5.9: each registered gateway's last status report, as kept, and when it came
+    status: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     # -- what happens outside the API --------------------------------------------------------------
 
@@ -513,7 +570,7 @@ class PostOffice:
                 return problem("not-authorized")
             return self._office(method, parts[1:], body or {}, (user[3], user[4]))
         is_gateway = bool(user[9] & rp.FLAGS["gateway"])
-        gateway_routes = {"sessions", "reports", "copies"}
+        gateway_routes = {"sessions", "reports", "copies", "status"}
         anyone = {"/credentials"}  # gateways renew their credentials too (§6.2)
         if route not in anyone and (parts[0] in gateway_routes) != is_gateway:
             return problem("not-authorized")
@@ -527,6 +584,8 @@ class PostOffice:
             return self.poll(user, query)
         if (method, route) == ("POST", "/copies/ack"):
             return self._ack(user, body or {})
+        if route == "/status" and method in {"PUT", "DELETE"}:
+            return self._status(user, method, body)
         if route == "/settings":
             if method == "PUT":
                 self.settings[user[3]] = dict(body or {})
@@ -582,7 +641,41 @@ class PostOffice:
         }
         if self.operators and self._is_operator(cbody):
             answer["office"] = True  # RP-5 §3.2
+        if cbody[9] & rp.FLAGS["gateway"]:
+            self._saw(cbody)
         return 200, answer
+
+    def _own_gateway(self, cbody: dict[int, Any]) -> str | None:
+        """RP-5 §5.9: the callsign a gateway is registered under here, when this credential is its
+        own: its `operator` registered here, its `address` at one of this post office's domains."""
+        found = self._registered(cbody[4])
+        mine = cbody[3].rpartition("@")[2].lower() in self.domains
+        return found if found is not None and mine else None
+
+    def _saw(self, cbody: dict[int, Any]) -> None:
+        """RP-5 §4.4: a registered gateway reached this post office now, with its own credential."""
+        found = self._own_gateway(cbody)
+        if found is not None:
+            self.seen[found] = self.now
+
+    def _status(
+        self, gateway: dict[int, Any], method: str, body: dict[str, Any] | None
+    ) -> Response:
+        """RP-5 §5.9: a gateway's status report, or its withdrawal, from its own credential."""
+        found = self._registered(gateway[4])
+        if found is None:
+            return problem("unknown-message", 404)
+        if self._own_gateway(gateway) is None:
+            return problem("not-authorized")
+        if method == "DELETE":
+            self.status.pop(found, None)
+            return 204, None
+        kept = status_report(body, self.gateways[found], self.now)
+        if kept is None:
+            return problem("malformed")
+        self.status[found] = {"report": kept, "reported": self.now}
+        self._saw(gateway)
+        return 204, None
 
     def _is_operator(self, cbody: dict[int, Any]) -> bool:
         """RP-5 §7.1: a credential this post office issued, to one of its operators, no gateway."""
@@ -1070,6 +1163,7 @@ class PostOffice:
         credential from a post office that did not list the gateway gets nothing, uncounted.
         """
         callsign = gateway[4]
+        self._saw(gateway)
         if not self._theirs(gateway):
             return 200, {"cursor": "c_0", "placing": False, "items": []}
         self.cut.discard(callsign)
@@ -1165,6 +1259,8 @@ class PostOffice:
         self.copies.pop(found, None)
         self.acked.pop(found, None)
         self.last_poll.pop(found, None)
+        self.seen.pop(found, None)
+        self.status.pop(found, None)  # RP-5 §6.4: its report goes with it
         self.cut.discard(found)
         for via, address, serial in self.forwarded.pop(found, []):
             drop = {"kind": "drop", "address": address, "serial": serial}
@@ -1406,3 +1502,20 @@ class PostOffice:
         listed["serials"].extend(s for s in serials if s not in listed["serials"])
         self.tokens = {k: v for k, v in self.tokens.items() if v["body"][2] not in serials}
         return list(serials)
+
+
+def status_list(office: PostOffice) -> dict[str, Any]:
+    """RP-5 §4.6: the payload of `GET /gateways/status` at the post office's clock: each registered
+    gateway that holds a report, `seen` and `reported` to the minute."""
+    return {
+        "issued": office.now,
+        "status": [
+            {
+                "callsign": callsign,
+                "seen": office.seen[callsign] // 60 * 60,
+                "reported": s["reported"] // 60 * 60,
+                "report": s["report"],
+            }
+            for callsign, s in sorted(office.status.items())
+        ],
+    }

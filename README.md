@@ -278,7 +278,8 @@ RP-4 1.3.0), withdrawing a gateway's registration (RP-5 1.2.0), and the answers 
 from RadioPostKit, a second implementation, each keeping what conforming programs already send
 (RP-0 1.2.0, RP-1 1.1.0, RP-2 1.2.0, RP-3 1.1.0, RP-4 1.3.1, RP-5 1.3.0), and when a gateway
 listens and was last seen, and where its antennas are and how it transmits, for choosing one
-(RP-5 1.4.0 and 1.5.0, RP-0 1.3.0). RP-4 also describes
+(RP-5 1.4.0 and 1.5.0, RP-0 1.3.0), and whether a gateway is on the air now, as it reports to its
+post office (RP-5 1.6.0, RP-0 1.4.0). RP-4 also describes
 the VARA, ARDOP and packet adapters. RP-7, forwarding between gateways, and RP-8, alerts, are
 drafts. All nine are written, with test vectors for RP-1 to RP-8.
 

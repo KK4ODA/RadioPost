@@ -18,6 +18,7 @@ import email.utils
 import hashlib
 import json
 import sys
+import time
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from email.header import Header
@@ -3145,11 +3146,50 @@ def documents() -> list[tuple[str, str, dict[str, Any], str]]:
             },
         ],
     }
+    # RP-5 §4.6: each gateway's last report, `seen` and `reported` to the minute, `carried` to the
+    # hour. KK4ODA-1's is current; N2CALL-5's, two days old, says what it last said, not what it
+    # does now
+    status = {
+        "issued": T_DOCUMENTS,
+        "status": [
+            {
+                "callsign": "KK4ODA-1",
+                "seen": T_DOCUMENTS - 180,
+                "reported": T_DOCUMENTS - 180,
+                "report": {
+                    "state": "listening",
+                    "channels": [
+                        {"dial_hz": 3590000, "modem": "aether", "up": True},
+                        {"dial_hz": 7101000, "modem": "aether", "up": True},
+                    ],
+                    "carried": (T_DOCUMENTS - 3 * 3600) // 3600 * 3600,
+                },
+            },
+            {
+                "callsign": "N2CALL-5",
+                "seen": T_DOCUMENTS - 2 * DAY,
+                "reported": T_DOCUMENTS - 2 * DAY,
+                "report": {
+                    "state": "listening",
+                    "channels": [
+                        {"dial_hz": 7103500, "modem": "aether", "up": True},
+                        {"dial_hz": 145050000, "modem": "ax25", "up": False},
+                    ],
+                    "problems": ["modem-away"],
+                    "carried": (T_DOCUMENTS - 2 * DAY - 7200) // 3600 * 3600,
+                },
+            },
+        ],
+    }
+    for s in status["status"]:  # RP-5 §5.9: as a post office keeps them
+        assert s["seen"] % 60 == 0 and s["reported"] % 60 == 0, s
+        assert s["report"]["carried"] % 3600 == 0 and s["report"]["carried"] <= s["reported"], s
     return [
         ("info", "/info", info, "po:radiopost.org"),
         ("revocations", "/revocations", revocations, "po:radiopost.org:new"),
         ("post-offices", "/post-offices", post_offices, "po:radiopost.org"),
         ("gateways", "/gateways", gateways, "po:radiopost.org"),
+        ("gateways-status", "/gateways/status", status, "po:radiopost.org"),
     ]
 
 
@@ -3195,6 +3235,13 @@ def make_jws() -> dict[str, Any]:
     changed = dict(documents()[2][2])
     changed["post_offices"] = []
     altered = f"{head}.{jws.b64u(jws.compact(changed))}.{sig}"
+    head_s, _, sig_s = signed["gateways-status"].split(".")
+    stopped = dict(documents()[4][2])
+    stopped["status"] = [
+        {**s, "report": {"state": "stopped"}} if s["callsign"] == "KK4ODA-1" else s
+        for s in stopped["status"]
+    ]
+    status_altered = f"{head_s}.{jws.b64u(jws.compact(stopped))}.{sig_s}"
     none_header = jws.b64u(jws.compact({"alg": "none", "kid": next(iter(dns))}))
     unsigned = f"{none_header}.{signed['gateways'].split('.')[1]}."
     cases_in = [
@@ -3207,6 +3254,7 @@ def make_jws() -> dict[str, Any]:
         ("revocations, checked with the DNS key alone", signed["revocations"], None),
         ("post-offices, its payload changed after signing", altered, signed["info"]),
         ("gateways, `alg` none and no signature", unsigned, signed["info"]),
+        ("gateways-status, a report changed after signing", status_altered, signed["info"]),
         (
             "an info document signed by a key DNS does not list, naming itself; then a "
             "document signed by that key",
@@ -3236,6 +3284,7 @@ def make_jws() -> dict[str, Any]:
             "revocations, checked with the DNS key alone": "signature-invalid",
             "post-offices, its payload changed after signing": "signature-invalid",
             "gateways, `alg` none and no signature": "signature-invalid",
+            "gateways-status, a report changed after signing": "signature-invalid",
             "an info document signed by a key DNS does not list, naming itself; then a "
             "document signed by that key": "signature-invalid",
             "two parts, not three": "malformed",
@@ -3293,6 +3342,14 @@ class Exchanges:
             response["body"] = answer
         self.log.append({"at": at, "who": who, "request": request, "response": response})
         return answer or {}
+
+    def document(self, at: int, path: str) -> dict[str, Any]:
+        """A public document's payload as the post office serves it at `at` (RP-5 §4)."""
+        self.po.now = at
+        assert path == "/gateways/status", path
+        payload = po.status_list(self.po)
+        self.log.append({"at": at, "document": path, "payload": payload})
+        return payload
 
     def login(self, at: int, who: str, cred: str) -> str:
         return self.login_with(at, who, credential(cred), CREDENTIALS[cred]["device"])
@@ -3676,6 +3733,7 @@ def api_cases() -> list[dict[str, Any]]:
     cases.append(held_case(good))
     cases.append(across_case())
     cases.append(withdrawn_case())
+    cases.append(status_case())
     return cases
 
 
@@ -3840,6 +3898,168 @@ def withdrawn_case() -> dict[str, Any]:
     ex.call(T_SESSION + 210, gw, "GET", "/copies?after=&wait=0", None, kk)
     ex.call(T_SESSION + 220, laptop, "DELETE", path, None, facundo)
     return {"what": WITHDRAWN, "setup": WITHDRAWN_SETUP, "exchanges": ex.log}
+
+
+STATUS = (
+    "a gateway's status: KK4ODA-1 reports, and the status list names it; reports refused to a "
+    "user's token, for a callsign not registered here, to another post office's credential for "
+    "KK4ODA-1, and malformed five ways; withdrawn twice, reported again, and dropped with the "
+    "registration"
+)
+
+
+def status_case() -> dict[str, Any]:
+    """RP-5 §4.6, §5.9: KK4ODA-1's status reports, and the status lists they make."""
+    _, ex, tokens = case_office()
+    facundo, laptop, gw = tokens["facundo"], "Facundo's laptop", "KK4ODA-1"
+    gateway = "device:gateway-kk4oda-1"
+    reg = GATEWAY_RECORD["callsign"].encode() + PO_RADIOPOST.encode()
+    registration = {
+        "record": GATEWAY_RECORD,
+        "device": jws.b64u(PUBLIC[gateway]),
+        "signature": jws.b64u(rp.sign(rp.CTX_GATEWAY, reg, SECRET[gateway])),
+    }
+    ex.note("Facundo registers KK4ODA-1 (RP-5 §6.4), and the gateway logs in with its credential.")
+    issued = ex.call(T_SESSION + 20, laptop, "POST", "/gateways", registration, facundo)
+    own = jws.unb64u(issued["credential"])
+    assert own is not None
+    kk = ex.login_with(T_SESSION + 30, gw, own, gateway)
+    ex.note("It is opening: its modem is not yet answering (RP-5 §5.9).")
+    ex.call(T_SESSION + 40, gw, "PUT", "/status", {"state": "opening"}, kk)
+    ex.document(T_SESSION + 45, "/gateways/status")
+    ex.note(
+        "It listens. Its report names a channel its record does not list and one of its record's "
+        "twice, a member the post office does not know, an empty list of problems, and a last "
+        "session two hours ahead of the post office's clock."
+    )
+    listening = {
+        "state": "listening",
+        "channels": [
+            {"dial_hz": 3590000, "modem": "aether", "up": True},
+            {"dial_hz": 7101000, "modem": "aether", "up": True},
+            {"dial_hz": 14105000, "modem": "aether", "up": True},
+            {"dial_hz": 3590000, "modem": "aether", "up": False},
+        ],
+        "problems": [],
+        "carried": T_SESSION + 2 * 3600,
+        "uptime_s": 4000,
+    }
+    ex.call(T_SESSION + 100, gw, "PUT", "/status", listening, kk)
+    ex.document(T_SESSION + 110, "/gateways/status")
+    ex.note(
+        "Reports refused: from Facundo's own token, which is no gateway's; from N2CALL-5, whose "
+        "credential radiopost.org issued but which is not registered here; and from a credential "
+        "for KK4ODA-1 that hampost.org issued, which is not the gateway's own."
+    )
+    ex.call(T_SESSION + 120, laptop, "PUT", "/status", {"state": "listening"}, facundo)
+    n2 = ex.login(T_SESSION + 130, "N2CALL-5", "gateway-n2call-5")
+    ex.call(T_SESSION + 131, "N2CALL-5", "PUT", "/status", {"state": "listening"}, n2)
+    stranger = rp.make_credential(
+        credential_body(
+            {
+                "serial": 2099,
+                "address": "n1call@hampost.org",
+                "operator": "KK4ODA-1",
+                "device": "device:gateway-n1call-10",
+                "flags": ["send", "gateway"],
+            }
+        ),
+        SECRET["po:hampost.org"],
+    )[3]
+    other = ex.login_with(
+        T_SESSION + 140, "KK4ODA-1 (hampost.org's credential)", stranger, "device:gateway-n1call-10"
+    )
+    ex.call(
+        T_SESSION + 141,
+        "KK4ODA-1 (hampost.org's credential)",
+        "PUT",
+        "/status",
+        {"state": "listening"},
+        other,
+    )
+    ex.note(
+        "Malformed reports, each refused whole: a state RP-5 §5.9 does not name; a problem in "
+        "capitals; a dial as text; a negative `carried`; seventeen problems."
+    )
+    for at, body in (
+        (T_SESSION + 150, {"state": "dancing"}),
+        (T_SESSION + 151, {"state": "listening", "problems": ["Modem-Away"]}),
+        (
+            T_SESSION + 152,
+            {
+                "state": "listening",
+                "channels": [{"dial_hz": "3590000", "modem": "aether", "up": True}],
+            },
+        ),
+        (T_SESSION + 153, {"state": "listening", "carried": -3600}),
+        (T_SESSION + 154, {"state": "listening", "problems": [f"p{n}" for n in range(17)]}),
+    ):
+        ex.call(at, gw, "PUT", "/status", body, kk)
+    ex.document(T_SESSION + 300, "/gateways/status")
+    ex.note(
+        "It carries a session while one modem is away: its 40 m channel down, a problem named "
+        "twice and one from a later RP-0 §9.7, the last session nearly two hours before."
+    )
+    session = {
+        "state": "session",
+        "channels": [
+            {"dial_hz": 3590000, "modem": "aether", "up": True},
+            {"dial_hz": 7101000, "modem": "aether", "up": False},
+        ],
+        "problems": ["modem-away", "future-problem", "modem-away"],
+        "carried": T_SESSION - 7000,
+    }
+    ex.call(T_SESSION + 400, gw, "PUT", "/status", session, kk)
+    ex.document(T_SESSION + 410, "/gateways/status")
+    ex.note("Its operator turns reporting off: the report is withdrawn, and withdrawn again.")
+    ex.call(T_SESSION + 500, gw, "DELETE", "/status", None, kk)
+    ex.call(T_SESSION + 505, gw, "DELETE", "/status", None, kk)
+    ex.document(T_SESSION + 510, "/gateways/status")
+    ex.note("Turned on again, it reports listening, and says nothing of its channels.")
+    ex.call(T_SESSION + 600, gw, "PUT", "/status", {"state": "listening"}, kk)
+    ex.document(T_SESSION + 610, "/gateways/status")
+    ex.note(
+        "Facundo withdraws KK4ODA-1's registration: its report goes with it, and its credential's "
+        "token no longer reports."
+    )
+    ex.call(T_SESSION + 700, laptop, "DELETE", "/gateways/KK4ODA-1", None, facundo)
+    ex.document(T_SESSION + 710, "/gateways/status")
+    ex.call(T_SESSION + 720, gw, "PUT", "/status", {"state": "listening"}, kk)
+    return {"what": STATUS, "exchanges": ex.log}
+
+
+def status_said(c: dict[str, Any]) -> list[str]:
+    """Each status list a case shows, in a few words: each entry's callsign, `seen` and `reported`
+    as UTC times, its state, channels, problems and `carried`; `none` for an empty list."""
+
+    def hhmm(t: int) -> str:
+        """The time of day, UTC; with its seconds when it has any, so that they show."""
+        return time.strftime("%H:%M" if t % 60 == 0 else "%H:%M:%S", time.gmtime(t))
+
+    out = []
+    for e in c["exchanges"]:
+        if "document" not in e:
+            continue
+        assert e["payload"]["issued"] == e["at"]
+        entries = []
+        for s in e["payload"]["status"]:
+            r = s["report"]
+            words = [f"{s['callsign']} seen {hhmm(s['seen'])} reported {hhmm(s['reported'])}"]
+            words.append(r["state"])
+            if "channels" in r:
+                words.append(
+                    ", ".join(
+                        f"{ch['dial_hz']} {ch['modem']} {'up' if ch['up'] else 'down'}"
+                        for ch in r["channels"]
+                    )
+                )
+            if "problems" in r:
+                words.append(" ".join(r["problems"]))
+            if "carried" in r:
+                words.append(f"carried {hhmm(r['carried'])}")
+            entries.append("; ".join(words))
+        out.append(" | ".join(entries) or "none")
+    return out
 
 
 def withdrawn_said(c: dict[str, Any]) -> list[str]:
@@ -4092,8 +4312,56 @@ def make_api_exchanges() -> dict[str, Any]:
                 "200",
                 "200",
             ],
+            STATUS: [
+                "201",  # registered
+                "200",
+                "200",  # KK4ODA-1 logs in with its own credential
+                "204",  # opening
+                "204",  # listening
+                "403 not-authorized",  # a user's token, on a gateway endpoint (§2)
+                "200",
+                "200",  # N2CALL-5 logs in
+                "404 unknown-message",  # not registered here
+                "200",
+                "200",  # hampost.org's credential for KK4ODA-1 logs in
+                "403 not-authorized",  # not the gateway's own credential
+                "400 malformed",  # a state not named
+                "400 malformed",  # a problem in capitals
+                "400 malformed",  # a dial as text
+                "400 malformed",  # a negative `carried`
+                "400 malformed",  # seventeen problems
+                "204",  # in a session
+                "204",  # withdrawn
+                "204",  # withdrawn again: no report, 204 all the same
+                "204",  # listening again
+                "200",  # the registration withdrawn
+                "401 not-authorized",  # its token ended with the revocation
+            ],
         },
         answers,
+    )
+    confirm(  # RP-5 §4.6, §5.9: the status lists, worked out from the specification
+        [c for c in cases if c["what"] == STATUS],
+        {
+            STATUS: [
+                # 14:40:40, to the minute
+                "KK4ODA-1 seen 14:40 reported 14:40; opening",
+                # the record's channels once each; no empty list; `carried` no later than 14:41:40
+                "KK4ODA-1 seen 14:41 reported 14:41; listening; 3590000 aether up, "
+                "7101000 aether up; carried 14:00",
+                # nothing refused changed it, and another's credential reached nothing
+                "KK4ODA-1 seen 14:41 reported 14:41; listening; 3590000 aether up, "
+                "7101000 aether up; carried 14:00",
+                # 14:46:40; problems once each, the unknown one kept; 12:43:20 to the hour
+                "KK4ODA-1 seen 14:46 reported 14:46; session; 3590000 aether up, "
+                "7101000 aether down; modem-away future-problem; carried 12:00",
+                "none",  # withdrawn
+                # 14:50:00; the report replaced whole: no channels, problems or `carried`
+                "KK4ODA-1 seen 14:50 reported 14:50; listening",
+                "none",  # dropped with the registration
+            ]
+        },
+        status_said,
     )
     confirm(  # RP-5 §6.4: a withdrawal, worked out from the specification
         [c for c in cases if c["what"] == WITHDRAWN],

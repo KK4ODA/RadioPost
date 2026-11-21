@@ -2704,6 +2704,717 @@
           }
         }
       ]
+    },
+    {
+      "what": "a gateway's status: KK4ODA-1 reports, and the status list names it; reports refused to a user's token, for a callsign not registered here, to another post office's credential for KK4ODA-1, and malformed five ways; withdrawn twice, reported again, and dropped with the registration",
+      "exchanges": [
+        {
+          "note": "Facundo registers KK4ODA-1 (RP-5 §6.4), and the gateway logs in with its credential."
+        },
+        {
+          "at": 1794235220,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "POST",
+            "path": "/gateways",
+            "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi",
+            "body": {
+              "record": {
+                "callsign": "KK4ODA-1",
+                "operator": "KK4ODA",
+                "grid": "EM73",
+                "place": "Atlanta, GA",
+                "channels": [
+                  {
+                    "dial_hz": 3590000,
+                    "mode": "USB",
+                    "modem": "aether",
+                    "bandwidth_hz": 2300,
+                    "scan_s": 14
+                  },
+                  {
+                    "dial_hz": 7101000,
+                    "mode": "USB",
+                    "modem": "aether",
+                    "bandwidth_hz": 2300,
+                    "scan_s": 14
+                  }
+                ],
+                "hours": "always",
+                "internet": true,
+                "copies": {
+                  "users": 50,
+                  "days": 7,
+                  "max_air_bytes": 16384
+                }
+              },
+              "device": "L2s9kPkHedoS8O1-BJo5ldNc8ngoQyraV2NU22EELJs",
+              "signature": "ioPARb1BRU0yoTdDRYI7-mxDjO2WgPAUyN21-JAhQu1HBI2zPilmFCEw0G3Tc3eFu2tvHIs93oJzmhFay2d6DA"
+            }
+          },
+          "response": {
+            "status": 201,
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFmoAQECGQQaA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEaEtLNE9EQS0xBVggL2s9kPkHedoS8O1-BJo5ldNc8ngoQyraV2NU22EELJsGGmrx21QHGmtoglQJCVhA4wVDl4PiEKzbV_H8xGrIGe07vvBlgPziScM_wJYQo2jf8dVnter519YBRQJDV7HXSN7NlONqNYFbDRpln8zkDA"
+            }
+          }
+        },
+        {
+          "at": 1794235230,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "YnIMfdL74LxF8F0CuKW2UTsDNl77F_AW6aiohypUgGs",
+              "expires": 1794235530
+            }
+          }
+        },
+        {
+          "at": 1794235230,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFmoAQECGQQaA3VmYWN1bmRvQHJhZGlvcG9zdC5vcmcEaEtLNE9EQS0xBVggL2s9kPkHedoS8O1-BJo5ldNc8ngoQyraV2NU22EELJsGGmrx21QHGmtoglQJCVhA4wVDl4PiEKzbV_H8xGrIGe07vvBlgPziScM_wJYQo2jf8dVnter519YBRQJDV7HXSN7NlONqNYFbDRpln8zkDA",
+              "nonce": "YnIMfdL74LxF8F0CuKW2UTsDNl77F_AW6aiohypUgGs",
+              "signature": "fI8i2ala9dNOb5FatzxWe5xR9ChsmwRv_4GAHjZImcKcDttJ50dAJW1cvJauMW9PuUoVBix4QTWUD5SQgqh-BQ"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_7FDsReE3n0Nfd47g83S1DcTo",
+              "expires": 1794238830,
+              "address": "facundo@radiopost.org",
+              "operator": "KK4ODA-1",
+              "flags": 9
+            }
+          }
+        },
+        {
+          "note": "It is opening: its modem is not yet answering (RP-5 §5.9)."
+        },
+        {
+          "at": 1794235240,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "PUT",
+            "path": "/status",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+            "body": {
+              "state": "opening"
+            }
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "at": 1794235245,
+          "document": "/gateways/status",
+          "payload": {
+            "issued": 1794235245,
+            "status": [
+              {
+                "callsign": "KK4ODA-1",
+                "seen": 1794235200,
+                "reported": 1794235200,
+                "report": {
+                  "state": "opening"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "note": "It listens. Its report names a channel its record does not list and one of its record's twice, a member the post office does not know, an empty list of problems, and a last session two hours ahead of the post office's clock."
+        },
+        {
+          "at": 1794235300,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "PUT",
+            "path": "/status",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+            "body": {
+              "state": "listening",
+              "channels": [
+                {
+                  "dial_hz": 3590000,
+                  "modem": "aether",
+                  "up": true
+                },
+                {
+                  "dial_hz": 7101000,
+                  "modem": "aether",
+                  "up": true
+                },
+                {
+                  "dial_hz": 14105000,
+                  "modem": "aether",
+                  "up": true
+                },
+                {
+                  "dial_hz": 3590000,
+                  "modem": "aether",
+                  "up": false
+                }
+              ],
+              "problems": [],
+              "carried": 1794242400,
+              "uptime_s": 4000
+            }
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "at": 1794235310,
+          "document": "/gateways/status",
+          "payload": {
+            "issued": 1794235310,
+            "status": [
+              {
+                "callsign": "KK4ODA-1",
+                "seen": 1794235260,
+                "reported": 1794235260,
+                "report": {
+                  "state": "listening",
+                  "channels": [
+                    {
+                      "dial_hz": 3590000,
+                      "modem": "aether",
+                      "up": true
+                    },
+                    {
+                      "dial_hz": 7101000,
+                      "modem": "aether",
+                      "up": true
+                    }
+                  ],
+                  "carried": 1794232800
+                }
+              }
+            ]
+          }
+        },
+        {
+          "note": "Reports refused: from Facundo's own token, which is no gateway's; from N2CALL-5, whose credential radiopost.org issued but which is not registered here; and from a credential for KK4ODA-1 that hampost.org issued, which is not the gateway's own."
+        },
+        {
+          "at": 1794235320,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "PUT",
+            "path": "/status",
+            "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi",
+            "body": {
+              "state": "listening"
+            }
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 403,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        },
+        {
+          "at": 1794235330,
+          "who": "N2CALL-5",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "TfBr6ZDPHEjEd_4ejFm07gnHXoq-1VMN1Vj--BI9PZA",
+              "expires": 1794235630
+            }
+          }
+        },
+        {
+          "at": 1794235330,
+          "who": "N2CALL-5",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERPu9X1ygWFWoAQECGQQlA3Flb2NAcmFkaW9wb3N0Lm9yZwRoTjJDQUxMLTUFWCC6b20Y7IK9dQfcRw-q8DUBO_VzdkPs0msbSxvpoXYrCAYaauaBAAcaa10oAAkJWEDwcLQKnDhGXl0DhvtdbKue2jMwjwXgcQ266Ol9AXLng2Oaf6EMnp8hRK94tXnSnHmgA7Gq0bKmfR4FwSZzY8YL",
+              "nonce": "TfBr6ZDPHEjEd_4ejFm07gnHXoq-1VMN1Vj--BI9PZA",
+              "signature": "_RuZqtJUNiB67c5nbMpO0NBBLLVDUJ2QzZVV2fNTnM7Eq8W9JSILS1x_Jo-WFODn9c50AfN7Np2uSnaCZPAoBw"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_4ZCaC2EKWUg9gz5cxdvp2E4a",
+              "expires": 1794238930,
+              "address": "eoc@radiopost.org",
+              "operator": "N2CALL-5",
+              "flags": 9
+            }
+          }
+        },
+        {
+          "at": 1794235331,
+          "who": "N2CALL-5",
+          "request": {
+            "method": "PUT",
+            "path": "/status",
+            "authorization": "Bearer tok_4ZCaC2EKWUg9gz5cxdvp2E4a",
+            "body": {
+              "state": "listening"
+            }
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "type": "about:blank",
+              "title": "Unknown message",
+              "status": 404,
+              "code": 15,
+              "name": "unknown-message"
+            }
+          }
+        },
+        {
+          "at": 1794235340,
+          "who": "KK4ODA-1 (hampost.org's credential)",
+          "request": {
+            "method": "POST",
+            "path": "/auth/challenge"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "nonce": "I2vUuzDA58xjIuwZCncC1HUKshe1128VcgdhvDQwfqQ",
+              "expires": 1794235640
+            }
+          }
+        },
+        {
+          "at": 1794235340,
+          "who": "KK4ODA-1 (hampost.org's credential)",
+          "request": {
+            "method": "POST",
+            "path": "/auth/token",
+            "body": {
+              "credential": "hEmiATIERIQhnQCgWFaoAQECGQgzA3JuMWNhbGxAaGFtcG9zdC5vcmcEaEtLNE9EQS0xBVggFEvl-5adla-bYI0JMGRYuyU1Zciw46cYbrMTidckTFMGGmrmgQAHGmtdKAAJCVhAqqacNj1Q7KRFyMqSyPoNIjOjLyjA8TypTUpoS19kZKR6K5X0dp5Icqu-EqtwU8B9485F0riZT1dsIMNJbYDxDw",
+              "nonce": "I2vUuzDA58xjIuwZCncC1HUKshe1128VcgdhvDQwfqQ",
+              "signature": "2HYegqdD8l9p_yyf7gEXRLmZ1BmNik2eMqu7_9dmLJES54Aib24lPFu6I0SDv7W4zo8mXhQTWaxWUAQ7tQFbAA"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "tok_waKizgSzG8A0xMltEwxCn3G_",
+              "expires": 1794238940,
+              "address": "n1call@hampost.org",
+              "operator": "KK4ODA-1",
+              "flags": 9
+            }
+          }
+        },
+        {
+          "at": 1794235341,
+          "who": "KK4ODA-1 (hampost.org's credential)",
+          "request": {
+            "method": "PUT",
+            "path": "/status",
+            "authorization": "Bearer tok_waKizgSzG8A0xMltEwxCn3G_",
+            "body": {
+              "state": "listening"
+            }
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 403,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        },
+        {
+          "note": "Malformed reports, each refused whole: a state RP-5 §5.9 does not name; a problem in capitals; a dial as text; a negative `carried`; seventeen problems."
+        },
+        {
+          "at": 1794235350,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "PUT",
+            "path": "/status",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+            "body": {
+              "state": "dancing"
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        },
+        {
+          "at": 1794235351,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "PUT",
+            "path": "/status",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+            "body": {
+              "state": "listening",
+              "problems": [
+                "Modem-Away"
+              ]
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        },
+        {
+          "at": 1794235352,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "PUT",
+            "path": "/status",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+            "body": {
+              "state": "listening",
+              "channels": [
+                {
+                  "dial_hz": "3590000",
+                  "modem": "aether",
+                  "up": true
+                }
+              ]
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        },
+        {
+          "at": 1794235353,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "PUT",
+            "path": "/status",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+            "body": {
+              "state": "listening",
+              "carried": -3600
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        },
+        {
+          "at": 1794235354,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "PUT",
+            "path": "/status",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+            "body": {
+              "state": "listening",
+              "problems": [
+                "p0",
+                "p1",
+                "p2",
+                "p3",
+                "p4",
+                "p5",
+                "p6",
+                "p7",
+                "p8",
+                "p9",
+                "p10",
+                "p11",
+                "p12",
+                "p13",
+                "p14",
+                "p15",
+                "p16"
+              ]
+            }
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "about:blank",
+              "title": "Malformed",
+              "status": 400,
+              "code": 2,
+              "name": "malformed"
+            }
+          }
+        },
+        {
+          "at": 1794235500,
+          "document": "/gateways/status",
+          "payload": {
+            "issued": 1794235500,
+            "status": [
+              {
+                "callsign": "KK4ODA-1",
+                "seen": 1794235260,
+                "reported": 1794235260,
+                "report": {
+                  "state": "listening",
+                  "channels": [
+                    {
+                      "dial_hz": 3590000,
+                      "modem": "aether",
+                      "up": true
+                    },
+                    {
+                      "dial_hz": 7101000,
+                      "modem": "aether",
+                      "up": true
+                    }
+                  ],
+                  "carried": 1794232800
+                }
+              }
+            ]
+          }
+        },
+        {
+          "note": "It carries a session while one modem is away: its 40 m channel down, a problem named twice and one from a later RP-0 §9.7, the last session nearly two hours before."
+        },
+        {
+          "at": 1794235600,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "PUT",
+            "path": "/status",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+            "body": {
+              "state": "session",
+              "channels": [
+                {
+                  "dial_hz": 3590000,
+                  "modem": "aether",
+                  "up": true
+                },
+                {
+                  "dial_hz": 7101000,
+                  "modem": "aether",
+                  "up": false
+                }
+              ],
+              "problems": [
+                "modem-away",
+                "future-problem",
+                "modem-away"
+              ],
+              "carried": 1794228200
+            }
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "at": 1794235610,
+          "document": "/gateways/status",
+          "payload": {
+            "issued": 1794235610,
+            "status": [
+              {
+                "callsign": "KK4ODA-1",
+                "seen": 1794235560,
+                "reported": 1794235560,
+                "report": {
+                  "state": "session",
+                  "channels": [
+                    {
+                      "dial_hz": 3590000,
+                      "modem": "aether",
+                      "up": true
+                    },
+                    {
+                      "dial_hz": 7101000,
+                      "modem": "aether",
+                      "up": false
+                    }
+                  ],
+                  "problems": [
+                    "modem-away",
+                    "future-problem"
+                  ],
+                  "carried": 1794225600
+                }
+              }
+            ]
+          }
+        },
+        {
+          "note": "Its operator turns reporting off: the report is withdrawn, and withdrawn again."
+        },
+        {
+          "at": 1794235700,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "DELETE",
+            "path": "/status",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo"
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "at": 1794235705,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "DELETE",
+            "path": "/status",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo"
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "at": 1794235710,
+          "document": "/gateways/status",
+          "payload": {
+            "issued": 1794235710,
+            "status": []
+          }
+        },
+        {
+          "note": "Turned on again, it reports listening, and says nothing of its channels."
+        },
+        {
+          "at": 1794235800,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "PUT",
+            "path": "/status",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+            "body": {
+              "state": "listening"
+            }
+          },
+          "response": {
+            "status": 204
+          }
+        },
+        {
+          "at": 1794235810,
+          "document": "/gateways/status",
+          "payload": {
+            "issued": 1794235810,
+            "status": [
+              {
+                "callsign": "KK4ODA-1",
+                "seen": 1794235800,
+                "reported": 1794235800,
+                "report": {
+                  "state": "listening"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "note": "Facundo withdraws KK4ODA-1's registration: its report goes with it, and its credential's token no longer reports."
+        },
+        {
+          "at": 1794235900,
+          "who": "Facundo's laptop",
+          "request": {
+            "method": "DELETE",
+            "path": "/gateways/KK4ODA-1",
+            "authorization": "Bearer tok__S0rLgmgVaVn3GOvq653Nwyi"
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "callsign": "KK4ODA-1",
+              "revoked": [
+                1050
+              ]
+            }
+          }
+        },
+        {
+          "at": 1794235910,
+          "document": "/gateways/status",
+          "payload": {
+            "issued": 1794235910,
+            "status": []
+          }
+        },
+        {
+          "at": 1794235920,
+          "who": "KK4ODA-1",
+          "request": {
+            "method": "PUT",
+            "path": "/status",
+            "authorization": "Bearer tok_7FDsReE3n0Nfd47g83S1DcTo",
+            "body": {
+              "state": "listening"
+            }
+          },
+          "response": {
+            "status": 401,
+            "body": {
+              "type": "about:blank",
+              "title": "Not authorized",
+              "status": 401,
+              "code": 10,
+              "name": "not-authorized"
+            }
+          }
+        }
+      ]
     }
   ],
   "report": [
