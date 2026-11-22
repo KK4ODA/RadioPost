@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.3.1 |
-| **Updated** | 2026-11-19 |
+| **Version** | 1.4.0 |
+| **Updated** | 2026-11-21 |
 | **Describes** | RadioPost 0.1.0-beta.34 |
 | **Licence** | CC BY 4.0 |
 
@@ -574,6 +574,18 @@ then, mail users send each other from mail programs does not reach the radio.
 **From releases before 0.1.0-beta.17:** Sent folders, read marks and the DKIM rotation use the
 mailboxes key (chapter 6). A key in *Replace* mode needs the rights in section 5.2's note.
 
+**Set up before 0.1.0-beta.35:** updating leaves Caddy's settings alone, and radiopost.org's gateway
+directory cannot read your gateways' status from a visitor's browser until Caddy allows it. Add this
+line to `/etc/caddy/Caddyfile`, just above `handle /rp/v1/*` (section 18.2), then
+`sudo systemctl reload caddy`:
+
+```
+    header /rp/v1/gateways/status Access-Control-Allow-Origin "*"
+```
+
+It applies to the status list only, which anyone can read already; the rest of the API is
+unchanged.
+
 ## 11. Backups and restoring
 
 ![Each night the server makes two backups; your computer fetches each one by itself, or you download one by hand; either restores on a new server](fig/backups.svg)
@@ -744,8 +756,8 @@ You need a second server, at another provider if you can.
    - its A record and reverse DNS (section 5.1);
    - the firewall and SSH (section 18.1);
    - Caddy and its certificate for `mx2.radiopost.org` (section 18.2). Its only job here is the
-     certificate for Stalwart's mail ports: leave the `handle /rp/v1/*` part out of the
-     Caddyfile;
+     certificate for Stalwart's mail ports: leave the `header` line and the `handle /rp/v1/*` part
+     out of the Caddyfile;
    - Stalwart: the wizard and settings 1 to 4 of section 5.2, with `mx2.radiopost.org` as the
      hostname (section 18.3);
    - `radiopost-po` from the tools archive of the same release as the post office, in
@@ -830,7 +842,7 @@ You need a second server, at another provider if you can.
 
 | Program | Ports | Does |
 |---|---|---|
-| Caddy | 80, 443 | Gets and renews the certificate for `po.radiopost.org`; sends `https://po.radiopost.org/rp/v1/…` to the post office and everything else to Stalwart's web page. |
+| Caddy | 80, 443 | Gets and renews the certificate for `po.radiopost.org`; sends `https://po.radiopost.org/rp/v1/…` to the post office and everything else to Stalwart's web page; lets any web page read the gateways' status list. |
 | Stalwart | 25 (email in and out), 465 (mail programs sending), 993 (mail programs reading); its web page on `127.0.0.1:8080`, behind Caddy | Email in and out, the mailboxes, DKIM signing. |
 | `radiopost-po` | 8770 (the API, behind Caddy), 8771 (the operator's commands), 8772 (the door): all on `127.0.0.1` | Accounts, credentials, gateways' sessions, the radio mailboxes, the door, email in and out. |
 
@@ -891,13 +903,16 @@ chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg /etc/apt/sources.
 apt update && apt install -y caddy
 ```
 
-`/etc/caddy/Caddyfile` (`issuer acme` keeps the certificate with Let's Encrypt, in a known folder):
+`/etc/caddy/Caddyfile` (`issuer acme` keeps the certificate with Let's Encrypt, in a known folder;
+the `header` line lets any web page read the gateways' status list, as radiopost.org's gateway
+directory does from each visitor's browser):
 
 ```
 po.radiopost.org {
     tls {
         issuer acme
     }
+    header /rp/v1/gateways/status Access-Control-Allow-Origin "*"
     handle /rp/v1/* {
         reverse_proxy 127.0.0.1:8770
     }
@@ -1140,3 +1155,4 @@ drawn by `tools/figures/server.py`; its screenshots of the desk are the user's m
 | 1.2.0 | 2026-11-18 | Chapter 9 *Gateways*: the desk's **Gateways** tab and its **Unregister**, `gateways` and `unregister` on the server, and, before 0.1.0-beta.28, unregistering by hand (the credential revoked on the desk, the record taken out of `state.json`). Chapter 20's commands and chapter 21's troubleshooting to match. |
 | 1.3.0 | 2026-11-18 | **New password** on the desk's Accounts tab and `password` on the server: a new password for a user who lost theirs (Stalwart has none of its own), only the password changed. The API key's rights gain `sysAccountUpdate`. Troubleshooting: a mailbox refused with *invalidPatch* (a post office before 0.1.0-beta.29 sent the password in a form Stalwart refuses), and a forgotten password. |
 | 1.3.1 | 2026-11-19 | Section 5.2: the API key's permissions named as Stalwart's page shows them, *Same as account*; the guide had said *Inherit*, Stalwart's word in its code. |
+| 1.4.0 | 2026-11-21 | Caddy lets any web page read the gateways' status list (RP-5 §4.6), which radiopost.org's directory now reads from each visitor's browser: the installer's Caddyfile and section 18.2 gain the `header` line, chapter 10 says how to add it to a post office set up before 0.1.0-beta.35, and chapter 17 says so. |

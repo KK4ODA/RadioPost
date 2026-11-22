@@ -155,11 +155,15 @@ pub struct Secrets {
     pub smtp_password: String,
 }
 
-/// The Caddyfile for the post office's host.
+/// The Caddyfile for the post office's host. The gateways' status list (RP-5 §4.6) is public, and
+/// any web page may read it: radiopost.org's directory reads each post office's from the visitor's
+/// browser, which needs `Access-Control-Allow-Origin` on the answer.
 #[must_use]
 pub fn caddyfile(host: &str) -> String {
     format!(
-        "{host} {{\n    tls {{\n        issuer acme\n    }}\n    handle /rp/v1/* {{\n        \
+        "{host} {{\n    tls {{\n        issuer acme\n    }}\n    \
+         header /rp/v1/gateways/status Access-Control-Allow-Origin \"*\"\n    \
+         handle /rp/v1/* {{\n        \
          reverse_proxy 127.0.0.1:8770\n    }}\n    handle {{\n        reverse_proxy \
          127.0.0.1:8080\n    }}\n}}\n"
     )
@@ -756,6 +760,24 @@ mod tests {
                 .iter()
                 .any(|a| matches!(a, Action::Run(w) if w.contains(&"init".to_owned()))),
             "a post office there is not made again"
+        );
+    }
+
+    #[test]
+    fn the_caddyfile_lets_web_pages_read_the_status_list_and_nothing_else() {
+        let c = caddyfile("po.example.org");
+        assert_eq!(
+            c,
+            "po.example.org {\n    tls {\n        issuer acme\n    }\n    \
+             header /rp/v1/gateways/status Access-Control-Allow-Origin \"*\"\n    \
+             handle /rp/v1/* {\n        reverse_proxy 127.0.0.1:8770\n    }\n    \
+             handle {\n        reverse_proxy 127.0.0.1:8080\n    }\n}\n",
+            "the guide's section 18.2 shows this file"
+        );
+        assert_eq!(
+            c.matches("Access-Control-Allow-Origin").count(),
+            1,
+            "only the status list: the rest of the API is for RadioPost's programs"
         );
     }
 
