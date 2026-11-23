@@ -832,12 +832,19 @@ fn carry<E: Engine<Event = SessionEvent> + Counted>(
 
 /// What the session said that outlives it.
 #[derive(Default)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "each a separate fact the session reported"
+)]
 struct SessionStats {
     /// The session's clock.
     now: u64,
     welcomed: bool,
     /// The station called is a gateway (not a station, RP-3 §10).
     gateway: bool,
+    /// The engine ended the session by its own rules (RP-3 §8: both `DONE`, or an `ERROR`), not
+    /// a link that ended under it: a broken link leaves the engine over too, without this.
+    ended: bool,
     /// Called for station-to-station mail, a gateway answered (RP-3 §10): said once, in plain
     /// words, in place of the refusal that follows.
     not_a_station: bool,
@@ -989,8 +996,9 @@ fn apply(
             store.set_credential(&bytes)?;
             tell(say, "a renewed credential, kept for the next session");
         }
+        SessionEvent::End => stats.ended = true,
         // only a gateway calling a partner hears `Placed` and `Records` (RP-7 §2), never a client
-        SessionEvent::Placed { .. } | SessionEvent::Records(_) | SessionEvent::End => {}
+        SessionEvent::Placed { .. } | SessionEvent::Records(_) => {}
     }
     Ok(())
 }
@@ -1473,7 +1481,9 @@ fn call_on(
         opts.live.as_deref(),
         say,
     );
-    let over = carrier.engine().0.is_over();
+    // both stations said DONE: the engine's own end, not a link broken under it (a broken link
+    // leaves the engine over too, and every such call had been recorded as completed)
+    let over = stats.ended;
     modem.note(|t| {
         t.session(SessionNotes {
             online: stats.online,

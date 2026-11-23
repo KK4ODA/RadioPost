@@ -10,6 +10,8 @@ use std::time::Duration;
 
 use radiopost_client::selection::attempts;
 use radiopost_client::session::{self, Kind, Options};
+use rpmi::host::{Event, Host};
+use rpmi::tcp::Connection;
 use serde_json::Value;
 
 use common::{loopback, loopback_with, message, scratch, store_for};
@@ -114,5 +116,56 @@ fn a_modem_that_cannot_be_reached_is_recorded_as_this_station_s() {
     assert_eq!(all[0]["outcome"]["class"], "local-station", "{}", all[0]);
     assert_eq!(all[0]["outcome"]["why"], e.as_str());
     assert_eq!(all[0]["modem"], Value::Null, "no hello was answered");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A link the other station ends in the middle is recorded as lost, not completed: a broken link
+/// leaves the session's engine over too, and until 2026-11-23 the record took that for both
+/// stations' `DONE`, so every session that broke (the other station gone, silence, a link
+/// dropped) was recorded as completed, and learned as a call that worked.
+#[test]
+fn a_link_the_other_station_ends_is_recorded_as_lost() {
+    let dir = scratch("attempts-lost");
+    let mut facundo = store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    facundo.queue(&message("facundo-direct")).expect("queued");
+    let (_server, at_f, at_a) = loopback();
+    // N0CALL's station, by hand: it answers, and hangs up before a word
+    let mut other = Connection::open(at_a).expect("the adapter");
+    other
+        .set_timeout(Some(Duration::from_secs(10)))
+        .expect("a wait");
+    let mut host = Host::new();
+    for request in [
+        host.hello("a test"),
+        host.callsigns(&["N0CALL"]),
+        host.listen(true),
+    ] {
+        other.send(&request).expect("sent");
+    }
+    let hangs_up = thread::spawn(move || {
+        let link = loop {
+            let line = other.read_message().expect("read").expect("a line");
+            if let Ok(Event::Connected { link, .. }) = Event::read(&line) {
+                break link;
+            }
+        };
+        other.send(&host.disconnect(&link)).expect("sent");
+        other
+    });
+    let called = session::call(
+        &mut facundo,
+        "N0CALL",
+        Kind::Station,
+        &Options::new(&at_f.to_string()),
+        &mut |_| {},
+    )
+    .expect("the session ends");
+    hangs_up.join().expect("N0CALL's station").close();
+    assert_eq!(facundo.outbox.len(), 1, "nothing crossed: {called:?}");
+    let all = attempts::read(&dir.join("facundo"));
+    assert_eq!(all.len(), 1, "{all:?}");
+    let a = &all[0];
+    assert_eq!(a["outcome"]["class"], "link-lost", "{a}");
+    assert_eq!(a["session"]["over"], false, "{a}");
     let _ = std::fs::remove_dir_all(&dir);
 }
