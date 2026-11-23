@@ -50,8 +50,12 @@
             <input type="radio" name="kind" value="station"> P2P (another client's station)
           </label>
         </div>
-        <label title="The callsign to call">Call
-          <input id="callsign" placeholder="KK4ODA-1" autocomplete="off" spellcheck="false">
+        <label title="The callsign to call. Switching between a gateway and P2P brings back the last of each you called; ▾ lists the others">Call
+          <span class="combo">
+            <input id="callsign" placeholder="KK4ODA-1" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="none" aria-controls="called-list" aria-expanded="false">
+            <button type="button" class="combo-open" id="called-open" tabindex="-1" hidden><svg class="icon" aria-hidden="true"><use href="#i-down"/></svg></button>
+            <ul class="suggestions called" id="called-list" role="listbox" hidden></ul>
+          </span>
         </label>
         <label id="channel-label" title="The chosen gateway's channel. Picking it tunes the radio there at once, when the modem can set the radio's dial (Aether with CAT, rigctld or FLRig), so you can set the antenna tuner before you call; with another modem, set the dial yourself" hidden>Channel
           <select id="channel"></select>
@@ -980,6 +984,7 @@
     <symbol id="i-restore" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-write" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-people" viewBox="0 0 24 24"><path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM3 20a6 6 0 0 1 12 0M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.5a6 6 0 0 1 3 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-gone" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
   </svg>
 </body>

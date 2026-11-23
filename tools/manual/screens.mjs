@@ -270,6 +270,22 @@ const RECENT = {recent: [
    bandwidth_hz: 2300, grid: "EM74sc", class: "link-lost", words: "the link was lost",
    completed: false, took_s: 410, why: "the link was lost"},
 ]};
+// whom the call box offers under ▾ (GET /api/called): RECENT's calls, once each and newest first,
+// a gateway with its record from the list in use, and a station called before RECENT's week
+function calledOf(gateways) {
+  const out = {gateway: [], station: []};
+  const calls = [...RECENT.recent, {at: T - 12 * DAY, kind: "station", remote: "N4CALL",
+                                    dial_hz: 3591500, bandwidth_hz: 500}];
+  for (const a of calls) {
+    if (out[a.kind].some((e) => e.callsign === a.remote)) continue;
+    const e = {callsign: a.remote, at: a.at, dial_hz: a.dial_hz, bandwidth_hz: a.bandwidth_hz};
+    if (a.kind === "gateway") {
+      e.gateway = gateways.gateways.find((g) => g.callsign === a.remote) || null;
+    }
+    out[a.kind].push(e);
+  }
+  return out;
+}
 const ADDRESSES = [
   {name: "Maria Perez", address: "maria@example.com", uses: 6, used: T - 420},
   {name: "Jim Ortega", address: "jim@hampost.org", uses: 3, used: T - DAY - 600},
@@ -534,6 +550,10 @@ function clientApi(world) {
       case "terrain/path": return TERRAIN_PATH;
       case "places": return PLACES;
       case "attempts": return RECENT;
+      // only the shots of the Station box show the calls made before; the others keep it empty
+      case "called": return world.called
+        ? calledOf(world.vhf ? GATEWAYS_VHF : world.hf ? GATEWAYS_HF : GATEWAYS)
+        : {gateway: [], station: []};
       case "learned": return LEARNED;
       case "forget": return FORGET;
       case "settings": return {usual_gateways: ["KK4ODA-1"], radio_skips_read: false};
@@ -778,7 +798,7 @@ const GATEWAY_UI = join(ROOT, "app", "gateway", "ui");
 function clientWorld(over = {}) {
   return {state: clientState(over.state || {}), log: over.log || CLIENT_LOG,
           operator: over.operator || false, byHand: over.byHand || false, vhf: over.vhf || false,
-          hf: over.hf || false,
+          hf: over.hf || false, called: over.called || false,
           alerts: over.alerts || ALERT_LOG};
 }
 
@@ -870,7 +890,8 @@ const SHOTS = {
 
   // the call box with KK4ODA-1 chosen: its first channel tuned at once, the tuner tone, Call
   async "client-call"(browser) {
-    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+    const {page, context} = await open(browser, {ui: CLIENT_UI,
+                                                 api: clientApi(clientWorld({called: true})),
                                                  height: 1100});
     await spreadLog(page, "log", T - 1300, 19);
     await page.click("#gateways-open");
@@ -886,7 +907,7 @@ const SHOTS = {
 
   // a station call: its dial and bandwidth, on a radio whose dial the modem cannot set
   async "client-call-station"(browser) {
-    const world = clientWorld({byHand: true});
+    const world = clientWorld({byHand: true, called: true});
     const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(world),
                                                  height: 900});
     await spreadLog(page, "log", T - 1300, 19);
@@ -899,6 +920,23 @@ const SHOTS = {
     await page.waitForTimeout(300);
     await page.evaluate(() => { document.getElementById("toast").hidden = true; });
     await shot(page, "client-call-station", ".station");
+    await context.close();
+  },
+
+  // P2P chosen: the last station called back in Call with its dial and bandwidth, and ▾ open on
+  // the stations called before
+  async "client-called"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI,
+                                                 api: clientApi(clientWorld({called: true})),
+                                                 height: 900});
+    await spreadLog(page, "log", T - 1300, 19);
+    await page.waitForTimeout(300);
+    await page.check("input[name=kind][value=station]");
+    await page.click("#called-open");
+    await page.waitForTimeout(300);
+    await page.screenshot({path: join(OUT, "client-called.png"),
+                           clip: await unionClip(page, [".station", "#called-list"])});
+    console.log("docs/manual/screens/client-called.png");
     await context.close();
   },
 

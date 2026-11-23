@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.41.0 |
-| **Updated** | 2026-11-21 |
+| **Version** | 1.42.0 |
+| **Updated** | 2026-11-23 |
 | **Describes** | RadioPost 0.1.0-beta.34 |
 | **Licence** | CC BY 4.0 |
 
@@ -367,7 +367,8 @@ again with a new code**.
    - **Trash**: messages you deleted.
    - **Addresses**: your address list.
 5. **Station**: whom to call, on which channel, and the **Call** and **Listen for P2P** buttons.
-   **Call** is the green one: it puts the station on the air. **Listen for P2P** is a switch:
+   The box called **Call** keeps the last gateway, or the last station, you called, and **▾** at
+   its right lists the others. The green **Call** button puts the station on the air. **Listen for P2P** is a switch:
    click it and it stays in, its lamp lit, and reads **Listening for P2P**. RadioPost then answers
    station-to-station calls to your callsign until you click it again. **Modem** is where
    RadioPost finds Aether, `ws://127.0.0.1:8515/v1`. Change it only if Aether's control port is
@@ -715,6 +716,16 @@ computer: your post office never places mail at it.
 
 ### 8.2 Tune and call
 
+**A gateway you called before.** When you choose **A gateway**, **Call** shows the last gateway you
+called, on the channel you called it on: when RadioPost starts, and when you come back from P2P.
+If you had put another gateway there before switching to P2P, that one comes back instead. Coming
+back tunes nothing. For another gateway you called, click **▾** at the right of **Call**, or press
+the down arrow in it. The list shows each gateway you called once, newest first, with its channel
+and how long ago. Click one, or move to it with the arrows and press Enter. Its channels go in
+**Channel**, the one you called it on picked, and the radio is tuned there at once. Escape closes
+the list. A gateway you blocked is not in it, and one no longer listed keeps only the channel you
+called it on.
+
 1. Pick the **Channel** to call on. RadioPost tunes the radio there at once, before you call, so
    you can set the radio and the antenna tuner for it. The line under it says what happened:
    - *✓ Tuned the radio to 7.101 MHz.* Aether set the radio's dial (it reaches the radio over
@@ -877,8 +888,10 @@ RadioPost renews your credential while it listens, as it does at other times
 
 **The station that calls:**
 
-1. Under **Station**, choose **P2P (another client's station)**.
-2. In **Call**, type the other station's callsign.
+1. Under **Station**, choose **P2P (another client's station)**. **Call** shows the last station
+   you called, with that call's **Dial, MHz** and **Bandwidth**.
+2. In **Call**, type the other station's callsign, or pick one you called before under **▾**
+   (below).
 3. In **Dial, MHz**, type the frequency you agreed, such as `7.103`. RadioPost tunes the radio
    there at once, or says which dial to set yourself, as in [8.2](#82-tune-and-call).
    **Tuner tone** keys ten seconds of carrier for your antenna tuner.
@@ -889,6 +902,18 @@ RadioPost renews your credential while it listens, as it does at other times
 ![The Station box for a station call: the callsign, the dial and the bandwidth, and the dial to set by hand](screens/client-call-station.png)
 
 *Figure 25. A station call on a radio whose dial Aether cannot set.*
+
+**A station you called before.** Click **▾** at the right of **Call**, or press the down arrow in
+it. The list shows each station you called once, newest first, with the dial and bandwidth of that
+call and how long ago. Click one, or move to it with the arrows and press Enter: its callsign, dial
+and bandwidth go in, and the radio is tuned to the dial at once. Escape closes the list. Choosing
+**A gateway** again brings back the gateway that was in **Call**, on its channel
+([8.2](#82-tune-and-call)), and choosing P2P again brings back this station. Switching tunes
+nothing.
+
+![The Station box on P2P: WD5EMA, the last station called, in Call, and the list under it showing WD5EMA on 7.101 MHz at 2300 Hz and N4CALL on 3.5915 MHz at 500 Hz, with how long ago](screens/client-called.png)
+
+*Figure 26. The stations you called before.*
 
 Mail addressed to the other station's address crosses. Each side keeps a record of the session.
 When you next have the Internet, a line under the Station box says how many sessions wait to be
@@ -930,7 +955,7 @@ You need:
 
 ![The Alerts view: an alert sent and answered, one heard, and two circles with their checks](screens/client-alerts.png)
 
-*Figure 26. Alerts.*
+*Figure 27. Alerts.*
 
 ### 10.2 Set up a circle
 
@@ -1002,7 +1027,7 @@ front, and a red box shows the alert, with the dial it was heard on.
 
 ![An alert from KK4ODA in the circle Family, with Acknowledge, Call back, three quick replies and a line of your own](screens/client-alarm.png)
 
-*Figure 27. An alert arriving.*
+*Figure 28. An alert arriving.*
 
 - **Acknowledge** stops the alarm. The other station sees *seen*.
 - **Received**, **Calling you now** and **Can't now** answer with that line, and stop the alarm.
@@ -1025,7 +1050,7 @@ its own account, its own address and its own mail.
 
 ![One computer with three callsigns, each its own account, and a shared key, address list and log](fig/callsigns.svg)
 
-*Figure 28. Several callsigns on one computer.*
+*Figure 29. Several callsigns on one computer.*
 
 ### 11.1 Add a callsign
 
@@ -1087,7 +1112,7 @@ Click **Setup** at the bottom of the left-hand column.
 
 ![The Setup page: enrollment, post office, accept list and usual gateways](screens/client-setup.png)
 
-*Figure 29. Setup.*
+*Figure 30. Setup.*
 
 ### Enroll with your post office
 
@@ -1128,7 +1153,7 @@ Where your station is. The gateway list is in order of distance from it
 
 ![Setup's Places and GPS: two places saved, the GPS read from an iPhone over TCP, and the position in use](screens/client-places.png)
 
-*Figure 30. Places and GPS.*
+*Figure 31. Places and GPS.*
 
 The line at the top says which position is in use, and why when it is not the GPS's present fix:
 *In use: the GPS, EM73tr, 2 s ago*, or *GPS silent for 6 minutes: using Home, EM73tr.*
@@ -1178,7 +1203,7 @@ names the profile in use.
 
 ![Setup's Station profiles: a mobile profile and a home one, each value set or assumed](screens/client-stations.png)
 
-*Figure 31. Station profiles.*
+*Figure 32. Station profiles.*
 
 Each profile shows what a prediction would use at **HF** and at **VHF** and above: the power, the
 antenna and its height, its gain, and the feed line's loss, and the **Noise** where it is. A value
@@ -1201,7 +1226,7 @@ when you ask, from the Copernicus DEM's public copy, and kept on this computer.
 
 ![Setup's Terrain: what is held, the area within 50 km being prepared at 90 m, and the notices of the data held](screens/client-terrain-setup.png)
 
-*Figure 32. Terrain.*
+*Figure 33. Terrain.*
 
 The first line says what is held: tiles of a degree square, at 90 m or 30 m, their size, and the
 folder. To have the terrain before you go where there is no Internet, pick how far around the place
@@ -1217,7 +1242,7 @@ RadioPost plays a sound when something happens, and tells you about new mail by 
 
 ![Setup's Sounds and notifications: speakers chosen, a sound for each event, quiet hours, and how mail arrives](screens/client-sounds.png)
 
-*Figure 33. Sounds and notifications.*
+*Figure 34. Sounds and notifications.*
 
 **Mind the radio's sound card.** If this computer's sound goes to the radio's sound card (a
 SignaLink, or the radio's own USB audio), these sounds go on the air, and with VOX they key the
@@ -1313,7 +1338,7 @@ RadioPost keeps working when the Internet fails at a gateway.
 
 ![Before: the post office copies your mail to your usual gateway. During: the gateway serves the copies and keeps what you send. After: it reports](fig/cutoff.svg)
 
-*Figure 34. When the Internet is down.*
+*Figure 35. When the Internet is down.*
 
 **Before.** Name your usual gateways in Setup ([section 12](#usual-gateways)). Your post office
 then copies each new message for you to them as it arrives.
@@ -1356,7 +1381,7 @@ licensed operator can run one.
 
 ![Two users call the gateway by radio; the gateway's computer runs RadioPost Gateway and Aether HF and reaches each caller's post office](fig/gateway.svg)
 
-*Figure 35. A gateway station.*
+*Figure 36. A gateway station.*
 
 A gateway is usually left answering with nobody at the radio. It is then under **automatic
 control**, and the rules for that apply ([The rules](#36-the-rules)).
@@ -1392,13 +1417,13 @@ Open RadioPost Gateway. Until it is set up and registered, it says what is missi
 
 ![A new RadioPost Gateway: the notice says it is not set up, with Set up the gateway](screens/gateway-first.png)
 
-*Figure 36. RadioPost Gateway before setup.*
+*Figure 37. RadioPost Gateway before setup.*
 
 Click **Set up the gateway**. Setup has three steps.
 
 ![The gateway's Setup page: the gateway, its registration with two channels, and post offices](screens/gateway-setup.png)
 
-*Figure 37. Setting up the gateway.*
+*Figure 38. Setting up the gateway.*
 
 ### Step 1. The gateway
 
@@ -1529,7 +1554,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 ![The RadioPost Gateway window with numbered marks on its parts](screens/gateway-window.png)
 
-*Figure 38. The RadioPost Gateway window.*
+*Figure 39. The RadioPost Gateway window.*
 
 1. **The gateway's callsign**, and the account it is registered under. To its left, beside
    *RadioPost Gateway*, is the version you are running.
@@ -1564,7 +1589,7 @@ While a session runs, a box shows who called, the account, since when, and the m
 
 ![The window during a session, with the Session under way box](screens/gateway-session.png)
 
-*Figure 39. A session at the gateway.*
+*Figure 40. A session at the gateway.*
 
 **Stopping and closing.** **Stop** ends a session under way and lets Aether go. Closing the
 window stops the gateway too. If it is answering, it asks first and says what closing stops.
@@ -1659,7 +1684,7 @@ text), each session waiting to be reported with its last try, and the last repor
 
 ![The Partners, Callers refused and Copies placed ahead panels, opened](screens/gateway-held.png)
 
-*Figure 40. What the gateway holds, its partners and the callers it refuses.*
+*Figure 41. What the gateway holds, its partners and the callers it refuses.*
 
 ## 22. Partners: forwarding by radio
 
@@ -1796,7 +1821,7 @@ on this tab.
 
 ![The Applications tab: one application waiting with its licence check, and the Decided list](screens/desk-applications.png)
 
-*Figure 41. Applications.*
+*Figure 42. Applications.*
 
 Each application shows the person's name, callsign and when they asked, the **Address** they
 want, their **Email now**, and what the post office found of the callsign:
@@ -1840,7 +1865,7 @@ the mailbox was made (*mailbox*, or *no mailbox* in red) and the applicant email
 
 ![The Accounts tab: five accounts with their names, devices and mail waiting](screens/desk-accounts.png)
 
-*Figure 42. Accounts.*
+*Figure 43. Accounts.*
 
 Every account, one a row:
 
@@ -1878,7 +1903,7 @@ Revoking the computer you are using takes the desk away from it: the button says
 
 ![The Gateways tab: two gateways, the account each was registered from, and Unregister](screens/desk-gateways.png)
 
-*Figure 43. Gateways.*
+*Figure 44. Gateways.*
 
 The **Gateways** tab lists each gateway registered with your post office, one a row:
 
@@ -1902,7 +1927,7 @@ that exists. Use it for someone you know holds the callsign.
 
 ![The New code tab: an address, a callsign and a name filled in, the licence checked, and the code made](screens/desk-code.png)
 
-*Figure 44. Making a code.*
+*Figure 45. Making a code.*
 
 1. Open **New code**.
 2. Fill in:
@@ -1952,7 +1977,7 @@ Know only post offices whose operators you trust to check callsigns. At first no
 
 ![The Post offices tab: one post office known, one seen, none blocked](screens/desk-others.png)
 
-*Figure 45. Other post offices.*
+*Figure 46. Other post offices.*
 
 - **Known**: the post offices you know, who runs each, when its records were last fetched, and
   whether DNSSEC signed them. They are fetched again every six hours. **Forget** stops knowing one;
@@ -1973,7 +1998,7 @@ when a check turns red, and again when all pass.
 
 ![The Health tab: eleven checks passed and one amber line about backups](screens/desk-health.png)
 
-*Figure 46. Health.*
+*Figure 47. Health.*
 
 Each line is one check:
 
@@ -2001,7 +2026,7 @@ The **Server** tab lets you look after the server without logging in to it.
 
 ![The Server tab: the jobs, one with its output open, and When you need more](screens/desk-server.png)
 
-*Figure 47. Jobs and a terminal.*
+*Figure 48. Jobs and a terminal.*
 
 **Jobs** are a fixed list of tasks the server's administrator account runs for you:
 
@@ -2036,7 +2061,7 @@ says the one command to run on the server, once.
 
 ![The Backups and DKIM keys boxes on the Server tab](screens/desk-backups.png)
 
-*Figure 48. Backups and DKIM keys.*
+*Figure 49. Backups and DKIM keys.*
 
 ### Backups
 
@@ -2093,7 +2118,7 @@ when they are older than 180 days.
 
 ![The Settings tab: applications, licence lookups, mailboxes and this post office](screens/desk-settings.png)
 
-*Figure 49. Settings.*
+*Figure 50. Settings.*
 
 ### Applications
 
@@ -2324,7 +2349,8 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 **Send and fetch mail**
 
 1. **Write**, fill in **To**, **Subject** and **Text**, **Put in outbox**.
-2. **Choose a gateway**, **Choose** one.
+2. **Choose a gateway**, **Choose** one. Or keep the last one you called, shown in **Call**, or
+   pick another you called under **▾**.
 3. Pick its **Channel**: the radio is tuned there at once if Aether can. **Tuner tone** if needed.
    Set Aether's bandwidth.
 4. Set **Fetch**. Listen that the frequency is clear.
@@ -2336,7 +2362,7 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 1. Agree on a frequency and bandwidth. The one who answers tunes to them and clicks
    **Listen for P2P**. It stays on until clicked again.
 2. The other chooses **P2P (another client's station)**, types the callsign, the **Dial, MHz** and the
-   **Bandwidth**, then **Call**.
+   **Bandwidth**, or picks a station called before under **▾**, then **Call**.
 3. With a station that runs a gateway, call its operator's own callsign, not the gateway's.
 4. Later, with the Internet: **Send reports**.
 
@@ -2458,3 +2484,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.40.1 | 2026-11-21 | From the session of 2026-11-21. §6: in a narrow window **Call** and **Listen for P2P** are as wide as their words, as **Write** and **Setup** are; they had stretched across the window. Figure 12 retaken. |
 | 1.40.2 | 2026-11-21 | **Call** is as wide as its word in the left column too, under **Fetch**; **Listen for P2P** still spans the column. §6 reworded. Figures 5, 6, 7, 9, 10, 11, 13, 19, 20, 21, 22, 24, 25 and 27 retaken. |
 | 1.41.0 | 2026-11-21 | §8.3: the session card's colours. The arc that spins while calling is amber and blue once in session, no longer the colour of transmitting; the ring of the way not moving is faded; at the end both rings are green, amber or red by how the session went. Figure 20 retaken. |
+| 1.42.0 | 2026-11-23 | **Call** remembers each kind of call. §6, §8.2: choosing **A gateway** brings back the last gateway called, on the channel it was called on, or the one you had put there before switching; **▾** lists the gateways called before, newest first, and picking one tunes its channel. §10: choosing **P2P** brings back the last station called with that call's dial and bandwidth, and **▾** lists the others (new Figure 26; later figures renumbered). §40 to match. Figures 19 and 25 retaken. |

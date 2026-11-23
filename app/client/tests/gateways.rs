@@ -103,6 +103,19 @@ fn favourites_blocks_own_gateways_and_the_calls_made() {
     assert_eq!(r["recent"][1]["completed"], true);
     assert_eq!(r["recent"][1]["took_s"], 300);
 
+    // the call box's memory: each gateway called, once and newest first, with the channel of its
+    // last call and its listed channels; no station called yet
+    let (status, c) = http(at, "GET", "/api/called", &Value::Null);
+    assert_eq!(status, 200, "{c}");
+    assert_eq!(c["gateway"][0]["callsign"], "N1CALL-10");
+    assert_eq!(c["gateway"][1]["callsign"], "KK4ODA-1");
+    assert_eq!(c["gateway"][1]["dial_hz"], 7_101_000);
+    assert_eq!(
+        c["gateway"][1]["gateway"]["channels"][1]["dial_hz"],
+        7_101_000
+    );
+    assert_eq!(c["station"], json!([]));
+
     // a favourite channel, a blocked gateway, a gateway of one's own between them
     mark(
         at,

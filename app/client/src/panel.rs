@@ -97,6 +97,9 @@ const FILES: &[(&str, &str, &str)] = &[
     ),
 ];
 
+/// How many gateways, and how many stations, the call box offers under ▾.
+const CALLED_KEPT: usize = 10;
+
 /// The panel's requests that reach the post office over the Internet (RP-5 §6).
 const ONLINE: [&str; 9] = [
     "/api/enroll",
@@ -997,6 +1000,7 @@ impl Panel {
                 self.gateways(param("at").parse().ok())
             }
             (Method::Get, "/api/attempts") => Ok(self.attempts(param("limit").parse().ok())),
+            (Method::Get, "/api/called") => Ok(self.called()),
             (Method::Get, "/api/learned") => self.learned(param("callsign").trim()),
             (_, "/api/forget") => self.forget(method, body),
             (Method::Post, p) if ONLINE.contains(&p) => self.online(path, body),
@@ -1976,6 +1980,18 @@ impl Panel {
         let forgotten = Forgotten::load(&self.base);
         let recent = directory::recent(&records, limit.unwrap_or(100));
         json!({"recent": marked(recent, &records, &forgotten)})
+    }
+
+    /// `GET /api/called`: whom the station called, by kind, once each and newest first, for the
+    /// call box (`directory::called`). The gateway list is read with the operator's marks but not
+    /// judged (no terrain, no predictions): the box asks for it whenever it opens its list.
+    fn called(&self) -> Value {
+        let listed = self
+            .gateways_judged(false, None)
+            .ok()
+            .and_then(|v| v["gateways"].as_array().cloned())
+            .unwrap_or_default();
+        directory::called(&attempts::read(&self.base), &listed, CALLED_KEPT)
     }
 
     /// `/api/forget`: the operator's forgetting rules (§12.9), `GET` to list them with the counts,

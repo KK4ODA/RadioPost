@@ -451,8 +451,8 @@ function showChannels() {
   const gw = chosenGateway;
   const fits = gw && kind() === "gateway"
     && $("callsign").value.trim().toUpperCase() === gw.callsign && gw.channels.length > 0;
+  // hidden, not emptied: the gateway's callsign typed again brings its channels back
   $("channel-label").hidden = !fits;
-  if (!fits) $("channel").replaceChildren();
   showTuning();
 }
 
@@ -463,7 +463,192 @@ function showKind() {
   $("gateways-open").hidden = !gateway;
   $("station-dial").hidden = gateway;
   $("callsign").placeholder = gateway ? "KK4ODA-1" : "N0CALL";
+  showCalledButton();
   showTuning();
+}
+
+// ── the call box remembers each kind ───────────────────────────────────────────────────────────
+// Switching between A gateway and P2P brings back what Call held for that kind when the operator
+// left it, or else its last call: a gateway with the channel it was called on, a station with the
+// dial and bandwidth agreed for it. ▾ lists the gateways, or the stations, called before, newest
+// first (GET /api/called, from the call records this computer keeps). Picking one there puts it
+// in the box and tunes the radio at once, as a channel picked does; switching kinds tunes nothing.
+
+let calledBefore = {gateway: [], station: []};
+let boxKind = null;  // the kind whose call the box holds
+const leftAs = {};   // what the box held for each kind when the operator switched away
+
+async function loadCalled() {
+  try { calledBefore = await api("called"); } catch { /* the list stays as it was */ }
+  showCalledButton();
+}
+
+// the calls of a kind the box offers: a gateway the operator blocked is left out
+function offered(k) {
+  return (calledBefore[k] || []).filter((e) => !(e.gateway && e.gateway.blocked));
+}
+
+function showCalledButton() {
+  const k = kind();
+  const b = $("called-open");
+  b.hidden = !offered(k).length;
+  b.title = k === "gateway"
+    ? "The gateways you called before, newest first, each on the channel you called it on"
+    : "The stations you called before, newest first, each with the dial and bandwidth of that call";
+  b.setAttribute("aria-label", k === "gateway" ? "Gateways called before" : "Stations called before");
+}
+
+// a gateway record's channels the box offers: favourites first, those left out dropped
+function channelsOf(gw) {
+  return (gw.channels || []).filter((c) => !c.blocked)
+    .sort((a, b) => Number(Boolean(b.favourite)) - Number(Boolean(a.favourite)));
+}
+
+// a gateway in the box with its channels, the one at `dialHz` picked when it is one of them
+function putGateway(callsign, channels, dialHz) {
+  chosenGateway = {callsign, channels};
+  $("callsign").value = callsign;
+  $("channel").replaceChildren(...channels.map((c) =>
+    el("option", {value: String(c.dial_hz), text: channelWords(c)})));
+  if (channels.some((c) => c.dial_hz === dialHz)) $("channel").value = String(dialHz);
+  showChannels();
+}
+
+// one call made before, in the box: its callsign and its channel. A gateway no longer listed
+// keeps the one channel it was called on
+function putCalled(k, e) {
+  if (k === "gateway") {
+    const channels = e.gateway ? channelsOf(e.gateway)
+      : e.dial_hz ? [{dial_hz: e.dial_hz, bandwidth_hz: e.bandwidth_hz}] : [];
+    putGateway(e.callsign, channels, e.dial_hz);
+    return;
+  }
+  $("callsign").value = e.callsign;
+  if (e.dial_hz) $("dial").value = mhzOf(e.dial_hz);
+  if ([...$("bandwidth").options].some((o) => Number(o.value) === e.bandwidth_hz)) {
+    $("bandwidth").value = String(e.bandwidth_hz);
+  }
+}
+
+// the box turned to kind `k`: what it held is kept for the kind it leaves, and what `k` held, or
+// its last call, comes back. `fill` false leaves the callsign to the caller (a gateway chosen)
+function switchKind(k, fill = true) {
+  document.querySelector(`input[name=kind][value=${k}]`).checked = true;
+  keep("kind", k);
+  if (boxKind !== k) {
+    if (boxKind) {
+      leftAs[boxKind] = {callsign: $("callsign").value, gateway: chosenGateway,
+                         channel: $("channel").value};
+    }
+    const back = leftAs[k];
+    if (!fill) {
+      // the caller puts in its own
+    } else if (back) {
+      if (k === "gateway" && back.gateway) {
+        putGateway(back.gateway.callsign, back.gateway.channels, Number(back.channel));
+      } else if (k === "gateway") {
+        chosenGateway = null;
+      }
+      $("callsign").value = back.callsign;
+    } else if (offered(k).length) {
+      putCalled(k, offered(k)[0]);
+    } else {
+      $("callsign").value = "";
+    }
+    boxKind = k;
+  }
+  showKind();
+}
+
+// ▾ beside Call: the calls of the kind shown. Arrows move, Enter takes one, Escape closes. The list
+// is read again as it opens, so a call just made is in it
+function wireCalled() {
+  const input = $("callsign");
+  const list = $("called-list");
+  const opener = $("called-open");
+  let shown = [];
+  let active = -1;
+  const close = () => {
+    list.hidden = true;
+    shown = [];
+    active = -1;
+    opener.setAttribute("aria-expanded", "false");
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+  };
+  const take = (e) => {
+    close();
+    const k = kind();
+    putCalled(k, e);
+    if (k === "station") {
+      keep("dial", $("dial").value);
+      keep("bandwidth", $("bandwidth").value);
+    }
+    showKind();
+    input.focus();
+    pickChannel();
+  };
+  const render = () => {
+    const k = kind();
+    list.replaceChildren(...shown.map((e, i) => {
+      const bandwidth = e.bandwidth_hz ? `, ${e.bandwidth_hz} Hz` : "";
+      const where = e.dial_hz ? `${mhzOf(e.dial_hz)} MHz${bandwidth}`
+        : k === "gateway" ? "no channel named" : "no dial named";
+      const li = el("li", {role: "option", id: `called-${i}`,
+        title: `${e.callsign}, called ${day(e.at)}${e.dial_hz ? ` on ${mhzOf(e.dial_hz)} MHz` : ""}`
+          + (k === "gateway" && !e.gateway ? ". It is not in the gateway list now" : "")},
+        el("span", {class: "s-name", text: e.callsign}),
+        el("span", {class: "s-addr", text: `${where} · ${age(e.at)}`}));
+      li.setAttribute("aria-selected", String(i === active));
+      li.addEventListener("mousedown", (event) => { event.preventDefault(); take(e); });
+      // inside the Call label: a click there is not the label's
+      li.addEventListener("click", (event) => event.preventDefault());
+      return li;
+    }));
+    list.hidden = false;
+    opener.setAttribute("aria-expanded", "true");
+    input.setAttribute("aria-expanded", "true");
+    input.setAttribute("aria-activedescendant", `called-${active}`);
+    const item = list.children[active];
+    if (item) item.scrollIntoView({block: "nearest"});
+  };
+  const open = async () => {
+    await loadCalled();
+    shown = offered(kind());
+    if (!shown.length) { close(); return; }
+    const typed = input.value.trim().toUpperCase();
+    active = Math.max(0, shown.findIndex((e) => e.callsign === typed));
+    render();
+  };
+  // the button keeps the focus in Call, so that leaving Call closes the list
+  opener.addEventListener("mousedown", (event) => event.preventDefault());
+  opener.addEventListener("click", (event) => {
+    event.preventDefault();
+    input.focus();
+    if (list.hidden) open(); else close();
+  });
+  input.addEventListener("input", close);
+  // leaving Call closes the list, unless Call has the focus again by then
+  input.addEventListener("blur", () => setTimeout(() => {
+    if (document.activeElement !== input) close();
+  }, 120));
+  input.addEventListener("keydown", (event) => {
+    if (list.hidden) {
+      if (event.key === "ArrowDown" && offered(kind()).length) { event.preventDefault(); open(); }
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      active = (active + (event.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length;
+      render();
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (active >= 0) take(shown[active]);
+    } else if (event.key === "Escape" || event.key === "Tab") {
+      if (event.key === "Escape") event.preventDefault();
+      close();
+    }
+  });
 }
 
 // ── the channel picked, tuned at once (W14, RP-4 §4.1) ─────────────────────────────────────────
@@ -662,6 +847,7 @@ async function refresh() {
   $("trusted").textContent = s.trusted.length ? s.trusted.join(", ") : "None yet.";
   if (s.log !== logNext) await readLog();
   soundsOfState(s, a);
+  if (a.state === "idle" && ["calling", "session"].includes(lastState)) loadCalled();
   // a session that ends shows what it brought, whether the station is idle or listening again; a
   // renewal or an alert changes no folder, and must not close a message being written
   if ((lastState !== "idle" && lastState !== "renewing" && lastState !== "alerting"
@@ -1011,8 +1197,9 @@ async function openGateways(refreshing = false) {
 // a channel as the page writes it: the dial in MHz to the kilohertz or finer, the bandwidth (an FM
 // channel's width in kHz), and whether the gateway scans it with others (RP-5 §4.4)
 function channelWords(c) {
-  const width = c.mode === "FM" ? `FM, ${c.bandwidth_hz / 1000} kHz` : `${c.bandwidth_hz} Hz`;
-  return `${mhzOf(c.dial_hz)} MHz, ${width}${c.scan_s != null ? ", scanned" : ""}`;
+  const width = c.bandwidth_hz == null ? ""
+    : c.mode === "FM" ? `, FM, ${c.bandwidth_hz / 1000} kHz` : `, ${c.bandwidth_hz} Hz`;
+  return `${mhzOf(c.dial_hz)} MHz${width}${c.scan_s != null ? ", scanned" : ""}`;
 }
 
 // days or hours since a moment, for the ages the page shows
@@ -1744,19 +1931,14 @@ function wireTerrain() {
 }
 
 // a gateway chosen: its channels in the call box, favourites first and those left out dropped,
-// and the radio tuned to the first at once (W14)
-function chooseGateway(gw) {
-  const channels = (gw.channels || []).filter((c) => !c.blocked)
-    .sort((a, b) => Number(Boolean(b.favourite)) - Number(Boolean(a.favourite)));
-  chosenGateway = {callsign: gw.callsign, channels};
-  $("callsign").value = gw.callsign;
-  document.querySelector("input[name=kind][value=gateway]").checked = true;
-  keep("kind", "gateway");
+// and the radio tuned at once (W14) to the first, or to `dialHz` when it is one of them (a call
+// from the Recent list chosen again)
+function chooseGateway(gw, dialHz = null) {
+  const channels = channelsOf(gw);
+  switchKind("gateway", false);
+  putGateway(gw.callsign, channels, dialHz);
   showKind();
-  $("channel").replaceChildren(...channels.map((c) =>
-    el("option", {value: String(c.dial_hz), text: channelWords(c)})));
-  showChannels();
-  const first = channels[0];
+  const first = channels.find((c) => c.dial_hz === dialHz) || channels[0];
   const scanned = first && first.scan_s != null
     ? ` It scans its channels: the call keeps trying for ${first.scan_s} s or more.`
     : "";
@@ -1795,7 +1977,7 @@ async function renderRecent() {
     if (gw && !gw.blocked) {
       const again = el("button", {type: "button", class: "quiet", text: "Choose",
         title: `Choose ${a.remote} again`});
-      again.addEventListener("click", () => chooseGateway(gw));
+      again.addEventListener("click", () => chooseGateway(gw, a.dial_hz));
       acts.append(again);
     }
     for (const [c, cls] of [[when(a.at), ""], [called, ""], [channel, ""], [ended, ""],
@@ -4692,8 +4874,7 @@ function wireAlerts() {
     const who = alarmShown.from;
     const dial = alarmShown.dial_hz;
     await alertDo({ack: alarmShown.tag});
-    document.querySelector("input[name=kind][value=station]").checked = true;
-    showKind();
+    switchKind("station", false);
     $("callsign").value = who;
     // the dial the alert was heard on, where its sender listens for the answers
     if (dial) {
@@ -4827,11 +5008,21 @@ function wire() {
   $("setup-open").addEventListener("click", () => show("setup"));
   for (const radio of document.querySelectorAll("input[name=kind]")) {
     radio.checked = radio.value === kept("kind", "gateway");
-    radio.addEventListener("change", () => { keep("kind", kind()); showKind(); });
+    radio.addEventListener("change", () => switchKind(radio.value));
   }
   $("fetch").value = kept("fetch", "all");
   $("fetch").addEventListener("change", () => keep("fetch", $("fetch").value));
+  boxKind = kind();
   showKind();
+  wireCalled();
+  // the box opens on the last call of its kind, unless something was put in it meanwhile
+  loadCalled().then(() => {
+    const k = kind();
+    if (!$("callsign").value.trim() && !leftAs[k] && offered(k).length) {
+      putCalled(k, offered(k)[0]);
+      showKind();
+    }
+  });
   $("gateways-open").addEventListener("click", () => openGateways());
   $("gateways-refresh").addEventListener("click", async () => {
     $("gateways-refresh").disabled = true;

@@ -183,6 +183,17 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 .station .row #listen { justify-content: center; }
 .pair { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .pair select { width: auto; }
+/* Call: the callsign, and under ▾ the gateways or stations called before, newest first */
+.combo { position: relative; display: block; margin-top: 3px; }
+.combo input { margin-top: 0; padding-right: 32px; }
+.combo-open { position: absolute; top: 1px; right: 1px; width: 30px; height: calc(var(--control-h) - 2px);
+              padding: 0; border: 0; border-radius: 0 5px 5px 0; background: transparent;
+              color: var(--muted); display: grid; place-items: center; }
+.combo-open:hover, .combo-open[aria-expanded="true"] { color: var(--text); }
+.called { max-height: 18rem; overflow: auto; }
+.suggestions.called li { flex-direction: column; align-items: stretch; gap: 1px; }
+.called .s-name { font-family: var(--mono); font-size: 13px; }
+.called .s-addr { font-family: inherit; font-size: 12px; white-space: normal; }
 .tuning { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: -2px 0 10px; }
 .radio-at { margin: 0; font-size: 13px; color: var(--muted); }
 .radio-at:empty { display: none; }

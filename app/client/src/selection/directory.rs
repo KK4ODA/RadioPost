@@ -350,6 +350,51 @@ pub fn recent(records: &[Value], limit: usize) -> Vec<Value> {
         .collect()
 }
 
+/// Whom this station called, once each and newest first, up to `per_kind` gateways and as many
+/// stations: the call box shows the last of a kind when the operator switches to it, and offers
+/// the others under ▾. Each names the channel of its last call; a gateway still in `listed` (the
+/// gateway list with the operator's marks, as the Gateways page has it) carries that record, whose
+/// channels the box offers.
+#[must_use]
+pub fn called(records: &[Value], listed: &[Value], per_kind: usize) -> Value {
+    let mut gateways: Vec<Value> = Vec::new();
+    let mut stations: Vec<Value> = Vec::new();
+    for r in records.iter().rev() {
+        let (Some(kind), Some(remote)) = (r["kind"].as_str(), r["remote"].as_str()) else {
+            continue;
+        };
+        let remote = remote.trim().to_ascii_uppercase();
+        let list = match kind {
+            "gateway" => &mut gateways,
+            "station" => &mut stations,
+            _ => continue,
+        };
+        if remote.is_empty()
+            || list.len() >= per_kind
+            || list.iter().any(|e| e["callsign"] == remote)
+        {
+            continue;
+        }
+        let mut entry = json!({
+            "callsign": remote, "at": r["start"],
+            "dial_hz": r["channel"]["dial_hz"], "bandwidth_hz": r["channel"]["bandwidth_hz"],
+        });
+        if kind == "gateway" {
+            entry["gateway"] = listed
+                .iter()
+                .find(|g| {
+                    g["callsign"]
+                        .as_str()
+                        .is_some_and(|c| c.eq_ignore_ascii_case(&remote))
+                })
+                .cloned()
+                .unwrap_or(Value::Null);
+        }
+        list.push(entry);
+    }
+    json!({"gateway": gateways, "station": stations})
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -507,6 +552,63 @@ mod tests {
         assert_eq!(r[0]["remote"], "N4VHF-1");
         assert_eq!(r[1]["words"], "completed, some mail left in the outbox");
         assert_eq!(r[1]["took_s"], 60);
+    }
+
+    #[test]
+    fn whom_the_call_box_offers_each_kind_once_newest_first() {
+        let place = json!({"grid": "EM73"});
+        let station = |remote: &str, end: u64, dial_hz: u64, bandwidth_hz: u64| {
+            json!({"id": format!("s-{end}"), "start": end - 60, "end": end, "kind": "station",
+                   "remote": remote, "channel": {"dial_hz": dial_hz, "bandwidth_hz": bandwidth_hz},
+                   "outcome": {"class": "completed"}})
+        };
+        // oldest first, as read() gives them; a stub's call (no end) counts as any other
+        let records = vec![
+            record("KK4ODA-1", "completed", 1000, &place, 3_591_500),
+            station("WD5EMA", 1500, 7_103_000, 500),
+            record("N1CALL-10", "no-answer", 2000, &place, 7_101_000),
+            station("N0CALL", 2500, 7_101_000, 2300),
+            record("kk4oda-1", "completed", 3000, &place, 7_101_000),
+            station("WD5EMA", 3500, 3_590_000, 2300),
+            json!({"id": "a-x", "start": 4000, "stub": true, "kind": "gateway", "remote": "N2CALL-5",
+                   "channel": {"dial_hz": null, "bandwidth_hz": null}}),
+        ];
+        let listed = vec![json!({"callsign": "KK4ODA-1", "channels": [
+            {"dial_hz": 3_591_500, "bandwidth_hz": 2300}, {"dial_hz": 7_101_000, "bandwidth_hz": 2300}]})];
+        let c = called(&records, &listed, 10);
+        assert_eq!(
+            calls_of(&c, "gateway"),
+            ["N2CALL-5", "KK4ODA-1", "N1CALL-10"]
+        );
+        assert_eq!(calls_of(&c, "station"), ["WD5EMA", "N0CALL"]);
+        // the channel of the last call to each, and a listed gateway's record
+        let kk = &c["gateway"][1];
+        assert_eq!(
+            (kk["dial_hz"].as_u64(), kk["at"].as_u64()),
+            (Some(7_101_000), Some(2940))
+        );
+        assert_eq!(kk["gateway"]["channels"][0]["dial_hz"], 3_591_500);
+        assert_eq!(c["gateway"][0]["gateway"], Value::Null, "not listed");
+        assert_eq!(c["gateway"][0]["dial_hz"], Value::Null, "no channel named");
+        let wd = &c["station"][0];
+        assert_eq!(
+            (wd["dial_hz"].as_u64(), wd["bandwidth_hz"].as_u64()),
+            (Some(3_590_000), Some(2300))
+        );
+        assert!(wd.get("gateway").is_none(), "a station has no record");
+        // at most so many of each
+        let c = called(&records, &listed, 1);
+        assert_eq!(calls_of(&c, "gateway"), ["N2CALL-5"]);
+        assert_eq!(calls_of(&c, "station"), ["WD5EMA"]);
+    }
+
+    fn calls_of(c: &Value, kind: &str) -> Vec<String> {
+        c[kind]
+            .as_array()
+            .expect("a list")
+            .iter()
+            .map(|e| e["callsign"].as_str().expect("a callsign").to_owned())
+            .collect()
     }
 
     #[test]
