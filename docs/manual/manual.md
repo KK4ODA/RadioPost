@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.44.0 |
+| **Version** | 1.45.0 |
 | **Updated** | 2026-11-23 |
 | **Describes** | RadioPost 0.1.0-beta.34 |
 | **Licence** | CC BY 4.0 |
@@ -913,6 +913,12 @@ During a session, **Write** and the buttons that change messages are greyed unti
 4. Choose the **Bandwidth** you agreed: **2300 Hz** or **500 Hz**. For the call, Aether moves the
    whole station to it, and back after.
 5. Click **Call**.
+
+If the other station also runs a gateway that scans its channels, and you call on one of them, the
+call keeps trying as long as the gateway's scan, so it reaches the station when the scan comes back
+to that channel. The activity says *a gateway at KK4ODA's station scans 7.101 MHz: the call keeps
+trying 54 s*. On a frequency the gateway does not scan, the station hears you only if its operator
+stopped the scan and tuned there.
 
 ![The Station box for a station call: the callsign, the dial and the bandwidth, and the dial to set by hand](screens/client-call-station.png)
 
@@ -2517,3 +2523,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.42.0 | 2026-11-23 | **Call** remembers each kind of call. §6, §8.2: choosing **A gateway** brings back the last gateway called, on the channel it was called on, or the one you had put there before switching; **▾** lists the gateways called before, newest first, and picking one tunes its channel. §10: choosing **P2P** brings back the last station called with that call's dial and bandwidth, and **▾** lists the others (new Figure 26; later figures renumbered). §40 to match. Figures 19 and 25 retaken. |
 | 1.43.0 | 2026-11-23 | §8.3: the session card's **Stop calling**, **Disconnect** and **Abort**; nothing is lost, the state reads *Stopped* and the card ends amber; closing the window aborts a call or a session before RadioPost closes. §10: **Disconnect** ends a session you answered, and the station listens on. §37: two rows. Figure 20 retaken. |
 | 1.44.0 | 2026-11-23 | Section 19: RadioPost Gateway's *Session under way* box has **Disconnect**, then **Abort**, and **Stop calling** for a call to a partner: each ends that session only, and the gateway goes on answering; what **Sessions** says of it. Figure 40 retaken. |
+| 1.45.0 | 2026-11-23 | Section 10, station to station: a call to a station whose gateway scans the frequency called keeps trying as long as the gateway's scan. A 500 Hz call on 7.101 MHz to a station scanning three channels made its tries while the radio was on the others (Aether's report of 2026-11-23). |

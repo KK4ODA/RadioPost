@@ -780,6 +780,19 @@ pub fn tune(
 }
 
 impl Modem {
+    /// Where the radio's dial is now, when the modem can say (RP-4 §4.1); `None` otherwise, or
+    /// when asking fails: a call is made all the same.
+    fn dial_now(&mut self) -> Option<u64> {
+        if !self.caps.dial {
+            return None;
+        }
+        let read = self.host.dial();
+        match self.ask(&read) {
+            Ok(Event::Dial { dial_hz, .. }) => Some(dial_hz),
+            _ => None,
+        }
+    }
+
     fn tune_to(&mut self, hz: u64) -> Result<Picked, Error> {
         let keys_tone = self.caps.tone;
         if !self.caps.dial {
@@ -1499,17 +1512,29 @@ fn fetched(fetch: Fetch, entry: &Value) -> bool {
 /// or read from the kept list. A modem without `caps.call_s` cannot be asked, and the user is told
 /// the call may end too soon.
 fn call_lasting(
-    modem: &Modem,
+    modem: &mut Modem,
     store: &Store,
     remote: &str,
     kind: Kind,
     opts: &Options,
     say: &mut dyn FnMut(&str),
 ) -> Option<u64> {
-    let wanted = opts.call_s.or_else(|| {
-        (kind == Kind::Gateway)
-            .then(|| store.scan_s_of(remote, opts.dial_hz))
-            .flatten()
+    let wanted = opts.call_s.or_else(|| match kind {
+        Kind::Gateway => store.scan_s_of(remote, opts.dial_hz),
+        Kind::Station => {
+            let dial = opts.dial_hz.or_else(|| modem.dial_now());
+            let s = station_call_s(store, remote, dial)?;
+            if let Some(hz) = dial {
+                tell(
+                    say,
+                    &format!(
+                        "a gateway at {remote}'s station scans {} MHz: the call keeps trying {s} s",
+                        mhz(hz)
+                    ),
+                );
+            }
+            Some(s)
+        }
     });
     let lasting = wanted.filter(|_| modem.caps.call_s);
     if let Some(s) = wanted
@@ -1525,6 +1550,16 @@ fn call_lasting(
         );
     }
     lasting
+}
+
+/// How long a call to a station keeps trying when a listed gateway under the same base callsign
+/// scans the dial it is made on (RP-5 §4.4): the gateway's `scan_s` there. The station's radio
+/// follows its gateway's scan, so a P2P call shorter than the scan finds it on another dial: on
+/// 2026-11-23 a 500 Hz call on 7.101 MHz to KK4ODA, whose gateway KK4ODA-1 scanned three dials,
+/// made its four tries while the radio was elsewhere. `None` when the dial is not known or not
+/// scanned there.
+fn station_call_s(store: &Store, station: &str, dial_hz: Option<u64>) -> Option<u64> {
+    store.outlast_s(Some(station), dial_hz?)
 }
 
 /// Places the call (RP-4 §4, `connect`) at `bandwidth` with tries lasting `call_s`, and waits for
@@ -2188,7 +2223,46 @@ mod tests {
     use rpmi::host::Event;
     use serde_json::json;
 
-    use super::Live;
+    use super::{Live, Store, station_call_s};
+
+    /// A P2P call to a station whose gateway scans the dial keeps trying as long as the scan, the
+    /// station's radio being wherever its gateway is; on a dial the gateway does not scan, or
+    /// with the dial not known, the call is the modem's own length.
+    #[test]
+    fn a_call_to_a_scanning_gateways_station_lasts_the_scan() {
+        let home = std::env::temp_dir().join(format!("radiopost-p2p-scan-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let mut store = Store::open(&home).expect("a home");
+        store.gateway_list = Some(
+            json!({"domain": "radiopost.org", "fetched": 1, "gateways": [
+                {"callsign": "KK4ODA-1", "channels": [
+                    {"dial_hz": 3_590_000, "scan_s": 54}, {"dial_hz": 7_101_000, "scan_s": 54},
+                    {"dial_hz": 14_107_000, "scan_s": 54}]},
+                {"callsign": "W4MID-1", "channels": [{"dial_hz": 7_101_000}]},
+            ]}),
+        );
+        assert_eq!(station_call_s(&store, "KK4ODA", Some(7_101_000)), Some(54));
+        assert_eq!(
+            station_call_s(&store, "kk4oda-2", Some(3_590_000)),
+            Some(54)
+        );
+        assert_eq!(
+            station_call_s(&store, "KK4ODA", Some(7_082_000)),
+            None,
+            "a dial the gateway does not scan"
+        );
+        assert_eq!(
+            station_call_s(&store, "KK4ODA", None),
+            None,
+            "the dial not known"
+        );
+        assert_eq!(
+            station_call_s(&store, "W4MID", Some(7_101_000)),
+            None,
+            "a gateway that does not scan"
+        );
+        let _ = std::fs::remove_dir_all(&home);
+    }
 
     /// What the modem still holds: the sends handed to it, then what it reports, then what it
     /// says the other station holds.
