@@ -22,7 +22,7 @@ use rpmi::tcp::Connection;
 use serde::{Deserialize, Serialize};
 
 use crate::forward::{Outcome, Partner};
-use crate::monitor::{Check, Monitor};
+use crate::monitor::{Check, Monitor, Stop};
 use crate::offline::{Fallback, Offline};
 use crate::store::Shared;
 use crate::upstream::{self, Account};
@@ -1955,8 +1955,78 @@ fn stopped(monitor: &Monitor, tell: &mut dyn FnMut(&str)) -> Result<(), String> 
     Ok(())
 }
 
-/// One session, from the link coming up until the caller hangs up, the link is quiet too long, or
-/// the gateway is asked to stop.
+/// How long an `abort` waits for the adapter to say the call or the link is gone (RP-4 §4: at
+/// once on every adapter RP-4 maps). Past it, the session is ended here.
+const ABORT_PATIENCE: Duration = Duration::from_secs(10);
+
+/// What ends a session the adapter never said had ended, after an abort.
+const ABORT_UNANSWERED: &str =
+    "the modem did not say the link had ended: the session is ended here";
+
+/// The operator's word to end the session under way ([`Monitor::end_session`]), as a session's
+/// loop heeds it: the modem is asked once for each word (`disconnect`, then `abort` if it follows),
+/// nothing more of the engine's goes to the modem once a word is said, and the session ends when
+/// the adapter says the link is gone, as a broken link does (RP-3 §7, §8): what was received in
+/// part is kept and what was not receipted is offered again.
+#[derive(Default)]
+struct Ending(Option<(Stop, Instant)>);
+
+impl Ending {
+    /// Asks the modem to end `link` with `remote` as a word said since the last look says, and
+    /// logs it.
+    fn heed(
+        &mut self,
+        monitor: &Monitor,
+        modem: &mut Modem,
+        link: Option<&str>,
+        remote: &str,
+    ) -> io::Result<()> {
+        let Some(how) = monitor.end_asked() else {
+            return Ok(());
+        };
+        if self.0.is_some_and(|(was, _)| was >= how) {
+            return Ok(());
+        }
+        if let Some(link) = link {
+            let request = match how {
+                Stop::Disconnect => modem.host.disconnect(link),
+                Stop::Abort => modem.host.abort(Some(link)),
+            };
+            modem.conn.send(&request)?;
+        }
+        monitor.log(&match how {
+            Stop::Disconnect => format!(
+                "disconnecting from {remote}, as the operator asked: what the modem holds goes \
+                 first"
+            ),
+            Stop::Abort => format!("aborting the session with {remote}, as the operator asked"),
+        });
+        self.0 = Some((how, Instant::now()));
+        Ok(())
+    }
+
+    /// Whether nothing more of the engine's goes to the modem: a word has been said.
+    fn holding(monitor: &Monitor) -> bool {
+        monitor.end_asked().is_some()
+    }
+
+    /// Whether an abort has gone unanswered for [`ABORT_PATIENCE`].
+    fn unanswered(&self) -> bool {
+        matches!(self.0, Some((Stop::Abort, at)) if at.elapsed() >= ABORT_PATIENCE)
+    }
+
+    /// How the session ended, when it ended on the operator's word: the result its record keeps.
+    fn result(&self) -> Result<(), String> {
+        match self.0 {
+            None => Ok(()),
+            Some((Stop::Disconnect, _)) => Err("the operator disconnected".into()),
+            Some((Stop::Abort, _)) => Err("the operator aborted the session".into()),
+        }
+    }
+}
+
+/// One session, from the link coming up until the caller hangs up, the link is quiet too long, the
+/// operator ends it ([`Ending`]), or the gateway is asked to stop.
 fn carry(
     station: &mut Station,
     modem: &mut Modem,
@@ -1977,6 +2047,11 @@ fn carry(
     let mut event = Some(connected.clone());
     // RP-3 §8: from the last bytes, stopped while the modem receives
     let mut silence = Silence::new();
+    let remote = match connected {
+        Event::Connected { remote, .. } => remote.clone(),
+        _ => String::new(),
+    };
+    let mut ending = Ending::default();
     let hang_up = |carrier: &mut Carrier<Answering>, modem: &mut Modem| {
         if let Some(link) = carrier.link() {
             let bye = modem.host.disconnect(link);
@@ -1991,17 +2066,30 @@ fn carry(
                 monitor.event(e);
             }
             monitor.account(carrier.engine().0.account());
+            let requests = if Ending::holding(monitor) {
+                Vec::new()
+            } else {
+                requests
+            };
             if let Some(err) = requests.iter().find_map(|r| modem.conn.send(r).err()) {
                 carrier.engine_mut().link_lost();
                 break Err(format!("the modem's adapter: {err}"));
             }
         }
         if carrier.is_ended() {
-            break Ok(());
+            break ending.result();
         }
         if monitor.stopping() {
             hang_up(&mut carrier, modem);
             break Err("the operator stopped the gateway".to_owned());
+        }
+        if let Err(err) = ending.heed(monitor, modem, carrier.link(), &remote) {
+            carrier.engine_mut().link_lost();
+            break Err(format!("the modem's adapter: {err}"));
+        }
+        if ending.unanswered() {
+            hang_up(&mut carrier, modem);
+            break Err(ABORT_UNANSWERED.to_owned());
         }
         match modem.next() {
             Ok(Some(e)) => {
@@ -2099,15 +2187,33 @@ fn forwarding_client(
         .forwarding(Forwarding { records, trust }))
 }
 
-/// Calls `partner` on `modem`: its `connected`, once the link is up.
+/// Calls `partner` on `modem`: its `connected`, once the link is up. The operator's word to end
+/// the session (either one) stops the call: the modem's `abort` ends it, with `failed` `aborted`.
+/// A link that came up as the word was said is handed on, and the session's loop ends it at once.
 fn call_up(modem: &mut Modem, partner: &str, monitor: &Monitor) -> Result<Event, String> {
     let connect = modem.host.connect(partner, None, None);
     let id = connect.get("id").cloned();
     modem.ask(&connect)?;
     let since = Instant::now();
+    // when the operator's word went to the modem as `abort`
+    let mut aborted: Option<Instant> = None;
     loop {
         if monitor.stopping() {
             return Err("the operator stopped the gateway".into());
+        }
+        if aborted.is_none() && monitor.end_asked().is_some() {
+            let abort = modem.host.abort(None);
+            modem
+                .conn
+                .send(&abort)
+                .map_err(|e| format!("the modem's adapter: {e}"))?;
+            monitor.log(&format!(
+                "stopping the call to {partner}, as the operator asked"
+            ));
+            aborted = Some(Instant::now());
+        }
+        if aborted.is_some_and(|at| at.elapsed() >= ABORT_PATIENCE) {
+            return Err("the operator stopped the call".into());
         }
         if since.elapsed() > CALL_WAIT {
             return Err(format!(
@@ -2120,6 +2226,9 @@ fn call_up(modem: &mut Modem, partner: &str, monitor: &Monitor) -> Result<Event,
             .map_err(|e| format!("the modem's adapter: {e}"))?
         {
             Some(e @ Event::Connected { id: Some(_), .. }) if e_id(&e) == id => return Ok(e),
+            Some(Event::Failed { id: i, .. }) if i == id && aborted.is_some() => {
+                return Err("the operator stopped the call".into());
+            }
             Some(Event::Failed {
                 id: i, code, text, ..
             }) if i == id => {
@@ -2215,6 +2324,7 @@ fn forward_here(
     let mut event = Some(connected);
     // RP-3 §8: from the last bytes, stopped while the modem receives
     let mut silence = Silence::new();
+    let mut ending = Ending::default();
     let result = loop {
         if let Some(e) = event.take() {
             let (requests, events) = carrier.on_event(&mut modem.host, &e);
@@ -2226,13 +2336,18 @@ fn forward_here(
             for e in &events {
                 monitor.event(e);
             }
+            let requests = if Ending::holding(monitor) {
+                Vec::new()
+            } else {
+                requests
+            };
             if let Some(err) = requests.iter().find_map(|r| modem.conn.send(r).err()) {
                 carrier.engine_mut().link_lost();
                 break Err(format!("the modem's adapter: {err}"));
             }
         }
         if carrier.is_ended() {
-            break Ok(());
+            break ending.result();
         }
         if monitor.stopping() {
             if let Some(link) = carrier.link() {
@@ -2241,6 +2356,18 @@ fn forward_here(
             }
             carrier.engine_mut().link_lost();
             break Err("the operator stopped the gateway".to_owned());
+        }
+        if let Err(err) = ending.heed(monitor, modem, carrier.link(), partner) {
+            carrier.engine_mut().link_lost();
+            break Err(format!("the modem's adapter: {err}"));
+        }
+        if ending.unanswered() {
+            if let Some(link) = carrier.link() {
+                let bye = modem.host.disconnect(link);
+                let _ = modem.conn.send(&bye);
+            }
+            carrier.engine_mut().link_lost();
+            break Err(ABORT_UNANSWERED.to_owned());
         }
         match modem.next() {
             Ok(Some(e)) => {

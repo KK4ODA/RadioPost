@@ -191,6 +191,7 @@ function render(s) {
     $("s-since").textContent = when(now.started);
     $("s-in").textContent = now.handed_in;
     $("s-out").textContent = now.picked_up;
+    showSessionStop(now, st.stopping);
   }
 
   const h = s.held || {};
@@ -692,6 +693,34 @@ async function tick() {
   }
 }
 
+// the session card's button, ending this session while the gateway goes on answering: Stop
+// calling while a call it placed to a partner goes out, Disconnect in a session, then Abort once
+// Disconnect has been asked and the modem is still sending what it holds
+function showSessionStop(session, stopping) {
+  const b = $("s-stop");
+  const calling = Boolean(session.unlinked);
+  b.classList.toggle("danger", !calling && Boolean(stopping));
+  b.disabled = stopping === "abort" || (calling && Boolean(stopping));
+  if (calling) {
+    b.textContent = stopping ? "Stopping the call…" : "Stop calling";
+    b.dataset.how = "abort";
+    b.title = `Stop the call to ${session.remote} now. The gateway goes on answering`;
+  } else if (!stopping) {
+    b.textContent = "Disconnect";
+    b.dataset.how = "disconnect";
+    b.title = `End the session with ${session.remote} in order: what the modem holds goes out `
+      + "first, then the link ends. What did not cross is offered again on the station's next "
+      + "call, and a message sent in part goes on from where it stopped. The gateway goes on "
+      + "answering";
+  } else {
+    b.textContent = stopping === "abort" ? "Aborting…" : "Abort";
+    b.dataset.how = "abort";
+    b.title = "End the link now, without waiting for the modem to send what it holds. What did "
+      + "not cross is kept as with Disconnect";
+  }
+}
+
+$("s-stop").addEventListener("click", () => act("hang-up", {how: $("s-stop").dataset.how}, render));
 $("start").addEventListener("click", () => act("start", {}, render));
 $("stop").addEventListener("click", async () => {
   if (state && state.status.session

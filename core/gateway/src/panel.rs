@@ -365,6 +365,7 @@ impl Panel {
                 self.runner.stop();
                 Ok(self.state())
             }
+            (Method::Post, "/api/hang-up") => self.hang_up(body),
             (Method::Post, "/api/check") => {
                 self.runner.check()?;
                 Ok(self.state())
@@ -372,6 +373,18 @@ impl Panel {
             (Method::Post, "/api/update" | "/api/update/check") => self.update(path),
             _ => Err(format!("no {method} {path}")),
         }
+    }
+
+    /// The session card's **Stop calling**, **Disconnect** or **Abort** (`{how: "disconnect" |
+    /// "abort"}`): the session under way ends, and the gateway goes on answering.
+    fn hang_up(&self, body: &Value) -> Result<Value, String> {
+        let how = match text(body, "how") {
+            "disconnect" => crate::monitor::Stop::Disconnect,
+            "abort" => crate::monitor::Stop::Abort,
+            _ => return Err("how: disconnect or abort".into()),
+        };
+        self.runner.monitor().end_session(how)?;
+        Ok(self.state())
     }
 
     /// `/api/update/check` asks the channel now, on a thread of its own; `/api/update` installs

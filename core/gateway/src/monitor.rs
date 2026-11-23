@@ -5,7 +5,7 @@
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use radiopost::ErrorCode;
@@ -109,6 +109,28 @@ pub struct Reported {
     pub error: Option<String>,
 }
 
+/// How the operator ends the session under way before its time: the panel's **Stop calling**,
+/// **Disconnect** and **Abort**.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Stop {
+    /// In order (RP-4 `disconnect`): what the modem holds goes first, then the link ends. A call
+    /// the gateway placed and not yet answered is stopped as by `Abort`.
+    Disconnect = 1,
+    /// Now (RP-4 `abort`): the call, or the link, ends at once and what the modem holds is dropped.
+    Abort = 2,
+}
+
+impl Stop {
+    /// Its name, as the panel's API and status say it.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Stop::Disconnect => "disconnect",
+            Stop::Abort => "abort",
+        }
+    }
+}
+
 /// The gateway's state, as the panel shows it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Status {
@@ -120,6 +142,8 @@ pub struct Status {
     pub problem: Option<String>,
     /// The session under way.
     pub session: Option<SessionRecord>,
+    /// The operator asked the session under way to end: `disconnect` or `abort`, until it has.
+    pub stopping: Option<&'static str>,
     /// Lines logged so far: the number to ask the log from next.
     pub logged: usize,
     /// How each post office answered the last check.
@@ -150,6 +174,9 @@ struct Inner {
 pub struct Monitor {
     inner: Mutex<Inner>,
     stop: AtomicBool,
+    /// The operator's word to end the session under way ([`Stop`] as a number, 0 for none):
+    /// forgotten when the next session begins.
+    end: AtomicU8,
     keep: Option<PathBuf>,
 }
 
@@ -179,6 +206,7 @@ impl Monitor {
                 reported: None,
             }),
             stop: AtomicBool::new(false),
+            end: AtomicU8::new(0),
             keep: None,
         }
     }
@@ -237,9 +265,11 @@ impl Monitor {
         self.lock().problem.clone()
     }
 
-    /// A station called.
+    /// A station called. The operator's word to end the last session is forgotten here, under
+    /// the lock [`Monitor::end_session`] takes, so a word for this one cannot be lost.
     pub fn begin(&self, remote: &str) {
         let mut i = self.lock();
+        self.end.store(0, Ordering::SeqCst);
         i.session = Some(SessionRecord {
             remote: remote.to_owned(),
             started: now(),
@@ -379,6 +409,34 @@ impl Monitor {
         self.lock().checks = checks;
     }
 
+    /// Asks the answering loop to end the session under way (**Stop calling**, **Disconnect**,
+    /// **Abort**), without stopping the gateway: it hears the word within a quarter of a second,
+    /// and goes on answering after. An abort after a disconnect still under way ends the link at
+    /// once.
+    ///
+    /// # Errors
+    ///
+    /// No session is under way.
+    pub fn end_session(&self, how: Stop) -> Result<(), String> {
+        let i = self.lock();
+        if i.session.is_none() {
+            return Err("no session is under way".into());
+        }
+        self.end.fetch_max(how as u8, Ordering::SeqCst);
+        drop(i);
+        Ok(())
+    }
+
+    /// What the operator asked of the session under way, if anything.
+    #[must_use]
+    pub fn end_asked(&self) -> Option<Stop> {
+        match self.end.load(Ordering::SeqCst) {
+            0 => None,
+            1 => Some(Stop::Disconnect),
+            _ => Some(Stop::Abort),
+        }
+    }
+
     /// The state, the session under way and the checks.
     #[must_use]
     pub fn status(&self) -> Status {
@@ -388,6 +446,7 @@ impl Monitor {
             since: i.since,
             problem: i.problem.clone(),
             session: i.session.clone(),
+            stopping: i.session.as_ref().and(self.end_asked()).map(Stop::name),
             logged: i.logged,
             checks: i.checks.clone(),
             scan: i.scan.clone(),

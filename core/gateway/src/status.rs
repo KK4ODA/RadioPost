@@ -441,6 +441,7 @@ mod tests {
             since: 0,
             problem: problem.map(str::to_owned),
             session: None,
+            stopping: None,
             logged: 0,
             checks: Vec::new(),
             scan: None,

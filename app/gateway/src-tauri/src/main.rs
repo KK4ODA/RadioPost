@@ -269,6 +269,7 @@ mod tests {
             since: 0,
             problem: None,
             session: None,
+            stopping: None,
             logged: 0,
             checks: Vec::new(),
             scan: None,

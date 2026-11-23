@@ -617,3 +617,25 @@ fn check_for_updates_finds_a_release_out_since_the_last_check() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The session card's stop (`/api/hang-up`) needs a session under way, and a word it knows:
+/// `disconnect` or `abort`.
+#[test]
+fn ending_a_session_needs_one_under_way() {
+    let dir = scratch("panel-hang-up");
+    let page = Page {
+        at: Panel::new(Arc::new(Runner::new(&dir.join("gateway"))), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    assert_eq!(
+        page.post("/api/hang-up", &json!({"how": "disconnect"})),
+        Err("no session is under way".into())
+    );
+    assert_eq!(
+        page.post("/api/hang-up", &json!({"how": "later"})),
+        Err("how: disconnect or abort".into())
+    );
+    assert_eq!(page.get("/api/state")["status"]["stopping"], Value::Null);
+    let _ = std::fs::remove_dir_all(&dir);
+}

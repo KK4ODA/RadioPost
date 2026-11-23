@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.43.0 |
+| **Version** | 1.44.0 |
 | **Updated** | 2026-11-23 |
 | **Describes** | RadioPost 0.1.0-beta.34 |
 | **Licence** | CC BY 4.0 |
@@ -1602,12 +1602,26 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 While a session runs, a box shows who called, the account, since when, and the messages so far.
 
-![The window during a session, with the Session under way box](screens/gateway-session.png)
+![The window during a session, with the Session under way box and its Disconnect button](screens/gateway-session.png)
 
 *Figure 40. A session at the gateway.*
 
-**Stopping and closing.** **Stop** ends a session under way and lets Aether go. Closing the
-window stops the gateway too. If it is answering, it asks first and says what closing stops.
+**Ending one session.** The box has a button that ends this session only. The gateway goes on
+answering:
+
+- **Disconnect**: Aether sends what it already holds, then ends the link. The caller hears it end.
+- **Abort** takes Disconnect's place once you have clicked it. Click it when Disconnect takes too
+  long on a weak path: the link ends at once.
+- **Stop calling**, while the gateway calls a partner ([section 22](#22-partners-forwarding-by-radio)):
+  the call stops at once.
+
+Nothing is lost. What did not cross is offered again on the station's next call, and a message
+sent in part goes on from where it stopped. **Sessions** says *the operator disconnected*, *the
+operator aborted the session* or *the operator stopped the call*.
+
+**Stopping and closing.** **Stop** ends a session under way and lets Aether go: the gateway stops
+answering. Closing the window stops the gateway too. If it is answering, it asks first and says
+what closing stops.
 
 **Its status, for anyone to see.** Unless you untick **Report its status to its post office, for
 anyone to see** in Setup, the gateway tells its post office whether it is on the air. The post
@@ -2502,3 +2516,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.41.0 | 2026-11-21 | §8.3: the session card's colours. The arc that spins while calling is amber and blue once in session, no longer the colour of transmitting; the ring of the way not moving is faded; at the end both rings are green, amber or red by how the session went. Figure 20 retaken. |
 | 1.42.0 | 2026-11-23 | **Call** remembers each kind of call. §6, §8.2: choosing **A gateway** brings back the last gateway called, on the channel it was called on, or the one you had put there before switching; **▾** lists the gateways called before, newest first, and picking one tunes its channel. §10: choosing **P2P** brings back the last station called with that call's dial and bandwidth, and **▾** lists the others (new Figure 26; later figures renumbered). §40 to match. Figures 19 and 25 retaken. |
 | 1.43.0 | 2026-11-23 | §8.3: the session card's **Stop calling**, **Disconnect** and **Abort**; nothing is lost, the state reads *Stopped* and the card ends amber; closing the window aborts a call or a session before RadioPost closes. §10: **Disconnect** ends a session you answered, and the station listens on. §37: two rows. Figure 20 retaken. |
+| 1.44.0 | 2026-11-23 | Section 19: RadioPost Gateway's *Session under way* box has **Disconnect**, then **Abort**, and **Stop calling** for a call to a partner: each ends that session only, and the gateway goes on answering; what **Sessions** says of it. Figure 40 retaken. |
