@@ -27,12 +27,12 @@ Aether listens on two ports, and RadioPost uses only the first:
 | Port | What it is | Who uses it |
 |---|---|---|
 | 8515 | Aether's control port | RadioPost, Aether's own window |
-| 8300, and 8301 for data | Aether's host programs port, the VARA-style one | Winlink Express, VarAC, RMS Trimode |
+| 8300, and 8301 for data | Aether's external programs port, the VARA-style one | Winlink Express, VarAC, RMS Trimode |
 
-Leave the host programs port at 8300. Set to 8515, it takes the control port's number, and
+Leave the external programs port at 8300. Set to 8515, it takes the control port's number, and
 Aether stops at start (*host interface: 127.0.0.1:8515 is already in use*). Aether keys the
-radio itself (its Setup step 2: CAT, serial, rigctld, FLRig, CM108 or VOX, not *Host*): keyed by
-a host program, Aether transmits only through that program, and refuses RadioPost's calls.
+radio itself (its Setup step 2: CAT, serial, rigctld, FLRig, CM108 or VOX, not *External program*): keyed by
+an external program, Aether transmits only through that program, and refuses RadioPost's calls.
 
 ## 2. Credentials, before going on the air
 

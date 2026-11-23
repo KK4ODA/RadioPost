@@ -23,8 +23,8 @@ the RadioPost app, and the gateway, which its operator runs with RadioPost Gatew
   only during a call or while it listens; between calls an Aether under automatic control then
   says *calls to* its callsign *not answered*, which is normal: no program answers for it.
 * **Aether keying the radio itself** (Aether's Setup step 2: CAT, serial, rigctld, FLRig, CM108
-  or VOX, not *Host*), with its ports as they are. RadioPost talks to Aether's control port,
-  8515 (`ws://127.0.0.1:8515/v1`). The host programs port, 8300, is for Winlink Express and VarAC;
+  or VOX, not *External program*), with its ports as they are. RadioPost talks to Aether's control port,
+  8515 (`ws://127.0.0.1:8515/v1`). The external programs port, 8300, is for Winlink Express and VarAC;
   RadioPost never uses it, and it stays at 8300. Close Winlink Express or VarAC while you test if
   they use the same callsign: one program at a time answers for a callsign at Aether.
 * **RadioPost**, from the [releases](https://github.com/KK4ODA/RadioPost/releases): the installer

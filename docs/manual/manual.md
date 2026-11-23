@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.45.0 |
+| **Version** | 1.46.0 |
 | **Updated** | 2026-11-23 |
 | **Describes** | RadioPost 0.1.0-beta.34 |
 | **Licence** | CC BY 4.0 |
@@ -196,7 +196,7 @@ to experiment and build: every protocol it uses is published.
   radio.
 
 > **Note.** Aether must key the radio **itself**. In Aether's Setup, step 2, choose CAT, serial,
-> rigctld, FLRig, CM108 or VOX, not *Host*. Set to *Host*, Aether transmits only for the program
+> rigctld, FLRig, CM108 or VOX, not *External program*. Set to *External program*, Aether transmits only for the program
 > that keys it, and RadioPost's calls never reach the air.
 
 Aether listens on two ports. RadioPost uses only the first:
@@ -204,9 +204,10 @@ Aether listens on two ports. RadioPost uses only the first:
 | Port | What it is | Who uses it |
 |---|---|---|
 | 8515 | Aether's control port | RadioPost, RadioPost Gateway, Aether's own window |
-| 8300 (and 8301) | Aether's host programs port | Winlink Express, VarAC, RMS Trimode |
+| 8300 (and 8301) | Aether's external programs port | Winlink Express, VarAC, RMS Trimode |
 
-Leave both as they are. Never set the host programs port to 8515: Aether then stops at start.
+Leave both as they are. Never set the external programs port to 8515: Aether then stops at start.
+Leave Aether's **External programs** box unchecked for RadioPost, as it says beside the box.
 
 ## 4. Installing RadioPost
 
@@ -1417,7 +1418,7 @@ The gateway's computer needs:
 
 - **An HF radio and Aether HF 0.2.0-beta.146 or later**, working with the radio.
 - **Aether keying the radio itself** (Aether's Setup, step 2: CAT, serial, rigctld, FLRig, CM108
-  or VOX, not *Host*). If the same computer runs RMS Trimode with Aether set to *Host*, close
+  or VOX, not *External program*). If the same computer runs RMS Trimode with Aether set to *External program*, close
   Trimode and change Aether's keying. An Aether profile for each makes the switch one click.
 - **Aether's ports as they are** (8515 for RadioPost; [section 3](#3-what-you-need)).
 - **An Internet connection.** The gateway only connects out, so a home router needs no change.
@@ -2214,15 +2215,23 @@ RadioPost is the mail program. Aether HF is the modem. Each is set up in its own
 | Sending your logs to the project | Aether | [Send files](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#sending-files) |
 
 **Callsigns.** RadioPost calls and answers as the callsign it was enrolled with. You never copy it
-into Aether. While a RadioPost program holds a callsign, Aether's Setup shows it greyed in place
-of Aether's own.
+into Aether. Aether's Setup step 1 keeps the **Aether callsign**, for Aether standalone use; while
+a RadioPost program holds a callsign, the note after that box names it and the program.
+
+**External programs.** Leave Aether's **External programs** (its Setup step 5) unchecked for
+RadioPost: they are programs written for VARA, such as Winlink Express, VarAC and RMS Trimode,
+and RadioPost is not one. Tick it only when one of them runs on the station too.
+
+**Bandwidth.** A station that listens for RadioPost calls runs Aether's own **Bandwidth** (its
+Setup step 4): RadioPost cannot change it while it listens. At 2300 Hz it answers 500 Hz calls
+too.
 
 **Aether's header.** While RadioPost is open, Aether's header shows *✓ RadioPost client* between
 calls, and *✓ RadioPost client · listening* while it listens (Aether 0.2.0-beta.159 and RadioPost
 0.1.0-beta.15 or later). RadioPost Gateway shows there too, *listening* while it answers.
 
 **Other programs.** Aether can serve Winlink Express, VarAC or RMS Trimode beside RadioPost, on
-its host programs port. One program at a time answers for one callsign: close a program that uses
+its external programs port. One program at a time answers for one callsign: close a program that uses
 the same callsign as RadioPost while you test. Aether's manual covers them in
 [Part 4](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#part-4-aether-with-other-programs).
 
@@ -2259,8 +2268,8 @@ These notes follow the US rules (Part 97). Check your own country's.
 | *cannot reach the modem's adapter at ws://127.0.0.1:8515/v1* | Start Aether. Check the **Modem** box. |
 | The call goes out but nothing answers | Check the dial and the bandwidth against the gateway's channel. Check the gateway's hours. Try another gateway. |
 | *Your last 4 calls failed on 2 gateways that usually answer* | Your calls are probably not getting out. Check the radio, the antenna, the cable to the radio and Aether's levels before trying more gateways. Those calls count less against the gateways until it clears ([8.1](#81-choose-a-gateway)). |
-| Aether refuses RadioPost's calls | Aether is keyed by a host program. In Aether's Setup, step 2, choose CAT, serial, rigctld, FLRig, CM108 or VOX. |
-| Aether stops at start: *127.0.0.1:8515 is already in use* | Aether's host programs port was set to 8515. Put it back to 8300 ([Aether's ports](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#20-the-programs-and-their-ports)). |
+| Aether refuses RadioPost's calls | Aether is keyed by an external program. In Aether's Setup, step 2, choose CAT, serial, rigctld, FLRig, CM108 or VOX. |
+| Aether stops at start: *127.0.0.1:8515 is already in use* | Aether's external programs port was set to 8515. Put it back to 8300 ([Aether's ports](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#20-the-programs-and-their-ports)). |
 | *a session is under way: try again when it ends* | Wait for the session to end, or click **Disconnect** on the session card ([8.3](#83-during-the-session)). |
 | *the modem did not say the link had ended: the session is ended here* | Aether did not answer **Abort** within ten seconds. RadioPost ended the session on its side; nothing is lost. Check that Aether is running and that its panel shows no session. |
 | *the station is listening for P2P calls: click Listening for P2P to stop it first* | A call, tuning, the tuner tone, refreshing the gateway list, an update and most of Setup wait while the station listens. Click **Listening for P2P** to stop, then try again. Writing, changing and deleting messages go on while it listens. |
@@ -2295,7 +2304,7 @@ These notes follow the US rules (Part 97). Check your own country's.
 | Register: *… is registered with radiopost.org's post office now* | You picked an account at another post office. **Unregister** first, then register with the account you want ([section 18](#unregistering-or-moving-to-another-post-office)). |
 | Unregister: *… still wait to be reported* | Sessions carried with the Internet down hold users' mail. **Start** the gateway with the Internet up, let it report them, then unregister. |
 | Unregister: *… keeps KK4ODA-1 on its gateway list* | That post office does not take withdrawals yet. Ask its operators to remove the gateway, then click **Unregister** again. |
-| *This modem neither checks the band rules nor says where the radio's dial is* | Aether's rules are off, as they are when a host program keys the radio, and it cannot read the dial. Set Aether's keying and rules (its Setup, steps 1 and 2). |
+| *This modem neither checks the band rules nor says where the radio's dial is* | Aether's rules are off, as they are when an external program keys the radio, and it cannot read the dial. Set Aether's keying and rules (its Setup, steps 1 and 2). |
 | *The radio is at … MHz: … outside the segments*, badge **Not answering here** | Aether's rules are off, so the gateway judges the dial itself. Turn the radio to the gateway's channel. |
 | *could not tune the radio back* | The radio stayed on the partner's or gateway's channel after a call. Tune it back in Aether. |
 | *listening on … MHz only, until the scan runs again* | The scan ended ([When a scan stops](#when-a-scan-stops)); the gateway registered again with that channel alone. Click **Stop** and **Start** to scan again. |
@@ -2524,3 +2533,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.43.0 | 2026-11-23 | §8.3: the session card's **Stop calling**, **Disconnect** and **Abort**; nothing is lost, the state reads *Stopped* and the card ends amber; closing the window aborts a call or a session before RadioPost closes. §10: **Disconnect** ends a session you answered, and the station listens on. §37: two rows. Figure 20 retaken. |
 | 1.44.0 | 2026-11-23 | Section 19: RadioPost Gateway's *Session under way* box has **Disconnect**, then **Abort**, and **Stop calling** for a call to a partner: each ends that session only, and the gateway goes on answering; what **Sessions** says of it. Figure 40 retaken. |
 | 1.45.0 | 2026-11-23 | Section 10, station to station: a call to a station whose gateway scans the frequency called keeps trying as long as the gateway's scan. A 500 Hz call on 7.101 MHz to a station scanning three channels made its tries while the radio was on the others (Aether's report of 2026-11-23). |
+| 1.46.0 | 2026-11-23 | Aether's names, as Aether 0.2.0-beta.173 says them: its *Host programs* are **External programs**, to leave unchecked for RadioPost, its radio control *Host* is *External program*, and its Setup step 1 shows the **Aether callsign** (for Aether standalone use). Section 3 and section 35 say so, and that a listening station runs Aether's own **Bandwidth**. |

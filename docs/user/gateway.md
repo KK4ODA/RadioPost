@@ -26,7 +26,7 @@ gateway that can reach the Internet (§4).
     Aether serves both. A client that calls the gateway's callsign for station-to-station mail is
     welcomed as by any gateway, hangs up, and the gateway's log says why.
 * **Aether keying the radio itself**: in Aether's Setup step 2, CAT, serial, rigctld, FLRig,
-  CM108 or VOX, not *Host*. Keyed by a host program, Aether transmits only through that program,
+  CM108 or VOX, not *External program*. Keyed by an external program, Aether transmits only through that program,
   and RadioPost's sessions do not reach the air. On a computer that also runs RMS Trimode with
   Aether set that way, close Trimode and change Aether's keying; an Aether profile for each makes
   the switch one click.
@@ -35,10 +35,10 @@ gateway that can reach the Internet (§4).
   | Port | What it is | Who uses it |
   |---|---|---|
   | 8515 | Aether's control port | RadioPost (client and gateway), Aether's own window |
-  | 8300, and 8301 for data | Aether's host programs port, the VARA-style one | RMS Trimode, Winlink Express, VarAC |
+  | 8300, and 8301 for data | Aether's external programs port, the VARA-style one | RMS Trimode, Winlink Express, VarAC |
 
   RadioPost Gateway's **Modem** address, `ws://127.0.0.1:8515/v1`, is the control port. Nothing
-  about the host programs port is set in RadioPost. Keep it at 8300, and never at 8515: on the
+  about the external programs port is set in RadioPost. Keep it at 8300, and never at 8515: on the
   control port's number, Aether stops at start (*host interface: 127.0.0.1:8515 is already in
   use*).
 * **An Internet connection.** The gateway only makes outgoing connections, so a home router needs
@@ -421,13 +421,13 @@ another; Setup shows where):
 | Callers connect to Aether but the gateway never answers them, though it says *Listening* | RadioPost Gateway 0.1.0-beta.6 and earlier lost Aether when Aether restarted (a Setup save) and never claimed its callsign again; Aether before 0.2.0-beta.147 then answered callers itself (from beta.147, under automatic control, it answers nobody while no program holds the callsign, and its header says *not answering*). Update RadioPost Gateway, or stop and start it after saving Aether's Setup. |
 | `gateway.log` says, a few times a day on Windows, *the connection to Aether … ended: a read failed: … (os error 997)*, then *waiting for the modem* for a few seconds | RadioPost Gateway 0.1.0-beta.14 and earlier waited for Aether with a read timeout on the connection, which Windows sometimes fails that way; the gateway then lost its callsign at Aether until it claimed it again, about five seconds later. Update RadioPost Gateway. |
 | Waiting for the modem: *the modem refused* | Another program holds the callsign at Aether (RMS Trimode, if it uses the same one), or Aether refused it: Aether's log says why. |
-| Aether HF stops at start: *host interface: 127.0.0.1:8515 is already in use* | Aether's host programs port was set to 8515, its control port's number. Open Aether's `station.toml` (in PowerShell, `notepad "$env:APPDATA\aether-hf\station.toml"`), write `bind = "127.0.0.1:8300"` under `[host]`, save, and start Aether again. |
+| Aether HF stops at start: *host interface: 127.0.0.1:8515 is already in use* | Aether's external programs port was set to 8515, its control port's number. Open Aether's `station.toml` (in PowerShell, `notepad "$env:APPDATA\aether-hf\station.toml"`), write `bind = "127.0.0.1:8300"` under `[host]`, save, and start Aether again. |
 | Register: *… .radiopost holds no device key* | The RadioPost app on this computer is not enrolled: enroll it in its Setup, with a code of its own (§1). |
 | Register: *KK4ODA-1 is registered with radiopost.org's post office now …* | You picked an account at another post office. Unregister the gateway first (§2), then register it with the account you want. |
 | Unregister: *… still wait to be reported* | Sessions carried while the Internet was down hold users' mail. Start the gateway with the Internet up: it reports them, and Held says when. Then unregister. |
 | Unregister: *… keeps KK4ODA-1 on its gateway list* | That post office does not take withdrawals yet. Ask its operators to remove the gateway, then click **Unregister** again: the gateway finds itself off the list and forgets the registration. |
 | Unregister: *… is not in the RadioPost app on this computer* | The account the gateway was registered from is not enrolled here. Enroll it in RadioPost, or ask its post office's operators to remove the gateway and use `radiopost-gateway unregister --here`. |
-| *This modem neither checks the band rules nor says where the radio's dial is* | Aether's band rules are off, as they are when a host program keys the radio, and it cannot read the dial. Set Aether's keying and its rules profile (Aether's Setup steps 1 and 2). |
+| *This modem neither checks the band rules nor says where the radio's dial is* | Aether's band rules are off, as they are when an external program keys the radio, and it cannot read the dial. Set Aether's keying and its rules profile (Aether's Setup steps 1 and 2). |
 | **Not answering here**: *the radio is at … MHz … outside the segments* | The modem checks no band rules, so the gateway judges the dial: turn the radio to the gateway's channel. |
 | A post office *not found* | Its DNS records are not published: name it in Setup, step 3. |
 | A post office *refused the gateway* | The credential has run out or was revoked: register again (Setup, step 2). |
