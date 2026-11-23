@@ -7,7 +7,7 @@
 | **Status** | Current |
 | **Version** | 1.4.0 |
 | **Updated** | 2026-11-21 |
-| **Describes** | RadioPost 0.1.0-beta.34 |
+| **Describes** | RadioPost 0.1.0-beta.35 |
 | **Licence** | CC BY 4.0 |
 
 This guide shows a club or a group how to run its own RadioPost post office: rent a server, set it
@@ -198,7 +198,7 @@ moment; it says so and waits.
 1. **Download the RadioPost tools** onto the server:
 
    ```
-   curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.34/radiopost-tools-linux-x64.zip
+   curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.35/radiopost-tools-linux-x64.zip
    apt-get install -y unzip
    unzip radiopost-tools-linux-x64.zip
    ```
@@ -971,7 +971,7 @@ errors.
 
 ```
 apt install -y unzip
-curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.34/radiopost-tools-linux-x64.zip
+curl -LO https://github.com/KK4ODA/RadioPost/releases/download/v0.1.0-beta.35/radiopost-tools-linux-x64.zip
 unzip radiopost-tools-linux-x64.zip
 install -m 0755 radiopost-tools-linux-x64/radiopost-po /usr/local/bin/
 useradd --system --home-dir /var/lib/radiopost --create-home --shell /usr/sbin/nologin radiopost
