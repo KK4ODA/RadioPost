@@ -13,7 +13,7 @@ use radiopost_client::panel::Panel;
 use radiopost_client::session::{self, Options};
 use serde_json::{Value, json};
 
-use common::{loopback, loopback_dialled, scratch, store_for};
+use common::{loopback, loopback_dialled, loopback_with, scratch, store_for};
 
 /// One HTTP exchange: the status and the body.
 fn http(
@@ -1605,5 +1605,51 @@ fn check_for_updates_finds_a_release_out_since_the_last_check() {
         );
         thread::sleep(Duration::from_millis(20));
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Stop calling from the panel (`/api/hang-up`): refused with nothing under way, then a call that
+/// nobody answers ends at once, shown as stopped by the operator, not failed.
+#[test]
+fn a_call_is_stopped_from_the_panel() {
+    let dir = scratch("panel-hang-up");
+    store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    let (_server, at_f, _) = loopback_with(None, Duration::from_secs(60));
+    let c = Client {
+        at: Panel::new(&dir.join("facundo"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    assert_eq!(
+        c.post("/api/hang-up", &json!({"how": "abort"})),
+        Err("no call or session is under way".into())
+    );
+    c.post(
+        "/api/call",
+        &json!({"callsign": "n0call", "station": true, "adapter": at_f.to_string()}),
+    )
+    .expect("calling");
+    assert!(c.post("/api/hang-up", &json!({"how": "later"})).is_err());
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !c.get("/api/log?since=0")["lines"]
+        .as_array()
+        .expect("lines")
+        .iter()
+        .any(|l| l == "calling N0CALL")
+    {
+        assert!(Instant::now() < deadline, "the call never went out");
+        thread::sleep(Duration::from_millis(20));
+    }
+    c.post("/api/hang-up", &json!({"how": "abort"}))
+        .expect("stopping");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while c.get("/api/state")["activity"]["state"] != "idle" {
+        assert!(Instant::now() < deadline, "the call never ended");
+        thread::sleep(Duration::from_millis(20));
+    }
+    let a = &c.get("/api/state")["activity"];
+    assert_eq!(a["failed"], "you stopped the call", "{a}");
+    assert_eq!(a["stopped"], true, "{a}");
+    assert_eq!(a["stopping"], Value::Null, "{a}");
     let _ = std::fs::remove_dir_all(&dir);
 }

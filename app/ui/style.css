@@ -365,6 +365,8 @@ h2.section { margin-top: 24px; }
 .transfer[data-end="part"] .t-line::before { background: var(--busy); }
 .transfer[data-end="failed"] .t-line::before { background: var(--bad); }
 .t-left { color: var(--muted); font-size: 12px !important; }
+/* Stop calling, Disconnect, then Abort: small, under the lines, so the card stays the session's */
+.t-stop { height: 26px; margin-top: 8px; padding: 0 10px; font-size: 13px; }
 .mini { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted);
         font-variant-numeric: tabular-nums; }
 .mini .rings { width: 24px; height: 24px; display: block; }

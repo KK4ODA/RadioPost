@@ -9,9 +9,9 @@
 use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use radiopost::message::{Compression, Message};
 use radiopost::session::called::{Called, CalledConfig};
@@ -31,6 +31,67 @@ use crate::store::{Error, Store};
 
 /// RP-3 §8: nothing heard for this long ends the session.
 pub const QUIET: Duration = Duration::from_secs(300);
+
+/// How long a read of the adapter waits while a call or a session runs, so that the operator's
+/// word ([`HangUp`]) is heard between its events.
+const POLL: Duration = Duration::from_millis(250);
+
+/// How long an `abort` waits for the adapter to say the call or the link is gone (RP-4 §4: at
+/// once on every adapter RP-4 maps). Past it, the end is taken here.
+const ABORT_PATIENCE: Duration = Duration::from_secs(10);
+
+/// How the operator ends a call or a session before its time.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Stop {
+    /// In order (RP-4 `disconnect`): what the modem holds goes first, then the link ends. A call
+    /// not yet answered is stopped as by `Abort`.
+    Disconnect = 1,
+    /// Now (RP-4 `abort`): the call, or the link, ends at once and what the modem holds is dropped.
+    Abort = 2,
+}
+
+/// The operator's word to end the call or the session under way: the panel's **Stop calling**,
+/// **Disconnect** and **Abort**. The window keeps one and hands it to each call or listening in
+/// [`Options::hang_up`]; the session's thread hears it within [`POLL`].
+///
+/// Either way the end is a broken link as RP-3 §7 and §8 see it: what was receipted stays done,
+/// what was not is offered again, and a message received in part is kept to resume.
+#[derive(Clone, Debug, Default)]
+pub struct HangUp(Arc<AtomicU8>);
+
+impl HangUp {
+    /// A word not yet said.
+    #[must_use]
+    pub fn new() -> HangUp {
+        HangUp::default()
+    }
+
+    /// Asks for the end `how`. An `Abort` replaces a `Disconnect` still under way, never the
+    /// other way round.
+    pub fn ask(&self, how: Stop) {
+        self.0.fetch_max(how as u8, Ordering::SeqCst);
+    }
+
+    /// What was asked, if anything.
+    #[must_use]
+    pub fn asked(&self) -> Option<Stop> {
+        match self.0.load(Ordering::SeqCst) {
+            0 => None,
+            1 => Some(Stop::Disconnect),
+            _ => Some(Stop::Abort),
+        }
+    }
+
+    /// Forgets what was asked: a new call, or the next call a listening station answers.
+    pub fn clear(&self) {
+        self.0.store(0, Ordering::SeqCst);
+    }
+}
+
+/// What the operator asked of the call or the session, when the window gave a word to hear.
+fn asked(hang_up: Option<&HangUp>) -> Option<Stop> {
+    hang_up.and_then(HangUp::asked)
+}
 
 /// How compressible messages go on the air (RP-2 §4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,6 +152,9 @@ pub struct Options {
     pub quiet: Duration,
     /// Set, it stops a station listening for a call: how a program's window says "stop".
     pub stop: Option<Arc<AtomicBool>>,
+    /// The operator's word to end the call or the session under way before its time. A station
+    /// that keeps listening forgets it at each call that comes.
+    pub hang_up: Option<HangUp>,
     /// How long before the credential runs out a gateway call asks for a renewed one
     /// ([`crate::renewal::WITHIN`]).
     pub renew_within: u64,
@@ -215,6 +279,7 @@ impl Options {
             call_s: None,
             quiet: QUIET,
             stop: None,
+            hang_up: None,
             renew_within: crate::renewal::WITHIN,
             live: None,
             alerts: None,
@@ -259,6 +324,8 @@ pub struct Report {
     pub queued: Vec<ContentId>,
     /// Why the call or the session failed, when it did.
     pub failed: Option<String>,
+    /// The operator ended the call or the session ([`HangUp`]): `failed` says how.
+    pub stopped: bool,
     /// The codes of the other station's `ERROR`s (RP-3 §5.9), in order.
     pub errors: Vec<String>,
     /// `NOTICE`s heard (RP-3 §5.10).
@@ -530,6 +597,39 @@ impl Modem {
         }
     }
 
+    /// Runs `f` with each read of the adapter waiting at most [`POLL`], so that `f` hears the
+    /// operator's word between events, and puts the session's wait back after.
+    fn polling<T>(&mut self, f: impl FnOnce(&mut Modem) -> Result<T, Error>) -> Result<T, Error> {
+        self.conn
+            .set_timeout(Some(POLL))
+            .map_err(|e| e.to_string())?;
+        let result = f(self);
+        self.conn
+            .set_timeout(Some(self.quiet))
+            .map_err(|e| e.to_string())?;
+        result
+    }
+
+    /// [`Modem::poll`], while [`Modem::polling`]: an adapter that says nothing at all for the
+    /// session's silence (`last` is when it last spoke) has failed, as a read that waited that
+    /// long said before.
+    fn poll_since(&mut self, last: &mut Instant) -> Result<Option<Event>, Error> {
+        match self.poll()? {
+            Some(e) => {
+                *last = Instant::now();
+                Ok(Some(e))
+            }
+            None if last.elapsed() >= self.quiet => {
+                self.note(Trace::fault);
+                Err(format!(
+                    "the adapter said nothing for {} seconds",
+                    self.quiet.as_secs()
+                ))
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Sends a request and waits for its answer, past events before it.
     fn ask(&mut self, request: &Line) -> Result<Event, Error> {
         self.send(request)?;
@@ -755,6 +855,14 @@ pub fn mhz(hz: u64) -> String {
 
 /// Carries a session on a link that has come up, until it ends, putting what happens in the
 /// store and telling the user.
+///
+/// The operator may end it first (`hang_up`): the modem is asked to `disconnect` or `abort` the
+/// link (RP-4 §4), nothing more of the engine's goes to it, and the session ends as a broken link
+/// does when the adapter says the link is gone: what was received in part is kept to resume
+/// (RP-3 §7), `report` says the operator stopped it, and the call's record classes it as theirs
+/// (choosing a gateway, §12.3). An `abort` the adapter does not answer in [`ABORT_PATIENCE`] ends
+/// the session here all the same, with an error, so a listening station opens its connection
+/// afresh.
 #[allow(
     clippy::too_many_arguments,
     reason = "the session's parts, each its own"
@@ -766,68 +874,122 @@ fn carry<E: Engine<Event = SessionEvent> + Counted>(
     store: &mut Store,
     report: &mut Report,
     stats: &mut SessionStats,
-    live: Option<&Mutex<Live>>,
+    (live, hang_up): (Option<&Mutex<Live>>, Option<&HangUp>),
     say: &mut dyn FnMut(&str),
 ) -> Result<(), Error> {
-    let mut event = connected.clone();
-    // RP-3 §8: the silence counts from the last bytes, stopped while the modem receives
-    let mut silence = Silence::new();
-    loop {
-        silence.heard(&event);
-        let (requests, said) = carrier.on_event(&mut modem.host, &event);
-        for e in said {
-            apply(e, store, report, stats, say)?;
-        }
-        let mut handed = Vec::new();
-        for r in &requests {
-            if r.get("op").and_then(Value::as_str) == Some("send")
-                && let Some(bytes) = r
-                    .get("data")
-                    .and_then(Value::as_str)
-                    .and_then(base64::decode)
-            {
-                handed.push((r.get("ref").cloned(), bytes.len() as u64));
-                report.transmissions.push(bytes);
-            }
-            modem.send(r)?;
-        }
-        if let Some(live) = live {
-            let mut l = live.lock().unwrap_or_else(PoisonError::into_inner);
-            l.heard(&event);
-            for (reference, n) in handed {
-                l.sent(reference.as_ref(), n);
-            }
-            l.progress = carrier.engine().progress().clone();
-        }
-        if carrier.is_ended() {
-            return Ok(());
-        }
-        let next = if silence.over(modem.quiet) {
-            modem.note(Trace::silence);
-            Err(format!(
-                "nothing arrived for {} seconds",
-                modem.quiet.as_secs()
-            ))
-        } else {
-            modem.next()
-        };
-        event = match next {
-            Ok(e) => e,
-            Err(why) => {
-                // RP-3 §8: nothing heard for too long; drop the link and keep what was held
-                if let Some(link) = carrier.link() {
-                    let hang_up = modem.host.disconnect(link);
-                    let _ = modem.send(&hang_up);
-                }
-                for e in carrier.engine_mut().link_lost() {
+    modem.polling(|modem| {
+        let mut event = Some(connected.clone());
+        // RP-3 §8: the silence counts from the last bytes, stopped while the modem receives
+        let mut silence = Silence::new();
+        let mut spoke = Instant::now();
+        // the operator's word, once acted on, and when
+        let mut ending: Option<(Stop, Instant)> = None;
+        loop {
+            if let Some(event) = event.take() {
+                silence.heard(&event);
+                let (requests, said) = carrier.on_event(&mut modem.host, &event);
+                for e in said {
                     apply(e, store, report, stats, say)?;
                 }
-                report.failed = Some(why.clone());
-                store.save()?;
-                return Err(why);
+                let mut handed = Vec::new();
+                // once the operator has asked for the end, nothing more goes to the modem, the
+                // opening of a link that came up as it was asked included: it would only hold
+                // the link up
+                let holding = asked(hang_up).is_some();
+                for r in requests.iter().filter(|_| !holding) {
+                    if r.get("op").and_then(Value::as_str) == Some("send")
+                        && let Some(bytes) = r
+                            .get("data")
+                            .and_then(Value::as_str)
+                            .and_then(base64::decode)
+                    {
+                        handed.push((r.get("ref").cloned(), bytes.len() as u64));
+                        report.transmissions.push(bytes);
+                    }
+                    modem.send(r)?;
+                }
+                if let Some(live) = live {
+                    let mut l = live.lock().unwrap_or_else(PoisonError::into_inner);
+                    l.heard(&event);
+                    for (reference, n) in handed {
+                        l.sent(reference.as_ref(), n);
+                    }
+                    l.progress = carrier.engine().progress().clone();
+                }
+                if carrier.is_ended() {
+                    if let Some((how, _)) = ending {
+                        hung_up(how, report, say);
+                    }
+                    return Ok(());
+                }
             }
-        };
-    }
+            if let Some(how) = asked(hang_up)
+                && ending.is_none_or(|(was, _)| how > was)
+            {
+                if let Some(link) = carrier.link().map(str::to_owned) {
+                    let request = match how {
+                        Stop::Disconnect => modem.host.disconnect(&link),
+                        Stop::Abort => modem.host.abort(Some(&link)),
+                    };
+                    modem.send(&request)?;
+                }
+                tell(
+                    say,
+                    &match how {
+                        Stop::Disconnect => format!(
+                            "disconnecting from {}: what the modem holds goes first",
+                            report.remote
+                        ),
+                        Stop::Abort => format!("aborting the session with {}", report.remote),
+                    },
+                );
+                ending = Some((how, Instant::now()));
+            }
+            let next = match ending {
+                Some((Stop::Abort, at)) if at.elapsed() >= ABORT_PATIENCE => Err(
+                    "the modem did not say the link had ended: the session is ended here".into(),
+                ),
+                _ if silence.over(modem.quiet) => {
+                    modem.note(Trace::silence);
+                    Err(format!(
+                        "nothing arrived for {} seconds",
+                        modem.quiet.as_secs()
+                    ))
+                }
+                _ => modem.poll_since(&mut spoke),
+            };
+            match next {
+                Ok(Some(e)) => event = Some(e),
+                Ok(None) => {}
+                Err(why) => {
+                    // RP-3 §8: nothing heard for too long, or an abort the adapter never
+                    // answered; drop the link and keep what was held
+                    if let Some(link) = carrier.link() {
+                        let hang_up = modem.host.disconnect(link);
+                        let _ = modem.send(&hang_up);
+                    }
+                    for e in carrier.engine_mut().link_lost() {
+                        apply(e, store, report, stats, say)?;
+                    }
+                    report.failed = Some(why.clone());
+                    report.stopped = ending.is_some();
+                    store.save()?;
+                    return Err(why);
+                }
+            }
+        }
+    })
+}
+
+/// The operator's word ended the session: said, and put in `report`.
+fn hung_up(how: Stop, report: &mut Report, say: &mut dyn FnMut(&str)) {
+    let why = match how {
+        Stop::Disconnect => "you disconnected",
+        Stop::Abort => "you aborted the session",
+    };
+    tell(say, why);
+    report.failed = Some(why.into());
+    report.stopped = true;
 }
 
 /// What the session said that outlives it.
@@ -1367,10 +1529,15 @@ fn call_lasting(
 
 /// Places the call (RP-4 §4, `connect`) at `bandwidth` with tries lasting `call_s`, and waits for
 /// its link: `None` when it failed, said and put in `report`.
+///
+/// The operator may stop it (`hang_up`, either word): the modem's `abort` ends the call under
+/// way, which ends with `failed` `aborted`, and the call's record classes it as theirs. A link
+/// that came up as the word was said is handed on, and [`carry`] ends it at once.
 fn place(
     modem: &mut Modem,
     remote: &str,
     (bandwidth, call_s): (Option<i64>, Option<u64>),
+    hang_up: Option<&HangUp>,
     report: &mut Report,
     say: &mut dyn FnMut(&str),
 ) -> Result<Option<Event>, Error> {
@@ -1378,32 +1545,63 @@ fn place(
     let id = connect.get("id").cloned();
     modem.ask(&connect)?;
     say_at(say, &format!("calling {remote}"), bandwidth);
-    loop {
-        let e = modem.next()?;
-        match &e {
-            Event::Connected {
-                id: i, bandwidth, ..
-            } if *i == id => {
-                // the bandwidth the modem says the link runs at: what was asked, or its own
-                say_at(say, &format!("connected to {remote}"), *bandwidth);
-                return Ok(Some(e));
+    modem.polling(|modem| {
+        let mut spoke = Instant::now();
+        // when the operator's word went to the modem as `abort`
+        let mut aborted: Option<Instant> = None;
+        loop {
+            if aborted.is_none() && asked(hang_up).is_some() {
+                let abort = modem.host.abort(None);
+                modem.send(&abort)?;
+                tell(say, &format!("stopping the call to {remote}"));
+                aborted = Some(Instant::now());
             }
-            Event::Failed {
-                id: i, code, text, ..
-            } if *i == id => {
-                let why = format!(
-                    "the call failed: {code}{}",
-                    text.as_deref()
-                        .map(|t| format!(" ({t})"))
-                        .unwrap_or_default()
-                );
-                report.failed = Some(why.clone());
-                tell(say, &why);
+            if aborted.is_some_and(|at| at.elapsed() >= ABORT_PATIENCE) {
+                // the adapter said nothing of the call's end: it ends here, and closing the
+                // connection ends whatever is left of it (RP-4 §1.1)
+                call_stopped(report, say);
                 return Ok(None);
             }
-            _ => {}
+            let Some(e) = modem.poll_since(&mut spoke)? else {
+                continue;
+            };
+            match &e {
+                Event::Connected {
+                    id: i, bandwidth, ..
+                } if *i == id => {
+                    // the bandwidth the modem says the link runs at: what was asked, or its own
+                    say_at(say, &format!("connected to {remote}"), *bandwidth);
+                    return Ok(Some(e));
+                }
+                Event::Failed { id: i, .. } if *i == id && aborted.is_some() => {
+                    call_stopped(report, say);
+                    return Ok(None);
+                }
+                Event::Failed {
+                    id: i, code, text, ..
+                } if *i == id => {
+                    let why = format!(
+                        "the call failed: {code}{}",
+                        text.as_deref()
+                            .map(|t| format!(" ({t})"))
+                            .unwrap_or_default()
+                    );
+                    report.failed = Some(why.clone());
+                    tell(say, &why);
+                    return Ok(None);
+                }
+                _ => {}
+            }
         }
-    }
+    })
+}
+
+/// The operator stopped the call before it was answered: said, and put in `report`.
+fn call_stopped(report: &mut Report, say: &mut dyn FnMut(&str)) {
+    let why = "you stopped the call";
+    tell(say, why);
+    report.failed = Some(why.into());
+    report.stopped = true;
 }
 
 /// Says `line`, and at what bandwidth when one is known.
@@ -1428,7 +1626,16 @@ fn call_on(
         remote: remote.to_owned(),
         ..Report::default()
     };
-    let Some(connected) = place(modem, remote, (opts.bandwidth, lasting), &mut report, say)? else {
+    let hang_up = opts.hang_up.as_ref();
+    let Some(connected) = place(
+        modem,
+        remote,
+        (opts.bandwidth, lasting),
+        hang_up,
+        &mut report,
+        say,
+    )?
+    else {
         return Ok(report);
     };
     let now = opts.now();
@@ -1478,7 +1685,7 @@ fn call_on(
         store,
         &mut report,
         &mut stats,
-        opts.live.as_deref(),
+        (opts.live.as_deref(), hang_up),
         say,
     );
     // both stations said DONE: the engine's own end, not a link broken under it (a broken link
@@ -1564,7 +1771,7 @@ fn wait_for_call(
 ) -> Result<Option<(Event, String, String)>, Error> {
     modem
         .conn
-        .set_timeout(Some(Duration::from_millis(250)))
+        .set_timeout(Some(POLL))
         .map_err(|e| e.to_string())?;
     // alerts sent on this connection, by their requests' `id`, to their references (RP-8 §6);
     // and the tunes asked for them, by `id`, to the dial asked for
@@ -1772,6 +1979,9 @@ pub fn answer(
             return Err(why);
         }
     };
+    if let Some(h) = &opts.hang_up {
+        h.clear();
+    }
     let result = listener.answer(store, called, opts, say);
     listener.modem.conn.close();
     result
@@ -1867,6 +2077,10 @@ pub fn keep_listening(
                 continue;
             }
         };
+        // the operator's word belongs to one session: a call that comes starts without it
+        if let Some(h) = &opts.hang_up {
+            h.clear();
+        }
         if let Event::Connected { remote, .. } = &called.0 {
             told(Listening::Called(remote.clone()));
         }
@@ -1950,7 +2164,7 @@ fn answer_on(
         store,
         &mut report,
         &mut stats,
-        opts.live.as_deref(),
+        (opts.live.as_deref(), opts.hang_up.as_ref()),
         say,
     );
     if let Some((address, nonce)) = carrier.engine().0.seen() {

@@ -5,8 +5,10 @@
 //! The panel's server runs in this process, on the loopback interface, as `radiopost panel` serves
 //! it, and the window shows it. The page talks only to that server: the window grants it no access
 //! to the application (no Tauri commands, no capabilities). Closing the window ends the program;
-//! while a call, a session or listening is under way, it asks first, since closing ends that too and
-//! leaves the other station waiting on the air. While it runs, the panel holds a connection to
+//! while a call, a session or listening is under way, it asks first, since closing ends that too.
+//! A call or a session it ends is aborted first, as the session card's **Abort** does, and the
+//! window closes once it has ended (`close_after_abort`): the other station hears the link end, and
+//! a message received in part is kept to resume. While it runs, the panel holds a connection to
 //! Aether that names the app there between calls, and closes it as the program ends.
 //!
 //! It updates itself: the panel says when a newer release is out (asked when it opens and every
@@ -36,13 +38,17 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::{Duration, Instant};
 
 use radiopost_client::panel::Panel;
 use radiopost_client::selection::hf::Hf;
+use radiopost_client::session::Stop;
 use radiopost_client::store;
 use radiopost_update::{Install, Product, Watch};
 use tauri::webview::{NewWindowFeatures, NewWindowResponse};
-use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{
+    AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
+};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_updater::UpdaterExt as _;
 use tauri_plugin_window_state::{StateFlags, WindowExt as _};
@@ -284,12 +290,40 @@ fn start_panel(home: &Path, engine: Option<&Path>) -> Result<(SocketAddr, Panel)
 /// What closing the window would end, in the operator's words; `None` when nothing is under way.
 fn interrupts(activity: &str) -> Option<&'static str> {
     match activity {
-        "calling" => Some("A call is going out."),
+        "calling" => Some("A call is going out: closing stops it."),
         "listening" => Some("The station is listening for a call."),
-        "session" => Some("A session is under way: closing ends it, and the other station waits."),
+        "session" => Some(
+            "A session is under way: closing aborts it. What did not cross is offered again on \
+             your next call.",
+        ),
         "alerting" => Some("An alert is going out."),
         _ => None,
     }
+}
+
+/// How long closing waits for the call or session it aborted to end. The adapter answers an
+/// abort at once, and a session's thread gives up on one it does not answer in ten seconds.
+const CLOSE_PATIENCE: Duration = Duration::from_secs(12);
+
+/// Closes the window, the operator having said so: a call or a session under way is aborted
+/// first, as the session card's **Abort** does, and the window closes once it has ended (or after
+/// [`CLOSE_PATIENCE`]), so the other station hears the link end and what was received in part is
+/// on disk to resume (RP-3 §7). The program ending would otherwise stop the session's thread
+/// where it stood.
+fn close_after_abort(panel: &Panel, window: WebviewWindow) {
+    if panel.hang_up(Stop::Abort).is_err() {
+        // nothing on the air to end first
+        let _ = window.destroy();
+        return;
+    }
+    let panel = panel.clone();
+    std::thread::spawn(move || {
+        let until = Instant::now() + CLOSE_PATIENCE;
+        while matches!(panel.activity(), "calling" | "session") && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let _ = window.destroy();
+    });
 }
 
 /// The update on offer, downloaded, its signature checked with the project's key, installed, and
@@ -394,7 +428,7 @@ fn main() {
                     && let Some(what) = interrupts(panel.activity())
                 {
                     api.prevent_close();
-                    let window = asking.clone();
+                    let (window, closing) = (asking.clone(), panel.clone());
                     asking
                         .app_handle()
                         .dialog()
@@ -407,7 +441,7 @@ fn main() {
                         ))
                         .show(move |close| {
                             if close {
-                                let _ = window.destroy();
+                                close_after_abort(&closing, window);
                             }
                         });
                 }

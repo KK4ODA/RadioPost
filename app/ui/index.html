@@ -948,13 +948,16 @@
   <footer class="log" aria-label="Session log">
     <pre id="log" title="What the sessions said"></pre>
   </footer>
-  <div class="transfer" id="transfer" role="status" aria-live="polite" hidden>
+  <div class="transfer" id="transfer" hidden>
     <span class="transfer-rings" id="transfer-rings"></span>
     <div class="transfer-text">
-      <p class="t-head" id="t-head"></p>
-      <p class="t-line out" id="t-out" title="Your messages going out: how many the other station holds whole, and the bytes on their way"></p>
-      <p class="t-line in" id="t-in" title="Messages coming in: how many are here whole, and the bytes arrived"></p>
-      <p class="t-left" id="t-left"></p>
+      <div role="status" aria-live="polite">
+        <p class="t-head" id="t-head"></p>
+        <p class="t-line out" id="t-out" title="Your messages going out: how many the other station holds whole, and the bytes on their way"></p>
+        <p class="t-line in" id="t-in" title="Messages coming in: how many are here whole, and the bytes arrived"></p>
+        <p class="t-left" id="t-left"></p>
+      </div>
+      <button type="button" class="t-stop" id="hang-up" hidden></button>
     </div>
   </div>
   <div class="alarm" id="alarm" role="alertdialog" aria-modal="true" aria-labelledby="alarm-head" aria-describedby="alarm-text" hidden>

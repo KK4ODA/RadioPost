@@ -782,10 +782,11 @@ function soundsOfState(s, a) {
   lastCounts = {inbox: s.counts.inbox, sent: s.counts.sent};
   if (a.state === "session" && lastState !== "session") play("session-up");
   // a session answered ends with the station listening again, Listen still on
+  // a session the operator ended is not a failure: it ends as any other does
   if (["idle", "listening"].includes(a.state) && lastState === "session") {
-    play(a.failed ? "failed" : "session-down");
+    play(a.failed && !a.stopped ? "failed" : "session-down");
   }
-  if (a.state === "idle" && lastState === "calling" && a.failed) play("failed");
+  if (a.state === "idle" && lastState === "calling" && a.failed && !a.stopped) play("failed");
   if (!was) return;
   if (s.counts.sent > was.sent) play("delivered");
   if (s.counts.inbox !== was.inbox) {
@@ -819,9 +820,15 @@ async function refresh() {
                  listening: a.held ? "Waiting for the modem" : "Listening",
                  session: `In session with ${a.remote || ""}`,
                  renewing: "Renewing credential", alerting: "Sending an alert"}[a.state];
+  const stopping = a.state === "calling" ? "Stopping the call"
+    : a.stopping === "abort" ? `Aborting the session with ${a.remote || ""}`
+    : `Disconnecting from ${a.remote || ""}`;
   const state = $("state");
-  state.dataset.state = a.state === "idle" && a.failed ? "failed" : a.state;
-  state.textContent = a.state === "idle" && a.failed ? "Last session failed" : label;
+  // a call or session the operator ended reads stopped, not failed
+  const ended = a.state === "idle" && a.failed;
+  state.dataset.state = ended ? (a.stopped ? "stopped" : "failed") : a.state;
+  state.textContent = ended ? (a.stopped ? "Stopped" : "Last session failed")
+    : a.stopping && ["calling", "session"].includes(a.state) ? stopping : label;
   state.title = a.held || a.failed || "What the station is doing";
   const busy = a.state !== "idle";
   document.body.dataset.busy = String(busy);
@@ -1039,6 +1046,33 @@ function timeLeft(seconds) {
 
 const transfer = {samples: [], shownUntil: 0, last: null, wasSession: false};
 
+// the session card's button: Stop calling while the call goes out, Disconnect in a session, then
+// Abort once Disconnect has been asked and the modem is still sending what it holds
+function showHangUp(a) {
+  const b = $("hang-up");
+  const calling = a.state === "calling";
+  b.hidden = !calling && a.state !== "session";
+  if (b.hidden) return;
+  b.classList.toggle("danger", !calling && Boolean(a.stopping));
+  b.disabled = a.stopping === "abort" || (calling && Boolean(a.stopping));
+  if (calling) {
+    b.textContent = "Stop calling";
+    b.dataset.how = "abort";
+    b.title = "Stop the call now. Nothing has been sent; your Outbox is as it was";
+  } else if (!a.stopping) {
+    b.textContent = "Disconnect";
+    b.dataset.how = "disconnect";
+    b.title = "End the session in order: what the modem holds goes out first, then the link "
+      + "ends. What the other station did not get whole stays in your Outbox for your next "
+      + "call, and a message you received in part goes on from where it stopped";
+  } else {
+    b.textContent = a.stopping === "abort" ? "Aborting…" : "Abort";
+    b.dataset.how = "abort";
+    b.title = "End the link now, without waiting for the modem to send what it holds. What did "
+      + "not cross is kept as with Disconnect";
+  }
+}
+
 function showTransfer(a, p) {
   const box = $("transfer");
   const mini = $("mini");
@@ -1067,11 +1101,12 @@ function showTransfer(a, p) {
   let end = "";
   if (a.state === "calling") {
     mode = "calling";
-    head = "Calling…";
+    head = a.stopping ? "Stopping the call…" : "Calling…";
   } else if (ending) {
     mode = "done";
     const all = total > 0 && out.whole === out.messages && inc.whole === inc.messages && !a.failed;
-    end = a.failed ? "failed" : all || total === 0 ? "all" : "part";
+    // stopped by the operator: amber, what crossed kept, not red
+    end = a.failed ? (a.stopped ? "part" : "failed") : all || total === 0 ? "all" : "part";
     head = a.failed ? `Stopped at ${total ? Math.floor(100 * crossed / total) : 0}%`
       : total === 0 ? "Nothing to carry" : all ? "All carried" : "Carried what it could";
   } else if (total === 0) {
@@ -1080,6 +1115,8 @@ function showTransfer(a, p) {
   } else {
     head = `${Math.floor(100 * crossed / total)}% carried`;
   }
+  if (inSession && a.stopping) head = a.stopping === "abort" ? "Aborting…" : "Disconnecting…";
+  showHangUp(a);
   const dir = !q || mode !== "carrying" ? ""
     : q.receiving_now ? "down" : out.crossed < out.bytes ? "up" : inc.crossed < inc.bytes ? "down" : "";
   for (const target of [box, mini]) {
@@ -5070,6 +5107,7 @@ function wire() {
       bandwidth: station ? Number($("bandwidth").value) : null,
     });
   });
+  $("hang-up").addEventListener("click", () => act("hang-up", {how: $("hang-up").dataset.how}));
   // one switch: pressed in, it listens; pressed again, it stops
   $("listen").addEventListener("click", () => {
     if ($("listen").getAttribute("aria-pressed") === "true") act("stop", {});

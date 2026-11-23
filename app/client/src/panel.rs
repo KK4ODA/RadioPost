@@ -128,6 +128,12 @@ struct Activity {
     listen: bool,
     /// Why the station cannot listen now, while Listen is on: the modem away, tried again.
     held: Option<String>,
+    /// The operator asked the call or session under way to end (**Stop calling**,
+    /// **Disconnect**, **Abort**): `disconnect` or `abort`, until it has.
+    stopping: Option<&'static str>,
+    /// The last call or session ended because the operator said so: `failed` says how, and the
+    /// page shows it as stopped, not failed.
+    stopped: bool,
     /// What the sessions said, in order.
     log: Vec<String>,
 }
@@ -140,6 +146,8 @@ pub struct Panel {
     ui: Option<PathBuf>,
     activity: Arc<Mutex<Activity>>,
     stop: Arc<AtomicBool>,
+    /// The operator's word to end the call or the session under way, handed to each.
+    hang_up: session::HangUp,
     addr: SocketAddr,
     updates: Arc<Watch>,
     renewal: Renewal,
@@ -292,6 +300,7 @@ impl Panel {
                 ..Activity::default()
             })),
             stop: Arc::new(AtomicBool::new(false)),
+            hang_up: session::HangUp::new(),
             addr: SocketAddr::from(([127, 0, 0, 1], 0)),
             updates: Watch::new(
                 Product::Tools,
@@ -1028,13 +1037,8 @@ impl Panel {
                 alerts::set_notify_settings(&self.base, body)?;
                 Ok(alerts::notify_settings(&self.base))
             }
-            (Method::Post, "/api/stop") => {
-                // Listen pressed again: off at once, and the station stops listening, now or when
-                // the session under way ends
-                self.stop.store(true, Ordering::Relaxed);
-                lock(&self.activity).listen = false;
-                Ok(json!({}))
-            }
+            (Method::Post, "/api/stop") => Ok(self.stop_listening()),
+            (Method::Post, "/api/hang-up") => self.hang_up_asked(body),
             _ => Err(format!("no {method} {path}")),
         }
     }
@@ -1596,7 +1600,8 @@ impl Panel {
                        "reports": store.reports.len(),
                        "files": store.files.len(), "waiting": store.waiting_entries().len()},
             "activity": {"state": a.state, "remote": a.remote, "failed": a.failed,
-                         "listen": a.listen, "held": a.held},
+                         "listen": a.listen, "held": a.held, "stopping": a.stopping,
+                         "stopped": a.stopped},
             "alerts": self.alerts.summary(),
             "progress": self.live.lock().unwrap_or_else(PoisonError::into_inner).summary(),
             "update": self.updates.status(),
@@ -2222,17 +2227,62 @@ impl Panel {
         Ok(json!({"on": on, "seconds": seconds}))
     }
 
-    /// Takes the station for a call or for listening (`state`), when it is idle.
+    /// Takes the station for a call or for listening (`state`), when it is idle. The operator's
+    /// word from the last call or session is forgotten here, under the lock [`Panel::hang_up`]
+    /// takes, so a word for this one cannot be lost.
     fn take_station(&self, state: &'static str, remote: Option<String>) -> Result<(), Error> {
         let mut a = lock(&self.activity);
         if a.state != "idle" {
             return Err(why_busy(a.state));
         }
+        self.hang_up.clear();
         a.state = state;
         a.remote = remote;
         a.failed = None;
         a.listen = state == "listening";
         a.held = None;
+        a.stopping = None;
+        a.stopped = false;
+        Ok(())
+    }
+
+    /// Listen pressed again: off at once, and the station stops listening, now or when the
+    /// session under way ends.
+    fn stop_listening(&self) -> Value {
+        self.stop.store(true, Ordering::Relaxed);
+        lock(&self.activity).listen = false;
+        json!({})
+    }
+
+    /// The page's **Stop calling**, **Disconnect** or **Abort**: `{how: "disconnect" | "abort"}`.
+    fn hang_up_asked(&self, body: &Value) -> Result<Value, Error> {
+        let how = match body["how"].as_str() {
+            Some("disconnect") => session::Stop::Disconnect,
+            Some("abort") => session::Stop::Abort,
+            _ => return Err("how: disconnect or abort".into()),
+        };
+        self.hang_up(how)?;
+        Ok(json!({}))
+    }
+
+    /// Ends the call or the session under way (**Stop calling**, **Disconnect**, **Abort**): the
+    /// session's thread hears it within a quarter of a second ([`session::HangUp`]). A call is
+    /// stopped by either word; an abort after a disconnect still under way ends the link at once.
+    /// Listening goes on after a session ended so: **Listening for P2P** is its own switch.
+    ///
+    /// # Errors
+    ///
+    /// No call or session is under way.
+    pub fn hang_up(&self, how: session::Stop) -> Result<(), Error> {
+        let mut a = lock(&self.activity);
+        if !matches!(a.state, "calling" | "session") {
+            return Err("no call or session is under way".into());
+        }
+        self.hang_up.ask(how);
+        a.stopping = Some(match self.hang_up.asked() {
+            Some(session::Stop::Abort) => "abort",
+            _ => "disconnect",
+        });
         Ok(())
     }
 
@@ -2245,6 +2295,7 @@ impl Panel {
         self.presence.set_modem(&adapter);
         let mut opts = Options::new(&adapter);
         opts.stop = Some(Arc::clone(&self.stop));
+        opts.hang_up = Some(self.hang_up.clone());
         // the channel was tuned when the operator picked it: the radio stays where it was put
         opts.tune_back = false;
         *self.live.lock().unwrap_or_else(PoisonError::into_inner) = session::Live::default();
@@ -2280,6 +2331,7 @@ impl Panel {
         // read once the activity is set, so the callsign chosen cannot change before it is opened
         let home = self.home();
         let activity = Arc::clone(&self.activity);
+        let hang_up = self.hang_up.clone();
         thread::spawn(move || {
             let mut say = |line: &str| {
                 let mut a = lock(&activity);
@@ -2291,10 +2343,11 @@ impl Panel {
             let result = Store::open(&home)
                 .and_then(|mut store| session::call(&mut store, &remote, kind, &opts, &mut say));
             let mut a = lock(&activity);
-            a.failed = match result {
-                Ok(report) => report.failed,
-                Err(e) => Some(e),
+            (a.failed, a.stopped) = match result {
+                Ok(report) => (report.failed, report.stopped),
+                Err(e) => (Some(e), hang_up.asked().is_some()),
             };
+            a.stopping = None;
             if let Some(why) = &a.failed {
                 let line = format!("ended: {why}");
                 radiopost::logfile::line(&line);
@@ -2332,14 +2385,17 @@ impl Panel {
                         a.state = "session";
                         a.remote = Some(who);
                         a.failed = None;
+                        a.stopping = None;
+                        a.stopped = false;
                         *rings.lock().unwrap_or_else(PoisonError::into_inner) =
                             session::Live::default();
                     }
                     session::Listening::Ended(result) => {
-                        a.failed = match result {
-                            Ok(report) => report.failed,
-                            Err(e) => Some(e),
+                        (a.failed, a.stopped) = match result {
+                            Ok(report) => (report.failed, report.stopped),
+                            Err(e) => (Some(e), a.stopping.is_some()),
                         };
+                        a.stopping = None;
                         if let Some(why) = &a.failed {
                             let line = format!("ended: {why}");
                             radiopost::logfile::line(&line);

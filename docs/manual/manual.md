@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.42.0 |
+| **Version** | 1.43.0 |
 | **Updated** | 2026-11-23 |
 | **Describes** | RadioPost 0.1.0-beta.34 |
 | **Licence** | CC BY 4.0 |
@@ -773,14 +773,14 @@ shows how far the mail has got:
 - The lines say how many messages are whole, the kilobytes, and about how long is left.
 - The header shows the same as a small ring with the percentage.
 - When the session ends the card stays a few seconds, both rings in one colour: green with a tick
-  when everything crossed or there was nothing to carry, amber when some of it did not, red when
-  the session failed.
+  when everything crossed or there was nothing to carry, amber when some of it did not or you
+  stopped it, red when the session failed.
 
 Red on the card means only mail going out, or a session that failed.
 
 A message counts as sent once Aether has put it on the air, not when RadioPost hands it over.
 
-![The window during a session: 49% carried, with the transfer card at the bottom right](screens/client-session.png)
+![The window during a session: 49% carried, with the transfer card and its Disconnect button at the bottom right](screens/client-session.png)
 
 *Figure 20. A session under way.*
 
@@ -788,8 +788,22 @@ The log says what happens: the call, each message delivered or received, what wa
 A few short messages take a minute or two at 2300 Hz on a fair path, longer on a weak one. Your
 email reaches the other end within a minute of the session, from your RadioPost address.
 
-To stop a session, close the window. RadioPost asks first, because closing ends the session and
-leaves the other station waiting. What did not cross is offered again on your next call.
+**Stopping.** While a call or a session is under way, the card has a button under its lines:
+
+- **Stop calling**, while RadioPost calls. The call stops at once. Nothing has gone out.
+- **Disconnect**, during a session. Aether sends what it already holds, then ends the link. The
+  other station hears it end.
+- **Abort** takes Disconnect's place once you have clicked it. Click it when Disconnect takes too
+  long on a weak path: the link ends at once, and what Aether still held is dropped.
+
+Nothing is lost either way. Mail the other station did not take whole stays in your **Outbox**
+and goes on your next call. A message you received in part is kept, and the rest comes on your
+next call, through any gateway. The state at the top reads *Stopped*, and the card ends amber, not
+red. A call you stopped does not count against the gateway in what your calls teach
+([8.1](#81-choose-a-gateway)).
+
+Closing the window during a call or a session asks first, then aborts it the same way before
+RadioPost closes.
 
 ## 9. Reading your mail
 
@@ -883,7 +897,8 @@ While the switch is on, **Call** and **Tuner tone** are greyed: the radio is lis
 Everything else goes on while the station listens. Write, change and delete messages as usual: a
 station that calls takes what is in the outbox for it then, even a message saved a moment before.
 During a session, **Write** and the buttons that change messages are greyed until it ends.
-RadioPost renews your credential while it listens, as it does at other times
+**Disconnect** on the session card ends a session you answered, as it ends one you called
+([8.3](#83-during-the-session)); the station goes on listening. RadioPost renews your credential while it listens, as it does at other times
 ([5.4](#54-your-credential)), and a station that calls meanwhile is answered at once.
 
 **The station that calls:**
@@ -2226,7 +2241,8 @@ These notes follow the US rules (Part 97). Check your own country's.
 | *Your last 4 calls failed on 2 gateways that usually answer* | Your calls are probably not getting out. Check the radio, the antenna, the cable to the radio and Aether's levels before trying more gateways. Those calls count less against the gateways until it clears ([8.1](#81-choose-a-gateway)). |
 | Aether refuses RadioPost's calls | Aether is keyed by a host program. In Aether's Setup, step 2, choose CAT, serial, rigctld, FLRig, CM108 or VOX. |
 | Aether stops at start: *127.0.0.1:8515 is already in use* | Aether's host programs port was set to 8515. Put it back to 8300 ([Aether's ports](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#20-the-programs-and-their-ports)). |
-| *a session is under way: try again when it ends* | Wait for the session to end, or close the window to stop it. |
+| *a session is under way: try again when it ends* | Wait for the session to end, or click **Disconnect** on the session card ([8.3](#83-during-the-session)). |
+| *the modem did not say the link had ended: the session is ended here* | Aether did not answer **Abort** within ten seconds. RadioPost ended the session on its side; nothing is lost. Check that Aether is running and that its panel shows no session. |
 | *the station is listening for P2P calls: click Listening for P2P to stop it first* | A call, tuning, the tuner tone, refreshing the gateway list, an update and most of Setup wait while the station listens. Click **Listening for P2P** to stop, then try again. Writing, changing and deleting messages go on while it listens. |
 | *renewing the credential: try again in a moment* | Wait a few seconds. |
 | *this message cannot be changed while a session is under way* | It may be going out. Edit it when the session ends. |
@@ -2485,3 +2501,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.40.2 | 2026-11-21 | **Call** is as wide as its word in the left column too, under **Fetch**; **Listen for P2P** still spans the column. §6 reworded. Figures 5, 6, 7, 9, 10, 11, 13, 19, 20, 21, 22, 24, 25 and 27 retaken. |
 | 1.41.0 | 2026-11-21 | §8.3: the session card's colours. The arc that spins while calling is amber and blue once in session, no longer the colour of transmitting; the ring of the way not moving is faded; at the end both rings are green, amber or red by how the session went. Figure 20 retaken. |
 | 1.42.0 | 2026-11-23 | **Call** remembers each kind of call. §6, §8.2: choosing **A gateway** brings back the last gateway called, on the channel it was called on, or the one you had put there before switching; **▾** lists the gateways called before, newest first, and picking one tunes its channel. §10: choosing **P2P** brings back the last station called with that call's dial and bandwidth, and **▾** lists the others (new Figure 26; later figures renumbered). §40 to match. Figures 19 and 25 retaken. |
+| 1.43.0 | 2026-11-23 | §8.3: the session card's **Stop calling**, **Disconnect** and **Abort**; nothing is lost, the state reads *Stopped* and the card ends amber; closing the window aborts a call or a session before RadioPost closes. §10: **Disconnect** ends a session you answered, and the station listens on. §37: two rows. Figure 20 retaken. |
