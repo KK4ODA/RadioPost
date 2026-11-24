@@ -536,9 +536,9 @@ impl Draft {
 }
 
 /// A form from the command line: the template named by its fingerprint, or by the start of its
-/// name (`ics-213`), and `N=VALUE` fields, each value read as its field's type: a date
-/// `YYYY-MM-DD`, a time `HH:MM` (UTC), a choice by its text or number, a check `yes` or `no`, and
-/// `\n` in a text for a line break.
+/// name (`ics-213`), and `N=VALUE` fields, each value read as its field's type ([`value_from_text`]).
+/// A `rows` field takes one row a `--field`, its cells in the columns' order joined by `|`, an
+/// empty cell left out: `--field 14="2026-11-24 14:05|KK4ODA||Shelter open"`.
 ///
 /// # Errors
 ///
@@ -554,7 +554,7 @@ pub fn form_from_args(which: &str, fields: &[String]) -> Result<radiopost::forms
                 || x.name.to_lowercase().starts_with(&wanted)
         })
         .ok_or_else(|| format!("no form {which}: `radiopost forms` lists them"))?;
-    let mut values = Vec::new();
+    let mut values: Vec<(u64, Value)> = Vec::new();
     for given in fields {
         let (n, text) = given
             .split_once('=')
@@ -564,54 +564,24 @@ pub fn form_from_args(which: &str, fields: &[String]) -> Result<radiopost::forms
             .parse()
             .map_err(|_| format!("--field {given}: N is a number"))?;
         let field = template
-            .fields
-            .iter()
-            .find(|f| f.n == n)
+            .field(n)
             .ok_or_else(|| format!("{} has no field {n}", template.name))?;
-        let bad = || {
-            format!(
-                "field {n} ({}): {text:?} is not a {}",
-                field.label,
-                field.kind.name()
-            )
+        let said = |why: String| format!("field {n} ({}): {why}", field.label);
+        if field.kind == Kind::Rows {
+            let row = row_from_text(field, text).map_err(said)?;
+            match values.iter_mut().find(|(m, _)| *m == n) {
+                Some((_, Value::Array(rows))) => rows.push(row),
+                _ => values.push((n, Value::Array(vec![row]))),
+            }
+            continue;
+        }
+        let text = if field.kind == Kind::Text {
+            text.replace("\\n", "\n")
+        } else {
+            text.to_owned()
         };
-        let value = match field.kind {
-            Kind::Line => Value::text(text),
-            Kind::Text => Value::text(&text.replace("\\n", "\n")),
-            Kind::Date => {
-                let parts: Vec<u64> = text.split('-').filter_map(|p| p.parse().ok()).collect();
-                let [year, month, day] = parts[..] else {
-                    return Err(bad());
-                };
-                Value::Uint(days_from_civil(year, month, day).ok_or_else(bad)?)
-            }
-            Kind::Time => {
-                let (h, m) = text.split_once(':').ok_or_else(bad)?;
-                let (h, m): (u64, u64) =
-                    (h.parse().map_err(|_| bad())?, m.parse().map_err(|_| bad())?);
-                if h > 23 || m > 59 {
-                    return Err(bad());
-                }
-                Value::Uint(h * 60 + m)
-            }
-            Kind::Number => Value::int(text.trim().parse().map_err(|_| bad())?),
-            Kind::Choice => {
-                let i = field
-                    .choices
-                    .iter()
-                    .position(|c| c.eq_ignore_ascii_case(text.trim()))
-                    .map(|i| i as u64)
-                    .or_else(|| text.trim().parse().ok())
-                    .ok_or_else(bad)?;
-                Value::Uint(i)
-            }
-            Kind::Check => match text.trim().to_lowercase().as_str() {
-                "yes" | "true" | "y" => Value::Bool(true),
-                "no" | "false" | "n" => Value::Bool(false),
-                _ => return Err(bad()),
-            },
-        };
-        values.retain(|(other, _): &(u64, Value)| *other != n);
+        let value = value_from_text(field, &text).map_err(said)?;
+        values.retain(|(other, _)| *other != n);
         values.push((n, value));
     }
     values.sort_by_key(|(n, _)| *n);
@@ -619,6 +589,224 @@ pub fn form_from_args(which: &str, fields: &[String]) -> Result<radiopost::forms
         template: template.fingerprint(),
         values,
     })
+}
+
+/// A value typed for a field (RP-2 §8.1), read as its type: a date `YYYY-MM-DD`; a time `HH:MM`
+/// and a date and time `YYYY-MM-DD HH:MM`, both UTC; a number in decimal, with as many places as
+/// its `scale` at most, its unit after it or not; a choice by its text or number; several choices
+/// by their texts or numbers joined by `,`; a check `yes` or `no`; a position as
+/// [`position_from_text`] reads it.
+///
+/// # Errors
+///
+/// The text does not read as the field's type, or the field takes no value (a heading).
+pub fn value_from_text(field: &radiopost::forms::Field, text: &str) -> Result<Value, String> {
+    use radiopost::forms::Kind;
+    let bad = || format!("{text:?} is not a {}", field.kind.name());
+    let trimmed = text.trim();
+    Ok(match field.kind {
+        Kind::Line | Kind::Text => Value::text(text),
+        Kind::Date => Value::Uint(date_from_text(trimmed).ok_or_else(bad)?),
+        Kind::Time => Value::Uint(time_from_text(trimmed).ok_or_else(bad)?),
+        Kind::Datetime => {
+            let (date, time) = trimmed.split_once([' ', 'T']).ok_or_else(|| {
+                format!("{text:?} is not a date and time: write YYYY-MM-DD HH:MM")
+            })?;
+            let days = date_from_text(date.trim()).ok_or_else(bad)?;
+            let minutes =
+                time_from_text(time.trim().trim_end_matches("UTC").trim()).ok_or_else(bad)?;
+            Value::Uint(days * 1440 + minutes)
+        }
+        Kind::Number => {
+            let digits = field
+                .unit
+                .as_deref()
+                .and_then(|unit| trimmed.strip_suffix(unit))
+                .unwrap_or(trimmed)
+                .trim();
+            let places = u32::try_from(field.scale.unwrap_or(0)).unwrap_or(0);
+            Value::int(scaled(digits, places).ok_or_else(|| match places {
+                0 => format!("{text:?} is not a whole number"),
+                p => format!("{text:?} is not a number with {p} decimal places at most"),
+            })?)
+        }
+        Kind::Choice => Value::Uint(choice_index(field, trimmed).ok_or_else(bad)?),
+        Kind::Multi => {
+            let names: Vec<&str> = if choice_index(field, trimmed).is_some() {
+                vec![trimmed]
+            } else {
+                trimmed.split(',').map(str::trim).collect()
+            };
+            let mut bits = 0u64;
+            for name in names.into_iter().filter(|n| !n.is_empty()) {
+                let i = choice_index(field, name)
+                    .ok_or_else(|| format!("{name:?} is not one of the choices"))?;
+                bits |= 1 << i;
+            }
+            Value::Uint(bits)
+        }
+        Kind::Check => match trimmed.to_lowercase().as_str() {
+            "yes" | "true" | "y" => Value::Bool(true),
+            "no" | "false" | "n" => Value::Bool(false),
+            _ => return Err(bad()),
+        },
+        Kind::Position => position_from_text(trimmed)?,
+        Kind::Rows => Value::Array(vec![row_from_text(field, text)?]),
+        Kind::Heading => return Err("a heading takes no value".to_owned()),
+    })
+}
+
+/// One row of a `rows` field: its cells in the columns' order, joined by `|`, an empty cell left
+/// out.
+fn row_from_text(field: &radiopost::forms::Field, text: &str) -> Result<Value, String> {
+    let cells: Vec<&str> = text.split('|').collect();
+    if cells.len() > field.columns.len() {
+        return Err(format!(
+            "a row has {} cells at most, joined by |",
+            field.columns.len()
+        ));
+    }
+    let mut row = Vec::new();
+    for (column, cell) in field.columns.iter().zip(cells) {
+        if cell.trim().is_empty() {
+            continue;
+        }
+        let value = value_from_text(column, cell.trim())
+            .map_err(|why| format!("{}: {why}", column.label))?;
+        row.push((Value::Uint(column.n), value));
+    }
+    Ok(Value::Map(row))
+}
+
+/// A choice's index, by its text (whatever its case) or its number.
+fn choice_index(field: &radiopost::forms::Field, text: &str) -> Option<u64> {
+    field
+        .choices
+        .iter()
+        .position(|c| c.eq_ignore_ascii_case(text))
+        .map(|i| i as u64)
+        .or_else(|| {
+            text.parse()
+                .ok()
+                .filter(|i| *i < field.choices.len() as u64)
+        })
+}
+
+/// A date `YYYY-MM-DD` as days since 1970-01-01.
+fn date_from_text(text: &str) -> Option<u64> {
+    let parts: Vec<u64> = text.split('-').filter_map(|p| p.parse().ok()).collect();
+    let [year, month, day] = parts[..] else {
+        return None;
+    };
+    days_from_civil(year, month, day)
+}
+
+/// A time `HH:MM` as minutes after midnight.
+fn time_from_text(text: &str) -> Option<u64> {
+    let (h, m) = text.split_once(':')?;
+    let (h, m): (u64, u64) = (h.parse().ok()?, m.parse().ok()?);
+    (h <= 23 && m <= 59).then_some(h * 60 + m)
+}
+
+/// A decimal `-1.25` as an integer with `places` decimal places (`-125` for 2): exactly, or
+/// `None` when it has more places than that or is not a number.
+fn scaled(text: &str, places: u32) -> Option<i64> {
+    let (negative, digits) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text),
+    };
+    let (whole, part) = digits.split_once('.').unwrap_or((digits, ""));
+    let width = usize::try_from(places).ok()?;
+    if whole.is_empty() && part.is_empty()
+        || !whole
+            .chars()
+            .chain(part.chars())
+            .all(|c| c.is_ascii_digit())
+        || part.len() > width
+    {
+        return None;
+    }
+    let joined = format!("{whole}{part:0<width$}");
+    let magnitude: i64 = joined.parse().ok()?;
+    Some(if negative { -magnitude } else { magnitude })
+}
+
+/// A position typed for a form (RP-2 §8.1): decimal degrees (`33.78123, -84.38765`, or
+/// `33.78123N 84.38765W`), or a grid square (`EM73`, `EM73ts`), whose centre goes with how far
+/// off it may be, half the square's diagonal. What a form shows is read back too: a locator in
+/// parentheses after the degrees is left out, and `±25 m` or `±1.1 km` says how far off it may be.
+///
+/// # Errors
+///
+/// The text is not a position.
+pub fn position_from_text(text: &str) -> Result<Value, String> {
+    let (place, within) = match text.split_once('±') {
+        Some((place, off)) => (place, Some(metres_from_text(off.trim())?)),
+        None => (text, None),
+    };
+    let place = place.split('(').next().unwrap_or("").trim();
+    let at = radioprop_geo::parse_position(place)?;
+    let within = within.or_else(|| {
+        place
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic())
+            .then(|| half_diagonal_m(place, at))
+            .flatten()
+    });
+    let e7 = |degrees: f64| {
+        let scaled = (degrees * 1e7).round();
+        // within ±180°, so well inside an i64
+        #[allow(clippy::cast_possible_truncation)]
+        let whole = scaled as i64;
+        whole
+    };
+    Ok(radiopost::forms::position_value(
+        e7(at.lat),
+        e7(at.lon),
+        within,
+    ))
+}
+
+/// How far off, `25 m` or `1.1 km`, in whole metres.
+fn metres_from_text(text: &str) -> Result<u64, String> {
+    let bad = || format!("{text:?} is not a distance: write it 25 m or 1.1 km");
+    let (number, factor) = if let Some(km) = text.strip_suffix("km") {
+        (km, 1000.0)
+    } else if let Some(m) = text.strip_suffix('m') {
+        (m, 1.0)
+    } else {
+        return Err(bad());
+    };
+    let value: f64 = number.trim().parse().map_err(|_| bad())?;
+    let metres = (value * factor).round();
+    if !(1.0..=4.1e7).contains(&metres) {
+        return Err(bad());
+    }
+    // checked above to lie between 1 and the Earth's circumference
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let whole = metres as u64;
+    Ok(whole)
+}
+
+/// Half the diagonal of a grid square, in whole metres rounded up: how far its centre may be
+/// from a station somewhere in it.
+fn half_diagonal_m(square: &str, centre: radioprop_geo::LatLon) -> Option<u64> {
+    let (lon_cell, lat_cell) = match square.len() {
+        4 => (2.0, 1.0),
+        6 => (2.0 / 24.0, 1.0 / 24.0),
+        8 => (2.0 / 240.0, 1.0 / 240.0),
+        _ => return None,
+    };
+    let corner = |sign: f64| radioprop_geo::LatLon {
+        lat: centre.lat + sign * lat_cell / 2.0,
+        lon: centre.lon + sign * lon_cell / 2.0,
+    };
+    let metres = (radioprop_geo::distance_km(corner(-1.0), corner(1.0)) * 500.0).ceil();
+    // a square's diagonal is a few hundred kilometres at most
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let whole = metres as u64;
+    Some(whole)
 }
 
 /// Days since 1970-01-01 of a date in the proleptic Gregorian calendar, if it is one on or after.
@@ -672,8 +860,138 @@ pub fn checked_form(form: &radiopost::forms::Form) -> Result<radiopost::forms::F
 mod tests {
     use super::{
         Draft, File, checked_address, days_from_civil, form_from_args, forwarded, normalise,
-        parse_addresses, reply_subject, text_of, utc, with_note,
+        parse_addresses, position_from_text, reply_subject, text_of, utc, value_from_text,
+        with_note,
     };
+    use radiopost::cbor::Value;
+
+    /// RP-2 §8's test template, with every type (`vectors/forms.json`, `every_type`).
+    fn every_type() -> radiopost::forms::Template {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../vectors/forms.json");
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("forms.json"))
+                .expect("JSON");
+        radiopost::forms::Template::from_value(&v["every_type"]["template"]).expect("it reads")
+    }
+
+    fn ints(v: &Value) -> Vec<i64> {
+        v.as_array()
+            .expect("a list")
+            .iter()
+            .map(|x| x.as_i64().expect("an integer"))
+            .collect()
+    }
+
+    #[test]
+    fn a_position_is_typed_as_degrees_or_a_grid_square_and_read_back_as_shown() {
+        // degrees, as decimals or with their hemispheres, to the ten-millionth
+        let here = [337_812_300, -843_876_500];
+        assert_eq!(
+            ints(&position_from_text("33.78123, -84.38765").expect("degrees")),
+            here
+        );
+        assert_eq!(
+            ints(&position_from_text("33.78123N 84.38765W").expect("N, W")),
+            here
+        );
+        // a grid square's centre, with half its diagonal: EM73 is 2° by 1°, about 216 km corner
+        // to corner at 33.5° N
+        let square = ints(&position_from_text("EM73").expect("a square"));
+        assert_eq!(square[..2], [335_000_000, -850_000_000]);
+        assert!((107_000..=109_000).contains(&square[2]), "{square:?}");
+        let small = ints(&position_from_text("EM73ts").expect("a subsquare"));
+        assert!((4_000..=5_000).contains(&small[2]), "{small:?}");
+        // what a form shows is read back as it went
+        let shown = "33.5, -85.0 (EM73mm) ±108 km";
+        assert_eq!(
+            ints(&position_from_text(shown).expect("shown")),
+            [335_000_000, -850_000_000, 108_000]
+        );
+        assert_eq!(
+            ints(&position_from_text("33.78123, -84.38765 (EM73ts) ±25 m").expect("metres")),
+            [337_812_300, -843_876_500, 25]
+        );
+        assert!(position_from_text("33.7, -84.3 ±25 ft").is_err());
+        assert!(position_from_text("91, 0").is_err());
+        assert!(position_from_text("Atlanta").is_err());
+    }
+
+    #[test]
+    fn each_type_is_typed_as_its_field_reads_it() {
+        let t = every_type();
+        let field = |n| t.field(n).expect("a field");
+        let read = |n, text: &str| value_from_text(field(n), text);
+        // a date and time, UTC, as the composer's box writes it too
+        let minutes = 1_794_235_200 / 60 - 35;
+        assert_eq!(read(4, "2026-11-09 14:05"), Ok(Value::Uint(minutes)));
+        assert_eq!(read(4, "2026-11-09T14:05"), Ok(Value::Uint(minutes)));
+        assert_eq!(read(4, "2026-11-09 14:05 UTC"), Ok(Value::Uint(minutes)));
+        assert!(read(4, "14:05").is_err());
+        // several choices, by text or number; one whose text has no comma
+        assert_eq!(read(6, "Roof, Flooding"), Ok(Value::Uint(5)));
+        assert_eq!(read(6, "power lines down,0"), Ok(Value::Uint(9)));
+        assert!(read(6, "Roof, Hail").is_err());
+        // a decimal exactly, its unit or not; never more places than its scale
+        assert_eq!(read(7, "1.25"), Ok(Value::Uint(125)));
+        assert_eq!(read(7, "1.25 in"), Ok(Value::Uint(125)));
+        assert_eq!(read(7, "2"), Ok(Value::Uint(200)));
+        assert_eq!(read(7, "-0.5"), Ok(Value::int(-50)));
+        assert_eq!(read(7, ".5"), Ok(Value::Uint(50)));
+        assert!(read(7, "1.255").is_err());
+        assert!(read(7, "1,25").is_err());
+        assert_eq!(read(8, "45 mph"), Ok(Value::Uint(45)));
+        assert!(read(8, "4.5").is_err());
+        // a heading takes nothing
+        assert!(read(2, "x").is_err());
+    }
+
+    #[test]
+    fn a_form_of_every_type_goes_from_the_command_line() {
+        let t = every_type();
+        let fields = [
+            "1=Shelter 3",
+            "3=33.78123, -84.38765",
+            "4=2026-11-09 14:05",
+            "6=Roof, Flooding",
+            "7=1.25",
+            "14=2026-11-09 14:05|KK4ODA|N0CALL|Shelter 3 open, 40 cots|Routine",
+            "14=2026-11-09 14:20|N0CALL||Copied",
+        ]
+        .map(str::to_owned);
+        // the test template is not published, so it is read here by hand, field by field
+        let mut values = Vec::new();
+        for f in &fields {
+            let (n, text) = f.split_once('=').expect("N=VALUE");
+            let n: u64 = n.parse().expect("a number");
+            values.push((
+                n,
+                value_from_text(t.field(n).expect("a field"), text).expect("reads"),
+            ));
+        }
+        let rows: Vec<Value> = values
+            .iter()
+            .filter(|(n, _)| *n == 14)
+            .flat_map(|(_, v)| v.as_array().expect("rows").to_vec())
+            .collect();
+        values.retain(|(n, _)| *n != 14);
+        values.push((14, Value::Array(rows)));
+        values.sort_by_key(|(n, _)| *n);
+        assert_eq!(t.problem(&values), None);
+        let log = values
+            .last()
+            .expect("the log")
+            .1
+            .as_array()
+            .expect("rows")
+            .to_vec();
+        // the second row has no To and no precedence: those cells are left out
+        assert_eq!(log[1].as_map().expect("a row").len(), 3);
+        // outside a rows field, `|` is only text
+        let fields = ["2=EOC", "3=Shelter 3", "7=Cots | water"].map(str::to_owned);
+        let form = form_from_args("ics-213", &fields).expect("a form");
+        assert_eq!(form.value(7), Some(&Value::text("Cots | water")));
+    }
 
     #[test]
     fn a_form_from_the_command_line_goes_as_its_values() {

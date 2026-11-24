@@ -976,6 +976,8 @@ impl Panel {
         match (method, path) {
             (Method::Get, "/api/state") => self.state(),
             (Method::Get, "/api/forms") => Ok(forms_json()),
+            (Method::Get, "/api/form-position") => Ok(self.position.for_form()),
+            (Method::Post, "/api/form-position") => form_position(&text("text")),
             (Method::Get, "/api/settings") => {
                 let store = Store::open(&self.home())?;
                 online::settings(&store, None)
@@ -1360,7 +1362,14 @@ impl Panel {
             let rows: Vec<Value> = shown
                 .iter()
                 .flat_map(|s| &s.rows)
-                .map(|r| json!({"n": r.n, "label": r.label, "value": r.value, "lines": r.lines}))
+                .map(|r| {
+                    let table = r
+                        .table
+                        .as_ref()
+                        .map(|t| json!({"columns": t.columns, "rows": t.rows}));
+                    json!({"n": r.n, "label": r.label, "value": r.value, "lines": r.lines,
+                           "heading": r.heading, "table": table})
+                })
                 .collect();
             v["form"] = json!({
                 "template": radiopost::cbor::hex(&form.template),
@@ -1496,14 +1505,7 @@ impl Panel {
             let values: serde_json::Map<String, Value> = form
                 .values
                 .iter()
-                .filter_map(|(n, x)| {
-                    let x = match x {
-                        Cbor::Text(t) => Value::from(t.as_str()),
-                        Cbor::Bool(b) => Value::from(*b),
-                        other => Value::from(other.as_i64()?),
-                    };
-                    Some((n.to_string(), x))
-                })
+                .filter_map(|(n, x)| Some((n.to_string(), json_of(x)?)))
                 .collect();
             json!({"template": radiopost::cbor::hex(&form.template), "values": values})
         });
@@ -2550,15 +2552,7 @@ fn forms_json() -> Value {
     radiopost::forms::Template::published()
         .iter()
         .map(|t| {
-            let fields: Vec<Value> = t
-                .fields
-                .iter()
-                .map(|f| {
-                    json!({"n": f.n, "label": f.label, "type": f.kind.name(),
-                           "required": f.required, "choices": f.choices,
-                           "bound": f.bound.map(radiopost::forms::Bound::name), "max": f.max})
-                })
-                .collect();
+            let fields: Vec<Value> = t.fields.iter().map(field_json).collect();
             // how it prints, as the paper form it comes from, when this program holds a layout
             let print = radiopost::forms::layout(&t.fingerprint());
             json!({"template": radiopost::cbor::hex(&t.fingerprint()), "name": t.name,
@@ -2567,9 +2561,83 @@ fn forms_json() -> Value {
         .collect()
 }
 
-/// A form from the composer: `{template, values}`, the values by field number, text, integers or
-/// booleans; `null` for none.
+/// A field of a template (or a column of a `rows` field) for the composer.
+fn field_json(f: &radiopost::forms::Field) -> Value {
+    let columns: Vec<Value> = f.columns.iter().map(field_json).collect();
+    json!({"n": f.n, "label": f.label, "type": f.kind.name(), "required": f.required,
+           "choices": f.choices, "bound": f.bound.map(radiopost::forms::Bound::name),
+           "max": f.max, "scale": f.scale, "unit": f.unit, "columns": columns})
+}
+
+/// A form's value as JSON, for the composer to put back in its fields: integers, text, yes and
+/// no, a list (a position, rows) and a map (a row) by its numbers. `None` for what JSON cannot
+/// hold exactly.
+fn json_of(v: &Cbor) -> Option<Value> {
+    Some(match v {
+        Cbor::Text(t) => Value::from(t.as_str()),
+        Cbor::Bool(b) => Value::from(*b),
+        Cbor::Array(items) => Value::Array(items.iter().map(json_of).collect::<Option<_>>()?),
+        Cbor::Map(entries) => Value::Object(
+            entries
+                .iter()
+                .map(|(k, v)| Some((k.as_u64()?.to_string(), json_of(v)?)))
+                .collect::<Option<_>>()?,
+        ),
+        other => Value::from(other.as_i64()?),
+    })
+}
+
+/// A position typed in the composer (`POST /api/form-position`): its value, and the text the form
+/// will show (RP-2 §8.4), so the operator sees exactly what goes.
+fn form_position(text: &str) -> Result<Value, Error> {
+    let value = crate::compose::position_from_text(text)?;
+    let shown = radiopost::forms::Template::from_value(&json!({
+        "name": "", "fields": [{"n": 1, "label": "", "type": "position"}]
+    }))
+    .ok()
+    .and_then(|t| {
+        let form = radiopost::forms::Form {
+            template: t.fingerprint(),
+            values: vec![(1, value.clone())],
+        };
+        (t.problem(&form.values).is_none()).then(|| form_row_value(&t, &form))
+    })
+    .ok_or("a latitude within 90° and a longitude within 180°")?;
+    Ok(json!({"value": json_of(&value), "shown": shown}))
+}
+
+/// The text of a form's first row, as RP-2 §8.4 writes it.
+fn form_row_value(t: &radiopost::forms::Template, form: &radiopost::forms::Form) -> String {
+    let message = radiopost::message::Message::from_map(&Cbor::int_map(vec![
+        (1, Cbor::Uint(1)),
+        (2, Cbor::text("")),
+        (3, Cbor::Array(vec![])),
+        (5, Cbor::Uint(0)),
+        (6, Cbor::text("")),
+        (7, Cbor::text("")),
+        (13, form.to_cbor()),
+    ]));
+    message
+        .ok()
+        .and_then(|m| t.shown(&m, form).rows.into_iter().next())
+        .map(|r| r.value)
+        .unwrap_or_default()
+}
+
+/// A form from the composer: `{template, values}`, the values by field number; `null` for none.
+/// With a template this client holds, each value is read as its field's type: text as typed for
+/// a `line` or `text` field and through [`crate::compose::value_from_text`] for any other (a
+/// position, a decimal), integers and yes and no as they are, rows as a list of maps by column
+/// number. Empty fields, cells and rows are left out.
 fn form_of(form: &Value) -> Result<Option<radiopost::forms::Form>, Error> {
+    form_of_with(form, &radiopost::forms::Template::published())
+}
+
+/// [`form_of`] with these templates held.
+fn form_of_with(
+    form: &Value,
+    templates: &[radiopost::forms::Template],
+) -> Result<Option<radiopost::forms::Form>, Error> {
     if form.is_null() {
         return Ok(None);
     }
@@ -2578,21 +2646,72 @@ fn form_of(form: &Value) -> Result<Option<radiopost::forms::Form>, Error> {
         .and_then(crate::store::unhex)
         .and_then(|b| b.try_into().ok())
         .ok_or("a form names its template's fingerprint, 16 hex digits")?;
+    let held = templates.iter().find(|t| t.fingerprint() == template);
     let mut values = Vec::new();
     for (n, v) in form["values"].as_object().into_iter().flatten() {
         let n: u64 = n.parse().map_err(|_| "a form's fields are numbered")?;
-        let value = match v {
-            Value::String(t) if t.is_empty() => continue,
-            Value::String(t) => Cbor::text(t),
-            Value::Bool(b) => Cbor::Bool(*b),
-            Value::Number(x) => Cbor::int(x.as_i64().ok_or("a form's numbers are integers")?),
-            Value::Null => continue,
-            _ => return Err("a form's values are text, integers or yes and no".into()),
+        let value = match held.and_then(|t| t.field(n)) {
+            Some(field) => value_of(field, v).map_err(|why| format!("{}: {why}", field.label))?,
+            None => plain_value(v)?,
         };
-        values.push((n, value));
+        if let Some(value) = value {
+            values.push((n, value));
+        }
     }
     values.sort_by_key(|(n, _)| *n);
     Ok(Some(radiopost::forms::Form { template, values }))
+}
+
+/// A value from the composer for `field`, read as its type; `None` when it is empty.
+fn value_of(field: &radiopost::forms::Field, v: &Value) -> Result<Option<Cbor>, Error> {
+    use radiopost::forms::Kind;
+    Ok(Some(match (field.kind, v) {
+        (_, Value::Null) => return Ok(None),
+        (_, Value::String(t)) if t.trim().is_empty() => return Ok(None),
+        (Kind::Line | Kind::Text, Value::String(t)) => Cbor::text(t),
+        (_, Value::String(t)) => crate::compose::value_from_text(field, t)?,
+        (Kind::Rows, Value::Array(rows)) => {
+            let mut out = Vec::new();
+            for row in rows {
+                let mut cells = Vec::new();
+                for (k, cell) in row.as_object().ok_or("a row is a map of its columns")? {
+                    let column = k
+                        .parse::<u64>()
+                        .ok()
+                        .and_then(|c| field.columns.iter().find(|col| col.n == c))
+                        .ok_or("a row's cells are its columns, by number")?;
+                    if let Some(value) = value_of(column, cell)? {
+                        cells.push((Cbor::Uint(column.n), value));
+                    }
+                }
+                if !cells.is_empty() {
+                    out.push(Cbor::Map(cells));
+                }
+            }
+            if out.is_empty() {
+                return Ok(None);
+            }
+            Cbor::Array(out)
+        }
+        (_, other) => match plain_value(other)? {
+            Some(value) => value,
+            None => return Ok(None),
+        },
+    }))
+}
+
+/// A value from the composer for a field this client does not know: text, an integer, yes or no.
+fn plain_value(v: &Value) -> Result<Option<Cbor>, Error> {
+    Ok(match v {
+        Value::String(t) if t.is_empty() => None,
+        Value::String(t) => Some(Cbor::text(t)),
+        Value::Bool(b) => Some(Cbor::Bool(*b)),
+        Value::Number(x) => Some(Cbor::int(
+            x.as_i64().ok_or("a form's numbers are integers")?,
+        )),
+        Value::Null => None,
+        _ => return Err("a form's values are text, integers or yes and no".into()),
+    })
 }
 
 /// A dial member of a request: absent or null is none, else a whole number of hertz above 0.
@@ -2612,7 +2731,58 @@ mod tests {
     use std::path::Path;
     use std::time::{Duration, Instant};
 
-    use super::{Panel, Store, lock, thread, unhex};
+    use super::{Panel, Store, form_of_with, json_of, lock, thread, unhex};
+
+    /// What the composer sends for RP-2 §8's test template (`vectors/forms.json`, `every_type`):
+    /// text as typed, a position and decimals as text, integers for dates, choices and bits,
+    /// rows by column number with empty cells and rows; read as the template's types, it is the
+    /// test message's form, and put back for Edit it is the same values.
+    #[test]
+    fn a_form_of_every_type_reads_from_the_composer() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../vectors/forms.json");
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("forms.json"))
+                .expect("JSON");
+        let e = &v["every_type"];
+        let t = radiopost::forms::Template::from_value(&e["template"]).expect("it reads");
+        let sent = serde_json::json!({
+            "template": e["fingerprint_hex"],
+            "values": {
+                "1": "Shelter 3", "3": "33.78123, -84.38765", "4": 29_903_885, "6": 5,
+                "7": "1.25", "8": "45", "9": "1.5", "10": false, "12": "",
+                "14": [
+                    {"1": 29_903_885, "2": "KK4ODA", "3": "N0CALL",
+                     "4": "Shelter 3 open, 40 cots", "5": 0},
+                    {"1": 29_903_900, "2": "N0CALL", "3": "", "4": "Copied"},
+                    {"2": ""}
+                ],
+                "15": "Water rising on Main St.\nRoad closed at the bridge."
+            }
+        });
+        let form = form_of_with(&sent, std::slice::from_ref(&t))
+            .expect("it reads")
+            .expect("a form");
+        let message = radiopost::message::Message::from_canonical(
+            &unhex(e["messages"][0]["canonical_hex"].as_str().expect("hex")).expect("hex"),
+        )
+        .expect("canonical");
+        assert_eq!(Some(form.clone()), radiopost::forms::Form::of(&message));
+        // Edit puts the same values back: positions and rows as lists, rows by column number
+        let back: serde_json::Map<String, serde_json::Value> = form
+            .values
+            .iter()
+            .map(|(n, x)| (n.to_string(), json_of(x).expect("JSON holds it")))
+            .collect();
+        assert_eq!(back["3"], serde_json::json!([337_812_300, -843_876_500]));
+        assert_eq!(
+            back["14"][1],
+            serde_json::json!({"1": 29_903_900, "2": "N0CALL", "4": "Copied"})
+        );
+        // what does not read as its type is refused, with the field's label
+        let bad = serde_json::json!({"template": e["fingerprint_hex"], "values": {"3": "Atlanta"}});
+        let why = form_of_with(&bad, std::slice::from_ref(&t)).expect_err("refused");
+        assert!(why.starts_with("Location: "), "{why}");
+    }
 
     /// A field of an entry of one of the vectors' lists, found by its name.
     fn vector(file: &str, list: &str, (key, name): (&str, &str), field: &str) -> String {

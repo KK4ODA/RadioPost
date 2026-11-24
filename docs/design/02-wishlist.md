@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.49 |
-| **Updated** | 2026-11-21 |
+| **Version** | 0.3.50 |
+| **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §9 and §10 |
@@ -135,8 +135,8 @@ rules:
 | W29 | The sender's client follows queued mail | Offline | High | Fits today | Implemented |
 | W30 | Forwarding by radio | Offline | Medium | Fits today | Implemented; trial on the air deferred |
 | W31 | Local delivery at a cut-off gateway | Offline | Medium | Fits today | Implemented |
-| W32 | Forms | Applications | Medium | Optional addition: RP-2 1.1.0 §8, key 13 | Implemented |
-| W33 | Position reports | Applications | Low | Application layer; optional addition as broadcasts | Planned |
+| W32 | Forms | Applications | Medium | Optional addition: RP-2 1.1.0 §8, key 13; RP-2 1.4.0's types | Implemented; more in progress |
+| W33 | Position reports | Applications | Low | Application layer (a template, RP-2 1.4.0); optional addition as broadcasts | Planned |
 | W34 | Bulletins | Applications | Low | Application layer; optional addition as broadcasts | Planned |
 | W35 | Services that answer by mail | Applications | Low | Application layer | Planned |
 | W36 | One mailbox, by radio and by mail program | Operation | High | Fits today | Implemented |
@@ -976,8 +976,8 @@ readable copy.
 | Effort | Large: a template format, a set of forms, an editor and a viewer. |
 | Priority | **Medium**; likely to rise, since emergency groups ask for forms first. |
 | Recommendation | **Modify**: application layer first. Interoperability needs a published form format either way, but as a file it asks nothing of RP-2 or RP-6. Use key 13 only if a measured air-time saving pays for a specification. Measured (2026-11-15, the author asking that forms take as little air as possible): an ICS-213 with five fields is 253 bytes on the air as values, against 320 as text and 778 as a form file with its text (XML in `files`); key 13 was used. |
-| Status | Implemented. |
-| Author decision | No compatibility with Winlink's programs (CLAUDE.md, decided): templates from FEMA's public forms in an open format (concept §10), not Winlink's. |
+| Status | Implemented; more in progress: [forms for most jobs](06-forms.md), step 1 built (RP-2 1.4.0's types `position`, `datetime`, `multi`, `rows`, `heading`, a number's `scale` and `unit`; the composer, the reader and `compose --field` take them, a position field filled from W55). |
+| Author decision | No compatibility with Winlink's programs (CLAUDE.md, decided): templates from FEMA's public forms in an open format (concept §10), not Winlink's. 2026-11-24, with [forms for most jobs](06-forms.md): a post office serves templates by their fingerprint; the ARRL's and the Red Cross's forms wait for their permission, which the author asks; a position goes exactly as it is, by default. |
 
 ### W33. Position reports
 
@@ -987,7 +987,7 @@ Send where a station is, for a map or a net.
 |---|---|
 | Requested by | The plan: concept §10, later; RP-4 §6 reserves broadcasts for it. Requesters: 0. |
 | Component | Client; a service that collects them. |
-| Compatibility | **Application-layer capability** as a message to a position service, at a session each. As a broadcast to everyone listening, an **optional protocol addition** (a new specification) carried only by modems with `caps.broadcast` (RP-4 §6). |
+| Compatibility | **Application-layer capability** as a message to a position service, at a session each: a template with a `position` field (RP-2 1.4.0), [forms for most jobs](06-forms.md) §4.5. As a broadcast to everyone listening, an **optional protocol addition** (a new specification) carried only by modems with `caps.broadcast` (RP-4 §6). |
 | Existing coverage | Planned; not built. |
 | Dependencies | None. Shares a broadcast format with W34 (§12, T4). |
 | Effort | Medium. |
@@ -1325,3 +1325,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.47 | 2026-11-18 | W49's coverage: **New password** for a user who lost their mailbox's password, at a user's ask through the author. |
 | 0.3.48 | 2026-11-20 | The author accepted [choosing a gateway](04-gateway-selection.md): W17 rewritten to point to it; W55 (places and GPS), W56 (terrain at VHF and UHF), W57 (learning from every call) and W58 (ranking by when the mail is done) added; W55 and W57 in progress. |
 | 0.3.49 | 2026-11-21 | W55: places and the GPS built; station profiles to come. |
+| 0.3.50 | 2026-11-24 | W32: [forms for most jobs](06-forms.md) accepted with the author's three answers, step 1 built (RP-2 1.4.0); W33 becomes a template. |

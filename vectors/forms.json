@@ -118,5 +118,1297 @@
       },
       "expect": "a text value ending with a line break"
     }
-  ]
+  ],
+  "every_type": {
+    "rule": "`template` becomes exactly `canonical_hex` (RP-2 §8.1) and has the fingerprint `fingerprint_hex`. Each of `messages` shows as `text` with the template and as `text_without_template` without it (§8.4). Each of `values_shown` is the value of the template's field `field`, written `shown` (§8.4; a `rows` value's lines joined by LF). Each check's `values` give `expect`: `fills the template`, or why not (§8.2). Each of `templates` keeps §8.1's rules (`keeps the rules`) or is not a template, `expect` saying which rule it breaks. In JSON a map's keys are its numbers written as text.",
+    "template": {
+      "name": "Every type (test)",
+      "note": "RP-2 §8's test template, in vectors/forms.json only: every type of field.",
+      "fields": [
+        {
+          "n": 1,
+          "label": "Incident name",
+          "type": "line",
+          "max": 40
+        },
+        {
+          "n": 2,
+          "label": "Where and when",
+          "type": "heading"
+        },
+        {
+          "n": 3,
+          "label": "Location",
+          "type": "position",
+          "required": true
+        },
+        {
+          "n": 4,
+          "label": "Observed",
+          "type": "datetime"
+        },
+        {
+          "n": 5,
+          "label": "Damage",
+          "type": "heading"
+        },
+        {
+          "n": 6,
+          "label": "Damage seen",
+          "type": "multi",
+          "choices": [
+            "Roof",
+            "Windows",
+            "Flooding",
+            "Power lines down"
+          ]
+        },
+        {
+          "n": 7,
+          "label": "Rainfall",
+          "type": "number",
+          "scale": 2,
+          "unit": "in"
+        },
+        {
+          "n": 8,
+          "label": "Wind gust",
+          "type": "number",
+          "unit": "mph"
+        },
+        {
+          "n": 9,
+          "label": "Water depth, feet",
+          "type": "number",
+          "scale": 1
+        },
+        {
+          "n": 10,
+          "label": "Injuries",
+          "type": "check"
+        },
+        {
+          "n": 11,
+          "label": "Approval",
+          "type": "heading"
+        },
+        {
+          "n": 12,
+          "label": "Approved by",
+          "type": "line",
+          "max": 40
+        },
+        {
+          "n": 13,
+          "label": "Log",
+          "type": "heading"
+        },
+        {
+          "n": 14,
+          "label": "Communications log",
+          "type": "rows",
+          "max": 5,
+          "columns": [
+            {
+              "n": 1,
+              "label": "Time",
+              "type": "datetime",
+              "required": true
+            },
+            {
+              "n": 2,
+              "label": "From",
+              "type": "line",
+              "required": true,
+              "max": 10
+            },
+            {
+              "n": 3,
+              "label": "To",
+              "type": "line",
+              "max": 10
+            },
+            {
+              "n": 4,
+              "label": "Message",
+              "type": "line",
+              "max": 80
+            },
+            {
+              "n": 5,
+              "label": "Precedence",
+              "type": "choice",
+              "choices": [
+                "Routine",
+                "Priority",
+                "Emergency"
+              ]
+            }
+          ]
+        },
+        {
+          "n": 15,
+          "label": "Remarks",
+          "type": "text"
+        }
+      ]
+    },
+    "diagnostic": "{1: \"Every type (test)\", 2: [{1: 1, 2: \"Incident name\", 3: 0, 7: 40}, {1: 2, 2: \"Where and when\", 3: 11}, {1: 3, 2: \"Location\", 3: 7, 4: true}, {1: 4, 2: \"Observed\", 3: 8}, {1: 5, 2: \"Damage\", 3: 11}, {1: 6, 2: \"Damage seen\", 3: 9, 5: [\"Roof\", \"Windows\", \"Flooding\", \"Power lines down\"]}, {1: 7, 2: \"Rainfall\", 3: 4, 8: 2, 9: \"in\"}, {1: 8, 2: \"Wind gust\", 3: 4, 9: \"mph\"}, {1: 9, 2: \"Water depth, feet\", 3: 4, 8: 1}, {1: 10, 2: \"Injuries\", 3: 6}, {1: 11, 2: \"Approval\", 3: 11}, {1: 12, 2: \"Approved by\", 3: 0, 7: 40}, {1: 13, 2: \"Log\", 3: 11}, {1: 14, 2: \"Communications log\", 3: 10, 7: 5, 10: [{1: 1, 2: \"Time\", 3: 8, 4: true}, {1: 2, 2: \"From\", 3: 0, 4: true, 7: 10}, {1: 3, 2: \"To\", 3: 0, 7: 10}, {1: 4, 2: \"Message\", 3: 0, 7: 80}, {1: 5, 2: \"Precedence\", 3: 5, 5: [\"Routine\", \"Priority\", \"Emergency\"]}]}, {1: 15, 2: \"Remarks\", 3: 1}], 3: \"RP-2 §8's test template, in vectors/forms.json only: every type of field.\"}",
+    "canonical_hex": "a301714576657279207479706520287465737429028fa40101026d496e636964656e74206e616d650300071828a30102026e576865726520616e64207768656e030ba4010302684c6f636174696f6e030704f5a3010402684f627365727665640308a30105026644616d616765030ba40106026b44616d616765207365656e0309058464526f6f666757696e646f777368466c6f6f64696e6770506f776572206c696e657320646f776ea5010702685261696e66616c6c030408020962696ea40108026957696e642067757374030409636d7068a40109027157617465722064657074682c206665657403040801a3010a0268496e6a75726965730306a3010b0268417070726f76616c030ba4010c026b417070726f7665642062790300071828a3010d02634c6f67030ba5010e0272436f6d6d756e69636174696f6e73206c6f67030a07050a85a40101026454696d65030804f5a50102026446726f6d030004f5070aa401030262546f0300070aa4010402674d6573736167650300071850a40105026a507265636564656e63650305058367526f7574696e65685072696f7269747969456d657267656e6379a3010f026752656d61726b73030103784a52502d3220c2a738277320746573742074656d706c6174652c20696e20766563746f72732f666f726d732e6a736f6e206f6e6c793a2065766572792074797065206f66206669656c642e",
+    "fingerprint_hex": "3039350fc0bddece",
+    "messages": [
+      {
+        "what": "the example",
+        "canonical_hex": "a7010102767368656c7465723340726164696f706f73742e6f7267038171656f6340726164696f706f73742e6f7267051a6af1db40067344616d616765206174205368656c746572203307600da201483039350fc0bddece02aa01695368656c746572203303821a14229b4c3a324c8893041a01c84c0d060507187d08182d090f0af40e82a5011a01c84c0d02664b4b344f444103664e3043414c4c04775368656c7465722033206f70656e2c20343020636f74730500a3011a01c84c1c02664e3043414c4c0466436f706965640f7833576174657220726973696e67206f6e204d61696e2053742e0a526f616420636c6f73656420617420746865206272696467652e",
+        "text": "Every type (test)\n\nIncident name: Shelter 3\n\nWhere and when\nLocation: 33.78123, -84.38765 (EM73ts)\nObserved: 2026-11-09 14:05 UTC\n\nDamage\nDamage seen: Roof, Flooding\nRainfall: 1.25 in\nWind gust: 45 mph\nWater depth, feet: 1.5\nInjuries: No\n\nLog\nCommunications log:\nTime | From | To | Message | Precedence\n2026-11-09 14:05 UTC | KK4ODA | N0CALL | Shelter 3 open, 40 cots | Routine\n2026-11-09 14:20 UTC | N0CALL |  | Copied |\nRemarks:\nWater rising on Main St.\nRoad closed at the bridge.\n",
+        "text_without_template": "Form 3039350fc0bddece\n\nField 1: Shelter 3\nField 3: [337812300, -843876500]\nField 4: 29903885\nField 6: 5\nField 7: 125\nField 8: 45\nField 9: 15\nField 10: No\nField 14: [{1: 29903885, 2: \"KK4ODA\", 3: \"N0CALL\", 4: \"Shelter 3 open, 40 cots\", 5: 0}, {1: 29903900, 2: \"N0CALL\", 4: \"Copied\"}]\nField 15:\nWater rising on Main St.\nRoad closed at the bridge.\n"
+      },
+      {
+        "what": "the location alone: its heading opens the form",
+        "canonical_hex": "a7010102767368656c7465723340726164696f706f73742e6f7267038171656f6340726164696f706f73742e6f7267051a6af1db40067344616d616765206174205368656c746572203307600da201483039350fc0bddece02a103821a14229b4c3a324c8893",
+        "text": "Every type (test)\n\nWhere and when\nLocation: 33.78123, -84.38765 (EM73ts)\n",
+        "text_without_template": "Form 3039350fc0bddece\n\nField 3: [337812300, -843876500]\n"
+      }
+    ],
+    "values_shown": [
+      {
+        "what": "a position",
+        "field": 3,
+        "value": [
+          337812300,
+          -843876500
+        ],
+        "shown": "33.78123, -84.38765 (EM73ts)"
+      },
+      {
+        "what": "south and east",
+        "field": 3,
+        "value": [
+          -339249000,
+          184232000
+        ],
+        "shown": "-33.9249, 18.4232 (JF96fb)"
+      },
+      {
+        "what": "whole degrees",
+        "field": 3,
+        "value": [
+          340000000,
+          -840000000
+        ],
+        "shown": "34.0, -84.0 (EM84aa)"
+      },
+      {
+        "what": "a ten-millionth from 0, 0",
+        "field": 3,
+        "value": [
+          -5,
+          5
+        ],
+        "shown": "-0.0000005, 0.0000005 (JI09ax)"
+      },
+      {
+        "what": "the north pole at 180°",
+        "field": 3,
+        "value": [
+          900000000,
+          1800000000
+        ],
+        "shown": "90.0, 180.0 (RR99xx)"
+      },
+      {
+        "what": "the south pole at -180°",
+        "field": 3,
+        "value": [
+          -900000000,
+          -1800000000
+        ],
+        "shown": "-90.0, -180.0 (AA00aa)"
+      },
+      {
+        "what": "within 1 m",
+        "field": 3,
+        "value": [
+          335000000,
+          -850000000,
+          1
+        ],
+        "shown": "33.5, -85.0 (EM73mm) ±1 m"
+      },
+      {
+        "what": "within 25 m",
+        "field": 3,
+        "value": [
+          335000000,
+          -850000000,
+          25
+        ],
+        "shown": "33.5, -85.0 (EM73mm) ±25 m"
+      },
+      {
+        "what": "within 999 m",
+        "field": 3,
+        "value": [
+          335000000,
+          -850000000,
+          999
+        ],
+        "shown": "33.5, -85.0 (EM73mm) ±999 m"
+      },
+      {
+        "what": "within 1000 m",
+        "field": 3,
+        "value": [
+          335000000,
+          -850000000,
+          1000
+        ],
+        "shown": "33.5, -85.0 (EM73mm) ±1 km"
+      },
+      {
+        "what": "within 1049 m",
+        "field": 3,
+        "value": [
+          335000000,
+          -850000000,
+          1049
+        ],
+        "shown": "33.5, -85.0 (EM73mm) ±1 km"
+      },
+      {
+        "what": "within 1050 m",
+        "field": 3,
+        "value": [
+          335000000,
+          -850000000,
+          1050
+        ],
+        "shown": "33.5, -85.0 (EM73mm) ±1.1 km"
+      },
+      {
+        "what": "within 108 km",
+        "field": 3,
+        "value": [
+          335000000,
+          -850000000,
+          108000
+        ],
+        "shown": "33.5, -85.0 (EM73mm) ±108 km"
+      },
+      {
+        "what": "the epoch",
+        "field": 4,
+        "value": 0,
+        "shown": "1970-01-01 00:00 UTC"
+      },
+      {
+        "what": "the last minute of a day",
+        "field": 4,
+        "value": 1439,
+        "shown": "1970-01-01 23:59 UTC"
+      },
+      {
+        "what": "the first minute of the next",
+        "field": 4,
+        "value": 1440,
+        "shown": "1970-01-02 00:00 UTC"
+      },
+      {
+        "what": "a multi of one choice",
+        "field": 6,
+        "value": 1,
+        "shown": "Roof"
+      },
+      {
+        "what": "a multi of the last choice",
+        "field": 6,
+        "value": 8,
+        "shown": "Power lines down"
+      },
+      {
+        "what": "a multi of every choice",
+        "field": 6,
+        "value": 15,
+        "shown": "Roof, Windows, Flooding, Power lines down"
+      },
+      {
+        "what": "a decimal",
+        "field": 7,
+        "value": 125,
+        "shown": "1.25 in"
+      },
+      {
+        "what": "a decimal under 1",
+        "field": 7,
+        "value": 5,
+        "shown": "0.05 in"
+      },
+      {
+        "what": "a negative decimal under 1",
+        "field": 7,
+        "value": -5,
+        "shown": "-0.05 in"
+      },
+      {
+        "what": "zero with two places",
+        "field": 7,
+        "value": 0,
+        "shown": "0.00 in"
+      },
+      {
+        "what": "a whole number with two places",
+        "field": 7,
+        "value": 100,
+        "shown": "1.00 in"
+      },
+      {
+        "what": "a number with a unit",
+        "field": 8,
+        "value": 45,
+        "shown": "45 mph"
+      },
+      {
+        "what": "a negative number with a unit",
+        "field": 8,
+        "value": -3,
+        "shown": "-3 mph"
+      },
+      {
+        "what": "one place, no unit",
+        "field": 9,
+        "value": 15,
+        "shown": "1.5"
+      },
+      {
+        "what": "rows",
+        "field": 14,
+        "value": [
+          {
+            "1": 29903885,
+            "2": "KK4ODA",
+            "3": "N0CALL",
+            "4": "Shelter 3 open, 40 cots",
+            "5": 0
+          },
+          {
+            "1": 29903900,
+            "2": "N0CALL",
+            "4": "Copied"
+          }
+        ],
+        "shown": "Time | From | To | Message | Precedence\n2026-11-09 14:05 UTC | KK4ODA | N0CALL | Shelter 3 open, 40 cots | Routine\n2026-11-09 14:20 UTC | N0CALL |  | Copied |"
+      }
+    ],
+    "checks": [
+      {
+        "what": "the example",
+        "values": {
+          "1": "Shelter 3",
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "4": 29903885,
+          "6": 5,
+          "7": 125,
+          "8": 45,
+          "9": 15,
+          "10": false,
+          "14": [
+            {
+              "1": 29903885,
+              "2": "KK4ODA",
+              "3": "N0CALL",
+              "4": "Shelter 3 open, 40 cots",
+              "5": 0
+            },
+            {
+              "1": 29903900,
+              "2": "N0CALL",
+              "4": "Copied"
+            }
+          ],
+          "15": "Water rising on Main St.\nRoad closed at the bridge."
+        },
+        "expect": "fills the template"
+      },
+      {
+        "what": "only the required field",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ]
+        },
+        "expect": "fills the template"
+      },
+      {
+        "what": "a position with how far off it may be",
+        "values": {
+          "3": [
+            337812300,
+            -843876500,
+            25
+          ]
+        },
+        "expect": "fills the template"
+      },
+      {
+        "what": "a heading among the values",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "2": "Downtown"
+        },
+        "expect": "a heading among the values"
+      },
+      {
+        "what": "a latitude past 90°",
+        "values": {
+          "3": [
+            900000001,
+            0
+          ]
+        },
+        "expect": "a position out of range"
+      },
+      {
+        "what": "a longitude past -180°",
+        "values": {
+          "3": [
+            0,
+            -1800000001
+          ]
+        },
+        "expect": "a position out of range"
+      },
+      {
+        "what": "a distance of 0",
+        "values": {
+          "3": [
+            337812300,
+            -843876500,
+            0
+          ]
+        },
+        "expect": "a position out of range"
+      },
+      {
+        "what": "a position of one number",
+        "values": {
+          "3": [
+            337812300
+          ]
+        },
+        "expect": "a value of the wrong type"
+      },
+      {
+        "what": "a position of four numbers",
+        "values": {
+          "3": [
+            337812300,
+            -843876500,
+            25,
+            1
+          ]
+        },
+        "expect": "a value of the wrong type"
+      },
+      {
+        "what": "a position written as text",
+        "values": {
+          "3": "33.78123, -84.38765"
+        },
+        "expect": "a value of the wrong type"
+      },
+      {
+        "what": "a position with text in it",
+        "values": {
+          "3": [
+            337812300,
+            "-84.38765"
+          ]
+        },
+        "expect": "a value of the wrong type"
+      },
+      {
+        "what": "the position missing: it is required",
+        "values": {
+          "1": "Shelter 3"
+        },
+        "expect": "a required field missing"
+      },
+      {
+        "what": "a datetime before 1970",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "4": -1
+        },
+        "expect": "a value of the wrong type"
+      },
+      {
+        "what": "a multi of no choice",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "6": 0
+        },
+        "expect": "an empty value: an empty field is left out"
+      },
+      {
+        "what": "a multi naming a fifth choice",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "6": 16
+        },
+        "expect": "a choice the field does not have"
+      },
+      {
+        "what": "a decimal written as text",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "7": "1.25"
+        },
+        "expect": "a value of the wrong type"
+      },
+      {
+        "what": "a check written as a number",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "10": 1
+        },
+        "expect": "a value of the wrong type"
+      },
+      {
+        "what": "no rows",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "14": []
+        },
+        "expect": "an empty value: an empty field is left out"
+      },
+      {
+        "what": "six rows, over the max of 5",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "14": [
+            {
+              "1": 29903920,
+              "2": "KK4ODA"
+            },
+            {
+              "1": 29903920,
+              "2": "KK4ODA"
+            },
+            {
+              "1": 29903920,
+              "2": "KK4ODA"
+            },
+            {
+              "1": 29903920,
+              "2": "KK4ODA"
+            },
+            {
+              "1": 29903920,
+              "2": "KK4ODA"
+            },
+            {
+              "1": 29903920,
+              "2": "KK4ODA"
+            }
+          ]
+        },
+        "expect": "more rows than the field's max"
+      },
+      {
+        "what": "a row that is not a map",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "14": [
+            "KK4ODA"
+          ]
+        },
+        "expect": "a value of the wrong type"
+      },
+      {
+        "what": "an empty row",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "14": [
+            {}
+          ]
+        },
+        "expect": "an empty row"
+      },
+      {
+        "what": "a column the field does not have",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "14": [
+            {
+              "1": 29903920,
+              "2": "KK4ODA",
+              "6": "x"
+            }
+          ]
+        },
+        "expect": "a column the field does not have"
+      },
+      {
+        "what": "a row without its required time",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "14": [
+            {
+              "2": "KK4ODA"
+            }
+          ]
+        },
+        "expect": "a required column missing"
+      },
+      {
+        "what": "a time written as text in a row",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "14": [
+            {
+              "1": "14:05",
+              "2": "KK4ODA"
+            }
+          ]
+        },
+        "expect": "a value of the wrong type"
+      },
+      {
+        "what": "a line break in a row's line",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "14": [
+            {
+              "1": 29903920,
+              "2": "KK4\nODA"
+            }
+          ]
+        },
+        "expect": "a line value with a line break"
+      },
+      {
+        "what": "a cell over its column's max of 10",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "14": [
+            {
+              "1": 29903920,
+              "2": "KK4ODA-1234"
+            }
+          ]
+        },
+        "expect": "a value longer than the field's max"
+      },
+      {
+        "what": "an empty cell sent",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "14": [
+            {
+              "1": 29903920,
+              "2": "KK4ODA",
+              "3": ""
+            }
+          ]
+        },
+        "expect": "an empty value: an empty field is left out"
+      },
+      {
+        "what": "a precedence past its choices",
+        "values": {
+          "3": [
+            337812300,
+            -843876500
+          ],
+          "14": [
+            {
+              "1": 29903920,
+              "2": "KK4ODA",
+              "5": 3
+            }
+          ]
+        },
+        "expect": "a choice the field does not have"
+      }
+    ],
+    "templates": [
+      {
+        "what": "the test template",
+        "template": {
+          "name": "Every type (test)",
+          "note": "RP-2 §8's test template, in vectors/forms.json only: every type of field.",
+          "fields": [
+            {
+              "n": 1,
+              "label": "Incident name",
+              "type": "line",
+              "max": 40
+            },
+            {
+              "n": 2,
+              "label": "Where and when",
+              "type": "heading"
+            },
+            {
+              "n": 3,
+              "label": "Location",
+              "type": "position",
+              "required": true
+            },
+            {
+              "n": 4,
+              "label": "Observed",
+              "type": "datetime"
+            },
+            {
+              "n": 5,
+              "label": "Damage",
+              "type": "heading"
+            },
+            {
+              "n": 6,
+              "label": "Damage seen",
+              "type": "multi",
+              "choices": [
+                "Roof",
+                "Windows",
+                "Flooding",
+                "Power lines down"
+              ]
+            },
+            {
+              "n": 7,
+              "label": "Rainfall",
+              "type": "number",
+              "scale": 2,
+              "unit": "in"
+            },
+            {
+              "n": 8,
+              "label": "Wind gust",
+              "type": "number",
+              "unit": "mph"
+            },
+            {
+              "n": 9,
+              "label": "Water depth, feet",
+              "type": "number",
+              "scale": 1
+            },
+            {
+              "n": 10,
+              "label": "Injuries",
+              "type": "check"
+            },
+            {
+              "n": 11,
+              "label": "Approval",
+              "type": "heading"
+            },
+            {
+              "n": 12,
+              "label": "Approved by",
+              "type": "line",
+              "max": 40
+            },
+            {
+              "n": 13,
+              "label": "Log",
+              "type": "heading"
+            },
+            {
+              "n": 14,
+              "label": "Communications log",
+              "type": "rows",
+              "max": 5,
+              "columns": [
+                {
+                  "n": 1,
+                  "label": "Time",
+                  "type": "datetime",
+                  "required": true
+                },
+                {
+                  "n": 2,
+                  "label": "From",
+                  "type": "line",
+                  "required": true,
+                  "max": 10
+                },
+                {
+                  "n": 3,
+                  "label": "To",
+                  "type": "line",
+                  "max": 10
+                },
+                {
+                  "n": 4,
+                  "label": "Message",
+                  "type": "line",
+                  "max": 80
+                },
+                {
+                  "n": 5,
+                  "label": "Precedence",
+                  "type": "choice",
+                  "choices": [
+                    "Routine",
+                    "Priority",
+                    "Emergency"
+                  ]
+                }
+              ]
+            },
+            {
+              "n": 15,
+              "label": "Remarks",
+              "type": "text"
+            }
+          ]
+        },
+        "expect": "keeps the rules"
+      },
+      {
+        "what": "a line field",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 1,
+              "label": "A",
+              "type": "line"
+            }
+          ]
+        },
+        "expect": "keeps the rules"
+      },
+      {
+        "what": "a field number used twice",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 1,
+              "label": "A",
+              "type": "line"
+            },
+            {
+              "n": 1,
+              "label": "B",
+              "type": "line"
+            }
+          ]
+        },
+        "expect": "a number used twice"
+      },
+      {
+        "what": "a choice field without choices",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 1,
+              "label": "A",
+              "type": "choice"
+            }
+          ]
+        },
+        "expect": "a choice field without choices"
+      },
+      {
+        "what": "a multi field without choices",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 1,
+              "label": "A",
+              "type": "multi"
+            }
+          ]
+        },
+        "expect": "a multi field without 1 to 64 choices"
+      },
+      {
+        "what": "a multi field with 65 choices",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 1,
+              "label": "A",
+              "type": "multi",
+              "choices": [
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x",
+                "x"
+              ]
+            }
+          ]
+        },
+        "expect": "a multi field without 1 to 64 choices"
+      },
+      {
+        "what": "a scale on a line",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 1,
+              "label": "A",
+              "type": "line",
+              "scale": 2
+            }
+          ]
+        },
+        "expect": "a scale or a unit on a field that is not a number"
+      },
+      {
+        "what": "a unit on a choice",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 1,
+              "label": "A",
+              "type": "choice",
+              "choices": [
+                "x"
+              ],
+              "unit": "in"
+            }
+          ]
+        },
+        "expect": "a scale or a unit on a field that is not a number"
+      },
+      {
+        "what": "a scale of 0",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 1,
+              "label": "A",
+              "type": "number",
+              "scale": 0
+            }
+          ]
+        },
+        "expect": "a scale that is not 1 to 9"
+      },
+      {
+        "what": "a scale of 10",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 1,
+              "label": "A",
+              "type": "number",
+              "scale": 10
+            }
+          ]
+        },
+        "expect": "a scale that is not 1 to 9"
+      },
+      {
+        "what": "columns on a line",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 1,
+              "label": "A",
+              "type": "line",
+              "columns": [
+                {
+                  "n": 1,
+                  "label": "C",
+                  "type": "line"
+                }
+              ]
+            }
+          ]
+        },
+        "expect": "columns on a field that is not rows"
+      },
+      {
+        "what": "a rows field without columns",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 2,
+              "label": "R",
+              "type": "rows",
+              "columns": []
+            }
+          ]
+        },
+        "expect": "a rows field without columns"
+      },
+      {
+        "what": "a column of type text",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 2,
+              "label": "R",
+              "type": "rows",
+              "columns": [
+                {
+                  "n": 1,
+                  "label": "C",
+                  "type": "text"
+                }
+              ]
+            }
+          ]
+        },
+        "expect": "a column of type text"
+      },
+      {
+        "what": "a column of type rows",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 2,
+              "label": "R",
+              "type": "rows",
+              "columns": [
+                {
+                  "n": 1,
+                  "label": "C",
+                  "type": "rows",
+                  "columns": [
+                    {
+                      "n": 1,
+                      "label": "C",
+                      "type": "line"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "expect": "a column of type rows"
+      },
+      {
+        "what": "a column of type heading",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 2,
+              "label": "R",
+              "type": "rows",
+              "columns": [
+                {
+                  "n": 1,
+                  "label": "C",
+                  "type": "heading"
+                }
+              ]
+            }
+          ]
+        },
+        "expect": "a column of type heading"
+      },
+      {
+        "what": "a bound column",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 2,
+              "label": "R",
+              "type": "rows",
+              "columns": [
+                {
+                  "n": 1,
+                  "label": "C",
+                  "type": "line",
+                  "bound": "subject"
+                }
+              ]
+            }
+          ]
+        },
+        "expect": "a bound column"
+      },
+      {
+        "what": "a column number used twice",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 2,
+              "label": "R",
+              "type": "rows",
+              "columns": [
+                {
+                  "n": 1,
+                  "label": "C",
+                  "type": "line"
+                },
+                {
+                  "n": 1,
+                  "label": "D",
+                  "type": "line"
+                }
+              ]
+            }
+          ]
+        },
+        "expect": "a number used twice"
+      },
+      {
+        "what": "a required heading",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 1,
+              "label": "A",
+              "type": "heading",
+              "required": true
+            }
+          ]
+        },
+        "expect": "a heading with required, choices, bound or max"
+      },
+      {
+        "what": "a heading with a max",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 1,
+              "label": "A",
+              "type": "heading",
+              "max": 10
+            }
+          ]
+        },
+        "expect": "a heading with required, choices, bound or max"
+      }
+    ]
+  }
 }

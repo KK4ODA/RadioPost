@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! RP-2 §8 against `vectors/forms.json`: each published template's encoding and fingerprint, the
-//! text `shelter3-213` shows as with its template and without it, and values checked.
+//! text `shelter3-213` shows as with its template and without it, and values checked; and the test
+//! template with every type (`every_type`): its encoding, its messages' text, values written,
+//! values checked, and templates that break §8.1's rules.
 
 use std::path::PathBuf;
 
@@ -89,7 +91,9 @@ fn a_form_message_shows_as_rp2_8_4_says() {
         assert_eq!((with.title.as_str(), with.filled), (t.name.as_str(), true));
         let text = s["text"].as_str().expect("text");
         for r in &with.rows {
-            let line = if r.lines {
+            let line = if r.heading {
+                format!("\n{}\n", r.label)
+            } else if r.lines {
                 format!("\n{}:\n{}\n", r.label, r.value)
             } else {
                 format!("\n{}: {}\n", r.label, r.value)
@@ -125,21 +129,128 @@ fn values_fill_the_template_or_say_why_not() {
     let file = vectors("forms.json");
     let t = template("forms/ics-213.json");
     for c in file["checks"].as_array().expect("checks") {
-        let values: Vec<(u64, Value)> = c["values"]
-            .as_object()
-            .expect("values")
-            .iter()
-            .map(|(n, v)| {
-                let value = match v {
-                    Json::String(s) => Value::text(s),
-                    Json::Bool(b) => Value::Bool(*b),
-                    Json::Number(n) => Value::int(n.as_i64().expect("an integer")),
-                    other => panic!("{other}"),
-                };
-                (n.parse().expect("a number"), value)
-            })
-            .collect();
+        let values = numbered(&c["values"]);
         let got = t.problem(&values).unwrap_or("fills the template");
         assert_eq!(got, c["expect"].as_str().expect("expect"), "{}", c["what"]);
     }
+}
+
+/// A value as the vectors write it in JSON, back to CBOR: a map's keys are its numbers as text.
+fn cbor(v: &Json) -> Value {
+    match v {
+        Json::String(s) => Value::text(s),
+        Json::Bool(b) => Value::Bool(*b),
+        Json::Number(n) => Value::int(n.as_i64().expect("an integer")),
+        Json::Array(items) => Value::Array(items.iter().map(cbor).collect()),
+        Json::Object(entries) => Value::Map(
+            entries
+                .iter()
+                .map(|(k, v)| (Value::Uint(k.parse().expect("a number")), cbor(v)))
+                .collect(),
+        ),
+        Json::Null => Value::Null,
+    }
+}
+
+/// Values by field number, from the vectors' JSON.
+fn numbered(values: &Json) -> Vec<(u64, Value)> {
+    let mut out: Vec<(u64, Value)> = values
+        .as_object()
+        .expect("values")
+        .iter()
+        .map(|(n, v)| (n.parse().expect("a number"), cbor(v)))
+        .collect();
+    out.sort_by_key(|(n, _)| *n);
+    out
+}
+
+#[test]
+fn every_type_encodes_shows_and_checks_as_rp2_8_says() {
+    let e = &vectors("forms.json")["every_type"];
+    let t = Template::from_value(&e["template"]).expect("the test template reads");
+    let encoded = t.to_cbor().encode().expect("encodes");
+    assert_eq!(encoded, unhex(e["canonical_hex"].as_str().expect("hex")));
+    assert_eq!(
+        t.to_cbor().diagnostic(),
+        e["diagnostic"].as_str().expect("diag")
+    );
+    assert_eq!(
+        t.fingerprint().to_vec(),
+        unhex(e["fingerprint_hex"].as_str().expect("hex"))
+    );
+    for m in e["messages"].as_array().expect("messages") {
+        let what = m["what"].as_str().expect("what");
+        let message = Message::from_canonical(&unhex(m["canonical_hex"].as_str().expect("hex")))
+            .expect("canonical");
+        let form = Form::of(&message).expect("a form");
+        assert_eq!(t.problem(&form.values), None, "{what}");
+        assert_eq!(
+            shown(&message, std::slice::from_ref(&t)).as_deref(),
+            m["text"].as_str(),
+            "{what}"
+        );
+        assert_eq!(
+            shown(&message, &[]).as_deref(),
+            m["text_without_template"].as_str(),
+            "{what}"
+        );
+        // a rows field's table holds the cells its text shows
+        let with = shown_as(&message, std::slice::from_ref(&t)).expect("a form");
+        for r in with.rows.iter().filter(|r| r.table.is_some()) {
+            let table = r.table.as_ref().expect("a table");
+            assert_eq!(
+                r.value.lines().next(),
+                Some(table.columns.join(" | ").as_str())
+            );
+            assert_eq!(r.value.lines().count(), table.rows.len() + 1);
+        }
+    }
+    for c in e["values_shown"].as_array().expect("values shown") {
+        let what = c["what"].as_str().expect("what");
+        let n = c["field"].as_u64().expect("a field");
+        let value = cbor(&c["value"]);
+        // the value alone in a form, shown with the template: its field's line, or lines
+        let field = t.field(n).expect("the field");
+        let form = Form {
+            template: t.fingerprint(),
+            values: vec![(n, value)],
+        };
+        let rows = t.shown(&message_with(&form), &form).rows;
+        let row = rows.iter().find(|r| r.n == n).expect("its row");
+        assert_eq!(
+            row.value,
+            c["shown"].as_str().expect("shown"),
+            "{what} ({})",
+            field.label
+        );
+    }
+    for c in e["checks"].as_array().expect("checks") {
+        let got = t
+            .problem(&numbered(&c["values"]))
+            .unwrap_or("fills the template");
+        assert_eq!(got, c["expect"].as_str().expect("expect"), "{}", c["what"]);
+    }
+    for c in e["templates"].as_array().expect("templates") {
+        let what = c["what"].as_str().expect("what");
+        let read = Template::from_value(&c["template"]);
+        if c["expect"] == "keeps the rules" {
+            assert!(read.is_ok(), "{what}: {read:?}");
+        } else {
+            assert!(read.is_err(), "{what}: read as a template");
+        }
+    }
+}
+
+/// A message carrying this form, for showing it.
+fn message_with(form: &Form) -> Message {
+    let map = Value::int_map(vec![
+        (1, Value::Uint(1)),
+        (2, Value::text("shelter3@radiopost.org")),
+        (3, Value::Array(vec![Value::text("eoc@radiopost.org")])),
+        (5, Value::Uint(1_794_235_200)),
+        (6, Value::text("")),
+        (7, Value::text("")),
+        (13, form.to_cbor()),
+    ]);
+    Message::from_map(&map).expect("a message")
 }

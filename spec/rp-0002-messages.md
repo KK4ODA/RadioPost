@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.3.0 |
+| **Version** | 1.4.0 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -213,9 +213,12 @@ A **field** is a map:
 | 2 | `label` | text | yes | As shown. |
 | 3 | `type` | uint | yes | Below. |
 | 4 | `required` | bool | no | `true`: the form is not filled in without it. |
-| 5 | `choices` | array of text | for `choice` | The choices, in order. |
+| 5 | `choices` | array of text | for `choice` and `multi` | The choices, in order. |
 | 6 | `bound` | uint | no | 1: the message's `subject`; 2: the date of its `date`; 3: the time of its `date`. A bound field's value is the message's own, and is never among the values. |
-| 7 | `max` | uint | no | The most characters (Unicode code points) of a `line` or `text` value. |
+| 7 | `max` | uint | no | The most characters (Unicode code points) of a `line` or `text` value; the most rows of a `rows` value. |
+| 8 | `scale` | uint | no | A `number`'s decimal places, 1 to 9: the value is the integer divided by 10 to that power. |
+| 9 | `unit` | text | no | A `number`'s unit, shown after it: `in`, `mph`. |
+| 10 | `columns` | array of field | for `rows` | A `rows` field's columns, in the order shown. |
 
 | Type | Name | A value is |
 |---|---|---|
@@ -226,6 +229,23 @@ A **field** is a map:
 | 4 | `number` | int |
 | 5 | `choice` | uint: the index of a choice |
 | 6 | `check` | bool |
+| 7 | `position` | array of two or three ints: the latitude and the longitude in ten-millionths of a degree (WGS 84), north and east positive; then, if the sender gives it, how far the true position may be from it, in metres |
+| 8 | `datetime` | uint: minutes since 1970-01-01 00:00 UTC |
+| 9 | `multi` | uint: the choices chosen, choice *i* (from 0) as the bit of value 2 to the power *i* |
+| 10 | `rows` | array of rows, each a map of uint to value: a column's number, and a value of its column's type |
+| 11 | `heading` | none: a heading has no value. It names the fields after it, up to the next heading. |
+
+A position takes 11 bytes at any precision from 10⁻⁴ to 10⁻⁷ degree, each coordinate a 5-byte
+integer: its precision is whatever its sender rounds it to.
+
+A template keeps these rules, or a station does not hold it:
+
+* A field's number is used once in the template, and a column's once among its field's columns.
+* A `choice` field has `choices`; a `multi` field has 1 to 64.
+* `scale` and `unit` are on a `number` only, and `scale` is 1 to 9.
+* `columns` is on a `rows` field only, and a `rows` field has at least one column. A column is a
+  field of any type but `text`, `rows` and `heading`, and is never bound.
+* A `heading` has none of `required`, `choices`, `bound` and `max`.
 
 The template's **fingerprint** is the first 8 bytes of SHA-256 of its deterministic CBOR encoding
 (RP-0 §4.1). Any change to a template makes another template, with another fingerprint: a published
@@ -245,10 +265,23 @@ Key 13, `form`, is a map:
 | 1 | `template` | bstr .size 8 | The template's fingerprint. |
 | 2 | `values` | map of uint to value | Each field filled in, by its number, a value of its type. |
 
-The values **fill the template** when every number is a field of it that is not bound, every value
-is of its field's type and within its `max` and `choices`, no `line` value has a line break, no
-`text` value ends with one, no value is empty text (an empty field is left out), and every required
-field that is not bound has a value. A client MUST NOT send values that do not fill their template.
+The values **fill the template** when:
+
+* every number is a field of it that is neither bound nor a heading, and every value is of its
+  field's type;
+* no value is empty: not empty text, not a `multi` of 0, not an array of no rows, and no row an
+  empty map (an empty field is left out);
+* a `line` value has no line break, a `text` value does not end with one, and neither is longer
+  than its field's `max`;
+* a `time` is at most 1439, a `choice` names a choice its field has, and a `multi` only choices its
+  field has;
+* a `position`'s latitude is within ±900 000 000, its longitude within ±1 800 000 000, and its
+  distance, if it has one, at least 1;
+* a `rows` value has at most its field's `max` rows; each row's keys are columns of its field, each
+  cell fills its column as a field's value would, and every required column has a cell;
+* every required field that is not bound has a value.
+
+A client MUST NOT send values that do not fill their template.
 
 A form message's `subject` is the form's subject, whether or not a field is bound to it, so that
 lists of messages read as usual. Its `body` holds anything the sender adds to the form, and is
@@ -280,9 +313,36 @@ the email it makes of it (RP-6 §3.1):
 One line for each field in the template's order that has a value: a bound field the message's
 (the subject when it is not empty; the date as `YYYY-MM-DD`; the time as `HH:MM UTC`), any other its
 value from `values`. A `text` field's label stands alone and its value follows on the lines after.
-A `date` value is written `YYYY-MM-DD`, a `time` `HH:MM UTC`, a `choice` as its choice's text, a
-`check` `Yes` or `No`, a `number` in decimal. A field with no value is left out. The text ends with
-a line break, and a non-empty `body` follows after an empty line.
+A field with no value is left out. A value is written:
+
+* a `date` as `YYYY-MM-DD`, a `time` as `HH:MM UTC`, a `datetime` as `YYYY-MM-DD HH:MM UTC`;
+* a `choice` as its choice's text, and a `multi` as the texts of its choices in their order, joined
+  by `, `;
+* a `check` as `Yes` or `No`;
+* a `number` in decimal, with a `-` when it is negative. With a `scale`, it has exactly that many
+  digits after a `.`, and at least one before it (`0.05`). With a `unit`, a space and the unit
+  follow (`1.25 in`);
+* a `position` as its latitude, `, `, its longitude, a space and its locator in parentheses; then,
+  if it has a distance, a space, `±` and the distance (`33.78123, -84.38765 (EM73ts)`). Each
+  coordinate is written in decimal degrees, with a `-` when it is negative and with seven digits
+  after the `.` less any trailing zeros, but at least one (`34.0`). The locator is the position's
+  6-character Maidenhead locator, worked out from the integers: with *x* the longitude plus
+  1 800 000 000 and *y* the latitude plus 900 000 000 (*x* at most 3 599 999 999 and *y* at most
+  1 799 999 999), and every division rounding down, it is the letter `A`–`R` numbered *x* ÷
+  200 000 000 (from 0), the same for *y* ÷ 100 000 000, the digit (*x* mod 200 000 000) ÷ 20 000 000,
+  the digit (*y* mod 100 000 000) ÷ 10 000 000, the letter `a`–`x` numbered (*x* mod 20 000 000) ×
+  24 ÷ 20 000 000, and the same for (*y* mod 10 000 000) × 24 ÷ 10 000 000. A distance under
+  1000 m is written in metres (`±25 m`); one of 1000 m or more in kilometres to one decimal place,
+  *k* = (metres + 50) ÷ 100 in tenths, its `.0` dropped (`±1.1 km`, `±108 km`);
+* a `rows` value as a `text` value is: its label stands alone, and on the lines after it come the
+  labels of all the field's columns joined by ` | `, then one line for each row: its cells in the
+  columns' order, each written as a field's value would be and an empty one for a column it has no
+  cell for, joined by ` | `, the line's trailing spaces removed.
+
+A heading is shown, as its label alone on a line of its own, when a field after it and before the
+next heading shows a line. It follows an empty line, unless it is the first line after the
+template's name and its empty line. The text ends with a line break, and a non-empty `body` follows
+after an empty line.
 
 Without its template, or with values that do not fill it, the form shows as:
 
@@ -294,11 +354,16 @@ Field <n>:
 <a value with line breaks, its lines as they are>
 ```
 
-the values in the order of their numbers, text as it is, an integer in decimal, a bool `Yes` or `No`;
-then the `body` in the same way.
+the values in the order of their numbers, text as it is, an integer in decimal, a bool `Yes` or
+`No`, and any other value (a list or a map) in CBOR diagnostic notation (RFC 8949 §8), as the test
+vectors write it: `[1, -2]`, `{1: "a", 2: true}`, map keys in their encoded order, text in double
+quotes with `\`, `"` and line breaks escaped. Then the `body` in the same way.
 
 Test vectors: `vectors/forms.json`: ICS-213's encoding and fingerprint, `shelter3-213`'s text with
-and without its template, and ten sets of values checked against the template.
+and without its template, and ten sets of values checked against the template; under `every_type`,
+a test template that uses every type, two messages filled in with it, their text with and without the
+template, values written as §8.4 says, values checked against it, and templates that break §8.1's
+rules.
 
 ---
 
@@ -314,3 +379,4 @@ and without its template, and ten sets of values checked against the template.
 | 1.1.0 | 2026-11-15 | Forms (§8, key 13, wishlist W32): a form travels as its template's fingerprint and its values by field number, the template held by each station; the template's CBOR map, its fingerprint, the values that fill it and the text a form shows as. An implementation that does not show forms keeps key 13 as before: nothing it must do. Test vectors: `forms.json`, and `shelter3-213` in `messages.json`. |
 | 1.2.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 5; D43). §2: a receiver refuses as `malformed` a message missing a required key or with a key of the wrong type (no receiver had checked); "at least one in `to` or `cc`" binds clients, since a post office makes `to: []` of an email sent by `Bcc` alone (RP-6 §2.4); how a sender turns CR into LF; a receiver neither checks nor changes text, so Unicode versions never change a content ID. §4: compression 1 is exactly one DEFLATE stream, as `messages.json` already had it. §5: a station inflates to 16 MiB at least, and may refuse more as `too-large` (the Rust library had refused past 16 MiB as `malformed`, and the reference had no bound). Test vectors (`messages.json`). MINOR, announced (RP-0 §8.4): no conforming sender makes what is now refused, and a station that takes more refuses nothing it should take. Implementations should check the keys and inflate to 16 MiB. |
 | 1.3.0 | 2026-11-24 | §2: a sender writes `from`, `to` and `cc` in lowercase (RP-0 1.5.0 §6.2); a receiver keeps them as they came and compares them without regard to case. MINOR, announced (RP-0 §8.4): nothing is refused that was taken before; implementations should lowercase addresses as they make a message. |
+| 1.4.0 | 2026-11-24 | Forms for most jobs ([the forms design](../docs/design/06-forms.md), wishlist W32): §8.1's types `position`, `datetime`, `multi`, `rows` and `heading`, a `number`'s `scale` and `unit`, a `rows` field's `columns`, and the rules a template keeps; §8.2's checks for each, written as a list; §8.4's text for each, and a list or a map shown without its template in CBOR diagnostic notation. Test vectors: `forms.json`'s `every_type`. MINOR, announced (RP-0 §8.4): a program that does not know the new types holds no template that uses them, and shows such a form by number as before; only the diagnostic notation for a list or a map is new there. Implementations should show lists and maps so, and may read the new types. |

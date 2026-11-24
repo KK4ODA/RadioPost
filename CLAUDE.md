@@ -31,7 +31,13 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   the template's CBOR) and its values by field number; `forms/*.json` are the published templates
   (ICS-213 first), `radiopost::forms` reads them (`Template::published`, compiled in), checks values
   (`problem`) and makes the text (`shown`); `rpref/forms.py` and `vectors/forms.json` are its
-  reference. The client's composer has **Form** (`/api/forms`), `compose --form --field N=VALUE`,
+  reference. RP-2 1.4.0 (D49, `docs/design/06-forms.md`, 2026-11-24) added `position` (`[lat,
+  lon]` in ten-millionths of a degree, or with a distance in metres), `datetime`, `multi` (bits),
+  `rows` (a field's `columns`), `heading`, and a number's `scale` and `unit`; `forms.json`'s
+  `every_type` is a test template that uses them all, never published. The client reads each type
+  with `compose::value_from_text` (the command line, and the panel's `form_of` with the template)
+  and a position with `position_from_text` (degrees, or a grid square's centre with half its
+  diagonal); `/api/form-position` fills a position field from W55 and shows what goes. The client's composer has **Form** (`/api/forms`), `compose --form --field N=VALUE`,
   `forms`; the post office writes a form's text into the email (RP-6 1.1.0 §3.1). A new template
   goes in `forms/` and in `make.py`, never a change to a published one.
   A form prints as its paper form (W53): `forms/*.print.html`, named by the template's

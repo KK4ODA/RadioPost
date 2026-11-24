@@ -123,6 +123,26 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 .form-view .fields { margin: 0; }
 .form-view dd { overflow-wrap: anywhere; }
 .form-view dd.lines { white-space: pre-wrap; }
+.fields dt.heading { grid-column: 1 / -1; color: var(--text); font-weight: 600; margin-top: 8px; }
+.form-table, .rows-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.form-table th, .form-table td { border: 1px solid var(--line); padding: 3px 6px; text-align: left;
+                                 vertical-align: top; }
+.form-table th { color: var(--muted); font-weight: normal; }
+.form-fields .form-heading { font-size: 14px; color: var(--text); margin: 12px 0 6px;
+                             padding-top: 8px; border-top: 1px solid var(--line); }
+.form-field { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+.form-fields input.narrow { width: 12em; }
+.position { display: block; }
+.form-note { display: block; margin-top: 3px; font-size: 12px; color: var(--muted); }
+.form-note.warn { color: var(--bad); }
+.multi { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 3px; }
+.multi label.check { margin: 0; color: var(--text); font-size: 14px; }
+.rows { margin-top: 3px; overflow-x: auto; }
+.rows-table th { color: var(--muted); font-weight: normal; text-align: left; padding: 0 4px 2px 0; }
+.rows-table td { padding: 0 4px 4px 0; vertical-align: top; }
+.rows-table td input, .rows-table td select { min-width: 6em; }
+.rows-table td:last-child { width: 1%; }
+.rows > button { margin-top: 2px; }
 #r-files button { margin-left: 8px; }
 /* a form as its paper form (app.js, paper), and the message read on paper: only what it says, black
    on white, whatever the screen's theme */

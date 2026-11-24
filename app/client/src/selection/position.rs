@@ -206,6 +206,43 @@ impl Position {
         Some(record)
     }
 
+    /// The position in use for a form's position field (RP-2 §8.1): `text` to put in the field
+    /// (a place entered as a grid square as that square, whose centre then goes with how far off
+    /// it may be; any other position in decimal degrees), and `says`, where it came from. Empty
+    /// when there is no position.
+    #[must_use]
+    pub fn for_form(&self) -> Value {
+        let chosen = self.here();
+        let Some(here) = chosen.here else {
+            return json!({"text": "", "says": "No position: add a place, or set up a GPS."});
+        };
+        let e7 = |degrees: f64| {
+            // within ±180°, so well inside an i128
+            #[allow(clippy::cast_possible_truncation)]
+            let whole = (degrees * 1e7).round() as i128;
+            radiopost::forms::degrees(whole)
+        };
+        let decimal = format!("{}, {}", e7(here.lat), e7(here.lon));
+        let (text, says) = match &here.from {
+            radioprop_place::place::From::Gps { age_s, .. } => {
+                (decimal, format!("From the GPS, {age_s} s ago."))
+            }
+            radioprop_place::place::From::Place { id, name, source } => {
+                let square = (*source == Origin::Grid)
+                    .then(|| {
+                        let g = self.lock();
+                        g.book.places.iter().find(|p| &p.id == id)?.grid.clone()
+                    })
+                    .flatten();
+                match square {
+                    Some(sq) => (sq.clone(), format!("{name}: the centre of {sq}.")),
+                    None => (decimal, format!("{name}.")),
+                }
+            }
+        };
+        json!({"text": text, "says": says, "note": chosen.note})
+    }
+
     /// The panel's view: the places with their squares, the choice, the GPS and what it is doing,
     /// the position in use; with `ports`, the serial ports this computer has.
     #[must_use]

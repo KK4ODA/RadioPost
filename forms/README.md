@@ -10,9 +10,12 @@ a changed template is another template.
 | `ics-213.json` | ICS-213 General Message, after FEMA's public-domain form | `vectors/forms.json` gives it |
 
 Each file is the template as JSON: `name`, an optional `note`, and `fields`, each with its number
-`n`, its `label` and `type` (`line`, `text`, `date`, `time`, `number`, `choice`, `check`), and,
-where they apply, `required`, `choices`, `bound` (`subject`, `date`, `time`) and `max`. RP-2 §8.1
-says how it becomes the CBOR that is fingerprinted.
+`n`, its `label` and `type` (`line`, `text`, `date`, `time`, `number`, `choice`, `check`,
+`position`, `datetime`, `multi`, `rows`, `heading`), and, where they apply, `required`, `choices`,
+`bound` (`subject`, `date`, `time`), `max`, a number's `scale` and `unit`, and a `rows` field's
+`columns` (fields of their own). RP-2 §8.1 says how it becomes the CBOR that is fingerprinted and
+the rules a template keeps; `vectors/forms.json`'s `every_type` is a test template that uses them
+all. [Forms for most jobs](../docs/design/06-forms.md) says which forms come next.
 
 **Print layouts.** `ics-213.print.html` is how the client prints an ICS-213: as FEMA's ICS 213,
 the paper form. A layout is the programs' own and never goes on the air, so it is a file of its

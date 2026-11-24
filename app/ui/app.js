@@ -2796,38 +2796,223 @@ async function loadForms() {
 
 const DAY_MS = 86400000;
 
-// the composer's fields for the form chosen, or none
-function showFormFields() {
+// the inputs of the form chosen, each {n, get, set}: get() is the value to send, null when empty;
+// set(v) puts back a value as the panel gives it (Edit)
+let formInputs = [];
+
+// the composer's fields for the form chosen, or none. A position field starts with the position in
+// use (where it came from said under it), unless `fresh` is false (Edit puts the values back)
+function showFormFields(fresh = true) {
   const box = $("c-form-fields");
   const t = templates.find((x) => x.template === $("c-form").value);
   box.hidden = !t;
   $("c-body-name").textContent = t ? "Note" : "Text";
   $("composer").body.rows = t ? 3 : 12;
+  formInputs = [];
   if (!t) {
     box.replaceChildren();
     return;
   }
   const legend = el("legend", {text: t.name, title: t.note || ""});
   box.replaceChildren(legend, ...t.fields.filter((f) => !f.bound).map((f) => {
-    let input;
-    if (f.type === "text") {
-      input = el("textarea", {rows: 5});
-    } else if (f.type === "choice") {
-      input = el("select", {}, el("option", {value: "", text: ""}),
-        ...f.choices.map((c, i) => el("option", {value: String(i), text: c})));
-    } else {
-      input = el("input", {type: {date: "date", time: "time", number: "number",
-        check: "checkbox"}[f.type] || "text"});
+    if (f.type === "heading") return el("h3", {class: "form-heading", text: f.label});
+    const input = fieldInput(f, fresh);
+    formInputs.push({n: f.n, get: input.get, set: input.set});
+    // the input itself, by the field's number and type, as a test or a script finds it
+    const target = input.input || input.node;
+    target.dataset.field = String(f.n);
+    target.dataset.kind = f.type;
+    const name = `${f.label}${f.unit ? ` (${f.unit})` : ""}${f.type === "datetime" ? " (UTC)" : ""}`
+      + (f.required ? " *" : "");
+    const title = f.required ? "Required" : "Optional: left out when empty";
+    if (f.type === "check") return el("label", {class: "check", title}, input.node, name);
+    // several inputs (check boxes, a table) are a group named by the field; one is its label's
+    if (f.type === "multi" || f.type === "rows") {
+      return el("div", {class: "form-field", role: "group", "aria-label": f.label, title},
+        el("span", {text: name}), input.node);
     }
-    if (f.max) input.maxLength = f.max;
-    input.dataset.field = String(f.n);
-    input.dataset.kind = f.type;
-    input.required = !!f.required;
-    const label = el("label", {class: f.type === "check" ? "check" : "",
-      title: f.required ? "Required" : "Optional: left out when empty"});
-    label.append(`${f.label}${f.required ? " *" : ""} `, input);
-    return label;
+    return el("label", {title}, `${name} `, input.node);
   }));
+}
+
+// decimal degrees from ten-millionths, as RP-2 §8.4 writes them: seven places less trailing zeros
+function degreesText(e7) {
+  const fixed = (e7 / 1e7).toFixed(7).replace(/0+$/, "");
+  return fixed.endsWith(".") ? `${fixed}0` : fixed;
+}
+
+// an integer with `scale` decimal places as a decimal, exactly ("1.25" for 125 and 2)
+function scaledText(n, scale) {
+  if (!scale) return String(n);
+  const digits = String(Math.abs(n)).padStart(scale + 1, "0");
+  return `${n < 0 ? "-" : ""}${digits.slice(0, -scale)}.${digits.slice(-scale)}`;
+}
+
+const two = (n) => String(n).padStart(2, "0");
+
+// An input for one field or column of a form, as {node, get, set} (RP-2 §8.1). Text is sent as
+// typed; a position, a number and a choice by name are read by the panel as their field's type,
+// so what the operator types is checked once, there.
+function fieldInput(f, fresh = true, compact = false) {
+  const plain = (node, get, set) => ({node, get, set});
+  if (f.type === "text") {
+    const node = el("textarea", {rows: 5});
+    if (f.max) node.maxLength = f.max;
+    return plain(node, () => (node.value.replace(/\s+$/, "") || null),
+      (v) => { node.value = v; });
+  }
+  if (f.type === "choice") {
+    const node = el("select", {}, el("option", {value: "", text: ""}),
+      ...f.choices.map((c, i) => el("option", {value: String(i), text: c})));
+    return plain(node, () => (node.value === "" ? null : Number(node.value)),
+      (v) => { node.value = String(v); });
+  }
+  if (f.type === "check") {
+    const node = el("input", {type: "checkbox"});
+    return plain(node, () => (node.checked ? true : null), (v) => { node.checked = v === true; });
+  }
+  if (f.type === "date" || f.type === "time" || f.type === "datetime") {
+    const node = el("input", {type: f.type === "datetime" ? "datetime-local" : f.type,
+      title: "UTC"});
+    const get = () => {
+      if (!node.value) return null;
+      if (f.type === "date") return Math.floor(Date.parse(`${node.value}T00:00:00Z`) / DAY_MS);
+      if (f.type === "datetime") return Math.floor(Date.parse(`${node.value}:00Z`) / 60000);
+      const [h, m] = node.value.split(":").map(Number);
+      return h * 60 + m;
+    };
+    const set = (v) => {
+      if (f.type === "date") node.value = new Date(v * DAY_MS).toISOString().slice(0, 10);
+      else if (f.type === "datetime") node.value = new Date(v * 60000).toISOString().slice(0, 16);
+      else node.value = `${two(Math.floor(v / 60))}:${two(v % 60)}`;
+    };
+    return plain(node, get, set);
+  }
+  if (f.type === "number") {
+    const node = el("input", {type: "text", inputmode: f.scale ? "decimal" : "numeric",
+      class: "narrow", title: f.scale ? `Up to ${f.scale} decimal places` : "A whole number"});
+    return plain(node, () => (node.value.trim() || null),
+      (v) => { node.value = scaledText(v, f.scale || 0); });
+  }
+  if (f.type === "multi") {
+    const node = el("div", {class: "multi"});
+    const boxes = f.choices.map((c, i) => {
+      const b = el("input", {type: "checkbox"});
+      b.dataset.bit = String(i);
+      node.append(el("label", {class: "check"}, b, c));
+      return b;
+    });
+    const get = () => {
+      let bits = 0;
+      for (const b of boxes) if (b.checked) bits += 2 ** Number(b.dataset.bit);
+      return bits || null;
+    };
+    const set = (v) => {
+      for (const b of boxes) b.checked = Math.floor(v / 2 ** Number(b.dataset.bit)) % 2 === 1;
+    };
+    return plain(node, get, set);
+  }
+  if (f.type === "position") return positionInput(fresh, compact);
+  if (f.type === "rows") return rowsInput(f);
+  const node = el("input", {type: "text"});
+  if (f.max) node.maxLength = f.max;
+  return plain(node, () => (node.value.trim() || null), (v) => { node.value = v; });
+}
+
+// A position: decimal degrees or a grid square, as typed; under it, where the one filled in came
+// from and exactly what goes (RP-2 §8.4's text, from the panel). It goes as shown, to the
+// ten-millionth of a degree: type fewer decimals or a grid square to send less.
+function positionInput(fresh, compact) {
+  const input = el("input", {type: "text", placeholder: "33.78123, -84.38765 or EM73",
+    title: "Decimal degrees, north and east positive, or a grid square. It goes exactly as shown below: type fewer decimals or a grid square to send less"});
+  const said = el("span", {class: "form-note"});
+  const node = compact ? input : el("span", {class: "position"}, input, said);
+  let from = "";
+  const preview = async () => {
+    if (compact) return;
+    const text = input.value.trim();
+    if (!text) {
+      said.textContent = from;
+      said.classList.remove("warn");
+      return;
+    }
+    try {
+      const v = await api("form-position", {text});
+      said.textContent = `${from ? `${from} ` : ""}Goes as: ${v.shown}`;
+      said.classList.remove("warn");
+    } catch (e) {
+      said.textContent = e.message;
+      said.classList.add("warn");
+    }
+  };
+  input.addEventListener("change", () => { from = ""; preview(); });
+  if (fresh && !compact) {
+    api("form-position").then((v) => {
+      if (input.value) return;
+      input.value = v.text;
+      from = v.says;
+      preview();
+    }).catch(() => {});
+  }
+  const set = (v) => {
+    const off = v[2] === undefined ? ""
+      : v[2] < 1000 ? ` ±${v[2]} m` : ` ±${v[2] / 1000} km`;
+    input.value = `${degreesText(v[0])}, ${degreesText(v[1])}${off}`;
+    preview();
+  };
+  return {node, input, get: () => (input.value.trim() || null), set};
+}
+
+// Rows: a table of the columns' inputs, a row added or removed by its buttons, up to the field's
+// max. Empty cells and rows are left out.
+function rowsInput(f) {
+  const body = el("tbody");
+  const rows = [];
+  const add = el("button", {type: "button", class: "quiet", text: "Add a row",
+    title: f.max ? `Up to ${f.max} rows` : "Another row"});
+  const addRow = () => {
+    const cells = f.columns.map((c) => ({n: c.n, ...fieldInput(c, false, true)}));
+    const tr = el("tr", {}, ...cells.map((c) => el("td", {}, c.node)));
+    const row = {cells, tr};
+    const remove = el("button", {type: "button", class: "quiet", text: "×", title: "Remove this row",
+      onclick: () => {
+        rows.splice(rows.indexOf(row), 1);
+        tr.remove();
+        add.disabled = false;
+      }});
+    tr.append(el("td", {}, remove));
+    rows.push(row);
+    body.append(tr);
+    add.disabled = Boolean(f.max) && rows.length >= f.max;
+    return row;
+  };
+  add.addEventListener("click", () => addRow());
+  addRow();
+  const head = el("thead", {}, el("tr", {}, ...f.columns.map((c) =>
+    el("th", {text: `${c.label}${c.unit ? ` (${c.unit})` : ""}${c.required ? " *" : ""}`,
+      title: c.required ? "Required in each row" : "Optional"})), el("th")));
+  const node = el("div", {class: "rows"}, el("table", {class: "rows-table"}, head, body), add);
+  const get = () => {
+    const out = [];
+    for (const r of rows) {
+      const cells = {};
+      for (const c of r.cells) {
+        const v = c.get();
+        if (v !== null) cells[c.n] = v;
+      }
+      if (Object.keys(cells).length) out.push(cells);
+    }
+    return out.length ? out : null;
+  };
+  const set = (v) => {
+    rows.splice(0).forEach((r) => r.tr.remove());
+    for (const cells of v) {
+      const row = addRow();
+      for (const c of row.cells) if (cells[c.n] !== undefined) c.set(cells[c.n]);
+    }
+    if (!rows.length) addRow();
+  };
+  return {node, get, set};
 }
 
 // what the form's fields hold: {template, values} by field number, empty fields left out
@@ -2835,18 +3020,9 @@ function formValues() {
   const template = $("c-form").value;
   if (!template) return null;
   const values = {};
-  for (const input of $("c-form-fields").querySelectorAll("[data-field]")) {
-    const kind = input.dataset.kind;
-    let v;
-    if (kind === "check") v = input.checked ? true : null;
-    else if (input.value.trim() === "") v = null;
-    else if (kind === "date") v = Math.floor(Date.parse(`${input.value}T00:00:00Z`) / DAY_MS);
-    else if (kind === "time") {
-      const [h, m] = input.value.split(":").map(Number);
-      v = h * 60 + m;
-    } else if (kind === "number" || kind === "choice") v = Number(input.value);
-    else v = kind === "line" ? input.value.trim() : input.value.replace(/\s+$/, "");
-    if (v !== null) values[input.dataset.field] = v;
+  for (const input of formInputs) {
+    const v = input.get();
+    if (v !== null) values[input.n] = v;
   }
   return {template, values};
 }
@@ -2884,15 +3060,9 @@ function carriedFile(f, i) {
 
 // a form's values, as the panel gives them, back in its fields (the inverse of formValues)
 function fillForm(values) {
-  const two = (n) => String(n).padStart(2, "0");
-  for (const input of $("c-form-fields").querySelectorAll("[data-field]")) {
-    const v = values[input.dataset.field];
-    if (v === undefined || v === null) continue;
-    const kind = input.dataset.kind;
-    if (kind === "check") input.checked = v === true;
-    else if (kind === "date") input.value = new Date(v * DAY_MS).toISOString().slice(0, 10);
-    else if (kind === "time") input.value = `${two(Math.floor(v / 60))}:${two(v % 60)}`;
-    else input.value = String(v);
+  for (const input of formInputs) {
+    const v = values[String(input.n)];
+    if (v !== undefined && v !== null) input.set(v);
   }
 }
 
@@ -2925,7 +3095,7 @@ async function edit(id) {
   form.priority.value = String(m.priority);
   if (m.form) {
     $("c-form").value = m.form.template;
-    showFormFields();
+    showFormFields(false);
     fillForm(m.form.values);
   }
   form.body.value = m.body;
@@ -3071,8 +3241,11 @@ async function openMessage(id, from = {folder}) {
   $("r-form-title").textContent = f ? f.title : "";
   $("r-form-title").title = f && !f.filled
     ? "This computer does not hold this form: its fields show by number" : "";
-  $("r-form-rows").replaceChildren(...(f?.rows ?? []).flatMap((r) =>
-    [el("dt", {text: r.label}), el("dd", {class: r.lines ? "lines" : "", text: r.value})]));
+  $("r-form-rows").replaceChildren(...(f?.rows ?? []).flatMap((r) => {
+    if (r.heading) return [el("dt", {class: "heading", text: r.label})];
+    if (r.table) return [el("dt", {text: r.label}), el("dd", {}, formTable(r.table))];
+    return [el("dt", {text: r.label}), el("dd", {class: r.lines ? "lines" : "", text: r.value})];
+  }));
   $("r-body").textContent = m.body;
   $("r-body").hidden = !!f && !m.body;
   // printed, a form with a layout is the paper form it comes from; anything else, the message as
@@ -3082,6 +3255,13 @@ async function openMessage(id, from = {folder}) {
   $("r-paper").replaceChildren(...(layout ? paper(m, layout) : []));
   printTitle = [f && f.filled ? f.title : "", m.subject || "Message"].filter(Boolean).join(" - ");
   show("reader");
+}
+
+// a form's rows field as a table: its columns' labels, then each row's cells (RP-2 §8.4)
+function formTable(t) {
+  return el("table", {class: "form-table"},
+    el("thead", {}, el("tr", {}, ...t.columns.map((c) => el("th", {text: c})))),
+    el("tbody", {}, ...t.rows.map((row) => el("tr", {}, ...row.map((c) => el("td", {text: c}))))));
 }
 
 // what the message read prints as, by its name: the name a PDF of it is offered
@@ -3251,7 +3431,7 @@ function wireComposer() {
   wireSuggestions($("composer").cc);
   $("cancel").addEventListener("click", discard);
   $("composer").addEventListener("submit", send);
-  $("c-form").addEventListener("change", showFormFields);
+  $("c-form").addEventListener("change", () => showFormFields());
 }
 
 // the page as a composer window: the composer alone, on what the panel's window asked for

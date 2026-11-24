@@ -326,6 +326,51 @@ def form_template(name: str) -> dict[str, Any]:
 
 ICS_213 = form_template("ics-213")
 
+# RP-2 1.4.0 §8: a template that uses every type, for the vectors only (never published).
+EVERY_TYPE: dict[str, Any] = {
+    "name": "Every type (test)",
+    "note": "RP-2 §8's test template, in vectors/forms.json only: every type of field.",
+    "fields": [
+        {"n": 1, "label": "Incident name", "type": "line", "max": 40},
+        {"n": 2, "label": "Where and when", "type": "heading"},
+        {"n": 3, "label": "Location", "type": "position", "required": True},
+        {"n": 4, "label": "Observed", "type": "datetime"},
+        {"n": 5, "label": "Damage", "type": "heading"},
+        {
+            "n": 6,
+            "label": "Damage seen",
+            "type": "multi",
+            "choices": ["Roof", "Windows", "Flooding", "Power lines down"],
+        },
+        {"n": 7, "label": "Rainfall", "type": "number", "scale": 2, "unit": "in"},
+        {"n": 8, "label": "Wind gust", "type": "number", "unit": "mph"},
+        {"n": 9, "label": "Water depth, feet", "type": "number", "scale": 1},
+        {"n": 10, "label": "Injuries", "type": "check"},
+        {"n": 11, "label": "Approval", "type": "heading"},
+        {"n": 12, "label": "Approved by", "type": "line", "max": 40},
+        {"n": 13, "label": "Log", "type": "heading"},
+        {
+            "n": 14,
+            "label": "Communications log",
+            "type": "rows",
+            "max": 5,
+            "columns": [
+                {"n": 1, "label": "Time", "type": "datetime", "required": True},
+                {"n": 2, "label": "From", "type": "line", "required": True, "max": 10},
+                {"n": 3, "label": "To", "type": "line", "max": 10},
+                {"n": 4, "label": "Message", "type": "line", "max": 80},
+                {
+                    "n": 5,
+                    "label": "Precedence",
+                    "type": "choice",
+                    "choices": ["Routine", "Priority", "Emergency"],
+                },
+            ],
+        },
+        {"n": 15, "label": "Remarks", "type": "text"},
+    ],
+}
+
 
 def messages() -> dict[str, dict[str, Any]]:
     """The messages of the vectors, by name, as named fields (RP-2 §2)."""
@@ -8587,7 +8632,357 @@ def make_forms() -> dict[str, Any]:
     out["templates"] = templates
     out["shown"] = shown
     out["checks"] = checks
+    out["every_type"] = make_every_type()
     return out
+
+
+def make_every_type() -> dict[str, Any]:
+    """RP-2 1.4.0 §8: the test template with every type, a message filled in with it, values
+    written as §8.4 says, values checked (§8.2), and templates that break §8.1's rules."""
+    t = EVERY_TYPE
+    assert forms.template_problem(ICS_213) is None, "ICS-213 keeps §8.1's rules"
+    assert forms.template_problem(t) is None, "the test template keeps §8.1's rules"
+    fp = forms.fingerprint(t)
+    minute = T_SESSION // 60  # 2026-11-09 14:40 UTC
+    here = [337812300, -843876500]  # Atlanta, 33.78123 N 84.38765 W
+    log = [
+        {1: minute - 35, 2: "KK4ODA", 3: "N0CALL", 4: "Shelter 3 open, 40 cots", 5: 0},
+        {1: minute - 20, 2: "N0CALL", 4: "Copied"},
+    ]
+    values: dict[int, Any] = {
+        1: "Shelter 3",
+        3: here,
+        4: minute - 35,
+        6: 5,
+        7: 125,
+        8: 45,
+        9: 15,
+        10: False,
+        14: log,
+        15: "Water rising on Main St.\nRoad closed at the bridge.",
+    }
+    message = {
+        "v": 1,
+        "from": "shelter3@radiopost.org",
+        "to": ["eoc@radiopost.org"],
+        "date": T_SESSION,
+        "subject": "Damage at Shelter 3",
+        "body": "",
+        "form": {"template": fp, "values": values},
+    }
+    canonical = cbor.encode(cbor_message(message))
+    with_template = forms.text(t, message)
+    without = forms.text_without(message)
+    # RP-2 §8.4, worked out by hand: the Approval heading has nothing after it, so it is not shown
+    assert with_template == (
+        "Every type (test)\n"
+        "\n"
+        "Incident name: Shelter 3\n"
+        "\n"
+        "Where and when\n"
+        "Location: 33.78123, -84.38765 (EM73ts)\n"
+        "Observed: 2026-11-09 14:05 UTC\n"
+        "\n"
+        "Damage\n"
+        "Damage seen: Roof, Flooding\n"
+        "Rainfall: 1.25 in\n"
+        "Wind gust: 45 mph\n"
+        "Water depth, feet: 1.5\n"
+        "Injuries: No\n"
+        "\n"
+        "Log\n"
+        "Communications log:\n"
+        "Time | From | To | Message | Precedence\n"
+        "2026-11-09 14:05 UTC | KK4ODA | N0CALL | Shelter 3 open, 40 cots | Routine\n"
+        "2026-11-09 14:20 UTC | N0CALL |  | Copied |\n"
+        "Remarks:\n"
+        "Water rising on Main St.\n"
+        "Road closed at the bridge.\n"
+    ), with_template
+    assert without == (
+        f"Form {fp.hex()}\n"
+        "\n"
+        "Field 1: Shelter 3\n"
+        "Field 3: [337812300, -843876500]\n"
+        "Field 4: 29903885\n"
+        "Field 6: 5\n"
+        "Field 7: 125\n"
+        "Field 8: 45\n"
+        "Field 9: 15\n"
+        "Field 10: No\n"
+        'Field 14: [{1: 29903885, 2: "KK4ODA", 3: "N0CALL", 4: "Shelter 3 open, 40 cots", '
+        '5: 0}, {1: 29903900, 2: "N0CALL", 4: "Copied"}]\n'
+        "Field 15:\n"
+        "Water rising on Main St.\n"
+        "Road closed at the bridge.\n"
+    ), without
+
+    # RP-2 §8.1's keys and type numbers, written out by hand: a field of each new kind
+    fields = {f["n"]: f for f in t["fields"]}
+    maps = {n: cbor.diagnostic(forms.field_map(fields[n])) for n in (2, 3, 4, 6, 7, 14)}
+    assert maps == {
+        2: '{1: 2, 2: "Where and when", 3: 11}',
+        3: '{1: 3, 2: "Location", 3: 7, 4: true}',
+        4: '{1: 4, 2: "Observed", 3: 8}',
+        6: '{1: 6, 2: "Damage seen", 3: 9, 5: ["Roof", "Windows", "Flooding", "Power lines down"]}',
+        7: '{1: 7, 2: "Rainfall", 3: 4, 8: 2, 9: "in"}',
+        14: (
+            '{1: 14, 2: "Communications log", 3: 10, 7: 5, 10: [{1: 1, 2: "Time", 3: 8, 4: true}, '
+            '{1: 2, 2: "From", 3: 0, 4: true, 7: 10}, {1: 3, 2: "To", 3: 0, 7: 10}, '
+            '{1: 4, 2: "Message", 3: 0, 7: 80}, '
+            '{1: 5, 2: "Precedence", 3: 5, 5: ["Routine", "Priority", "Emergency"]}]}'
+        ),
+    }, maps
+    # a heading that opens the form follows the name's empty line, with no second one (§8.4)
+    first = {**message, "form": {"template": fp, "values": {3: here}}}
+    first_text = forms.text(t, first)
+    assert first_text == (
+        "Every type (test)\n\nWhere and when\nLocation: 33.78123, -84.38765 (EM73ts)\n"
+    ), first_text
+    near = [335000000, -850000000]  # the centre of EM73
+    shown_in: list[tuple[str, int, Any]] = [
+        ("a position", 3, here),
+        ("south and east", 3, [-339249000, 184232000]),
+        ("whole degrees", 3, [340000000, -840000000]),
+        ("a ten-millionth from 0, 0", 3, [-5, 5]),
+        ("the north pole at 180°", 3, [900000000, 1800000000]),
+        ("the south pole at -180°", 3, [-900000000, -1800000000]),
+        ("within 1 m", 3, [*near, 1]),
+        ("within 25 m", 3, [*near, 25]),
+        ("within 999 m", 3, [*near, 999]),
+        ("within 1000 m", 3, [*near, 1000]),
+        ("within 1049 m", 3, [*near, 1049]),
+        ("within 1050 m", 3, [*near, 1050]),
+        ("within 108 km", 3, [*near, 108000]),
+        ("the epoch", 4, 0),
+        ("the last minute of a day", 4, 1439),
+        ("the first minute of the next", 4, 1440),
+        ("a multi of one choice", 6, 1),
+        ("a multi of the last choice", 6, 8),
+        ("a multi of every choice", 6, 15),
+        ("a decimal", 7, 125),
+        ("a decimal under 1", 7, 5),
+        ("a negative decimal under 1", 7, -5),
+        ("zero with two places", 7, 0),
+        ("a whole number with two places", 7, 100),
+        ("a number with a unit", 8, 45),
+        ("a negative number with a unit", 8, -3),
+        ("one place, no unit", 9, 15),
+        ("rows", 14, log),
+    ]
+    values_shown = [
+        {
+            "what": what,
+            "field": n,
+            "value": to_json(v),
+            "shown": forms.shown_value(fields[n], v),
+        }
+        for what, n, v in shown_in
+    ]
+    confirm(  # RP-2 §8.4, worked out by hand
+        values_shown,
+        {
+            "a position": "33.78123, -84.38765 (EM73ts)",
+            "south and east": "-33.9249, 18.4232 (JF96fb)",
+            "whole degrees": "34.0, -84.0 (EM84aa)",
+            "a ten-millionth from 0, 0": "-0.0000005, 0.0000005 (JI09ax)",
+            "the north pole at 180°": "90.0, 180.0 (RR99xx)",
+            "the south pole at -180°": "-90.0, -180.0 (AA00aa)",
+            "within 1 m": "33.5, -85.0 (EM73mm) ±1 m",
+            "within 25 m": "33.5, -85.0 (EM73mm) ±25 m",
+            "within 999 m": "33.5, -85.0 (EM73mm) ±999 m",
+            "within 1000 m": "33.5, -85.0 (EM73mm) ±1 km",
+            "within 1049 m": "33.5, -85.0 (EM73mm) ±1 km",
+            "within 1050 m": "33.5, -85.0 (EM73mm) ±1.1 km",
+            "within 108 km": "33.5, -85.0 (EM73mm) ±108 km",
+            "the epoch": "1970-01-01 00:00 UTC",
+            "the last minute of a day": "1970-01-01 23:59 UTC",
+            "the first minute of the next": "1970-01-02 00:00 UTC",
+            "a multi of one choice": "Roof",
+            "a multi of the last choice": "Power lines down",
+            "a multi of every choice": "Roof, Windows, Flooding, Power lines down",
+            "a decimal": "1.25 in",
+            "a decimal under 1": "0.05 in",
+            "a negative decimal under 1": "-0.05 in",
+            "zero with two places": "0.00 in",
+            "a whole number with two places": "1.00 in",
+            "a number with a unit": "45 mph",
+            "a negative number with a unit": "-3 mph",
+            "one place, no unit": "1.5",
+            "rows": (
+                "Time | From | To | Message | Precedence\n"
+                "2026-11-09 14:05 UTC | KK4ODA | N0CALL | Shelter 3 open, 40 cots | Routine\n"
+                "2026-11-09 14:20 UTC | N0CALL |  | Copied |"
+            ),
+        },
+        verdict=lambda c: c["shown"],
+    )
+
+    least: dict[int, Any] = {3: here}
+    row = {1: minute, 2: "KK4ODA"}
+    cases_in: list[tuple[str, dict[int, Any]]] = [
+        ("the example", values),
+        ("only the required field", least),
+        ("a position with how far off it may be", {3: [*here, 25]}),
+        ("a heading among the values", {**least, 2: "Downtown"}),
+        ("a latitude past 90°", {3: [900000001, 0]}),
+        ("a longitude past -180°", {3: [0, -1800000001]}),
+        ("a distance of 0", {3: [*here, 0]}),
+        ("a position of one number", {3: [337812300]}),
+        ("a position of four numbers", {3: [*here, 25, 1]}),
+        ("a position written as text", {3: "33.78123, -84.38765"}),
+        ("a position with text in it", {3: [337812300, "-84.38765"]}),
+        ("the position missing: it is required", {1: "Shelter 3"}),
+        ("a datetime before 1970", {**least, 4: -1}),
+        ("a multi of no choice", {**least, 6: 0}),
+        ("a multi naming a fifth choice", {**least, 6: 16}),
+        ("a decimal written as text", {**least, 7: "1.25"}),
+        ("a check written as a number", {**least, 10: 1}),
+        ("no rows", {**least, 14: []}),
+        ("six rows, over the max of 5", {**least, 14: [row] * 6}),
+        ("a row that is not a map", {**least, 14: ["KK4ODA"]}),
+        ("an empty row", {**least, 14: [{}]}),
+        ("a column the field does not have", {**least, 14: [{**row, 6: "x"}]}),
+        ("a row without its required time", {**least, 14: [{2: "KK4ODA"}]}),
+        ("a time written as text in a row", {**least, 14: [{**row, 1: "14:05"}]}),
+        ("a line break in a row's line", {**least, 14: [{**row, 2: "KK4\nODA"}]}),
+        ("a cell over its column's max of 10", {**least, 14: [{**row, 2: "KK4ODA-1234"}]}),
+        ("an empty cell sent", {**least, 14: [{**row, 3: ""}]}),
+        ("a precedence past its choices", {**least, 14: [{**row, 5: 3}]}),
+    ]
+    checks = [
+        {
+            "what": what,
+            "values": to_json(values),
+            "expect": forms.problem(t, values) or "fills the template",
+        }
+        for what, values in cases_in
+    ]
+    confirm(  # RP-2 §8.2, as written
+        checks,
+        {
+            "the example": "fills the template",
+            "only the required field": "fills the template",
+            "a position with how far off it may be": "fills the template",
+            "a heading among the values": "a heading among the values",
+            "a latitude past 90°": "a position out of range",
+            "a longitude past -180°": "a position out of range",
+            "a distance of 0": "a position out of range",
+            "a position of one number": "a value of the wrong type",
+            "a position of four numbers": "a value of the wrong type",
+            "a position written as text": "a value of the wrong type",
+            "a position with text in it": "a value of the wrong type",
+            "the position missing: it is required": "a required field missing",
+            "a datetime before 1970": "a value of the wrong type",
+            "a multi of no choice": "an empty value: an empty field is left out",
+            "a multi naming a fifth choice": "a choice the field does not have",
+            "a decimal written as text": "a value of the wrong type",
+            "a check written as a number": "a value of the wrong type",
+            "no rows": "an empty value: an empty field is left out",
+            "six rows, over the max of 5": "more rows than the field's max",
+            "a row that is not a map": "a value of the wrong type",
+            "an empty row": "an empty row",
+            "a column the field does not have": "a column the field does not have",
+            "a row without its required time": "a required column missing",
+            "a time written as text in a row": "a value of the wrong type",
+            "a line break in a row's line": "a line value with a line break",
+            "a cell over its column's max of 10": "a value longer than the field's max",
+            "an empty cell sent": "an empty value: an empty field is left out",
+            "a precedence past its choices": "a choice the field does not have",
+        },
+    )
+
+    def one(*fields: dict[str, Any]) -> dict[str, Any]:
+        return {"name": "T", "fields": list(fields)}
+
+    line = {"n": 1, "label": "A", "type": "line"}
+    col = {"n": 1, "label": "C", "type": "line"}
+    rows = {"n": 2, "label": "R", "type": "rows"}
+    templates_in: list[tuple[str, dict[str, Any]]] = [
+        ("the test template", t),
+        ("a line field", one(line)),
+        ("a field number used twice", one(line, {**line, "label": "B"})),
+        ("a choice field without choices", one({**line, "type": "choice"})),
+        ("a multi field without choices", one({**line, "type": "multi"})),
+        ("a multi field with 65 choices", one({**line, "type": "multi", "choices": ["x"] * 65})),
+        ("a scale on a line", one({**line, "scale": 2})),
+        ("a unit on a choice", one({**line, "type": "choice", "choices": ["x"], "unit": "in"})),
+        ("a scale of 0", one({**line, "type": "number", "scale": 0})),
+        ("a scale of 10", one({**line, "type": "number", "scale": 10})),
+        ("columns on a line", one({**line, "columns": [col]})),
+        ("a rows field without columns", one({**rows, "columns": []})),
+        ("a column of type text", one({**rows, "columns": [{**col, "type": "text"}]})),
+        (
+            "a column of type rows",
+            one({**rows, "columns": [{**col, "type": "rows", "columns": [col]}]}),
+        ),
+        ("a column of type heading", one({**rows, "columns": [{**col, "type": "heading"}]})),
+        ("a bound column", one({**rows, "columns": [{**col, "bound": "subject"}]})),
+        ("a column number used twice", one({**rows, "columns": [col, {**col, "label": "D"}]})),
+        ("a required heading", one({**line, "type": "heading", "required": True})),
+        ("a heading with a max", one({**line, "type": "heading", "max": 10})),
+    ]
+    refused = [
+        {"what": what, "template": tj, "expect": forms.template_problem(tj) or "keeps the rules"}
+        for what, tj in templates_in
+    ]
+    confirm(  # RP-2 §8.1, as written
+        refused,
+        {
+            "the test template": "keeps the rules",
+            "a line field": "keeps the rules",
+            "a field number used twice": "a number used twice",
+            "a choice field without choices": "a choice field without choices",
+            "a multi field without choices": "a multi field without 1 to 64 choices",
+            "a multi field with 65 choices": "a multi field without 1 to 64 choices",
+            "a scale on a line": "a scale or a unit on a field that is not a number",
+            "a unit on a choice": "a scale or a unit on a field that is not a number",
+            "a scale of 0": "a scale that is not 1 to 9",
+            "a scale of 10": "a scale that is not 1 to 9",
+            "columns on a line": "columns on a field that is not rows",
+            "a rows field without columns": "a rows field without columns",
+            "a column of type text": "a column of type text",
+            "a column of type rows": "a column of type rows",
+            "a column of type heading": "a column of type heading",
+            "a bound column": "a bound column",
+            "a column number used twice": "a number used twice",
+            "a required heading": "a heading with required, choices, bound or max",
+            "a heading with a max": "a heading with required, choices, bound or max",
+        },
+    )
+    return {
+        "rule": (
+            "`template` becomes exactly `canonical_hex` (RP-2 §8.1) and has the fingerprint "
+            "`fingerprint_hex`. Each of `messages` shows as `text` with the template and as "
+            "`text_without_template` without it (§8.4). Each of `values_shown` is the value of "
+            "the template's field `field`, written `shown` (§8.4; a `rows` value's lines joined "
+            "by LF). Each check's `values` give `expect`: `fills the template`, or why not "
+            "(§8.2). Each of `templates` keeps §8.1's rules (`keeps the rules`) or is not a "
+            "template, `expect` saying which rule it breaks. In JSON a map's keys are its "
+            "numbers written as text."
+        ),
+        "template": t,
+        "diagnostic": cbor.diagnostic(forms.template_map(t)),
+        "canonical_hex": cbor.encode(forms.template_map(t)).hex(),
+        "fingerprint_hex": fp.hex(),
+        "messages": [
+            {
+                "what": "the example",
+                "canonical_hex": canonical.hex(),
+                "text": with_template,
+                "text_without_template": without,
+            },
+            {
+                "what": "the location alone: its heading opens the form",
+                "canonical_hex": cbor.encode(cbor_message(first)).hex(),
+                "text": first_text,
+                "text_without_template": forms.text_without(first),
+            },
+        ],
+        "values_shown": values_shown,
+        "checks": checks,
+        "templates": refused,
+    }
 
 
 # -- RP-8: alerts --------------------------------------------------------------------------------
