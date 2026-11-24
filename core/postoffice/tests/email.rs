@@ -483,6 +483,7 @@ fn messages_become_the_emails_rp6_3_says() {
                 with_part,
                 // the vectors' part holds an uncompressed air form
                 compress: false,
+                templates: &[],
             },
         );
         let got: HashMap<&str, String> = headers
@@ -516,6 +517,44 @@ fn messages_become_the_emails_rp6_3_says() {
         assert!(text.ends_with(mail::FOOTER), "{name}");
         let part = mail::find_part(&email).map(|p| radiopost::cbor::hex(&p));
         assert_eq!(part.as_deref(), e["part_hex"].as_str(), "{name}");
+    }
+}
+
+/// RP-6 §3.1 with RP-5 §6.8: a form whose template its sender's client handed in is written as
+/// its text; without the template, by its fields' numbers.
+#[test]
+fn a_form_on_a_template_handed_in_is_written_as_its_text() {
+    let e = vectors("forms.json")["every_type"].clone();
+    let example = &e["messages"][0];
+    let m = Message::from_canonical(&unhex(example["canonical_hex"].as_str().expect("hex")))
+        .expect("the example");
+    let t =
+        radiopost::forms::Template::from_cbor(&unhex(e["canonical_hex"].as_str().expect("hex")))
+            .expect("the test template");
+    let ids = |_: &[u8]| None;
+    for (held, want) in [
+        (vec![t], example["text"].as_str().expect("text")),
+        (
+            Vec::new(),
+            example["text_without_template"].as_str().expect("text"),
+        ),
+    ] {
+        let (_, email) = mail::from_message(
+            &m,
+            &Leaving {
+                display_name: "Shelter 3",
+                path: &mail::Carried::default(),
+                message_id: &ids,
+                with_part: false,
+                compress: false,
+                templates: &held,
+            },
+        );
+        let parsed = mail::parse(&email).expect("an email");
+        let text = mail::text(&parsed.body_text(0).expect("a text part"));
+        let first = want.lines().next().expect("a line");
+        assert!(text.starts_with(first), "{text}");
+        assert_eq!(text.contains("Maps:"), !held.is_empty(), "{text}");
     }
 }
 

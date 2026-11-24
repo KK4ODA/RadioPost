@@ -965,6 +965,9 @@ pub struct Leaving<'a> {
     pub with_part: bool,
     /// Whether the part's air form is compressed (RP-5 §5.3, [`crate::air_form`]).
     pub compress: bool,
+    /// The templates its users handed in (RP-5 §6.8), beside the published ones, for a form's
+    /// text.
+    pub templates: &'a [radiopost::forms::Template],
 }
 
 /// RadioPost's published form templates (RP-2 §8.3), read once.
@@ -1023,10 +1026,11 @@ pub fn from_message(message: &Message, ctx: &Leaving<'_>) -> (Vec<(String, Strin
         headers.push(("Importance".into(), "high".into()));
     }
     headers.push(("MIME-Version".into(), "1.0".into()));
-    // a form is written as its text, made from the published templates (RP-2 §8.4), with a map
-    // link for each position it holds (RP-6 §3.1)
-    let templates = published_templates();
-    let text = radiopost::forms::email_text(message, templates).unwrap_or_else(|| {
+    // a form is written as its text, made from the published templates and those handed in
+    // (RP-2 §8.4, RP-5 §6.8), with a map link for each position it holds (RP-6 §3.1)
+    let mut templates = published_templates().to_vec();
+    templates.extend_from_slice(ctx.templates);
+    let text = radiopost::forms::email_text(message, &templates).unwrap_or_else(|| {
         field(key::BODY)
             .and_then(Value::as_text)
             .unwrap_or("")

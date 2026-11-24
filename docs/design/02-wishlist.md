@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.53 |
+| **Version** | 0.3.54 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -976,7 +976,7 @@ readable copy.
 | Effort | Large: a template format, a set of forms, an editor and a viewer. |
 | Priority | **Medium**; likely to rise, since emergency groups ask for forms first. |
 | Recommendation | **Modify**: application layer first. Interoperability needs a published form format either way, but as a file it asks nothing of RP-2 or RP-6. Use key 13 only if a measured air-time saving pays for a specification. Measured (2026-11-15, the author asking that forms take as little air as possible): an ICS-213 with five fields is 253 bytes on the air as values, against 320 as text and 778 as a form file with its text (XML in `files`); key 13 was used. |
-| Status | Implemented, 18 forms and their reports on a map: [forms for most jobs](06-forms.md), step 3 built (the client's **Reports**, CSV and GeoJSON; map links in email, RP-6 1.3.0); step 2 built (FEMA's ICS 202, 204, 205, 205A, 206, 208, 210, 211, 213, 213RR and 214, each printing as FEMA's paper form, and RadioPost's own Check-In, Check-Out, Communications Log, Damage Report, Position Report, Situation Report and Storm Report); step 1 built (RP-2 1.4.0's types `position`, `datetime`, `multi`, `rows`, `heading`, a number's `scale` and `unit`; the composer, the reader and `compose --field` take them, a position field filled from W55). |
+| Status | Implemented, 18 forms and their reports on a map, and a group's own forms: [forms for most jobs](06-forms.md), step 4 built (templates by fingerprint, RP-5 1.8.0 §4.7 and §6.8: the post office serves them and takes its users' in; the client imports, exports, fetches and hands them in); step 3 built (the client's **Reports**, CSV and GeoJSON; map links in email, RP-6 1.3.0); step 2 built (FEMA's ICS 202, 204, 205, 205A, 206, 208, 210, 211, 213, 213RR and 214, each printing as FEMA's paper form, and RadioPost's own Check-In, Check-Out, Communications Log, Damage Report, Position Report, Situation Report and Storm Report); step 1 built (RP-2 1.4.0's types `position`, `datetime`, `multi`, `rows`, `heading`, a number's `scale` and `unit`; the composer, the reader and `compose --field` take them, a position field filled from W55). |
 | Author decision | No compatibility with Winlink's programs (CLAUDE.md, decided): templates from FEMA's public forms in an open format (concept §10), not Winlink's. 2026-11-24, with [forms for most jobs](06-forms.md): a post office serves templates by their fingerprint; the ARRL's and the Red Cross's forms wait for their permission, which the author asks; a position goes exactly as it is, by default. |
 
 ### W33. Position reports
@@ -1329,3 +1329,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.51 | 2026-11-24 | W14: a gateway call carries its channel's bandwidth (D50). |
 | 0.3.52 | 2026-11-24 | W32: [forms for most jobs](06-forms.md) step 2 built, 18 forms published; W33's Position Report template published. |
 | 0.3.53 | 2026-11-24 | W32: [forms for most jobs](06-forms.md) step 3 built: **Reports** on a map, CSV and GeoJSON, and map links in email (RP-6 1.3.0). |
+| 0.3.54 | 2026-11-24 | W32: [forms for most jobs](06-forms.md) step 4 built: templates by fingerprint (RP-5 1.8.0, RP-2 1.5.0), a group's own forms imported, exported, fetched and handed in. |

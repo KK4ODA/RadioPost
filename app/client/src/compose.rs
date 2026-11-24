@@ -308,19 +308,18 @@ pub fn reply_subject(subject: &str) -> String {
 }
 
 /// A message's text as it shows: a form's text (RP-2 §8.4), made from the template this client
-/// holds or by number, with the sender's note below it; otherwise its `body`.
+/// holds (`templates`, [`crate::templates::held`]) or by number, with the sender's note below it;
+/// otherwise its `body`.
 #[must_use]
-pub fn text_of(message: &Message) -> String {
-    radiopost::forms::shown(message, &radiopost::forms::Template::published()).unwrap_or_else(
-        || {
-            message
-                .map()
-                .get(key::BODY)
-                .and_then(Value::as_text)
-                .unwrap_or("")
-                .to_owned()
-        },
-    )
+pub fn text_of(message: &Message, templates: &[radiopost::forms::Template]) -> String {
+    radiopost::forms::shown(message, templates).unwrap_or_else(|| {
+        message
+            .map()
+            .get(key::BODY)
+            .and_then(Value::as_text)
+            .unwrap_or("")
+            .to_owned()
+    })
 }
 
 /// The text a forward carries: a short header (`Forwarded message`, From, Date, Subject), a blank
@@ -329,7 +328,7 @@ pub fn text_of(message: &Message) -> String {
 /// A form goes as its text, not as the form again: its fields bound to the message's subject,
 /// date and time (RP-2 §8.1) would be the forward's own, and say what the original did not.
 #[must_use]
-pub fn forwarded(original: &Message) -> String {
+pub fn forwarded(original: &Message, templates: &[radiopost::forms::Template]) -> String {
     let map = original.map();
     let text = |k| map.get(k).and_then(Value::as_text).unwrap_or("");
     let date = map.get(key::DATE).and_then(Value::as_u64).unwrap_or(0);
@@ -338,7 +337,7 @@ pub fn forwarded(original: &Message) -> String {
         text(key::FROM),
         utc(date),
         text(key::SUBJECT),
-        text_of(original)
+        text_of(original, templates)
     )
 }
 
@@ -407,7 +406,12 @@ pub fn held_of(message: &Message) -> Vec<Held> {
 ///
 /// The priority is the user's to choose, and starts routine whatever the original's.
 #[must_use]
-pub fn answer(original: &Message, me: &str, how: Answer) -> Started {
+pub fn answer(
+    original: &Message,
+    me: &str,
+    how: Answer,
+    templates: &[radiopost::forms::Template],
+) -> Started {
     let map = original.map();
     let list = |k| -> Vec<String> {
         map.get(k)
@@ -445,7 +449,7 @@ pub fn answer(original: &Message, me: &str, how: Answer) -> Started {
         }
         Answer::Forward => Started {
             subject: prefixed("Fwd:", subject),
-            body: forwarded(original),
+            body: forwarded(original, templates),
             files: files_of(original),
             held: held_of(original),
             ..Started::default()
@@ -543,9 +547,12 @@ impl Draft {
 /// # Errors
 ///
 /// No such template, a field it does not have, or a value that does not read as its type.
-pub fn form_from_args(which: &str, fields: &[String]) -> Result<radiopost::forms::Form, String> {
+pub fn form_from_args(
+    which: &str,
+    fields: &[String],
+    templates: &[radiopost::forms::Template],
+) -> Result<radiopost::forms::Form, String> {
     use radiopost::forms::Kind;
-    let templates = radiopost::forms::Template::published();
     let wanted = which.to_lowercase();
     let template = templates
         .iter()
@@ -989,7 +996,8 @@ mod tests {
         assert_eq!(log[1].as_map().expect("a row").len(), 3);
         // outside a rows field, `|` is only text
         let fields = ["2=EOC", "3=Shelter 3", "7=Cots | water"].map(str::to_owned);
-        let form = form_from_args("ics-213", &fields).expect("a form");
+        let form = form_from_args("ics-213", &fields, &radiopost::forms::Template::published())
+            .expect("a form");
         assert_eq!(form.value(7), Some(&Value::text("Cots | water")));
     }
 
@@ -1003,7 +1011,8 @@ mod tests {
             "3=J. Park, Shelter 3 manager".to_owned(),
             "7=140 people tonight.\\nNeed 40 cots.".to_owned(),
         ];
-        let form = form_from_args("ics-213", &fields).expect("a form");
+        let form = form_from_args("ics-213", &fields, &radiopost::forms::Template::published())
+            .expect("a form");
         let draft = Draft {
             from: "shelter3@radiopost.org".into(),
             to: vec!["eoc@radiopost.org".into()],
@@ -1026,15 +1035,28 @@ mod tests {
             "{text}"
         );
         // forwarded, from the command line too, the form goes as that text
-        assert_eq!(text_of(&m), text);
-        assert!(forwarded(&m).ends_with(&format!("Subject: Cots\n\n{text}")));
+        assert_eq!(text_of(&m, &radiopost::forms::Template::published()), text);
+        assert!(
+            forwarded(&m, &radiopost::forms::Template::published())
+                .ends_with(&format!("Subject: Cots\n\n{text}"))
+        );
         // what does not fill the template is not sent (RP-2 §8.2)
-        let missing = form_from_args("ics-213", &fields[..2]).expect_err("refused");
+        let missing = form_from_args(
+            "ics-213",
+            &fields[..2],
+            &radiopost::forms::Template::published(),
+        )
+        .expect_err("refused");
         assert!(missing.contains("a required field missing"), "{missing}");
-        let bound = form_from_args("ics-213", &["4=Water".to_owned()]).expect_err("refused");
+        let bound = form_from_args(
+            "ics-213",
+            &["4=Water".to_owned()],
+            &radiopost::forms::Template::published(),
+        )
+        .expect_err("refused");
         assert!(bound.contains("a bound field"), "{bound}");
         // a form this client does not hold (ICS-209 is not published)
-        assert!(form_from_args("ics-209", &[]).is_err());
+        assert!(form_from_args("ics-209", &[], &radiopost::forms::Template::published()).is_err());
     }
 
     #[test]

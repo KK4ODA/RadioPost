@@ -540,6 +540,17 @@ const FORMS = JSON.parse(readFileSync(join(ROOT, "vectors", "forms.json"), "utf8
     return {template: v.fingerprint_hex, name: t.name, note: t.note, fields: t.fields.map(formField)};
   });
 
+// two forms of a group's own, kept on this computer (Setup's Forms kept here): made up, so their
+// fingerprints are too
+const FORMS_KEPT = [
+  {template: "3f9a51c0de7b2e14", name: "Shelter Roll (Cobb County ARES)", note: null, kept: true,
+   fields: [formField({n: 1, label: "Shelter", type: "line", required: true}),
+            formField({n: 2, label: "Cots in use", type: "number"})]},
+  {template: "a07c94e2b1d35f68", name: "Checkpoint Report (Bike Ride)", note: null, kept: true,
+   fields: [formField({n: 1, label: "Checkpoint", type: "line", required: true}),
+            formField({n: 2, label: "Riders through", type: "number"})]},
+];
+
 // the reports (/api/reports): damage reports around Atlanta after a storm, and two storm reports,
 // as the panel gives them: each place with its text and map link, and the choices made
 const fpOf = (file) => JSON.parse(readFileSync(join(ROOT, "vectors", "forms.json"), "utf8"))
@@ -599,7 +610,7 @@ function clientApi(world) {
       case "settings": return {usual_gateways: ["KK4ODA-1"], radio_skips_read: false};
       case "accept": return {entries: ["maria@example.com", "jim@hampost.org", "@hampost.org"]};
       case "addresses": return {entries: ADDRESSES};
-      case "forms": return FORMS;
+      case "forms": return world.formsKept ? [...FORMS, ...FORMS_KEPT] : FORMS;
       case "form-position": return body ? FORM_POSITION_SHOWN : FORM_POSITION;
       case "reports": return REPORTS;
       case "modem": return {};
@@ -841,7 +852,7 @@ function clientWorld(over = {}) {
   return {state: clientState(over.state || {}), log: over.log || CLIENT_LOG,
           operator: over.operator || false, byHand: over.byHand || false, vhf: over.vhf || false,
           hf: over.hf || false, called: over.called || false,
-          alerts: over.alerts || ALERT_LOG};
+          alerts: over.alerts || ALERT_LOG, formsKept: over.formsKept || false};
 }
 
 // the desk on one tab, as KK4ODA, an operator of radiopost.org
@@ -1336,6 +1347,17 @@ const SHOTS = {
     await page.waitForTimeout(400);
     await page.evaluate(() => document.getElementById("terrain-setup").scrollIntoView());
     await shot(page, "client-terrain-setup", "#terrain-setup");
+    await context.close();
+  },
+
+  async "client-forms-kept"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI,
+                                                 api: clientApi(clientWorld({formsKept: true})),
+                                                 height: 1800});
+    await page.click("#setup-open");
+    await page.waitForTimeout(400);
+    await page.evaluate(() => document.getElementById("forms-card").scrollIntoView());
+    await shot(page, "client-forms-kept", "#forms-card");
     await context.close();
   },
 

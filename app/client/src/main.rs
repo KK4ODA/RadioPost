@@ -11,7 +11,7 @@ use radiopost::message::{Message, key};
 use radiopost_client::compose::{self, Answer, Draft, File, media_type, utc};
 use radiopost_client::session::{self, Fetch, Kind, Options, Packing};
 use radiopost_client::store::{Error, Store, unhex};
-use radiopost_client::{addresses, callsigns, online};
+use radiopost_client::{addresses, callsigns, online, templates};
 
 const HELP: &str = "\
 radiopost: the RadioPost client
@@ -65,6 +65,12 @@ usage: radiopost [--home DIR] [--as CALLSIGN] COMMAND ...
                            --forward passes any message on with its text and files, your text
                            above it. --to, --cc and --subject replace what these fill in
   forms                    the forms this client holds, with their fields' numbers and types
+  forms import FILE        keep a form's template from its JSON or CBOR file (RP-2 §8.3)
+  forms export NAME FILE   write a form's template as JSON, to give to someone
+  forms remove NAME        stop holding a form kept here (not a published one)
+  forms fetch FINGERPRINT [--from ADDRESS]
+                           fetch a form's template from your post office, then the sender's
+  forms hand-in            hand the forms kept in to your post office (RP-5 §6.8)
   import FILE              put a message, in its canonical encoding (RP-2), in the outbox
   outbox | inbox | sent | trash
                            list a folder
@@ -318,7 +324,7 @@ fn line_of(store: &Store, id: &radiopost::ContentId) -> String {
     }
 }
 
-fn show(m: &Message) -> String {
+fn show(m: &Message, templates: &[radiopost::forms::Template]) -> String {
     use radiopost::cbor::Value;
     let map = m.map();
     let list = |k| {
@@ -371,8 +377,62 @@ fn show(m: &Message) -> String {
     }
     out.push('\n');
     // a form shows as its text, made from the template this client holds (RP-2 §8.4)
-    out.push_str(&compose::text_of(m));
+    out.push_str(&compose::text_of(m, templates));
     out
+}
+
+/// `forms import|export|remove|fetch|hand-in`: the templates kept here (RP-2 §8.3).
+fn forms_command(store: &Store, args: &Args) -> Result<(), Error> {
+    let home = store.home();
+    let named = |which: &str| -> Result<radiopost::forms::Template, Error> {
+        let wanted = which.to_lowercase();
+        templates::held(home)
+            .into_iter()
+            .find(|t| {
+                templates::fingerprint(t) == wanted || t.name.to_lowercase().starts_with(&wanted)
+            })
+            .ok_or_else(|| format!("no form {which}: `radiopost forms` lists them"))
+    };
+    let arg = |i: usize, what: &str| -> Result<String, Error> {
+        args.rest
+            .get(i)
+            .cloned()
+            .ok_or_else(|| format!("forms {}: {what}", args.rest[0]))
+    };
+    match args.rest[0].as_str() {
+        "import" => {
+            let path = arg(1, "the file")?;
+            let data = std::fs::read(&path).map_err(|e| format!("{path}: {e}"))?;
+            let t = templates::import(home, &data)?;
+            println!("kept {} ({})", t.name, templates::fingerprint(&t));
+        }
+        "export" => {
+            let t = named(&arg(1, "NAME FILE")?)?;
+            let path = arg(2, "NAME FILE")?;
+            std::fs::write(&path, templates::exported(&t)).map_err(|e| format!("{path}: {e}"))?;
+            println!("wrote {} to {path}", t.name);
+        }
+        "remove" => {
+            let t = named(&arg(1, "the form")?)?;
+            let gone = templates::remove(home, &templates::fingerprint(&t))?;
+            println!("no longer holding {}", gone.name);
+        }
+        "fetch" => {
+            let fingerprint = arg(1, "the fingerprint")?.to_lowercase();
+            let t = templates::fetch(store, &fingerprint, args.one("--from").as_deref())?;
+            println!("kept {} ({fingerprint})", t.name);
+        }
+        "hand-in" => {
+            let done = templates::hand_in(store)?;
+            println!("handed in {} form(s)", done.len());
+        }
+        other => {
+            return Err(format!(
+                "forms {other}: import, export, remove, fetch or hand-in"
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// `delete` and `restore`: a message moved to the trash from every folder that holds it, deleted
@@ -462,7 +522,7 @@ fn answering(
     let original = store.message(&id)?;
     Ok(Some((
         how,
-        compose::answer(&original, me, how),
+        compose::answer(&original, me, how, &templates::held(store.home())),
         id.text()[..6].to_owned(),
     )))
 }
@@ -666,7 +726,10 @@ fn run(words: &[String]) -> Result<(), Error> {
             let answering = answering(&store, &me.address, &args)?;
             let form = args
                 .one("--form")
-                .map(|which| compose::form_from_args(&which, &args.all("--field")))
+                .map(|which| {
+                    let held = templates::held(store.home());
+                    compose::form_from_args(&which, &args.all("--field"), &held)
+                })
                 .transpose()?;
             let body = if let Some(path) = args.one("--body") {
                 std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))?
@@ -926,9 +989,19 @@ fn run(words: &[String]) -> Result<(), Error> {
                 );
             }
         }
+        "forms" if !args.rest.is_empty() => forms_command(&store, &args)?,
         "forms" => {
-            for t in radiopost::forms::Template::published() {
-                println!("{} ({})", t.name, radiopost::cbor::hex(&t.fingerprint()));
+            for t in templates::held(store.home()) {
+                let kept = if templates::published(&t.fingerprint()) {
+                    ""
+                } else {
+                    ", kept here"
+                };
+                println!(
+                    "{} ({}{kept})",
+                    t.name,
+                    radiopost::cbor::hex(&t.fingerprint())
+                );
                 for f in &t.fields {
                     let how = match f.bound {
                         Some(b) => format!("the message's {}", b.name()),
@@ -942,7 +1015,8 @@ fn run(words: &[String]) -> Result<(), Error> {
         "show" => {
             let prefix = args.rest.first().ok_or("show ID")?;
             let id = store.find(prefix)?;
-            println!("{}", show(&store.message(&id)?));
+            let held = templates::held(store.home());
+            println!("{}", show(&store.message(&id)?, &held));
         }
         "attachments" => {
             if let Some((prefix, names)) = args.rest.split_first() {

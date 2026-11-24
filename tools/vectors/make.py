@@ -3506,6 +3506,15 @@ class Exchanges:
         return self.call(at, who, "POST", "/auth/token", body).get("token", "")
 
 
+def published_templates() -> dict[bytes, bytes]:
+    """RP-2 §8.1: the published templates by fingerprint, each as its deterministic CBOR."""
+    out = {}
+    for name in PUBLISHED_FORMS:
+        t = form_template(name)
+        out[forms.fingerprint(t)] = cbor.encode(forms.template_map(t))
+    return out
+
+
 def post_office() -> po.PostOffice:
     """radiopost.org as the vectors find it: Facundo's account, his tablet's enrollment code."""
     office = po.PostOffice(
@@ -3517,6 +3526,7 @@ def post_office() -> po.PostOffice:
         draw=stream,
     )
     office.next_serial = 1050
+    office.published = published_templates()
     office.accounts.add("facundo@radiopost.org")
     office.codes["7Q4F-AZ9K"] = {
         "address": "facundo@radiopost.org",
@@ -6405,11 +6415,90 @@ def account_accept_list() -> list[dict[str, Any]]:
     return ex.log
 
 
+def account_forms() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """RP-5 §4.7 and §6.8: templates served by fingerprint, and handed in by a client."""
+    office = post_office()
+    ex = Exchanges(office)
+    at = T_ACCOUNT + 1000
+    ours = cbor.encode(forms.template_map(EVERY_TYPE))
+    fp = forms.fingerprint(EVERY_TYPE).hex()
+    ics = forms.fingerprint(ICS_213).hex()
+    ex.note("Anyone may fetch a template by its fingerprint: a published one, here ICS-213.")
+    ex.call(at, "Anyone", "GET", f"/forms/{ics}")
+    ex.note("Shelter 3 hands in its own form (every_type in forms.json stands for it).")
+    n3 = ex.login(at + 10, "Shelter 3 (N3CALL)", "shelter3-n3call")
+    ex.call(at + 11, "Shelter 3 (N3CALL)", "PUT", f"/forms/{fp}", {"template": jws.b64u(ours)}, n3)
+    ex.note("Now anyone may fetch it too, the same bytes.")
+    ex.call(at + 20, "Anyone", "GET", f"/forms/{fp}")
+    story = ex.log
+
+    def case(what: str, steps: list[tuple[str, str, Any, bool]]) -> dict[str, Any]:
+        """A refusal or an answer of its own, against a fresh radiopost.org."""
+        sub = Exchanges(post_office())
+        n3 = sub.login(at, "Shelter 3 (N3CALL)", "shelter3-n3call")
+        gw = sub.login(at, "N1CALL-10", "gateway-n1call-10")
+        for i, (method, path, given, as_gateway) in enumerate(steps):
+            token = None if method == "GET" else gw if as_gateway else n3
+            body = given
+            if given == "no token":
+                body, token = {"template": jws.b64u(ours)}, None
+            who = "N1CALL-10" if as_gateway else "Shelter 3 (N3CALL)"
+            sub.call(at + 1 + i, who, method, path, body, token)
+        return {"what": what, "exchanges": sub.log}
+
+    def put(path_fp: str, data: bytes) -> tuple[str, str, Any, bool]:
+        return ("PUT", f"/forms/{path_fp}", {"template": jws.b64u(data)}, False)
+
+    # a template's map with a key RP-2 §8.1 does not define, and one written in other order
+    extra = cbor.encode({**forms.template_map(EVERY_TYPE), 4: "x"})
+    broken = {"name": "T", "fields": [{"n": 1, "label": "A", "type": "line", "choices": ["x"]}]}
+    broken_cbor = cbor.encode(forms.template_map(broken))
+    # 0x18 0x01 is 1 in two bytes where one would do: not deterministic (RP-0 §4.1)
+    loose = b"\xa2\x01\x61T\x02\x81\xa3\x18\x01\x01\x02\x61A\x03\x00"
+    tight = cbor.encode(
+        forms.template_map({"name": "T", "fields": [{"n": 1, "label": "A", "type": "line"}]})
+    )
+    assert loose != tight and cbor.decode(tight) == {1: "T", 2: [{1: 1, 2: "A", 3: 0}]}
+    loose_fp = hashlib.sha256(loose).digest()[:8].hex()
+    big = b"\x00" * 65537
+    every = jws.b64u(ours)
+    ics_cbor = cbor.encode(forms.template_map(ICS_213))
+    cases = [
+        case("a template not held", [("GET", f"/forms/{fp}", None, False)]),
+        case("a fingerprint in capitals", [("GET", f"/forms/{fp.upper()}", None, False)]),
+        case("a fingerprint of 15 digits", [("GET", f"/forms/{fp[:15]}", None, False)]),
+        case("handed in with no token", [("PUT", f"/forms/{fp}", "no token", False)]),
+        case("handed in by a gateway", [("PUT", f"/forms/{fp}", {"template": every}, True)]),
+        case("under another fingerprint", [put(ics, ours)]),
+        case("not CBOR", [put(fp, b"\xff\x00")]),
+        case("not base64url", [("PUT", f"/forms/{fp}", {"template": "a+b/"}, False)]),
+        case("no template member", [("PUT", f"/forms/{fp}", {}, False)]),
+        case(
+            "a key RP-2 §8.1 does not define",
+            [put(hashlib.sha256(extra).digest()[:8].hex(), extra)],
+        ),
+        case(
+            "a template that breaks a rule",
+            [put(hashlib.sha256(broken_cbor).digest()[:8].hex(), broken_cbor)],
+        ),
+        case("CBOR that is not deterministic", [put(loose_fp, loose)]),
+        case("over 65 536 bytes", [put(fp, big)]),
+        case("handed in twice", [put(fp, ours), put(fp, ours)]),
+        case("a published template handed in", [put(ics, ics_cbor)]),
+    ]
+    return story, cases
+
+
 def make_api_account() -> dict[str, Any]:
     story, cases = account_renewal()
     out = header(
-        "Post office API: renewal and the accept list",
-        {"RP-5": "§5.2, §6.2, §6.3, §6.5", "RP-6": "§2.2", "RP-3": "§5.1, §5.8"},
+        "Post office API: renewal, the accept list and forms' templates",
+        {
+            "RP-5": "§4.7, §5.2, §6.2, §6.3, §6.5, §6.8",
+            "RP-6": "§2.2",
+            "RP-3": "§5.1, §5.8",
+            "RP-2": "§8.1, §8.3",
+        },
     )
     out["rule"] = (
         "As in api-exchanges.json: each exchange is a request to the post office at its clock and "
@@ -6417,7 +6506,11 @@ def make_api_account() -> dict[str, Any]:
         "office's key (`po:radiopost.org`), for the same account, operator, device key and flags, "
         "with the next serial and issued at the request's time. An `smtp` entry is the door's "
         "answer (email-door.json) for the accept list as it stands at that moment. An `rp3` entry "
-        "is a PDU on the air."
+        "is a PDU on the air. `forms` is a story and each of `forms_cases` a case of its own, each "
+        "against the post office as `context` gives it, which holds the published templates "
+        "(forms.json) and nothing handed in; a case logs in its station and a gateway first. A "
+        "template is its deterministic CBOR in base64url (RP-2 §8.1); the test template "
+        "`every_type` of forms.json stands for a group's own form."
     )
     out["context"] = {
         "post_office": "radiopost.org",
@@ -6462,6 +6555,42 @@ def make_api_account() -> dict[str, Any]:
     out["renewal"] = story
     out["renewal_cases"] = cases
     out["accept_list"] = accept_list
+    forms_story, forms_cases = account_forms()
+    seen = [answer_of(e) for e in forms_story if "request" in e]
+    assert seen == ["200", "200", "200", "200", "200"], seen  # RP-5 §4.7, §6.8: all answered
+    held = [e["response"]["body"] for e in forms_story if "request" in e]
+    every = jws.b64u(cbor.encode(forms.template_map(EVERY_TYPE)))
+    ics = jws.b64u(cbor.encode(forms.template_map(ICS_213)))
+    assert held[0] == {"template": ics}  # the published ICS-213, as its CBOR
+    assert held[3] == {"fingerprint": forms.fingerprint(EVERY_TYPE).hex()}
+    assert held[4] == {"template": every}  # what was handed in, byte for byte
+    confirm(  # RP-5 §4.7, §6.8, as written; each case logs in its station and a gateway first
+        forms_cases,
+        {
+            "a template not held": "404 unknown-message",
+            "a fingerprint in capitals": "400 malformed",
+            "a fingerprint of 15 digits": "400 malformed",
+            "handed in with no token": "401 not-authorized",
+            "handed in by a gateway": "403 not-authorized",
+            "under another fingerprint": "400 malformed",
+            "not CBOR": "400 malformed",
+            "not base64url": "400 malformed",
+            "no template member": "400 malformed",
+            "a key RP-2 §8.1 does not define": "400 malformed",
+            "a template that breaks a rule": "400 malformed",
+            "CBOR that is not deterministic": "400 malformed",
+            "over 65 536 bytes": "413 too-large",
+            "handed in twice": "200 200",
+            "a published template handed in": "200",
+        },
+        lambda c: " ".join(
+            answer_of(e)
+            for e in c["exchanges"][-len(c["exchanges"]) :]
+            if "request" in e and e["request"]["path"].startswith("/forms")
+        ),
+    )
+    out["forms"] = forms_story
+    out["forms_cases"] = forms_cases
     return out
 
 
@@ -9106,6 +9235,8 @@ def make_every_type() -> dict[str, Any]:
         ("a column number used twice", one({**rows, "columns": [col, {**col, "label": "D"}]})),
         ("a required heading", one({**line, "type": "heading", "required": True})),
         ("a heading with a max", one({**line, "type": "heading", "max": 10})),
+        ("choices on a line", one({**line, "choices": ["x"]})),
+        ("choices on a check", one({**line, "type": "check", "choices": ["x"]})),
     ]
     refused = [
         {"what": what, "template": tj, "expect": forms.template_problem(tj) or "keeps the rules"}
@@ -9133,6 +9264,8 @@ def make_every_type() -> dict[str, Any]:
             "a column number used twice": "a number used twice",
             "a required heading": "a heading with required, choices, bound or max",
             "a heading with a max": "a heading with required, choices, bound or max",
+            "choices on a line": "choices on a field that is neither choice nor multi",
+            "choices on a check": "choices on a field that is neither choice nor multi",
         },
     )
     return {

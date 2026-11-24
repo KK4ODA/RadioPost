@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.52.0 |
+| **Version** | 1.53.0 |
 | **Updated** | 2026-11-24 |
 | **Describes** | RadioPost 0.1.0-beta.39 |
 | **Licence** | CC BY 4.0 |
@@ -445,6 +445,13 @@ Request Message** and **ICS-214 Activity Log**, and its own **Check-In**, **Chec
 **Communications Log**, **Damage Report**, **Position Report**, **Situation Report** and **Storm
 Report**. Their dates and times are UTC, and their signatures are left for the paper form.
 
+**Your group's own forms.** A group can write forms of its own, in the same way as RadioPost's.
+Import one from its file in Setup ([Forms kept here](#forms-kept-here)), or get it from a form that
+came in ([9](#9-reading-your-mail)): it is then under **Form** with the others. RadioPost hands it
+to your post office, so that someone reading your form by email gets its labels too, and other
+stations can get it from there. Every station that reads your form needs it: give them the file,
+or let them click **Get the form**.
+
 Some fields take more than text:
 
 - **A position**, such as a report's **Location**, starts with where your station is
@@ -879,8 +886,11 @@ Click a message in the **Inbox** to read it.
 **A form** shows as the form, in a box under the attachments: its name, then each field filled
 in, its label beside its value, in the form's order, under the form's headings; a table shows as
 a table. The **Subject**, **Date** and **Time** are the message's own. The sender's note, if any, follows in a box of its own. A form your computer
-does not hold shows as *Form* and a number, its values by field number: ask the sender which form
-it is.
+does not hold shows as *Form* and a number, its values by field number. Click **Get the form**
+under its name: RadioPost asks your post office for it, then the sender's, and shows the form once
+it has it. Only the form's wording comes, over the Internet; nothing goes on the air. If neither
+post office has it, ask the sender for the form's file and import it in Setup
+([Forms kept here](#forms-kept-here)).
 
 **Files.** Click **Save** beside a file to save it in the **Downloads** folder in your home
 folder. RadioPost never writes over a file already there: a second `grid.txt` is saved as
@@ -1382,6 +1392,26 @@ in Addresses ([section 13](#13-addresses-and-the-trash)). Emergency mail arrives
 Important. Only an address or a group you set can reach Time-sensitive: anyone can choose
 Emergency.
 
+### Forms kept here
+
+The forms your group made, kept on this computer for every callsign it works. RadioPost's own
+forms come with the program and are not listed.
+
+- **Import a form…** takes a form's file: the JSON a group writes its forms in, as RadioPost's own
+  are written, or the file **Export** made. RadioPost checks it and says what is wrong with one
+  that is not a form.
+- **Export** saves a form in your **Downloads** folder, to give to another station.
+- **Remove**, clicked twice, stops holding a form. Its forms then show by field number until you
+  get it again.
+
+RadioPost hands each form kept here to your post office over the Internet, once, when you import it
+and then every hour until it gets through. The post office then writes your forms into email with
+their labels, and gives the form to any station that asks for it.
+
+![Setup's Forms kept here: two forms of groups' own, each with Export and Remove, and Import a form](screens/client-forms-kept.png)
+
+*Figure 37. Forms kept here.*
+
 ### This device's key, Credential, Post offices trusted
 
 These three boxes are for tests and special cases. You do not need them with a normal account:
@@ -1449,7 +1479,7 @@ RadioPost keeps working when the Internet fails at a gateway.
 
 ![Before: the post office copies your mail to your usual gateway. During: the gateway serves the copies and keeps what you send. After: it reports](fig/cutoff.svg)
 
-*Figure 37. When the Internet is down.*
+*Figure 38. When the Internet is down.*
 
 **Before.** Name your usual gateways in Setup ([section 12](#usual-gateways)). Your post office
 then copies each new message for you to them as it arrives.
@@ -1492,7 +1522,7 @@ licensed operator can run one.
 
 ![Two users call the gateway by radio; the gateway's computer runs RadioPost Gateway and Aether HF and reaches each caller's post office](fig/gateway.svg)
 
-*Figure 38. A gateway station.*
+*Figure 39. A gateway station.*
 
 A gateway is usually left answering with nobody at the radio. It is then under **automatic
 control**, and the rules for that apply ([The rules](#36-the-rules)).
@@ -1528,13 +1558,13 @@ Open RadioPost Gateway. Until it is set up and registered, it says what is missi
 
 ![A new RadioPost Gateway: the notice says it is not set up, with Set up the gateway](screens/gateway-first.png)
 
-*Figure 39. RadioPost Gateway before setup.*
+*Figure 40. RadioPost Gateway before setup.*
 
 Click **Set up the gateway**. Setup has three steps.
 
 ![The gateway's Setup page: the gateway, its registration with two channels, and post offices](screens/gateway-setup.png)
 
-*Figure 40. Setting up the gateway.*
+*Figure 41. Setting up the gateway.*
 
 ### Step 1. The gateway
 
@@ -1665,7 +1695,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 ![The RadioPost Gateway window with numbered marks on its parts](screens/gateway-window.png)
 
-*Figure 41. The RadioPost Gateway window.*
+*Figure 42. The RadioPost Gateway window.*
 
 1. **The gateway's callsign**, and the account it is registered under. To its left, beside
    *RadioPost Gateway*, is the version you are running.
@@ -1700,7 +1730,7 @@ While a session runs, a box shows who called, the account, since when, and the m
 
 ![The window during a session, with the Session under way box and its Disconnect button](screens/gateway-session.png)
 
-*Figure 42. A session at the gateway.*
+*Figure 43. A session at the gateway.*
 
 **Ending one session.** The box has a button that ends this session only. The gateway goes on
 answering:
@@ -1809,7 +1839,7 @@ text), each session waiting to be reported with its last try, and the last repor
 
 ![The Partners, Callers refused and Copies placed ahead panels, opened](screens/gateway-held.png)
 
-*Figure 43. What the gateway holds, its partners and the callers it refuses.*
+*Figure 44. What the gateway holds, its partners and the callers it refuses.*
 
 ## 22. Partners: forwarding by radio
 
@@ -1946,7 +1976,7 @@ on this tab.
 
 ![The Applications tab: one application waiting with its licence check, and the Decided list](screens/desk-applications.png)
 
-*Figure 44. Applications.*
+*Figure 45. Applications.*
 
 Each application shows the person's name, callsign and when they asked, the **Address** they
 want, their **Email now**, and what the post office found of the callsign:
@@ -1990,7 +2020,7 @@ the mailbox was made (*mailbox*, or *no mailbox* in red) and the applicant email
 
 ![The Accounts tab: five accounts with their names, devices and mail waiting](screens/desk-accounts.png)
 
-*Figure 45. Accounts.*
+*Figure 46. Accounts.*
 
 Every account, one a row:
 
@@ -2028,7 +2058,7 @@ Revoking the computer you are using takes the desk away from it: the button says
 
 ![The Gateways tab: two gateways, the account each was registered from, and Unregister](screens/desk-gateways.png)
 
-*Figure 46. Gateways.*
+*Figure 47. Gateways.*
 
 The **Gateways** tab lists each gateway registered with your post office, one a row:
 
@@ -2052,7 +2082,7 @@ that exists. Use it for someone you know holds the callsign.
 
 ![The New code tab: an address, a callsign and a name filled in, the licence checked, and the code made](screens/desk-code.png)
 
-*Figure 47. Making a code.*
+*Figure 48. Making a code.*
 
 1. Open **New code**.
 2. Fill in:
@@ -2102,7 +2132,7 @@ Know only post offices whose operators you trust to check callsigns. At first no
 
 ![The Post offices tab: one post office known, one seen, none blocked](screens/desk-others.png)
 
-*Figure 48. Other post offices.*
+*Figure 49. Other post offices.*
 
 - **Known**: the post offices you know, who runs each, when its records were last fetched, and
   whether DNSSEC signed them. They are fetched again every six hours. **Forget** stops knowing one;
@@ -2123,7 +2153,7 @@ when a check turns red, and again when all pass.
 
 ![The Health tab: eleven checks passed and one amber line about backups](screens/desk-health.png)
 
-*Figure 49. Health.*
+*Figure 50. Health.*
 
 Each line is one check:
 
@@ -2151,7 +2181,7 @@ The **Server** tab lets you look after the server without logging in to it.
 
 ![The Server tab: the jobs, one with its output open, and When you need more](screens/desk-server.png)
 
-*Figure 50. Jobs and a terminal.*
+*Figure 51. Jobs and a terminal.*
 
 **Jobs** are a fixed list of tasks the server's administrator account runs for you:
 
@@ -2186,7 +2216,7 @@ says the one command to run on the server, once.
 
 ![The Backups and DKIM keys boxes on the Server tab](screens/desk-backups.png)
 
-*Figure 51. Backups and DKIM keys.*
+*Figure 52. Backups and DKIM keys.*
 
 ### Backups
 
@@ -2243,7 +2273,7 @@ when they are older than 180 days.
 
 ![The Settings tab: applications, licence lookups, mailboxes and this post office](screens/desk-settings.png)
 
-*Figure 52. Settings.*
+*Figure 53. Settings.*
 
 ### Applications
 
@@ -2635,3 +2665,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.50.0 | 2026-11-24 | A gateway call goes at its channel's bandwidth. Section 8: the call asks Aether for the bandwidth listed with the channel picked, whatever Aether's own **Bandwidth** says, and the log says it; the step that told you to set Aether's bandwidth is gone; on a long call to a scanned channel, Aether may move a 2300 Hz call to 500 Hz, and the log says so. Section 35, troubleshooting, the glossary and the quick reference to match. A call picked on *7.101 MHz, 2300 Hz* had gone at the 500 Hz Aether was set to. |
 | 1.51.0 | 2026-11-24 | Forms for most jobs, step 2 (RP-2 1.4.0). §7: the forms RadioPost holds, FEMA's ICS 202, 204, 205, 205A, 206, 208, 210, 211, 213, 213 RR and 214 and its own Check-In, Check-Out, Communications Log, Damage Report, Position Report, Situation Report and Storm Report; a position filled from the station's and what goes; dates and times in UTC; check boxes; numbers with units; tables (new Figure 11; later figures renumbered; Figures 9, 10 and 13 retaken with the longer **Form** list). §9: every ICS form prints as FEMA's paper form; a form's headings and tables in the reader. |
 | 1.52.0 | 2026-11-24 | Forms for most jobs, step 3. §9.1 *Reports*: the forms with positions on a map and in a list, by form and age, coloured by one of the form's choices, opened on OpenStreetMap, and saved as CSV or GeoJSON in the Downloads folder (new Figure 24; later figures renumbered). §6: **Alerts** and **Reports** among the folders. §7: an emailed form has a map link for each position (RP-6 1.3.0). The client's screenshots retaken with **Reports** in the left-hand column. |
+| 1.53.0 | 2026-11-24 | Forms for most jobs, step 4 (RP-2 1.5.0, RP-5 1.8.0). §7: a group's own forms, held like RadioPost's and handed to your post office. §9: **Get the form**, for a form this computer does not hold, from your post office or the sender's. §12 *Forms kept here*: **Import a form…**, **Export** and **Remove**, and the forms handed to the post office (new Figure 37; later figures renumbered). |

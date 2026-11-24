@@ -449,6 +449,10 @@
         <ul class="files held" id="r-held" title="Too large for the radio when the message came: kept at the post office until you ask for them"></ul>
         <section class="form-view" id="r-form" hidden>
           <h2 id="r-form-title"></h2>
+          <p class="note row" id="r-form-get" hidden>
+            <span>This computer does not hold this form, so its fields show by number.</span>
+            <button class="quiet" type="button" id="r-form-fetch" title="Ask your post office for the form, then the sender's: a post office holds the forms its users handed in (RP-5 §4.7). Only the form's wording comes over the Internet; nothing goes on the air">Get the form</button>
+          </p>
           <dl class="fields" id="r-form-rows"></dl>
         </section>
         <pre class="body" id="r-body"></pre>
@@ -982,6 +986,15 @@
           <label title="The post office's domain">Domain <input id="t-domain" placeholder="hampost.org" spellcheck="false"></label>
           <label title="Its key, 32 bytes in hex, as its DNS records publish it">Key (hex) <input id="t-key" spellcheck="false"></label>
           <button id="t-save" title="Trust this key: the operator decides (RP-1 §7.3)">Trust</button>
+        </div>
+        <div class="card" id="forms-card">
+          <h2 title="RP-2 §8.3: RadioPost's published forms come with the program; these are kept on this computer, for every callsign">Forms kept here</h2>
+          <p class="note">A group's own forms: import one from its file, or get one from a form that came in. Each is handed in to your post office, so the forms you send read as forms in email.</p>
+          <ul class="entries" id="forms-kept"></ul>
+          <input id="forms-file" type="file" accept=".json,.cbor,application/json,application/cbor" hidden>
+          <div class="row">
+            <button id="forms-import" title="Keep a form from its file: its JSON, as RadioPost's own forms are written, or its CBOR">Import a form…</button>
+          </div>
         </div>
         <div class="card">
           <h2 title="RadioPost asks for a newer release when it starts and every six hours">Updates</h2>

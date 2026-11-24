@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.3.0 |
+| **Version** | 0.4.0 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -170,16 +170,16 @@ template writes its email as `Field 7: …`, which an agency cannot use.
 * **Clients hand them in.** A client sending a form whose template is not published gives it to
   its post office (`PUT /forms/{fingerprint}`, logged in). The post office checks that it reads as
   a template and hashes to its name.
-* **Between post offices.** A post office missing the template of a form from another post office's
-  user asks that post office.
-* **Clients fetch them.** A client that receives a form it has no template for asks its post office
-  when it is online, and keeps what it gets under its first home.
-* **By radio.** A template sent as a file of its own type in a message's `files`, kept by
-  fingerprint once it checks.
-* **By hand.** The client imports and exports template files, as RP-2 §8.1 already allows.
+* **Clients fetch them.** A client that receives a form it has no template for asks its own post
+  office, then the sender's, and keeps what it gets under its first home.
+* **By hand.** The client imports and exports template files, as JSON or CBOR.
 
-This needs RP-5 (MINOR) and a file type in RP-2 §8.3. A form designer in the client comes after
-it: Winlink's library grew because anyone could write a form, and RadioPost's can grow the same
+Built (step 4) with two changes to this plan. *Between post offices* went: since anyone may ask any
+post office, the client asks the sender's itself, and a post office needs no new trust or fetching.
+It only writes email for its own users' forms, and those are handed in. *By radio* waits: a file
+type of its own in RP-2 is a new kind of attachment for every program, and a file sent by hand,
+imported, does the job until a group asks for it on the air. A form designer in the client comes
+after: Winlink's library grew because anyone could write a form, and RadioPost's can grow the same
 way, as data.
 
 ---
@@ -200,7 +200,7 @@ way, as data.
 | 1 | RP-2 1.4.0: the six additions, their test vectors, the Rust library, the composer and the reader; a position field filled from W55. | Built |
 | 2 | Templates: FEMA's ICS forms, a storm report, check-in and check-out, a situation report, a damage report and a position report, with print layouts for the paper forms. | Built |
 | 3 | The Reports view: map, CSV and GeoJSON; map links in email (RP-6). | Built |
-| 4 | Templates by fingerprint (§6): RP-5, RP-2 §8.3, the post office, the client. | Planned |
+| 4 | Templates by fingerprint (§6): RP-5, RP-2 §8.3, the post office, the client. | Built |
 | 5 | Position reports as broadcasts, only if a net asks. | Not planned |
 
 **Step 1 in detail.** RP-2 §8.1 to §8.4 gain the types, the keys `scale`, `unit` and `columns`,
@@ -255,11 +255,27 @@ opens in the system's browser from a link the client makes from the numbers alon
 CSV** (RFC 4180, a line for each position, one form's fields as columns) and **Save as GeoJSON**
 (RFC 7946, a point for each position), in the Downloads folder.
 
+**What step 4 built.** RP-5 1.8.0 §4.7 (`GET /forms/{fingerprint}`, public, unsigned: the
+fingerprint is the proof) and §6.8 (`PUT /forms/{fingerprint}`, a client's token, 64 KiB at most,
+deterministic CBOR that keeps RP-2 §8.1's rules with no key it does not define, hashing to the
+path; `507` `quota-exceeded` allowed). RP-2 1.5.0: `choices` only on a `choice` or a `multi` field
+(the rule a template read from CBOR needs, since a JSON reader had dropped them silently), a
+template's JSON spelled out, and §8.3's three ways a station gets a template. `api-account.json`'s
+`forms` and `forms_cases`: one story and fifteen refusals and answers, every verdict written out by
+hand and each check shown to fail on a planted fault, in the reference and in the Rust post office.
+`radiopost::forms::Template::from_cbor` (exact: written back byte for byte) and `to_json`. The post
+office keeps what is handed in (`state.json`'s `templates`, a hundred an account) and writes its
+users' forms into email with them. The client (`app/client/src/templates.rs`): kept templates in
+the first home's `forms/`, one CBOR file a fingerprint; Setup's **Forms kept here** (**Import a
+form…**, **Export**, **Remove**); the reader's **Get the form**; `radiopost forms import`,
+`export`, `remove`, `fetch` and `hand-in`; each kept template handed in to every callsign's post
+office once, at import and with the hourly renewal.
+
 ---
 
 ## 9. The author's decisions (2026-11-24)
 
-1. **A post office serves templates by their fingerprint** (§6).
+1. **A post office serves templates by their fingerprint** (§6). Built in step 4.
 2. **The ARRL's and the Red Cross's forms wait for their permission**, which the author asks for
    (§5). Step 2 starts with the public-domain forms.
 3. **A position goes exactly as it is, by default** (§4.2). The operator may send less.
@@ -274,3 +290,4 @@ CSV** (RFC 4180, a line for each position, one form's fields as columns) and **S
 | 0.1.0 | 2026-11-24 | First version, accepted with the author's three answers (§9); step 1 built (§8). |
 | 0.2.0 | 2026-11-24 | Step 2 built (§8): eleven of FEMA's ICS forms with their paper forms, and seven of RadioPost's own. §2, §5: the ICS 309 is not FEMA's; ICS 213 RR is FEMA's Appendix B example; the storm report follows the National Weather Service's spotter guidance. |
 | 0.3.0 | 2026-11-24 | Step 3 built (§8): the Reports view and map links in email (RP-6 1.3.0), with the author's fourth answer (§9). §4.3: the view, not the template, chooses the field that colours the markers. |
+| 0.4.0 | 2026-11-24 | Step 4 built (§8): templates by fingerprint (RP-5 1.8.0, RP-2 1.5.0). §6: post offices do not fetch from each other, the client asks the sender's; templates by radio wait for a group to ask. |

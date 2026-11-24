@@ -545,6 +545,84 @@ fn renewal_over_the_internet_and_by_radio() {
 }
 
 #[test]
+fn templates_served_by_fingerprint_and_handed_in() {
+    let w = world();
+    let file = vectors("api-account.json");
+    let mut office = post_office(&w, 1050);
+    replay(
+        &mut office,
+        file["forms"].as_array().expect("forms"),
+        "forms",
+        |_, _| {},
+    );
+    // what was handed in is held for the email its forms become (RP-6 §3.1)
+    let held = office.held_templates();
+    assert_eq!(held.len(), 1);
+    assert_eq!(held[0].name, "Every type (test)");
+    for case in file["forms_cases"].as_array().expect("cases") {
+        let what = case["what"].as_str().expect("what");
+        let mut office = post_office(&w, 1050);
+        replay(
+            &mut office,
+            case["exchanges"].as_array().expect("exchanges"),
+            what,
+            |_, _| {},
+        );
+        let kept = office.held_templates().len();
+        assert_eq!(
+            kept,
+            usize::from(what == "handed in twice"),
+            "{what}: {kept} kept"
+        );
+    }
+}
+
+/// RP-5 §6.8: an account hands in at most `TEMPLATES_PER_ACCOUNT` templates; one held already,
+/// or published, is answered as kept whatever the count.
+#[test]
+fn an_account_hands_in_only_so_many_templates() {
+    use radiopost_postoffice::office::TEMPLATES_PER_ACCOUNT;
+    let w = world();
+    let file = vectors("api-account.json");
+    let mut office = post_office(&w, 1050);
+    replay(
+        &mut office,
+        file["forms"].as_array().expect("forms"),
+        "forms",
+        |_, _| {},
+    );
+    let put = file["forms"]
+        .as_array()
+        .expect("forms")
+        .iter()
+        .find(|s| s["request"]["method"] == "PUT")
+        .expect("a template handed in");
+    let token =
+        put["request"]["authorization"].as_str().expect("a token")["Bearer ".len()..].to_owned();
+    let hand_in = |office: &mut PostOffice, name: &str| {
+        let t = radiopost::forms::Template::from_json(&format!(
+            r#"{{"name": "{name}", "fields": [{{"n": 1, "label": "A", "type": "line"}}]}}"#
+        ))
+        .expect("a template");
+        let bytes = t.to_cbor().encode().expect("encodes");
+        let fp = radiopost::cbor::hex(&t.fingerprint());
+        let body = serde_json::json!({"template": radiopost::base64url::encode(&bytes)});
+        office
+            .handle(
+                T_ACCOUNT + 1100,
+                &request("PUT", &format!("/forms/{fp}"), Some(&token), Some(body)),
+            )
+            .status
+    };
+    for i in 1..TEMPLATES_PER_ACCOUNT {
+        assert_eq!(hand_in(&mut office, &format!("Form {i}")), 200);
+    }
+    assert_eq!(hand_in(&mut office, "One too many"), 507);
+    assert_eq!(hand_in(&mut office, "Form 1"), 200, "held already");
+    assert_eq!(office.held_templates().len(), TEMPLATES_PER_ACCOUNT);
+}
+
+#[test]
 fn the_accept_list_read_changed_shared_and_filled_by_mail_sent() {
     let w = world();
     let file = vectors("api-account.json");

@@ -2801,11 +2801,53 @@ async function loadForms() {
   } catch {
     templates = [];
   }
+  showKeptForms();
   const select = $("c-form");
   const byName = [...templates].sort((a, b) =>
     a.name.localeCompare(b.name, undefined, {numeric: true}));
   select.replaceChildren(el("option", {value: "", text: "None"}),
     ...byName.map((t) => el("option", {value: t.template, text: t.name})));
+}
+
+// Setup's forms kept here (RP-2 §8.3): each with Export and Remove; the published ones are the
+// program's own and are not listed
+function showKeptForms() {
+  const kept = templates.filter((t) => t.kept)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
+  $("forms-kept").replaceChildren(...(kept.length ? kept.map((t) => {
+    const name = el("span", {text: t.name, title: `Fingerprint ${t.template}`});
+    const out = el("button", {class: "quiet", type: "button", text: "Export",
+      title: "Write it to your Downloads folder as its JSON, to give to someone"});
+    out.addEventListener("click", async () => {
+      try { toast(`Saved as ${(await api("forms/export", {template: t.template})).name} in Downloads.`); }
+      catch (e) { toast(e.message, true); }
+    });
+    const gone = el("button", {class: "quiet danger", type: "button", text: "Remove",
+      title: "Stop holding it here: its forms then show by number, until you get it again"});
+    gone.addEventListener("click", (e) => armed(e.currentTarget, "Click again to remove", async () => {
+      try {
+        await api("forms/remove", {template: t.template});
+        await loadForms();
+      } catch (err) { toast(err.message, true); }
+    }));
+    return el("li", {}, name, el("span", {class: "entry-tools"}, out, gone));
+  }) : [el("li", {class: "note", text: "None yet."})]));
+}
+
+// a form's file, its JSON or CBOR, kept and handed in to the post office
+async function importForm(file) {
+  if (!file) return;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  const data = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  try {
+    const t = await api("forms/import", {data});
+    await loadForms();
+    toast(`Kept ${t.name}.`);
+  } catch (e) {
+    toast(e.message, true);
+  }
 }
 
 const DAY_MS = 86400000;
@@ -3255,6 +3297,17 @@ async function openMessage(id, from = {folder}) {
   $("r-form-title").textContent = f ? f.title : "";
   $("r-form-title").title = f && !f.filled
     ? "This computer does not hold this form: its fields show by number" : "";
+  $("r-form-get").hidden = !f || !!f.name;
+  $("r-form-fetch").onclick = async () => {
+    try {
+      const t = await api("forms/fetch", {template: f.template, from: m.from});
+      await loadForms();
+      toast(`Got ${t.name}.`);
+      await openMessage(id, from);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
   $("r-form-rows").replaceChildren(...(f?.rows ?? []).flatMap((r) => {
     if (r.heading) return [el("dt", {class: "heading", text: r.label})];
     if (r.table) return [el("dt", {text: r.label}), el("dd", {}, formTable(r.table))];
@@ -5520,6 +5573,11 @@ function wire() {
     }
   };
   $("address-add").addEventListener("click", addAddress);
+  $("forms-import").addEventListener("click", () => $("forms-file").click());
+  $("forms-file").addEventListener("change", async (e) => {
+    await importForm(e.target.files[0]);
+    e.target.value = "";
+  });
   $("address-import").addEventListener("click", () => $("address-file").click());
   $("address-file").addEventListener("change", async (e) => {
     await importContacts(e.target.files[0]);

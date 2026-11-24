@@ -225,6 +225,7 @@ impl Running {
             .cloned()
             .unwrap_or_default();
         let ids = office.thread_ids();
+        let templates = office.held_templates();
         drop(office);
         let message_id = |cid: &[u8]| ids.get(&radiopost::cbor::hex(cid)).cloned();
         let (_, email) = mail::from_message(
@@ -235,6 +236,7 @@ impl Running {
                 message_id: &message_id,
                 with_part: false,
                 compress: false,
+                templates: &templates,
             },
         );
         Some(email)

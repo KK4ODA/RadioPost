@@ -820,6 +820,7 @@ impl Running {
                     message_id: &message_id,
                     with_part: with_part && carried.proof.is_some(),
                     compress,
+                    templates: &self.office().held_templates(),
                 },
             );
             let mut tries = vec![group.clone()];

@@ -814,7 +814,12 @@ fn a_reply_by_radio_keeps_the_email_thread() {
     let report = call(&mut user);
     assert_eq!(report.received.len(), 1);
     let original = user.message(&report.received[0]).expect("kept");
-    let started = compose::answer(&original, "club@test.example", Answer::Reply);
+    let started = compose::answer(
+        &original,
+        "club@test.example",
+        Answer::Reply,
+        &radiopost::forms::Template::published(),
+    );
     assert_eq!(started.to, ["maria@example.com"]);
     assert_eq!(started.subject, "Re: Net tonight");
     let reply = Draft {

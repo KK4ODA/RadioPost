@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.7.0 |
+| **Version** | 1.8.0 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -50,7 +50,7 @@ part of this API.
   | 400 | `unsupported-version`, `malformed` |
   | 401 | `not-authorized`, when the request has no token, or one unknown or expired |
   | 403 | `not-authorized` otherwise (the token may not do this), `refused-by-policy` |
-  | 404 | `unknown-message`: no such serial in the session, no such session of this gateway's, no such application (§6.7), or no such gateway registered (§5.9, §6.4, §7.7) |
+  | 404 | `unknown-message`: no such serial in the session, no such session of this gateway's, no such application (§6.7), no such gateway registered (§5.9, §6.4, §7.7), or no such template (§4.7) |
   | 409 | `already-have` |
   | 413 | `too-large` |
   | 422 | `credential-invalid`, `credential-expired`, `credential-revoked`, `credential-required`, `unknown-post-office`, `signature-invalid`, `time-skew` |
@@ -134,7 +134,8 @@ it.
 
 ## 4. Public documents
 
-Each is a signed JWS (RP-0 §5), signed by a key the verifier accepts by RP-1 §7.2: one in DNS, or
+Each but a template (§4.7), whose fingerprint is its proof, is a signed JWS (RP-0 §5), signed by a
+key the verifier accepts by RP-1 §7.2: one in DNS, or
 one the info document lists when a key in DNS signed that. A gateway SHOULD fetch and keep them for
 every post office it knows (RP-1 §7.3). Test vectors: `vectors/jws.json`. The payloads:
 
@@ -365,6 +366,25 @@ A reader SHOULD fetch the list no more than once a minute.
 
 Test vectors: `vectors/jws.json` (the example list), `vectors/api-exchanges.json` (reports taken,
 refused and withdrawn, and the lists they make).
+
+### 4.7 `GET /forms/{fingerprint}`
+
+A form's template (RP-2 §8.1) by its fingerprint, written as 16 lowercase hex digits: RadioPost's
+published templates, and those its users' clients handed in (§6.8). Answer:
+
+```json
+{"template": "o2FuGJ…"}
+```
+
+`template` is the template's deterministic CBOR encoding (RP-2 §8.1) in base64url. It is not
+signed: its fingerprint, the first 8 bytes of its SHA-256, is its proof. A reader checks that it
+hashes to the fingerprint it asked for and reads as a template (RP-2 §8.1's rules), and takes nothing
+from an answer that does not. A fingerprint not written as 16 lowercase hex digits is `400`
+`malformed`; one the post office does not hold, `404` `unknown-message`.
+
+Anyone may ask, with no token: nothing on the air is secret, and every form on the air names its
+template. A client missing a template SHOULD ask its own post office, and then the post office of
+the form's sender, found by the sender's domain (RP-1 §7.1).
 
 ---
 
@@ -883,6 +903,32 @@ applicant is given. `expires` is when a pending application is forgotten, at lea
 An unknown ID, or one the post office has forgotten, is `404` `unknown-message`. A decided
 application is answered for at least 7 days after the decision.
 
+### 6.8 `PUT /forms/{fingerprint}`
+
+A client hands in a template its user's forms use, so that the post office can write those forms
+into email (RP-6 §3.1) and serve the template to others (§4.7):
+
+```json
+{"template": "o2FuGJ…"}
+```
+
+The post office checks that `template` is base64url of at most 65 536 bytes (`413` `too-large`
+past that), and that those bytes are deterministic CBOR (RP-0 §4.1) holding a template that keeps RP-2
+§8.1's rules, with no key §8.1 does not define, and whose fingerprint is the one in the path:
+anything else is `400` `malformed`. It keeps the template and answers `200`:
+
+```json
+{"fingerprint": "c071db80be8d9501"}
+```
+
+It answers the same when it held the template already, a published one included. A post office
+MAY refuse to keep more of an account's templates with `507` `quota-exceeded`. As on every client
+endpoint, a gateway's token is `403` `not-authorized` (§2).
+
+A client SHOULD hand in a template that is not published when a message it sends uses it, as soon
+as it can reach its post office: until then, the email of that message shows the form's values by
+number (RP-2 §8.4).
+
 ---
 
 ## 7. Operator endpoints
@@ -1051,7 +1097,8 @@ accounts, codes and revocation; a gateway's registration withdrawn by an operato
 both), `vectors/direct.json` (§6.6: session-03 reported by both stations, sent again, refused to a
 gateway, and thirteen cases: a caller's statement in challenge form among them), `vectors/api-account.json` (renewal over the Internet and by radio, a gateway's, an expired and a
 revoked credential; the accept list read and changed, shared by a role mailbox's operators, filled
-by mail sent, and its effect at the door), `vectors/api-exchanges.json` (enrollment, a gateway registered, logins, session-01
+by mail sent, and its effect at the door; templates handed in and served, and the refusals of
+§4.7 and §6.8), `vectors/api-exchanges.json` (enrollment, a gateway registered, logins, session-01
 at the post office, copies placed ahead and dropped, copies at a gateway registered with another
 post office and for whose credential, a gateway's registration withdrawn, an offline gateway's
 report, a gateway's status reports and the status lists they make, and the failures above),
@@ -1096,3 +1143,4 @@ read from the home's and every post office it knows) and `vectors/api.json` (the
 | 1.5.0 | 2026-11-21 | §4.4: `site`, where a gateway's antennas are (`lat`, `lon` at the operator's precision, `agl_m`), and a channel's `station`, how it transmits and receives there (`power_w`, `antenna` from RP-0 1.3.0 §9.6, `agl_m`, `gain_dbi`, `azimuth_deg`), for programs judging a path over the terrain and its link budget each way; what a reader does with a member out of its range. From choosing a gateway (the design's §7.2, Phase 2). Test vectors: `site_cases`, and the example list's second gateway with a site and a VHF channel's station. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; a reader that ignores both loses nothing it had. |
 | 1.6.0 | 2026-11-21 | Whether a gateway is on the air. §5.9: `PUT /status`, a gateway's report to its own post office (its `state`, `listening`, `session`, `opening` or `stopped`; whether it listens on each channel; problems named from RP-0 1.4.0 §9.7; the hour its last session ended), taken only from a credential that post office issued for a gateway registered with it; what the post office keeps, to the minute and the hour; `DELETE /status`; reported on change and at least every 5 minutes. §4.6: `GET /gateways/status`, the signed list of its gateways' last reports, and how a reader reads one: current for 15 minutes (RP-7 §4.1's cut-off), an unknown state saying nothing, an unknown problem a problem all the same. §4.4: a status report counts for `seen`. §6.4: a withdrawal drops the report. §8: what a report makes public. For radiopost.org's gateway directory, which could say only that a gateway was registered (the author, 2026-11-20; D45). Test vectors (`api-exchanges.json`, `jws.json`). MINOR, announced (RP-0 §8.4): nothing for an implementation to do; a post office SHOULD offer both, and a gateway MAY report. |
 | 1.7.0 | 2026-11-24 | §5.4: a message's `from` is the statement's address as RP-0 §6.2 compares them, so a client writing `from` in lowercase (RP-0 1.5.0) is not refused under a credential issued with capitals. §7.5: a code's address is written in lowercase, and so is the credential issued with it (a post office had kept an operator's capitals, filed the account's mail under the lowercase address, and looked for it under the other). MINOR, announced (RP-0 §8.4): a post office should compare `from` so and lowercase codes' addresses; nothing taken before is refused. |
+| 1.8.0 | 2026-11-24 | Templates by fingerprint ([the forms design](../docs/design/06-forms.md), step 4): §4.7 `GET /forms/{fingerprint}`, public and unsigned, the fingerprint being the proof; §6.8 `PUT /forms/{fingerprint}`, a client handing in a template its forms use; §1's `404` covers a template not held. Test vectors: `api-account.json`'s `forms` and `forms_cases`. MINOR, announced (RP-0 §8.4): new endpoints; a post office that offers neither answers `404`, and its email shows a form it lacks by number as before. Post offices should serve and take templates, clients should hand theirs in. |

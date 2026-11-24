@@ -48,4 +48,5 @@ pub mod reports;
 pub mod selection;
 pub mod session;
 pub mod store;
+pub mod templates;
 pub mod terminal;

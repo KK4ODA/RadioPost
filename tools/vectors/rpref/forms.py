@@ -81,6 +81,8 @@ def _fields_problem(fields: list[dict[str, Any]], column: bool) -> str | None:
             return f"a column of type {kind}"
         if column and "bound" in f:
             return "a bound column"
+        if "choices" in f and kind not in {"choice", "multi"}:
+            return "choices on a field that is neither choice nor multi"
         if kind == "choice" and not f.get("choices"):
             return "a choice field without choices"
         if kind == "multi" and not 1 <= len(f.get("choices", [])) <= 64:
@@ -102,6 +104,97 @@ def _fields_problem(fields: list[dict[str, Any]], column: bool) -> str | None:
         ):
             return "a heading with required, choices, bound or max"
     return None
+
+
+# RP-2 §8.1: a field's keys, by number, and its types and bounds by number
+_FIELD_KEYS = {
+    1: "n",
+    2: "label",
+    3: "type",
+    4: "required",
+    5: "choices",
+    6: "bound",
+    7: "max",
+    8: "scale",
+    9: "unit",
+    10: "columns",
+}
+_TYPE_NAMES = {v: k for k, v in TYPES.items()}
+_BOUND_NAMES = {v: k for k, v in BOUND.items()}
+
+
+def _field_json(m: Any) -> dict[str, Any] | None:
+    """A field's (or a column's) CBOR map as JSON, or None when it is not one §8.1 writes."""
+    if not isinstance(m, dict) or not all(_is_int(k) and k in _FIELD_KEYS for k in m):
+        return None
+    f: dict[str, Any] = {}
+    for k, v in sorted(m.items()):
+        name = _FIELD_KEYS[k]
+        if name == "type":
+            if not _is_int(v) or v not in _TYPE_NAMES:
+                return None
+            f[name] = _TYPE_NAMES[v]
+        elif name == "bound":
+            if not _is_int(v) or v not in _BOUND_NAMES:
+                return None
+            f[name] = _BOUND_NAMES[v]
+        elif name == "required":
+            if v is not True:  # written only when true (§8.1)
+                return None
+            f[name] = True
+        elif name in {"n", "max", "scale"}:
+            if not _is_int(v) or v < 0:
+                return None
+            f[name] = v
+        elif name in {"label", "unit"}:
+            if not isinstance(v, str):
+                return None
+            f[name] = v
+        elif name == "choices":
+            if not isinstance(v, list) or not all(isinstance(c, str) for c in v):
+                return None
+            f[name] = list(v)
+        else:  # columns
+            if not isinstance(v, list):
+                return None
+            columns = [_field_json(c) for c in v]
+            if any(c is None for c in columns):
+                return None
+            f[name] = columns
+    if not {"n", "label", "type"} <= f.keys() or not 1 <= f["n"] <= 255:
+        return None
+    return f
+
+
+def template_from_map(m: Any) -> dict[str, Any] | None:
+    """RP-2 §8.1: a template's CBOR map as JSON, or None when it is not one §8.1 writes."""
+    if not isinstance(m, dict) or not set(m) <= {1, 2, 3} or not {1, 2} <= set(m):
+        return None
+    if not isinstance(m[1], str) or not isinstance(m[2], list):
+        return None
+    fields = [_field_json(f) for f in m[2]]
+    if any(f is None for f in fields):
+        return None
+    t: dict[str, Any] = {"name": m[1]}
+    if 3 in m:
+        if not isinstance(m[3], str):
+            return None
+        t["note"] = m[3]
+    t["fields"] = fields
+    return t
+
+
+def read_template(data: bytes) -> dict[str, Any] | None:
+    """RP-2 §8.3: a template from its CBOR, when it is deterministic, keeps §8.1's rules and is
+    written back byte for byte; None otherwise."""
+    try:
+        m = cbor.decode(data)
+    except ValueError:  # anything that is not deterministic CBOR is not a template
+        return None
+    t = template_from_map(m)
+    if t is None or template_problem(t) is not None:
+        return None
+    return t if cbor.encode(template_map(t)) == data else None
 
 
 def form_map(template: bytes, values: dict[int, Any]) -> dict[int, Any]:

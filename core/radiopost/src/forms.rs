@@ -216,6 +216,11 @@ impl Field {
         if column && has("bound") {
             return Err(format!("column {n}: a column is never bound"));
         }
+        if has("choices") && !matches!(kind, Kind::Choice | Kind::Multi) {
+            return Err(format!(
+                "{what} {n}: choices are on a choice or a multi field only"
+            ));
+        }
         let choices: Vec<String> = f["choices"]
             .as_array()
             .into_iter()
@@ -278,6 +283,37 @@ impl Field {
             unit: f["unit"].as_str().map(str::to_owned),
             columns,
         })
+    }
+
+    /// Its JSON, as RP-2 §8.1 writes a template as JSON: a member not set is left out.
+    fn to_json(&self) -> Json {
+        let mut m = serde_json::Map::new();
+        m.insert("n".into(), self.n.into());
+        m.insert("label".into(), self.label.clone().into());
+        m.insert("type".into(), self.kind.name().into());
+        if self.required {
+            m.insert("required".into(), true.into());
+        }
+        if !self.choices.is_empty() {
+            m.insert("choices".into(), self.choices.clone().into());
+        }
+        if let Some(b) = self.bound {
+            m.insert("bound".into(), b.name().into());
+        }
+        if let Some(max) = self.max {
+            m.insert("max".into(), max.into());
+        }
+        if let Some(scale) = self.scale {
+            m.insert("scale".into(), scale.into());
+        }
+        if let Some(unit) = &self.unit {
+            m.insert("unit".into(), unit.clone().into());
+        }
+        if !self.columns.is_empty() {
+            let columns: Vec<Json> = self.columns.iter().map(Field::to_json).collect();
+            m.insert("columns".into(), columns.into());
+        }
+        Json::Object(m)
     }
 
     /// Its CBOR map (RP-2 §8.1).
@@ -594,6 +630,79 @@ fn table_cells(f: &Field, rows: &[Value]) -> Vec<Vec<String>> {
         .collect()
 }
 
+/// A template's CBOR map as its JSON, each key by its name and a type and a bound by name, for
+/// [`Template::from_value`] to check; `None` for a key RP-2 §8.1 does not define or a value no
+/// JSON template could hold. [`Template::from_cbor`] then checks that it encodes back exactly, so
+/// nothing this lets through unchecked (a `max` as text, say) can make a template.
+fn template_json(m: &Value) -> Option<Json> {
+    let mut out = serde_json::Map::new();
+    for (k, v) in m.as_map()? {
+        let (name, value) = match k.as_u64()? {
+            1 => ("name", plain_json(v)?),
+            2 => (
+                "fields",
+                Json::Array(
+                    v.as_array()?
+                        .iter()
+                        .map(field_json)
+                        .collect::<Option<_>>()?,
+                ),
+            ),
+            3 => ("note", plain_json(v)?),
+            _ => return None,
+        };
+        out.insert(name.into(), value);
+    }
+    Some(Json::Object(out))
+}
+
+/// A field's (or a column's) CBOR map as its JSON (see [`template_json`]).
+fn field_json(m: &Value) -> Option<Json> {
+    const NAMES: [&str; 10] = [
+        "n", "label", "type", "required", "choices", "bound", "max", "scale", "unit", "columns",
+    ];
+    let mut out = serde_json::Map::new();
+    for (k, v) in m.as_map()? {
+        let key = usize::try_from(k.as_u64()?).ok()?;
+        let name = *NAMES.get(key.checked_sub(1)?)?;
+        let value = match name {
+            "type" => Json::from(Kind::NAMES.get(usize::try_from(v.as_u64()?).ok()?)?.0),
+            "bound" => {
+                let code = v.as_u64()?;
+                let b = [Bound::Subject, Bound::Date, Bound::Time]
+                    .into_iter()
+                    .find(|b| b.code() == code)?;
+                Json::from(b.name())
+            }
+            "columns" => Json::Array(
+                v.as_array()?
+                    .iter()
+                    .map(field_json)
+                    .collect::<Option<_>>()?,
+            ),
+            _ => plain_json(v)?,
+        };
+        out.insert(name.into(), value);
+    }
+    Some(Json::Object(out))
+}
+
+/// A uint, text, bool or array of text as JSON; `None` for any other value.
+fn plain_json(v: &Value) -> Option<Json> {
+    match v {
+        Value::Uint(n) => Some((*n).into()),
+        Value::Text(t) => Some(t.clone().into()),
+        Value::Bool(b) => Some((*b).into()),
+        Value::Array(items) => Some(Json::Array(
+            items
+                .iter()
+                .map(|i| i.as_text().map(Json::from))
+                .collect::<Option<_>>()?,
+        )),
+        _ => None,
+    }
+}
+
 /// A template (RP-2 §8.1).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Template {
@@ -636,6 +745,37 @@ impl Template {
             fields.push(f);
         }
         Ok(Template { name, note, fields })
+    }
+
+    /// A template from its deterministic CBOR encoding (RP-2 §8.3; RP-5 §4.7, §6.8): read only
+    /// when the bytes are deterministic CBOR (RP-0 §4.1), keep RP-2 §8.1's rules with no key it
+    /// does not define, and are what the template encodes as, byte for byte. Its fingerprint is
+    /// then that of the bytes.
+    ///
+    /// # Errors
+    ///
+    /// The bytes are not such a template: what is wrong.
+    pub fn from_cbor(bytes: &[u8]) -> Result<Template, String> {
+        let map = crate::cbor::decode(bytes).map_err(|e| format!("not deterministic CBOR: {e}"))?;
+        let j = template_json(&map).ok_or("not a template's map (RP-2 §8.1)")?;
+        let t = Template::from_value(&j)?;
+        if t.to_cbor().encode().ok().as_deref() != Some(bytes) {
+            return Err("not written as RP-2 §8.1 writes a template".into());
+        }
+        Ok(t)
+    }
+
+    /// Its JSON (RP-2 §8.1): `name`, `note` when it has one, and `fields`, as `forms/*.json` are.
+    #[must_use]
+    pub fn to_json(&self) -> Json {
+        let mut m = serde_json::Map::new();
+        m.insert("name".into(), self.name.clone().into());
+        if let Some(note) = &self.note {
+            m.insert("note".into(), note.clone().into());
+        }
+        let fields: Vec<Json> = self.fields.iter().map(Field::to_json).collect();
+        m.insert("fields".into(), fields.into());
+        Json::Object(m)
     }
 
     /// RadioPost's published templates.

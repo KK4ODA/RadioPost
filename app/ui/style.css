@@ -248,6 +248,8 @@ label.inline input { width: 7em; margin: 0; }
 .lines { white-space: pre-line; }
 #waiting-view .note, #gateways-view .note { margin-bottom: 12px; }
 .entries li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 0; }
+/* an entry's buttons together at its end (Setup's forms kept here) */
+.entry-tools { display: flex; gap: 8px; flex: none; }
 .card .note { margin-bottom: 8px; }
 /* this computer's enrollment, said where the form would be */
 .enrolled-who { margin: 0 0 4px; font-weight: 600; color: var(--ok); }

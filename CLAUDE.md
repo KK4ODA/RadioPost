@@ -49,6 +49,18 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `WorldMap` (`narrowest`, `fitLeast`, `showReports`, subsquares). The client's composer has **Form** (`/api/forms`), `compose --form --field N=VALUE`,
   `forms`; the post office writes a form's text into the email (RP-6 1.1.0 §3.1). A new template
   goes in `forms/` and in `make.py`, never a change to a published one.
+  Step 4, templates by fingerprint (RP-5 1.8.0 §4.7 and §6.8, RP-2 1.5.0 §8.3): `GET /forms/{fp}`
+  is public and unsigned (the fingerprint is the proof), `PUT /forms/{fp}` takes a client's
+  template (64 KiB at most; `Template::from_cbor` reads only what writes back byte for byte); the
+  post office keeps them in `state.json`'s `templates` (`TEMPLATES_PER_ACCOUNT`, 100) and passes
+  them to `mail::from_message` as `Leaving::templates`; `api-account.json`'s `forms` and
+  `forms_cases` replay against it. The client's `templates.rs`: kept templates in the first home's
+  `forms/<fp>.cbor` (a file whose bytes do not hash to its name is not held), `held(home)` is the
+  published ones then those kept and is what `compose::text_of`, `answer`, `form_from_args`, the
+  reader, the composer and Reports take; `import` (JSON or CBOR), `exported` (JSON), `remove`,
+  `fetch` (own post office, then the sender's by DNS) and `hand_in` (once per account,
+  `forms/handed-in.json`; at import and with the hourly renewal). Setup's **Forms kept here**, the
+  reader's **Get the form**, `radiopost forms import|export|remove|fetch|hand-in`.
   A form prints as its paper form (W53): `forms/*.print.html`, named by the template's
   fingerprint, each field placed by number, a table's rows in a `tbody` padded to `data-rows`
   (`radiopost::forms::layout`); the reader's **Print**

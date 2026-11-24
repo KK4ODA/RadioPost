@@ -590,6 +590,7 @@ impl Panel {
                     lock(&self.activity).log.push(line);
                 }
             }
+            self.hand_in_templates();
             thread::sleep(self.renewal.every);
         }
     }
@@ -975,7 +976,23 @@ impl Panel {
         let text = |name: &str| body[name].as_str().unwrap_or("").trim().to_owned();
         match (method, path) {
             (Method::Get, "/api/state") => self.state(),
-            (Method::Get, "/api/forms") => Ok(forms_json()),
+            (Method::Get, "/api/forms") => Ok(forms_json(&self.home())),
+            (Method::Post, "/api/forms/import") => self.import_template(body),
+            (Method::Post, "/api/forms/export") => self.export_template(&text("template")),
+            (Method::Post, "/api/forms/remove") => {
+                let gone = crate::templates::remove(&self.home(), &text("template"))?;
+                Ok(json!({"removed": gone.name}))
+            }
+            (Method::Post, "/api/forms/fetch") => {
+                let store = Store::open(&self.home())?;
+                let from = text("from");
+                let t = crate::templates::fetch(
+                    &store,
+                    &text("template"),
+                    Some(from.as_str()).filter(|f| !f.is_empty()),
+                )?;
+                Ok(template_json(&t))
+            }
             (Method::Get, "/api/form-position") => Ok(self.position.for_form()),
             (Method::Get, "/api/reports") => self.reports_view(),
             (Method::Post, "/api/reports/export") => self.export_reports(body),
@@ -1321,11 +1338,64 @@ impl Panel {
         Ok(json!({"path": path.display().to_string(), "name": name}))
     }
 
+    /// A template from a file the page read (`{data}`, its bytes in base64url): its JSON or its
+    /// CBOR, kept for every callsign of this computer and handed in to each one's post office
+    /// by a thread of its own (RP-5 §6.8), since the post office may be slow or out of reach.
+    fn import_template(&self, body: &Value) -> Result<Value, Error> {
+        let data = body["data"]
+            .as_str()
+            .and_then(radiopost::base64url::decode)
+            .ok_or("data: the file's bytes in base64url")?;
+        let t = crate::templates::import(&self.home(), &data)?;
+        let panel = self.clone();
+        thread::spawn(move || panel.hand_in_templates());
+        Ok(template_json(&t))
+    }
+
+    /// A template written to the Downloads folder as its JSON, to give to someone, under a new
+    /// name: `{template}`, its fingerprint.
+    fn export_template(&self, fingerprint: &str) -> Result<Value, Error> {
+        let t = crate::templates::held(&self.home())
+            .into_iter()
+            .find(|t| crate::templates::fingerprint(t) == fingerprint)
+            .ok_or("no such form here")?;
+        let name = format!("{}.json", t.name);
+        let text = crate::templates::exported(&t);
+        let path = crate::downloads::write_new(&self.downloads, &name, text.as_bytes())?;
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        Ok(json!({"path": path.display().to_string(), "name": name}))
+    }
+
+    /// Hands every template kept in to each callsign's post office that has not had it (RP-5
+    /// §6.8), saying what went. A post office out of reach is tried again with the next hour's
+    /// renewal, quietly.
+    fn hand_in_templates(&self) {
+        for c in callsigns::list(&self.base) {
+            let Ok(store) = Store::open(&c.home) else {
+                continue;
+            };
+            if let Ok(done) = crate::templates::hand_in(&store)
+                && !done.is_empty()
+            {
+                let me = store.me().map(|m| m.address).unwrap_or_default();
+                let line = format!(
+                    "handed in {} form(s) to the post office of {me}",
+                    done.len()
+                );
+                radiopost::logfile::line(&line);
+                lock(&self.activity).log.push(line);
+            }
+        }
+    }
+
     /// The reports (the forms design, §4.3): every form received or sent that carries a position,
     /// newest first ([`crate::reports`]).
     fn reports_view(&self) -> Result<Value, Error> {
         let store = Store::open(&self.home())?;
-        let all = crate::reports::gather(&store, &radiopost::forms::Template::published());
+        let all = crate::reports::gather(&store, &crate::templates::held(store.home()));
         Ok(Value::Array(
             all.iter().map(crate::reports::Report::json).collect(),
         ))
@@ -1335,7 +1405,7 @@ impl Panel {
     /// `{format: "csv" | "geojson", ids}`, each a message's content ID as the reports give it.
     fn export_reports(&self, body: &Value) -> Result<Value, Error> {
         let store = Store::open(&self.home())?;
-        let all = crate::reports::gather(&store, &radiopost::forms::Template::published());
+        let all = crate::reports::gather(&store, &crate::templates::held(store.home()));
         let ids: Vec<&str> = body["ids"]
             .as_array()
             .ok_or("ids: the reports to write")?
@@ -1421,7 +1491,7 @@ impl Panel {
         // a form shows as the form: its rows, label and value, made from the template this client
         // holds (RP-2 §8.4), which the page lays out; its text too, as an email would have it
         if let Some(form) = radiopost::forms::Form::of(&m) {
-            let templates = radiopost::forms::Template::published();
+            let templates = crate::templates::held(store.home());
             let name = templates
                 .iter()
                 .find(|t| t.fingerprint() == form.template)
@@ -1503,7 +1573,8 @@ impl Panel {
             );
         }
         let original = store.message(&id)?;
-        let started = compose::answer(&original, &me.address, how);
+        let held = crate::templates::held(store.home());
+        let started = compose::answer(&original, &me.address, how, &held);
         let serial = store
             .inbox
             .iter()
@@ -1522,7 +1593,7 @@ impl Panel {
             .unwrap_or("")
             .into();
         // what the composer shows of it, for reference: a form's text, the note below it
-        v["text"] = compose::text_of(&original).into();
+        v["text"] = compose::text_of(&original, &held).into();
         Ok(json!({
             "how": how.name(), "to": started.to, "cc": started.cc, "subject": started.subject,
             "body": started.body,
@@ -1663,7 +1734,7 @@ impl Panel {
             files,
             priority: body["priority"].as_u64().unwrap_or(0),
             reply_to,
-            form: form_of(&body["form"])?,
+            form: form_of_with(&body["form"], &crate::templates::held(store.home()))?,
         };
         let message = draft.message()?;
         let (id, was) = match &edited {
@@ -2615,18 +2686,24 @@ fn dial_of(v: &Value) -> Result<Option<u64>, Error> {
     }
 }
 
-/// The templates this client holds (RP-2 §8.3), for the composer: each with its fingerprint.
-fn forms_json() -> Value {
-    radiopost::forms::Template::published()
+/// The templates this client holds (RP-2 §8.3), for the composer: each with its fingerprint, and
+/// whether it is one kept here (`kept`) rather than published.
+fn forms_json(home: &Path) -> Value {
+    crate::templates::held(home)
         .iter()
-        .map(|t| {
-            let fields: Vec<Value> = t.fields.iter().map(field_json).collect();
-            // how it prints, as the paper form it comes from, when this program holds a layout
-            let print = radiopost::forms::layout(&t.fingerprint());
-            json!({"template": radiopost::cbor::hex(&t.fingerprint()), "name": t.name,
-                   "note": t.note, "fields": fields, "print": print})
-        })
+        .map(template_json)
         .collect()
+}
+
+/// A template for the page: its fingerprint, name, note and fields, how it prints, and whether it
+/// is kept here.
+fn template_json(t: &radiopost::forms::Template) -> Value {
+    let fields: Vec<Value> = t.fields.iter().map(field_json).collect();
+    // how it prints, as the paper form it comes from, when this program holds a layout
+    let print = radiopost::forms::layout(&t.fingerprint());
+    json!({"template": radiopost::cbor::hex(&t.fingerprint()), "name": t.name,
+           "note": t.note, "fields": fields, "print": print,
+           "kept": !crate::templates::published(&t.fingerprint())})
 }
 
 /// A field of a template (or a column of a `rows` field) for the composer.
@@ -2693,15 +2770,10 @@ fn form_row_value(t: &radiopost::forms::Template, form: &radiopost::forms::Form)
 }
 
 /// A form from the composer: `{template, values}`, the values by field number; `null` for none.
-/// With a template this client holds, each value is read as its field's type: text as typed for
-/// a `line` or `text` field and through [`crate::compose::value_from_text`] for any other (a
-/// position, a decimal), integers and yes and no as they are, rows as a list of maps by column
-/// number. Empty fields, cells and rows are left out.
-fn form_of(form: &Value) -> Result<Option<radiopost::forms::Form>, Error> {
-    form_of_with(form, &radiopost::forms::Template::published())
-}
-
-/// [`form_of`] with these templates held.
+/// With a template this client holds (`templates`), each value is read as its field's type: text
+/// as typed for a `line` or `text` field and through [`crate::compose::value_from_text`] for any
+/// other (a position, a decimal), integers and yes and no as they are, rows as a list of maps by
+/// column number. Empty fields, cells and rows are left out.
 fn form_of_with(
     form: &Value,
     templates: &[radiopost::forms::Template],

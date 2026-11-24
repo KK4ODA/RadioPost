@@ -62,7 +62,48 @@ fn templates_encode_and_fingerprint_as_rp2_8_1_says() {
             unhex(t["fingerprint_hex"].as_str().expect("hex"))
         );
         assert!(published.contains(&ours), "the programs hold {}", ours.name);
+        // RP-2 §8.3: read back from its CBOR (RP-5 §4.7) and from its JSON, the same template
+        assert_eq!(Template::from_cbor(&encoded).as_ref(), Ok(&ours));
+        assert_eq!(Template::from_value(&ours.to_json()).as_ref(), Ok(&ours));
     }
+}
+
+#[test]
+fn a_template_reads_from_its_cbor_only_as_rp2_8_1_writes_it() {
+    let e = vectors("forms.json")["every_type"].clone();
+    let bytes = unhex(e["canonical_hex"].as_str().expect("hex"));
+    let t = Template::from_cbor(&bytes).expect("the test template");
+    assert_eq!(
+        t.fingerprint().to_vec(),
+        unhex(e["fingerprint_hex"].as_str().expect("hex"))
+    );
+    assert_eq!(t.to_json(), e["template"], "its JSON is the vector's");
+    // what RP-5 §6.8 refuses as not a template: each handed-in body the post office refused
+    // as malformed under the fingerprint of its own bytes is not read here either
+    let account = vectors("api-account.json");
+    let mut seen = 0;
+    for c in account["forms_cases"].as_array().expect("forms_cases") {
+        for x in c["exchanges"].as_array().expect("exchanges") {
+            let (Some(path), Some(given)) = (
+                x["request"]["path"].as_str(),
+                x["request"]["body"]["template"].as_str(),
+            ) else {
+                continue;
+            };
+            let Some(data) = radiopost::base64url::decode(given) else {
+                continue;
+            };
+            let own = radiopost::cbor::hex(&radiopost::crypto::sha256(&data)[..8]);
+            if !path.ends_with(&own) || data.len() > 65_536 {
+                continue;
+            }
+            let status = x["response"]["status"].as_u64().expect("status");
+            let read = Template::from_cbor(&data);
+            assert_eq!(read.is_ok(), status != 400, "{}: {read:?}", c["what"]);
+            seen += 1;
+        }
+    }
+    assert!(seen >= 5, "the refusals were found");
 }
 
 #[test]

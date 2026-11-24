@@ -55,4 +55,10 @@ To add a form, write its template here, add it to `PUBLISHED_FORMS` in `tools/ve
 that `vectors/forms.json` gives its fingerprint, and to `radiopost::forms::PUBLISHED` so the
 programs hold it. Never change a published template: write a new one.
 
+**A group's own forms** need none of that. Write the template as JSON in the same way, and import
+it in the client (Setup, **Forms kept here**, or `radiopost forms import FILE`). The client hands
+it in to its post office (RP-5 §6.8), which then writes those forms into email with their labels and
+serves the template by its fingerprint to any station that asks (RP-5 §4.7, the reader's **Get the
+form**). Give the file to the other stations, or let them get it that way.
+
 These templates and layouts are published under CC BY 4.0, as the specifications are.

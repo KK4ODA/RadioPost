@@ -32,6 +32,38 @@ pub const NONCE_S: u64 = 300;
 pub const CREDENTIAL_S: u64 = 90 * 86_400;
 /// How long an enrollment code is good for (RP-5 §8: within days).
 pub const CODE_S: u64 = 7 * 86_400;
+/// The largest template a client may hand in, in bytes (RP-5 §6.8).
+pub const TEMPLATE_MAX: usize = 65_536;
+/// How many templates one account may hand in (RP-5 §6.8's `quota-exceeded`): a group's own forms
+/// are a handful, and every one is kept in the state the post office writes after each request.
+pub const TEMPLATES_PER_ACCOUNT: usize = 100;
+
+/// RP-5 §4.7: a fingerprint as a path writes it, 16 lowercase hex digits.
+fn fingerprint_of(text: &str) -> Option<[u8; 8]> {
+    if text.len() != 16 || !text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+        return None;
+    }
+    let mut out = [0u8; 8];
+    for (i, byte) in out.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&text[2 * i..2 * i + 2], 16).ok()?;
+    }
+    Some(out)
+}
+
+/// A published template's deterministic CBOR, by its fingerprint (RP-2 §8.1).
+fn published_template(fingerprint: [u8; 8]) -> Option<&'static [u8]> {
+    static PUBLISHED: std::sync::OnceLock<Vec<([u8; 8], Vec<u8>)>> = std::sync::OnceLock::new();
+    PUBLISHED
+        .get_or_init(|| {
+            radiopost::forms::Template::published()
+                .iter()
+                .filter_map(|t| Some((t.fingerprint(), t.to_cbor().encode().ok()?)))
+                .collect()
+        })
+        .iter()
+        .find(|(f, _)| *f == fingerprint)
+        .map(|(_, bytes)| bytes.as_slice())
+}
 
 /// Where a post office's random values come from: `(what, n)` gives `n` bytes for the named use.
 /// The service draws from the system; the vectors' replay from their published stream.
@@ -411,6 +443,11 @@ pub struct State {
     pub forwarded: BTreeMap<String, Vec<(String, String, u64)>>,
     /// What the mail server is still to be told of mail sent and picked up by radio (RP-6 §2.6).
     pub to_mailboxes: Vec<MailboxTask>,
+    /// The templates its users' clients handed in (RP-5 §6.8): each one's deterministic CBOR in
+    /// base64url, by its fingerprint in hex. The published ones are the programs' own, not here.
+    pub templates: BTreeMap<String, String>,
+    /// The fingerprints each account handed in, for its quota (RP-5 §6.8).
+    pub templates_of: BTreeMap<String, BTreeSet<String>>,
 }
 
 impl State {
@@ -1099,6 +1136,7 @@ impl PostOffice {
             ("GET", _) if parts.len() == 2 && parts[0] == "applications" => {
                 return self.application(parts[1]);
             }
+            ("GET", _) if parts.len() == 2 && parts[0] == "forms" => return self.form(parts[1]),
             _ => {}
         }
         if parts[0] == "office" && self.config.operators.is_empty() {
@@ -1144,12 +1182,75 @@ impl PostOffice {
             }
             ("POST", "/direct") => return self.direct(&user, body),
             (_, "/accept-list") => return self.accept_list(&user.address, method, body),
+            ("PUT", _) if parts.len() == 2 && parts[0] == "forms" => {
+                return self.hand_in(&user.address, parts[1], body);
+            }
             _ => {}
         }
         if parts[0] == "sessions" && parts.len() >= 2 {
             return self.in_session(&user, method, parts[1], &parts[2..], body);
         }
         problem(ErrorCode::UnknownMessage, Some(404))
+    }
+
+    /// RP-5 §4.7: a template by its fingerprint, published or handed in.
+    fn form(&self, text: &str) -> Response {
+        let Some(fingerprint) = fingerprint_of(text) else {
+            return problem(ErrorCode::Malformed, None);
+        };
+        let held = published_template(fingerprint)
+            .map(base64url::encode)
+            .or_else(|| self.state.templates.get(text).cloned());
+        match held {
+            Some(template) => Response::ok(200, json!({"template": template})),
+            None => problem(ErrorCode::UnknownMessage, Some(404)),
+        }
+    }
+
+    /// RP-5 §6.8: a template handed in, kept when it is one and is the one the path names.
+    fn hand_in(&mut self, account: &str, text: &str, body: &Json) -> Response {
+        let fingerprint = fingerprint_of(text);
+        let given = body.get("template").and_then(Json::as_str);
+        let (Some(fingerprint), Some(data)) = (fingerprint, given.and_then(base64url::decode))
+        else {
+            return problem(ErrorCode::Malformed, None);
+        };
+        if data.len() > TEMPLATE_MAX {
+            return problem(ErrorCode::TooLarge, None);
+        }
+        let its_own = crypto::sha256(&data)[..8] == fingerprint;
+        if !its_own || radiopost::forms::Template::from_cbor(&data).is_err() {
+            return problem(ErrorCode::Malformed, None);
+        }
+        let answer = Response::ok(200, json!({"fingerprint": text}));
+        if published_template(fingerprint).is_some() || self.state.templates.contains_key(text) {
+            return answer;
+        }
+        let own = self
+            .state
+            .templates_of
+            .entry(account.to_owned())
+            .or_default();
+        if own.len() >= TEMPLATES_PER_ACCOUNT {
+            return problem(ErrorCode::QuotaExceeded, None);
+        }
+        own.insert(text.to_owned());
+        self.state
+            .templates
+            .insert(text.to_owned(), base64url::encode(&data));
+        answer
+    }
+
+    /// The templates its users handed in (RP-5 §6.8), for the email their forms become (RP-6
+    /// §3.1); the published ones are the programs' own.
+    #[must_use]
+    pub fn held_templates(&self) -> Vec<radiopost::forms::Template> {
+        self.state
+            .templates
+            .values()
+            .filter_map(|t| base64url::decode(t))
+            .filter_map(|t| radiopost::forms::Template::from_cbor(&t).ok())
+            .collect()
     }
 
     /// RP-5 §2: the holder of a valid bearer token.

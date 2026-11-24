@@ -1514,7 +1514,10 @@ fn a_form_forwarded_or_answered_keeps_the_form() {
         subject: "Cots".into(),
         body: "Sent from the mobile.".into(),
         priority: 1,
-        form: Some(form_from_args("ics-213", &fields).expect("a form")),
+        form: Some(
+            form_from_args("ics-213", &fields, &radiopost::forms::Template::published())
+                .expect("a form"),
+        ),
         ..Draft::default()
     }
     .message()
@@ -1805,5 +1808,65 @@ fn forms_with_positions_are_reports_written_as_csv_and_geojson() {
             &json!({"format": "csv", "ids": ["nothing"]})
         )
         .is_err()
+    );
+}
+
+/// RP-2 §8.3: a group's form imported from its file is held beside the published ones, offered
+/// in the composer, written to Downloads as its JSON, and removed; a published form is not.
+#[test]
+fn a_form_is_imported_exported_and_removed_from_setup() {
+    let dir = scratch("panel-forms-kept");
+    drop(store_for(&dir.join("ana"), "device:ana", "ana"));
+    let saved = dir.join("Downloads");
+    let c = Client {
+        at: Panel::new(&dir.join("ana"), None)
+            .saving_in(&saved)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let published = c.get("/api/forms").as_array().expect("forms").len();
+    let file = br#"{"name": "Shelter Roll", "fields": [
+        {"n": 1, "label": "Shelter", "type": "line", "required": true},
+        {"n": 2, "label": "Cots in use", "type": "number"}]}"#;
+    let data = radiopost::base64url::encode(file);
+    let t = c
+        .post("/api/forms/import", &json!({"data": data}))
+        .expect("imported");
+    assert_eq!(t["name"], "Shelter Roll");
+    assert_eq!(t["kept"], true);
+    let forms = c.get("/api/forms");
+    let forms = forms.as_array().expect("forms");
+    assert_eq!(forms.len(), published + 1);
+    assert_eq!(forms.iter().filter(|f| f["kept"] == true).count(), 1);
+    // a line field with choices breaks RP-2 §8.1's rules: not kept
+    let bad =
+        br#"{"name": "T", "fields": [{"n": 1, "label": "A", "type": "line", "choices": ["x"]}]}"#;
+    let why = c
+        .post(
+            "/api/forms/import",
+            &json!({"data": radiopost::base64url::encode(bad)}),
+        )
+        .expect_err("refused");
+    assert!(why.contains("choices"), "{why}");
+    let out = c
+        .post("/api/forms/export", &json!({"template": t["template"]}))
+        .expect("written");
+    let text = std::fs::read_to_string(saved.join(out["name"].as_str().expect("a name")))
+        .expect("the JSON");
+    let again = radiopost::forms::Template::from_json(&text).expect("a template");
+    assert_eq!(radiopost::cbor::hex(&again.fingerprint()), t["template"]);
+    let ics = forms
+        .iter()
+        .find(|f| f["name"] == "ICS-213 General Message")
+        .expect("ICS-213");
+    assert!(
+        c.post("/api/forms/remove", &json!({"template": ics["template"]}))
+            .is_err()
+    );
+    c.post("/api/forms/remove", &json!({"template": t["template"]}))
+        .expect("removed");
+    assert_eq!(
+        c.get("/api/forms").as_array().expect("forms").len(),
+        published
     );
 }

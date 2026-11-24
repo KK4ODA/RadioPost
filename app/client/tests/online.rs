@@ -1025,3 +1025,57 @@ fn the_operators_computer_keeps_the_post_offices_backups() {
     assert_eq!(panel_get(op, "/api/backups")["on"], false);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// RP-5 §6.8 and §4.7: a template imported on one computer is handed in to the post office, which
+/// writes its forms into email, and another computer fetches it by its fingerprint for a form that
+/// came in.
+#[test]
+fn a_groups_form_is_handed_in_and_fetched_by_its_fingerprint() {
+    let dir = scratch("online-forms");
+    let (running, base, public) = post_office(&dir.join("po"));
+    let (one, other) = (dir.join("one"), dir.join("other"));
+    enroll(&running, &base, &public, &one);
+    enroll(&running, &base, &public, &other);
+    let file = dir.join("shelter-roll.json");
+    std::fs::write(
+        &file,
+        r#"{"name": "Shelter roll", "fields": [
+            {"n": 1, "label": "Shelter", "type": "line", "required": true},
+            {"n": 2, "label": "Cots", "type": "number"}]}"#,
+    )
+    .expect("written");
+    let kept = radiopost(&one, &["forms", "import", file.to_str().expect("a path")]).expect("kept");
+    let fingerprint = kept
+        .rsplit_once('(')
+        .and_then(|(_, f)| f.strip_suffix(")\n"))
+        .expect("its fingerprint")
+        .to_owned();
+    // not held yet: the other computer cannot fetch it
+    let missing = radiopost(&other, &["forms", "fetch", &fingerprint]).expect_err("not held");
+    assert!(missing.contains("404"), "{missing}");
+    assert_eq!(
+        radiopost(&one, &["forms", "hand-in"]).expect("handed in"),
+        "handed in 1 form(s)\n"
+    );
+    assert_eq!(
+        radiopost(&one, &["forms", "hand-in"]).expect("asked"),
+        "handed in 0 form(s)\n",
+        "once"
+    );
+    assert_eq!(running.office().held_templates().len(), 1);
+    let fetched = radiopost(&other, &["forms", "fetch", &fingerprint]).expect("fetched");
+    assert_eq!(fetched, format!("kept Shelter roll ({fingerprint})\n"));
+    let listed = radiopost(&other, &["forms"]).expect("listed");
+    assert!(
+        listed.contains(&format!("Shelter roll ({fingerprint}, kept here)")),
+        "{listed}"
+    );
+    // a published form is the programs' own: never removed
+    assert!(radiopost(&other, &["forms", "remove", "ics-213"]).is_err());
+    radiopost(&other, &["forms", "remove", "shelter roll"]).expect("removed");
+    assert!(
+        !radiopost(&other, &["forms"])
+            .expect("listed")
+            .contains("Shelter roll")
+    );
+}

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.4.1 |
+| **Version** | 1.5.0 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -241,7 +241,8 @@ integer: its precision is whatever its sender rounds it to.
 A template keeps these rules, or a station does not hold it:
 
 * A field's number is used once in the template, and a column's once among its field's columns.
-* A `choice` field has `choices`; a `multi` field has 1 to 64.
+* `choices` is on a `choice` or a `multi` field only: a `choice` field has at least one, a `multi`
+  field 1 to 64.
 * `scale` and `unit` are on a `number` only, and `scale` is 1 to 9.
 * `columns` is on a `rows` field only, and a `rows` field has at least one column. A column is a
   field of any type but `text`, `rows` and `heading`, and is never bound.
@@ -251,10 +252,14 @@ The template's **fingerprint** is the first 8 bytes of SHA-256 of its determinis
 (RP-0 §4.1). Any change to a template makes another template, with another fingerprint: a published
 template is never changed, a new one is published.
 
-RadioPost publishes its templates in its repository's `forms/` directory, as JSON with the names of
-the tables above (a type and a `bound` by name), each with its fingerprint in `vectors/forms.json`.
-The first is ICS-213, after FEMA's public-domain form. A client SHOULD hold every published
-template, and MAY hold others: a group's own forms, shared as files.
+**A template as JSON** is an object with the members `name`, `fields` and, when it has one, `note`;
+a field's (and a column's) members are the field table's names, a `type` and a `bound` by name, and
+a member not set is left out: `required` is written only when `true`. It becomes the CBOR map by
+those names alone, so a template written either way has one fingerprint.
+
+RadioPost publishes its templates in its repository's `forms/` directory, as JSON, each with its
+fingerprint in `vectors/forms.json`. The first is ICS-213, after FEMA's public-domain form. A
+client SHOULD hold every published template, and MAY hold others: a group's own forms (§8.3).
 
 ### 8.2 The form in a message
 
@@ -293,9 +298,17 @@ the form as §8.4 says.
 
 ### 8.3 Templates and the air
 
-Only the fingerprint and the values go on the air. A template is shared beforehand: published with
-the programs, or passed between stations as a file. A station that receives a form it has no
-template for shows its values by number (§8.4); its operator can ask the sender for the template.
+Only the fingerprint and the values go on the air. A station gets a template:
+
+* published with the programs;
+* from a post office, by its fingerprint (RP-5 §4.7): the station's own, or the sender's, where the
+  sender's client handed it in (RP-5 §6.8);
+* as a file, by hand or attached to a message (`files`, §2): the template as JSON (§8.1), or its
+  CBOR encoding.
+
+Whichever way it comes, a station keeps a template only when it reads as one (§8.1's rules) and,
+come by fingerprint, only when it hashes to that fingerprint. A station that receives a form it has
+no template for shows its values by number (§8.4) until it has the template.
 
 ### 8.4 The text a form shows as
 
@@ -381,3 +394,4 @@ rules.
 | 1.3.0 | 2026-11-24 | §2: a sender writes `from`, `to` and `cc` in lowercase (RP-0 1.5.0 §6.2); a receiver keeps them as they came and compares them without regard to case. MINOR, announced (RP-0 §8.4): nothing is refused that was taken before; implementations should lowercase addresses as they make a message. |
 | 1.4.0 | 2026-11-24 | Forms for most jobs ([the forms design](../docs/design/06-forms.md), wishlist W32): §8.1's types `position`, `datetime`, `multi`, `rows` and `heading`, a `number`'s `scale` and `unit`, a `rows` field's `columns`, and the rules a template keeps; §8.2's checks for each, written as a list; §8.4's text for each, and a list or a map shown without its template in CBOR diagnostic notation. Test vectors: `forms.json`'s `every_type`. MINOR, announced (RP-0 §8.4): a program that does not know the new types holds no template that uses them, and shows such a form by number as before; only the diagnostic notation for a list or a map is new there. Implementations should show lists and maps so, and may read the new types. |
 | 1.4.1 | 2026-11-24 | §8.4: the test vectors give every published template's encoding and fingerprint: FEMA's ICS 202, 204, 205, 205A, 206, 208, 210, 211, 213RR and 214 and RadioPost's own seven forms joined ICS-213 ([the forms design](../docs/design/06-forms.md), step 2). Nothing to do: templates are published as files (§8.1). |
+| 1.5.0 | 2026-11-24 | Templates by fingerprint ([the forms design](../docs/design/06-forms.md), step 4). §8.1: `choices` only on a `choice` or `multi` field, and a template as JSON written out, so that a template written as JSON and as CBOR has one fingerprint (a `line` with an empty `choices` had been two templates); §8.3: a template from a post office by its fingerprint (RP-5 §4.7, §6.8), or as a file, its JSON or its CBOR, kept only when it reads and, come by fingerprint, hashes to it. Test vectors: `forms.json`'s `every_type` templates. MINOR, announced (RP-0 §8.4): no published template has `choices` elsewhere; implementations should refuse such a template. |

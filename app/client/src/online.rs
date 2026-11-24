@@ -523,6 +523,37 @@ pub fn settings(store: &Store, change: Option<&Value>) -> Result<Value, Error> {
     ask(store, "GET", "/settings", None)
 }
 
+/// RP-5 §4.7: the template with this fingerprint (16 lowercase hex digits) from the post office at
+/// `api`, its bytes checked to hash to it. Anyone may ask: no credential.
+///
+/// # Errors
+///
+/// The post office could not be reached, does not hold it, or answered with something else.
+pub fn template(api: &str, fingerprint: &str) -> Result<Vec<u8>, Error> {
+    let text = fetch(api, &format!("/forms/{fingerprint}"))?;
+    let answer: Value = serde_json::from_str(&text).map_err(|e| format!("{api}: {e}"))?;
+    let bytes = answer["template"]
+        .as_str()
+        .and_then(radiopost::base64url::decode)
+        .ok_or_else(|| format!("{api}: no template in its answer"))?;
+    let hashed = radiopost::cbor::hex(&radiopost::crypto::sha256(&bytes)[..8]);
+    if hashed != fingerprint {
+        return Err(format!("{api} answered with another template ({hashed})"));
+    }
+    Ok(bytes)
+}
+
+/// RP-5 §6.8: hands this template (its deterministic CBOR) in to the user's post office.
+///
+/// # Errors
+///
+/// The post office could not be reached or refused.
+pub fn hand_in_template(store: &Store, bytes: &[u8]) -> Result<(), Error> {
+    let fingerprint = radiopost::cbor::hex(&radiopost::crypto::sha256(bytes)[..8]);
+    let body = json!({"template": radiopost::base64url::encode(bytes)});
+    ask(store, "PUT", &format!("/forms/{fingerprint}"), Some(&body)).map(|_| ())
+}
+
 /// RP-5 §6.5: the accept list, after adding and removing entries.
 ///
 /// # Errors

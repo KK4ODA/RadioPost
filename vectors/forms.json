@@ -1510,6 +1510,40 @@
           ]
         },
         "expect": "a heading with required, choices, bound or max"
+      },
+      {
+        "what": "choices on a line",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 1,
+              "label": "A",
+              "type": "line",
+              "choices": [
+                "x"
+              ]
+            }
+          ]
+        },
+        "expect": "choices on a field that is neither choice nor multi"
+      },
+      {
+        "what": "choices on a check",
+        "template": {
+          "name": "T",
+          "fields": [
+            {
+              "n": 1,
+              "label": "A",
+              "type": "check",
+              "choices": [
+                "x"
+              ]
+            }
+          ]
+        },
+        "expect": "choices on a field that is neither choice nor multi"
       }
     ]
   }

@@ -8,12 +8,13 @@ requires, as plainly as possible, and nothing about storage, mail or real time.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import cbor, fwd, jws, mail, rp
+from . import cbor, forms, fwd, jws, mail, rp
 
 # RP-5 §1: the HTTP status of each RP-0 §9.3 code. `not-authorized` is 401 when the request has
 # no valid token, and 403 when the token may not do what is asked.
@@ -413,6 +414,10 @@ class PostOffice:
     seen: dict[str, int] = field(default_factory=dict)
     # RP-5 §5.9: each registered gateway's last status report, as kept, and when it came
     status: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # RP-5 §4.7, §6.8: templates by fingerprint, as their CBOR: the published ones, and those
+    # handed in
+    published: dict[bytes, bytes] = field(default_factory=dict)
+    templates: dict[bytes, bytes] = field(default_factory=dict)
 
     # -- what happens outside the API --------------------------------------------------------------
 
@@ -560,6 +565,8 @@ class PostOffice:
             return self._apply(body or {})
         if method == "GET" and len(parts) == 2 and parts[0] == "applications":
             return self._application(parts[1])
+        if method == "GET" and len(parts) == 2 and parts[0] == "forms":
+            return self._form(parts[1])
         if parts[0] == "office" and not self.operators:
             return problem("unknown-message", 404)  # RP-5 §7.1: not offered
         user = self.authorise(token)
@@ -601,7 +608,43 @@ class PostOffice:
             return self.direct(user, body or {})
         if route == "/accept-list":
             return self.accept_list(user[3], method, body or {})
+        if method == "PUT" and len(parts) == 2 and parts[0] == "forms":
+            return self._hand_in(parts[1], body or {})
         return problem("unknown-message", 404)
+
+    @staticmethod
+    def _fingerprint(text: str) -> bytes | None:
+        """RP-5 §4.7: a fingerprint as the path writes it, 16 lowercase hex digits."""
+        if len(text) != 16 or any(c not in "0123456789abcdef" for c in text):
+            return None
+        return bytes.fromhex(text)
+
+    def _form(self, text: str) -> Response:
+        """RP-5 §4.7: a template by its fingerprint."""
+        fp = self._fingerprint(text)
+        if fp is None:
+            return problem("malformed")
+        held = self.published.get(fp) or self.templates.get(fp)
+        if held is None:
+            return problem("unknown-message", 404)
+        return 200, {"template": jws.b64u(held)}
+
+    def _hand_in(self, text: str, body: dict[str, Any]) -> Response:
+        """RP-5 §6.8: a template handed in, kept when it is one and is the one named."""
+        fp = self._fingerprint(text)
+        given = body.get("template")
+        if fp is None or not isinstance(given, str):
+            return problem("malformed")
+        data = jws.unb64u(given)
+        if data is None:
+            return problem("malformed")
+        if len(data) > 65536:
+            return problem("too-large")
+        if forms.read_template(data) is None or hashlib.sha256(data).digest()[:8] != fp:
+            return problem("malformed")
+        if fp not in self.published:
+            self.templates[fp] = data
+        return 200, {"fingerprint": text}
 
     def authorise(self, token: str | None) -> dict[int, Any] | Response:
         """RP-5 §2: the credential body behind a valid bearer token, or 401."""
