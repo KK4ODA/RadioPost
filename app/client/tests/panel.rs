@@ -258,6 +258,11 @@ fn a_message_written_and_carried_from_the_panel() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A form's row as the panel gives it for a field that is neither a heading nor a table.
+fn plain_row(n: u64, label: &str, value: &str, lines: bool) -> Value {
+    json!({"n": n, "label": label, "value": value, "lines": lines, "heading": false, "table": null})
+}
+
 /// RP-2 §8 (the 40 m sessions of 2026-11-18): an ICS-213 with a file, sent P2P from the panel,
 /// reaches the station called as a form. Its panel gives the form's name and each field filled in,
 /// label and value, in the template's order, the subject, date and time the message's own; the
@@ -352,22 +357,14 @@ fn a_form_sent_p2p_reads_as_the_form() {
     assert_eq!(
         form["rows"],
         json!([
-            {"n": 1, "label": "Incident name", "value": "Shelter 3", "lines": false,
-             "heading": false, "table": null},
-            {"n": 2, "label": "To (name and position)", "value": "Ana Lopez, EOC", "lines": false,
-             "heading": false, "table": null},
-            {"n": 3, "label": "From (name and position)", "value": "Facundo, net control", "lines": false,
-             "heading": false, "table": null},
-            {"n": 4, "label": "Subject", "value": "Cots and water", "lines": false,
-             "heading": false, "table": null},
-            {"n": 5, "label": "Date", "value": date, "lines": false,
-             "heading": false, "table": null},
-            {"n": 6, "label": "Time", "value": time, "lines": false,
-             "heading": false, "table": null},
-            {"n": 7, "label": "Message", "value": "Forty cots by 18:00.\nWater for 120.", "lines": true,
-             "heading": false, "table": null},
-            {"n": 8, "label": "Approved by (name and position)", "value": "J. Ortega", "lines": false,
-             "heading": false, "table": null},
+            plain_row(1, "Incident name", "Shelter 3", false),
+            plain_row(2, "To (name and position)", "Ana Lopez, EOC", false),
+            plain_row(3, "From (name and position)", "Facundo, net control", false),
+            plain_row(4, "Subject", "Cots and water", false),
+            plain_row(5, "Date", date, false),
+            plain_row(6, "Time", &time, false),
+            plain_row(7, "Message", "Forty cots by 18:00.\nWater for 120.", true),
+            plain_row(8, "Approved by (name and position)", "J. Ortega", false),
         ]),
         "{m}"
     );
