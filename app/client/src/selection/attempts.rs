@@ -128,6 +128,8 @@ pub struct Trace {
     busy_at_call: Option<bool>,
     call_started: Option<Instant>,
     call_ended: Option<Instant>,
+    /// The bandwidth the `connect` asked for, once it was sent: none when it named none.
+    asked_bandwidth: Option<i64>,
     dial_hz: Option<u64>,
     heard_remote: bool,
     heard_snr_db: Option<f64>,
@@ -168,6 +170,7 @@ impl Trace {
             busy_at_call: None,
             call_started: None,
             call_ended: None,
+            asked_bandwidth: None,
             dial_hz: None,
             heard_remote: false,
             heard_snr_db: None,
@@ -283,6 +286,7 @@ impl Trace {
             Some("connect") if self.call_started.is_none() => {
                 self.call_started = Some(Instant::now());
                 self.busy_at_call = self.busy;
+                self.asked_bandwidth = line.get("bandwidth").and_then(Value::as_i64);
             }
             Some("send") => {
                 if let Some(bytes) = line
@@ -417,7 +421,7 @@ impl Recorder {
         let stub = json!({
             "v": VERSION, "id": record.id, "start": start, "stub": true,
             "kind": record.kind(), "remote": record.call.remote,
-            "channel": record.channel_json(None),
+            "channel": record.channel_json(None, record.call.bandwidth_hz),
         });
         record.append(&stub);
         record
@@ -437,10 +441,11 @@ impl Recorder {
         }
     }
 
-    fn channel_json(&self, dial_read: Option<u64>) -> Value {
+    /// The channel: the dial given, or the one read, and the bandwidth asked for.
+    fn channel_json(&self, dial_read: Option<u64>, bandwidth: Option<i64>) -> Value {
         json!({
             "dial_hz": self.call.dial_hz.or(dial_read),
-            "bandwidth_hz": self.call.bandwidth_hz,
+            "bandwidth_hz": bandwidth,
             "call_s": self.call.call_s,
         })
     }
@@ -471,7 +476,16 @@ impl Recorder {
             "kind": self.kind(),
             "remote": self.call.remote,
             "as": t.as_call,
-            "channel": self.channel_json(t.dial_hz),
+            // once the `connect` went, what it asked for: it leaves out a bandwidth the modem
+            // cannot be asked for
+            "channel": self.channel_json(
+                t.dial_hz,
+                if t.call_started.is_some() {
+                    t.asked_bandwidth
+                } else {
+                    self.call.bandwidth_hz
+                },
+            ),
             "modem": t.modem,
             "place": self.call.place,
             "station": self.call.station,

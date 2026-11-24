@@ -5444,8 +5444,11 @@ function wire() {
       fetch: /^[0-9]+$/.test(fetchRule) ? Number(fetchRule) : fetchRule,
       dial_hz: dial || null,
       call_s: channel && channel.scan_s != null ? channel.scan_s : null,
-      // a station call's bandwidth, as the two operators agreed; a gateway call names none
-      bandwidth: station ? Number($("bandwidth").value) : null,
+      // the call's bandwidth: a station call's, as the two operators agreed; a gateway call's,
+      // the channel picked's, so the call goes at the bandwidth the channel says (an FM channel's
+      // width is no modem's bandwidth)
+      bandwidth: station ? Number($("bandwidth").value)
+        : channel && channel.mode !== "FM" && channel.bandwidth_hz ? channel.bandwidth_hz : null,
     });
   });
   $("hang-up").addEventListener("click", () => act("hang-up", {how: $("hang-up").dataset.how}));

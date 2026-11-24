@@ -57,7 +57,7 @@
             <ul class="suggestions called" id="called-list" role="listbox" hidden></ul>
           </span>
         </label>
-        <label id="channel-label" title="The chosen gateway's channel. Picking it tunes the radio there at once, when the modem can set the radio's dial (Aether with CAT, rigctld or FLRig), so you can set the antenna tuner before you call; with another modem, set the dial yourself" hidden>Channel
+        <label id="channel-label" title="The chosen gateway's channel: its dial, and the bandwidth the call goes at. Picking it tunes the radio there at once, when the modem can set the radio's dial (Aether with CAT, rigctld or FLRig), so you can set the antenna tuner before you call; with another modem, set the dial yourself" hidden>Channel
           <select id="channel"></select>
         </label>
         <div class="pair" id="station-dial" hidden>
@@ -86,7 +86,7 @@
           </select>
         </label>
         <div class="row">
-          <button class="go" id="call" title="Call the station on the channel picked and carry a session. The radio is tuned there first if it is not there already">Call</button>
+          <button class="go" id="call" title="Call the station on the channel picked, at its bandwidth, and carry a session. The radio is tuned there first if it is not there already; Aether moves the station to the bandwidth for the call, and back after">Call</button>
           <button id="listen" class="latch" aria-pressed="false" title="Answer P2P calls to your callsign until you press it again. A gateway on this station keeps answering calls to its own callsign"><span class="lamp" aria-hidden="true"></span><span id="listen-label">Listen for P2P</span></button>
         </div>
         <p class="radio-at" id="listen-at" role="status" title="Where and how this station answers P2P calls, as the modem says: tell the station that will call you"></p>
@@ -229,7 +229,7 @@
           <thead><tr>
             <th title="Its callsign, and the post office that lists it. The star marks a favourite">Gateway</th><th title="Where it is, when it answers, and how old its record is">Where</th>
             <th class="n" title="From the position in use: a place you saved, or your GPS">Distance</th>
-            <th title="Each dial frequency, upper sideband, and Aether's bandwidth there. A star marks a favourite channel">Channels</th>
+            <th title="Each dial frequency, upper sideband, and the bandwidth a call there goes at. A star marks a favourite channel">Channels</th>
             <th title="Your last call to it, and how it ended">Last call</th><th></th>
           </tr></thead>
           <tbody id="gateway-rows"></tbody>
@@ -268,7 +268,7 @@
             <label class="inline" title="The dial frequency in MHz, upper sideband">Dial
               <input id="own-mhz" class="short" placeholder="7.101" inputmode="decimal">
             </label>
-            <label class="inline" title="Aether's bandwidth on this channel">Bandwidth
+            <label class="inline" title="The bandwidth it answers in on this channel: a call there goes at it">Bandwidth
               <select id="own-bw" class="narrow">
                 <option value="2300">2300 Hz</option>
                 <option value="500">500 Hz</option>

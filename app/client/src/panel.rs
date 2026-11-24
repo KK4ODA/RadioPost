@@ -1118,13 +1118,20 @@ impl Panel {
             Value::Null => None,
             v => Some(v.as_u64().ok_or("call_s: seconds, 0 or above")?),
         };
-        // a station call's bandwidth, as the two operators agreed (RP-4 §4 `bandwidth`)
-        let bandwidth = match &body["bandwidth"] {
-            Value::Null => None,
-            v => Some(
+        // the call's bandwidth (RP-4 §4 `bandwidth`): a station call's, as the two operators
+        // agreed, or the gateway channel's, as its record lists it (RP-5 §4.4), which the call
+        // leaves out if the modem cannot be asked for it
+        let bandwidth = match (&body["bandwidth"], kind) {
+            (Value::Null, _) => None,
+            (v, Kind::Station) => Some(
                 v.as_i64()
                     .filter(|b| [500, 2300].contains(b))
                     .ok_or("bandwidth: 500 or 2300 Hz")?,
+            ),
+            (v, Kind::Gateway) => Some(
+                v.as_i64()
+                    .filter(|b| *b > 0)
+                    .ok_or("bandwidth: the channel's, in Hz")?,
             ),
         };
         self.run(

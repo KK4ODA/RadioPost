@@ -136,7 +136,8 @@ pub struct Options {
     pub fetch: Fetch,
     /// How many bytes a gateway may send unasked (RP-3 §5.1, `auto`).
     pub auto: u64,
-    /// A bandwidth to ask the modem for.
+    /// A bandwidth to ask the modem for: a station call's, as the operators agreed, or a gateway
+    /// channel's. A gateway call given none asks for its channel's, from the kept list.
     pub bandwidth: Option<i64>,
     /// The channel to call on (wishlist W14): with a modem that has a dial (RP-4 §4.1) the radio
     /// is tuned there before the call when it is not there already.
@@ -1533,7 +1534,11 @@ fn attempt(store: &Store, remote: &str, kind: Kind, opts: &Options) -> attempts:
         remote: remote.to_owned(),
         gateway: kind == Kind::Gateway,
         dial_hz: opts.dial_hz,
-        bandwidth_hz: opts.bandwidth,
+        bandwidth_hz: opts.bandwidth.or_else(|| {
+            (kind == Kind::Gateway)
+                .then(|| store.bandwidth_of(remote, opts.dial_hz?))
+                .flatten()
+        }),
         call_s: opts.call_s.or_else(|| {
             (kind == Kind::Gateway)
                 .then(|| store.scan_s_of(remote, opts.dial_hz))
@@ -1610,6 +1615,65 @@ fn call_lasting(
     lasting
 }
 
+/// What the call asks the modem for (RP-4 §4, `connect`): its bandwidth, and how long its tries
+/// keep starting.
+fn call_asks(
+    modem: &mut Modem,
+    store: &Store,
+    remote: &str,
+    kind: Kind,
+    opts: &Options,
+    say: &mut dyn FnMut(&str),
+) -> (Option<i64>, Option<u64>) {
+    let lasting = call_lasting(modem, store, remote, kind, opts, say);
+    (
+        call_bandwidth(modem, store, remote, kind, opts, say),
+        lasting,
+    )
+}
+
+/// The bandwidth the call asks the modem for (RP-4 §4, `connect`'s `bandwidth`): a station
+/// call's, as the two operators agreed, or a gateway call's channel's, as its record lists it
+/// (RP-5 §4.4), given or read from the kept list. So the call goes at the bandwidth the channel
+/// picked says: on 2026-11-24 a call picked on "7.101 MHz, 2300 Hz" asked for none, went at the
+/// 500 Hz the caller's Aether was set to, and the gateway answered at 500 Hz. A channel's
+/// bandwidth the modem cannot be asked for (not in `caps.bandwidths`) is left out, and the user
+/// told unless the modem offers none to choose from; the call then goes at the modem's own.
+fn call_bandwidth(
+    modem: &Modem,
+    store: &Store,
+    remote: &str,
+    kind: Kind,
+    opts: &Options,
+    say: &mut dyn FnMut(&str),
+) -> Option<i64> {
+    if kind == Kind::Station {
+        return opts.bandwidth;
+    }
+    let wanted = opts
+        .bandwidth
+        .or_else(|| store.bandwidth_of(remote, opts.dial_hz?))?;
+    let offered = &modem.caps.bandwidths;
+    if offered.contains(&wanted) {
+        return Some(wanted);
+    }
+    if !offered.is_empty() {
+        let names: Vec<String> = offered.iter().map(i64::to_string).collect();
+        let list = match names.split_last() {
+            Some((last, rest)) if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
+            _ => names.join(""),
+        };
+        tell(
+            say,
+            &format!(
+                "{remote}'s channel is {wanted} Hz, which this modem cannot be asked for (it \
+                 offers {list} Hz): the call goes at the bandwidth the modem runs"
+            ),
+        );
+    }
+    None
+}
+
 /// How long a call to a station keeps trying when a listed gateway under the same base callsign
 /// scans the dial it is made on (RP-5 §4.4): the gateway's `scan_s` there. The station's radio
 /// follows its gateway's scan, so a P2P call shorter than the scan finds it on another dial: on
@@ -1660,10 +1724,26 @@ fn place(
             };
             match &e {
                 Event::Connected {
-                    id: i, bandwidth, ..
+                    id: i,
+                    bandwidth: running,
+                    ..
                 } if *i == id => {
                     // the bandwidth the modem says the link runs at: what was asked, or its own
-                    say_at(say, &format!("connected to {remote}"), *bandwidth);
+                    say_at(say, &format!("connected to {remote}"), *running);
+                    // a modem may move a call it was asked to keep: Aether goes on at 500 Hz after
+                    // four unanswered tries at 2300 Hz to a station it does not know (its
+                    // ADR-0058), and the channel picked said 2300 Hz
+                    if let (Some(asked), Some(running)) = (bandwidth, *running)
+                        && asked != running
+                    {
+                        tell(
+                            say,
+                            &format!(
+                                "the link runs at {running} Hz, not the {asked} Hz asked: the \
+                                 modem moved the call"
+                            ),
+                        );
+                    }
                     return Ok(Some(e));
                 }
                 Event::Failed { id: i, .. } if *i == id && aborted.is_some() => {
@@ -1714,21 +1794,13 @@ fn call_on(
     opts: &Options,
     say: &mut dyn FnMut(&str),
 ) -> Result<Report, Error> {
-    let lasting = call_lasting(modem, store, remote, kind, opts, say);
+    let asked = call_asks(modem, store, remote, kind, opts, say);
     let mut report = Report {
         remote: remote.to_owned(),
         ..Report::default()
     };
     let hang_up = opts.hang_up.as_ref();
-    let Some(connected) = place(
-        modem,
-        remote,
-        (opts.bandwidth, lasting),
-        hang_up,
-        &mut report,
-        say,
-    )?
-    else {
+    let Some(connected) = place(modem, remote, asked, hang_up, &mut report, say)? else {
         return Ok(report);
     };
     let now = opts.now();

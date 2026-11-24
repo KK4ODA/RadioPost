@@ -538,6 +538,17 @@ fn a_channel_picked_is_tuned_at_once_and_a_station_call_keeps_it() {
         .is_err_and(|e| e.contains("500 or 2300")),
         "a bandwidth no one runs"
     );
+    // a gateway call's bandwidth is its channel's, whatever its record says (a VARA channel's
+    // 2750 Hz too), but a number of hertz
+    assert!(
+        c.post(
+            "/api/call",
+            &json!({"callsign": "kk4oda-1", "station": false, "adapter": modem,
+                    "bandwidth": "wide"}),
+        )
+        .is_err_and(|e| e.contains("the channel's, in Hz")),
+        "not a bandwidth"
+    );
 
     // a modem with no dial: the operator is told which dial to set, by hand
     let (_plain, at_plain, _) = loopback();

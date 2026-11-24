@@ -76,7 +76,10 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   picks a channel (`/api/tune`, `session::tune` over a connection with `hello` alone,
   `Modem::reach`), keys the tone (`/api/tone`), and leaves the radio there after the call
   (`Options::tune_back` false; the command line's `--dial` still goes back); a station call
-  carries its **Dial, MHz** and **Bandwidth**. A station call a gateway answers (no key 13 or 15 in
+  carries its **Dial, MHz** and **Bandwidth**, and a gateway call its channel's bandwidth (D50:
+  `session::call_bandwidth`, from the page or `Store::bandwidth_of`; left out, and said, when
+  the modem cannot be asked for it, never an FM channel's width; a link that comes up at
+  another bandwidth is said). A station call a gateway answers (no key 13 or 15 in
   `WELCOME`) is `Event::NotAStation`, said in plain words, its `ERROR` carrying `NOT_A_STATION`;
   the gateway's monitor logs a caller's `ERROR`. A gateway whose scan ends asks where the radio
   stays (`Modem::stay_asked`: RP-4 says the end before the dial) and registers again with only
@@ -660,6 +663,8 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
 - (2026-11-24) P2P made plain (D47): a listener runs 2300 Hz and answers both bandwidths; Listen
   tunes to the P2P dial unless a gateway scans, and says where and how it answers; no P2P call to
   a listed gateway's callsign; a P2P call shows its band's prediction. No retry at 500 Hz.
+- (2026-11-24) A gateway call goes at the bandwidth listed with the channel picked, whatever
+  Aether's own says (D50): the channel's words are what the call does.
 - (2026-11-21) An alert to a station whose gateway scans (D46): it goes on the gateway's channel
   predicted best, else the circle's optional watch dial, else where the radio is; copies for the
   gateway's `scan_s`, also for a circle alert when any listed gateway scans the watch dial; answers,

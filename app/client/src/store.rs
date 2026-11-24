@@ -1068,13 +1068,7 @@ impl Store {
     /// that it scans. `None` when it scans none of them, or is not listed.
     #[must_use]
     pub fn scan_s_of(&self, gateway: &str, dial_hz: Option<u64>) -> Option<u64> {
-        let list = self.gateway_list.as_ref()?;
-        let record = list["gateways"].as_array()?.iter().find(|g| {
-            g["callsign"]
-                .as_str()
-                .is_some_and(|c| c.eq_ignore_ascii_case(gateway))
-        })?;
-        let channels = record["channels"].as_array()?;
+        let channels = self.listed_channels(gateway)?;
         match dial_hz {
             Some(hz) => channels
                 .iter()
@@ -1082,6 +1076,31 @@ impl Store {
                 .and_then(|c| c["scan_s"].as_u64()),
             None => channels.iter().filter_map(|c| c["scan_s"].as_u64()).max(),
         }
+    }
+
+    /// The bandwidth of `gateway`'s channel at `dial_hz`, from the kept list (RP-5 §4.4,
+    /// `bandwidth_hz`): what a call there asks the modem for. On 2026-11-24 a call picked on
+    /// "7.101 MHz, 2300 Hz" went at 500 Hz, the bandwidth the caller's Aether was set to, since a
+    /// gateway call asked for none. `None` for a channel not listed, or an FM one, whose
+    /// `bandwidth_hz` is the channel's width, not a modem's bandwidth.
+    #[must_use]
+    pub fn bandwidth_of(&self, gateway: &str, dial_hz: u64) -> Option<i64> {
+        self.listed_channels(gateway)?
+            .iter()
+            .find(|c| c["dial_hz"].as_u64() == Some(dial_hz))
+            .filter(|c| c["mode"] != "FM")
+            .and_then(|c| c["bandwidth_hz"].as_i64())
+    }
+
+    /// The channels the kept list gives `gateway`, when it lists it.
+    fn listed_channels(&self, gateway: &str) -> Option<&Vec<Value>> {
+        let list = self.gateway_list.as_ref()?;
+        let record = list["gateways"].as_array()?.iter().find(|g| {
+            g["callsign"]
+                .as_str()
+                .is_some_and(|c| c.eq_ignore_ascii_case(gateway))
+        })?;
+        record["channels"].as_array()
     }
 
     /// The gateway a P2P call names (RP-5 §4.4: a listed gateway's own callsign), and the

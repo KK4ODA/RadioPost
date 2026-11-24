@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.49.0 |
+| **Version** | 1.50.0 |
 | **Updated** | 2026-11-24 |
 | **Describes** | RadioPost 0.1.0-beta.37 |
 | **Licence** | CC BY 4.0 |
@@ -509,8 +509,8 @@ A call to a gateway sends your outbox and fetches what waits for you, in one ses
    **Places** says which position that is, such as *In use: the GPS, EM73tr, 2 s ago* or *In use:
    Home, EM73tr*. Your places and your GPS are set in **Setup**, under
    [Places and GPS](#places-and-gps); **Places** takes you there.
-4. Each gateway shows its **Channels** (dial frequency, upper sideband, and the bandwidth Aether
-   uses there; on an FM channel, *FM* and the channel's width, such as *145.050 MHz, FM, 12.5 kHz*)
+4. Each gateway shows its **Channels** (dial frequency, upper sideband, and the bandwidth a call
+   there goes at; on an FM channel, *FM* and the channel's width, such as *145.050 MHz, FM, 12.5 kHz*)
    and its **Hours**. A channel marked *scanned* is one of several the gateway listens
    on in turn with one radio. Click **Choose** beside the one you want. Its callsign goes in
    **Call**, its channels in **Channel**, and the radio is tuned to the first channel at once
@@ -740,8 +740,10 @@ called it on.
      Aether's own manual says how to let it set the dial: CAT keying in its
      [Setup step 2](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-2-radio-interface).
 
-   Set Aether's **Bandwidth** to the one listed there (500 or 2300 Hz) in its
-   [Setup step 4](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-4-modem-settings).
+   The call goes at the bandwidth listed with the channel, 500 or 2300 Hz, whatever Aether's own
+   **Bandwidth** (its Setup step 4) says. Aether moves to it for the call and goes back after.
+   The log says it: *calling KK4ODA-1 at 2300 Hz*. Before RadioPost 0.1.0-beta.38 a gateway call
+   went at Aether's own **Bandwidth**, and a gateway on 2300 Hz answered a 500 Hz call at 500 Hz.
 2. If your antenna needs a tuner for this channel, click **Tuner tone**. Aether keys ten seconds of
    steady carrier at its transmit level. Set the tuner while it sounds. Click **Stop tone** to stop
    it sooner. Aether keys no tone while it hears the channel in use.
@@ -764,6 +766,10 @@ On a *scanned* channel the gateway may be on another channel when you call. Radi
 to keep calling as long as the gateway's record says it takes to come round, often a minute or
 more. An Aether before 0.2.0-beta.162 cannot be asked: the log says the call may end before the
 gateway comes round. Call again, or call on another of its channels.
+
+On such a long call, Aether may go on at 500 Hz after four tries at 2300 Hz go unanswered, to a
+station it does not know runs 2300 Hz. The log then says *connected to KK4ODA-1 at 500 Hz* and
+*the link runs at 500 Hz, not the 2300 Hz asked: the modem moved the call*.
 
 ### 8.3 During the session
 
@@ -2233,7 +2239,7 @@ RadioPost is the mail program. Aether HF is the modem. Each is set up in its own
 | Your account, your mail, whom to call | RadioPost | This manual |
 | Sound card, keying, drive level | Aether | [Setup, step 2](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-2-radio-interface) |
 | Your licence class, control and band rules | Aether | [Setup, step 1](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-1-callsign-and-rules) |
-| Bandwidth (500 or 2300 Hz) | Aether; RadioPost's **Bandwidth** for a station call | [Setup, step 4](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-4-modem-settings) |
+| Bandwidth (500 or 2300 Hz) | Aether's own; RadioPost asks for a gateway channel's, and a station call's **Bandwidth** | [Setup, step 4](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-4-modem-settings) |
 | The frequency | RadioPost's **Channel** or **Dial, MHz**, which tune Aether when it can set the dial; otherwise Aether or the radio | [Radio dial](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#radio-dial) |
 | Recording a session's audio | Aether | [Recording](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#recording-the-radios-audio) |
 | Sending your logs to the project | Aether | [Send files](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#sending-files) |
@@ -2246,7 +2252,9 @@ a RadioPost program holds a callsign, the note after that box names it and the p
 RadioPost: they are programs written for VARA, such as Winlink Express, VarAC and RMS Trimode,
 and RadioPost is not one. Tick it only when one of them runs on the station too.
 
-**Bandwidth.** While RadioPost listens, Aether runs 2300 Hz, which answers 500 Hz calls too,
+**Bandwidth.** A call goes at the bandwidth RadioPost asks for: the gateway channel's, or a
+station call's **Bandwidth**. Aether moves the station to it for the call and goes back after.
+While RadioPost listens, Aether runs 2300 Hz, which answers 500 Hz calls too,
 whatever Aether's own **Bandwidth** (its Setup step 4) says, and goes back to it when RadioPost
 stops listening or closes (Aether 0.2.0-beta.174 and RadioPost 0.1.0-beta.36 or later). Aether's
 header then says *2300 Hz · listening*. An external program's own bandwidth, VarAC's 500 Hz on its
@@ -2292,7 +2300,7 @@ These notes follow the US rules (Part 97). Check your own country's.
 | **Call** is greyed, and **Listening for P2P** is in | The station is listening for P2P calls. Click **Listening for P2P** to stop, then call ([section 10](#10-station-to-station)). |
 | **Listening for P2P** is in, its lamp amber; the state reads *Waiting for the modem* | RadioPost cannot reach Aether. Start Aether, or check the **Modem** box. RadioPost tries again every 5 seconds and listens as soon as Aether answers. Point at the state to see why. |
 | *cannot reach the modem's adapter at ws://127.0.0.1:8515/v1* | Start Aether. Check the **Modem** box. |
-| The call goes out but nothing answers | Check the dial and the bandwidth against the gateway's channel. Check the gateway's hours. Try another gateway. |
+| The call goes out but nothing answers | Check the dial against the gateway's channel, and the log's *calling … at … Hz* against its bandwidth. Check the gateway's hours. Try another gateway. |
 | *Your last 4 calls failed on 2 gateways that usually answer* | Your calls are probably not getting out. Check the radio, the antenna, the cable to the radio and Aether's levels before trying more gateways. Those calls count less against the gateways until it clears ([8.1](#81-choose-a-gateway)). |
 | Aether refuses RadioPost's calls | Aether is keyed by an external program. In Aether's Setup, step 2, choose CAT, serial, rigctld, FLRig, CM108 or VOX. |
 | Aether stops at start: *127.0.0.1:8515 is already in use* | Aether's external programs port was set to 8515. Put it back to 8300 ([Aether's ports](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#20-the-programs-and-their-ports)). |
@@ -2385,7 +2393,7 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 | Aether HF | The open-source HF modem RadioPost uses. It has its own program and manual. |
 | Automatic control | Operating with nobody at the radio, as a gateway left answering does. |
 | Bandwidth | How wide Aether's signal is: 500 or 2300 Hz. Both stations of a session use the same. |
-| Channel | A gateway's dial frequency, with the bandwidth it uses there. Picking one tunes the radio. |
+| Channel | A gateway's dial frequency, with the bandwidth it uses there: a call there goes at it. Picking one tunes the radio. |
 | Check (of a circle) | Eight characters made from a circle's keyword. The same check means the same keyword. |
 | Circle | The stations whose operators typed the same keyword, and so can alert each other. |
 | Client | RadioPost, the program you send and read mail with. |
@@ -2423,8 +2431,8 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 1. **Write**, fill in **To**, **Subject** and **Text**, **Put in outbox**.
 2. **Choose a gateway**, **Choose** one. Or keep the last one you called, shown in **Call**, or
    pick another you called under **▾**.
-3. Pick its **Channel**: the radio is tuned there at once if Aether can. **Tuner tone** if needed.
-   Set Aether's bandwidth.
+3. Pick its **Channel**: the radio is tuned there at once if Aether can, and the call goes at its
+   bandwidth. **Tuner tone** if needed.
 4. Set **Fetch**. Listen that the frequency is clear.
 5. **Call**. Watch the card at the bottom right.
 6. Read your new mail in the **Inbox**.
@@ -2565,3 +2573,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.47.0 | 2026-11-24 | From the portable's sessions of 2026-11-23. Section 10: **Listen for P2P** tunes the radio to **Dial, MHz** first (unless the station scans its gateway's channels), Aether runs 2300 Hz while it listens and answers 500 Hz calls too, and the line under the switch says where and how the station answers (Figure 24 retaken); a station call shows the band predicted from the station's gateway's site, amber when unlikely to work (Figure 25 retaken); a P2P call to a listed gateway's callsign is not placed, its message offering the station's own callsign. Section 35: the bandwidth while listening. Troubleshooting and the short guide to match. A 2300 Hz call to a home station a profile had left at 500 Hz went unanswered, and three calls on 40 m after dark were heard by nobody. |
 | 1.48.0 | 2026-11-24 | Sections 6 and 9: a paperclip marks a message with files in the folders, faded when its files are held at the post office; in **Waiting** it marks one whose files are held. Rest the mouse on it to see how many and how large. Figures 7, 11, 20, 22 and 28 retaken. |
 | 1.49.0 | 2026-11-24 | Addresses are written in lowercase everywhere (RP-0 1.5.0 §6.2). Section 5: the address applied for or enrolled with is written in lowercase, and the refusal table no longer blames capitals. Section 7: To and Cc are written in lowercase. Section 13: the address list keeps one entry an address, and an older list holding `Ana@…` and `ana@…` reads as one. The client had kept them as two addresses. |
+| 1.50.0 | 2026-11-24 | A gateway call goes at its channel's bandwidth. Section 8: the call asks Aether for the bandwidth listed with the channel picked, whatever Aether's own **Bandwidth** says, and the log says it; the step that told you to set Aether's bandwidth is gone; on a long call to a scanned channel, Aether may move a 2300 Hz call to 500 Hz, and the log says so. Section 35, troubleshooting, the glossary and the quick reference to match. A call picked on *7.101 MHz, 2300 Hz* had gone at the 500 Hz Aether was set to. |

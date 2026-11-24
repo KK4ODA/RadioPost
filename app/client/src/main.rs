@@ -98,7 +98,8 @@ usage: radiopost [--home DIR] [--as CALLSIGN] COMMAND ...
 
 session options:
   --adapter HOST:PORT      the modem's RPMI adapter (default 127.0.0.1:8600)
-  --bandwidth HZ           ask the modem for this bandwidth
+  --bandwidth HZ           ask the modem for this bandwidth; a gateway call on a --dial its
+                           record lists asks for that channel's bandwidth by itself
   --dial MHZ               call on this channel: a modem with a dial (RP-4 §4.1) is tuned
                            there first and back after; with another, tune the radio yourself
   --call-s S               keep the call trying at least S seconds: a gateway that scans its

@@ -69,8 +69,10 @@ takes one off this computer once its folders and trash are empty.
    there is no Internet. Under each callsign is the post office that lists it: any gateway takes
    your calls, wherever it was registered.
 3. Enter **Your grid** (say `EM73`) and **Save**: the nearest gateways come first.
-4. Find **KK4ODA-1**: its channels (dial frequency, upper sideband, and Aether's bandwidth there)
-   and its hours. Click **Choose**. Tune Aether to one of its channels, at that bandwidth.
+4. Find **KK4ODA-1**: its channels (dial frequency, upper sideband, and the bandwidth a call there
+   goes at) and its hours. Click **Choose**, and pick one of its channels under **Channel**: the
+   radio is tuned there when Aether can set it, and the call goes at that channel's bandwidth,
+   whatever Aether's own says.
 
 ## 4. Send an email by radio
 

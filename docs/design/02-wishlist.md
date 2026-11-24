@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.50 |
+| **Version** | 0.3.51 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -496,7 +496,7 @@ Pick a gateway from the list, and the radio goes to its channel.
 | Requested by | The plan: concept §10, first version. Requesters: 0. |
 | Component | Client, adapters. |
 | Compatibility | **Optional protocol addition** to RP-4: a request to read and set the dial, with a `caps` member; an adapter that cannot answers `unsupported` (RP-4 §2). Aether can; VARA's published commands cannot (RP-4 §9.2). Driving Aether's own API beside RPMI works today, but only with Aether, which is what RP-4 exists to avoid. |
-| Existing coverage | **Implemented** (2026-11-15): RP-4 0.8.0 §4.1, `caps.dial`, `dial` and `tune`, with the dial conversation in the vectors; the Aether adapter maps them to `status.can_tune`, `status.frequency_hz` and `frequency.set`. The panel's **Choose** puts the gateway's channels in a **Channel** box; **Call** (and `radiopost call --dial`) tunes the radio there and back after. A modem without a dial is named, and the user told where to tune. A cut-off gateway tunes to its partner's window the same way. **Tuned as it is picked** (2026-11-17, the author's notes from the 40 m RadioPost mail): picking a channel, a gateway's or a station call's **Dial**, tunes the radio at once, so the radio and the antenna tuner can be set first; **Tuner tone** keys a ten-second carrier (RP-4 1.2.0 §4.3, Aether's `tune`); **Call** finds the radio there and leaves it there, the pick being the operator's choice. A modem that cannot set the dial is said plainly, with the dial to set by hand. A station call also carries a bandwidth (500 or 2300 Hz), for which Aether moves the whole station and back (RP-4 §1.1, §9.1). |
+| Existing coverage | **Implemented** (2026-11-15): RP-4 0.8.0 §4.1, `caps.dial`, `dial` and `tune`, with the dial conversation in the vectors; the Aether adapter maps them to `status.can_tune`, `status.frequency_hz` and `frequency.set`. The panel's **Choose** puts the gateway's channels in a **Channel** box; **Call** (and `radiopost call --dial`) tunes the radio there and back after. A modem without a dial is named, and the user told where to tune. A cut-off gateway tunes to its partner's window the same way. **Tuned as it is picked** (2026-11-17, the author's notes from the 40 m RadioPost mail): picking a channel, a gateway's or a station call's **Dial**, tunes the radio at once, so the radio and the antenna tuner can be set first; **Tuner tone** keys a ten-second carrier (RP-4 1.2.0 §4.3, Aether's `tune`); **Call** finds the radio there and leaves it there, the pick being the operator's choice. A modem that cannot set the dial is said plainly, with the dial to set by hand. A station call also carries a bandwidth (500 or 2300 Hz), for which Aether moves the whole station and back (RP-4 §1.1, §9.1). **A gateway call carries its channel's** (2026-11-24, D50): the bandwidth listed with the channel picked, so *7.101 MHz, 2300 Hz* is the bandwidth the call goes at, whatever Aether's own says. |
 | Dependencies | None. Shares its addition with W40 (§12, T1). |
 | Effort | Medium: RP-4 and its vectors, the Aether adapter, the client. |
 | Priority | **Medium.** Every call starts with tuning, and it removes a common mistake. |
@@ -1326,3 +1326,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.48 | 2026-11-20 | The author accepted [choosing a gateway](04-gateway-selection.md): W17 rewritten to point to it; W55 (places and GPS), W56 (terrain at VHF and UHF), W57 (learning from every call) and W58 (ranking by when the mail is done) added; W55 and W57 in progress. |
 | 0.3.49 | 2026-11-21 | W55: places and the GPS built; station profiles to come. |
 | 0.3.50 | 2026-11-24 | W32: [forms for most jobs](06-forms.md) accepted with the author's three answers, step 1 built (RP-2 1.4.0); W33 becomes a template. |
+| 0.3.51 | 2026-11-24 | W14: a gateway call carries its channel's bandwidth (D50). |

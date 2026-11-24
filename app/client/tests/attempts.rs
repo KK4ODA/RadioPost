@@ -169,3 +169,98 @@ fn a_link_the_other_station_ends_is_recorded_as_lost() {
     assert_eq!(a["session"]["over"], false, "{a}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A gateway call nobody answers, on the channel at `dial_hz` of a gateway whose kept record lists
+/// `channels`: what the call said, and its record.
+fn gateway_call_on(name: &str, channels: &Value, dial_hz: u64) -> (Vec<String>, Value) {
+    let dir = scratch(name);
+    let mut facundo = store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    facundo.gateway_list = Some(serde_json::json!({
+        "domain": "radiopost.org", "fetched": 1,
+        "gateways": [{"callsign": "KK4ODA-1", "grid": "EM73tr", "post_office": "radiopost.org",
+                      "channels": channels.clone()}],
+    }));
+    facundo.save().expect("saved");
+    let (_server, at_f, _at_a) = loopback_with(Some(dial_hz), Duration::from_millis(300));
+    let mut opts = Options::new(&at_f.to_string());
+    opts.dial_hz = Some(dial_hz);
+    let mut said = Vec::new();
+    let called = session::call(&mut facundo, "KK4ODA-1", Kind::Gateway, &opts, &mut |s| {
+        said.push(s.to_owned());
+    })
+    .expect("the call ends");
+    assert!(called.failed.is_some(), "nobody answered: {said:?}");
+    let all = attempts::read(&dir.join("facundo"));
+    assert_eq!(all.len(), 1, "{all:?}");
+    let _ = std::fs::remove_dir_all(&dir);
+    (said, all[0].clone())
+}
+
+/// A gateway call asks the modem for its channel's bandwidth, so it goes at the bandwidth the
+/// channel picked says: on 2026-11-24 a call picked on "7.101 MHz, 2300 Hz" asked for none and went
+/// at the 500 Hz the caller's Aether was set to. One the modem cannot be asked for is left out and
+/// said; an FM channel's width is no modem's bandwidth.
+#[test]
+fn a_gateway_call_asks_for_its_channel_s_bandwidth() {
+    let (said, a) = gateway_call_on(
+        "attempts-channel-bw",
+        &serde_json::json!([{"dial_hz": 7_101_000, "mode": "USB", "modem": "aether",
+                            "bandwidth_hz": 2300},
+                           {"dial_hz": 3_590_000, "mode": "USB", "modem": "aether",
+                            "bandwidth_hz": 500}]),
+        7_101_000,
+    );
+    assert!(
+        said.iter().any(|l| l == "calling KK4ODA-1 at 2300 Hz"),
+        "{said:?}"
+    );
+    assert_eq!(a["channel"]["bandwidth_hz"], 2300, "{a}");
+    assert_eq!(
+        a["call"]["result"], "timeout",
+        "the modem took the bandwidth: {a}"
+    );
+
+    let (said, a) = gateway_call_on(
+        "attempts-channel-500",
+        &serde_json::json!([{"dial_hz": 7_101_000, "mode": "USB", "modem": "aether",
+                            "bandwidth_hz": 2300},
+                           {"dial_hz": 3_590_000, "mode": "USB", "modem": "aether",
+                            "bandwidth_hz": 500}]),
+        3_590_000,
+    );
+    assert!(
+        said.iter().any(|l| l == "calling KK4ODA-1 at 500 Hz"),
+        "{said:?}"
+    );
+    assert_eq!(a["channel"]["bandwidth_hz"], 500, "{a}");
+
+    // the loopback offers 500 and 2300 Hz
+    let (said, a) = gateway_call_on(
+        "attempts-channel-2750",
+        &serde_json::json!([{"dial_hz": 14_105_000, "mode": "USB", "modem": "vara",
+                            "bandwidth_hz": 2750}]),
+        14_105_000,
+    );
+    assert!(
+        said.iter().any(|l| l
+            == "KK4ODA-1's channel is 2750 Hz, which this modem cannot be asked for (it offers \
+                500 and 2300 Hz): the call goes at the bandwidth the modem runs"),
+        "{said:?}"
+    );
+    assert!(said.iter().any(|l| l == "calling KK4ODA-1"), "{said:?}");
+    assert_eq!(a["channel"]["bandwidth_hz"], Value::Null, "{a}");
+    assert_eq!(a["call"]["result"], "timeout", "not refused: {a}");
+
+    let (said, a) = gateway_call_on(
+        "attempts-channel-fm",
+        &serde_json::json!([{"dial_hz": 145_050_000, "mode": "FM", "modem": "aether-fm",
+                            "bandwidth_hz": 12_500}]),
+        145_050_000,
+    );
+    assert!(said.iter().any(|l| l == "calling KK4ODA-1"), "{said:?}");
+    assert!(
+        !said.iter().any(|l| l.contains("cannot be asked")),
+        "{said:?}"
+    );
+    assert_eq!(a["channel"]["bandwidth_hz"], Value::Null, "{a}");
+}
