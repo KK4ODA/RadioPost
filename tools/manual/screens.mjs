@@ -43,14 +43,18 @@ const TYPES = {".html": "text/html", ".js": "text/javascript", ".css": "text/css
 
 const ME = {address: "ana@radiopost.org", operator: "N0CALL", expires: T + 71 * DAY};
 
-const msg = (id, m) => ({id, short: id.slice(0, 8), cc: [], priority: 0, ...m});
+const NO_FILES = {carried: 0, bytes: 0, held: 0, held_bytes: 0};
+const msg = (id, m) => ({id, short: id.slice(0, 8), cc: [], priority: 0, attachments: NO_FILES,
+                         ...m});
 const INBOX = [
   msg("b3f1c9a2e7d4402f9a11c0d2e5b7a913", {from: "maria@example.com", to: [ME.address],
-    subject: "Re: Field Day plans", date: T - 1500, station: "KK4ODA-1"}),
+    subject: "Re: Field Day plans", date: T - 1500, station: "KK4ODA-1",
+    attachments: {carried: 1, bytes: 412, held: 1, held_bytes: 412806}}),
   msg("4c2d8e1f90ab43c7b2a6d5e8f1c3a7b9", {from: "jim@hampost.org", to: [ME.address],
     subject: "Antenna party on Saturday", date: T - 5200, station: "KK4ODA-1"}),
   msg("e7a90b3c5d1f4e2a8c6b9d0f1a2b3c4d", {from: "postmaster@radiopost.org", to: [ME.address],
-    subject: "Your attachments: tower-photo.jpg", date: T - DAY - 3000, station: "KK4ODA-1"}),
+    subject: "Your attachments: tower-photo.jpg", date: T - DAY - 3000, station: "KK4ODA-1",
+    attachments: {...NO_FILES, carried: 1, bytes: 48213}}),
   msg("19f0e2d3c4b5a6978877665544332211", {from: "dad@example.com", to: [ME.address],
     subject: "Ice storm at the cabin", date: T - 3 * DAY, priority: 1, station: "N1CALL-10"}),
 ];

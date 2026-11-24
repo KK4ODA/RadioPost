@@ -253,6 +253,13 @@ label.inline input { width: 7em; margin: 0; }
 .act:hover { color: var(--text); border-color: var(--line); }
 .act.danger:hover, .act.armed { color: var(--bad); border-color: var(--bad); }
 .icon { width: 17px; height: 17px; }
+/* the paperclip of a message with files: a narrow column, faded when its files are held */
+.list th.clip, .list td.clip { width: 1%; padding-left: 2px; padding-right: 2px; text-align: center;
+                               line-height: 0; }
+.list th.clip .icon, .clip-mark .icon { width: 15px; height: 15px; }
+.list th.clip { color: var(--muted); }
+.clip-mark { display: inline-block; color: var(--text); }
+.clip-mark.held { color: var(--muted); opacity: .6; }
 button.danger { color: var(--bad); }
 button[data-armed] { border-color: var(--bad); color: var(--bad); }
 .tag { display: inline-block; font-size: 11px; line-height: 1; padding: 3px 6px; margin-right: 8px;

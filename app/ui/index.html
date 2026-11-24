@@ -113,7 +113,7 @@
           <button class="quiet danger changes-home" id="empty-trash" title="Delete every message in the trash for good" hidden>Empty trash</button>
         </div>
         <table class="list" aria-label="Messages">
-          <thead><tr><th id="who-col" title="Who wrote it">From</th><th title="What it is about">Subject</th><th title="When it was written">Date</th><th class="acts"></th></tr></thead>
+          <thead><tr><th id="who-col" title="Who wrote it">From</th><th title="What it is about">Subject</th><th class="clip" aria-label="Attachments" title="A paperclip: it carries files, or has files held at the post office (faded). Point at it to see how many and how large"><svg class="icon" aria-hidden="true"><use href="#i-clip"/></svg></th><th title="When it was written">Date</th><th class="acts"></th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
         <p class="empty" id="empty" hidden>Nothing here.</p>
@@ -126,6 +126,7 @@
           <thead><tr>
             <th title="Fetch it on the next call to a gateway, whatever the Fetch setting says">Fetch</th>
             <th title="Who wrote it">From</th><th title="What it is about">Subject</th>
+            <th class="clip" aria-label="Attachments" title="A faded paperclip: its files are held at the post office and do not come with it"><svg class="icon" aria-hidden="true"><use href="#i-clip"/></svg></th>
             <th class="n" title="Its size on the air">Size</th>
           </tr></thead>
           <tbody id="waiting-rows"></tbody>
@@ -990,6 +991,7 @@
     <symbol id="i-write" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-people" viewBox="0 0 24 24"><path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM3 20a6 6 0 0 1 12 0M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.5a6 6 0 0 1 3 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-clip" viewBox="0 0 24 24"><path d="M17.25 7v9.75a5.25 5.25 0 0 1-10.5 0V5.5a3.5 3.5 0 0 1 7 0v11a1.75 1.75 0 0 1-3.5 0V9" transform="rotate(45 12 12)" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-gone" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
   </svg>
 </body>

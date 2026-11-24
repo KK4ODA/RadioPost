@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.47.0 |
+| **Version** | 1.48.0 |
 | **Updated** | 2026-11-24 |
 | **Describes** | RadioPost 0.1.0-beta.36 |
 | **Licence** | CC BY 4.0 |
@@ -374,7 +374,9 @@ again with a new code**.
    station-to-station calls to your callsign until you click it again. **Modem** is where
    RadioPost finds Aether, `ws://127.0.0.1:8515/v1`. Change it only if Aether's control port is
    not the usual one.
-6. **The folder or message you are looking at.** Click a row to read it.
+6. **The folder or message you are looking at.** Click a row to read it. A paperclip marks a
+   message with files. A faded one means its files are held at the post office
+   ([9](#9-reading-your-mail)). Rest the mouse on it to see how many and how large.
 7. **Setup**: your account, post office, accept list, usual gateways and keys.
 8. **The log**: what RadioPost did, line by line, with the time.
 
@@ -856,7 +858,9 @@ message. Under it you see *held at the post office* and the button **Ask on the 
 
 **The Waiting folder** shows what waited at your post office at your last call to a gateway.
 Tick a message to fetch it on the next call, whatever **Fetch** says. A message a cut-off gateway
-kept for you has no tick box: it comes with what you fetch.
+kept for you has no tick box: it comes with what you fetch. A faded paperclip marks a message
+whose files are held at the post office: they do not come with it. Once it has come, open it to
+ask for them.
 
 ![The Waiting folder with three messages and one ticked to fetch](screens/client-waiting.png)
 
@@ -2555,3 +2559,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.45.0 | 2026-11-23 | Section 10, station to station: a call to a station whose gateway scans the frequency called keeps trying as long as the gateway's scan. A 500 Hz call on 7.101 MHz to a station scanning three channels made its tries while the radio was on the others (Aether's report of 2026-11-23). |
 | 1.46.0 | 2026-11-23 | Aether's names, as Aether 0.2.0-beta.173 says them: its *Host programs* are **External programs**, to leave unchecked for RadioPost, its radio control *Host* is *External program*, and its Setup step 1 shows the **Aether callsign** (for Aether standalone use). Section 3 and section 35 say so, and that a listening station runs Aether's own **Bandwidth**. |
 | 1.47.0 | 2026-11-24 | From the portable's sessions of 2026-11-23. Section 10: **Listen for P2P** tunes the radio to **Dial, MHz** first (unless the station scans its gateway's channels), Aether runs 2300 Hz while it listens and answers 500 Hz calls too, and the line under the switch says where and how the station answers (Figure 24 retaken); a station call shows the band predicted from the station's gateway's site, amber when unlikely to work (Figure 25 retaken); a P2P call to a listed gateway's callsign is not placed, its message offering the station's own callsign. Section 35: the bandwidth while listening. Troubleshooting and the short guide to match. A 2300 Hz call to a home station a profile had left at 500 Hz went unanswered, and three calls on 40 m after dark were heard by nobody. |
+| 1.48.0 | 2026-11-24 | Sections 6 and 9: a paperclip marks a message with files in the folders, faded when its files are held at the post office; in **Waiting** it marks one whose files are held. Rest the mouse on it to see how many and how large. Figures 7, 11, 20, 22 and 28 retaken. |

@@ -244,12 +244,32 @@ fn summary(m: &Message) -> Value {
             .map(|a| a.iter().filter_map(Cbor::as_text).collect::<Vec<_>>())
             .unwrap_or_default()
     };
+    // what the lists mark with a clip: the files it carries, and those its post office holds
+    // (RP-6 §2.5), each with their bytes, counted as the reader lists them
+    let entries = |k| map.get(k).and_then(Cbor::as_array).unwrap_or_default();
+    let carried: Vec<usize> = entries(key::FILES)
+        .iter()
+        .filter_map(|f| {
+            f.get(1)?.as_text()?;
+            Some(f.get(3)?.as_bytes()?.len())
+        })
+        .collect();
+    let held: Vec<u64> = entries(key::HELD)
+        .iter()
+        .filter_map(|f| {
+            f.get(1)?.as_text()?;
+            f.get(4)?.as_bytes()?;
+            Some(f.get(3).and_then(Cbor::as_u64).unwrap_or(0))
+        })
+        .collect();
     let id = m.content_id().text();
     json!({
         "id": id, "short": &id[..6], "from": text(key::FROM), "to": list(key::TO),
         "cc": list(key::CC), "date": map.get(key::DATE).and_then(Cbor::as_u64),
         "subject": text(key::SUBJECT),
         "priority": map.get(key::PRIORITY).and_then(Cbor::as_u64).unwrap_or(0),
+        "attachments": {"carried": carried.len(), "bytes": carried.iter().sum::<usize>(),
+                        "held": held.len(), "held_bytes": held.iter().sum::<u64>()},
     })
 }
 

@@ -1256,6 +1256,28 @@ async function readLog() {
   log.scrollTop = log.scrollHeight;
 }
 
+// A list's paperclip: a message that carries files, faded when its files are all held at the
+// post office (RP-6 §2.5); its tooltip says how many and how large. `a` is the panel's
+// `attachments` ({carried, bytes, held, held_bytes}); the Waiting list knows only `held`.
+function clipCell(a) {
+  const td = el("td", {class: "clip"});
+  if (!a || !(a.carried || a.held)) return td;
+  const files = (n) => `${n} file${n === 1 ? "" : "s"}`;
+  const carried = a.carried ? `It carries ${files(a.carried)}, ${kb(a.bytes)}` : "";
+  const ask = `open it to ask for ${a.held === 1 ? "it" : "them"}`;
+  const words = a.held === true
+    ? "Its files are held at the post office: they do not come with it. Once it has come, "
+      + `${ask}.`
+    : !a.held ? `${carried}.`
+    : `${carried ? `${carried}, and has ${a.held} more` : `It has ${files(a.held)}`} held at the `
+      + `post office, ${kb(a.held_bytes)}: ${ask}.`;
+  const mark = el("span", {class: a.carried ? "clip-mark" : "clip-mark held", role: "img",
+    title: words, "aria-label": words});
+  mark.append(icon("clip"));
+  td.append(mark);
+  return td;
+}
+
 function markFolder(name) {
   for (const b of document.querySelectorAll("[data-folder]")) {
     b.setAttribute("aria-current", String(b.dataset.folder === name));
@@ -1291,14 +1313,15 @@ async function openWaiting() {
         toast(err.message, true);
       }
     });
-    const cells = [box, e.from, e.subject + (e.held ? " (attachments held)" : ""),
-                   `${(e.size / 1000).toFixed(1)} kB`];
+    const cells = [box, e.from, e.subject, `${(e.size / 1000).toFixed(1)} kB`];
     cells.forEach((c, i) => {
       const td = document.createElement("td");
       if (typeof c === "string") td.textContent = c; else td.append(c);
       if (i === 3) td.className = "n";
       tr.append(td);
     });
+    // the listing says only whether its files are held (RP-3 §5.6), not whether it carries any
+    tr.children[3].before(clipCell(e.held ? {carried: 0, held: true} : null));
     tr.title = `${e.local ? "kept for you at the gateway" : `#${e.serial}`}${e.third_party ? " · third-party traffic" : ""}`;
     return tr;
   }));
@@ -2399,6 +2422,7 @@ async function openFolder(name) {
       tr.append(td);
     }
     tr.children[2].className = "date";
+    tr.children[2].before(clipCell(m.attachments));
     if (trash) {
       const tag = document.createElement("span");
       tag.className = "tag";

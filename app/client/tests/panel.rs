@@ -191,6 +191,8 @@ fn a_message_written_and_carried_from_the_panel() {
         .to_owned();
     let outbox = c.get("/api/folder?name=outbox");
     assert_eq!(outbox[0]["id"], id.as_str());
+    // the list's clip: the one file carried, its four bytes
+    assert_eq!(outbox[0]["attachments"]["bytes"], 4);
     let m = c.get(&format!("/api/message?id={}", &id[..6]));
     assert_eq!(m["body"], "Written in the panel.\n");
     assert_eq!(
@@ -1235,6 +1237,22 @@ fn a_held_attachment_is_asked_for_from_the_panel() {
             ("house.mp4", false)
         ]
     );
+    // the inbox's clip counts what the reader lists: the files carried and those held, with
+    // their bytes
+    let held_bytes: u64 = m["held"]
+        .as_array()
+        .expect("held")
+        .iter()
+        .filter_map(|f| f["size"].as_u64())
+        .sum();
+    let carried = m["files"].as_array().expect("files");
+    let carried_bytes: u64 = carried.iter().filter_map(|f| f["size"].as_u64()).sum();
+    assert_eq!(
+        c.get("/api/folder?name=inbox")[0]["attachments"],
+        json!({"carried": carried.len(), "bytes": carried_bytes, "held": 3,
+               "held_bytes": held_bytes})
+    );
+    assert!(held_bytes > 0, "the held files have sizes");
     let asked = c
         .post(
             "/api/held",
