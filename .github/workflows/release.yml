@@ -19,6 +19,9 @@
 # release offers, and a tagged release puts them on the rolling `channel-beta` release, where the
 # programs look. A program installs only what that key signed. The installers themselves are not
 # code-signed yet: Windows' SmartScreen and macOS' Gatekeeper warn on a first install.
+#
+# The notes name every change to a Stable specification since the previous v* tag, as RP-0 §8.4
+# asks of the programs that carry it: tools/announced.py reads the change-log rows added since.
 name: Release
 
 on:
@@ -196,7 +199,10 @@ jobs:
     needs: [preflight, build]
     runs-on: ubuntu-latest
     steps:
+      # every commit and tag: the notes compare the specifications with the previous release's
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v8
         with:
@@ -257,6 +263,10 @@ jobs:
           radiopost-gateway, radiopost-po and radiopost-test-service. RadioPost-Manual-<version>.pdf is the user's manual
           for this release, and RadioPost-Server-Guide-<version>.pdf the guide to running a post
           office. SHA256SUMS lists every file's checksum."
+          # RP-0 §8.4: each change to a Stable specification since the previous release, named
+          announced=$(python3 tools/announced.py --exclude "$TAG" \
+            --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_SHA")
+          if [ -n "$announced" ]; then notes=$(printf '%s\n\n%s' "$notes" "$announced"); fi
           # $KIND holds two words for a draft
           # shellcheck disable=SC2086
           gh release create "$TAG" dist/* $KIND --target "$GITHUB_SHA" \

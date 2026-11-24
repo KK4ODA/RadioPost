@@ -411,7 +411,9 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   bump X` writes it in every Cargo manifest, lockfile and the guide's download link (the Tauri
   configurations take Cargo's); `check` runs in CI and in the release's preflight, which also
   refuses a tag that is not `v` + the version. A release: bump, commit, push, then the Release
-  workflow with that tag; `tools/update_manifests.py` writes the manifests from the signed files.
+  workflow with that tag; `tools/update_manifests.py` writes the manifests from the signed files,
+  and `tools/announced.py` adds to the notes every change-log row of a Stable specification since
+  the previous `v*` tag (RP-0 §8.4; `--self-test` in CI).
   No MSI: it takes no pre-release version, and NSIS's setup.exe updates in place.
   Renewal (W8): `radiopost::credential::RENEW_WITHIN` (30 days) and `renewal_due` are the one rule.
   The client's `renewal` module and its panel renew over the Internet when the panel starts and
