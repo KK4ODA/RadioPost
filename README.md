@@ -164,6 +164,25 @@ when the Internet is back. Meanwhile it hands mail between its own users at once
 its queue by radio to a partner gateway that still reaches the Internet. The manual's
 [When the Internet is down](docs/manual/manual.md#14-when-the-internet-is-down) has the details.
 
+## Coming: an offline library beside your mail
+
+[Arcana](https://github.com/KK4ODA/arcana), by the same author, is a library that works with no
+Internet: encyclopedias, medical references, repair guides, amateur radio rules and maps, kept on
+a drive or a Raspberry Pi and read from any device on your network. It already lets other
+programs in, through its
+[integration API](https://github.com/KK4ODA/arcana/blob/main/docs/integration-api.md). RadioPost
+will use it:
+
+* **Answer with a source.** When a question comes in by radio and nobody can look it up online,
+  search your Arcana library from the message you are writing and put in a short excerpt. It comes
+  with a line naming its source, edition and licence, and its warnings: a medical page does not
+  go out without them.
+* **Where you are.** Your position and grid square from the GPS Arcana reads, and the nearest
+  place from its maps, for the gateway list and your messages.
+
+Neither needs the other. You let RadioPost in once, by approving its request in Arcana's
+**Settings → Integrations**, and Arcana itself never transmits.
+
 ## On the air
 
 RadioPost's first modem is **[Aether HF](https://github.com/KK4ODA/aether-hf)**, an open-source
