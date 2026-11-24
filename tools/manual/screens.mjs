@@ -540,6 +540,37 @@ const FORMS = JSON.parse(readFileSync(join(ROOT, "vectors", "forms.json"), "utf8
     return {template: v.fingerprint_hex, name: t.name, note: t.note, fields: t.fields.map(formField)};
   });
 
+// the reports (/api/reports): damage reports around Atlanta after a storm, and two storm reports,
+// as the panel gives them: each place with its text and map link, and the choices made
+const fpOf = (file) => JSON.parse(readFileSync(join(ROOT, "vectors", "forms.json"), "utf8"))
+  .templates.find((v) => v.file === `forms/${file}.json`).fingerprint_hex;
+const placeOf = (lat, lon, label = "Location") => {
+  const deg = (d) => {
+    const t = d.toFixed(5).replace(/0+$/, "");
+    return t.endsWith(".") ? `${t}0` : t;
+  };
+  return {label, lat, lon, within: null,
+    text: `${deg(lat)}, ${deg(lon)}`,
+    osm: `https://www.openstreetmap.org/?mlat=${deg(lat)}&mlon=${deg(lon)}#map=17/${deg(lat)}/${deg(lon)}`};
+};
+const REPORTS = [
+  ["N3CALL", "shelter3@radiopost.org", 33.7812, -84.3876, 3, "Roof gone, 12 Peachtree Pl"],
+  ["N4CALL", "n4call@radiopost.org", 33.7629, -84.4012, 1, "Fence down"],
+  ["N5CALL", "n5call@radiopost.org", 33.7955, -84.3561, 4, "House destroyed, Elm St"],
+  ["N6CALL", "n6call@hampost.org", 33.7480, -84.3698, 2, "Windows out, car port"],
+  ["N7CALL", "n7call@radiopost.org", 33.8102, -84.4170, 0, "No damage"],
+  ["N8CALL", "n8call@radiopost.org", 33.7701, -84.3305, 3, "Tree through the roof"],
+  ["N9CALL", "n9call@hampost.org", 33.7344, -84.4256, 2, "Shed flattened"],
+].map(([call, from, lat, lon, damage, subject], i) => ({
+  id: `damage${i}`.padEnd(20, "a"), folder: "inbox", from, to: [ME.address],
+  date: T - 600 * (i + 1), subject, template: fpOf("damage-report"), form: "Damage Report",
+  places: [placeOf(lat, lon)], choices: {"5": damage, "4": 0},
+})).concat([
+  {id: "storm0".padEnd(20, "a"), folder: "inbox", from: "n4call@radiopost.org",
+   to: [ME.address], date: T - 5400, subject: "Hail and wind", template: fpOf("storm-report"),
+   form: "Storm Report", places: [placeOf(33.7590, -84.3880)], choices: {"7": 0}},
+]);
+
 // a form's position field, filled from the GPS in use (/api/form-position), and what it goes as
 const FORM_POSITION = {text: "33.78123, -84.38765", says: "From the GPS, 4 s ago."};
 const FORM_POSITION_SHOWN = {value: [337812300, -843876500], shown: "33.78123, -84.38765 (EM73ts)"};
@@ -570,6 +601,7 @@ function clientApi(world) {
       case "addresses": return {entries: ADDRESSES};
       case "forms": return FORMS;
       case "form-position": return body ? FORM_POSITION_SHOWN : FORM_POSITION;
+      case "reports": return REPORTS;
       case "modem": return {};
       // a channel picked is tuned at once (W14): moved there, or, for a radio Aether keys with no
       // CAT, the dial to set by hand
@@ -1070,6 +1102,20 @@ const SHOTS = {
     await fillReport(page);
     await page.locator("body").click({position: {x: 1200, y: 1200}});
     await shot(page, "client-form-report");
+    await context.close();
+  },
+
+  async "client-reports"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+                                                 height: 1100});
+    await spreadLog(page, "log", T - 1300, 19);
+    await page.click('[data-folder="reports"]');
+    await page.waitForTimeout(300);
+    await page.locator("#report-form").selectOption({label: "Damage Report"});
+    await page.waitForTimeout(300);
+    await page.locator("#report-rows tr").first().click();
+    await page.waitForTimeout(300);
+    await shot(page, "client-reports");
     await context.close();
   },
 

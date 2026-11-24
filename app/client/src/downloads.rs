@@ -97,6 +97,18 @@ pub fn save(message: &Message, n: usize, folder: &Path) -> Result<PathBuf, Strin
         .get(3)
         .and_then(Value::as_bytes)
         .ok_or("the attachment holds no data")?;
+    let path = write_new(folder, name, data)?;
+    mark_as_from_outside(&path);
+    Ok(path)
+}
+
+/// `data` written to a new file named `name` in `folder` (made if it is not there), made safe
+/// ([`safe_name`]) and never over a file already there: `name (2).ext` and so on.
+///
+/// # Errors
+///
+/// The folder or the file cannot be made or written, or 999 files of that name are there.
+pub fn write_new(folder: &Path, name: &str, data: &[u8]) -> Result<PathBuf, String> {
     std::fs::create_dir_all(folder).map_err(|e| format!("{}: {e}", folder.display()))?;
     let name = safe_name(name);
     let (stem, ext) = split(&name);
@@ -119,7 +131,6 @@ pub fn save(message: &Message, n: usize, folder: &Path) -> Result<PathBuf, Strin
         };
         out.write_all(data)
             .map_err(|e| format!("{}: {e}", path.display()))?;
-        mark_as_from_outside(&path);
         return Ok(path);
     }
     Err(format!(

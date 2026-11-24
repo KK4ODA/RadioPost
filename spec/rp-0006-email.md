@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.2.0 |
+| **Version** | 1.3.0 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -239,6 +239,27 @@ the post office holds it, as every post office SHOULD for RadioPost's published 
 the values by number when it does not. The text replaces the `body`, which that text already ends
 with.
 
+A form written with its template that holds positions (RP-2 §8.1's `position`, a field's value or
+a `rows` field's cell) SHOULD have a map link for each, so that a mail program opens the place:
+after the form's own lines and before the `body`, an empty line, `Maps:`, and one line for each
+position, in the form's order (a `rows` field's cells row by row, its columns in order):
+
+```
+<label>: https://www.openstreetmap.org/?mlat=<lat>&mlon=<lon>#map=<zoom>/<lat>/<lon> geo:<lat>,<lon>
+```
+
+`<lat>` and `<lon>` are the coordinates as RP-2 §8.4 writes them. The `geo:` URI (RFC 5870) ends
+with `;u=` and the distance in metres when the position has one. `<zoom>` is 17, or with a distance
+15 from 100 m, 12 from 1 km, 9 from 10 km and 6 from 100 km. A field's label is its own; a cell's
+is its field's label, `, row `, the row's number from 1, `, ` and its column's label. The link is
+OpenStreetMap's, which any mail program makes clickable; the `geo:` URI is for map applications and
+programs that read the email. A position goes to openstreetmap.org only if the reader clicks.
+
+```
+Maps:
+Location: https://www.openstreetmap.org/?mlat=33.78123&mlon=-84.38765#map=17/33.78123/-84.38765 geo:33.78123,-84.38765;u=25
+```
+
 The body ends with a short footer, after the usual signature line of two dashes and a space, so
 that mail programs leave it out of replies. The post office MAY reword it:
 
@@ -432,3 +453,4 @@ and the session files.
 | 1.0.0 | 2026-11-15 | Stable (D41). §3.1: a reply restores its thread from the email this post office sent for the message it answers, as well as from one that came in (gap G17). Test vectors: `facundo-followup`. |
 | 1.1.0 | 2026-11-15 | §3.1: a message with a form becomes the form's text (RP-2 1.1.0 §8.4). A post office that does not yet write it sends the message's `body` as before, which is all it must do until it holds the templates. Test vectors: `shelter3-213` in `email-out.json`. |
 | 1.2.0 | 2026-11-24 | §2.4: the message made of an email has its addresses in lowercase, both parts (RP-0 1.5.0 §6.2); only the domains had been. §4: the message's `from` is the statement's address as RP-0 §6.2 compares them. Test vectors: `jorge-outlook` in `email-in.json` writes its addresses in capitals. MINOR, announced (RP-0 §8.4): a post office should lowercase the addresses it takes from an email; nothing a receiver takes changes. |
+| 1.3.0 | 2026-11-24 | §3.1: a form's positions get a map link each in the email, an OpenStreetMap link and a `geo:` URI (RFC 5870) under `Maps:` after the form's lines ([the forms design](../docs/design/06-forms.md), step 3; the author's choice of both links). Test vectors: `shelter3-storm` and `shelter3-206` and the zooms (`map_zooms`) in `email-out.json`. MINOR, announced (RP-0 §8.4): a SHOULD; a post office that writes no maps still sends the form's text. Post offices should add them. |

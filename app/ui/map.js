@@ -17,6 +17,8 @@ const LABELS_UNDER = 40; // degrees across under which every gateway's callsign 
 const FIELDS_UNDER = 200; // degrees across under which the fields are named
 const SQUARES_UNDER = 30; // degrees across under which the squares are drawn
 const SQUARE_NAMES_UNDER = 12; // and under which they are named
+const SUBSQUARES_UNDER = 1.6; // degrees across under which the subsquares are drawn (a map that
+const SUBSQUARE_NAMES_UNDER = 0.5; // zooms that close: the Reports view's), and named
 
 const rad = (d) => (d * Math.PI) / 180;
 const deg = (r) => (r * 180) / Math.PI;
@@ -86,12 +88,20 @@ export function greatCircle(a, b) {
 /** The map, drawn into `svg`. `onPick(callsign)` when a gateway is clicked, `onPoint(lat, lon)`
  *  when the map is clicked while placing. */
 export class WorldMap {
-  constructor(svg, {onPick = () => {}, onPoint = () => {}} = {}) {
+  /** `narrowest`: degrees across at the most zoom (a grid square's width twice by default; the
+   *  Reports view goes to a town's); `fitLeast`: the least a fit shows, in degrees across. */
+  constructor(svg, {onPick = () => {}, onPoint = () => {}, onReport = () => {},
+                    narrowest = NARROWEST, fitLeast = 20} = {}) {
     this.svg = svg;
     this.onPick = onPick;
     this.onPoint = onPoint;
+    this.onReport = onReport;
+    this.narrowest = narrowest;
+    this.fitLeast = fitLeast;
     this.here = null;
     this.gateways = [];
+    this.reports = [];
+    this.pickedReport = null;
     this.picked = null;
     this.point = null;
     this.placingOn = false;
@@ -118,6 +128,22 @@ export class WorldMap {
     this.here = here && here.lat != null ? here : null;
     this.gateways = (gateways || []).filter((g) => g.at && g.at.lat != null);
     if (this.picked && !this.gateways.some((g) => g.callsign === this.picked)) this.picked = null;
+    this.draw();
+  }
+
+  /** The reports to show (the Reports view): each with `id`, `lat`, `lon`, `colour` (a CSS
+   *  colour) and `title`. */
+  showReports(reports) {
+    this.reports = (reports || []).filter((r) => r.lat != null);
+    if (this.pickedReport && !this.reports.some((r) => r.id === this.pickedReport)) {
+      this.pickedReport = null;
+    }
+    this.draw();
+  }
+
+  /** Marks one report picked, or none. */
+  pickReport(id) {
+    this.pickedReport = id || null;
     this.draw();
   }
 
@@ -150,9 +176,11 @@ export class WorldMap {
     this.apply();
   }
 
-  /** The position in use and the gateways shown, with a margin; the world when there is none. */
+  /** The position in use, the gateways and the reports shown, with a margin; the world when there
+   *  is none. */
   fit() {
-    const pts = this.gateways.map((g) => xy(g.at.lat, g.at.lon));
+    const pts = this.gateways.map((g) => xy(g.at.lat, g.at.lon))
+      .concat(this.reports.map((r) => xy(r.lat, r.lon)));
     if (this.here) pts.push(xy(this.here.lat, this.here.lon));
     if (!pts.length) {
       this.world();
@@ -161,7 +189,7 @@ export class WorldMap {
     const xs = pts.map((p) => p[0]);
     const ys = pts.map((p) => p[1]);
     const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-    const w = Math.max(20, (x1 - x0) * 1.3, (y1 - y0) * 2 * 1.3);
+    const w = Math.max(this.fitLeast, (x1 - x0) * 1.3, (y1 - y0) * 2 * 1.3);
     this.view = {x: (x0 + x1) / 2 - w / 2, y: (y0 + y1) / 2 - w / 4, w};
     this.apply();
   }
@@ -170,7 +198,7 @@ export class WorldMap {
   zoom(factor, at) {
     const v = this.view;
     const [cx, cy] = at || [v.x + v.w / 2, v.y + v.w / 4];
-    const w = Math.min(WIDEST, Math.max(NARROWEST, v.w / factor));
+    const w = Math.min(WIDEST, Math.max(this.narrowest, v.w / factor));
     const k = w / v.w;
     this.view = {x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k, w};
     this.apply();
@@ -179,7 +207,7 @@ export class WorldMap {
   // keeps the view on the map, sets the viewBox, and redraws the marks at the new scale
   apply() {
     const v = this.view;
-    v.w = Math.min(WIDEST, Math.max(NARROWEST, v.w));
+    v.w = Math.min(WIDEST, Math.max(this.narrowest, v.w));
     const h = v.w / 2;
     v.x = Math.min(360 - v.w, Math.max(0, v.x));
     v.y = Math.min(180 - h, Math.max(0, v.y));
@@ -241,6 +269,18 @@ export class WorldMap {
       mark.append(Object.assign(node("title"), {textContent: words}));
       marks.push(mark);
     }
+    // the reports, the picked one last and larger, on top
+    const reports = [...this.reports].sort((a, b) =>
+      Number(a.id === this.pickedReport) - Number(b.id === this.pickedReport));
+    for (const r of reports) {
+      const [x, y] = xy(r.lat, r.lon);
+      const picked = r.id === this.pickedReport;
+      const mark = node("g", {class: picked ? "m-report picked" : "m-report", "data-report": r.id});
+      mark.append(node("circle", {class: "m-hit", cx: x, cy: y, r: 11 * u}),
+        node("circle", {class: "m-dot", cx: x, cy: y, r: (picked ? 7 : 5) * u, fill: r.colour}),
+        Object.assign(node("title"), {textContent: r.title}));
+      marks.push(mark);
+    }
     if (this.here) {
       const [x, y] = xy(this.here.lat, this.here.lon);
       const you = node("g", {class: "m-here"});
@@ -266,6 +306,32 @@ export class WorldMap {
     const letter = (i) => String.fromCharCode(65 + i);
     const label = (x, y, text, cls) => Object.assign(
       node("text", {class: cls, x: x + 4 * u, y: y + 13 * u, "font-size": 11 * u}), {textContent: text});
+    if (v.w <= SUBSQUARES_UNDER) {
+      // the subsquares: 5 minutes of longitude by 2.5 of latitude, 24 to a square each way
+      const [dx, dy] = [2 / 24, 1 / 24];
+      const lines = [];
+      for (let x = Math.ceil(v.x / dx) * dx; x <= v.x + v.w; x += dx) lines.push(`M${x} ${v.y}V${v.y + h}`);
+      for (let y = Math.ceil(v.y / dy) * dy; y <= v.y + h; y += dy) lines.push(`M${v.x} ${y}H${v.x + v.w}`);
+      out.push(node("path", {class: "m-squares", d: lines.join("")}));
+      if (v.w <= SUBSQUARE_NAMES_UNDER) {
+        const sub = (i) => String.fromCharCode(97 + i);
+        for (let x = Math.floor(v.x / dx) * dx; x < v.x + v.w; x += dx) {
+          for (let y = Math.floor(v.y / dy) * dy; y < v.y + h; y += dy) {
+            // the subsquare whose top-left corner is (x, y): its name, as the locator reads
+            const lon = x - 180 + dx / 2;
+            const lat = 90 - y - dy / 2;
+            const fx = Math.floor((lon + 180) / 20);
+            const fy = Math.floor((lat + 90) / 10);
+            const sx = Math.floor(((lon + 180) % 20) / 2);
+            const sy = Math.floor((lat + 90) % 10);
+            const tx = Math.floor((((lon + 180) % 2) * 12));
+            const ty = Math.floor((((lat + 90) % 1) * 24));
+            out.push(label(x, y, `${letter(fx)}${letter(fy)}${sx}${sy}${sub(tx)}${sub(ty)}`,
+              "m-grid-name"));
+          }
+        }
+      }
+    }
     if (v.w <= SQUARES_UNDER) {
       const lines = [];
       for (let x = Math.ceil(v.x / 2) * 2; x <= v.x + v.w; x += 2) lines.push(`M${x} ${v.y}V${v.y + h}`);
@@ -325,6 +391,12 @@ export class WorldMap {
       press = null;
       svg.classList.remove("dragging");
       if (was.dragged || event.type === "pointercancel") return;
+      const report = event.target.closest && event.target.closest(".m-report");
+      if (report) {
+        this.pickReport(report.dataset.report);
+        this.onReport(report.dataset.report);
+        return;
+      }
       const mark = event.target.closest && event.target.closest(".m-gw");
       if (mark) {
         this.pick(mark.dataset.callsign);

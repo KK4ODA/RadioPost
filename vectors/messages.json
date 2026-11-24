@@ -611,6 +611,110 @@
           "exact": false
         }
       ]
+    },
+    {
+      "name": "shelter3-storm",
+      "fields": {
+        "v": 1,
+        "from": "shelter3@radiopost.org",
+        "to": [
+          "reports@weather.example"
+        ],
+        "date": 1794234300,
+        "subject": "Hail and wind, Atlanta",
+        "body": "",
+        "form": {
+          "template_hex": "58584708ebf060c1",
+          "values": {
+            "1": [
+              337812300,
+              -843876500,
+              25
+            ],
+            "2": 29903870,
+            "3": 24,
+            "4": "NE at 30 mph",
+            "5": 175,
+            "6": 60,
+            "7": 0,
+            "11": "Two large limbs down on Peachtree St.\nCar windows broken.",
+            "14": "N3CALL"
+          }
+        }
+      },
+      "diagnostic": "{1: 1, 2: \"shelter3@radiopost.org\", 3: [\"reports@weather.example\"], 5: 1794234300, 6: \"Hail and wind, Atlanta\", 7: \"\", 13: {1: h'58584708ebf060c1', 2: {1: [337812300, -843876500, 25], 2: 29903870, 3: 24, 4: \"NE at 30 mph\", 5: 175, 6: 60, 7: 0, 11: \"Two large limbs down on Peachtree St.\\nCar windows broken.\", 14: \"N3CALL\"}}}",
+      "canonical_hex": "a7010102767368656c7465723340726164696f706f73742e6f72670381777265706f72747340776561746865722e6578616d706c65051a6af1d7bc06764861696c20616e642077696e642c2041746c616e746107600da2014858584708ebf060c102a901831a14229b4c3a324c88931819021a01c84bfe031818046c4e45206174203330206d70680518af06183c07000b783954776f206c61726765206c696d627320646f776e206f6e205065616368747265652053742e0a4361722077696e646f77732062726f6b656e2e0e664e3343414c4c",
+      "content_id_hex": "3b6278e00551e26441621d57",
+      "content_id_text": "hnrhryafkhrgiqlcdvlq",
+      "air": [
+        {
+          "compression": 0,
+          "hex": "00a7010102767368656c7465723340726164696f706f73742e6f72670381777265706f72747340776561746865722e6578616d706c65051a6af1d7bc06764861696c20616e642077696e642c2041746c616e746107600da2014858584708ebf060c102a901831a14229b4c3a324c88931819021a01c84bfe031818046c4e45206174203330206d70680518af06183c07000b783954776f206c61726765206c696d627320646f776e206f6e205065616368747265652053742e0a4361722077696e646f77732062726f6b656e2e0e664e3343414c4c",
+          "exact": true
+        }
+      ]
+    },
+    {
+      "name": "shelter3-206",
+      "fields": {
+        "v": 1,
+        "from": "shelter3@radiopost.org",
+        "to": [
+          "eoc@radiopost.org"
+        ],
+        "date": 1794234300,
+        "subject": "Medical plan, Shelter 3",
+        "body": "Sent with the shelter's IAP.\n",
+        "form": {
+          "template_hex": "5cf57eeb404d7beb",
+          "values": {
+            "1": "Storm response, Atlanta",
+            "2": 29903760,
+            "3": 29904480,
+            "4": [
+              {
+                "1": "First aid, Shelter 3",
+                "2": "Gym, 123 Main St",
+                "3": "TAC 2",
+                "4": 0
+              }
+            ],
+            "6": [
+              {
+                "1": "Grady Memorial",
+                "2": "80 Jesse Hill Jr Dr SE, Atlanta",
+                "3": [
+                  337521600,
+                  -843815800
+                ],
+                "4": "404-616-1000",
+                "7": 0,
+                "8": "I",
+                "9": 0,
+                "10": 0
+              }
+            ],
+            "7": "Call 911 first; then the EOC on TAC 2.",
+            "9": "J. Park"
+          }
+        }
+      },
+      "diagnostic": "{1: 1, 2: \"shelter3@radiopost.org\", 3: [\"eoc@radiopost.org\"], 5: 1794234300, 6: \"Medical plan, Shelter 3\", 7: \"Sent with the shelter's IAP.\\n\", 13: {1: h'5cf57eeb404d7beb', 2: {1: \"Storm response, Atlanta\", 2: 29903760, 3: 29904480, 4: [{1: \"First aid, Shelter 3\", 2: \"Gym, 123 Main St\", 3: \"TAC 2\", 4: 0}], 6: [{1: \"Grady Memorial\", 2: \"80 Jesse Hill Jr Dr SE, Atlanta\", 3: [337521600, -843815800], 4: \"404-616-1000\", 7: 0, 8: \"I\", 9: 0, 10: 0}], 7: \"Call 911 first; then the EOC on TAC 2.\", 9: \"J. Park\"}}}",
+      "canonical_hex": "a7010102767368656c7465723340726164696f706f73742e6f7267038171656f6340726164696f706f73742e6f7267051a6af1d7bc06774d65646963616c20706c616e2c205368656c746572203307781d53656e74207769746820746865207368656c7465722773204941502e0a0da201485cf57eeb404d7beb02a7017753746f726d20726573706f6e73652c2041746c616e7461021a01c84b90031a01c84e600481a401744669727374206169642c205368656c7465722033027047796d2c20313233204d61696e2053740365544143203204000681a8016e4772616479204d656d6f7269616c02781f3830204a657373652048696c6c204a722044722053452c2041746c616e746103821a141e2bc03a324b9b77046c3430342d3631362d31303030070008614909000a0007782643616c6c203931312066697273743b207468656e2074686520454f43206f6e2054414320322e09674a2e205061726b",
+      "content_id_hex": "366caf95f34e417cde78df61",
+      "content_id_text": "gzwk7fptjzaxzxty35qq",
+      "air": [
+        {
+          "compression": 0,
+          "hex": "00a7010102767368656c7465723340726164696f706f73742e6f7267038171656f6340726164696f706f73742e6f7267051a6af1d7bc06774d65646963616c20706c616e2c205368656c746572203307781d53656e74207769746820746865207368656c7465722773204941502e0a0da201485cf57eeb404d7beb02a7017753746f726d20726573706f6e73652c2041746c616e7461021a01c84b90031a01c84e600481a401744669727374206169642c205368656c7465722033027047796d2c20313233204d61696e2053740365544143203204000681a8016e4772616479204d656d6f7269616c02781f3830204a657373652048696c6c204a722044722053452c2041746c616e746103821a141e2bc03a324b9b77046c3430342d3631362d31303030070008614909000a0007782643616c6c203931312066697273743b207468656e2074686520454f43206f6e2054414320322e09674a2e205061726b",
+          "exact": true
+        },
+        {
+          "compression": 1,
+          "hex": "015bcec8c854569c919a53925a64ec50949892995f905f5ca2975f94cedc58989a9f8c2ac62a95f5f1fa1eb672dfd494cce4c41c85829cc43c1d8560887e0563f60ad9e0d4bc1285f2cc920c85928c5405a8c9eac50a9e8e017a5cbc8b183d62bed6bd76f0ad7ecdb49cb13cb824bf2857a128b5b8203faf385547c1b104685e49229314e309ef09cc40d22f81a5710963895b665171894262660a925d4c05ee95b93a0a8646c60abe8999790ac125cca9218ece0a462c0c6c8d2b18f3dc810eaf54f04dcdcd2fca4ccc61aa90b73050f04a2d2e4e55f0c8ccc951f02a527029520876855bcadc242522a77dc0cac87b76394b8e898189ae99a199aea18181013b0347a227270317037b859a732250afa5a1a1421ac849d6204fe6817deaeaefac909fa70076811e67ba979e424062513600",
+          "exact": false
+        }
+      ]
     }
   ],
   "invalid": [

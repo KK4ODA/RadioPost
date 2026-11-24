@@ -44,6 +44,7 @@ pub mod online;
 pub mod panel;
 pub mod presence;
 pub mod renewal;
+pub mod reports;
 pub mod selection;
 pub mod session;
 pub mod store;

@@ -40,7 +40,13 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `every_type` is a test template that uses them all, never published. The client reads each type
   with `compose::value_from_text` (the command line, and the panel's `form_of` with the template)
   and a position with `position_from_text` (degrees, or a grid square's centre with half its
-  diagonal); `/api/form-position` fills a position field from W55 and shows what goes. The client's composer has **Form** (`/api/forms`), `compose --form --field N=VALUE`,
+  diagonal); `/api/form-position` fills a position field from W55 and shows what goes. Step 3:
+  RP-6 1.3.0 §3.1 puts a `Maps:` line under an emailed form for each position (OpenStreetMap link
+  and `geo:` URI; `forms::places`, `forms::email_text`, the post office's mail.rs); the client's
+  **Reports** (`reports.rs`: `gather` from Inbox and Sent, `csv`, `geojson`; `/api/reports`,
+  `/api/reports/export` to Downloads by `downloads::write_new`, `/api/reports/map` opening a link
+  made from the numbers in the system browser, since the shell refuses other sites) on a second
+  `WorldMap` (`narrowest`, `fitLeast`, `showReports`, subsquares). The client's composer has **Form** (`/api/forms`), `compose --form --field N=VALUE`,
   `forms`; the post office writes a form's text into the email (RP-6 1.1.0 §3.1). A new template
   goes in `forms/` and in `make.py`, never a change to a published one.
   A form prints as its paper form (W53): `forms/*.print.html`, named by the template's

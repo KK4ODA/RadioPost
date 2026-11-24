@@ -13,7 +13,7 @@ use radiopost_client::panel::Panel;
 use radiopost_client::session::{self, Options};
 use serde_json::{Value, json};
 
-use common::{loopback, loopback_dialled, loopback_with, scratch, store_for};
+use common::{loopback, loopback_dialled, loopback_with, message, scratch, store_for};
 
 /// One HTTP exchange: the status and the body.
 fn http(
@@ -1708,4 +1708,102 @@ fn a_call_is_stopped_from_the_panel() {
     assert_eq!(a["stopped"], true, "{a}");
     assert_eq!(a["stopping"], Value::Null, "{a}");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The forms design, §4.3: the forms received with a position are the reports, newest first, each
+/// with its places and the choices made; written out, they are a CSV file and a `GeoJSON` file in
+/// the Downloads folder, under new names. A form without a position is no report.
+#[test]
+fn forms_with_positions_are_reports_written_as_csv_and_geojson() {
+    let dir = scratch("panel-reports");
+    let mut store = store_for(&dir.join("ana"), "device:ana", "ana");
+    for (name, at) in [
+        ("shelter3-storm", 100),
+        ("shelter3-206", 200),
+        ("shelter3-213", 300),
+    ] {
+        store
+            .received(&message(name), "N2CALL-5", at, None)
+            .expect("received");
+    }
+    drop(store);
+    let saved = dir.join("Downloads");
+    let c = Client {
+        at: Panel::new(&dir.join("ana"), None)
+            .saving_in(&saved)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let reports = c.get("/api/reports");
+    let forms: Vec<&str> = reports
+        .as_array()
+        .expect("reports")
+        .iter()
+        .filter_map(|r| r["form"].as_str())
+        .collect();
+    // both written at 14:25; the ICS-213 has no position
+    assert_eq!(forms.len(), 2, "{reports}");
+    assert!(forms.contains(&"Storm Report") && forms.contains(&"ICS-206 Medical Plan"));
+    let hail = reports
+        .as_array()
+        .expect("reports")
+        .iter()
+        .find(|r| r["form"] == "Storm Report")
+        .expect("the storm report");
+    assert_eq!(hail["folder"], "inbox");
+    assert_eq!(hail["places"][0]["lat"], 33.78123);
+    assert_eq!(hail["places"][0]["lon"], -84.38765);
+    assert_eq!(hail["places"][0]["within"], 25);
+    assert_eq!(
+        hail["places"][0]["text"],
+        "33.78123, -84.38765 (EM73ts) ±25 m"
+    );
+    assert_eq!(hail["choices"]["7"], 0);
+    let ids: Vec<Value> = reports
+        .as_array()
+        .expect("reports")
+        .iter()
+        .map(|r| r["id"].clone())
+        .collect();
+    let csv = c
+        .post("/api/reports/export", &json!({"format": "csv", "ids": ids}))
+        .expect("written");
+    assert_eq!(csv["count"], 2, "{csv}");
+    let name = csv["name"].as_str().expect("a name");
+    assert!(
+        name.starts_with("RadioPost reports ")
+            && std::path::Path::new(name)
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("csv")),
+        "{name}"
+    );
+    let text = std::fs::read_to_string(saved.join(name)).expect("the CSV");
+    // a line for each place, and the head
+    assert_eq!(text.trim_end().split("\r\n").count(), 3, "{text}");
+    let geo = c
+        .post(
+            "/api/reports/export",
+            &json!({"format": "geojson", "ids": [&ids[0]]}),
+        )
+        .expect("written");
+    let file = std::fs::read_to_string(saved.join(geo["name"].as_str().expect("a name")))
+        .expect("the GeoJSON");
+    let g: Value = serde_json::from_str(&file).expect("JSON");
+    assert_eq!(g["features"].as_array().expect("features").len(), 1);
+    // written again, it goes beside the first
+    let again = c
+        .post("/api/reports/export", &json!({"format": "csv", "ids": ids}))
+        .expect("written again");
+    assert_ne!(again["name"], csv["name"]);
+    assert!(
+        c.post("/api/reports/export", &json!({"format": "kml", "ids": ids}))
+            .is_err()
+    );
+    assert!(
+        c.post(
+            "/api/reports/export",
+            &json!({"format": "csv", "ids": ["nothing"]})
+        )
+        .is_err()
+    );
 }

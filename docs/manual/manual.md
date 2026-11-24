@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.51.0 |
+| **Version** | 1.52.0 |
 | **Updated** | 2026-11-24 |
 | **Describes** | RadioPost 0.1.0-beta.39 |
 | **Licence** | CC BY 4.0 |
@@ -368,6 +368,10 @@ again with a new code**.
    - **Waiting**: what waited at your post office at your last call to a gateway.
    - **Trash**: messages you deleted.
    - **Addresses**: your address list.
+   - **Alerts**: alerts to and from the stations that share a keyword with you
+     ([Alerts](#101-alerts)).
+   - **Reports**: the forms you received or sent that carry a position, on a map
+     ([Reports](#91-reports)).
 5. **Station**: whom to call, on which channel, and the **Call** and **Listen for P2P** buttons.
    The box called **Call** keeps the last gateway, or the last station, you called, and **▾** at
    its right lists the others. The green **Call** button puts the station on the air. **Listen for P2P** is a switch:
@@ -427,7 +431,8 @@ the form; it is usually empty.
 Only what you type goes on the air. The form's wording stays on each computer, so a form takes less
 time than the same text typed out (about a fifth less for a short ICS-213). The station that
 receives it shows the whole form, by gateway or P2P ([9](#9-reading-your-mail)). Someone reading
-it by email gets it as text, with the labels.
+it by email gets it as text, with the labels, and under **Maps:** a link to OpenStreetMap for each
+position (with a `geo:` address after it, for map apps).
 
 If a field is missing or too long, RadioPost says which, and keeps what you wrote. A form that
 reaches a program without that form shows its values by field number.
@@ -902,6 +907,32 @@ ask for them.
 
 *Figure 23. Choosing what to fetch next.*
 
+### 9.1 Reports
+
+Forms that carry a position are **Reports** too: a damage, storm or situation report, a check-in
+or check-out, a position report, an ICS-206's helipads. Click **Reports** in the list on the left.
+The map shows where each one is, and the list under it each report, the newest first.
+
+- **Form** shows one form's reports, or all of them.
+- **Written** shows those written in the last day, three days or week, or at any time.
+- **Colour by** colours the marks by one of the form's choices, such as a Damage Report's
+  **Damage**: the first choice green, the last red, *Unknown* and *Other* grey. The key above the
+  map names the colours.
+- Click a mark or a line to pick it in both. Under the map RadioPost says what and where it is.
+  **Open the message** opens it. **OpenStreetMap** shows the place on openstreetmap.org, with its
+  streets, in your web browser; openstreetmap.org then knows the place.
+- **Fit** shows every report shown. **+** and **−**, or the mouse wheel, zoom; drag to move. The
+  map draws land only roughly, and the Maidenhead squares and subsquares as you zoom in.
+- **Save as CSV** writes the reports shown to a file for a spreadsheet: a line for each
+  position, with the date, the sender and recipients, the form, the position and its grid square,
+  and, when all are of one form, each of its fields. **Save as GeoJSON** writes them for a map
+  program such as QGIS, ArcGIS or CalTopo. Both go in your **Downloads** folder, never over a file
+  already there.
+
+![The Reports view: damage reports around Atlanta on the map, coloured from None in green to Destroyed in red, one picked, and the list under it](screens/client-reports.png)
+
+*Figure 24. Damage reports, coloured by damage.*
+
 ## 10. Station to station
 
 Two RadioPost stations can send mail to each other directly by radio. No gateway, no post office
@@ -910,7 +941,7 @@ credential.
 
 ![Station A calls, station B listens, mail crosses both ways, and each post office is told later](fig/direct.svg)
 
-*Figure 24. Station to station.*
+*Figure 25. Station to station.*
 
 Agree on a frequency and a bandwidth first.
 
@@ -937,7 +968,7 @@ Agree on a frequency and a bandwidth first.
 
 ![The Station box with Listening for P2P switched on: the switch sunk in, its lamp lit green, Call greyed, and under it the line saying the station listens on 7.103 MHz at 2300 Hz and answers 500 Hz calls too](screens/client-listening.png)
 
-*Figure 25. Listening for P2P, switched on.*
+*Figure 26. Listening for P2P, switched on.*
 
 While the switch is on, **Call** and **Tuner tone** are greyed: the radio is listening. Click
 **Listening for P2P** to stop listening, then call.
@@ -977,7 +1008,7 @@ stopped the scan and tuned there.
 
 ![The Station box for a station call: the callsign, the dial and the bandwidth, the band predicted unlikely to work with 80 m likely, and the dial to set by hand](screens/client-call-station.png)
 
-*Figure 26. A station call: the band predicted, on a radio whose dial Aether cannot set.*
+*Figure 27. A station call: the band predicted, on a radio whose dial Aether cannot set.*
 
 **A station you called before.** Click **▾** at the right of **Call**, or press the down arrow in
 it. The list shows each station you called once, newest first, with the dial and bandwidth of that
@@ -989,7 +1020,7 @@ nothing.
 
 ![The Station box on P2P: WD5EMA, the last station called, in Call, and the list under it showing WD5EMA on 7.101 MHz at 2300 Hz and N4CALL on 3.5915 MHz at 500 Hz, with how long ago](screens/client-called.png)
 
-*Figure 27. The stations you called before.*
+*Figure 28. The stations you called before.*
 
 Mail addressed to the other station's address crosses. Each side keeps a record of the session.
 When you next have the Internet, a line under the Station box says how many sessions wait to be
@@ -1033,7 +1064,7 @@ You need:
 
 ![The Alerts view: an alert sent and answered, one heard, and two circles with their checks](screens/client-alerts.png)
 
-*Figure 28. Alerts.*
+*Figure 29. Alerts.*
 
 ### 10.2 Set up a circle
 
@@ -1105,7 +1136,7 @@ front, and a red box shows the alert, with the dial it was heard on.
 
 ![An alert from KK4ODA in the circle Family, with Acknowledge, Call back, three quick replies and a line of your own](screens/client-alarm.png)
 
-*Figure 29. An alert arriving.*
+*Figure 30. An alert arriving.*
 
 - **Acknowledge** stops the alarm. The other station sees *seen*.
 - **Received**, **Calling you now** and **Can't now** answer with that line, and stop the alarm.
@@ -1128,7 +1159,7 @@ its own account, its own address and its own mail.
 
 ![One computer with three callsigns, each its own account, and a shared key, address list and log](fig/callsigns.svg)
 
-*Figure 30. Several callsigns on one computer.*
+*Figure 31. Several callsigns on one computer.*
 
 ### 11.1 Add a callsign
 
@@ -1190,7 +1221,7 @@ Click **Setup** at the bottom of the left-hand column.
 
 ![The Setup page: enrollment, post office, accept list and usual gateways](screens/client-setup.png)
 
-*Figure 31. Setup.*
+*Figure 32. Setup.*
 
 ### Enroll with your post office
 
@@ -1231,7 +1262,7 @@ Where your station is. The gateway list is in order of distance from it
 
 ![Setup's Places and GPS: two places saved, the GPS read from an iPhone over TCP, and the position in use](screens/client-places.png)
 
-*Figure 32. Places and GPS.*
+*Figure 33. Places and GPS.*
 
 The line at the top says which position is in use, and why when it is not the GPS's present fix:
 *In use: the GPS, EM73tr, 2 s ago*, or *GPS silent for 6 minutes: using Home, EM73tr.*
@@ -1281,7 +1312,7 @@ names the profile in use.
 
 ![Setup's Station profiles: a mobile profile and a home one, each value set or assumed](screens/client-stations.png)
 
-*Figure 33. Station profiles.*
+*Figure 34. Station profiles.*
 
 Each profile shows what a prediction would use at **HF** and at **VHF** and above: the power, the
 antenna and its height, its gain, and the feed line's loss, and the **Noise** where it is. A value
@@ -1304,7 +1335,7 @@ when you ask, from the Copernicus DEM's public copy, and kept on this computer.
 
 ![Setup's Terrain: what is held, the area within 50 km being prepared at 90 m, and the notices of the data held](screens/client-terrain-setup.png)
 
-*Figure 34. Terrain.*
+*Figure 35. Terrain.*
 
 The first line says what is held: tiles of a degree square, at 90 m or 30 m, their size, and the
 folder. To have the terrain before you go where there is no Internet, pick how far around the place
@@ -1320,7 +1351,7 @@ RadioPost plays a sound when something happens, and tells you about new mail by 
 
 ![Setup's Sounds and notifications: speakers chosen, a sound for each event, quiet hours, and how mail arrives](screens/client-sounds.png)
 
-*Figure 35. Sounds and notifications.*
+*Figure 36. Sounds and notifications.*
 
 **Mind the radio's sound card.** If this computer's sound goes to the radio's sound card (a
 SignaLink, or the radio's own USB audio), these sounds go on the air, and with VOX they key the
@@ -1418,7 +1449,7 @@ RadioPost keeps working when the Internet fails at a gateway.
 
 ![Before: the post office copies your mail to your usual gateway. During: the gateway serves the copies and keeps what you send. After: it reports](fig/cutoff.svg)
 
-*Figure 36. When the Internet is down.*
+*Figure 37. When the Internet is down.*
 
 **Before.** Name your usual gateways in Setup ([section 12](#usual-gateways)). Your post office
 then copies each new message for you to them as it arrives.
@@ -1461,7 +1492,7 @@ licensed operator can run one.
 
 ![Two users call the gateway by radio; the gateway's computer runs RadioPost Gateway and Aether HF and reaches each caller's post office](fig/gateway.svg)
 
-*Figure 37. A gateway station.*
+*Figure 38. A gateway station.*
 
 A gateway is usually left answering with nobody at the radio. It is then under **automatic
 control**, and the rules for that apply ([The rules](#36-the-rules)).
@@ -1497,13 +1528,13 @@ Open RadioPost Gateway. Until it is set up and registered, it says what is missi
 
 ![A new RadioPost Gateway: the notice says it is not set up, with Set up the gateway](screens/gateway-first.png)
 
-*Figure 38. RadioPost Gateway before setup.*
+*Figure 39. RadioPost Gateway before setup.*
 
 Click **Set up the gateway**. Setup has three steps.
 
 ![The gateway's Setup page: the gateway, its registration with two channels, and post offices](screens/gateway-setup.png)
 
-*Figure 39. Setting up the gateway.*
+*Figure 40. Setting up the gateway.*
 
 ### Step 1. The gateway
 
@@ -1634,7 +1665,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 ![The RadioPost Gateway window with numbered marks on its parts](screens/gateway-window.png)
 
-*Figure 40. The RadioPost Gateway window.*
+*Figure 41. The RadioPost Gateway window.*
 
 1. **The gateway's callsign**, and the account it is registered under. To its left, beside
    *RadioPost Gateway*, is the version you are running.
@@ -1669,7 +1700,7 @@ While a session runs, a box shows who called, the account, since when, and the m
 
 ![The window during a session, with the Session under way box and its Disconnect button](screens/gateway-session.png)
 
-*Figure 41. A session at the gateway.*
+*Figure 42. A session at the gateway.*
 
 **Ending one session.** The box has a button that ends this session only. The gateway goes on
 answering:
@@ -1778,7 +1809,7 @@ text), each session waiting to be reported with its last try, and the last repor
 
 ![The Partners, Callers refused and Copies placed ahead panels, opened](screens/gateway-held.png)
 
-*Figure 42. What the gateway holds, its partners and the callers it refuses.*
+*Figure 43. What the gateway holds, its partners and the callers it refuses.*
 
 ## 22. Partners: forwarding by radio
 
@@ -1915,7 +1946,7 @@ on this tab.
 
 ![The Applications tab: one application waiting with its licence check, and the Decided list](screens/desk-applications.png)
 
-*Figure 43. Applications.*
+*Figure 44. Applications.*
 
 Each application shows the person's name, callsign and when they asked, the **Address** they
 want, their **Email now**, and what the post office found of the callsign:
@@ -1959,7 +1990,7 @@ the mailbox was made (*mailbox*, or *no mailbox* in red) and the applicant email
 
 ![The Accounts tab: five accounts with their names, devices and mail waiting](screens/desk-accounts.png)
 
-*Figure 44. Accounts.*
+*Figure 45. Accounts.*
 
 Every account, one a row:
 
@@ -1997,7 +2028,7 @@ Revoking the computer you are using takes the desk away from it: the button says
 
 ![The Gateways tab: two gateways, the account each was registered from, and Unregister](screens/desk-gateways.png)
 
-*Figure 45. Gateways.*
+*Figure 46. Gateways.*
 
 The **Gateways** tab lists each gateway registered with your post office, one a row:
 
@@ -2021,7 +2052,7 @@ that exists. Use it for someone you know holds the callsign.
 
 ![The New code tab: an address, a callsign and a name filled in, the licence checked, and the code made](screens/desk-code.png)
 
-*Figure 46. Making a code.*
+*Figure 47. Making a code.*
 
 1. Open **New code**.
 2. Fill in:
@@ -2071,7 +2102,7 @@ Know only post offices whose operators you trust to check callsigns. At first no
 
 ![The Post offices tab: one post office known, one seen, none blocked](screens/desk-others.png)
 
-*Figure 47. Other post offices.*
+*Figure 48. Other post offices.*
 
 - **Known**: the post offices you know, who runs each, when its records were last fetched, and
   whether DNSSEC signed them. They are fetched again every six hours. **Forget** stops knowing one;
@@ -2092,7 +2123,7 @@ when a check turns red, and again when all pass.
 
 ![The Health tab: eleven checks passed and one amber line about backups](screens/desk-health.png)
 
-*Figure 48. Health.*
+*Figure 49. Health.*
 
 Each line is one check:
 
@@ -2120,7 +2151,7 @@ The **Server** tab lets you look after the server without logging in to it.
 
 ![The Server tab: the jobs, one with its output open, and When you need more](screens/desk-server.png)
 
-*Figure 49. Jobs and a terminal.*
+*Figure 50. Jobs and a terminal.*
 
 **Jobs** are a fixed list of tasks the server's administrator account runs for you:
 
@@ -2155,7 +2186,7 @@ says the one command to run on the server, once.
 
 ![The Backups and DKIM keys boxes on the Server tab](screens/desk-backups.png)
 
-*Figure 50. Backups and DKIM keys.*
+*Figure 51. Backups and DKIM keys.*
 
 ### Backups
 
@@ -2212,7 +2243,7 @@ when they are older than 180 days.
 
 ![The Settings tab: applications, licence lookups, mailboxes and this post office](screens/desk-settings.png)
 
-*Figure 51. Settings.*
+*Figure 52. Settings.*
 
 ### Applications
 
@@ -2603,3 +2634,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.49.0 | 2026-11-24 | Addresses are written in lowercase everywhere (RP-0 1.5.0 §6.2). Section 5: the address applied for or enrolled with is written in lowercase, and the refusal table no longer blames capitals. Section 7: To and Cc are written in lowercase. Section 13: the address list keeps one entry an address, and an older list holding `Ana@…` and `ana@…` reads as one. The client had kept them as two addresses. |
 | 1.50.0 | 2026-11-24 | A gateway call goes at its channel's bandwidth. Section 8: the call asks Aether for the bandwidth listed with the channel picked, whatever Aether's own **Bandwidth** says, and the log says it; the step that told you to set Aether's bandwidth is gone; on a long call to a scanned channel, Aether may move a 2300 Hz call to 500 Hz, and the log says so. Section 35, troubleshooting, the glossary and the quick reference to match. A call picked on *7.101 MHz, 2300 Hz* had gone at the 500 Hz Aether was set to. |
 | 1.51.0 | 2026-11-24 | Forms for most jobs, step 2 (RP-2 1.4.0). §7: the forms RadioPost holds, FEMA's ICS 202, 204, 205, 205A, 206, 208, 210, 211, 213, 213 RR and 214 and its own Check-In, Check-Out, Communications Log, Damage Report, Position Report, Situation Report and Storm Report; a position filled from the station's and what goes; dates and times in UTC; check boxes; numbers with units; tables (new Figure 11; later figures renumbered; Figures 9, 10 and 13 retaken with the longer **Form** list). §9: every ICS form prints as FEMA's paper form; a form's headings and tables in the reader. |
+| 1.52.0 | 2026-11-24 | Forms for most jobs, step 3. §9.1 *Reports*: the forms with positions on a map and in a list, by form and age, coloured by one of the form's choices, opened on OpenStreetMap, and saved as CSV or GeoJSON in the Downloads folder (new Figure 24; later figures renumbered). §6: **Alerts** and **Reports** among the folders. §7: an emailed form has a map link for each position (RP-6 1.3.0). The client's screenshots retaken with **Reports** in the left-hand column. |

@@ -38,6 +38,7 @@
         <li><button data-folder="trash" title="Messages you deleted: put them back, or delete them for good. Deleting is on this computer only: your post office and other stations keep what they hold">Trash <span class="count" id="n-trash"></span></button></li>
         <li class="sep"><button data-folder="addresses" title="Whom you have written to, and addresses you add: offered as you type in To and Cc">Addresses <span class="count" id="n-addresses"></span></button></li>
         <li><button data-folder="alerts" title="Alerts to and from the stations that share a keyword with you: sent at once, heard as an alarm, answered with a line">Alerts <span class="count" id="n-alerts"></span></button></li>
+        <li><button data-folder="reports" title="The forms you received or sent that carry a position, on a map: a damage, storm or situation report, a check-in, a position report">Reports</button></li>
       </ul>
 
       <section class="station" aria-label="Station">
@@ -162,7 +163,7 @@
             <button type="button" class="quiet" id="map-place" aria-pressed="false" title="Click a spot on the map to save it as a place">Save a place from the map</button>
             <span class="note map-legend" title="What the marks mean">◎ you · ○ listed · ■ yours · ★ favourite · ◆ worked from here · faded: not seen for days · shaded: night now</span>
           </div>
-          <svg id="world-map" role="img" aria-label="A map of the gateways of this view and the position in use. Pick a gateway in the list to see it here, or click one here to pick it in the list"></svg>
+          <svg id="world-map" class="world-map" role="img" aria-label="A map of the gateways of this view and the position in use. Pick a gateway in the list to see it here, or click one here to pick it in the list"></svg>
           <div class="row" id="map-picked" hidden>
             <span id="map-picked-text"></span>
             <button type="button" id="map-choose" title="Call it: its channel goes in the call box, and the radio is tuned there at once when the modem can">Choose</button>
@@ -280,6 +281,49 @@
           </div>
           <p class="note">The same callsign again adds a channel to it.</p>
         </details>
+      </section>
+
+      <section id="reports-view" hidden>
+        <div class="head"><h1>Reports</h1></div>
+        <p class="note">The forms you received or sent that carry a position, on the map and in the list. Click one to see it, open the message from there, or write the reports shown to a file for a spreadsheet or a map program.</p>
+        <div class="row report-tools">
+          <label title="Which form's reports to show">Form
+            <select id="report-form" class="narrow"></select>
+          </label>
+          <label title="How old a report may be, by when it was written">Written
+            <select id="report-age" class="narrow">
+              <option value="86400">In the last day</option>
+              <option value="259200">In the last 3 days</option>
+              <option value="604800">In the last week</option>
+              <option value="0" selected>Any time</option>
+            </select>
+          </label>
+          <label title="Colour the marks by one of the form's choices, in the order the form lists them: the first green, the last red; Unknown and Other grey">Colour by
+            <select id="report-colour" class="narrow"></select>
+          </label>
+          <button type="button" class="quiet" id="report-csv" title="Write the reports shown to a CSV file in your Downloads folder: a line for each position, for a spreadsheet">Save as CSV</button>
+          <button type="button" class="quiet" id="report-geojson" title="Write the reports shown to a GeoJSON file in your Downloads folder, for QGIS, ArcGIS, CalTopo or another map program">Save as GeoJSON</button>
+        </div>
+        <div id="reports-legend" class="note" aria-label="What the colours mean"></div>
+        <div class="card">
+          <div class="row map-tools">
+            <button type="button" class="quiet" id="report-fit" title="Show every report shown">Fit</button>
+            <button type="button" class="quiet narrow-button" id="report-in" title="Zoom in: the mouse wheel does it too, about the pointer" aria-label="Zoom in">+</button>
+            <button type="button" class="quiet narrow-button" id="report-out" title="Zoom out" aria-label="Zoom out">−</button>
+            <span class="note map-legend" title="What the map shows">Land is drawn coarsely: open a report on OpenStreetMap for the streets</span>
+          </div>
+          <svg id="reports-map" class="world-map" role="img" aria-label="A map of the reports shown. Click one to pick it in the list"></svg>
+          <div class="row" id="report-picked" hidden>
+            <span id="report-picked-text"></span>
+            <button type="button" id="report-open" title="Open the message the report came in">Open the message</button>
+            <a id="report-osm" target="_blank" rel="noopener noreferrer" title="Open this position on OpenStreetMap, in your web browser: openstreetmap.org learns the position">OpenStreetMap</a>
+          </div>
+        </div>
+        <table class="list" aria-label="Reports">
+          <thead><tr><th title="The colour of its mark"></th><th title="When it was written">Written</th><th title="Who sent it, or to whom you sent it">From, to</th><th title="The form, and the message's subject">Form</th><th title="Its position, and how far off it may be">Where</th></tr></thead>
+          <tbody id="report-rows"></tbody>
+        </table>
+        <p class="empty" id="reports-empty" hidden></p>
       </section>
 
       <section id="alerts-view" hidden>

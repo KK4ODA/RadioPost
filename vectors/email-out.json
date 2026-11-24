@@ -5,13 +5,57 @@
     "RP-6": "§3.1, §3.2, §4"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "A post office given the named message (messages.json) and the `context` makes an email whose headers have the values in `headers`, compared after unfolding and RFC 2047 decoding, and whose decoded text is the message's body and the footer: for a form, its text with its template (RP-2 §8.4). `email` is one spelling of it, before DKIM signing: header order, folding and the MIME boundary are the writer's. `part_hex`, where present, is the `application/radiopost-message` part's CBOR, exact (RP-6 §4).",
+  "map_zooms": [
+    {
+      "within": null,
+      "zoom": 17
+    },
+    {
+      "within": 1,
+      "zoom": 17
+    },
+    {
+      "within": 99,
+      "zoom": 17
+    },
+    {
+      "within": 100,
+      "zoom": 15
+    },
+    {
+      "within": 999,
+      "zoom": 15
+    },
+    {
+      "within": 1000,
+      "zoom": 12
+    },
+    {
+      "within": 9999,
+      "zoom": 12
+    },
+    {
+      "within": 10000,
+      "zoom": 9
+    },
+    {
+      "within": 99999,
+      "zoom": 9
+    },
+    {
+      "within": 100000,
+      "zoom": 6
+    }
+  ],
+  "rule": "A post office given the named message (messages.json) and the `context` makes an email whose headers have the values in `headers`, compared after unfolding and RFC 2047 decoding, and whose decoded text is the message's body and the footer: for a form, its text with its template (RP-2 §8.4), a map link for each position it holds, then its body (RP-6 §3.1). `email` is one spelling of it, before DKIM signing: header order, folding and the MIME boundary are the writer's. `part_hex`, where present, is the `application/radiopost-message` part's CBOR, exact (RP-6 §4).",
   "context": {
     "facundo-reply": "display name Facundo; session-01 (KK4ODA via N1CALL-10, started 1794235240, gateway session ec7b31841ec47c47); #419 came as <CAF.maria.419@mail.example.com>",
     "facundo-to-ana": "as facundo-reply; every recipient (ana@hampost.org) at a RadioPost post office, so the part is added, with session-01's proof",
     "facundo-followup": "as facundo-reply; the post office sent facundo-reply as email, with the Message-ID <kdj2eowb2e7wqq4y5ttq@radiopost.org>",
     "shelter3-priority": "display name Shelter 3; N3CALL via N2CALL-5, started 1794234060, gateway session 86e5b36c010212ce; eoc@radiopost.org is in the same post office, so no part",
-    "shelter3-213": "display name Shelter 3; N3CALL via N2CALL-5, started 1794233340, gateway session 221dbd553c46664d; the post office holds the published templates (forms/ics-213.json), so the email is the form's text"
+    "shelter3-213": "display name Shelter 3; N3CALL via N2CALL-5, started 1794233340, gateway session 221dbd553c46664d; the post office holds the published templates (forms/ics-213.json), so the email is the form's text",
+    "shelter3-storm": "display name Shelter 3; N3CALL via N2CALL-5, started 1794234240, gateway session a8fe3d366856f884; the post office holds the published templates (forms/storm-report.json): the form's text and a map link for its location",
+    "shelter3-206": "display name Shelter 3; N3CALL via N2CALL-5, started 1794234240, gateway session c6a96183ccd04c50; the post office holds the published templates (forms/ics-206.json): the form's text, a map link for the helipad in its hospital table, then the note"
   },
   "emails": [
     {
@@ -79,6 +123,38 @@
         "Content-Transfer-Encoding": "7bit"
       },
       "email": "From: Shelter 3 <shelter3@radiopost.org>\r\nTo: eoc@radiopost.org\r\nDate: Mon, 09 Nov 2026 14:10:00 +0000\r\nSubject: Cots and water for tonight\r\nMessage-ID: <sahp75tv6yd4g3r5uo4q@radiopost.org>\r\nRadio-Path: N3CALL via N2CALL-5; at=2026-11-09T14:09:00Z; session=221dbd553c46664d\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 7bit\r\n\r\nICS-213 General Message\r\n\r\nIncident name: Storm response, Atlanta\r\nTo (name and position): Duty officer, county EOC\r\nFrom (name and position): J. Park, Shelter 3 manager\r\nSubject: Cots and water for tonight\r\nDate: 2026-11-09\r\nTime: 14:10 UTC\r\nMessage:\r\n140 people tonight, 30 more expected by 20:00.\r\nNeed 40 cots and 300 litres of drinking water.\r\nGenerator fuel for 12 hours.\r\nApproved by (name and position): J. Park, Shelter 3 manager\r\n-- \r\nSent by amateur radio through RadioPost. Please reply in plain text, under 20 kB.\r\nAmateur radio carries no business content.\r\n",
+      "part_hex": null
+    },
+    {
+      "message": "shelter3-storm",
+      "headers": {
+        "From": "Shelter 3 <shelter3@radiopost.org>",
+        "To": "reports@weather.example",
+        "Date": "Mon, 09 Nov 2026 14:25:00 +0000",
+        "Subject": "Hail and wind, Atlanta",
+        "Message-ID": "<hnrhryafkhrgiqlcdvlq@radiopost.org>",
+        "Radio-Path": "N3CALL via N2CALL-5; at=2026-11-09T14:24:00Z; session=a8fe3d366856f884",
+        "MIME-Version": "1.0",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Transfer-Encoding": "quoted-printable"
+      },
+      "email": "From: Shelter 3 <shelter3@radiopost.org>\r\nTo: reports@weather.example\r\nDate: Mon, 09 Nov 2026 14:25:00 +0000\r\nSubject: Hail and wind, Atlanta\r\nMessage-ID: <hnrhryafkhrgiqlcdvlq@radiopost.org>\r\nRadio-Path: N3CALL via N2CALL-5; at=2026-11-09T14:24:00Z; session=a8fe3d366856f884\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nStorm Report\r\n\r\nLocation: 33.78123, -84.38765 (EM73ts) =C2=B125 m\r\nTime of the event: 2026-11-09 13:50 UTC\r\nEvent: Hail, Damaging wind\r\nStorm movement (toward, speed): NE at 30 mph\r\nHail size: 1.75 in\r\nWind speed: 60 mph\r\nThe wind speed was: Measured\r\nDamage:\r\nTwo large limbs down on Peachtree St.\r\nCar windows broken.\r\nSpotter number or callsign: N3CALL\r\n\r\nMaps:\r\nLocation: https://www.openstreetmap.org/?mlat=3D33.78123&mlon=3D-84.38765#m=\r\nap=3D17/33.78123/-84.38765 geo:33.78123,-84.38765;u=3D25\r\n--=20\r\nSent by amateur radio through RadioPost. Please reply in plain text, under =\r\n20 kB.\r\nAmateur radio carries no business content.\r\n",
+      "part_hex": null
+    },
+    {
+      "message": "shelter3-206",
+      "headers": {
+        "From": "Shelter 3 <shelter3@radiopost.org>",
+        "To": "eoc@radiopost.org",
+        "Date": "Mon, 09 Nov 2026 14:25:00 +0000",
+        "Subject": "Medical plan, Shelter 3",
+        "Message-ID": "<gzwk7fptjzaxzxty35qq@radiopost.org>",
+        "Radio-Path": "N3CALL via N2CALL-5; at=2026-11-09T14:24:00Z; session=c6a96183ccd04c50",
+        "MIME-Version": "1.0",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Transfer-Encoding": "7bit"
+      },
+      "email": "From: Shelter 3 <shelter3@radiopost.org>\r\nTo: eoc@radiopost.org\r\nDate: Mon, 09 Nov 2026 14:25:00 +0000\r\nSubject: Medical plan, Shelter 3\r\nMessage-ID: <gzwk7fptjzaxzxty35qq@radiopost.org>\r\nRadio-Path: N3CALL via N2CALL-5; at=2026-11-09T14:24:00Z; session=c6a96183ccd04c50\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 7bit\r\n\r\nICS-206 Medical Plan\r\n\r\nIncident name: Storm response, Atlanta\r\nOperational period from: 2026-11-09 12:00 UTC\r\nOperational period to: 2026-11-10 00:00 UTC\r\nMedical aid stations:\r\nName | Location | Contact number(s)/frequency | Paramedics on site?\r\nFirst aid, Shelter 3 | Gym, 123 Main St | TAC 2 | Yes\r\nHospitals:\r\nHospital name | Address | Helipad position | Contact number(s)/frequency | Travel time, air | Travel time, ground | Trauma center | Trauma center level | Burn center | Helipad\r\nGrady Memorial | 80 Jesse Hill Jr Dr SE, Atlanta | 33.75216, -84.38158 (EM73ts) | 404-616-1000 |  |  | Yes | I | Yes | Yes\r\nSpecial medical emergency procedures:\r\nCall 911 first; then the EOC on TAC 2.\r\nPrepared by (Medical Unit Leader, name): J. Park\r\nDate prepared: 2026-11-09\r\nTime prepared: 14:25 UTC\r\n\r\nMaps:\r\nHospitals, row 1, Helipad position: https://www.openstreetmap.org/?mlat=33.75216&mlon=-84.38158#map=17/33.75216/-84.38158 geo:33.75216,-84.38158\r\n\r\nSent with the shelter's IAP.\r\n-- \r\nSent by amateur radio through RadioPost. Please reply in plain text, under 20 kB.\r\nAmateur radio carries no business content.\r\n",
       "part_hex": null
     },
     {

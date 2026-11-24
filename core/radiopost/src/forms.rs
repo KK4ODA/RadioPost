@@ -813,6 +813,11 @@ impl Shown {
     /// Its text (RP-2 §8.4), the message's `body` after it when there is one.
     #[must_use]
     pub fn text(&self, message: &Message) -> String {
+        finish(&self.lines(), message)
+    }
+
+    /// Its lines (RP-2 §8.4), before the message's `body`.
+    fn lines(&self) -> Vec<String> {
         let mut lines = vec![self.title.clone(), String::new()];
         for r in &self.rows {
             if r.heading {
@@ -827,7 +832,7 @@ impl Shown {
                 lines.push(format!("{}: {}", r.label, r.value));
             }
         }
-        finish(&lines, message)
+        lines
     }
 }
 
@@ -936,6 +941,123 @@ pub fn shown_as(message: &Message, templates: &[Template]) -> Option<Shown> {
         Some(t) => t.shown(message, &form),
         None => form.shown_without(),
     })
+}
+
+/// A position in a form, as RP-6 §3.1 links it to a map: its label (a field's, or a cell's: the
+/// field's label, its row's number from 1 and the column's label), and its value.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Place {
+    /// What it is in the form.
+    pub label: String,
+    /// The field's number (a `rows` field's, for a cell).
+    pub n: u64,
+    /// Latitude, ten-millionths of a degree.
+    pub lat: i128,
+    /// Longitude, ten-millionths of a degree.
+    pub lon: i128,
+    /// How far off it may be, in metres, when the sender said.
+    pub within: Option<u64>,
+}
+
+impl Place {
+    /// How close a map opens on it (RP-6 §3.1): 17, or by how far off it may be.
+    #[must_use]
+    pub fn zoom(&self) -> u8 {
+        match self.within {
+            Some(m) if m >= 100_000 => 6,
+            Some(m) if m >= 10_000 => 9,
+            Some(m) if m >= 1000 => 12,
+            Some(m) if m >= 100 => 15,
+            _ => 17,
+        }
+    }
+
+    /// Its OpenStreetMap link (RP-6 §3.1): a marker on it, at [`Place::zoom`].
+    #[must_use]
+    pub fn osm_link(&self) -> String {
+        let (lat, lon) = (degrees(self.lat), degrees(self.lon));
+        format!(
+            "https://www.openstreetmap.org/?mlat={lat}&mlon={lon}#map={}/{lat}/{lon}",
+            self.zoom()
+        )
+    }
+
+    /// Its `geo:` URI (RFC 5870), with `;u=` how far off it may be.
+    #[must_use]
+    pub fn geo_uri(&self) -> String {
+        let uri = format!("geo:{},{}", degrees(self.lat), degrees(self.lon));
+        match self.within {
+            Some(m) => format!("{uri};u={m}"),
+            None => uri,
+        }
+    }
+}
+
+/// The positions a form holds (RP-6 §3.1), in its order: a `position` field's value, and a `rows`
+/// field's `position` cells, row by row, its columns in order.
+#[must_use]
+pub fn places(template: &Template, form: &Form) -> Vec<Place> {
+    let place = |label: String, n: u64, v: &Value| {
+        let parts: Vec<i128> = v.as_array()?.iter().filter_map(integer).collect();
+        let (&lat, &lon) = (parts.first()?, parts.get(1)?);
+        Some(Place {
+            label,
+            n,
+            lat,
+            lon,
+            within: parts.get(2).and_then(|w| u64::try_from(*w).ok()),
+        })
+    };
+    let mut out = Vec::new();
+    for f in &template.fields {
+        let Some(v) = form.value(f.n) else {
+            continue;
+        };
+        match f.kind {
+            Kind::Position => out.extend(place(f.label.clone(), f.n, v)),
+            Kind::Rows => {
+                for (i, row) in v.as_array().unwrap_or(&[]).iter().enumerate() {
+                    for c in f.columns.iter().filter(|c| c.kind == Kind::Position) {
+                        let cell = row
+                            .as_map()
+                            .and_then(|cells| cells.iter().find(|(k, _)| k.as_u64() == Some(c.n)));
+                        if let Some((_, v)) = cell {
+                            let label = format!("{}, row {}, {}", f.label, i + 1, c.label);
+                            out.extend(place(label, f.n, v));
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// The text a post office writes in the email it makes of a message with a form (RP-6 §3.1): the
+/// form's text with its template, a map link for each position it holds, then the `body`; without
+/// the template, or with values that do not fill it, the values by number. `None` for a message
+/// with no form.
+#[must_use]
+pub fn email_text(message: &Message, templates: &[Template]) -> Option<String> {
+    let form = Form::of(message)?;
+    let Some(t) = templates
+        .iter()
+        .find(|t| t.fingerprint() == form.template)
+        .filter(|t| t.problem(&form.values).is_none())
+    else {
+        return Some(form.text_without(message));
+    };
+    let mut lines = t.shown(message, &form).lines();
+    let found = places(t, &form);
+    if !found.is_empty() {
+        lines.push(String::new());
+        lines.push("Maps:".to_owned());
+        for p in found {
+            lines.push(format!("{}: {} {}", p.label, p.osm_link(), p.geo_uri()));
+        }
+    }
+    Some(finish(&lines, message))
 }
 
 /// The lines joined, ending with a line break, then a non-empty body after an empty line.

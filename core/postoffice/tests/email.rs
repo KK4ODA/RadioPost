@@ -440,6 +440,18 @@ fn messages_become_the_emails_rp6_3_says() {
         session: "221dbd553c46664d".into(),
         proof: None,
     };
+    // the forms with positions (RP-6 §3.1), each from a session of its own
+    let shelter_map = |session: &str| Carried {
+        operator: "N3CALL".into(),
+        gateways: vec!["N2CALL-5".into()],
+        started: 1_794_234_240,
+        session: session.into(),
+        proof: None,
+    };
+    let (storm, medical) = (
+        shelter_map("a8fe3d366856f884"),
+        shelter_map("c6a96183ccd04c50"),
+    );
     let maria_419 = message("maria-419").content_id().0;
     let facundo_reply = message("facundo-reply").content_id();
     let sent_reply = format!("<{}@radiopost.org>", facundo_reply.text());
@@ -458,6 +470,8 @@ fn messages_become_the_emails_rp6_3_says() {
             "facundo-reply" | "facundo-followup" => ("Facundo", &facundo, false),
             "facundo-to-ana" => ("Facundo", &facundo, true),
             "shelter3-213" => ("Shelter 3", &shelter_form, false),
+            "shelter3-storm" => ("Shelter 3", &storm, false),
+            "shelter3-206" => ("Shelter 3", &medical, false),
             _ => ("Shelter 3", &shelter, false),
         };
         let (headers, email) = mail::from_message(
@@ -491,19 +505,34 @@ fn messages_become_the_emails_rp6_3_says() {
             e["headers"].as_object().expect("headers").len(),
             "{name}"
         );
-        // the decoded text is the body and the footer: a form's text, for a form (RP-2 §8.4)
+        // the decoded text is the vector email's: the body and the footer, for a form its text
+        // (RP-2 §8.4) with a map link for each position it holds (RP-6 §3.1)
         let parsed = mail::parse(&email).expect("an email");
-        let published = radiopost::forms::Template::published();
-        let body = radiopost::forms::shown(&m, &published).unwrap_or_else(|| {
-            m.map()
-                .get(radiopost::message::key::BODY)
-                .and_then(Value::as_text)
-                .expect("a body")
-                .to_owned()
-        });
         let text = mail::text(&parsed.body_text(0).expect("a text part"));
-        assert_eq!(text, format!("{body}{}", mail::FOOTER), "{name}");
+        let theirs = e["email"].as_str().expect("the email");
+        let vector = mail::parse(theirs.as_bytes()).expect("the vector's email");
+        let want = mail::text(&vector.body_text(0).expect("its text part"));
+        assert_eq!(text, want, "{name}");
+        assert!(text.ends_with(mail::FOOTER), "{name}");
         let part = mail::find_part(&email).map(|p| radiopost::cbor::hex(&p));
         assert_eq!(part.as_deref(), e["part_hex"].as_str(), "{name}");
+    }
+}
+
+/// RP-6 §3.1: a map link opens at 17, or closer to the world the farther off a position may be.
+#[test]
+fn map_links_open_as_close_as_rp6_3_1_says() {
+    let file = vectors("email-out.json");
+    for z in file["map_zooms"].as_array().expect("zooms") {
+        let place = radiopost::forms::Place {
+            label: String::new(),
+            n: 1,
+            lat: 337_812_300,
+            lon: -843_876_500,
+            within: z["within"].as_u64(),
+        };
+        let want = z["zoom"].as_u64().expect("a zoom");
+        assert_eq!(u64::from(place.zoom()), want, "{z}");
+        assert!(place.osm_link().contains(&format!("#map={want}/")), "{z}");
     }
 }

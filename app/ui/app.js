@@ -121,7 +121,7 @@ function when(seconds) {
 
 function show(view) {
   for (const id of ["list-view", "waiting-view", "gateways-view", "addresses-view", "alerts-view",
-                    "reader", "composer", "setup", "office"]) {
+                    "reports-view", "reader", "composer", "setup", "office"]) {
     $(id).hidden = id !== view;
   }
   // the usual gateways are read afresh each time, for the callsign in use now
@@ -1642,6 +1642,17 @@ function wireMap() {
   area.open = kept("garea", "open") === "open";
   area.addEventListener("toggle", () => keep("garea", area.open ? "open" : "closed"));
   $("map-fit").addEventListener("click", () => worldMap && worldMap.fit());
+  $("report-form").addEventListener("change", () => {
+    fillColourBy();
+    renderReports(true);
+  });
+  $("report-age").addEventListener("change", () => renderReports(true));
+  $("report-colour").addEventListener("change", () => renderReports());
+  $("report-fit").addEventListener("click", () => reportsMap && reportsMap.fit());
+  $("report-in").addEventListener("click", () => reportsMap && reportsMap.zoom(1.5));
+  $("report-out").addEventListener("click", () => reportsMap && reportsMap.zoom(1 / 1.5));
+  $("report-csv").addEventListener("click", () => exportReports("csv"));
+  $("report-geojson").addEventListener("click", () => exportReports("geojson"));
   $("map-world").addEventListener("click", () => worldMap && worldMap.world());
   $("map-in").addEventListener("click", () => worldMap && worldMap.zoom(1.5));
   $("map-out").addEventListener("click", () => worldMap && worldMap.zoom(1 / 1.5));
@@ -2403,6 +2414,7 @@ async function openFolder(name) {
   if (name === "waiting") return openWaiting();
   if (name === "addresses") return openAddresses();
   if (name === "alerts") return openAlerts();
+  if (name === "reports") return openReports();
   folder = name;
   markFolder(name);
   const trash = name === "trash";
@@ -4921,6 +4933,158 @@ async function alertDo(body, said) {
     toast(e.message, true);
   }
   await syncAlerts(null, true);
+}
+
+// -- reports (the forms design, §4.3): the forms received or sent that carry a position --------
+let reportList = [];
+let reportsMap = null;
+let pickedReport = null; // `${id}:${n}`: a report's nth position
+
+async function openReports() {
+  folder = "reports";
+  markFolder("reports");
+  show("reports-view");
+  try {
+    reportList = await api("reports");
+  } catch (e) {
+    toast(e.message, true);
+    reportList = [];
+  }
+  if (!templates.length) await loadForms();
+  if (!reportsMap) {
+    reportsMap = new WorldMap($("reports-map"), {narrowest: 0.02, fitLeast: 0.05,
+      onReport: (key) => pickReportAt(key, "map")});
+  }
+  fillReportForms();
+  renderReports(true);
+}
+
+// the forms the reports are of, by name, "All forms" first; the one chosen kept
+function fillReportForms() {
+  const select = $("report-form");
+  const was = select.value;
+  const forms = [...new Map(reportList.map((r) => [r.template, r.form])).entries()]
+    .sort((a, b) => a[1].localeCompare(b[1], undefined, {numeric: true}));
+  select.replaceChildren(el("option", {value: "", text: "All forms"}),
+    ...forms.map(([fp, name]) => el("option", {value: fp, text: name})));
+  select.value = forms.some(([fp]) => fp === was) ? was : "";
+  fillColourBy();
+}
+
+// the choice fields of the form chosen, to colour the marks by: its first required one, else its
+// first, by default; none for all forms together
+function fillColourBy() {
+  const select = $("report-colour");
+  const t = templates.find((x) => x.template === $("report-form").value);
+  const choices = t ? t.fields.filter((f) => f.type === "choice") : [];
+  select.replaceChildren(el("option", {value: "", text: "None"}),
+    ...choices.map((f) => el("option", {value: String(f.n), text: f.label})));
+  const first = choices.find((f) => f.required) || choices[0];
+  select.value = first ? String(first.n) : "";
+  select.disabled = !choices.length;
+}
+
+// a choice's colour: in the form's order, the first green and the last red; Unknown and Other grey
+function choiceColours(choices) {
+  const grey = (c) => /^(unknown|other)$/i.test(c);
+  const ranked = choices.filter((c) => !grey(c));
+  return choices.map((c) => {
+    if (grey(c)) return "hsl(0, 0%, 60%)";
+    const j = ranked.indexOf(c);
+    const hue = ranked.length < 2 ? 120 : 120 * (1 - j / (ranked.length - 1));
+    return `hsl(${Math.round(hue)}, 70%, 45%)`;
+  });
+}
+
+function shownReports() {
+  const fp = $("report-form").value;
+  const age = Number($("report-age").value);
+  const since = age ? Date.now() / 1000 - age : 0;
+  return reportList.filter((r) => (!fp || r.template === fp) && r.date >= since);
+}
+
+function renderReports(fit = false) {
+  const shown = shownReports();
+  const t = templates.find((x) => x.template === $("report-form").value);
+  const by = t && t.fields.find((f) => String(f.n) === $("report-colour").value);
+  const colours = by ? choiceColours(by.choices) : [];
+  const colourOf = (r) => {
+    const i = by ? r.choices[String(by.n)] : undefined;
+    return i === undefined ? "var(--accent)" : colours[i];
+  };
+  $("reports-legend").replaceChildren(...(by ? by.choices.map((c, i) =>
+    el("span", {}, el("span", {class: "swatch", style: `background: ${colours[i]}`}), c)) : []));
+  reportsMap.showReports(shown.flatMap((r) => r.places.map((p, n) => ({
+    id: `${r.id}:${n}`, lat: p.lat, lon: p.lon, colour: colourOf(r),
+    title: `${r.form}, ${r.folder === "sent" ? `to ${r.to.join(", ")}` : `from ${r.from}`}: ${p.label} ${p.text}`,
+  }))));
+  $("report-rows").replaceChildren(...shown.map((r) => {
+    const who = r.folder === "sent" ? `To ${r.to.join(", ")}` : r.from;
+    const where = r.places.length > 1
+      ? `${r.places[0].text} and ${r.places.length - 1} more` : r.places[0].text;
+    const tr = el("tr", {"data-report": r.id},
+      el("td", {}, el("span", {class: "swatch", style: `background: ${colourOf(r)}`})),
+      el("td", {class: "date", text: when(r.date)}),
+      el("td", {text: who}),
+      el("td", {text: r.subject ? `${r.form}: ${r.subject}` : r.form}),
+      el("td", {class: "where", text: where}));
+    tr.title = new Date(r.date * 1000).toUTCString();
+    tr.addEventListener("click", () => pickReportAt(`${r.id}:0`, "list"));
+    return tr;
+  }));
+  $("reports-empty").textContent = reportList.length
+    ? "No report of this form was written in that time."
+    : "No form you received or sent carries a position yet. A storm, damage or situation report, a check-in or a position report does.";
+  $("reports-empty").hidden = shown.length > 0;
+  if (pickedReport && !shown.some((r) => pickedReport.startsWith(`${r.id}:`))) pickReportAt(null);
+  if (fit) reportsMap.fit();
+}
+
+// a report's position picked, on the map or in the list: marked in both, and said under the map
+function pickReportAt(key, from) {
+  pickedReport = key;
+  if (from !== "map") reportsMap.pickReport(key);
+  const [id, n] = key ? key.split(":") : [null, 0];
+  for (const tr of $("report-rows").children) {
+    tr.classList.toggle("picked", tr.dataset.report === id);
+  }
+  const r = reportList.find((x) => x.id === id);
+  $("report-picked").hidden = !r;
+  if (!r) return;
+  const p = r.places[Number(n)];
+  $("report-picked-text").textContent = `${r.form}, ${r.folder === "sent" ? `to ${r.to.join(", ")}` : `from ${r.from}`}, `
+    + `${new Date(r.date * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC. ${p.label}: ${p.text}`;
+  $("report-open").onclick = () => openMessage(r.id, {folder: r.folder});
+  const osm = $("report-osm");
+  osm.href = p.osm;
+  // the desktop app's window opens no other site: the panel asks the system's browser
+  osm.onclick = window.radiopostPrints ? async (event) => {
+    event.preventDefault();
+    try {
+      await api("reports/map", {lat: p.lat, lon: p.lon, within: p.within});
+    } catch (e) {
+      toast(e.message, true);
+    }
+  } : null;
+  if (from === "list") {
+    const row = [...$("report-rows").children].find((tr) => tr.dataset.report === id);
+    if (row) row.scrollIntoView({block: "nearest"});
+  }
+}
+
+// the reports shown written to a file in the Downloads folder
+async function exportReports(format) {
+  const ids = shownReports().map((r) => r.id);
+  if (!ids.length) {
+    toast("No report is shown to save.", true);
+    return;
+  }
+  try {
+    const s = await api("reports/export", {format, ids});
+    toast(`Saved ${s.count} report${s.count > 1 ? "s" : ""} as ${s.name} in ${s.path.slice(0, s.path.length - s.name.length - 1)}`);
+  } catch (e) {
+    toast(e.message, true);
+  }
 }
 
 async function openAlerts() {

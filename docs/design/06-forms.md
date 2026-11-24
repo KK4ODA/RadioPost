@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.2.0 |
+| **Version** | 0.3.0 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -13,7 +13,7 @@ Emergency groups and the agencies they serve work with dozens of forms: messages
 requests, radio plans, logs, status grids, weather and damage reports, position reports. RadioPost
 has one, ICS-213. This document says how RadioPost can carry most of the forms groups use,
 including those that carry a position, without writing program code for each one. The author
-accepted it on 2026-11-24 with the three answers in §9. Steps 1 and 2 (§8) are built.
+accepted it on 2026-11-24 with the answers in §9. Steps 1 to 3 (§8) are built.
 
 **How facts are marked.** **[P]**: read on a primary source. **[S]**: found only secondhand, in a
 search result's summary. **[T]**: measured here. Facts about RadioPost were read in this repository
@@ -119,15 +119,19 @@ square.
 
 The client keeps an index of every form received that has a position field: the form, its sender,
 when, the position. A **Reports** view draws them on the client's map (`app/ui/map.js`), filtered
-by form and by age. A template may name a `choice` field whose choices, in order, colour the
-markers (green, amber, red). The reports export as CSV and as GeoJSON, which QGIS, ArcGIS and
+by form and by age. The operator picks a `choice` field of the form to colour the markers by, in
+the order of its choices: the first green, the last red, *Unknown* and *Other* grey. (A template
+key naming that field was the first idea; a published template never changes, so the view chooses
+instead, the form's first required choice by default.) The reports export as CSV and as GeoJSON, which QGIS, ArcGIS and
 CalTopo open. The client's land map is Natural Earth's 1:110m: right for a region, not for a
 street. A street-level view would need map tiles from the Internet, as an option.
 
 ### 4.4 In email (step 3)
 
-A post office writes a form's text into the email (RP-6 §3.1). For a position it will add a `geo:`
-link (RFC 5870), so that a mail program can open the point. It costs no air time.
+A post office writes a form's text into the email (RP-6 §3.1). Under `Maps:` after the form's
+lines it adds, for each position, an OpenStreetMap link, which any mail program makes clickable,
+and a `geo:` URI (RFC 5870) for map applications (the author's choice, §9). It costs no air time.
+OpenStreetMap learns a position only when the reader clicks.
 
 ### 4.5 Position reports
 
@@ -195,7 +199,7 @@ way, as data.
 |---|---|---|
 | 1 | RP-2 1.4.0: the six additions, their test vectors, the Rust library, the composer and the reader; a position field filled from W55. | Built |
 | 2 | Templates: FEMA's ICS forms, a storm report, check-in and check-out, a situation report, a damage report and a position report, with print layouts for the paper forms. | Built |
-| 3 | The Reports view: map, CSV and GeoJSON; a `geo:` link in email (RP-6). | Planned |
+| 3 | The Reports view: map, CSV and GeoJSON; map links in email (RP-6). | Built |
 | 4 | Templates by fingerprint (§6): RP-5, RP-2 §8.3, the post office, the client. | Planned |
 | 5 | Position reports as broadcasts, only if a net asks. | Not planned |
 
@@ -240,6 +244,17 @@ HICS until its terms are checked; the ARRL's and the Red Cross's until they answ
 Dates and times are UTC on every form, as on ICS-213, though FEMA's instructions say local time is
 typical: one clock for every station on a net, and the one the message's own date is in.
 
+**What step 3 built.** RP-6 1.3.0 §3.1: a form's positions, a field's or a table's cells, each
+get a line under `Maps:` in the email, the OpenStreetMap link and the `geo:` URI, the map opening
+closer the surer the position (`email-out.json`'s `shelter3-storm` and `shelter3-206`, and
+`map_zooms`). The client's **Reports** (`app/client/src/reports.rs`, `/api/reports`): every form in
+the Inbox and Sent that carries a position, read afresh each time (a message deleted is a report
+gone), on the map of the Gateways view (zooming to a town, with subsquares) and in a list, by form
+and age, coloured by a choice; **Open the message**; **OpenStreetMap**, which the desktop app
+opens in the system's browser from a link the client makes from the numbers alone; **Save as
+CSV** (RFC 4180, a line for each position, one form's fields as columns) and **Save as GeoJSON**
+(RFC 7946, a point for each position), in the Downloads folder.
+
 ---
 
 ## 9. The author's decisions (2026-11-24)
@@ -248,6 +263,7 @@ typical: one clock for every station on a net, and the one the message's own dat
 2. **The ARRL's and the Red Cross's forms wait for their permission**, which the author asks for
    (§5). Step 2 starts with the public-domain forms.
 3. **A position goes exactly as it is, by default** (§4.2). The operator may send less.
+4. **An emailed position gets both links**, OpenStreetMap's and a `geo:` URI (§4.4).
 
 ---
 
@@ -257,3 +273,4 @@ typical: one clock for every station on a net, and the one the message's own dat
 |---|---|---|
 | 0.1.0 | 2026-11-24 | First version, accepted with the author's three answers (§9); step 1 built (§8). |
 | 0.2.0 | 2026-11-24 | Step 2 built (§8): eleven of FEMA's ICS forms with their paper forms, and seven of RadioPost's own. §2, §5: the ICS 309 is not FEMA's; ICS 213 RR is FEMA's Appendix B example; the storm report follows the National Weather Service's spotter guidance. |
+| 0.3.0 | 2026-11-24 | Step 3 built (§8): the Reports view and map links in email (RP-6 1.3.0), with the author's fourth answer (§9). §4.3: the view, not the template, chooses the field that colours the markers. |

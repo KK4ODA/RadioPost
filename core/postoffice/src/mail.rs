@@ -1023,9 +1023,10 @@ pub fn from_message(message: &Message, ctx: &Leaving<'_>) -> (Vec<(String, Strin
         headers.push(("Importance".into(), "high".into()));
     }
     headers.push(("MIME-Version".into(), "1.0".into()));
-    // a form is written as its text, made from the published templates (RP-2 §8.4)
+    // a form is written as its text, made from the published templates (RP-2 §8.4), with a map
+    // link for each position it holds (RP-6 §3.1)
     let templates = published_templates();
-    let text = radiopost::forms::shown(message, templates).unwrap_or_else(|| {
+    let text = radiopost::forms::email_text(message, templates).unwrap_or_else(|| {
         field(key::BODY)
             .and_then(Value::as_text)
             .unwrap_or("")

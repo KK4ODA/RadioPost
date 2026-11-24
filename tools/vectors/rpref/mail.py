@@ -477,14 +477,59 @@ def part_bytes(proof: dict[str, Any]) -> bytes:
     )
 
 
+def map_zoom(within: int | None) -> int:
+    """§3.1: how close a map link opens: 17, or by how far off the position may be."""
+    if within is None or within < 100:
+        return 17
+    if within < 1000:
+        return 15
+    if within < 10_000:
+        return 12
+    if within < 100_000:
+        return 9
+    return 6
+
+
+def map_line(label: str, v: list[int]) -> str:
+    """§3.1: a position's map link line: the OpenStreetMap link, then the geo: URI (RFC 5870)."""
+    lat, lon = forms.degrees(v[0]), forms.degrees(v[1])
+    within = v[2] if len(v) == 3 else None
+    osm = f"https://www.openstreetmap.org/?mlat={lat}&mlon={lon}#map={map_zoom(within)}/{lat}/{lon}"
+    geo = f"geo:{lat},{lon}" + (f";u={within}" if within is not None else "")
+    return f"{label}: {osm} {geo}"
+
+
+def positions(t: dict[str, Any], values: dict[int, Any]) -> list[tuple[str, list[int]]]:
+    """§3.1: a form's positions in its order, each with its label: a field's, or a cell's
+    (the field's label, its row's number from 1, and the column's label)."""
+    out: list[tuple[str, list[int]]] = []
+    for f in t["fields"]:
+        v = values.get(f["n"])
+        if v is None:
+            continue
+        if f["type"] == "position":
+            out.append((f["label"], v))
+        elif f["type"] == "rows":
+            for i, row in enumerate(v, 1):
+                for c in f["columns"]:
+                    if c["type"] == "position" and c["n"] in row:
+                        out.append((f"{f['label']}, row {i}, {c['label']}", row[c["n"]]))
+    return out
+
+
 def text_of(fields: dict[str, Any], templates: list[dict[str, Any]]) -> str:
-    """§3.1: the email's text: the body, or a form's text (RP-2 §8.4), which ends with the body."""
+    """§3.1: the email's text: the body, or a form's text (RP-2 §8.4), then a map link for each of
+    its positions, then the body."""
     if "form" not in fields:
         return str(fields["body"])
     form = fields["form"]
     for t in templates:
         if forms.fingerprint(t) == form["template"] and forms.problem(t, form["values"]) is None:
-            return forms.text(t, fields)
+            out = forms.text(t, {**fields, "body": ""})
+            found = positions(t, form["values"])
+            if found:
+                out += "\nMaps:\n" + "".join(map_line(label, v) + "\n" for label, v in found)
+            return out + ("\n" + fields["body"] if fields["body"] else "")
     return forms.text_without(fields)
 
 

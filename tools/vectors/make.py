@@ -325,6 +325,8 @@ def form_template(name: str) -> dict[str, Any]:
 
 
 ICS_213 = form_template("ics-213")
+ICS_206 = form_template("ics-206")
+STORM_REPORT = form_template("storm-report")
 
 # RP-2 1.4.0 §8: a template that uses every type, for the vectors only (never published).
 EVERY_TYPE: dict[str, Any] = {
@@ -578,6 +580,63 @@ def messages() -> dict[str, dict[str, Any]]:
                     "Generator fuel for 12 hours."
                 ),
                 8: "J. Park, Shelter 3 manager",
+            },
+        },
+    }
+    # RP-6 §3.1: forms with positions, which the email gives map links for: a Storm Report, its
+    # location within 25 m, to a weather office's address; and an ICS-206 whose hospital table
+    # holds a helipad's position, with a note below it
+    minute = T_SESSION // 60
+    m["shelter3-storm"] = {
+        "v": 1,
+        "from": "shelter3@radiopost.org",
+        "to": ["reports@weather.example"],
+        "date": T_SESSION - 900,
+        "subject": "Hail and wind, Atlanta",
+        "body": "",
+        "form": {
+            "template": forms.fingerprint(STORM_REPORT),
+            "values": {
+                1: [337812300, -843876500, 25],
+                2: minute - 50,
+                3: 24,  # hail and damaging wind
+                4: "NE at 30 mph",
+                5: 175,
+                6: 60,
+                7: 0,
+                11: "Two large limbs down on Peachtree St.\nCar windows broken.",
+                14: "N3CALL",
+            },
+        },
+    }
+    m["shelter3-206"] = {
+        "v": 1,
+        "from": "shelter3@radiopost.org",
+        "to": ["eoc@radiopost.org"],
+        "date": T_SESSION - 900,
+        "subject": "Medical plan, Shelter 3",
+        "body": "Sent with the shelter's IAP.\n",
+        "form": {
+            "template": forms.fingerprint(ICS_206),
+            "values": {
+                1: "Storm response, Atlanta",
+                2: minute - 160,
+                3: minute - 160 + 720,
+                4: [{1: "First aid, Shelter 3", 2: "Gym, 123 Main St", 3: "TAC 2", 4: 0}],
+                6: [
+                    {
+                        1: "Grady Memorial",
+                        2: "80 Jesse Hill Jr Dr SE, Atlanta",
+                        3: [337521600, -843815800],
+                        4: "404-616-1000",
+                        7: 0,
+                        8: "I",
+                        9: 0,
+                        10: 0,
+                    }
+                ],
+                7: "Call 911 first; then the EOC on TAC 2.",
+                9: "J. Park",
             },
         },
     }
@@ -7502,6 +7561,23 @@ def outbound() -> dict[str, tuple[dict[str, str], bytes]]:
                 "templates": [ICS_213],
             },
         ),
+        # RP-6 §3.1: a form's positions get map links, after its lines and before its note
+        **{
+            name: mail.from_message(
+                MESSAGES[name],
+                {
+                    "display_name": "Shelter 3",
+                    "radio_path": {
+                        "operator": "N3CALL",
+                        "gateways": ["N2CALL-5"],
+                        "started": T_SESSION - 960,
+                        "session": stream(f"{name} session id", 8).hex(),
+                    },
+                    "templates": [STORM_REPORT, ICS_206],
+                },
+            )
+            for name in ("shelter3-storm", "shelter3-206")
+        },
         "shelter3-priority": mail.from_message(
             MESSAGES["shelter3-priority"],
             {
@@ -7559,8 +7635,73 @@ def make_email_out() -> dict[str, Any]:
         "facundo-to-ana": None,
         "shelter3-priority": None,
         "shelter3-213": None,
+        "shelter3-storm": None,
+        "shelter3-206": None,
         "facundo-followup": facundo_reply_id(),
     }
+    # RP-6 §3.1, worked out by hand: the form's lines, an empty line, `Maps:` and a line for each
+    # position (a cell's labelled by its field, row and column), then the note
+    templates = [STORM_REPORT, ICS_206]
+    assert mail.text_of(MESSAGES["shelter3-storm"], templates) == (
+        "Storm Report\n"
+        "\n"
+        "Location: 33.78123, -84.38765 (EM73ts) ±25 m\n"
+        "Time of the event: 2026-11-09 13:50 UTC\n"
+        "Event: Hail, Damaging wind\n"
+        "Storm movement (toward, speed): NE at 30 mph\n"
+        "Hail size: 1.75 in\n"
+        "Wind speed: 60 mph\n"
+        "The wind speed was: Measured\n"
+        "Damage:\n"
+        "Two large limbs down on Peachtree St.\n"
+        "Car windows broken.\n"
+        "Spotter number or callsign: N3CALL\n"
+        "\n"
+        "Maps:\n"
+        "Location: https://www.openstreetmap.org/?mlat=33.78123&mlon=-84.38765"
+        "#map=17/33.78123/-84.38765 geo:33.78123,-84.38765;u=25\n"
+    ), mail.text_of(MESSAGES["shelter3-storm"], templates)
+    assert mail.text_of(MESSAGES["shelter3-206"], templates) == (
+        "ICS-206 Medical Plan\n"
+        "\n"
+        "Incident name: Storm response, Atlanta\n"
+        "Operational period from: 2026-11-09 12:00 UTC\n"
+        "Operational period to: 2026-11-10 00:00 UTC\n"
+        "Medical aid stations:\n"
+        "Name | Location | Contact number(s)/frequency | Paramedics on site?\n"
+        "First aid, Shelter 3 | Gym, 123 Main St | TAC 2 | Yes\n"
+        "Hospitals:\n"
+        "Hospital name | Address | Helipad position | Contact number(s)/frequency | "
+        "Travel time, air | Travel time, ground | Trauma center | Trauma center level | "
+        "Burn center | Helipad\n"
+        "Grady Memorial | 80 Jesse Hill Jr Dr SE, Atlanta | 33.75216, -84.38158 (EM73ts) | "
+        "404-616-1000 |  |  | Yes | I | Yes | Yes\n"
+        "Special medical emergency procedures:\n"
+        "Call 911 first; then the EOC on TAC 2.\n"
+        "Prepared by (Medical Unit Leader, name): J. Park\n"
+        "Date prepared: 2026-11-09\n"
+        "Time prepared: 14:25 UTC\n"
+        "\n"
+        "Maps:\n"
+        "Hospitals, row 1, Helipad position: https://www.openstreetmap.org/?mlat=33.75216"
+        "&mlon=-84.38158#map=17/33.75216/-84.38158 geo:33.75216,-84.38158\n"
+        "\n"
+        "Sent with the shelter's IAP.\n"
+    ), mail.text_of(MESSAGES["shelter3-206"], templates)
+    # the zoom by how far off a position may be (§3.1)
+    zooms = {w: mail.map_zoom(w) for w in (None, 1, 99, 100, 999, 1000, 9999, 10000, 99999, 100000)}
+    assert zooms == {
+        None: 17,
+        1: 17,
+        99: 17,
+        100: 15,
+        999: 15,
+        1000: 12,
+        9999: 12,
+        10000: 9,
+        99999: 9,
+        100000: 6,
+    }, zooms
     for name, want in threads.items():
         headers = made[name][0]
         assert headers.get("In-Reply-To") == want and headers.get("References") == want, name
@@ -7574,11 +7715,14 @@ def make_email_out() -> dict[str, Any]:
             }
         )
     out = header("Email out: what a message sent by radio becomes", {"RP-6": "§3.1, §3.2, §4"})
+    # RP-6 §3.1: how close a map link opens, by how far off the position may be (null: not said)
+    out["map_zooms"] = [{"within": w, "zoom": z} for w, z in zooms.items()]
     out["rule"] = (
         "A post office given the named message (messages.json) and the `context` makes an email "
         "whose headers have the values in `headers`, compared after unfolding and RFC 2047 "
         "decoding, and whose decoded text is the message's body and the footer: for a form, its "
-        "text with its template (RP-2 §8.4). `email` is one "
+        "text with its template (RP-2 §8.4), a map link for each position it holds, then its "
+        "body (RP-6 §3.1). `email` is one "
         "spelling of it, before DKIM signing: header order, folding and the MIME boundary are "
         "the writer's. `part_hex`, where present, is the `application/radiopost-message` part's "
         "CBOR, exact (RP-6 §4)."
@@ -7597,6 +7741,14 @@ def make_email_out() -> dict[str, Any]:
         f"{T_SESSION - 1860}, gateway session {stream('shelter form session id', 8).hex()}; "
         "the post office holds the published templates (forms/ics-213.json), so the email is the "
         "form's text",
+        "shelter3-storm": "display name Shelter 3; N3CALL via N2CALL-5, started "
+        f"{T_SESSION - 960}, gateway session {stream('shelter3-storm session id', 8).hex()}; the "
+        "post office holds the published templates (forms/storm-report.json): the form's text and "
+        "a map link for its location",
+        "shelter3-206": "display name Shelter 3; N3CALL via N2CALL-5, started "
+        f"{T_SESSION - 960}, gateway session {stream('shelter3-206 session id', 8).hex()}; the "
+        "post office holds the published templates (forms/ics-206.json): the form's text, a map "
+        "link for the helipad in its hospital table, then the note",
     }
     out["emails"] = cases
     return out
@@ -9872,7 +10024,7 @@ def check_email_out(data: dict[str, Any]) -> None:
         assert str(parsed["Message-ID"]) == f"<{cid}@{mail.domain_of(fields['from'])}>"
         body = parsed.get_body(preferencelist=("plain",))
         assert body is not None
-        want = mail.text_of(fields, [ICS_213])
+        want = mail.text_of(fields, [ICS_213, STORM_REPORT, ICS_206])
         assert body.get_content().replace("\r\n", "\n") == want + mail.FOOTER
         if case["part_hex"]:
             assert mail.find_part(case["email"].encode("utf-8")) == bytes.fromhex(case["part_hex"])

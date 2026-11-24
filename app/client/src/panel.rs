@@ -977,6 +977,18 @@ impl Panel {
             (Method::Get, "/api/state") => self.state(),
             (Method::Get, "/api/forms") => Ok(forms_json()),
             (Method::Get, "/api/form-position") => Ok(self.position.for_form()),
+            (Method::Get, "/api/reports") => self.reports_view(),
+            (Method::Post, "/api/reports/export") => self.export_reports(body),
+            (Method::Post, "/api/reports/map") => {
+                // the desktop app's window opens no other site: the system's browser does
+                let link = crate::reports::osm_link(
+                    body["lat"].as_f64().ok_or("lat: a latitude")?,
+                    body["lon"].as_f64().ok_or("lon: a longitude")?,
+                    body["within"].as_u64(),
+                )?;
+                crate::reports::open_in_browser(&link)?;
+                Ok(json!({"opened": link}))
+            }
             (Method::Post, "/api/form-position") => form_position(&text("text")),
             (Method::Get, "/api/settings") => {
                 let store = Store::open(&self.home())?;
@@ -1307,6 +1319,55 @@ impl Panel {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         Ok(json!({"path": path.display().to_string(), "name": name}))
+    }
+
+    /// The reports (the forms design, §4.3): every form received or sent that carries a position,
+    /// newest first ([`crate::reports`]).
+    fn reports_view(&self) -> Result<Value, Error> {
+        let store = Store::open(&self.home())?;
+        let all = crate::reports::gather(&store, &radiopost::forms::Template::published());
+        Ok(Value::Array(
+            all.iter().map(crate::reports::Report::json).collect(),
+        ))
+    }
+
+    /// The reports named, written to the Downloads folder as CSV or `GeoJSON`, under a new name:
+    /// `{format: "csv" | "geojson", ids}`, each a message's content ID as the reports give it.
+    fn export_reports(&self, body: &Value) -> Result<Value, Error> {
+        let store = Store::open(&self.home())?;
+        let all = crate::reports::gather(&store, &radiopost::forms::Template::published());
+        let ids: Vec<&str> = body["ids"]
+            .as_array()
+            .ok_or("ids: the reports to write")?
+            .iter()
+            .filter_map(Value::as_str)
+            .collect();
+        let chosen: Vec<&crate::reports::Report> = all
+            .iter()
+            .filter(|r| ids.contains(&r.id.as_str()))
+            .collect();
+        if chosen.is_empty() {
+            return Err("none of those reports is here".into());
+        }
+        let day = radiopost::forms::ymd(now() / 86_400);
+        let (name, data) = match body["format"].as_str() {
+            Some("csv") => (
+                format!("RadioPost reports {day}.csv"),
+                crate::reports::csv(&chosen).into_bytes(),
+            ),
+            Some("geojson") => (
+                format!("RadioPost reports {day}.geojson"),
+                serde_json::to_vec_pretty(&crate::reports::geojson(&chosen))
+                    .map_err(|e| e.to_string())?,
+            ),
+            _ => return Err("format: csv or geojson".into()),
+        };
+        let path = crate::downloads::write_new(&self.downloads, &name, &data)?;
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        Ok(json!({"path": path.display().to_string(), "name": name, "count": chosen.len()}))
     }
 
     /// A backup of the post office sealed with the operator's passphrase, fetched over the desk
