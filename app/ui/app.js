@@ -2869,11 +2869,16 @@ function showFormFields(fresh = true) {
     box.replaceChildren();
     return;
   }
+  box.replaceChildren(...formFieldNodes(t, fresh, formInputs));
+}
+
+// a template's fields as inputs, each pushed on `inputs` ({n, get, set, here}) as it is made
+function formFieldNodes(t, fresh, inputs) {
   const legend = el("legend", {text: t.name, title: t.note || ""});
-  box.replaceChildren(legend, ...t.fields.filter((f) => !f.bound).map((f) => {
+  return [legend, ...t.fields.filter((f) => !f.bound).map((f) => {
     if (f.type === "heading") return el("h3", {class: "form-heading", text: f.label});
     const input = fieldInput(f, fresh);
-    formInputs.push({n: f.n, get: input.get, set: input.set});
+    inputs.push({n: f.n, get: input.get, set: input.set, here: input.here});
     // the input itself, by the field's number and type, as a test or a script finds it
     const target = input.input || input.node;
     target.dataset.field = String(f.n);
@@ -2888,7 +2893,7 @@ function showFormFields(fresh = true) {
         el("span", {text: name}), input.node);
     }
     return el("label", {title}, `${name} `, input.node);
-  }));
+  })];
 }
 
 // decimal degrees from ten-millionths, as RP-2 §8.4 writes them: seven places less trailing zeros
@@ -3016,7 +3021,7 @@ function positionInput(fresh, compact) {
     input.value = `${degreesText(v[0])}, ${degreesText(v[1])}${off}`;
     preview();
   };
-  return {node, input, get: () => (input.value.trim() || null), set};
+  return {node, input, get: () => (input.value.trim() || null), set, here: () => from !== ""};
 }
 
 // Rows: a table of the columns' inputs, a row added or removed by its buttons, up to the field's
@@ -4896,6 +4901,7 @@ async function syncAlerts(summary, force = false) {
   alertCircles = data.circles;
   alertsLog = data.log;
   alertDials = {radio: data.radio_hz ?? null, scanned: data.scanned_hz || []};
+  circleRepeat = data.repeat || null;
   const before = alertsKnown;
   alertsKnown = new Map(data.log.map((e) => [e.tag, {state: e.state, answers: e.answers.length}]));
   if (before) {
@@ -5073,13 +5079,15 @@ function renderReports(fit = false) {
   }))));
   $("report-rows").replaceChildren(...shown.map((r) => {
     const who = r.folder === "sent" ? `To ${r.to.join(", ")}` : r.from;
+    const what = r.folder === "circle" ? `${r.form}, in ${r.subject}`
+      : r.subject ? `${r.form}: ${r.subject}` : r.form;
     const where = r.places.length > 1
       ? `${r.places[0].text} and ${r.places.length - 1} more` : r.places[0].text;
     const tr = el("tr", {"data-report": r.id},
       el("td", {}, el("span", {class: "swatch", style: `background: ${colourOf(r)}`})),
       el("td", {class: "date", text: when(r.date)}),
       el("td", {text: who}),
-      el("td", {text: r.subject ? `${r.form}: ${r.subject}` : r.form}),
+      el("td", {text: what, title: r.folder === "circle" ? "By broadcast to a circle" : ""}),
       el("td", {class: "where", text: where}));
     tr.title = new Date(r.date * 1000).toUTCString();
     tr.addEventListener("click", () => pickReportAt(`${r.id}:0`, "list"));
@@ -5107,6 +5115,7 @@ function pickReportAt(key, from) {
   const p = r.places[Number(n)];
   $("report-picked-text").textContent = `${r.form}, ${r.folder === "sent" ? `to ${r.to.join(", ")}` : `from ${r.from}`}, `
     + `${new Date(r.date * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC. ${p.label}: ${p.text}`;
+  $("report-open").hidden = r.folder === "circle";
   $("report-open").onclick = () => openMessage(r.id, {folder: r.folder});
   const osm = $("report-osm");
   osm.href = p.osm;
@@ -5150,6 +5159,7 @@ async function openAlerts() {
   api("gateways").then((list) => {
     alertGateways = list.gateways || [];
     fillAlertDials();
+    fillAlertDials("crep");
   }).catch(() => {});
 }
 
@@ -5163,9 +5173,9 @@ function callBase(call) {
 
 // the dials an alert may go on (RP-8 §7): the channels of the station's listed gateways, the
 // best predicted first; the circle's watch dial; wherever the radio is
-function alertDialChoices() {
-  const to = $("alert-to").value.trim();
-  const circle = alertCircles.find((c) => c.name === $("alert-circle").value);
+function alertDialChoices(prefix = "alert") {
+  const to = $(`${prefix}-to`).value.trim();
+  const circle = alertCircles.find((c) => c.name === $(`${prefix}-circle`).value);
   const choices = [];
   if (to) {
     const base = callBase(to);
@@ -5193,10 +5203,10 @@ function alertDialChoices() {
   return choices;
 }
 
-function fillAlertDials() {
-  const select = $("alert-dial");
+function fillAlertDials(prefix = "alert") {
+  const select = $(`${prefix}-dial`);
   const was = select.value;
-  const choices = alertDialChoices();
+  const choices = alertDialChoices(prefix);
   select.replaceChildren(...choices.map((c) => new Option(c.label, c.hz ? String(c.hz) : "")));
   // a dial the operator picked stays while it is offered; else the first, the best
   const offered = choices.some((c) => (c.hz ? String(c.hz) : "") === was);
@@ -5252,6 +5262,7 @@ function renderAlerts() {
   const none = !alertCircles.length;
   for (const id of ["alert-circle", "alert-to", "alert-dial", "alert-text", "alert-send"]) $(id).disabled = none;
   fillAlertDials();
+  renderReportForm(none);
   const warnings = alertDialWarnings();
   $("alerts-dials").textContent = warnings.join(" ");
   $("alerts-dials").hidden = !warnings.length;
@@ -5342,6 +5353,84 @@ async function sendAlert(event) {
     $("alert-text").value = "";
     delete $("alert-dial").dataset.picked;
     toast(`Alert to ${to || `everyone in ${circle}`} waiting for the modem${dial_hz ? `, on ${mhzOf(dial_hz)} MHz` : ""}`);
+  } catch (e) {
+    toast(e.message, true);
+  }
+  await syncAlerts(null, true);
+}
+
+// Reports by broadcast (RP-8 §3, §7): a form with a position, to a circle, once or again
+let circleRepeat = null;  // the report being sent again, as the panel says
+let crepInputs = [];
+
+// the forms a report may carry: those with a position, in a field or a table's column
+function hasPosition(t) {
+  return t.fields.some((f) => f.type === "position"
+    || (f.columns || []).some((c) => c.type === "position"));
+}
+
+function renderReportForm(none) {
+  const circleSelect = $("crep-circle");
+  const chosen = circleSelect.value || kept("alertCircle", "");
+  circleSelect.replaceChildren(...alertCircles.map((c) => new Option(c.name, c.name)));
+  if (alertCircles.some((c) => c.name === chosen)) circleSelect.value = chosen;
+  const select = $("crep-template");
+  const was = select.value || kept("reportTemplate", "");
+  const usable = templates.filter(hasPosition)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
+  if (select.options.length !== usable.length) {
+    select.replaceChildren(...usable.map((t) => new Option(t.name, t.template)));
+    const position = usable.find((t) => t.name === "Position Report");
+    select.value = usable.some((t) => t.template === was) ? was : position?.template || "";
+    showReportFields();
+  }
+  for (const id of ["crep-circle", "crep-to", "crep-dial", "crep-every", "crep-template", "crep-send"]) {
+    $(id).disabled = none;
+  }
+  fillAlertDials("crep");
+  const r = circleRepeat;
+  $("crep-repeat").hidden = !r;
+  // a report going again keeps the card open, its Stop in sight
+  if (r) $("crep-card").open = true;
+  if (r) {
+    const name = templates.find((t) => t.template === r.template)?.name || "The report";
+    const at = (t) => new Date(t * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+    $("crep-repeat-text").textContent = `${name} to ${r.to || r.circle} goes again every `
+      + `${r.every_s / 60} min, next at ${at(r.next_at)}, until ${at(r.until)}.`;
+  }
+}
+
+function showReportFields() {
+  const t = templates.find((x) => x.template === $("crep-template").value);
+  const box = $("crep-fields");
+  box.hidden = !t;
+  crepInputs = [];
+  box.replaceChildren(...(t ? formFieldNodes(t, true, crepInputs) : []));
+}
+
+async function sendReport(event) {
+  event.preventDefault();
+  const template = $("crep-template").value;
+  if (!template) { toast("Choose a form", true); return; }
+  const values = {};
+  const here = [];
+  for (const input of crepInputs) {
+    const v = input.get();
+    if (v === null) continue;
+    values[input.n] = v;
+    if (input.here && input.here()) here.push(input.n);
+  }
+  const circle = $("crep-circle").value;
+  const to = $("crep-to").value.trim().toUpperCase();
+  const dial = $("crep-dial").value;
+  const every = $("crep-every").value;
+  keep("alertCircle", circle);
+  keep("reportTemplate", template);
+  try {
+    await api("alerts", {report: {circle, to, dial_hz: dial ? Number(dial) : null,
+      form: {template, values}, every_s: every ? Number(every) : null, here}});
+    toast(`Report to ${to || `everyone in ${circle}`} waiting for the modem`
+      + (every ? `; again every ${Number(every) / 60} min` : ""));
   } catch (e) {
     toast(e.message, true);
   }
@@ -5455,10 +5544,19 @@ function renderSounds() {
 function wireAlerts() {
   for (const kind of ["pointerdown", "keydown"]) document.addEventListener(kind, wakeAudio);
   $("alert-form").addEventListener("submit", sendAlert);
+  $("crep-form").addEventListener("submit", sendReport);
+  $("crep-template").addEventListener("change", showReportFields);
+  $("crep-circle").addEventListener("change", () => fillAlertDials("crep"));
+  $("crep-to").addEventListener("change", () => fillAlertDials("crep"));
+  $("crep-dial").addEventListener("change", () => { $("crep-dial").dataset.picked = "1"; });
+  $("crep-stop").addEventListener("click", async () => {
+    try { await api("alerts", {stop_repeat: true}); } catch (e) { toast(e.message, true); }
+    await syncAlerts(null, true);
+  });
   $("alert-text").addEventListener("input", () => { $("alert-left").textContent = alertLeft(); });
-  $("alert-to").addEventListener("input", fillAlertDials);
+  $("alert-to").addEventListener("input", () => fillAlertDials());
   $("alert-dial").addEventListener("change", () => { $("alert-dial").dataset.picked = "1"; });
-  $("alert-circle").addEventListener("change", fillAlertDials);
+  $("alert-circle").addEventListener("change", () => fillAlertDials());
   $("circle-form").addEventListener("submit", addCircle);
   $("circle-keyword").addEventListener("input", keywordStrength);
   $("circle-make").addEventListener("click", () => {

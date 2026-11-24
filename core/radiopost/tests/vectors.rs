@@ -818,7 +818,11 @@ fn alert_frames() {
             .get(4)
             .and_then(radiopost::Value::as_u64)
             .expect("time");
-        let mine = ["N0CALL".to_owned(), "KK4ODA".to_owned()];
+        let mine = [
+            "N0CALL".to_owned(),
+            "KK4ODA".to_owned(),
+            "N3CALL".to_owned(),
+        ];
         let got = alert::hear(
             &raw,
             &mine,
@@ -842,6 +846,13 @@ fn alert_frames() {
                     frame.text.as_deref(),
                 )
             }
+            None if frame.kind == Kind::Report => alert::report(
+                circle,
+                &frame.from,
+                frame.to.as_deref(),
+                frame.time,
+                frame.form.as_ref().expect("a report's form"),
+            ),
             None => alert::make(
                 circle,
                 &Draft {
@@ -851,6 +862,7 @@ fn alert_frames() {
                     time: frame.time,
                     text: frame.text.as_deref(),
                     re: None,
+                    form: None,
                 },
             ),
         };

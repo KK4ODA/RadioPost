@@ -1,9 +1,10 @@
 {
-  "radiopost_vectors": "Alerts: circles' keys, alert frames and their answers, and what a station makes of them",
+  "radiopost_vectors": "Alerts and reports: circles' keys, frames, answers, and what a station makes of them",
   "format": 1,
   "specs": {
     "RP-8": "§2–§5",
-    "RP-0": "§5, §9.2, §9.5"
+    "RP-0": "§5, §9.2, §9.5",
+    "RP-2": "§8.2"
   },
   "made_by": "tools/vectors/make.py",
   "rule": "Each circle's `keyword` normalises to `normalised` and gives `key_hex` (PBKDF2-HMAC-SHA256, 600000 iterations, salt `RadioPost-circle-v1`), whose ID is `id_hex`, shown as `check` (RP-8 §2). Each keyword normalises as shown and is kept or refused (`expect`). Each frame is exactly `hex`, tagged with its circle's key; its answers are made from it (§5). Each hearing case is a station with the callsigns `station` and the circles named, at `now`, having heard the tags in `heard`, given the broadcast data `hex`: it decides `expect` (§4).",
@@ -97,6 +98,22 @@
       "hex": "a60001014498537abf02664b4b344f4441041a6af873ec05782546616d696c79206e657420696e203130206d696e75746573206f6e20332e353930204d487a0748722d9cf1fdaebb68",
       "bytes": 73,
       "tag_hex": "722d9cf1fdaebb68"
+    },
+    {
+      "name": "Facundo reports his position to Shelter 3's circle",
+      "circle": "shelter",
+      "diagnostic": "{0: 5, 1: h'8aec0d0e', 2: \"KK4ODA\", 4: 1794667200, 7: h'4e590e55b64e4d89', 8: {1: h'5cf82a001bbfabf1', 2: {1: [337812300, -843876500], 5: 0}}}",
+      "hex": "a6000501448aec0d0e02664b4b344f4441041a6af872c007484e590e55b64e4d8908a201485cf82a001bbfabf102a201821a14229b4c3a324c88930500",
+      "bytes": 61,
+      "tag_hex": "4e590e55b64e4d89"
+    },
+    {
+      "name": "Facundo reports hail to its net control",
+      "circle": "shelter",
+      "diagnostic": "{0: 5, 1: h'8aec0d0e', 2: \"KK4ODA\", 3: \"N3CALL\", 4: 1794667260, 7: h'3dddbef1799051bc', 8: {1: h'58584708ebf060c1', 2: {1: [337812300, -843876500], 2: 29911115, 3: 8, 5: 125, 14: \"KK4ODA\"}}}",
+      "hex": "a7000501448aec0d0e02664b4b344f444103664e3343414c4c041a6af872fc07483dddbef1799051bc08a2014858584708ebf060c102a501821a14229b4c3a324c8893021a01c8684b030805187d0e664b4b344f4441",
+      "bytes": 86,
+      "tag_hex": "3dddbef1799051bc"
     }
   ],
   "hearing": [
@@ -492,6 +509,216 @@
       "heard": [],
       "hex": "a80001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f7707487ee2a7f1aa90bc4c18406d616e206578706572696d656e74",
       "expect": "an alert for this station"
+    },
+    {
+      "what": "Ana hears the position report",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667220,
+      "heard": [],
+      "hex": "a6000501448aec0d0e02664b4b344f4441041a6af872c007484e590e55b64e4d8908a201485cf82a001bbfabf102a201821a14229b4c3a324c88930500",
+      "expect": "a report for the circle"
+    },
+    {
+      "what": "by a station outside Shelter 3's circle",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667220,
+      "heard": [],
+      "hex": "a6000501448aec0d0e02664b4b344f4441041a6af872c007484e590e55b64e4d8908a201485cf82a001bbfabf102a201821a14229b4c3a324c88930500",
+      "expect": "unknown circle"
+    },
+    {
+      "what": "the position report heard again",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667280,
+      "heard": [
+        "4e590e55b64e4d89"
+      ],
+      "hex": "a6000501448aec0d0e02664b4b344f4441041a6af872c007484e590e55b64e4d8908a201485cf82a001bbfabf102a201821a14229b4c3a324c88930500",
+      "expect": "heard again"
+    },
+    {
+      "what": "net control hears the hail report",
+      "station": [
+        "N3CALL"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667270,
+      "heard": [],
+      "hex": "a7000501448aec0d0e02664b4b344f444103664e3343414c4c041a6af872fc07483dddbef1799051bc08a2014858584708ebf060c102a501821a14229b4c3a324c8893021a01c8684b030805187d0e664b4b344f4441",
+      "expect": "a report for this station"
+    },
+    {
+      "what": "at another SSID of net control's",
+      "station": [
+        "N3CALL-5"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667270,
+      "heard": [],
+      "hex": "a7000501448aec0d0e02664b4b344f444103664e3343414c4c041a6af872fc07483dddbef1799051bc08a2014858584708ebf060c102a501821a14229b4c3a324c8893021a01c8684b030805187d0e664b4b344f4441",
+      "expect": "a report for this station"
+    },
+    {
+      "what": "the hail report heard by another member",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667270,
+      "heard": [],
+      "hex": "a7000501448aec0d0e02664b4b344f444103664e3343414c4c041a6af872fc07483dddbef1799051bc08a2014858584708ebf060c102a501821a14229b4c3a324c8893021a01c8684b030805187d0e664b4b344f4441",
+      "expect": "for another station"
+    },
+    {
+      "what": "a report with no form",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667220,
+      "heard": [],
+      "hex": "a5000501448aec0d0e02664b4b344f4441041a6af872c00748f11944d92aef277d",
+      "expect": "malformed"
+    },
+    {
+      "what": "a report with text",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667220,
+      "heard": [],
+      "hex": "a7000501448aec0d0e02664b4b344f4441041a6af872c005624f4b074850a8ed5220287c0608a201485cf82a001bbfabf102a201821a14229b4c3a324c88930500",
+      "expect": "malformed"
+    },
+    {
+      "what": "a report that answers an alert",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667220,
+      "heard": [],
+      "hex": "a7000501448aec0d0e02664b4b344f4441041a6af872c00648775a35a77a50842a074848bf014c4ad2e8c308a201485cf82a001bbfabf102a201821a14229b4c3a324c88930500",
+      "expect": "malformed"
+    },
+    {
+      "what": "a form on an alert",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "family"
+      ],
+      "now": 1794667212,
+      "heard": [],
+      "hex": "a80001014498537abf02664b4b344f444103664e3043414c4c041a6af872c005781c506c656173652063616c6c206d65206f6e203134362e3532206e6f770748bd14345c92a2864308a201485cf82a001bbfabf102a201821a14229b4c3a324c88930500",
+      "expect": "malformed"
+    },
+    {
+      "what": "a form whose template is 7 bytes",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667220,
+      "heard": [],
+      "hex": "a6000501448aec0d0e02664b4b344f4441041a6af872c0074816ef4e1487eff4fd08a201470000000000000002a101820000",
+      "expect": "malformed"
+    },
+    {
+      "what": "a form with no values",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667220,
+      "heard": [],
+      "hex": "a6000501448aec0d0e02664b4b344f4441041a6af872c0074899e517ba0b532dec08a20148000000000000000002a0",
+      "expect": "malformed"
+    },
+    {
+      "what": "a value under field number 0",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667220,
+      "heard": [],
+      "hex": "a6000501448aec0d0e02664b4b344f4441041a6af872c0074888fecc71a2355a0008a20148000000000000000002a1006178",
+      "expect": "malformed"
+    },
+    {
+      "what": "a form whose template this station may not hold",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667220,
+      "heard": [],
+      "hex": "a6000501448aec0d0e02664b4b344f4441041a6af872c00748c0229d87075e460008a20148000000000000000002a10168616e797468696e67",
+      "expect": "a report for the circle"
+    },
+    {
+      "what": "a report of 512 bytes",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667220,
+      "heard": [],
+      "hex": "a6000501448aec0d0e02664b4b344f4441041a6af872c00748315c876aaea2b01d08a201485cf82a001bbfabf102a301821a14229b4c3a324c88930500067901bf787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878",
+      "expect": "a report for the circle"
+    },
+    {
+      "what": "a report of 513 bytes",
+      "station": [
+        "N0CALL"
+      ],
+      "circles": [
+        "shelter"
+      ],
+      "now": 1794667220,
+      "heard": [],
+      "hex": "a6000501448aec0d0e02664b4b344f4441041a6af872c00748a822c9b982ca732108a201485cf82a001bbfabf102a301821a14229b4c3a324c88930500067901c078787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878",
+      "expect": "malformed"
     }
   ]
 }

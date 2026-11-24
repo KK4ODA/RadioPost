@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.54 |
+| **Version** | 0.3.55 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -988,14 +988,14 @@ Send where a station is, for a map or a net.
 | Requested by | The plan: concept §10, later; RP-4 §6 reserves broadcasts for it. Requesters: 0. |
 | Component | Client; a service that collects them. |
 | Compatibility | **Application-layer capability** as a message to a position service, at a session each: a template with a `position` field (RP-2 1.4.0), [forms for most jobs](06-forms.md) §4.5. As a broadcast to everyone listening, an **optional protocol addition** (a new specification) carried only by modems with `caps.broadcast` (RP-4 §6). |
-| Existing coverage | Planned; not built. |
+| Existing coverage | Built: a Position Report (or any form with a position) as mail, and by broadcast to a circle (RP-8 0.3.0's report), once or again every 10 to 60 minutes. |
 | Dependencies | None. Shares a broadcast format with W34 (§12, T4). |
 | Effort | Medium. |
 | Priority | **Low.** |
 | Recommendation | Defer; application layer first when wanted. |
-| Status | Planned. |
-| Author decision | None yet. |
-| Notes | Whether a station under automatic control may send such a broadcast must be checked against the rules before a broadcast is designed. |
+| Status | Implemented: [forms for most jobs](06-forms.md), steps 2 and 5. |
+| Author decision | 2026-11-24, with [forms for most jobs](06-forms.md) §9: a report by broadcast is a circle's, tagged with its key; it carries any form with a position; it goes once, or again every few minutes while the operator is at the station; nobody answers it. |
+| Notes | Repeats are under the operator's control: the client repeats a report only while its window is open, for four hours at most, and a gateway program sends none (RP-8 §8). |
 
 ### W34. Bulletins
 
@@ -1330,3 +1330,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.52 | 2026-11-24 | W32: [forms for most jobs](06-forms.md) step 2 built, 18 forms published; W33's Position Report template published. |
 | 0.3.53 | 2026-11-24 | W32: [forms for most jobs](06-forms.md) step 3 built: **Reports** on a map, CSV and GeoJSON, and map links in email (RP-6 1.3.0). |
 | 0.3.54 | 2026-11-24 | W32: [forms for most jobs](06-forms.md) step 4 built: templates by fingerprint (RP-5 1.8.0, RP-2 1.5.0), a group's own forms imported, exported, fetched and handed in. |
+| 0.3.55 | 2026-11-24 | W33: implemented, [forms for most jobs](06-forms.md) step 5: reports by broadcast to a circle (RP-8 0.3.0), with the author's four decisions. |

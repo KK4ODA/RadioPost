@@ -228,3 +228,73 @@ fn a_modem_that_serves_one_program_is_let_go() {
     presence.stop();
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// RP-8 §3, §5, §7: a Position Report sent to a circle crosses the air on the dial named, is kept
+/// by the station that hears it, and nobody answers it.
+#[test]
+fn a_position_report_crosses_between_two_panels_unanswered() {
+    let dir = scratch("alerts-report");
+    let (f_home, a_home) = (dir.join("facundo"), dir.join("ana"));
+    store_for(&f_home, "device:facundo", "facundo");
+    store_for(&a_home, "device:ana", "ana");
+    let (_server, at_f, at_a) = shared_loopback();
+    let lends = Lends::default();
+    let (f_presence, facundo) = carrying(&f_home, &at_f, &lends);
+    let (a_presence, ana) = carrying(&a_home, &at_a, &lends);
+    facundo
+        .add_circle("Net", KEYWORD, Level::Normal)
+        .expect("kept");
+    ana.add_circle("Net", KEYWORD, Level::Normal).expect("kept");
+    thread::sleep(Duration::from_millis(600));
+    let t = radiopost::forms::Template::published()
+        .into_iter()
+        .find(|t| t.name == "Position Report")
+        .expect("published");
+    let form = radiopost::forms::Form {
+        template: t.fingerprint(),
+        values: vec![(
+            1,
+            radiopost::cbor::Value::Array(vec![
+                radiopost::cbor::Value::int(337_812_300),
+                radiopost::cbor::Value::int(-843_876_500),
+            ]),
+        )],
+    };
+    let how = Sending {
+        dial_hz: Some(DIAL),
+        outlast_s: None,
+    };
+    facundo
+        .report(
+            "Net",
+            None,
+            form.clone(),
+            "KK4ODA",
+            unix_now(),
+            how,
+            None,
+            vec![1],
+        )
+        .expect("written");
+    let end = Instant::now() + Duration::from_secs(10);
+    while ana.reports().is_empty() {
+        assert!(Instant::now() < end, "not heard in time");
+        thread::sleep(Duration::from_millis(50));
+    }
+    let heard = &ana.reports()[0];
+    assert_eq!(
+        (heard.from.as_str(), heard.circle.as_str()),
+        ("KK4ODA", "Net")
+    );
+    assert_eq!(heard.form, form);
+    assert_eq!(heard.dial_hz, Some(DIAL), "the dial it was heard on");
+    lends.settled();
+    assert_eq!(facundo.reports()[0].state, "sent");
+    // nothing comes back: Facundo's log of alerts is empty, and he hears no report of his own
+    thread::sleep(Duration::from_millis(500));
+    assert_eq!(facundo.json()["log"], serde_json::json!([]));
+    assert_eq!(facundo.reports().len(), 1);
+    f_presence.stop();
+    a_presence.stop();
+    let _ = std::fs::remove_dir_all(&dir);
+}

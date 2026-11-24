@@ -352,6 +352,39 @@
             <span class="note" id="alert-left"></span>
           </div>
         </form>
+        <details class="card" id="crep-card">
+          <summary title="RP-8: a form sent by broadcast to a circle, for its map. Only the circle's stations show it, and nobody answers it">Send a report</summary>
+          <form id="crep-form">
+          <div class="grid2">
+            <label title="The circle it goes to: only stations that typed its keyword map it">Circle
+              <select id="crep-circle"></select>
+            </label>
+            <label title="One station, such as net control, by callsign; left empty, every station in the circle">To
+              <input id="crep-to" placeholder="Everyone in the circle" spellcheck="false" autocomplete="off">
+            </label>
+            <label title="Where the report goes on the air, as for an alert: the circle's watch dial, or wherever the radio is">Dial
+              <select id="crep-dial"></select>
+            </label>
+            <label title="Send it once, or again that often while this window is open, for four hours at most. Each time, a position that is your station's own is brought up to date">Send
+              <select id="crep-every" class="narrow">
+                <option value="">Once</option><option value="600">Every 10 min</option><option value="900">Every 15 min</option><option value="1800">Every 30 min</option><option value="3600">Every 60 min</option>
+              </select>
+            </label>
+          </div>
+          <label title="A form with a position: a Position Report, a Storm Report, a Damage Report…">Form
+            <select id="crep-template" class="narrow"></select>
+          </label>
+          <fieldset class="form-fields" id="crep-fields" hidden></fieldset>
+          <div class="row">
+            <button class="primary" type="submit" id="crep-send" title="Send it now, between calls">Send report</button>
+            <span class="note" id="crep-left"></span>
+          </div>
+          <p class="note row" id="crep-repeat" hidden>
+            <span id="crep-repeat-text"></span>
+            <button class="quiet" type="button" id="crep-stop" title="Stop sending it again">Stop</button>
+          </p>
+          </form>
+        </details>
         <table class="list" aria-label="Alerts">
           <thead><tr><th title="When it was sent or heard">When</th><th title="Who sent it, and to whom">From, to</th><th title="Its line">Message</th><th title="The circle it went in">Circle</th><th title="Sent alerts: heard, seen or replied by the other station. Heard alerts: what you answered">Answers</th></tr></thead>
           <tbody id="alert-rows"></tbody>

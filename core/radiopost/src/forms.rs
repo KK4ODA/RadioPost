@@ -989,7 +989,13 @@ impl Form {
     /// The form a message carries, if it carries one of RP-2 §8.2's shape.
     #[must_use]
     pub fn of(message: &Message) -> Option<Form> {
-        let form = message.map().get(key::FORM)?;
+        Form::from_value(message.map().get(key::FORM)?)
+    }
+
+    /// A form from RP-2 §8.2's map, wherever it is carried: a message's key 13, a report's key 8
+    /// (RP-8 §3).
+    #[must_use]
+    pub fn from_value(form: &Value) -> Option<Form> {
         let template: [u8; 8] = form.get(1)?.as_bytes()?.try_into().ok()?;
         let mut values = Vec::new();
         for (k, v) in form.get(2)?.as_map()? {

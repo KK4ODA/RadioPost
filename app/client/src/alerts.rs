@@ -15,6 +15,10 @@
 //! * **Sounds and levels** (`notify.json`): the page's own settings, kept here so they hold
 //!   whatever port the panel is on. The page decides what to sound; [`Alerts::alarming`] tells the
 //!   window to come forward.
+//! * **Reports** (RP-8 0.3.0, the forms design's step 5): a form sent to a circle by broadcast,
+//!   once or again every few minutes ([`Alerts::report`], [`Alerts::repeat_due`]), and the reports
+//!   sent and heard, the last [`KEPT`], in [`REPORTS`] beside the log, for the Reports view. Nobody
+//!   answers a report.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -26,6 +30,14 @@ use serde_json::{Value, json};
 
 use crate::callsigns;
 use crate::store::{Error, Store, unhex, write};
+
+/// The reports sent and heard (RP-8 §7), in the first home.
+pub const REPORTS: &str = "circle-reports.json";
+/// How long a report goes on being sent again, at most, unless the operator starts it again
+/// (RP-8 §7, §8).
+pub const REPEAT_FOR_S: u64 = 4 * 3600;
+/// How often a report may be sent again: the choices offered (RP-8 §7).
+pub const REPEAT_EVERY_S: [u64; 4] = [600, 900, 1800, 3600];
 
 /// The circles' file, in the first home.
 pub const CIRCLES: &str = "circles.json";
@@ -282,6 +294,74 @@ impl Entry {
     }
 }
 
+/// A report sent or heard (RP-8 §3, §7).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CircleReport {
+    /// Its tag, which names it.
+    pub tag: [u8; 8],
+    /// This station sent it.
+    pub out: bool,
+    /// Its circle's name here.
+    pub circle: String,
+    /// The sender's callsign.
+    pub from: String,
+    /// The station it was for; `None`, the whole circle.
+    pub to: Option<String>,
+    /// Its own time.
+    pub time: u64,
+    /// When it was heard, or written.
+    pub at: u64,
+    /// The form.
+    pub form: radiopost::forms::Form,
+    /// Sent: `waiting`, `sent` or `failed`. Heard: `heard`.
+    pub state: &'static str,
+    /// The dial it was sent or heard on.
+    pub dial_hz: Option<u64>,
+}
+
+impl CircleReport {
+    fn json(&self) -> Value {
+        json!({"tag": hex(&self.tag), "out": self.out, "circle": self.circle, "from": self.from,
+               "to": self.to, "time": self.time, "at": self.at, "state": self.state,
+               "form": hex(&self.form.to_cbor().encode().unwrap_or_default()),
+               "template": hex(&self.form.template), "dial_hz": self.dial_hz})
+    }
+
+    fn from_json(v: &Value) -> Option<CircleReport> {
+        let form = radiopost::cbor::decode(&unhex(v["form"].as_str()?)?).ok()?;
+        let state = ["waiting", "sent", "failed", "heard"]
+            .into_iter()
+            .find(|s| v["state"].as_str() == Some(*s))?;
+        Some(CircleReport {
+            tag: unhex(v["tag"].as_str()?)?.try_into().ok()?,
+            out: v["out"].as_bool()?,
+            circle: v["circle"].as_str()?.to_owned(),
+            from: v["from"].as_str()?.to_owned(),
+            to: v["to"].as_str().map(str::to_owned),
+            time: v["time"].as_u64()?,
+            at: v["at"].as_u64()?,
+            form: radiopost::forms::Form::from_value(&form)?,
+            state,
+            dial_hz: v["dial_hz"].as_u64().filter(|&hz| hz > 0),
+        })
+    }
+}
+
+/// A report sent again every few minutes while the window is open (RP-8 §7): the fields in `here`
+/// get the station's position as it is then.
+#[derive(Clone, Debug)]
+struct Repeat {
+    circle: String,
+    to: Option<String>,
+    form: radiopost::forms::Form,
+    from: String,
+    how: Sending,
+    every_s: u64,
+    next_at: u64,
+    until: u64,
+    here: Vec<u64>,
+}
+
 /// A frame waiting for the modem.
 #[derive(Clone, Debug)]
 struct Outgoing {
@@ -292,6 +372,8 @@ struct Outgoing {
     alert: Option<[u8; 8]>,
     /// The alert it answers, when it is an answer.
     answers: Option<[u8; 8]>,
+    /// The report it is, when it is one this station sent.
+    report: Option<[u8; 8]>,
     /// The dial it belongs on (RP-4 §6's `dial_hz`).
     dial_hz: Option<u64>,
 }
@@ -343,6 +425,10 @@ struct State {
     seq: u64,
     /// Broadcasts dropped without a word (RP-8 §4), told to the log once a kind.
     dropped: HashSet<&'static str>,
+    /// The reports sent and heard, oldest first.
+    reports: Vec<CircleReport>,
+    /// The report sent again every few minutes, if one is.
+    repeat: Option<Repeat>,
 }
 
 /// The client's alerts. Clones share them.
@@ -429,6 +515,17 @@ impl Alerts {
                 e.why = Some("the program closed before it went out".into());
             }
         }
+        let mut reports: Vec<CircleReport> = read(REPORTS)
+            .and_then(|v| {
+                v.as_array()
+                    .map(|a| a.iter().filter_map(CircleReport::from_json).collect())
+            })
+            .unwrap_or_default();
+        for r in &mut reports {
+            if r.out && r.state == "waiting" {
+                r.state = "failed";
+            }
+        }
         Alerts(Arc::new(Mutex::new(State {
             base: base.to_owned(),
             circles,
@@ -439,6 +536,8 @@ impl Alerts {
             references: 0,
             seq: 0,
             dropped: HashSet::new(),
+            reports,
+            repeat: None,
         })))
     }
 
@@ -589,6 +688,7 @@ impl Alerts {
                 time: now,
                 text: Some(text),
                 re: None,
+                form: None,
             },
         )
         .map_err(|why| match why.as_str() {
@@ -629,6 +729,7 @@ impl Alerts {
             not_before: now,
             alert: Some(tag),
             answers: None,
+            report: None,
             dial_hz: how.dial_hz,
         });
         s.changed();
@@ -683,6 +784,7 @@ impl Alerts {
                 not_before: now,
                 alert: None,
                 answers: Some(tag),
+                report: None,
                 dial_hz,
             });
         }
@@ -720,7 +822,106 @@ impl Alerts {
             "circles": s.circles.iter().map(Kept::shown).collect::<Vec<_>>(),
             "log": s.entries.iter().rev().map(Entry::shown).collect::<Vec<_>>(),
             "alarming": s.entries.iter().any(Entry::alarms),
+            "reports": s.reports.iter().rev().map(CircleReport::json).collect::<Vec<_>>(),
+            "repeat": s.repeat.as_ref().map(|r| json!({
+                "circle": r.circle, "to": r.to, "template": hex(&r.form.template),
+                "every_s": r.every_s, "next_at": r.next_at, "until": r.until})),
         })
+    }
+
+    /// Sends a form as a report (RP-8 §3) from `from` to the circle, or to one station, on the
+    /// dial `how` names; with `every_s`, again that often while the window is open, for
+    /// [`REPEAT_FOR_S`] at most, the fields `here` taking the station's position each time (§7).
+    /// A new report replaces the one being repeated.
+    ///
+    /// # Errors
+    /// No such circle, a callsign RP-8 §3 refuses, a frame too long, or a repeat not offered.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "what a report is, one argument a part"
+    )]
+    pub fn report(
+        &self,
+        circle: &str,
+        to: Option<&str>,
+        form: radiopost::forms::Form,
+        from: &str,
+        now: u64,
+        how: Sending,
+        every_s: Option<u64>,
+        here: Vec<u64>,
+    ) -> Result<String, Error> {
+        if every_s.is_some_and(|e| !REPEAT_EVERY_S.contains(&e)) {
+            return Err("every: 10, 15, 30 or 60 minutes".into());
+        }
+        let to = to
+            .map(|t| t.trim().to_ascii_uppercase())
+            .filter(|t| !t.is_empty());
+        let mut s = self.lock();
+        let tag = s.queue_report(circle, to.as_deref(), &form, from, now, how)?;
+        s.repeat = every_s.map(|every_s| Repeat {
+            circle: circle.to_owned(),
+            to,
+            form,
+            from: from.to_owned(),
+            how,
+            every_s,
+            next_at: now + every_s,
+            until: now + REPEAT_FOR_S,
+            here,
+        });
+        s.changed();
+        Ok(hex(&tag))
+    }
+
+    /// The fields to bring up to date with the station's position, when the report being
+    /// repeated is due again; a repeat past [`REPEAT_FOR_S`] stops here.
+    #[must_use]
+    pub fn repeat_due(&self, now: u64) -> Option<Vec<u64>> {
+        let mut s = self.lock();
+        let r = s.repeat.as_ref()?;
+        if now >= r.until {
+            s.repeat = None;
+            s.changed();
+            return None;
+        }
+        (now >= r.next_at).then(|| r.here.clone())
+    }
+
+    /// Sends the report being repeated again, now, with `here` (the station's position, RP-2
+    /// §8.1's value) in the fields that held the station's own.
+    ///
+    /// # Errors
+    /// None is being repeated, or the circle has been forgotten.
+    pub fn repeat_now(&self, now: u64, here: Option<&radiopost::cbor::Value>) -> Result<(), Error> {
+        let mut s = self.lock();
+        let mut r = s.repeat.clone().ok_or("no report is being sent again")?;
+        if let Some(here) = here {
+            for (n, v) in &mut r.form.values {
+                if r.here.contains(n) {
+                    *v = here.clone();
+                }
+            }
+        }
+        r.next_at = now + r.every_s;
+        let sent = s.queue_report(&r.circle, r.to.as_deref(), &r.form, &r.from, now, r.how);
+        s.repeat = if sent.is_ok() { Some(r) } else { None };
+        s.changed();
+        sent.map(|_| ())
+    }
+
+    /// Stops sending the report again.
+    pub fn stop_repeat(&self) {
+        let mut s = self.lock();
+        if s.repeat.take().is_some() {
+            s.changed();
+        }
+    }
+
+    /// The reports sent and heard, newest first, for the Reports view.
+    #[must_use]
+    pub fn reports(&self) -> Vec<CircleReport> {
+        self.lock().reports.iter().rev().cloned().collect()
     }
 
     /// What the state shows: whether to look again, and whether an alarm sounds.
@@ -820,7 +1021,8 @@ impl Alerts {
             reference: reference.clone(),
             frame: outgoing.frame.clone(),
             dial_hz: outgoing.dial_hz,
-            tune: outgoing.alert.is_some() && outgoing.dial_hz.is_some(),
+            tune: (outgoing.alert.is_some() || outgoing.report.is_some())
+                && outgoing.dial_hz.is_some(),
         };
         s.flying.push(Flying {
             reference,
@@ -844,6 +1046,13 @@ impl Alerts {
             return;
         };
         let f = s.flying.remove(i);
+        if let Some(tag) = f.outgoing.report {
+            if let Some(r) = s.reports.iter_mut().find(|r| r.out && r.tag == tag) {
+                r.state = if sent { "sent" } else { "failed" };
+            }
+            s.changed();
+            return;
+        }
         let Some(tag) = f.outgoing.alert else {
             return;
         };
@@ -859,6 +1068,7 @@ impl Alerts {
                         not_before: now,
                         alert: Some(tag),
                         answers: None,
+                        report: None,
                         dial_hz: e.dial_hz,
                     });
                 } else if e.state == "waiting" {
@@ -911,6 +1121,23 @@ impl Alerts {
         }
         s.queue
             .retain(|o| o.alert.is_none_or(|t| !given_up.contains(&t)));
+        // a report that waited five minutes is stale: the next carries the news
+        let stale: HashSet<[u8; 8]> = s
+            .reports
+            .iter()
+            .filter(|r| {
+                r.out && r.state == "waiting" && now.saturating_sub(r.at) > WAITING_AT_MOST_S
+            })
+            .map(|r| r.tag)
+            .collect();
+        if !stale.is_empty() {
+            s.queue
+                .retain(|o| o.report.is_none_or(|t| !stale.contains(&t)));
+            for r in s.reports.iter_mut().filter(|r| stale.contains(&r.tag)) {
+                r.state = "failed";
+            }
+            changed = true;
+        }
         for e in s.entries.iter_mut().filter(|e| e.out && e.state == "sent") {
             let Some(at) = e.sent_at else { continue };
             if now.saturating_sub(at) < RETRY_AFTER_S {
@@ -925,6 +1152,7 @@ impl Alerts {
                     not_before: now,
                     alert: Some(e.tag),
                     answers: None,
+                    report: None,
                     dial_hz: e.dial_hz,
                 });
             } else {
@@ -969,12 +1197,73 @@ impl State {
             let extra = self.entries.len() - KEPT;
             self.entries.drain(..extra);
         }
+        if self.reports.len() > KEPT {
+            let extra = self.reports.len() - KEPT;
+            self.reports.drain(..extra);
+        }
         let all: Vec<Value> = self.entries.iter().map(Entry::json).collect();
         if let Ok(text) = serde_json::to_string_pretty(&all)
             && let Err(e) = write(&self.base.join(LOG), text.as_bytes())
         {
             radiopost::logfile::line(&format!("alerts: {e}"));
         }
+        let all: Vec<Value> = self.reports.iter().map(CircleReport::json).collect();
+        if let Ok(text) = serde_json::to_string_pretty(&all)
+            && let Err(e) = write(&self.base.join(REPORTS), text.as_bytes())
+        {
+            radiopost::logfile::line(&format!("alerts: {e}"));
+        }
+    }
+
+    /// A report made and queued, kept among the reports sent: its tag.
+    fn queue_report(
+        &mut self,
+        circle: &str,
+        to: Option<&str>,
+        form: &radiopost::forms::Form,
+        from: &str,
+        now: u64,
+        how: Sending,
+    ) -> Result<[u8; 8], Error> {
+        let kept = self
+            .circles
+            .iter()
+            .find(|c| c.name == circle)
+            .ok_or_else(|| format!("no circle called {circle}"))?
+            .clone();
+        let frame =
+            alert::report(&kept.circle, from, to, now, form).map_err(|why| match why.as_str() {
+                "to: a callsign" => "to: a callsign, such as N0CALL".into(),
+                "from: a callsign" => format!("{from} is not a callsign this station can send as"),
+                w if w.starts_with("over ") => format!(
+                    "too long for a broadcast: {} bytes at most; leave out a field or shorten one",
+                    alert::FRAME_MAX
+                ),
+                "form: at least one value" => "fill in the form first".into(),
+                _ => why,
+            })?;
+        let tag = tag_of_frame(&frame);
+        self.reports.push(CircleReport {
+            tag,
+            out: true,
+            circle: kept.name,
+            from: from.to_owned(),
+            to: to.map(str::to_owned),
+            time: now,
+            at: now,
+            form: form.clone(),
+            state: "waiting",
+            dial_hz: how.dial_hz,
+        });
+        self.queue.push_back(Outgoing {
+            frame,
+            not_before: now,
+            alert: None,
+            answers: None,
+            report: Some(tag),
+            dial_hz: how.dial_hz,
+        });
+        Ok(tag)
     }
 
     fn save_circles(&self) -> Result<(), Error> {
@@ -1005,6 +1294,7 @@ impl State {
                 time: e.time,
                 text: Some(e.text.clone()),
                 re: None,
+                form: None,
                 tag: e.tag,
             },
         ))
@@ -1039,6 +1329,7 @@ impl State {
             not_before: now + spread,
             alert: None,
             answers: Some(frame.tag),
+            report: None,
             dial_hz,
         });
     }
@@ -1058,6 +1349,24 @@ impl State {
         dial_hz: Option<u64>,
     ) -> Option<String> {
         let kept = self.circle_named_for(frame.circle)?.clone();
+        if frame.kind == Kind::Report {
+            // kept for the map, and never answered (RP-8 §5)
+            let form = frame.form.clone()?;
+            self.reports.push(CircleReport {
+                tag: frame.tag,
+                out: false,
+                circle: kept.name.clone(),
+                from: frame.from.clone(),
+                to: frame.to.clone(),
+                time: frame.time,
+                at: now,
+                form,
+                state: "heard",
+                dial_hz,
+            });
+            self.changed();
+            return Some(format!("report from {} in {}", frame.from, kept.name));
+        }
         if frame.kind == Kind::Alert {
             let loud_lately = self
                 .entries
@@ -1247,6 +1556,163 @@ mod tests {
         assert_eq!(log["log"][0]["answers"][2]["text"], "On my way, 5 min");
         assert_eq!(hex(&[0u8; 0]), "");
         let _ = (std::fs::remove_dir_all(&a), std::fs::remove_dir_all(&b));
+    }
+
+    /// A Position Report, its position and status only.
+    fn position_report(lat: i64) -> radiopost::forms::Form {
+        let t = &radiopost::forms::Template::published()[15];
+        assert_eq!(t.name, "Position Report");
+        radiopost::forms::Form {
+            template: t.fingerprint(),
+            values: vec![
+                (
+                    1,
+                    radiopost::cbor::Value::Array(vec![
+                        radiopost::cbor::Value::int(lat),
+                        radiopost::cbor::Value::int(-843_876_500),
+                    ]),
+                ),
+                (5, radiopost::cbor::Value::Uint(0)),
+            ],
+        }
+    }
+
+    /// RP-8 §3, §5, §7: a report reaches a station of the circle, which keeps it and answers
+    /// nothing; one outside the circle keeps nothing; the sender's own is kept too.
+    #[test]
+    fn a_report_crosses_and_nobody_answers() {
+        let (a, b, c) = (scratch("rep-a"), scratch("rep-b"), scratch("rep-c"));
+        let facundo = Alerts::open(&a);
+        let ana = Alerts::open(&b);
+        let stranger = Alerts::open(&c);
+        facundo
+            .add_circle("Net", KEYWORD, Level::Normal)
+            .expect("kept");
+        ana.add_circle("Net", KEYWORD, Level::Normal).expect("kept");
+        stranger
+            .add_circle("Other", "a keyword of their own", Level::Normal)
+            .expect("kept");
+        facundo
+            .report(
+                "Net",
+                None,
+                position_report(337_812_300),
+                "KK4ODA",
+                T,
+                Sending::default(),
+                None,
+                vec![1],
+            )
+            .expect("written");
+        let due = facundo.due_with(T).expect("due at once");
+        assert!(!due.tune, "no dial: where the radio is");
+        facundo.went(&due.reference, true, None, T + 16);
+        let line = ana
+            .heard(&due.frame, &["N0CALL".to_owned()], T + 17)
+            .expect("a line");
+        assert_eq!(line, "report from KK4ODA in Net");
+        assert!(ana.due(T + 30).is_none(), "nobody answers a report");
+        assert!(!ana.alarming());
+        assert!(
+            ana.heard(&due.frame, &["N0CALL".to_owned()], T + 90)
+                .is_none(),
+            "heard again: nothing more"
+        );
+        assert_eq!(ana.reports().len(), 1);
+        assert_eq!(ana.reports()[0].from, "KK4ODA");
+        assert_eq!(ana.reports()[0].form, position_report(337_812_300));
+        // a station outside the circle says once that it dropped one, and keeps nothing
+        let said = stranger.heard(&due.frame, &["N9XYZ".to_owned()], T + 17);
+        assert!(said.is_some_and(|l| l.contains("unknown circle")));
+        assert_eq!(stranger.reports(), Vec::new());
+        assert_eq!(facundo.reports()[0].state, "sent");
+        // kept through a restart
+        assert_eq!(Alerts::open(&b).reports(), ana.reports());
+        let _ = [a, b, c].map(std::fs::remove_dir_all);
+    }
+
+    /// RP-8 §7: a report sent again every few minutes, its position brought up to date, until it
+    /// is stopped, or for four hours at most; a frame too long is refused.
+    #[test]
+    fn a_report_goes_again_with_the_position_of_the_moment() {
+        let a = scratch("rep-again");
+        let facundo = Alerts::open(&a);
+        facundo
+            .add_circle("Net", KEYWORD, Level::Normal)
+            .expect("kept");
+        let how = Sending::default();
+        assert!(
+            facundo
+                .report(
+                    "Net",
+                    None,
+                    position_report(1),
+                    "KK4ODA",
+                    T,
+                    how,
+                    Some(700),
+                    vec![1]
+                )
+                .is_err(),
+            "every 700 s is not offered"
+        );
+        facundo
+            .report(
+                "Net",
+                None,
+                position_report(337_812_300),
+                "KK4ODA",
+                T,
+                how,
+                Some(600),
+                vec![1],
+            )
+            .expect("written");
+        let _ = facundo.due_with(T).expect("the first");
+        assert_eq!(facundo.repeat_due(T + 599), None);
+        assert_eq!(facundo.repeat_due(T + 600), Some(vec![1]));
+        let moved = radiopost::cbor::Value::Array(vec![
+            radiopost::cbor::Value::int(338_000_000),
+            radiopost::cbor::Value::int(-843_876_500),
+        ]);
+        facundo.repeat_now(T + 600, Some(&moved)).expect("again");
+        let again = facundo.due_with(T + 600).expect("the second");
+        let frame = radiopost::cbor::decode(&again.frame).expect("CBOR");
+        assert_eq!(
+            frame.get(8).and_then(|f| f.get(2)).and_then(|v| v.get(1)),
+            Some(&moved),
+            "the position of the moment"
+        );
+        assert_eq!(facundo.repeat_due(T + 1199), None);
+        assert_eq!(
+            facundo.repeat_due(T + super::REPEAT_FOR_S),
+            None,
+            "four hours at most"
+        );
+        assert!(facundo.json()["repeat"].is_null());
+        facundo
+            .report(
+                "Net",
+                None,
+                position_report(5),
+                "KK4ODA",
+                T,
+                how,
+                Some(900),
+                vec![1],
+            )
+            .expect("written");
+        facundo.stop_repeat();
+        assert_eq!(facundo.repeat_due(T + 900), None);
+        // a comment that makes the frame over 512 bytes
+        let mut long = position_report(5);
+        long.values
+            .push((6, radiopost::cbor::Value::text(&"x".repeat(480))));
+        let why = facundo
+            .report("Net", None, long, "KK4ODA", T, how, None, vec![])
+            .expect_err("refused");
+        assert!(why.contains("too long for a broadcast"), "{why}");
+        let _ = std::fs::remove_dir_all(&a);
     }
 
     #[test]

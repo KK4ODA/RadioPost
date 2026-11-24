@@ -18,7 +18,7 @@ use crate::store::Store;
 pub struct Report {
     /// The message's content ID, as text.
     pub id: String,
-    /// `inbox` or `sent`.
+    /// `inbox` or `sent`; `circle` for a report sent or heard by broadcast (RP-8).
     pub folder: &'static str,
     /// The sender's address.
     pub from: String,
@@ -107,6 +107,27 @@ pub fn report(m: &Message, folder: &'static str, templates: &[Template]) -> Opti
         choices,
         fields,
     })
+}
+
+/// A report sent to a circle or heard from one (RP-8 §3, §7), as a report: its tag is its ID, its
+/// folder `circle`, its subject the circle's name, its date its own time; the sender's and the
+/// station's callsigns stand for addresses. A form whose template this computer does not hold, or
+/// whose values do not fill it, or that has no position, is no report, as for mail.
+#[must_use]
+pub fn of_circle(r: &crate::alerts::CircleReport, templates: &[Template]) -> Option<Report> {
+    let map = Cbor::int_map(vec![
+        (1, Cbor::Uint(1)),
+        (2, Cbor::text(&r.from)),
+        (3, Cbor::Array(r.to.iter().map(|t| Cbor::text(t)).collect())),
+        (5, Cbor::Uint(r.time)),
+        (6, Cbor::text(&r.circle)),
+        (7, Cbor::text("")),
+        (key::FORM, r.form.to_cbor()),
+    ]);
+    let m = Message::from_map(&map).ok()?;
+    let mut report = report(&m, "circle", templates)?;
+    report.id = radiopost::cbor::hex(&r.tag);
+    Some(report)
 }
 
 /// A position's OpenStreetMap page (RP-6 §3.1's link), from degrees as the Reports view has them:

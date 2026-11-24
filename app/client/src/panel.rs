@@ -487,6 +487,10 @@ impl Panel {
             let how = crate::alerts::Sending { dial_hz, outlast_s };
             self.alerts
                 .send_on(circle, to, text, &me.operator, now, how)?;
+        } else if let Some(report) = body.get("report") {
+            self.send_report(report, now)?;
+        } else if body["stop_repeat"] == true {
+            self.alerts.stop_repeat();
         } else if let Some(tag) = body["ack"].as_str() {
             self.alerts.acknowledge(tag, now)?;
         } else if body["ack_all"] == true {
@@ -496,9 +500,70 @@ impl Panel {
             self.alerts
                 .reply(tag, reply["text"].as_str().unwrap_or(""), now)?;
         } else {
-            return Err("send, ack, ack_all or reply".into());
+            return Err("send, report, stop_repeat, ack, ack_all or reply".into());
         }
         Ok(self.alerts_view())
+    }
+
+    /// A form sent as a report to a circle (RP-8 §3, §7): `{circle, to?, dial_hz?, form, every_s?,
+    /// here}`, `here` the fields whose position is the station's own, which a repeat brings up to
+    /// date. A report carries a position: a form with none is refused.
+    fn send_report(&self, report: &Value, now: u64) -> Result<(), Error> {
+        let store = Store::open(&self.home())?;
+        let me = store
+            .me()
+            .map_err(|_| "no credential yet: enroll in Setup first")?;
+        let held = crate::templates::held(store.home());
+        let form = form_of_with(&report["form"], &held)?.ok_or("choose a form to report")?;
+        let t = held
+            .iter()
+            .find(|t| t.fingerprint() == form.template)
+            .ok_or("this computer does not hold that form")?;
+        if radiopost::forms::places(t, &form).is_empty() {
+            return Err("a report carries a position: fill in where".into());
+        }
+        let to = report["to"].as_str().filter(|t| !t.trim().is_empty());
+        let dial_hz = dial_member(&report["dial_hz"], "dial_hz")?;
+        let here: Vec<u64> = report["here"]
+            .as_array()
+            .map(|a| a.iter().filter_map(Value::as_u64).collect())
+            .unwrap_or_default();
+        let how = crate::alerts::Sending {
+            dial_hz,
+            outlast_s: None,
+        };
+        self.alerts.report(
+            report["circle"].as_str().unwrap_or(""),
+            to,
+            form,
+            &me.operator,
+            now,
+            how,
+            report["every_s"].as_u64(),
+            here,
+        )?;
+        Ok(())
+    }
+
+    /// Sends the report being repeated again whenever it is due (RP-8 §7), with the station's
+    /// position as it is then, for as long as the panel runs: repeats stop with the window.
+    fn keep_reporting(&self) {
+        loop {
+            thread::sleep(std::time::Duration::from_secs(5));
+            let now = now();
+            if self.alerts.repeat_due(now).is_none() {
+                continue;
+            }
+            let here = self.position.for_form()["text"]
+                .as_str()
+                .filter(|t| !t.is_empty())
+                .and_then(|t| crate::compose::position_from_text(t).ok());
+            if let Err(why) = self.alerts.repeat_now(now, here.as_ref()) {
+                let line = format!("reports: not sent again: {why}");
+                radiopost::logfile::line(&line);
+                lock(&self.activity).log.push(line);
+            }
+        }
     }
 
     /// `/api/circles`: add a circle from its keyword, change how it arrives, or forget it.
@@ -562,6 +627,8 @@ impl Panel {
         self.presence.start();
         let renewing = self.clone();
         thread::spawn(move || renewing.keep_renewed());
+        let reporting = self.clone();
+        thread::spawn(move || reporting.keep_reporting());
         let backing_up = self.clone();
         thread::spawn(move || backing_up.keep_backed_up());
         thread::spawn(move || {
@@ -1395,7 +1462,15 @@ impl Panel {
     /// newest first ([`crate::reports`]).
     fn reports_view(&self) -> Result<Value, Error> {
         let store = Store::open(&self.home())?;
-        let all = crate::reports::gather(&store, &crate::templates::held(store.home()));
+        let held = crate::templates::held(store.home());
+        let mut all = crate::reports::gather(&store, &held);
+        all.extend(
+            self.alerts
+                .reports()
+                .iter()
+                .filter_map(|r| crate::reports::of_circle(r, &held)),
+        );
+        all.sort_by(|a, b| b.date.cmp(&a.date).then_with(|| a.id.cmp(&b.id)));
         Ok(Value::Array(
             all.iter().map(crate::reports::Report::json).collect(),
         ))
@@ -1405,7 +1480,14 @@ impl Panel {
     /// `{format: "csv" | "geojson", ids}`, each a message's content ID as the reports give it.
     fn export_reports(&self, body: &Value) -> Result<Value, Error> {
         let store = Store::open(&self.home())?;
-        let all = crate::reports::gather(&store, &crate::templates::held(store.home()));
+        let held = crate::templates::held(store.home());
+        let mut all = crate::reports::gather(&store, &held);
+        all.extend(
+            self.alerts
+                .reports()
+                .iter()
+                .filter_map(|r| crate::reports::of_circle(r, &held)),
+        );
         let ids: Vec<&str> = body["ids"]
             .as_array()
             .ok_or("ids: the reports to write")?

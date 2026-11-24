@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
-"""Alerts (RP-8): a circle's key from its keyword, an alert's frame and tag, and what a station
-that hears a broadcast makes of it.
+"""Alerts and reports (RP-8): a circle's key from its keyword, a frame and its tag, and what a
+station that hears a broadcast makes of it.
 
 As plainly as the specification says it, for the vectors: no clock, no store, no modem. The
 receiver's situation (its callsigns, the circles it knows, the time, the tags it has heard) comes
@@ -25,15 +25,16 @@ CTX_ALERT = "RadioPost-alert-v1"
 ITERATIONS = 600_000  # RP-8 §2
 KEYWORD_MIN = 8  # characters, after normalising (RP-8 §2)
 TEXT_MAX = 100  # bytes of UTF-8 (RP-8 §3)
+FRAME_MAX = 512  # bytes of a frame of any kind (RP-8 §3)
 WINDOW_S = 600  # RP-8 §4: an alert's time against the receiver's clock
 REMEMBER_S = 2 * WINDOW_S  # RP-8 §4: how long a tag heard is kept
 
-# RP-0 §9.5: broadcast types. RP-8 defines four.
-ALERT, HEARD, SEEN, REPLY = 1, 2, 3, 4
-TYPES = {ALERT: "alert", HEARD: "heard", SEEN: "seen", REPLY: "reply"}
+# RP-0 §9.5: broadcast types. RP-8 defines five.
+ALERT, HEARD, SEEN, REPLY, REPORT = 1, 2, 3, 4, 5
+TYPES = {ALERT: "alert", HEARD: "heard", SEEN: "seen", REPLY: "reply", REPORT: "report"}
 
 # RP-8 §3: the frame's keys.
-K_TYPE, K_CIRCLE, K_FROM, K_TO, K_TIME, K_TEXT, K_RE, K_TAG = range(8)
+K_TYPE, K_CIRCLE, K_FROM, K_TO, K_TIME, K_TEXT, K_RE, K_TAG, K_FORM = range(9)
 
 CALLSIGN = re.compile(
     r"(?:[A-Z0-9]{1,10}/)?[A-Z0-9]{1,10}(?:/[A-Z0-9]{1,10})?(?:-(?:1[0-5]|[0-9]))?"
@@ -106,6 +107,7 @@ def frame_map(
     to: str | None = None,
     text: str | None = None,
     re_tag: bytes | None = None,
+    form: dict[int, Any] | None = None,
 ) -> dict[int, Any]:
     """The frame's map without its tag."""
     m: dict[int, Any] = {K_TYPE: kind, K_CIRCLE: circle, K_FROM: sender, K_TIME: time}
@@ -115,6 +117,8 @@ def frame_map(
         m[K_TEXT] = unicodedata.normalize("NFC", text)
     if re_tag is not None:
         m[K_RE] = re_tag
+    if form is not None:
+        m[K_FORM] = form
     return m
 
 
@@ -144,8 +148,8 @@ def shape_problem(m: dict[Any, Any]) -> str | None:
     to = m.get(K_TO)
     if to is not None and not is_callsign(to):
         return "to: a callsign"
-    if to is None and kind != ALERT:
-        return "to: only an alert may leave it out"
+    if to is None and kind not in {ALERT, REPORT}:
+        return "to: only an alert or a report may leave it out"
     text = m.get(K_TEXT)
     if kind in {ALERT, REPLY}:
         if not isinstance(text, str):
@@ -160,14 +164,35 @@ def shape_problem(m: dict[Any, Any]) -> str | None:
     elif text is not None:
         return "text: only an alert or a reply"
     re_tag = m.get(K_RE)
-    if kind == ALERT:
+    if kind in {ALERT, REPORT}:
         if re_tag is not None:
-            return "re: not on an alert"
+            return "re: not on an alert or a report"
     elif not (isinstance(re_tag, bytes) and len(re_tag) == 8):
         return "re: 8 bytes"
+    form = m.get(K_FORM)
+    if kind == REPORT:
+        if form_problem(form):
+            return f"form: {form_problem(form)}"
+    elif form is not None:
+        return "form: only on a report"
     tag = m.get(K_TAG)
     if not (isinstance(tag, bytes) and len(tag) == 8):
         return "tag: 8 bytes"
+    return None
+
+
+def form_problem(form: object) -> str | None:
+    """RP-8 §3: a report's `form`, RP-2 §8.2's map: a template's fingerprint and at least one value
+    by field number. Whether the values fill the template is for a station that holds it."""
+    if not isinstance(form, dict):
+        return "a map"
+    fingerprint, values = form.get(1), form.get(2)
+    if not (isinstance(fingerprint, bytes) and len(fingerprint) == 8):
+        return "a template's fingerprint of 8 bytes"
+    if not isinstance(values, dict) or not values:
+        return "at least one value"
+    if not all(isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= 255 for n in values):
+        return "values by field number, 1 to 255"
     return None
 
 
@@ -189,7 +214,7 @@ def hear(
         return "not an alert", None
     if not isinstance(m, dict) or m.get(K_TYPE) not in TYPES:
         return "not an alert", None
-    if shape_problem(m):
+    if len(data) > FRAME_MAX or shape_problem(m):
         return "malformed", None
     key = circles.get(m[K_CIRCLE])
     if key is None:
@@ -206,9 +231,17 @@ def hear(
     if m[K_TAG] in heard:
         return "heard again", m
     kind = m[K_TYPE]
-    if kind == ALERT:
-        return ("an alert for the circle" if to is None else "an alert for this station"), m
+    if kind in {ALERT, REPORT}:
+        whose = "the circle" if to is None else "this station"
+        return f"{'an alert' if kind == ALERT else 'a report'} for {whose}", m
     return TYPES[kind], m
+
+
+def report(
+    key: bytes, sender: str, time: int, form: dict[int, Any], *, to: str | None = None
+) -> bytes:
+    """RP-8 §3: a report of a form (RP-2 §8.2's map) to the circle, or to one station."""
+    return make(key, frame_map(REPORT, circle_id(key), sender, time, to=to, form=form))
 
 
 def answer(

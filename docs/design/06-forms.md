@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Accepted, in progress |
-| **Version** | 0.4.0 |
+| **Status** | Accepted, built |
+| **Version** | 0.5.0 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -136,8 +136,19 @@ OpenStreetMap learns a position only when the reader clicks.
 ### 4.5 Position reports
 
 W33 becomes one small template: position, course, speed, status and a comment, sent as mail to a
-net's or an agency's address. A broadcast of it (RP-8's format) waits until a net shows that the
-air time matters.
+net's or an agency's address. Step 5 sends any form with a position as a **broadcast** too (RP-8
+0.3.0's report), with no call and no session, for the moment, as an alert goes:
+
+* **To a circle** (the author's decision, §9): tagged with the circle's key, so only stations that
+  know the net's keyword map it and nobody outside can put a member's position on the map. Nothing
+  is encrypted: anyone can read it.
+* **Any form with a position** (§9): the form's values as a message carries them (RP-2 §8.2), so a
+  Storm Report or a Damage Report reaches the net's map as a Position Report does. A bare Position
+  Report is 61 bytes, three of Aether's frames, 16.1 s; a frame is at most 512 bytes, 85.8 s.
+* **Once, or again every 10, 15, 30 or 60 minutes** (§9), each time with the station's position as
+  it is then in the fields that held the station's own, while the window is open and the operator
+  at it (local control), for four hours at most. A gateway program sends none.
+* **Not answered** (§9): the next report carries the news. To be sure it arrived, send it as mail.
 
 ---
 
@@ -201,7 +212,7 @@ way, as data.
 | 2 | Templates: FEMA's ICS forms, a storm report, check-in and check-out, a situation report, a damage report and a position report, with print layouts for the paper forms. | Built |
 | 3 | The Reports view: map, CSV and GeoJSON; map links in email (RP-6). | Built |
 | 4 | Templates by fingerprint (§6): RP-5, RP-2 §8.3, the post office, the client. | Built |
-| 5 | Position reports as broadcasts, only if a net asks. | Not planned |
+| 5 | Reports as broadcasts to a circle (§4.5): RP-8 0.3.0, the client. | Built |
 
 **Step 1 in detail.** RP-2 §8.1 to §8.4 gain the types, the keys `scale`, `unit` and `columns`,
 the rules a template must keep, and each value's checks and text. `tools/vectors/rpref/forms.py`
@@ -271,6 +282,20 @@ form…**, **Export**, **Remove**); the reader's **Get the form**; `radiopost fo
 `export`, `remove`, `fetch` and `hand-in`; each kept template handed in to every callsign's post
 office once, at import and with the hourly renewal.
 
+**What step 5 built.** RP-8 0.3.0 (title *Alerts and reports*): kind 5 `report` with key 8
+`form`, RP-2 §8.2's map; any frame at most 512 bytes; a report to the circle or to one station,
+never answered and never sent again for want of an answer, with no copies for a scan; repeats under
+the operator's control (§8). RP-0 1.6.0 §9.5 registers broadcast type 5; RP-4 1.6.1 §6 says so.
+`alerts.json`: two reports byte for byte (a Position Report to Shelter 3's circle, 61 bytes; a
+Storm Report to its net control, 86) and sixteen hearing cases, each verdict written out by hand,
+each check shown to fail on a planted fault in the reference and in the Rust library.
+`radiopost::alert`: `Kind::Report`, `Frame.form`, `report()`, the size bound; `Form::from_value`.
+The client (`alerts.rs`): `report` (once, or every 10, 15, 30 or 60 minutes for four hours at
+most, the station's own positions brought up to date by the panel's thread), the reports sent and
+heard in `circle-reports.json`, the last 200; the Alerts view's **Send a report** (folded); heard
+reports in **Reports** (`reports::of_circle`). `tests/alerts.rs` carries a report between two
+panels' connections over the loopback modem.
+
 ---
 
 ## 9. The author's decisions (2026-11-24)
@@ -280,6 +305,10 @@ office once, at import and with the hourly renewal.
    (§5). Step 2 starts with the public-domain forms.
 3. **A position goes exactly as it is, by default** (§4.2). The operator may send less.
 4. **An emailed position gets both links**, OpenStreetMap's and a `geo:` URI (§4.4).
+5. **A report by broadcast is a circle's** (§4.5): tagged with its key, like an alert.
+6. **It carries any form with a position** (§4.5), not only the Position Report.
+7. **It goes once, or again every few minutes** while the operator is at the station (§4.5).
+8. **Nobody answers it** (§4.5).
 
 ---
 
@@ -291,3 +320,4 @@ office once, at import and with the hourly renewal.
 | 0.2.0 | 2026-11-24 | Step 2 built (§8): eleven of FEMA's ICS forms with their paper forms, and seven of RadioPost's own. §2, §5: the ICS 309 is not FEMA's; ICS 213 RR is FEMA's Appendix B example; the storm report follows the National Weather Service's spotter guidance. |
 | 0.3.0 | 2026-11-24 | Step 3 built (§8): the Reports view and map links in email (RP-6 1.3.0), with the author's fourth answer (§9). §4.3: the view, not the template, chooses the field that colours the markers. |
 | 0.4.0 | 2026-11-24 | Step 4 built (§8): templates by fingerprint (RP-5 1.8.0, RP-2 1.5.0). §6: post offices do not fetch from each other, the client asks the sender's; templates by radio wait for a group to ask. |
+| 0.5.0 | 2026-11-24 | Step 5 built (§8): reports by broadcast to a circle (RP-8 0.3.0), with the author's four answers (§9, decisions 5 to 8). Every step is built. |

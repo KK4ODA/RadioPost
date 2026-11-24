@@ -580,7 +580,15 @@ const REPORTS = [
   {id: "storm0".padEnd(20, "a"), folder: "inbox", from: "n4call@radiopost.org",
    to: [ME.address], date: T - 5400, subject: "Hail and wind", template: fpOf("storm-report"),
    form: "Storm Report", places: [placeOf(33.7590, -84.3880)], choices: {"7": 0}},
+  // heard by broadcast in a circle (RP-8): its tag for an ID, the circle's name for a subject
+  {id: "5e1f0a77c2b4d913", folder: "circle", from: "KK4ODA-9", to: [], date: T - 240,
+   subject: "Riverside net", template: fpOf("position-report"), form: "Position Report",
+   places: [placeOf(33.8037, -84.3721, "Position")], choices: {"5": 0}},
 ]);
+
+// a Position Report sent to a circle every 15 minutes (/api/alerts' `repeat`)
+const REPEATING = {circle: "Riverside net", to: null, template: fpOf("position-report"), every_s: 900,
+                   next_at: T + 600, until: T + 4 * 3600 - 300};
 
 // a form's position field, filled from the GPS in use (/api/form-position), and what it goes as
 const FORM_POSITION = {text: "33.78123, -84.38765", says: "From the GPS, 4 s ago."};
@@ -628,7 +636,8 @@ function clientApi(world) {
       case "alerts": case "circles":
         return {seq: s.alerts.seq, circles: ALERT_CIRCLES, log: world.alerts,
                 alarming: world.alerts.some((e) => e.alarm),
-                radio_hz: 7101000, scanned_hz: []};
+                radio_hz: 7101000, scanned_hz: [], reports: [],
+                repeat: world.repeat ? REPEATING : null};
       case "notify": return NOTIFY;
       case "backups": return {on: true, computer: "shack-pc", folder: "D:\\RadioPost backups",
         key: "k1", key_file: "C:\\Users\\you\\.radiopost\\backup.key",
@@ -852,7 +861,8 @@ function clientWorld(over = {}) {
   return {state: clientState(over.state || {}), log: over.log || CLIENT_LOG,
           operator: over.operator || false, byHand: over.byHand || false, vhf: over.vhf || false,
           hf: over.hf || false, called: over.called || false,
-          alerts: over.alerts || ALERT_LOG, formsKept: over.formsKept || false};
+          alerts: over.alerts || ALERT_LOG, formsKept: over.formsKept || false,
+          repeat: over.repeat || false};
 }
 
 // the desk on one tab, as KK4ODA, an operator of radiopost.org
@@ -1358,6 +1368,25 @@ const SHOTS = {
     await page.waitForTimeout(400);
     await page.evaluate(() => document.getElementById("forms-card").scrollIntoView());
     await shot(page, "client-forms-kept", "#forms-card");
+    await context.close();
+  },
+
+  // the Alerts view's Send a report: a Position Report to a circle, going again every 15 minutes
+  async "client-report"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI,
+                                                 api: clientApi(clientWorld({hf: true, repeat: true})),
+                                                 height: 1700});
+    await page.click("button[data-folder=alerts]");
+    await page.waitForTimeout(400);
+    await page.evaluate(() => { document.getElementById("crep-card").open = true; });
+    await page.selectOption("#crep-circle", "Riverside net");
+    await page.selectOption("#crep-every", "900");
+    await page.fill("#crep-fields input[data-field='6']", "Checkpoint 4, all well");
+    await page.selectOption("#crep-fields select[data-field='5']", "0");
+    await page.locator("#crep-fields input[data-field='6']").blur();
+    await page.waitForTimeout(300);
+    await page.evaluate(() => document.getElementById("crep-card").scrollIntoView());
+    await shot(page, "client-report", "#crep-card");
     await context.close();
   },
 

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.6.0 |
+| **Version** | 1.6.1 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -379,8 +379,8 @@ moved on since. A dial the scan has not, or no scan, and the broadcast goes wher
 modem never tunes for a broadcast otherwise. A `dial_hz` that is not an integer above 0 is
 `malformed` (§4); a modem without `caps.dial` ignores the member.
 
-RadioPost's broadcasts are CBOR maps whose key 0 says their kind (RP-0 §9.5): alerts first (RP-8).
-Bulletins and position reports would follow in later specifications.
+RadioPost's broadcasts are CBOR maps whose key 0 says their kind (RP-0 §9.5): alerts and reports,
+position reports among them (RP-8). Bulletins would follow in a later specification.
 
 ---
 
@@ -765,3 +765,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 1.4.0 | 2026-11-21 | §5: `failed`'s `heard` and `snr_db`, whether the station called was heard during a call that brought no link and how strongly; `quality`'s `peer_snr_db`, what the other station reports hearing this one at. §9.1: Aether's sources for both (its `frame` events during the call, `metrics.peer_snr_db`). From choosing a gateway (the design's §12.2, Phase 4), which learns each direction of a path and tells "nothing heard" from "heard, but no link". Test vectors: the simulated modem's `failed` `timeout` says `heard` false. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; an adapter that says neither and a host that ignores both lose nothing they had. |
 | 1.5.0 | 2026-11-21 | §6, the dial: a broadcast heard carries `dial_hz`, where it was heard, and a `broadcast` may name a `dial_hz`; a scanning modem takes its scan there to send it, so an answer goes where the frame it answers was heard (RP-8 0.2.0, an alert to a station whose gateway scans). §9.1: Aether's `datagram.send` and `datagram` carry the dial (its ADR-0129 §15). Test vectors (`rpmi-conversations.json`, the scan conversation). MINOR, announced (RP-0 §8.4): two optional members; a modem or host that ignores them works as before, and its answers go where the radio is. |
 | 1.6.0 | 2026-11-24 | §1.1: a host listening is called in any bandwidth: an adapter whose modem answers narrower calls in its widest bandwidth runs that one while a host listens, below a bandwidth another program chose. §4: `status` carries the station's `dial_hz`, `answers` (the bandwidths a call is answered in now) and `scanning` (the dials the station scans, whichever host asked), each left out when the adapter cannot say. §9.1: Aether's `bandwidth.set` with `listening` and `status` (its 0.2.0-beta.174). From the portable's sessions of 2026-11-23: a 2300 Hz P2P call to a home station a profile had left at 500 Hz went unanswered, and nothing in the listening client said where or how it listened. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; an adapter that says none of the three, and a host that ignores them, work as before. |
+| 1.6.1 | 2026-11-24 | §6: position reports are RP-8's reports (RP-8 0.3.0), no longer a later specification's. PATCH, announced (RP-0 §8.4): nothing for an implementation to do. |

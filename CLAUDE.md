@@ -519,7 +519,11 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   and `[profile.dev.package.sha2]` is optimized so tests that make a key take a second, not
   ten. `rpref/alert.py` and `vectors/alerts.json` are its reference. The client's `alerts` keeps
   `circles.json` (keys, never keywords), `alerts.json` (the log) and `notify.json` (the page's
-  sound and level settings) in the first home; every connection that holds the modem hands it
+  sound and level settings) in the first home, and `circle-reports.json`: RP-8 0.3.0's reports
+  (the forms design's step 5) sent and heard, the last 200. `Alerts::report` sends a form once or
+  every 10, 15, 30 or 60 minutes, for four hours at most; the panel's `keep_reporting` thread
+  drives `repeat_due`/`repeat_now` with the station's position. Nobody answers a report; the
+  Reports view shows them through `reports::of_circle`; every connection that holds the modem hands it
   broadcasts (`presence::Carrier::heard`): the connection between calls (`presence`, which now also
   holds a shared non-Aether adapter while circles are kept, and lets go of one that is not
   shared), and a station listening (`session::wait_for_call`, which also sends what waits). To

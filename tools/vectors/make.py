@@ -9315,7 +9315,8 @@ ALERT_CIRCLES = {
 
 def alert_frames() -> dict[str, tuple[str, bytes]]:
     """RP-8 §3 and §5: Facundo (KK4ODA) alerts Ana (N0CALL); her station hears it, she sees it and
-    replies; and Facundo alerts the whole family circle. Each frame with its circle's name."""
+    replies; Facundo alerts the whole family circle; and he reports his position to Shelter 3's
+    circle and a storm to its net control (N3CALL). Each frame with its circle's name."""
     family = alert.circle_key(ALERT_CIRCLES["family"])
     cid = alert.circle_id(family)
     to_ana = alert.frame_map(
@@ -9343,6 +9344,31 @@ def alert_frames() -> dict[str, tuple[str, bytes]]:
             ),
         ),
         "Facundo alerts the family circle": ("family", alert.make(family, everyone)),
+        **report_frames(),
+    }
+
+
+def report_frames() -> dict[str, tuple[str, bytes]]:
+    """RP-8 §3: Facundo's reports to Shelter 3's circle, each a form's values (RP-2 §8.2)."""
+    shelter = alert.circle_key(ALERT_CIRCLES["shelter"])
+    position = forms.fingerprint(form_template("position-report"))
+    storm = forms.fingerprint(form_template("storm-report"))
+    # only the Position and the Status (OK) filled in: the frame's time is the position's
+    where = {1: position, 2: {1: [337812300, -843876500], 5: 0}}
+    # hail of 1.25 in five minutes before, for net control alone
+    hail = {
+        1: storm,
+        2: {1: [337812300, -843876500], 2: T_ALERT // 60 - 5, 3: 1 << 3, 5: 125, 14: "KK4ODA"},
+    }
+    return {
+        "Facundo reports his position to Shelter 3's circle": (
+            "shelter",
+            alert.report(shelter, "KK4ODA", T_ALERT, where),
+        ),
+        "Facundo reports hail to its net control": (
+            "shelter",
+            alert.report(shelter, "KK4ODA", T_ALERT + 60, hail, to="N3CALL"),
+        ),
     }
 
 
@@ -9422,6 +9448,27 @@ def make_alerts() -> dict[str, Any]:
     )
     unsorted = bytes([0xA2, 0x02, 0x01, 0x00, 0x01])  # {2: 1, 0: 1}: keys out of order
     ana, n3 = ["N0CALL"], ["N3CALL"]
+    where = made["Facundo reports his position to Shelter 3's circle"][1]
+    hail = made["Facundo reports hail to its net control"][1]
+    where_tag = cbor.decode(where)[alert.K_TAG]
+
+    def report_with(changes: dict[int, Any], drop: tuple[int, ...] = ()) -> bytes:
+        """Facundo's position report with its keys changed, tagged again with the shelter's key."""
+        m = {k: v for k, v in cbor.decode(where).items() if k != alert.K_TAG and k not in drop}
+        return alert.make(shelter, {**m, **changes})
+
+    def report_of(size: int) -> bytes:
+        """Facundo's position report with a comment that makes the frame `size` bytes."""
+        form = cbor.decode(where)[alert.K_FORM]
+        comment = 0
+        while True:
+            values = {**form[2], 6: "x" * comment}
+            raw = report_with({alert.K_FORM: {1: form[1], 2: values}})
+            if len(raw) >= size:
+                assert len(raw) == size, len(raw)
+                return raw
+            comment += 1
+
     cases_in: list[tuple[str, list[str], list[str], int, list[bytes], bytes]] = [
         ("Ana hears Facundo's alert", ana, ["family"], T_ALERT + 12, [], to_ana),
         ("at another SSID of hers", ["N0CALL-7"], ["family"], T_ALERT + 12, [], to_ana),
@@ -9568,6 +9615,64 @@ def make_alerts() -> dict[str, Any]:
             [],
             remade({64: "an experiment"}),
         ),
+        ("Ana hears the position report", ana, ["shelter"], T_ALERT + 20, [], where),
+        ("by a station outside Shelter 3's circle", ana, ["family"], T_ALERT + 20, [], where),
+        ("the position report heard again", ana, ["shelter"], T_ALERT + 80, [where_tag], where),
+        ("net control hears the hail report", n3, ["shelter"], T_ALERT + 70, [], hail),
+        ("at another SSID of net control's", ["N3CALL-5"], ["shelter"], T_ALERT + 70, [], hail),
+        ("the hail report heard by another member", ana, ["shelter"], T_ALERT + 70, [], hail),
+        ("a report with no form", ana, ["shelter"], T_ALERT + 20, [], report_with({}, (8,))),
+        ("a report with text", ana, ["shelter"], T_ALERT + 20, [], report_with({5: "OK"})),
+        (
+            "a report that answers an alert",
+            ana,
+            ["shelter"],
+            T_ALERT + 20,
+            [],
+            report_with({alert.K_RE: tag1}),
+        ),
+        (
+            "a form on an alert",
+            ana,
+            ["family"],
+            T_ALERT + 12,
+            [],
+            remade({alert.K_FORM: cbor.decode(where)[alert.K_FORM]}),
+        ),
+        (
+            "a form whose template is 7 bytes",
+            ana,
+            ["shelter"],
+            T_ALERT + 20,
+            [],
+            report_with({alert.K_FORM: {1: bytes(7), 2: {1: [0, 0]}}}),
+        ),
+        (
+            "a form with no values",
+            ana,
+            ["shelter"],
+            T_ALERT + 20,
+            [],
+            report_with({alert.K_FORM: {1: bytes(8), 2: {}}}),
+        ),
+        (
+            "a value under field number 0",
+            ana,
+            ["shelter"],
+            T_ALERT + 20,
+            [],
+            report_with({alert.K_FORM: {1: bytes(8), 2: {0: "x"}}}),
+        ),
+        (
+            "a form whose template this station may not hold",
+            ana,
+            ["shelter"],
+            T_ALERT + 20,
+            [],
+            report_with({alert.K_FORM: {1: bytes(8), 2: {1: "anything"}}}),
+        ),
+        ("a report of 512 bytes", ana, ["shelter"], T_ALERT + 20, [], report_of(512)),
+        ("a report of 513 bytes", ana, ["shelter"], T_ALERT + 20, [], report_of(513)),
     ]
     hearing = []
     for what, mine, known, now, heard, data in cases_in:
@@ -9616,11 +9721,27 @@ def make_alerts() -> dict[str, Any]:
             "no text": "malformed",
             "a circle of three bytes": "malformed",
             "a key the specification does not know": "an alert for this station",
+            "Ana hears the position report": "a report for the circle",
+            "by a station outside Shelter 3's circle": "unknown circle",
+            "the position report heard again": "heard again",
+            "net control hears the hail report": "a report for this station",
+            "at another SSID of net control's": "a report for this station",
+            "the hail report heard by another member": "for another station",
+            "a report with no form": "malformed",
+            "a report with text": "malformed",
+            "a report that answers an alert": "malformed",
+            "a form on an alert": "malformed",
+            "a form whose template is 7 bytes": "malformed",
+            "a form with no values": "malformed",
+            "a value under field number 0": "malformed",
+            "a form whose template this station may not hold": "a report for the circle",
+            "a report of 512 bytes": "a report for the circle",
+            "a report of 513 bytes": "malformed",
         },
     )
     out = header(
-        "Alerts: circles' keys, alert frames and their answers, and what a station makes of them",
-        {"RP-8": "§2–§5", "RP-0": "§5, §9.2, §9.5"},
+        "Alerts and reports: circles' keys, frames, answers, and what a station makes of them",
+        {"RP-8": "§2–§5", "RP-0": "§5, §9.2, §9.5", "RP-2": "§8.2"},
     )
     out["rule"] = (
         "Each circle's `keyword` normalises to `normalised` and gives `key_hex` "

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Alerts (RP-8): a circle's key from its keyword (§2), an alert's frame and its tag (§3), what a
-//! station makes of a broadcast it hears (§4), and the answers (§5).
+//! Alerts and reports (RP-8): a circle's key from its keyword (§2), a frame and its tag (§3), what
+//! a station makes of a broadcast it hears (§4), and the answers to an alert (§5). A report is a
+//! form (RP-2 §8.2) sent to a circle, and is never answered.
 //!
 //! Sans-IO: the clock, the circles a station knows and the tags it has heard come in as arguments,
 //! so `tests/vectors.rs` replays `vectors/alerts.json` exactly.
@@ -13,6 +14,7 @@ use unicode_normalization::UnicodeNormalization as _;
 use crate::callsign;
 use crate::cbor::{self, Value};
 use crate::crypto::{self, context};
+use crate::forms::Form;
 
 /// PBKDF2's iterations for a circle's key (RP-8 §2).
 pub const ITERATIONS: u32 = 600_000;
@@ -24,6 +26,8 @@ pub const TEXT_MAX: usize = 100;
 pub const WINDOW_S: u64 = 600;
 /// How long a tag heard is kept, so a frame heard again is known for one (RP-8 §4, step 7).
 pub const REMEMBER_S: u64 = 2 * WINDOW_S;
+/// The most bytes a frame of any kind may have (RP-8 §3): sixteen of Aether's datagram frames.
+pub const FRAME_MAX: usize = 512;
 
 /// The frame's keys (RP-8 §3).
 mod key {
@@ -35,6 +39,7 @@ mod key {
     pub const TEXT: i64 = 5;
     pub const RE: i64 = 6;
     pub const TAG: i64 = 7;
+    pub const FORM: i64 = 8;
 }
 
 /// The kinds of frame RP-8 defines: key 0, from RP-0 §9.5's broadcast types.
@@ -48,6 +53,8 @@ pub enum Kind {
     Seen,
     /// Its operator's line in answer.
     Reply,
+    /// A form, to the circle or to one station; never answered.
+    Report,
 }
 
 impl Kind {
@@ -57,6 +64,7 @@ impl Kind {
             Kind::Heard => 2,
             Kind::Seen => 3,
             Kind::Reply => 4,
+            Kind::Report => 5,
         }
     }
 
@@ -66,11 +74,12 @@ impl Kind {
             2 => Some(Kind::Heard),
             3 => Some(Kind::Seen),
             4 => Some(Kind::Reply),
+            5 => Some(Kind::Report),
             _ => None,
         }
     }
 
-    /// Its name in RP-8 §3: `alert`, `heard`, `seen` or `reply`.
+    /// Its name in RP-8 §3: `alert`, `heard`, `seen`, `reply` or `report`.
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
@@ -78,15 +87,22 @@ impl Kind {
             Kind::Heard => "heard",
             Kind::Seen => "seen",
             Kind::Reply => "reply",
+            Kind::Report => "report",
         }
     }
 
     /// A kind by its name.
     #[must_use]
     pub fn named(name: &str) -> Option<Kind> {
-        [Kind::Alert, Kind::Heard, Kind::Seen, Kind::Reply]
-            .into_iter()
-            .find(|k| k.name() == name)
+        [
+            Kind::Alert,
+            Kind::Heard,
+            Kind::Seen,
+            Kind::Reply,
+            Kind::Report,
+        ]
+        .into_iter()
+        .find(|k| k.name() == name)
     }
 }
 
@@ -186,6 +202,8 @@ pub struct Frame {
     pub text: Option<String>,
     /// The tag of the alert an answer answers.
     pub re: Option<[u8; 8]>,
+    /// A report's form (RP-2 §8.2).
+    pub form: Option<Form>,
     /// Its tag, which names it.
     pub tag: [u8; 8],
 }
@@ -205,6 +223,8 @@ pub struct Draft<'a> {
     pub text: Option<&'a str>,
     /// The alert an answer answers.
     pub re: Option<[u8; 8]>,
+    /// A report's form (RP-2 §8.2).
+    pub form: Option<&'a Form>,
 }
 
 /// The tag of a map's encoding without key 7 (RP-8 §3).
@@ -235,6 +255,9 @@ pub fn make(circle: &Circle, draft: &Draft<'_>) -> Result<Vec<u8>, String> {
     if let Some(re) = draft.re {
         entries.push((key::RE, Value::bytes(&re)));
     }
+    if let Some(form) = draft.form {
+        entries.push((key::FORM, form.to_cbor()));
+    }
     let untagged = Value::int_map(entries.clone());
     let tag = tag_of(circle, &untagged.encode().map_err(|e| e.to_string())?);
     entries.push((key::TAG, Value::bytes(&tag)));
@@ -242,7 +265,36 @@ pub fn make(circle: &Circle, draft: &Draft<'_>) -> Result<Vec<u8>, String> {
     if let Some(why) = shape(&frame).err() {
         return Err(why.to_owned());
     }
-    frame.encode().map_err(|e| e.to_string())
+    let bytes = frame.encode().map_err(|e| e.to_string())?;
+    if bytes.len() > FRAME_MAX {
+        return Err(format!("over {FRAME_MAX} bytes"));
+    }
+    Ok(bytes)
+}
+
+/// A report of `form` from `from` at `now`, to the whole circle or to one station (RP-8 §3).
+///
+/// # Errors
+/// A callsign RP-8 §3 refuses, a form with no values, or a frame over [`FRAME_MAX`] bytes.
+pub fn report(
+    circle: &Circle,
+    from: &str,
+    to: Option<&str>,
+    now: u64,
+    form: &Form,
+) -> Result<Vec<u8>, String> {
+    make(
+        circle,
+        &Draft {
+            kind: Kind::Report,
+            from,
+            to,
+            time: now,
+            text: None,
+            re: None,
+            form: Some(form),
+        },
+    )
 }
 
 /// An answer to an alert (RP-8 §5): `heard`, `seen` or a `reply`, from `me` at `now`.
@@ -257,8 +309,11 @@ pub fn answer(
     now: u64,
     text: Option<&str>,
 ) -> Result<Vec<u8>, String> {
-    if kind == Kind::Alert {
+    if matches!(kind, Kind::Alert | Kind::Report) {
         return Err("an answer is heard, seen or a reply".into());
+    }
+    if alert.kind != Kind::Alert {
+        return Err("only an alert is answered (RP-8 §5)".into());
     }
     make(
         circle,
@@ -269,6 +324,7 @@ pub fn answer(
             time: now,
             text,
             re: Some(alert.tag),
+            form: None,
         },
     )
 }
@@ -298,8 +354,8 @@ fn shape(m: &Value) -> Result<Frame, &'static str> {
         None => None,
         Some(v) => Some(sent_callsign(Some(v)).ok_or("to: a callsign")?),
     };
-    if to.is_none() && kind != Kind::Alert {
-        return Err("to: only an alert may leave it out");
+    if to.is_none() && !matches!(kind, Kind::Alert | Kind::Report) {
+        return Err("to: only an alert or a report may leave it out");
     }
     let text = match (kind, m.get(key::TEXT)) {
         (Kind::Alert | Kind::Reply, Some(v)) => {
@@ -320,13 +376,19 @@ fn shape(m: &Value) -> Result<Frame, &'static str> {
         (_, None) => None,
     };
     let re = match (kind, m.get(key::RE)) {
-        (Kind::Alert, None) => None,
-        (Kind::Alert, Some(_)) => return Err("re: not on an alert"),
+        (Kind::Alert | Kind::Report, None) => None,
+        (Kind::Alert | Kind::Report, Some(_)) => return Err("re: not on an alert or a report"),
         (_, v) => Some(
             v.and_then(Value::as_bytes)
                 .and_then(|b| b.try_into().ok())
                 .ok_or("re: 8 bytes")?,
         ),
+    };
+    let form = match (kind, m.get(key::FORM)) {
+        (Kind::Report, Some(v)) => Some(form_of(v)?),
+        (Kind::Report, None) => return Err("form: a form (RP-2 §8.2)"),
+        (_, Some(_)) => return Err("form: only on a report"),
+        (_, None) => None,
     };
     let tag: [u8; 8] = m
         .get(key::TAG)
@@ -341,8 +403,32 @@ fn shape(m: &Value) -> Result<Frame, &'static str> {
         time,
         text,
         re,
+        form,
         tag,
     })
+}
+
+/// A report's `form` (RP-8 §3): RP-2 §8.2's map, a template's fingerprint of 8 bytes and at least
+/// one value by field number, 1 to 255. Whether the values fill the template is for a station that
+/// holds it.
+fn form_of(v: &Value) -> Result<Form, &'static str> {
+    v.as_map().ok_or("form: a map")?;
+    let fingerprint = v.get(1).and_then(Value::as_bytes);
+    if fingerprint.is_none_or(|f| f.len() != 8) {
+        return Err("form: a template's fingerprint of 8 bytes");
+    }
+    let values = v
+        .get(2)
+        .and_then(Value::as_map)
+        .filter(|m| !m.is_empty())
+        .ok_or("form: at least one value")?;
+    if !values
+        .iter()
+        .all(|(k, _)| k.as_u64().is_some_and(|n| (1..=255).contains(&n)))
+    {
+        return Err("form: values by field number, 1 to 255");
+    }
+    Form::from_value(v).ok_or("form: a form (RP-2 §8.2)")
 }
 
 /// What a station makes of a broadcast (RP-8 §4).
@@ -381,6 +467,8 @@ impl Heard {
             Heard::New(f) => match (f.kind, &f.to) {
                 (Kind::Alert, None) => "an alert for the circle",
                 (Kind::Alert, Some(_)) => "an alert for this station",
+                (Kind::Report, None) => "a report for the circle",
+                (Kind::Report, Some(_)) => "a report for this station",
                 (kind, _) => kind.name(),
             },
         }
@@ -409,6 +497,9 @@ pub fn hear<S: BuildHasher>(
             .is_none()
     {
         return Heard::NotAnAlert;
+    }
+    if data.len() > FRAME_MAX {
+        return Heard::Malformed("over 512 bytes");
     }
     let frame = match shape(&map) {
         Ok(f) => f,
@@ -477,6 +568,7 @@ mod tests {
             time: 1000,
             text: Some("Call me"),
             re: None,
+            form: None,
         };
         let raw = make(&circle, &draft).expect("a good draft");
         let mine = vec!["N0CALL-7".to_owned()];

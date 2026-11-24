@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.5.0 |
+| **Version** | 1.6.0 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -388,8 +388,9 @@ added after it was written.
 | 2 | An alert heard | RP-8 §5 |
 | 3 | An alert seen | RP-8 §5 |
 | 4 | A reply to an alert | RP-8 §5 |
+| 5 | A report: a form, such as a position report (wishlist W33) | RP-8 §3 |
 
-Position reports and bulletins (wishlist W33, W34) would take the next numbers.
+Bulletins (wishlist W34) would take the next number.
 
 ### 9.6 Antenna kinds
 
@@ -454,3 +455,4 @@ after the program was written is not an error.
 | 1.3.0 | 2026-11-21 | §9.6: the kinds of antenna a gateway's channel may name (RP-5 1.5.0 §4.4, a channel's `station`). From choosing a gateway (the gateway selection design's §7.2). MINOR, announced (§8.4): nothing for an implementation to do. |
 | 1.4.0 | 2026-11-21 | §9.7: the problems a gateway's status report may name (RP-5 1.6.0 §5.9): `modem-away`, `outside-segment`, `setup-error`; a name a program does not know is a problem all the same. For radiopost.org's gateway directory, which could say only that a gateway was registered (D45). MINOR, announced (§8.4): nothing for an implementation to do. |
 | 1.5.0 | 2026-11-24 | §6.2: an address is written in lowercase, both parts: a program lowercases the ASCII letters of an address where it enters (typed, imported, read from an email, given in a setting or a request) and before it stores, signs or sends it, and shows addresses as it keeps them. Only the domain had been sent in lowercase, and a client kept `Ana@…` and `ana@…` as two addresses. A receiver keeps what it received and refuses nothing for its capitals. MINOR, announced (§8.4): nothing a conforming program sends is refused; implementations should lowercase addresses where they enter. |
+| 1.6.0 | 2026-11-24 | §9.5: broadcast type 5, a report (RP-8 0.3.0 §3), for position reports and other forms sent to a circle. MINOR, announced (§8.4): a program that does not know it drops it without a word, as before. |
