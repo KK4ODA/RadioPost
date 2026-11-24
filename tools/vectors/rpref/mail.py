@@ -239,9 +239,8 @@ def door(envelope: dict[str, Any], raw: bytes, ctx: dict[str, Any]) -> dict[str,
 
 
 def address(addr: str) -> str:
-    """RP-0 §6.2: the domain in lowercase, the local part as written."""
-    local, _, domain = addr.rpartition("@")
-    return f"{local}@{domain.lower()}"
+    """RP-0 §6.2: written in lowercase, both parts."""
+    return rp.address(addr)
 
 
 def text(value: str) -> str:
@@ -580,7 +579,10 @@ def check_part(
     result, body = rp.verify_credential(credential, post_offices, revoked, started, ["send"])
     if result != "ok" or body is None:
         return result, None
-    if stmt.get(1) != body[3] or stmt.get(2) != body[4]:
+    address = stmt.get(1)
+    if not isinstance(address, str) or not rp.same_address(address, body[3]):
+        return "not-authorized", None
+    if stmt.get(2) != body[4]:
         return "not-authorized", None
     if not rp.verify(rp.CTX_SESSION, statement_raw, signature, body[5]):
         return "signature-invalid", None
@@ -589,7 +591,7 @@ def check_part(
     if rp.content_id(canonical) not in stmt.get(6, []):
         return "not-authorized", None
     message = cbor.decode(canonical)
-    if message.get(2) != stmt[1]:
+    if not isinstance(message.get(2), str) or not rp.same_address(message[2], stmt[1]):
         return "not-authorized", None
     if recipient.lower() not in [a.lower() for a in message.get(3, []) + message.get(4, [])]:
         return "not-authorized", None

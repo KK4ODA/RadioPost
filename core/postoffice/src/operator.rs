@@ -8,6 +8,7 @@
 //! the mail server) it adds around these answers, never inside them, so the vectors replay.
 
 use radiopost::ErrorCode;
+use radiopost::address;
 use radiopost::base64url;
 use radiopost::credential::flags;
 use radiopost::crypto::{self, context};
@@ -423,7 +424,7 @@ impl PostOffice {
                 let credential = self.issue(&app.address, &app.operator, device, f);
                 self.state
                     .names
-                    .insert(app.address.clone(), app.name.clone());
+                    .insert(address::lowercase(&app.address), app.name.clone());
                 app.status = "approved".into();
                 app.flags = Some(f);
                 app.credential = Some(base64url::encode(&credential));
@@ -438,7 +439,7 @@ impl PostOffice {
                 self.add_code_for(&code, &app.address, &app.operator, both, POSTCARD_S);
                 self.state
                     .names
-                    .insert(app.address.clone(), app.name.clone());
+                    .insert(address::lowercase(&app.address), app.name.clone());
                 app.status = "postcard".into();
                 app.code = Some(code);
                 app.code_expires = Some(now + POSTCARD_S);
@@ -485,7 +486,12 @@ impl PostOffice {
     /// RP-5 §7.5: a code for a new account, or a new device of one; one that makes an operator
     /// only when asked for with `operates`, unless it is the asking operator's own.
     fn make_code(&mut self, body: &Json, asking: Option<(&str, &str)>) -> Response {
-        let address = body.get("address").and_then(Json::as_str);
+        // the account in lowercase (RP-0 §6.2), however the operator typed it
+        let lower = body
+            .get("address")
+            .and_then(Json::as_str)
+            .map(address::lowercase);
+        let address = lower.as_deref();
         let operator = body.get("operator").and_then(Json::as_str);
         let name = match body.get("name") {
             None | Some(Json::Null) => Some(None),

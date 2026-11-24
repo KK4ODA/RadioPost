@@ -444,9 +444,15 @@ def base_callsign(callsign: str) -> str:
     return best
 
 
+def address(a: str) -> str:
+    """RP-0 §6.2: an address as a program writes it, its ASCII capitals made small; nothing
+    else is folded (`bytes.lower` touches ASCII alone)."""
+    return a.encode().lower().decode()
+
+
 def same_address(a: str, b: str) -> bool:
     """RP-0 §6.2: one address when they differ only in the case of ASCII letters."""
-    return a.encode().lower() == b.encode().lower()
+    return address(a) == address(b)
 
 
 def among(address: str, addresses: list[str]) -> bool:
@@ -478,7 +484,10 @@ def verify_statement(
     station's (RP-1 §6.5), checked by the caller: its nonce must be the one the caller sent, and
     the clocks are not compared.
     """
-    if stmt.get(1) != body[3] or not same_base(stmt.get(2), body[4]):
+    address = stmt.get(1)
+    if not isinstance(address, str) or not same_address(address, body[3]):
+        return "not-authorized"
+    if not same_base(stmt.get(2), body[4]):
         return "not-authorized"
     named = stmt.get(3) == me if verifier == "gateway" else same_base(stmt.get(3), me)
     if not named:

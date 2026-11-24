@@ -100,6 +100,14 @@
       "signature_hex": "d1b8f6b3e79a49b990a09b5f435792a8e0d229e50dd60075dcd150cf5484766fc75053aa1c846c80e68e6355d5b48de578d1c0d5ac23d9ec2218ceba2cdab60d"
     },
     {
+      "name": "lowercase-under-capitals",
+      "credential": "issued-in-capitals",
+      "diagnostic": "{1: \"facundo@radiopost.org\", 2: \"KK4ODA\", 3: \"N1CALL-10\", 4: 1794235200, 5: h'6c7f285d29fc1875', 6: [h'50d3a23ac1d13f684398ece7', h'ab9dd2649f3a4c55a7837501']}",
+      "statement_hex": "a60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d3130041a6af1db4005486c7f285d29fc187506824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signed_input_hex": "526164696f506f73742d73657373696f6e2d763100a60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d3130041a6af1db4005486c7f285d29fc187506824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signature_hex": "5204d4df89729c779e4309e81cea34dfbbc118aaecd93a7c91ccb24d8ad91ed57fe056fabbda038b65c848ac306bf2fe374279f32be6f69f9615363d0cf89007"
+    },
+    {
       "name": "called-at-ssid",
       "credential": "ana",
       "diagnostic": "{1: \"ana@hampost.org\", 2: \"N0CALL\", 3: \"KK4ODA-2\", 4: 1794249600, 5: h'95fe11b5ba558fb3', 6: []}",
@@ -295,6 +303,19 @@
       "seen": [],
       "sent_nonce_hex": "0db0c3d9fd330023",
       "expect": "not-authorized"
+    },
+    {
+      "what": "the address in lowercase, the credential's in capitals",
+      "statement_hex": "a60175666163756e646f40726164696f706f73742e6f726702664b4b344f444103694e3143414c4c2d3130041a6af1db4005486c7f285d29fc187506824c50d3a23ac1d13f684398ece74cab9dd2649f3a4c55a7837501",
+      "signature_hex": "5204d4df89729c779e4309e81cea34dfbbc118aaecd93a7c91ccb24d8ad91ed57fe056fabbda038b65c848ac306bf2fe374279f32be6f69f9615363d0cf89007",
+      "credential": "issued-in-capitals",
+      "verifier": "N1CALL-10",
+      "verifier_role": "gateway",
+      "now": 1794235241,
+      "challenge_hex": null,
+      "seen": [],
+      "sent_nonce_hex": null,
+      "expect": "ok"
     },
     {
       "what": "on the air as VE3/KK4ODA/P-7, under the credential for KK4ODA",

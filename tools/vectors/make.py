@@ -813,6 +813,15 @@ CREDENTIALS: dict[str, dict[str, Any]] = {
         "flags": ["send", "receive"],
         "issued": T_SESSION + 600,
     },
+    # issued before addresses were written in lowercase (RP-0 1.5.0 §6.2): its capitals stay
+    "issued-in-capitals": {
+        "po": "po:radiopost.org",
+        "device": "device:facundo",
+        "serial": 1092,
+        "address": "Facundo@RadioPost.org",
+        "operator": "KK4ODA",
+        "flags": ["send", "receive"],
+    },
 }
 
 
@@ -1111,6 +1120,20 @@ def make_statements() -> dict[str, Any]:
             "device:facundo",
             "facundo",
         ),
+        # RP-1 §6.3 step 2: the address in lowercase, as a program writes it, under a credential
+        # an older post office issued with capitals: one address (RP-0 §6.2)
+        "lowercase-under-capitals": (
+            rp.statement(
+                "facundo@radiopost.org",
+                "KK4ODA",
+                "N1CALL-10",
+                ids,
+                time=T_SESSION,
+                nonce=stream("lowercase nonce", 8),
+            ),
+            "device:facundo",
+            "issued-in-capitals",
+        ),
         # RP-1 §6.3 step 3: Ana calls Facundo's station at an SSID of his callsign (RP-3 §10)
         "called-at-ssid": (
             rp.statement(
@@ -1305,7 +1328,20 @@ def make_statements() -> dict[str, Any]:
     ]
     pt_stmt, pt_sig, pt_cred = signed["portable"]
     ss_stmt, ss_sig, ss_cred = signed["called-at-ssid"]
+    lc_stmt, lc_sig, lc_cred = signed["lowercase-under-capitals"]
     base_cases = [
+        (
+            "the address in lowercase, the credential's in capitals",
+            lc_stmt,
+            lc_sig,
+            lc_cred,
+            "N1CALL-10",
+            T_SESSION + 41,
+            None,
+            [],
+            None,
+            "gateway",
+        ),
         (
             "on the air as VE3/KK4ODA/P-7, under the credential for KK4ODA",
             pt_stmt,
@@ -1416,6 +1452,8 @@ def make_statements() -> dict[str, Any]:
             "called station, its clock two hours ahead: the clocks are not compared": "ok",
             "called station, the nonce of another session": "signature-invalid",
             "called station, checked by a caller it was not made for": "not-authorized",
+            # RP-1 §6.3 step 2: one address whatever the case of its ASCII letters (RP-0 §6.2)
+            "the address in lowercase, the credential's in capitals": "ok",
             # RP-1 §6.3 steps 2 and 3: base callsigns (RP-0 §6.1), a gateway's own exactly
             "on the air as VE3/KK4ODA/P-7, under the credential for KK4ODA": "ok",
             "a gateway named with another SSID of its callsign": "not-authorized",
@@ -7061,9 +7099,9 @@ def inbound_emails() -> list[tuple[str, str, bytes, int, dict[str, Any]]]:
         "> Amateur radio carries no business content.\n"
     )
     outlook = crlf(
-        "From: Jorge Ruiz <jorge@redcross.example>\n"
-        "To: Facundo <facundo@RadioPost.org>, EOC <eoc@radiopost.org>\n"
-        "Cc: Shelter 3 <shelter3@RADIOPOST.ORG>\n"
+        "From: Jorge Ruiz <Jorge@RedCross.example>\n"
+        "To: Facundo <Facundo@RadioPost.org>, EOC <eoc@radiopost.org>\n"
+        "Cc: Shelter 3 <SHELTER3@RADIOPOST.ORG>\n"
         "Subject: RE: Shelter list\n"
         f"Date: {mail_date(T_SESSION + 3600, -6)}\n"
         "Message-ID: <BY5PR.jorge.1@redcross.example>\n"
@@ -7150,7 +7188,7 @@ def inbound_emails() -> list[tuple[str, str, bytes, int, dict[str, Any]]]:
         (
             "jorge-outlook",
             "an Outlook reply: the history under the rule and `From:`/`Sent:` block trimmed; "
-            "display names dropped, domains in lowercase",
+            "display names dropped, addresses in lowercase, both parts",
             outlook,
             423,
             {},
@@ -7330,8 +7368,10 @@ def make_email_in() -> dict[str, Any]:
     assert named["jorge-outlook"]["body"] == (
         "Facundo, the list is in the next mail. Shelters 3 and 7 have room.\n\nJorge\n"
     )
+    # addresses in lowercase, both parts (RP-0 §6.2), whatever case the email wrote them in
+    assert named["jorge-outlook"]["from"] == "jorge@redcross.example"
     assert named["jorge-outlook"]["to"] == ["facundo@radiopost.org", "eoc@radiopost.org"]
-    assert named["jorge-outlook"]["cc"] == ["shelter3@radiopost.org"]  # domains in lowercase
+    assert named["jorge-outlook"]["cc"] == ["shelter3@radiopost.org"]
     held = named["maria-held"]["held"][0]
     assert (held["name"], held["type"], held["size"]) == ("policy.pdf", "application/pdf", 40000)
     assert bounce["from"] == "postmaster@radiopost.org"  # RP-6 §3.3

@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.2.0 |
-| **Updated** | 2026-11-19 |
+| **Version** | 1.3.0 |
+| **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -62,12 +62,13 @@ in `to` or `cc`, a `priority` above 2, or text not in NFC is taken as it is.
 **Priority.** `priority` orders transfers (RP-3 §6) and is shown to the recipient. `2` is for
 emergency traffic only, as in the operator's traffic-handling practice.
 
-**Addresses** follow RP-0 §6.2. **Text** follows RP-0 §4.3: a sender MUST normalise `subject`,
-`body` and file names to NFC with LF line endings before encoding, turning CR LF, and then a CR
-alone, into LF first. A receiver neither checks nor changes the text: it is part of the canonical
-encoding and of the content ID (§3). NFC is as the sender's version of Unicode has it; text in NFC
-stays in NFC under later versions (Unicode's normalization stability policy), and no receiver
-normalises again, so a version never changes a content ID.
+**Addresses** follow RP-0 §6.2: a sender MUST write `from`, `to` and `cc` in lowercase. A receiver
+keeps them as they came, like the text, and compares them by RP-0 §6.2. **Text** follows RP-0 §4.3:
+a sender MUST normalise `subject`, `body` and file names to NFC with LF line endings before
+encoding, turning CR LF, and then a CR alone, into LF first. A receiver neither checks nor changes
+the text: it is part of the canonical encoding and of the content ID (§3). NFC is as the sender's
+version of Unicode has it; text in NFC stays in NFC under later versions (Unicode's normalization
+stability policy), and no receiver normalises again, so a version never changes a content ID.
 
 ---
 
@@ -312,3 +313,4 @@ and without its template, and ten sets of values checked against the template.
 | 1.0.0 | 2026-11-15 | Stable (D41). §4: dictionary 1, if adopted, is an option both ends say they support, never a requirement (gap G7). §6: a trimmed message points to the one it answers; nothing on the air asks for the full text (gap G1). |
 | 1.1.0 | 2026-11-15 | Forms (§8, key 13, wishlist W32): a form travels as its template's fingerprint and its values by field number, the template held by each station; the template's CBOR map, its fingerprint, the values that fill it and the text a form shows as. An implementation that does not show forms keeps key 13 as before: nothing it must do. Test vectors: `forms.json`, and `shelter3-213` in `messages.json`. |
 | 1.2.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 5; D43). §2: a receiver refuses as `malformed` a message missing a required key or with a key of the wrong type (no receiver had checked); "at least one in `to` or `cc`" binds clients, since a post office makes `to: []` of an email sent by `Bcc` alone (RP-6 §2.4); how a sender turns CR into LF; a receiver neither checks nor changes text, so Unicode versions never change a content ID. §4: compression 1 is exactly one DEFLATE stream, as `messages.json` already had it. §5: a station inflates to 16 MiB at least, and may refuse more as `too-large` (the Rust library had refused past 16 MiB as `malformed`, and the reference had no bound). Test vectors (`messages.json`). MINOR, announced (RP-0 §8.4): no conforming sender makes what is now refused, and a station that takes more refuses nothing it should take. Implementations should check the keys and inflate to 16 MiB. |
+| 1.3.0 | 2026-11-24 | §2: a sender writes `from`, `to` and `cc` in lowercase (RP-0 1.5.0 §6.2); a receiver keeps them as they came and compares them without regard to case. MINOR, announced (RP-0 §8.4): nothing is refused that was taken before; implementations should lowercase addresses as they make a message. |

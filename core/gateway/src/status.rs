@@ -385,7 +385,9 @@ fn find(dir: &Path, settings: &Settings, account: Arc<Account>) -> Option<Target
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or(Json::Null);
-    let registered = (kept["address"].as_str() == Some(body.address.as_str()))
+    let registered = kept["address"]
+        .as_str()
+        .is_some_and(|a| a.eq_ignore_ascii_case(&body.address))
         .then(|| kept["post_office"].as_str().map(str::to_owned))
         .flatten();
     let base = registered

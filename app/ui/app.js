@@ -3006,8 +3006,10 @@ async function openMessage(id, from = {folder}) {
   $("r-restore").title = trash ? `Put it back in the ${from.was}` : "";
   $("r-subject").textContent = m.subject || "(no subject)";
   $("r-from").textContent = m.from;
-  const known = addressBook.some((e) => e.address === m.from);
-  $("r-from-add").hidden = known || m.from === meAddress;
+  // one address whatever the case of its letters (RP-0 §6.2): mail from an older program may
+  // carry capitals, and the list keeps addresses in lowercase
+  const known = addressBook.some((e) => e.address === addressOf(m.from));
+  $("r-from-add").hidden = known || addressOf(m.from) === addressOf(meAddress);
   $("r-from-add").onclick = async () => {
     try {
       await changeAddresses({add: m.from});
@@ -3453,11 +3455,13 @@ async function enroll(event) {
   try {
     const r = applying
       ? await api("apply", {
-        address: form.address.value, operator: form.operator.value, name: form.name.value,
+        address: addressOf(form.address.value), operator: form.operator.value,
+        name: form.name.value,
         contact: form.contact.value, url: form.url.value,
       })
       : await api("enroll", {
-        address: form.address.value, operator: form.operator.value, code: form.code.value,
+        address: addressOf(form.address.value), operator: form.operator.value,
+        code: form.code.value,
         url: form.url.value,
       });
     form.reset();
@@ -4519,15 +4523,26 @@ async function saveNotify() {
 
 // ── how mail arrives: its sender's level ───────────────────────────────────────────────────────
 
+// an address as RadioPost writes it (RP-0 §6.2): the one in angle brackets if any, its ASCII
+// capitals made small and nothing else
 function addressOf(from) {
   const m = /<([^>]+)>/.exec(from || "");
-  return (m ? m[1] : from || "").trim().toLowerCase();
+  return (m ? m[1] : from || "").trim().replace(/[A-Z]/g, (c) => c.toLowerCase());
 }
 
 function mailLevels() {
   notifySettings.mail = notifySettings.mail || {};
-  notifySettings.mail.levels = notifySettings.mail.levels || {};
-  return notifySettings.mail.levels;
+  const levels = notifySettings.mail.levels || {};
+  // an address's level kept before addresses were written in lowercase is found all the same
+  for (const key of Object.keys(levels)) {
+    const lower = key.startsWith("address:") ? `address:${addressOf(key.slice(8))}` : key;
+    if (lower !== key) {
+      if (!(lower in levels)) levels[lower] = levels[key];
+      delete levels[key];
+    }
+  }
+  notifySettings.mail.levels = levels;
+  return levels;
 }
 
 // an address's own level, else the highest of its groups', else the default; Emergency brings it

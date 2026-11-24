@@ -88,8 +88,8 @@
     },
     {
       "name": "jorge-outlook",
-      "what": "an Outlook reply: the history under the rule and `From:`/`Sent:` block trimmed; display names dropped, domains in lowercase",
-      "email": "From: Jorge Ruiz <jorge@redcross.example>\r\nTo: Facundo <facundo@RadioPost.org>, EOC <eoc@radiopost.org>\r\nCc: Shelter 3 <shelter3@RADIOPOST.ORG>\r\nSubject: RE: Shelter list\r\nDate: Mon, 09 Nov 2026 09:40:00 -0600\r\nMessage-ID: <BY5PR.jorge.1@redcross.example>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"us-ascii\"\r\n\r\nFacundo, the list is in the next mail. Shelters 3 and 7 have room.\r\n\r\nJorge\r\n\r\n________________________________\r\nFrom: Facundo <facundo@radiopost.org>\r\nSent: Monday, November 9, 2026 9:00 AM\r\nTo: Jorge Ruiz <jorge@redcross.example>\r\nSubject: Shelter list\r\n\r\nCan you send me the shelter list?\r\n",
+      "what": "an Outlook reply: the history under the rule and `From:`/`Sent:` block trimmed; display names dropped, addresses in lowercase, both parts",
+      "email": "From: Jorge Ruiz <Jorge@RedCross.example>\r\nTo: Facundo <Facundo@RadioPost.org>, EOC <eoc@radiopost.org>\r\nCc: Shelter 3 <SHELTER3@RADIOPOST.ORG>\r\nSubject: RE: Shelter list\r\nDate: Mon, 09 Nov 2026 09:40:00 -0600\r\nMessage-ID: <BY5PR.jorge.1@redcross.example>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"us-ascii\"\r\n\r\nFacundo, the list is in the next mail. Shelters 3 and 7 have room.\r\n\r\nJorge\r\n\r\n________________________________\r\nFrom: Facundo <facundo@radiopost.org>\r\nSent: Monday, November 9, 2026 9:00 AM\r\nTo: Jorge Ruiz <jorge@redcross.example>\r\nSubject: Shelter list\r\n\r\nCan you send me the shelter list?\r\n",
       "serial": 423,
       "context": {},
       "message": {

@@ -21,7 +21,7 @@ pub const FILE: &str = "addresses.json";
 /// One address.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
-    /// The address (RP-0 §6.2), its domain lowercase.
+    /// The address (RP-0 §6.2), in lowercase.
     pub address: String,
     /// The name written with it, if any.
     pub name: Option<String>,
@@ -40,7 +40,8 @@ impl Entry {
 
     fn from_json(v: &Value) -> Option<Entry> {
         Some(Entry {
-            address: v["address"].as_str()?.to_owned(),
+            // a list kept before addresses were written in lowercase may hold capitals
+            address: crate::compose::address(v["address"].as_str()?),
             name: v["name"].as_str().map(str::to_owned),
             used: v["used"].as_u64().unwrap_or(0),
             uses: v["uses"].as_u64().unwrap_or(0),
@@ -67,7 +68,7 @@ fn path(home: &Path) -> PathBuf {
 /// The list, by name (or address where there is none), as an address book reads.
 #[must_use]
 pub fn list(home: &Path) -> Vec<Entry> {
-    let mut entries: Vec<Entry> = fs::read_to_string(path(home))
+    let read: Vec<Entry> = fs::read_to_string(path(home))
         .ok()
         .and_then(|t| serde_json::from_str::<Value>(&t).ok())
         .and_then(|v| {
@@ -75,7 +76,30 @@ pub fn list(home: &Path) -> Vec<Entry> {
                 .map(|a| a.iter().filter_map(Entry::from_json).collect())
         })
         .unwrap_or_default();
+    let mut entries = merged(read);
     entries.sort_by_key(|e| e.name.as_deref().unwrap_or(&e.address).to_lowercase());
+    entries
+}
+
+/// One entry an address: a list kept before addresses were written in lowercase may hold
+/// `Ana@…` and `ana@…` apart, now one address. The two become one, its messages counted
+/// together, with the date and the name of the one written to last.
+fn merged(read: Vec<Entry>) -> Vec<Entry> {
+    let mut entries: Vec<Entry> = Vec::with_capacity(read.len());
+    for e in read {
+        match entries.iter_mut().find(|x| x.address == e.address) {
+            Some(x) => {
+                x.uses += e.uses;
+                if e.used > x.used || x.name.is_none() {
+                    if e.name.is_some() {
+                        x.name = e.name;
+                    }
+                    x.used = x.used.max(e.used);
+                }
+            }
+            None => entries.push(e),
+        }
+    }
     entries
 }
 
@@ -97,6 +121,7 @@ pub fn remember(home: &Path, written: &[(Option<String>, String)], now: u64) -> 
     }
     let mut entries = list(home);
     for (name, address) in written {
+        let address = &crate::compose::address(address);
         match entries.iter_mut().find(|e| e.address == *address) {
             Some(e) => {
                 e.used = now;
@@ -198,13 +223,17 @@ impl Group {
     }
 
     fn from_json(v: &Value) -> Option<Group> {
+        let mut members: Vec<String> = Vec::new();
+        for m in v["members"].as_array()?.iter().filter_map(Value::as_str) {
+            // in lowercase, once each: a group kept before addresses were written so
+            let m = crate::compose::address(m);
+            if !members.contains(&m) {
+                members.push(m);
+            }
+        }
         Some(Group {
             name: v["name"].as_str()?.to_owned(),
-            members: v["members"]
-                .as_array()?
-                .iter()
-                .filter_map(|m| m.as_str().map(str::to_owned))
-                .collect(),
+            members,
         })
     }
 }
@@ -327,7 +356,11 @@ pub fn remove_group(home: &Path, name: &str) -> Result<(Group, Vec<Group>), Erro
 /// # Errors
 ///
 /// The file cannot be written.
-pub fn put_back_group(home: &Path, group: Group) -> Result<Vec<Group>, Error> {
+pub fn put_back_group(home: &Path, mut group: Group) -> Result<Vec<Group>, Error> {
+    for m in &mut group.members {
+        *m = crate::compose::address(m);
+    }
+    group.members.dedup();
     let mut all = groups(home);
     all.retain(|g| !g.name.eq_ignore_ascii_case(&group.name));
     all.push(group);
@@ -604,6 +637,41 @@ mod tests {
         assert!(remove(&home, "zoe@example.com").is_err(), "gone");
         put_back(&home, gone.clone()).expect("put back");
         assert!(list(&home).contains(&gone), "as it was");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// A list and groups kept before addresses were written in lowercase read as one address
+    /// each (RP-0 §6.2): `Ana@…` and `ana@…` merge, their messages counted together, with the
+    /// name written last; a group's member is one address however it was kept.
+    #[test]
+    fn capitals_kept_before_read_as_one_address() {
+        let home = std::env::temp_dir().join(format!("radiopost-capitals-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).expect("a home");
+        std::fs::write(
+            home.join(super::FILE),
+            r#"[{"address": "Ana@HamPost.org", "name": "Ana", "used": 100, "uses": 2},
+                {"address": "ana@hampost.org", "name": "Ana Perez", "used": 300, "uses": 1},
+                {"address": "Zoe@example.com", "name": null, "used": 50, "uses": 1}]"#,
+        )
+        .expect("written");
+        std::fs::write(
+            home.join(super::GROUPS),
+            r#"[{"name": "Net", "members": ["Ana@HamPost.org", "ana@hampost.org", "ZOE@example.com"]}]"#,
+        )
+        .expect("written");
+        let names: Vec<String> = list(&home).iter().map(Entry::written).collect();
+        assert_eq!(names, ["Ana Perez <ana@hampost.org>", "zoe@example.com"]);
+        let ana = &list(&home)[0];
+        assert_eq!((ana.uses, ana.used), (3, 300));
+        assert_eq!(
+            groups(&home)[0].members,
+            ["ana@hampost.org", "zoe@example.com"]
+        );
+        // written to again with other capitals: still the one entry
+        remember(&home, &[(None, "ANA@hampost.org".into())], 400).expect("kept");
+        assert_eq!(list(&home).len(), 2);
+        assert_eq!(list(&home)[0].uses, 4);
         let _ = std::fs::remove_dir_all(&home);
     }
 }

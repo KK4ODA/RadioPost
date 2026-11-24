@@ -115,9 +115,12 @@ impl Running {
         Some(match (method, route) {
             ("GET", "/office/outgoing") => ok(&json!({"outgoing": self.office().state.outgoing})),
             ("POST", "/office/name") => {
-                let (address, name) = (text("address"), text("name"));
+                let (address, name) = (
+                    radiopost::address::lowercase(&text("address")),
+                    text("name"),
+                );
                 let mut office = self.office();
-                if !office.state.accounts.contains(&address.to_lowercase()) || name.is_empty() {
+                if !office.state.accounts.contains(&address) || name.is_empty() {
                     return Some(refused(ErrorCode::Malformed, 400));
                 }
                 office.state.names.insert(address.clone(), name.clone());

@@ -1627,7 +1627,11 @@ impl Panel {
         let me = store
             .me()
             .ok()
-            .map(|b| json!({"address": b.address, "operator": b.operator, "expires": b.expires}));
+            // shown as it goes in From (RP-0 §6.2), whatever case the credential was issued in
+            .map(|b| {
+                json!({"address": radiopost::address::lowercase(&b.address),
+                       "operator": b.operator, "expires": b.expires})
+            });
         let device = store
             .device()
             .ok()

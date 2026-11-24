@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.48.0 |
+| **Version** | 1.49.0 |
 | **Updated** | 2026-11-24 |
 | **Describes** | RadioPost 0.1.0-beta.36 |
 | **Licence** | CC BY 4.0 |
@@ -292,7 +292,8 @@ and RadioPost collects your credential once they approve.
 1. On **Setup**, under *Enroll with your post office*, choose **Apply for an account**. Two
    more boxes appear.
 2. Fill in:
-   - **Address**: the address you want, in lowercase, such as `ana@radiopost.org`.
+   - **Address**: the address you want, such as `ana@radiopost.org`. RadioPost writes it in
+     lowercase.
    - **Callsign**: your callsign as licensed, with no SSID.
    - **Name on your licence**: exactly as it is printed on the licence.
    - **Your email now**: an ordinary email address where the post office can write to you about
@@ -328,7 +329,7 @@ What the operators can decide:
 |---|---|---|
 | *it takes no applications, or not for that domain* | The post office is not taking applications now, or the address is at a domain it does not serve. | Check the part after `@`. Ask the operator for a code instead. |
 | *that address is taken, or already asked for* | Someone has that address, or an application for it is waiting. | Choose another address. |
-| *a field is not as it should be* | Usually an SSID on the callsign, capitals in the address, or an empty name. | Fix the field, then **Apply** again. |
+| *a field is not as it should be* | Usually an SSID on the callsign, a character in the address other than letters, digits, `.`, `-` and `_`, or an empty name. | Fix the field, then **Apply** again. |
 | *… operates this post office, so nobody may apply with it* | That callsign runs the post office. Nobody becomes an operator by applying. | The operator makes a code for it instead ([New codes](#28-codes)). |
 | *cannot reach …* | No Internet, or the post office is down. | Try again later. |
 
@@ -398,7 +399,8 @@ You write messages at any time. They wait in the outbox until a session carries 
 1. Click **Write**.
 2. In **To**, type the address. Several addresses go with commas between them:
    `maria@example.com, Jim Ortega <jim@hampost.org>`. As you type, RadioPost offers addresses
-   from your address list: use the arrow keys and **Enter**, or click one.
+   from your address list: use the arrow keys and **Enter**, or click one. RadioPost writes every
+   address in lowercase, so `Maria@Example.com` and `maria@example.com` are one address.
 3. **Cc** takes copies the same way.
 4. Type a **Subject** and the **Text**.
 5. Leave **Priority** at *Routine*. *Emergency* is for emergency traffic only.
@@ -1333,8 +1335,10 @@ release is out, the line at the top of the window offers **Update and restart**.
 
 ## 13. Addresses and the Trash
 
-**Addresses** is your address list. Everyone you write to is added, with the name you typed
-before the address. To and Cc offer it as you type.
+**Addresses** is your address list. Everyone you write to is added, with the name you typed before
+the address. To and Cc offer it as you type. Addresses are kept in lowercase: `Ana@HamPost.org` and
+`ana@hampost.org` are one entry. A list from an earlier version that held both shows them as one,
+its messages counted together.
 
 - **Find** shows the entries that match.
 - Type `Name <address>` in the box and click **Add** to add one by hand.
@@ -2560,3 +2564,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.46.0 | 2026-11-23 | Aether's names, as Aether 0.2.0-beta.173 says them: its *Host programs* are **External programs**, to leave unchecked for RadioPost, its radio control *Host* is *External program*, and its Setup step 1 shows the **Aether callsign** (for Aether standalone use). Section 3 and section 35 say so, and that a listening station runs Aether's own **Bandwidth**. |
 | 1.47.0 | 2026-11-24 | From the portable's sessions of 2026-11-23. Section 10: **Listen for P2P** tunes the radio to **Dial, MHz** first (unless the station scans its gateway's channels), Aether runs 2300 Hz while it listens and answers 500 Hz calls too, and the line under the switch says where and how the station answers (Figure 24 retaken); a station call shows the band predicted from the station's gateway's site, amber when unlikely to work (Figure 25 retaken); a P2P call to a listed gateway's callsign is not placed, its message offering the station's own callsign. Section 35: the bandwidth while listening. Troubleshooting and the short guide to match. A 2300 Hz call to a home station a profile had left at 500 Hz went unanswered, and three calls on 40 m after dark were heard by nobody. |
 | 1.48.0 | 2026-11-24 | Sections 6 and 9: a paperclip marks a message with files in the folders, faded when its files are held at the post office; in **Waiting** it marks one whose files are held. Rest the mouse on it to see how many and how large. Figures 7, 11, 20, 22 and 28 retaken. |
+| 1.49.0 | 2026-11-24 | Addresses are written in lowercase everywhere (RP-0 1.5.0 §6.2). Section 5: the address applied for or enrolled with is written in lowercase, and the refusal table no longer blames capitals. Section 7: To and Cc are written in lowercase. Section 13: the address list keeps one entry an address, and an older list holding `Ana@…` and `ana@…` reads as one. The client had kept them as two addresses. |

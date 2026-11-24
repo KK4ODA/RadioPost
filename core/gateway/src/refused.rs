@@ -62,7 +62,7 @@ pub fn normal(caller: &str) -> Result<String, String> {
                 "{caller:?} is not an address such as ana@example.org"
             ));
         }
-        return Ok(caller.to_lowercase());
+        return Ok(radiopost::address::lowercase(caller));
     }
     let call = caller.to_uppercase();
     if crate::panel::callsign_ok(&call) {

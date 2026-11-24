@@ -769,11 +769,12 @@ impl Running {
             );
         };
         let from = message.from().unwrap_or("").to_owned();
+        let who = radiopost::address::lowercase(&from);
         let (name, known, ids) = {
             let office = self.office();
             let ids: BTreeMap<String, String> = office.thread_ids();
             (
-                office.state.names.get(&from).cloned().unwrap_or_default(),
+                office.state.names.get(&who).cloned().unwrap_or_default(),
                 office.known_post_offices(),
                 ids,
             )

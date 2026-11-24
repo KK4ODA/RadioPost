@@ -132,7 +132,8 @@ pub fn accounts(base: &Path) -> Vec<ClientAccount> {
             Some(ClientAccount {
                 id,
                 home,
-                address: body.address,
+                // in lowercase (RP-0 §6.2), whatever case the credential was issued in
+                address: radiopost::address::lowercase(&body.address),
                 operator: body.operator,
                 chosen: id == chosen,
             })
@@ -297,12 +298,11 @@ pub fn register(dir: &Path, home: &Path, mut record: Json) -> Result<String, Str
     let settings = Settings::load(dir)?;
     let gateway = station::key(dir)?;
     let (user, credential) = user_of(home)?;
-    let domain = credential
-        .body
-        .address
-        .rsplit_once('@')
-        .map(|(_, d)| d.to_owned())
-        .ok_or("the credential has no address")?;
+    if !credential.body.address.contains('@') {
+        return Err("the credential has no address".into());
+    }
+    // in lowercase, as the settings keep post offices' domains
+    let domain = credential.body.domain();
     let base = settings
         .post_offices
         .get(&domain)
@@ -453,7 +453,7 @@ pub fn unregister(dir: &Path) -> Result<String, String> {
     let home = now["home"]
         .as_str()
         .map(PathBuf::from)
-        .filter(|h| enrolled_as(h).is_ok_and(|b| b.address == address))
+        .filter(|h| enrolled_as(h).is_ok_and(|b| b.address.eq_ignore_ascii_case(&address)))
         .or_else(|| {
             accounts(&client_home())
                 .into_iter()

@@ -23,6 +23,7 @@ use super::{
     Caps, Event, Inbound, Outgoing, Receipts, VERSION, WaitingEntry, done, error_pdu,
     error_pdu_saying, flags, listed_ids, listed_pairs, msg_pdus, piece_for, transmission,
 };
+use crate::address;
 use crate::base64url;
 use crate::cbor::Value;
 use crate::credential::{self, Credential, Trust};
@@ -581,7 +582,8 @@ impl Gateway {
         if self.refuses(&body.address, &body.operator) {
             return;
         }
-        self.address.clone_from(&body.address);
+        // kept in lowercase (RP-0 §6.2): it is what the gateway's store and the post office key by
+        self.address = address::lowercase(&body.address);
         let text = |k| {
             hello
                 .get(k)
@@ -640,11 +642,7 @@ impl Gateway {
         if self.caller_caps.renew {
             request["renew"] = Json::Bool(true);
         }
-        let domain = body
-            .address
-            .rsplit_once('@')
-            .map_or("", |(_, d)| d)
-            .to_owned();
+        let domain = body.domain();
         // a forwarding session is answered from the partner's own store (RP-7 §2)
         let found = match (self.forwarding.as_mut(), self.partners.as_mut()) {
             (Some(f), Some(partners)) => {
@@ -940,10 +938,9 @@ impl Gateway {
         };
         let id = message.content_id();
         let from = message.from().unwrap_or_default();
-        if f.taken
-            .iter()
-            .any(|r| r.statement.messages.contains(&id) && r.statement.address == from)
-        {
+        if f.taken.iter().any(|r| {
+            r.statement.messages.contains(&id) && address::same(&r.statement.address, from)
+        }) {
             return Ok(());
         }
         Err(f

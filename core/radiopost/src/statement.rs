@@ -3,6 +3,7 @@
 
 use ed25519_dalek::SigningKey;
 
+use crate::address;
 use crate::callsign;
 use crate::cbor::{self, Value};
 use crate::credential::Body;
@@ -180,7 +181,9 @@ pub fn verify(
     me: Verifier<'_>,
     freshness: &Freshness<'_>,
 ) -> Result<(), ErrorCode> {
-    if statement.address != body.address
+    // one address as RP-0 §6.2 compares them: a statement made with the address in lowercase
+    // stands under a credential issued with capitals before addresses were written so
+    if !address::same(&statement.address, &body.address)
         || !callsign::same_base(&statement.operator, &body.operator)
     {
         return Err(ErrorCode::NotAuthorized);

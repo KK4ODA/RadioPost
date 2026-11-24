@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.1.0 |
-| **Updated** | 2026-11-19 |
+| **Version** | 1.2.0 |
+| **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -174,9 +174,10 @@ A verifier MUST check, in this order, and stop at the first failure:
 
 1. The credential, by §5, with the flags `send` if `messages` is not empty, and `receive` if mail
    is to be handed over. Otherwise the error §5 gives.
-2. `address` equals the credential's, and `operator` shares its base with the credential's
-   (RP-0 §6.1): a station on the air as `VE3/KK4ODA/P` or `KK4ODA-7` signs with that callsign
-   under a credential for `KK4ODA`. Otherwise `not-authorized`.
+2. `address` is the credential's, the same address by RP-0 §6.2 (so one written in lowercase
+   stands under a credential issued with capitals), and `operator` shares its base with the
+   credential's (RP-0 §6.1): a station on the air as `VE3/KK4ODA/P` or `KK4ODA-7` signs with that
+   callsign under a credential for `KK4ODA`. Otherwise `not-authorized`.
 3. `gateway` names the verifier, when the verifier is the station the statement names: a gateway
    called checks that it is its own callsign exactly, since callers choose a gateway by that name
    (RP-5 §4.4); a client, called (RP-3 §10) or the caller in §6.5, checks that it shares its base
@@ -399,3 +400,4 @@ A serial MAY be dropped from the list once the credential it names has expired.
 | 0.7.0 | 2026-11-15 | §6.3 steps 2 and 3 compare base callsigns (RP-0 §6.1), so a station on the air as `VE3/KK4ODA/P` or `KK4ODA-7` proves itself with its `KK4ODA` credential, and a client answers under an SSID of its callsign; a gateway called still checks its own callsign exactly (gaps G10, G12). An earlier verifier refuses such a statement `not-authorized`, so nothing is taken that should not be. |
 | 1.0.0 | 2026-11-15 | Stable (D41). §7.3: the keys a gateway trusts for its own post office when its operator names it by URL (gap G20). |
 | 1.1.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 4; D43). §5 step 3: a key known only from DNS has no validity period and passes; an info document's period applies to a key it lists. §6.3: a challenge-form statement relayed later, in a station-to-station report, is taken without a `time` (RP-5 1.3.0 §6.6). §6.4: after `AUTH`, the caller's proof is its challenge-form statement, on both sides. §7.1: two API records with different URLs leave a domain with no API (the Rust programs had taken whichever DNS gave first). Test vectors (`credentials.json`, `dns.json`, `direct.json`). MINOR, announced (RP-0 §8.4): a post office that does not take such a statement refuses the report, and nothing else changes. Implementations should keep the challenge-form proof and refuse two API URLs. |
+| 1.2.0 | 2026-11-24 | §6.3 step 2: the statement's `address` is the credential's by RP-0 §6.2, whatever the case of its ASCII letters; it had read as exact equality, so a statement written in lowercase (RP-0 1.5.0 §6.2) under a credential issued with capitals would have been refused. Test vectors: the credential `issued-in-capitals` and a `statements.json` case. MINOR, announced (RP-0 §8.4): a verifier should compare the addresses so; nothing is taken that is not the credential's account. |

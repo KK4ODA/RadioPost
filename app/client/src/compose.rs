@@ -53,21 +53,18 @@ pub fn normalise(text: &str) -> String {
         .collect()
 }
 
-/// RP-0 §6.2: an address with its domain in lowercase; the local part is the account's own.
+/// RP-0 §6.2: an address as RadioPost writes it, both parts in lowercase, so `Ana@…` and
+/// `ana@…` are one address in the list, in a message and on the air.
 #[must_use]
 pub fn address(text: &str) -> String {
-    let text = text.trim();
-    match text.rsplit_once('@') {
-        Some((local, domain)) => format!("{local}@{}", domain.to_ascii_lowercase()),
-        None => text.to_owned(),
-    }
+    radiopost::address::lowercase(text.trim())
 }
 
 /// The characters a local part may hold besides letters and digits: RFC 5322's `atext`.
 const ATEXT: &str = "!#$%&'*+-/=?^_`{|}~";
 
 /// RP-0 §6.2: an Internet mail address (RFC 5322's `addr-spec`, in its dot-atom form), checked as
-/// a user typed it, and returned with its domain in lowercase. Checked here, where the user can
+/// a user typed it, and returned in lowercase, both parts. Checked here, where the user can
 /// still correct it: a mistyped address would otherwise go on the air and fail at the post office.
 ///
 /// # Errors
@@ -751,12 +748,12 @@ mod tests {
     }
 
     #[test]
-    fn an_address_is_checked_and_its_domain_lowercased() {
+    fn an_address_is_checked_and_written_in_lowercase() {
         for (typed, kept) in [
             ("maria@example.com", "maria@example.com"),
             (
                 "  Maria.Perez+radio@Example.COM ",
-                "Maria.Perez+radio@example.com",
+                "maria.perez+radio@example.com",
             ),
             ("kk4oda@radio-post.org", "kk4oda@radio-post.org"),
             ("a_b-c@mail.example.co.uk", "a_b-c@mail.example.co.uk"),

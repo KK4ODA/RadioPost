@@ -80,6 +80,7 @@ pub fn enroll(
     operator: &str,
     code: &str,
 ) -> Result<String, Error> {
+    let address = &radiopost::address::lowercase(address.trim());
     let domain = domain_of(address);
     let base = match url {
         Some(u) => u.trim_end_matches('/').to_owned(),
@@ -90,11 +91,11 @@ pub fn enroll(
     let body = store.set_credential(&credential)?;
     store.post_office = Some(base.clone());
     // a code by post answers the application for the same account: it is done
-    if store
-        .application
-        .as_ref()
-        .is_some_and(|a| a["address"].as_str() == Some(body.address.as_str()))
-    {
+    if store.application.as_ref().is_some_and(|a| {
+        a["address"]
+            .as_str()
+            .is_some_and(|x| radiopost::address::same(x, &body.address))
+    }) {
         store.application = None;
     }
     store.save()?;

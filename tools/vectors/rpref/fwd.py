@@ -95,7 +95,10 @@ def check_proof(
     if result != "ok" or body is None:
         return result, stmt
     held[rp.credential_hash(credential)] = credential
-    if stmt.get(1) != body[3] or stmt.get(2) != body[4]:
+    address = stmt.get(1)
+    if not isinstance(address, str) or not rp.same_address(address, body[3]):
+        return "not-authorized", stmt
+    if stmt.get(2) != body[4]:
         return "not-authorized", stmt
     if not rp.verify(rp.CTX_SESSION, pdu[2], signature, body[5]):
         return "signature-invalid", stmt
@@ -113,7 +116,12 @@ def check_forwarded(canonical: bytes, statements: list[dict[int, Any]]) -> str:
     cid = rp.content_id(canonical)
     sender = cbor.decode(canonical).get(2)
     for stmt in statements:
-        if cid in stmt.get(6, []) and sender == stmt.get(1):
+        if (
+            cid in stmt.get(6, [])
+            and isinstance(sender, str)
+            and isinstance(stmt.get(1), str)
+            and rp.same_address(sender, stmt[1])
+        ):
             return "ok"
     return "not-authorized"
 

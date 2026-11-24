@@ -311,13 +311,10 @@ pub fn door(
 
 // -- §2.4: email to message ----------------------------------------------------------------------
 
-/// RP-0 §6.2: the domain in lowercase, the local part as written.
+/// RP-0 §6.2: written in lowercase, both parts.
 #[must_use]
 pub fn address(addr: &str) -> String {
-    match addr.rsplit_once('@') {
-        Some((local, domain)) => format!("{local}@{}", domain.to_lowercase()),
-        None => addr.to_owned(),
-    }
+    radiopost::address::lowercase(addr)
 }
 
 /// RP-0 §4.3: NFC, LF line endings.
@@ -1138,7 +1135,7 @@ pub fn check_part(
     let message = Message::from_air(air).map_err(|refused| refused.code())?;
     let stmt = Statement::decode(raw_statement).ok_or(ErrorCode::Malformed)?;
     let body = credential::verify(cred, trust, started, flags::SEND).map_err(|r| r.code)?;
-    if stmt.address != body.address || stmt.operator != body.operator {
+    if !radiopost::address::same(&stmt.address, &body.address) || stmt.operator != body.operator {
         return Err(ErrorCode::NotAuthorized);
     }
     if !crypto::verify(context::SESSION, raw_statement, signature, &body.device) {
@@ -1152,7 +1149,12 @@ pub fn check_part(
     if !stmt.messages.contains(&message.content_id()) {
         return Err(ErrorCode::NotAuthorized);
     }
-    if message.from() != Some(stmt.address.as_str()) {
+    // the same address (RP-0 §6.2): a message written in lowercase under a credential issued
+    // with capitals is its holder's
+    if !message
+        .from()
+        .is_some_and(|f| radiopost::address::same(f, &stmt.address))
+    {
         return Err(ErrorCode::NotAuthorized);
     }
     let recipient = recipient.to_lowercase();

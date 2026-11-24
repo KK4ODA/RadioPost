@@ -356,7 +356,7 @@
         </div>
         <p class="note">Everyone you write to is added, and they are offered as you type in To and Cc. This list is this computer's own: who may email you is your accept list, in Setup.</p>
         <div class="row">
-          <input id="address-new" class="grow" placeholder="Maria Perez &lt;maria@example.com&gt;" spellcheck="false" autocomplete="off" title="A name with the address in angle brackets, or the address alone. An address already listed takes the new name">
+          <input id="address-new" class="grow" placeholder="Maria Perez &lt;maria@example.com&gt;" spellcheck="false" autocapitalize="none" autocomplete="off" title="A name with the address in angle brackets, or the address alone, which is kept in lowercase. An address already listed takes the new name">
           <button id="address-add" title="Add it to the list">Add</button>
           <button id="address-import" class="quiet" title="Read a contact file: a vCard (.vcf) from a phone, Google Contacts, Outlook or Apple Contacts, or a CSV export. Its addresses join the list, and its groups or labels become groups">Import contacts…</button>
           <input id="address-file" type="file" accept=".vcf,.csv,text/vcard,text/csv" hidden>
@@ -370,7 +370,7 @@
         <p class="note">Write to a net or a team in one step. Type the group's name in To, or click its pencil here; the people button changes it. Every address in a group goes on the air.</p>
         <form class="row" id="group-form">
           <input name="name" placeholder="Shelter team" spellcheck="false" autocomplete="off" title="The group's name">
-          <span class="suggest grow"><input name="members" spellcheck="false" autocomplete="off" placeholder="ana@hampost.org, Zoe Lee &lt;zoe@example.com&gt;" title="Its addresses, with commas between them. Your address list is offered as you type" aria-autocomplete="list"><ul class="suggestions" role="listbox" hidden></ul></span>
+          <span class="suggest grow"><input name="members" spellcheck="false" autocapitalize="none" autocomplete="off" placeholder="ana@hampost.org, Zoe Lee &lt;zoe@example.com&gt;" title="Its addresses, with commas between them. Your address list is offered as you type" aria-autocomplete="list"><ul class="suggestions" role="listbox" hidden></ul></span>
           <button type="submit" id="group-save" title="Save the group">Save</button>
           <button type="button" id="group-cancel" class="quiet" title="Stop changing this group" hidden>Cancel</button>
         </form>
@@ -415,8 +415,8 @@
 
       <form id="composer" hidden>
         <h1 id="c-title">New message</h1>
-        <label title="Addresses, separated by commas: maria@example.com, or Maria &lt;maria@example.com&gt;. Each is checked before the message goes in the outbox. Your address list is offered as you type">To <span class="suggest"><input name="to" required spellcheck="false" autocomplete="off" placeholder="ana@hampost.org" aria-autocomplete="list"><ul class="suggestions" role="listbox" hidden></ul></span></label>
-        <label title="Copies, separated by commas, written as in To">Cc <span class="suggest"><input name="cc" spellcheck="false" autocomplete="off" aria-autocomplete="list"><ul class="suggestions" role="listbox" hidden></ul></span></label>
+        <label title="Addresses, separated by commas: maria@example.com, or Maria &lt;maria@example.com&gt;. Each is checked, and written in lowercase, before the message goes in the outbox. Your address list is offered as you type">To <span class="suggest"><input name="to" required spellcheck="false" autocapitalize="none" autocomplete="off" placeholder="ana@hampost.org" aria-autocomplete="list"><ul class="suggestions" role="listbox" hidden></ul></span></label>
+        <label title="Copies, separated by commas, written as in To">Cc <span class="suggest"><input name="cc" spellcheck="false" autocapitalize="none" autocomplete="off" aria-autocomplete="list"><ul class="suggestions" role="listbox" hidden></ul></span></label>
         <label title="What it is about">Subject <input name="subject"></label>
         <label title="Emergency is for emergency traffic only">Priority
           <select name="priority" class="narrow">
@@ -487,7 +487,7 @@
 
         <form class="o-pane card" id="o-code" hidden>
           <p class="note">For someone you know holds the callsign: a new account, or a new device for one. Give them the code; it works once, for a week.</p>
-          <label title="The account, at your post office's domain">Address <input name="address" required spellcheck="false" placeholder="ana@radiopost.org"></label>
+          <label title="The account, at your post office's domain, in lowercase">Address <input name="address" required spellcheck="false" autocapitalize="none" placeholder="ana@radiopost.org"></label>
           <label title="Their callsign, as on the air">Callsign <input name="operator" required spellcheck="false" autocomplete="off" placeholder="N0CALL"></label>
           <label title="The name on the email the account sends; leave it empty to keep the one it has">Name <input name="name" placeholder="Ana Lopez"></label>
           <div class="row"><button type="button" class="quiet" id="o-code-check" title="What the post office finds of this callsign and name: the FCC copy, QRZ, and its own history">Check the licence</button></div>
@@ -706,7 +706,7 @@
             <label class="check" title="Ask the post office for an account; its operators check your licence and decide"><input type="radio" name="join" value="apply"> Apply for an account</label>
           </div>
           <p class="note" id="join-note">Your post office's operator gives you a one-time code once they have seen your licence. Over the Internet.</p>
-          <label title="Your RadioPost address: the one you have, or the one you ask for">Address <input name="address" placeholder="facundo@radiopost.org" required spellcheck="false" autocomplete="email"></label>
+          <label title="Your RadioPost address: the one you have, or the one you ask for. Written in lowercase">Address <input name="address" placeholder="facundo@radiopost.org" required spellcheck="false" autocapitalize="none" autocomplete="email"></label>
           <label title="Your callsign, as on your licence">Callsign <input name="operator" placeholder="KK4ODA" required spellcheck="false" autocomplete="off"></label>
           <label class="by-code" title="The one-time code the operator gave you">Code <input name="code" placeholder="7Q4F-AZ9K" spellcheck="false" autocomplete="off"></label>
           <label class="by-apply" title="Your name as it is on your licence: the operators check it" hidden>Name on your licence <input name="name" autocomplete="name"></label>

@@ -603,6 +603,13 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   error 997 and lose data (Aether found it on 2026-11-12; its `core/aetherd/src/polled.rs`). End
   such a connection from another thread with its `Closer`, not a `shutdown` on a clone. A one-shot
   request that gives up at its timeout (an HTTP call) may keep one.
+- **Addresses are lowercase** (the author's rule, 2026-11-24; RP-0 1.5.0 §6.2): every program
+  lowercases an address where it enters (typed, imported, read from an email, a file, a code, a
+  request) with `radiopost::address::lowercase` (`rp.address` in the reference, `addressOf` in
+  the panels), and keys every map by it. What is signed keeps its bytes, so an older program's
+  message or credential may still hold capitals: compare those with `address::same`, never
+  refuse them. The post office folds mixed-case keys in `state.json` at start
+  (`State::lowercase_addresses`); the client's address list and groups merge on read.
 - **Amateur radio rules**: nothing on the air is encrypted; every encoding is published; VARA is a
   black box — cite only its published documents (the TNC command list).
 - Figures: edit the generator, run it, check the render, commit the script and the SVGs together.

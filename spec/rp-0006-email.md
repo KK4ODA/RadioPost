@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.1.0 |
-| **Updated** | 2026-11-15 |
+| **Version** | 1.2.0 |
+| **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-5 |
@@ -116,7 +116,7 @@ An accepted email is stored in the mailbox as received; the post office also mak
 message (RP-2) for the radio, once, and gives it the account's next **serial** (RP-3 §6.2).
 
 1. **Addresses and date.** `from`: the `From:` address. `to`, `cc`: the `To:` and `Cc:` addresses.
-   Display names are dropped and domains written in lowercase (RP-0 §6.2). `date`: the `Date:`
+   Display names are dropped and addresses written in lowercase, both parts (RP-0 §6.2). `date`: the `Date:`
    header, with its time zone, or the arrival time if there is none or it is unreadable.
 2. **Subject.** The `Subject:` header, decoded (RFC 2047), as text.
 3. **Text.** The `text/plain` part if there is one (in `multipart/alternative`, the plain one),
@@ -297,12 +297,12 @@ The part holds a CBOR map (RP-0 §4.1): `1` the air form (RP-2 §4), `2` the sen
 the session statement's encoding (RP-1 §6.2), `4` its signature, `5` `started` (RP-5 §5.2); all byte
 strings but `5`, an integer.
 
-The receiving post office checks the proof as RP-1 §6.3 says for a statement relayed later, with
-the credential and `time` checked against `started`. Then it checks that the message's content ID
-is in the statement, that its `from` is the statement's address, and that the recipient of this
-SMTP transaction is in its `to` or `cc`. If all pass, it uses that message, with its priority and
-content ID, instead of converting the email (§2.4). If any fails, it converts the email as usual and
-drops the part. Test vectors: `vectors/email-in.json`, `between`.
+The receiving post office checks the proof as RP-1 §6.3 says for a statement relayed later, with the
+credential and `time` checked against `started`. Then it checks that the message's content ID is in
+the statement, that its `from` is the statement's address (RP-0 §6.2), and that the recipient of
+this SMTP transaction is in its `to` or `cc`. If all pass, it uses that message, with its priority
+and content ID, instead of converting the email (§2.4). If any fails, it converts the email as usual
+and drops the part. Test vectors: `vectors/email-in.json`, `between`.
 
 ---
 
@@ -431,3 +431,4 @@ and the session files.
 | 0.8.0 | 2026-11-15 | §2.6, one mailbox, the rest of it: mail an account sends by radio goes into its Sent folder as §3.1's email, read; mail picked up by radio is marked read in the mail server, mail that reaches it later when it arrives; both in the background. A mail program had shown neither, so a user reading in both saw mail they had read by radio as new, and none of what they had sent by radio. |
 | 1.0.0 | 2026-11-15 | Stable (D41). §3.1: a reply restores its thread from the email this post office sent for the message it answers, as well as from one that came in (gap G17). Test vectors: `facundo-followup`. |
 | 1.1.0 | 2026-11-15 | §3.1: a message with a form becomes the form's text (RP-2 1.1.0 §8.4). A post office that does not yet write it sends the message's `body` as before, which is all it must do until it holds the templates. Test vectors: `shelter3-213` in `email-out.json`. |
+| 1.2.0 | 2026-11-24 | §2.4: the message made of an email has its addresses in lowercase, both parts (RP-0 1.5.0 §6.2); only the domains had been. §4: the message's `from` is the statement's address as RP-0 §6.2 compares them. Test vectors: `jorge-outlook` in `email-in.json` writes its addresses in capitals. MINOR, announced (RP-0 §8.4): a post office should lowercase the addresses it takes from an email; nothing a receiver takes changes. |

@@ -413,6 +413,74 @@ pub struct State {
     pub to_mailboxes: Vec<MailboxTask>,
 }
 
+impl State {
+    /// Every account's address in lowercase (RP-0 §6.2). A post office before 0.1.0-beta.37 kept
+    /// a credential's address as issued, and a code typed with capitals gave one: its mail went
+    /// under one key and was looked for under another. What two spellings kept apart becomes
+    /// one account's: its mailboxes joined (a serial taken twice renumbered past the last), its
+    /// lists joined, its settings and name those of the spelling in lowercase if it had any.
+    pub fn lowercase_addresses(&mut self) {
+        fn fold<V>(map: &mut BTreeMap<String, V>, join: impl Fn(&mut V, V)) {
+            let mixed: Vec<String> = map
+                .keys()
+                .filter(|k| k.bytes().any(|b| b.is_ascii_uppercase()))
+                .cloned()
+                .collect();
+            for key in mixed {
+                let Some(v) = map.remove(&key) else { continue };
+                match map.entry(address::lowercase(&key)) {
+                    std::collections::btree_map::Entry::Occupied(mut kept) => {
+                        join(kept.get_mut(), v);
+                    }
+                    std::collections::btree_map::Entry::Vacant(free) => {
+                        free.insert(v);
+                    }
+                }
+            }
+        }
+        fold(&mut self.mailboxes, |kept, more| {
+            for mut w in more {
+                if kept.iter().any(|k| k.serial == w.serial) {
+                    w.serial = kept.iter().map(|k| k.serial).max().unwrap_or(0) + 1;
+                }
+                if !kept.iter().any(|k| k.id == w.id) {
+                    kept.push(w);
+                }
+            }
+        });
+        fold(&mut self.settings, |_, _| {});
+        fold(&mut self.accept, |kept, more| {
+            for e in more {
+                if !kept.contains(&e) {
+                    kept.push(e);
+                }
+            }
+        });
+        fold(&mut self.picked_locally, Extend::extend);
+        fold(&mut self.names, |_, _| {});
+        self.accounts = self
+            .accounts
+            .iter()
+            .map(|a| address::lowercase(a))
+            .collect();
+        for h in self.tokens.values_mut() {
+            h.address = address::lowercase(&h.address);
+        }
+        for s in self.sessions.values_mut() {
+            s.address = address::lowercase(&s.address);
+        }
+        for c in self.codes.values_mut() {
+            c.address = address::lowercase(&c.address);
+        }
+        for c in self.credentials.values_mut() {
+            c.address = address::lowercase(&c.address);
+        }
+        for task in &mut self.to_mailboxes {
+            task.account = address::lowercase(&task.account);
+        }
+    }
+}
+
 /// A radio route (RP-7 §6.1).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -499,7 +567,8 @@ pub(crate) fn is_entry(e: &str) -> bool {
 impl PostOffice {
     /// A post office with this configuration and state, drawing random values from `draw`.
     #[must_use]
-    pub fn new(config: Config, state: State, draw: Draw) -> PostOffice {
+    pub fn new(config: Config, mut state: State, draw: Draw) -> PostOffice {
+        state.lowercase_addresses();
         PostOffice {
             config,
             state,
@@ -596,6 +665,8 @@ impl PostOffice {
         priority: u64,
         third_party: bool,
     ) {
+        // in lowercase, whatever case it came in (RP-0 §6.2)
+        let address: &str = &address::lowercase(address);
         self.sweep();
         let id = Message::from_air(air).map_or_else(|_| String::new(), |m| m.content_id().text());
         let waiting = Waiting {
@@ -753,6 +824,7 @@ impl PostOffice {
     /// The next serial of an account's mailbox.
     #[must_use]
     pub fn next_mailbox_serial(&self, address: &str) -> u64 {
+        let address: &str = &address::lowercase(address);
         self.state
             .mailboxes
             .get(address)
@@ -776,6 +848,8 @@ impl PostOffice {
         flags: u64,
         life: u64,
     ) {
+        // in lowercase, whatever case it came in (RP-0 §6.2)
+        let address: &str = &address::lowercase(address);
         self.state.accounts.insert(address.to_lowercase());
         self.state.codes.insert(
             code.to_owned(),
@@ -899,6 +973,7 @@ impl PostOffice {
     /// An account's `attach_bytes` (RP-5 §6.3), or the post office's own.
     #[must_use]
     pub fn attach_bytes(&self, address: &str, max_air_bytes: u64) -> u64 {
+        let address: &str = &address::lowercase(address);
         self.state
             .settings
             .get(address)
@@ -972,6 +1047,8 @@ impl PostOffice {
         device: [u8; 32],
         flags: u64,
     ) -> Vec<u8> {
+        // the account in lowercase (RP-0 §6.2), however the code or request gave it
+        let address: &str = &address::lowercase(address);
         let serial = self.state.next_serial;
         self.state.next_serial += 1;
         self.state.accounts.insert(address.to_lowercase());
@@ -1113,10 +1190,13 @@ impl PostOffice {
         }
         let token = format!("tok_{}", base64url::encode(&self.fresh("token", 18)));
         let expires = (self.now + TOKEN_S).min(cbody.expires);
+        // the account by its address in lowercase (RP-0 §6.2), which every map here is keyed by,
+        // whatever case an older post office issued the credential in
+        let account = address::lowercase(&cbody.address);
         self.state.tokens.insert(
             token.clone(),
             Holder {
-                address: cbody.address.clone(),
+                address: account.clone(),
                 operator: cbody.operator.clone(),
                 device: hex(&cbody.device),
                 flags: cbody.flags,
@@ -1127,7 +1207,7 @@ impl PostOffice {
         if cbody.flags & flags::GATEWAY != 0 {
             self.saw(&cbody.address, &cbody.operator);
         }
-        let mut answer = json!({"token": token, "expires": expires, "address": cbody.address,
+        let mut answer = json!({"token": token, "expires": expires, "address": account,
                                 "operator": cbody.operator, "flags": cbody.flags});
         if !self.config.operators.is_empty()
             && self.is_operator(&cbody.address, &cbody.operator, cbody.flags)
@@ -1223,10 +1303,11 @@ impl PostOffice {
                 .retain(|(a, n, _)| (a, n) != (&key.0, &key.1));
             self.state.replay.push((key.0, key.1, started));
         }
+        let account = address::lowercase(&stmt.address);
         let mut waiting: Vec<Waiting> = self
             .state
             .mailboxes
-            .get(&stmt.address)
+            .get(&account)
             .map(|b| b.iter().filter(|w| !w.picked).cloned().collect())
             .unwrap_or_default();
         waiting.sort_by_key(|w| (std::cmp::Reverse(w.priority), w.serial));
@@ -1242,7 +1323,7 @@ impl PostOffice {
         let sid = format!("s_{}", base64url::encode(&self.fresh("session", 12)));
         let session = Session {
             gateway: gateway.operator.clone(),
-            address: stmt.address.clone(),
+            address: account,
             offers: stmt.messages.iter().map(ContentId::text).collect(),
             waiting: waiting.iter().map(|w| w.serial).collect(),
             expires: self.now + SESSION_S,
@@ -1258,7 +1339,7 @@ impl PostOffice {
         });
         if body.get("renew").and_then(Json::as_bool) == Some(true) {
             let holder = Holder {
-                address: cbody.address.clone(),
+                address: address::lowercase(&cbody.address),
                 operator: cbody.operator.clone(),
                 device: hex(&cbody.device),
                 flags: cbody.flags,
@@ -1356,6 +1437,7 @@ impl PostOffice {
 
     /// RP-5 §5.3, RP-6 §2.5: held attachments asked for, sent in new messages.
     fn files(&mut self, address: &str, body: &Json) -> Response {
+        let address: &str = &address::lowercase(address);
         let Some(asked) = body
             .get("files")
             .and_then(Json::as_array)
@@ -1550,7 +1632,7 @@ impl PostOffice {
                 ));
                 continue;
             };
-            if message.from() != Some(address) {
+            if !message.from().is_some_and(|f| address::same(f, address)) {
                 results.push(refused(
                     id,
                     ErrorCode::NotAuthorized,
@@ -1655,6 +1737,7 @@ impl PostOffice {
 
     /// RP-5 §5.6 `local_pickups`: mark what the user already picked up at a gateway.
     fn picked_locally_here(&mut self, address: &str) {
+        let address: &str = &address::lowercase(address);
         let ids = self
             .state
             .picked_locally
@@ -1677,6 +1760,7 @@ impl PostOffice {
 
     /// RP-5 §6.5: the recipients of mail a user sent join the user's accept list.
     fn written_to(&mut self, address: &str, message: &Message) {
+        let address: &str = &address::lowercase(address);
         self.add_written(address, &message.recipients());
     }
 
@@ -1684,11 +1768,13 @@ impl PostOffice {
     /// to the mail server (the submission's envelope: `To`, `Cc` and `Bcc` alike), join the
     /// user's accept list.
     pub fn written_from_mail_program(&mut self, address: &str, recipients: &[String]) {
+        let address: &str = &address::lowercase(address);
         let recipients: Vec<&str> = recipients.iter().map(String::as_str).collect();
         self.add_written(address, &recipients);
     }
 
     fn add_written(&mut self, address: &str, recipients: &[&str]) {
+        let address: &str = &address::lowercase(address);
         let on = self
             .state
             .settings
@@ -1712,6 +1798,7 @@ impl PostOffice {
     }
 
     fn accept_list(&mut self, address: &str, method: &str, body: &Json) -> Response {
+        let address: &str = &address::lowercase(address);
         if method == "POST" {
             let list = |k| -> Option<Vec<String>> {
                 body.get(k).map_or(Some(Vec::new()), |v| {
@@ -1741,12 +1828,14 @@ impl PostOffice {
     /// RP-5 §6.3 `radio_skips_read`: messages the user read in a mail program are taken as
     /// picked up, and their copies placed ahead dropped. Returns how many were not already.
     pub fn read_in_mail_program(&mut self, address: &str, serials: &[u64]) -> usize {
+        let address: &str = &address::lowercase(address);
         let before = self.unpicked(address);
         self.picked_up(address, serials, false);
         before - self.unpicked(address)
     }
 
     fn unpicked(&self, address: &str) -> usize {
+        let address: &str = &address::lowercase(address);
         self.state
             .mailboxes
             .get(address)
@@ -1757,6 +1846,7 @@ impl PostOffice {
     /// they are marked read in the mail program too (RP-6 §2.6); read there already, they are not
     /// marked again.
     fn picked_up(&mut self, address: &str, serials: &[u64], by_radio: bool) {
+        let address: &str = &address::lowercase(address);
         let mut newly = Vec::new();
         let mut read = Vec::new();
         if let Some(b) = self.state.mailboxes.get_mut(address) {
@@ -2014,7 +2104,7 @@ impl PostOffice {
         let code = self.state.codes.get(&code_text).cloned();
         let Some(code) = code.filter(|c| {
             c.expires > self.now
-                && c.address == text(body, "address")
+                && address::same(&c.address, text(body, "address"))
                 && c.operator == text(body, "operator")
         }) else {
             return problem(ErrorCode::NotAuthorized, None);
@@ -2287,7 +2377,7 @@ impl PostOffice {
         let theirs_body = self
             .verify_credential(&theirs.0, &trust, started, theirs_need)
             .map_err(|r| r.code)?;
-        if mine_body.address != user.address || !self.ours(&user.address) {
+        if !address::same(&mine_body.address, &user.address) || !self.ours(&user.address) {
             return Err(ErrorCode::NotAuthorized);
         }
         let (calling, answering) = if role == Some("caller") {
@@ -2330,7 +2420,9 @@ impl PostOffice {
         let message = Message::from_air(&unb64(m, "air")?).ok()?;
         (stmt.messages.contains(&id)
             && message.content_id() == id
-            && message.from() == Some(stmt.address.as_str()))
+            && message
+                .from()
+                .is_some_and(|f| address::same(f, &stmt.address)))
         .then_some(message)
     }
 
@@ -2369,15 +2461,16 @@ impl PostOffice {
         if !address::among(&mine.address, &message.recipients()) {
             return refused(id, ErrorCode::NotAuthorized, "not addressed to this user");
         }
+        let account = address::lowercase(&mine.address);
         let box_has = self
             .state
             .mailboxes
-            .get(&mine.address)
+            .get(&account)
             .is_some_and(|b| b.iter().any(|w| w.id == message.content_id().text()));
         if box_has {
             return json!({"id": id, "status": "duplicate"});
         }
-        let serial = self.next_mailbox_serial(&mine.address);
+        let serial = self.next_mailbox_serial(&account);
         let subject = message
             .map()
             .get(key::SUBJECT)
@@ -2391,7 +2484,7 @@ impl PostOffice {
             .unwrap_or(0);
         self.state
             .mailboxes
-            .entry(mine.address.clone())
+            .entry(account)
             .or_default()
             .push(Waiting {
                 serial,

@@ -883,7 +883,7 @@ class PostOffice:
             if rp.content_id(canonical) != cid:
                 results.append(refused(text, "malformed", "the air form is not this message"))
                 continue
-            if cbor.decode(canonical).get(2) != stmt[1]:
+            if not rp.same_address(str(cbor.decode(canonical).get(2)), stmt[1]):
                 results.append(refused(text, "not-authorized", "not from the statement's address"))
                 continue
             status = "duplicate" if cid in self.had else "accepted"
@@ -1015,7 +1015,7 @@ class PostOffice:
             return None
         if cid is None or cid not in stmt.get(6, []) or rp.content_id(canonical) != cid:
             return None
-        if cbor.decode(canonical).get(2) != stmt[1]:
+        if not rp.same_address(str(cbor.decode(canonical).get(2)), stmt[1]):
             return None
         return m["id"], canonical
 
@@ -1462,6 +1462,8 @@ class PostOffice:
     def _make_code(self, body: dict[str, Any], asking: tuple[str, str]) -> Response:
         """RP-5 §7.5: a code for a new account or a new device of one."""
         address, operator, name = body.get("address"), body.get("operator"), body.get("name")
+        if isinstance(address, str):
+            address = rp.address(address)  # RP-0 §6.2: the account in lowercase
         flags = self._flags(body.get("flags"))
         confirmed = body.get("operates", False)
         if not (

@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.4.0 |
-| **Updated** | 2026-11-21 |
+| **Version** | 1.5.0 |
+| **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
@@ -181,14 +181,25 @@ are equal; the station is the same licensee on the air another way. Test vectors
 ### 6.2 Addresses
 
 A RadioPost address is an Internet mail address (RFC 5321 `Mailbox`, the `addr-spec` of RFC 5322).
-The domain part is sent in lowercase. Two addresses are the **same address** when they differ only
-in the case of ASCII letters, in either part: the domain as DNS compares names (RFC 4343), and the
-local part because a post office's accounts are written in lowercase (below). Nothing else is
-folded. Wherever a specification asks whether a message is addressed to an account, or whether two
-addresses are one, it compares them so.
+**An address is written in lowercase, both parts.** A program MUST turn the ASCII capitals `A` to
+`Z` of an address into small letters where the address enters it (typed by a user, imported, read
+from an email, given on a command line, in a setting or in an API request) and before it stores,
+signs or sends it. Nothing else is folded: a letter outside ASCII stays as it is. A program shows
+addresses as it keeps them, so a user sees one address one way.
 
-For accounts a post office creates, the local part SHOULD use only lowercase letters, digits, `.`,
-`-` and `_`, so that it is short on the air and cannot be confused.
+Two addresses are the **same address** when they differ only in the case of ASCII letters, in
+either part: the domain as DNS compares names (RFC 4343), and the local part because RadioPost
+writes it in lowercase. Wherever a specification asks whether a message is addressed to an account,
+or whether two addresses are one, it compares them so. A receiver keeps an address it received as
+it came, since it is part of what was signed and of a message's content ID (RP-2 §3), and MUST NOT
+refuse it for its capitals: a program written before this rule may have sent them.
+
+RFC 5321 leaves the case of a local part to the mail system it names. RadioPost lowercases it all
+the same, at its own post offices and elsewhere: mail systems in use do not tell local parts apart
+by case, and two addresses that look alike to a person are one address to RadioPost.
+
+For accounts a post office creates, the local part SHOULD use only letters, digits, `.`, `-` and
+`_`, so that it is short on the air and cannot be confused.
 
 ### 6.3 Content IDs
 
@@ -442,3 +453,4 @@ after the program was written is not an error.
 | 1.2.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 3; D43). §3: a client implements RP-1 §7.1, §7.2 and §8 too, which RP-1 §5 already needed, and RP-3 §10 both ways, as the conformance tester had graded it; its MAY column names RP-5 §3 and §4. §6.1: of three parts, the base is the middle one (the length rule had made `W4/K1A/QRP`'s base `QRP`). §6.2: two addresses are one when they differ only in the case of ASCII letters, in either part (only the domain had been said, and programs compared local parts both ways). Test vectors (`statements.json`, `base_callsigns`). MINOR, announced (§8.4): a verifier that keeps the old base refuses some statements `not-authorized`, and a station that compares local parts exactly refuses a message `refused-by-policy`; nothing is taken that should not be. Implementations should take the new base and compare addresses so. |
 | 1.3.0 | 2026-11-21 | §9.6: the kinds of antenna a gateway's channel may name (RP-5 1.5.0 §4.4, a channel's `station`). From choosing a gateway (the gateway selection design's §7.2). MINOR, announced (§8.4): nothing for an implementation to do. |
 | 1.4.0 | 2026-11-21 | §9.7: the problems a gateway's status report may name (RP-5 1.6.0 §5.9): `modem-away`, `outside-segment`, `setup-error`; a name a program does not know is a problem all the same. For radiopost.org's gateway directory, which could say only that a gateway was registered (D45). MINOR, announced (§8.4): nothing for an implementation to do. |
+| 1.5.0 | 2026-11-24 | §6.2: an address is written in lowercase, both parts: a program lowercases the ASCII letters of an address where it enters (typed, imported, read from an email, given in a setting or a request) and before it stores, signs or sends it, and shows addresses as it keeps them. Only the domain had been sent in lowercase, and a client kept `Ana@…` and `ana@…` as two addresses. A receiver keeps what it received and refuses nothing for its capitals. MINOR, announced (§8.4): nothing a conforming program sends is refused; implementations should lowercase addresses where they enter. |

@@ -414,7 +414,9 @@ impl Store {
                         .retain(|c| !(c.address == address && c.serial == serial));
                     dropped += before - self.copies.len();
                     self.forwards.retain(|f| {
-                        !(f["address"].as_str() == Some(address.as_str())
+                        !(f["address"]
+                            .as_str()
+                            .is_some_and(|a| a.eq_ignore_ascii_case(&address))
                             && f["serial"].as_u64() == Some(serial))
                     });
                 }

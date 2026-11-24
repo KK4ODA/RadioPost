@@ -270,7 +270,9 @@ function fillForms(s) {
   }
 }
 
-const domainOf = (address) => (address || "").split("@").pop();
+// an address as RadioPost writes it (RP-0 §6.2): its ASCII capitals made small
+const lowercase = (address) => (address || "").replace(/[A-Z]/g, (c) => c.toLowerCase());
+const domainOf = (address) => lowercase(address).split("@").pop();
 
 // the accounts of the RadioPost app (W46): the one the gateway is registered with chosen, else the
 // one the app has chosen
@@ -286,7 +288,8 @@ function fillAccounts(accounts, registration) {
     return o;
   }));
   const pick = accountsShown.find((a) => a.address === was)
-    || accountsShown.find((a) => registration && a.address === registration.address)
+    || accountsShown.find((a) => registration
+      && lowercase(a.address) === lowercase(registration.address))
     || accountsShown.find((a) => a.chosen)
     || accountsShown[0];
   if (pick) select.value = pick.address;

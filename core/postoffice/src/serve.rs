@@ -650,20 +650,18 @@ impl Running {
         office.at(now());
         let mut answer = match (method, path) {
             ("POST", "/code") => {
-                if !office
-                    .state
-                    .accounts
-                    .contains(&text("address").to_lowercase())
-                {
-                    begins = Some(text("address")); // its mailbox is made once the lock is let go
+                // the account in lowercase (RP-0 §6.2), however the operator typed it
+                let address = radiopost::address::lowercase(&text("address"));
+                if !office.state.accounts.contains(&address) {
+                    begins = Some(address.clone()); // its mailbox is made once the lock is let go
                 }
                 let f = flags_named(&body);
                 let code = office.new_code();
-                office.add_code(&code, &text("address"), &text("operator"), f);
+                office.add_code(&code, &address, &text("operator"), f);
                 if !text("name").is_empty() {
-                    office.state.names.insert(text("address"), text("name"));
+                    office.state.names.insert(address.clone(), text("name"));
                 }
-                let mut made = json!({"code": code, "address": text("address"),
+                let mut made = json!({"code": code, "address": address,
                                       "operator": text("operator"), "flags": f});
                 if office.operates(&text("operator")) {
                     made["operates"] = json!(true); // RP-5 §7.5: whoever enrolls is an operator
@@ -672,7 +670,7 @@ impl Running {
             }
             ("POST", "/deliver") => {
                 let air = base64url::decode(&text("air")).unwrap_or_default();
-                let to = text("to");
+                let to = radiopost::address::lowercase(&text("to"));
                 let serial = office.next_mailbox_serial(&to);
                 let priority = body.get("priority").and_then(Json::as_u64).unwrap_or(0);
                 let third = body
@@ -702,8 +700,9 @@ impl Running {
             (_, "/routes") => admin_routes(&mut office, method, &body),
             (_, "/backup-mx") => admin_backup_mx(&mut office, method, &body),
             ("POST", "/name") => {
-                office.state.names.insert(text("address"), text("name"));
-                Ok(json!({"address": text("address"), "name": text("name")}))
+                let address = radiopost::address::lowercase(&text("address"));
+                office.state.names.insert(address.clone(), text("name"));
+                Ok(json!({"address": address, "name": text("name")}))
             }
             ("GET", "/outgoing") => Ok(json!({"outgoing": office.state.outgoing})),
             ("GET", "/applications") | ("POST", "/decide") => {

@@ -174,7 +174,8 @@ impl PostOffice {
         let body = Body {
             v: 1,
             serial: self.next_serial,
-            address: format!("{local}@{}", domain.to_ascii_lowercase()),
+            // both parts in lowercase (RP-0 §6.2)
+            address: radiopost::address::lowercase(address),
             operator,
             device,
             issued: now,

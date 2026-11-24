@@ -59,7 +59,8 @@ impl Entry {
     pub fn json(&self) -> Value {
         let mut v = json!({"id": self.id, "chosen": self.chosen});
         if let Some(me) = &self.me {
-            v["address"] = me.address.clone().into();
+            // shown as it goes in From (RP-0 §6.2), whatever case the credential was issued in
+            v["address"] = radiopost::address::lowercase(&me.address).into();
             v["operator"] = me.operator.clone().into();
             v["expires"] = me.expires.into();
         }
@@ -75,7 +76,11 @@ impl Entry {
     #[must_use]
     pub fn label(&self) -> String {
         if let Some(me) = &self.me {
-            return format!("{} · {}", me.address, me.operator);
+            return format!(
+                "{} · {}",
+                radiopost::address::lowercase(&me.address),
+                me.operator
+            );
         }
         if let Some(op) = self
             .application

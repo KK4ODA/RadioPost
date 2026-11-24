@@ -2351,7 +2351,9 @@ fn answer_on(
     }
     let mail_for = Box::new(move |address: &str| {
         mail.iter()
-            .filter(|(to, _, _)| to.iter().any(|t| t == address))
+            // addressed to the caller's account as RP-0 §6.2 compares: a message kept before
+            // addresses were written in lowercase, or a credential issued with capitals
+            .filter(|(to, _, _)| to.iter().any(|t| radiopost::address::same(t, address)))
             .map(|(_, serial, o)| (*serial, o.clone()))
             .collect()
     });

@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.6.0 |
-| **Updated** | 2026-11-21 |
+| **Version** | 1.7.0 |
+| **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-3 |
@@ -458,8 +458,8 @@ attachments back to keep a message within `max_air_bytes` (§4.1) or an account'
 ```
 
 For each message the post office checks that its content ID is in the session's statement, that
-the air form decodes to that ID (RP-2 §3), and that its `from` is the statement's address. It
-answers:
+the air form decodes to that ID (RP-2 §3), and that its `from` is the statement's address (the same
+address by RP-0 §6.2, whatever the case of its ASCII letters). It answers:
 
 ```json
 {"results": [{"id": "a3f9…", "status": "accepted"}]}
@@ -975,7 +975,8 @@ for a gateway, and the credentials the post office issued for it that have not e
 
 `{"address": "ana@radiopost.org", "operator": "N2CALL", "flags": ["send", "receive"], "name": "Ana"}`
 makes an enrollment code (§6.1) for an account, a new one or one that exists (a new device). `flags`
-and `name` are optional, as in §7.3. Answers `200`:
+and `name` are optional, as in §7.3. The post office writes the address in lowercase (RP-0 §6.2),
+in the code, the answer and the credential issued with it. Answers `200`:
 
 ```json
 {"code": "7Q4F-AZ9K", "address": "ana@radiopost.org", "operator": "N2CALL", "flags": 3,
@@ -1094,3 +1095,4 @@ read from the home's and every post office it knows) and `vectors/api.json` (the
 | 1.4.0 | 2026-11-21 | §4.4: `listens`, when a gateway listens, as windows of RP-7 §5's form, for programs where `hours` is for people; `seen`, set by the post office that serves the list, when the gateway last logged in or polled for copies, to the minute. §6.4: a registered record's `seen` is ignored. From choosing a gateway (the design's §7.2). Test vectors: the example record lists `listens` and the example list `seen`. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; a post office SHOULD set `seen`, and a reader that ignores both loses nothing it had. |
 | 1.5.0 | 2026-11-21 | §4.4: `site`, where a gateway's antennas are (`lat`, `lon` at the operator's precision, `agl_m`), and a channel's `station`, how it transmits and receives there (`power_w`, `antenna` from RP-0 1.3.0 §9.6, `agl_m`, `gain_dbi`, `azimuth_deg`), for programs judging a path over the terrain and its link budget each way; what a reader does with a member out of its range. From choosing a gateway (the design's §7.2, Phase 2). Test vectors: `site_cases`, and the example list's second gateway with a site and a VHF channel's station. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; a reader that ignores both loses nothing it had. |
 | 1.6.0 | 2026-11-21 | Whether a gateway is on the air. §5.9: `PUT /status`, a gateway's report to its own post office (its `state`, `listening`, `session`, `opening` or `stopped`; whether it listens on each channel; problems named from RP-0 1.4.0 §9.7; the hour its last session ended), taken only from a credential that post office issued for a gateway registered with it; what the post office keeps, to the minute and the hour; `DELETE /status`; reported on change and at least every 5 minutes. §4.6: `GET /gateways/status`, the signed list of its gateways' last reports, and how a reader reads one: current for 15 minutes (RP-7 §4.1's cut-off), an unknown state saying nothing, an unknown problem a problem all the same. §4.4: a status report counts for `seen`. §6.4: a withdrawal drops the report. §8: what a report makes public. For radiopost.org's gateway directory, which could say only that a gateway was registered (the author, 2026-11-20; D45). Test vectors (`api-exchanges.json`, `jws.json`). MINOR, announced (RP-0 §8.4): nothing for an implementation to do; a post office SHOULD offer both, and a gateway MAY report. |
+| 1.7.0 | 2026-11-24 | §5.4: a message's `from` is the statement's address as RP-0 §6.2 compares them, so a client writing `from` in lowercase (RP-0 1.5.0) is not refused under a credential issued with capitals. §7.5: a code's address is written in lowercase, and so is the credential issued with it (a post office had kept an operator's capitals, filed the account's mail under the lowercase address, and looked for it under the other). MINOR, announced (RP-0 §8.4): a post office should compare `from` so and lowercase codes' addresses; nothing taken before is refused. |
