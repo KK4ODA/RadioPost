@@ -36,6 +36,11 @@ struct Aether {
     bandwidth_refused: bool,
     /// `tune` (the tuner tone) refused, as when the channel is busy.
     tone_refused: bool,
+    /// Each connection's bandwidth request held apart, one for listening taken
+    /// (`status.bandwidth.listening`, 0.2.0-beta.174).
+    listening_requests: bool,
+    /// `status.scan`'s dials, a scan another program runs; none when empty.
+    scan_dials: Vec<u64>,
     asked: Vec<Value>,
 }
 
@@ -55,6 +60,8 @@ impl Aether {
             host_hz: Value::Null,
             bandwidth_refused: false,
             tone_refused: false,
+            listening_requests: false,
+            scan_dials: Vec::new(),
             asked: Vec::new(),
         }
     }
@@ -83,6 +90,12 @@ impl Aether {
                 }
                 if self.scans {
                     status["scan"] = Value::Null;
+                }
+                if !self.scan_dials.is_empty() {
+                    status["scan"] = json!({"owner": 9, "dials": self.scan_dials});
+                }
+                if self.listening_requests {
+                    status["bandwidth"]["listening"] = json!(false);
                 }
                 ok(status)
             }
@@ -437,7 +450,22 @@ fn every_line_is_read_or_refused() {
                 Value::Object(m)
             })
             .collect();
-        assert_eq!(lines(&said), want, "{}", case["what"]);
+        // `status`'s station members are an adapter's to add when it can say (RP-4 §4); the
+        // reference adapter the file was written with says none
+        let said: Vec<Value> = lines(&said)
+            .into_iter()
+            .map(|mut m| {
+                if m["op"] == "status"
+                    && let Some(o) = m.as_object_mut()
+                {
+                    for key in ["dial_hz", "answers", "scanning"] {
+                        o.remove(key);
+                    }
+                }
+                m
+            })
+            .collect();
+        assert_eq!(said, want, "{}", case["what"]);
     }
 }
 
@@ -703,7 +731,7 @@ fn another_programs_session_is_busy() {
         lines(&said),
         [
             json!({"op": "status", "id": 4, "listening": true, "callsigns": ["KK4ODA"],
-                "busy": true, "links": []})
+                "busy": true, "links": [], "answers": [500, 2300]})
         ]
     );
     theirs["name"] = json!("disconnected");
@@ -1405,5 +1433,96 @@ fn the_tuner_tone_is_aethers_tune() {
         lines(&said),
         [json!({"op": "ok", "id": 9})],
         "a stop is taken"
+    );
+}
+
+/// RP-4 §1.1: while the host listens, an Aether that takes a request for listening runs its widest
+/// bandwidth, which answers 500 Hz calls too, and is asked for none once the host stops. A profile
+/// had left KK4ODA-1 at 500 Hz while its client listened, and WD5EMA's 2300 Hz call went
+/// unanswered (2026-11-23).
+#[test]
+fn a_host_listening_asks_for_the_widest_bandwidth() {
+    let mut b = Bridge::new();
+    let mut a = Aether::new(true);
+    a.listening_requests = true;
+    a.bandwidth_hz = 500;
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"hello","id":1,"version":[1,1],"app":"RadioPost client 0.1.0"}"#,
+    );
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"callsigns","id":2,"callsigns":["KK4ODA"]}"#,
+    );
+    let from = a.asked.len();
+    let said = line(&mut b, &mut a, r#"{"op":"listen","id":3,"on":true}"#);
+    assert_eq!(lines(&said), [json!({"op": "ok", "id": 3})]);
+    assert_eq!(
+        asked_since(&a, from),
+        [
+            ("listen".to_owned(), json!({"enabled": true})),
+            (
+                "bandwidth.set".to_owned(),
+                json!({"hz": 2300, "listening": true})
+            ),
+        ]
+    );
+    // a call of its own in 500 Hz moves the station; when it ends, listening's request is back
+    let from = a.asked.len();
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":4,"remote":"WD5EMA","bandwidth":500}"#,
+    );
+    event(&mut b, &mut a, "state", &mine("disconnected", "no answer"));
+    let set: Vec<Value> = asked_since(&a, from)
+        .into_iter()
+        .filter(|(m, _)| m == "bandwidth.set")
+        .map(|(_, p)| p)
+        .collect();
+    assert_eq!(
+        set,
+        [json!({"hz": 500}), json!({"hz": 2300, "listening": true})]
+    );
+    // stopping withdraws it
+    let from = a.asked.len();
+    line(&mut b, &mut a, r#"{"op":"listen","id":5,"on":false}"#);
+    assert_eq!(
+        asked_since(&a, from),
+        [
+            ("listen".to_owned(), json!({"enabled": false})),
+            ("bandwidth.set".to_owned(), json!({"hz": null})),
+        ]
+    );
+    // an earlier Aether, which holds one request for the whole station, is not asked
+    let (_, a) = opened(true, true);
+    assert!(!a.asked.iter().any(|r| r["method"] == "bandwidth.set"));
+}
+
+/// RP-4 §4 `status`: the station's dial, the bandwidths a call is answered in, and the dials a
+/// scan of another program's takes the radio over, from Aether's `status`.
+#[test]
+fn status_says_where_and_how_the_station_is_called() {
+    let (mut b, mut a) = opened(true, true);
+    a.dial = Some(7_082_000);
+    let said = line(&mut b, &mut a, r#"{"op":"status","id":6}"#);
+    assert_eq!(
+        lines(&said),
+        [
+            json!({"op": "status", "id": 6, "listening": true, "callsigns": ["KK4ODA"],
+                "busy": false, "links": [], "dial_hz": 7_082_000, "answers": [500, 2300]})
+        ]
+    );
+    // at 500 Hz only 500 Hz calls are answered; a gateway's scan is said
+    a.bandwidth_hz = 500;
+    a.scan_dials = vec![7_101_000, 3_590_000, 14_107_000];
+    let said = line(&mut b, &mut a, r#"{"op":"status","id":7}"#);
+    let status = &lines(&said)[0];
+    assert_eq!(status["answers"], json!([500]));
+    assert_eq!(
+        status["scanning"],
+        json!([7_101_000, 3_590_000, 14_107_000])
     );
 }

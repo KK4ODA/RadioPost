@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.46.0 |
-| **Updated** | 2026-11-23 |
+| **Version** | 1.47.0 |
+| **Updated** | 2026-11-24 |
 | **Describes** | RadioPost 0.1.0-beta.35 |
 | **Licence** | CC BY 4.0 |
 
@@ -876,19 +876,26 @@ Agree on a frequency and a bandwidth first.
 
 **The station that answers:**
 
-1. Tune the radio to the frequency, and set Aether's bandwidth. At 2300 Hz Aether also answers a
-   call at 500 Hz.
+1. Choose **P2P (another client's station)** and type the frequency in **Dial, MHz**.
+   **Listen for P2P** tunes the radio there when it starts. If RadioPost Gateway on this station
+   scans its channels, the radio stays with the scan, and callers call on one of those channels.
 2. Click **Listen for P2P**. The switch stays in, its lamp lights green, and it reads
    **Listening for P2P**. The state reads *Listening*. RadioPost answers P2P calls to the callsign
    at the top of the window or to any other of yours. Rest the mouse on the switch to see the
-   callsigns it answers as.
+   callsigns it answers as. While it listens, Aether runs 2300 Hz, which answers calls at 500 Hz
+   too, whatever Aether's own **Bandwidth** says; it goes back when you stop listening.
+   The line under the switch says where and how the station answers, as Aether reports it:
+   *Listening as KK4ODA on 7.103 MHz, 2300 Hz (answers 500 Hz calls too)*, or *on the channels
+   the station scans: 7.101, 3.590 and 14.107 MHz*. Tell this to the station that will call you.
+   In amber, *500 Hz calls only* means a 2300 Hz call is not answered: an external program on
+   Aether, such as VarAC, chose 500 Hz for the station.
 3. Leave it on. After each session, however it ended, RadioPost listens again by itself. If
    Aether goes away (it restarts, say), the lamp turns amber and the state reads *Waiting for the
    modem*. RadioPost tries again every 5 seconds and listens as soon as Aether is back.
 4. To stop listening, click **Listening for P2P** again. During a session, the session goes on to
    its end, and listening stops then.
 
-![The Station box with Listening for P2P switched on: the switch sunk in, its lamp lit green, and Call greyed](screens/client-listening.png)
+![The Station box with Listening for P2P switched on: the switch sunk in, its lamp lit green, Call greyed, and under it the line saying the station listens on 7.103 MHz at 2300 Hz and answers 500 Hz calls too](screens/client-listening.png)
 
 *Figure 24. Listening for P2P, switched on.*
 
@@ -912,8 +919,15 @@ During a session, **Write** and the buttons that change messages are greyed unti
    there at once, or says which dial to set yourself, as in [8.2](#82-tune-and-call).
    **Tuner tone** keys ten seconds of carrier for your antenna tuner.
 4. Choose the **Bandwidth** you agreed: **2300 Hz** or **500 Hz**. For the call, Aether moves the
-   whole station to it, and back after.
+   whole station to it, and back after. A station listening with RadioPost answers either.
 5. Click **Call**.
+
+When the station you call has a gateway listed under its callsign (KK4ODA's KK4ODA-1), the line
+under the dial predicts the band from that gateway's site: *40 m to KK4ODA, predicted at
+KK4ODA-1's site, 95 km away. Unlikely to work: links on 12 % of days at 00Z. 80 m, 3.590 MHz:
+likely to work.* It is amber when the band is unlikely to work. Short paths close on the higher
+bands after dark: 40 m can skip right over a station 100 km away in the evening, when 80 m still
+works. Nothing shows for a station with no gateway listed.
 
 If the other station also runs a gateway that scans its channels, and you call on one of them, the
 call keeps trying as long as the gateway's scan, so it reaches the station when the scan comes back
@@ -921,9 +935,9 @@ to that channel. The activity says *a gateway at KK4ODA's station scans 7.101 MH
 trying 54 s*. On a frequency the gateway does not scan, the station hears you only if its operator
 stopped the scan and tuned there.
 
-![The Station box for a station call: the callsign, the dial and the bandwidth, and the dial to set by hand](screens/client-call-station.png)
+![The Station box for a station call: the callsign, the dial and the bandwidth, the band predicted unlikely to work with 80 m likely, and the dial to set by hand](screens/client-call-station.png)
 
-*Figure 25. A station call on a radio whose dial Aether cannot set.*
+*Figure 25. A station call: the band predicted, on a radio whose dial Aether cannot set.*
 
 **A station you called before.** Click **▾** at the right of **Call**, or press the down arrow in
 it. The list shows each station you called once, newest first, with the dial and bandwidth of that
@@ -942,10 +956,12 @@ When you next have the Internet, a line under the Station box says how many sess
 reported: click **Send reports**. Your post office then marks your sent mail as delivered.
 
 **A station that also runs a gateway.** RadioPost Gateway holds the gateway's own callsign, such
-as `KK4ODA-1`. A station call to that callsign reaches the gateway, not its operator, and
-RadioPost hangs up and says *KK4ODA-1 is a gateway: for P2P, call the other operator's own
-callsign while their client listens*. To work that operator station to station, call their own
-callsign (`KK4ODA`). Their RadioPost client must be listening (**Listen for P2P**) under it, beside the
+as `KK4ODA-1`. A station call to a gateway RadioPost has listed is not placed: RadioPost says
+*KK4ODA-1 is a gateway: it takes gateway calls, not P2P calls. For P2P, call the station's own
+callsign, KK4ODA*, and the message's **Call KK4ODA** button calls that one. A gateway not listed
+yet still answers the call, then hangs up and says *KK4ODA-1 is a gateway: for P2P, call the other
+operator's own callsign while their client listens*. To work that operator station to station,
+call their own callsign (`KK4ODA`). Their RadioPost client must be listening (**Listen for P2P**) under it, beside the
 gateway on the same Aether. The gateway need not close: Aether serves both programs, each for its
 own callsigns.
 
@@ -2222,9 +2238,11 @@ a RadioPost program holds a callsign, the note after that box names it and the p
 RadioPost: they are programs written for VARA, such as Winlink Express, VarAC and RMS Trimode,
 and RadioPost is not one. Tick it only when one of them runs on the station too.
 
-**Bandwidth.** A station that listens for RadioPost calls runs Aether's own **Bandwidth** (its
-Setup step 4): RadioPost cannot change it while it listens. At 2300 Hz it answers 500 Hz calls
-too.
+**Bandwidth.** While RadioPost listens, Aether runs 2300 Hz, which answers 500 Hz calls too,
+whatever Aether's own **Bandwidth** (its Setup step 4) says, and goes back to it when RadioPost
+stops listening or closes (Aether 0.2.0-beta.174 and RadioPost 0.1.0-beta.36 or later). Aether's
+header then says *2300 Hz · listening*. An external program's own bandwidth, VarAC's 500 Hz on its
+calling frequency say, comes first: RadioPost's listening line then says *500 Hz calls only*.
 
 **Aether's header.** While RadioPost is open, Aether's header shows *✓ RadioPost client* between
 calls, and *✓ RadioPost client · listening* while it listens (Aether 0.2.0-beta.159 and RadioPost
@@ -2285,6 +2303,7 @@ These notes follow the US rules (Part 97). Check your own country's.
 | *Set the radio's dial to … MHz (USB) yourself: the modem cannot set it* | Aether keys this radio without CAT and cannot set its dial. Turn the radio to that dial. To let Aether set it, key the radio by CAT in Aether's Setup, step 2. |
 | *Not tuned: … busy …* | A session is up on the station, yours or another program's. Pick the channel again when it has ended. |
 | **Tuner tone** refused | Aether keys no tone while the channel is in use, or while its rules forbid it there. Wait, or check the dial. |
+| *… is a gateway: it takes gateway calls, not P2P calls. For P2P, call the station's own callsign, …* | You chose **P2P (another client's station)** and typed a listed gateway's callsign. Click the message's **Call** button, or type the operator's own callsign ([section 10](#10-station-to-station)). |
 | *… is a gateway: for P2P, call the other operator's own callsign while their client listens* | You called a gateway's callsign as **P2P (another client's station)**. Call its operator's own callsign, and ask them to click **Listen for P2P** ([section 10](#10-station-to-station)). |
 | An application refused | See [section 5.3](#53-if-the-post-office-refuses). |
 | An alert stays *not heard* | The other station's RadioPost was closed, its circle's check differs from yours, its clock is more than ten minutes off, or the path failed. Read your checks to each other. |
@@ -2404,8 +2423,9 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 
 **Station to station**
 
-1. Agree on a frequency and bandwidth. The one who answers tunes to them and clicks
-   **Listen for P2P**. It stays on until clicked again.
+1. Agree on a frequency. The one who answers types it in **Dial, MHz** and clicks
+   **Listen for P2P**, which tunes there and answers 500 and 2300 Hz calls. It stays on until
+   clicked again.
 2. The other chooses **P2P (another client's station)**, types the callsign, the **Dial, MHz** and the
    **Bandwidth**, or picks a station called before under **▾**, then **Call**.
 3. With a station that runs a gateway, call its operator's own callsign, not the gateway's.
@@ -2534,3 +2554,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.44.0 | 2026-11-23 | Section 19: RadioPost Gateway's *Session under way* box has **Disconnect**, then **Abort**, and **Stop calling** for a call to a partner: each ends that session only, and the gateway goes on answering; what **Sessions** says of it. Figure 40 retaken. |
 | 1.45.0 | 2026-11-23 | Section 10, station to station: a call to a station whose gateway scans the frequency called keeps trying as long as the gateway's scan. A 500 Hz call on 7.101 MHz to a station scanning three channels made its tries while the radio was on the others (Aether's report of 2026-11-23). |
 | 1.46.0 | 2026-11-23 | Aether's names, as Aether 0.2.0-beta.173 says them: its *Host programs* are **External programs**, to leave unchecked for RadioPost, its radio control *Host* is *External program*, and its Setup step 1 shows the **Aether callsign** (for Aether standalone use). Section 3 and section 35 say so, and that a listening station runs Aether's own **Bandwidth**. |
+| 1.47.0 | 2026-11-24 | From the portable's sessions of 2026-11-23. Section 10: **Listen for P2P** tunes the radio to **Dial, MHz** first (unless the station scans its gateway's channels), Aether runs 2300 Hz while it listens and answers 500 Hz calls too, and the line under the switch says where and how the station answers (Figure 24 retaken); a station call shows the band predicted from the station's gateway's site, amber when unlikely to work (Figure 25 retaken); a P2P call to a listed gateway's callsign is not placed, its message offering the station's own callsign. Section 35: the bandwidth while listening. Troubleshooting and the short guide to match. A 2300 Hz call to a home station a profile had left at 500 Hz went unanswered, and three calls on 40 m after dark were heard by nobody. |

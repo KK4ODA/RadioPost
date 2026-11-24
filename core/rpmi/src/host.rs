@@ -344,6 +344,13 @@ pub enum Event {
         busy: bool,
         /// The host's links.
         links: Vec<LinkStatus>,
+        /// The station's dial, when the adapter can say (§4.1).
+        dial_hz: Option<u64>,
+        /// The bandwidths a call to the host is answered in now, when the modem has a choice
+        /// (§1.1); empty when the adapter does not say.
+        answers: Vec<u64>,
+        /// The dials the station scans, whichever host asked (§4.2); empty when it scans none.
+        scanning: Vec<u64>,
     },
     /// The host's scan (§4.2): the answer to `scan`, or, with no `id`, its dials changed or,
     /// with none and a `why`, its end.
@@ -444,7 +451,27 @@ fn status(m: &Message, id: Option<Value>) -> Result<Event, String> {
             .ok_or("no `callsigns`")?,
         busy: flag(m, "busy")?,
         links,
+        dial_hz: m
+            .get("dial_hz")
+            .and_then(Value::as_u64)
+            .filter(|&hz| hz > 0),
+        answers: numbers(m, "answers"),
+        scanning: numbers(m, "scanning"),
     })
+}
+
+/// A list of whole numbers above 0, as `status`'s `answers` and `scanning` carry them: empty
+/// when absent, anything else in it left out.
+fn numbers(m: &Message, key: &str) -> Vec<u64> {
+    m.get(key)
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(Value::as_u64)
+                .filter(|&n| n > 0)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 impl Event {

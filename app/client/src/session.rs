@@ -660,9 +660,17 @@ impl Modem {
                 Event::Ok { id: i } if Some(i) == id.as_ref() => return Ok(e),
                 Event::Hello { id: Some(i), .. } if Some(i) == id.as_ref() => return Ok(e),
                 Event::Dial { id: Some(i), .. } if Some(i) == id.as_ref() => return Ok(e),
+                Event::Status { id: Some(i), .. } if Some(i) == id.as_ref() => return Ok(e),
                 _ => {}
             }
         }
+    }
+
+    /// Where the modem says the station listens (RP-4 §4 `status`), or nothing when it cannot
+    /// be read.
+    fn where_now(&mut self) -> Option<Where> {
+        let status = self.host.status();
+        self.ask(&status).ok().as_ref().and_then(Where::of)
     }
 
     /// Tunes the radio to `dial_hz` for a call, when the modem has a dial (RP-4 §4.1), and gives
@@ -790,6 +798,51 @@ impl Modem {
         match self.ask(&read) {
             Ok(Event::Dial { dial_hz, .. }) => Some(dial_hz),
             _ => None,
+        }
+    }
+
+    /// The channel a station listens on (the panel's P2P dial): the radio is tuned there before
+    /// it listens, as `VarAC` tunes to its calling frequency — unless the station scans a
+    /// gateway's channels, which the scan keeps (a `tune` would end it, RP-4 §4.2), or the modem
+    /// cannot set the dial. Said either way; listening goes on whatever happens.
+    fn tune_to_listen(&mut self, dial_hz: Option<u64>, say: &mut dyn FnMut(&str)) {
+        let Some(hz) = dial_hz else {
+            return;
+        };
+        if !self.caps.dial {
+            tell(say, &by_hand(hz));
+            return;
+        }
+        let at = self.where_now().unwrap_or_default();
+        if !at.scanning.is_empty() {
+            let dials: Vec<String> = at.scanning.iter().map(|&d| mhz(d)).collect();
+            tell(
+                say,
+                &format!(
+                    "the station scans {} MHz for its gateway: the radio stays with the scan, \
+                     not on {} MHz",
+                    dials.join(", "),
+                    mhz(hz)
+                ),
+            );
+            return;
+        }
+        if at.dial_hz == Some(hz) {
+            return;
+        }
+        let tune = self.host.tune(hz);
+        match self.ask(&tune) {
+            Ok(_) => tell(
+                say,
+                &format!("tuned the radio to {} MHz to listen", mhz(hz)),
+            ),
+            Err(why) => tell(
+                say,
+                &format!(
+                    "could not tune the radio to {} MHz to listen: {why}",
+                    mhz(hz)
+                ),
+            ),
         }
     }
 
@@ -1422,6 +1475,11 @@ fn call_traced(
     say: &mut dyn FnMut(&str),
     trace: &Arc<Mutex<Trace>>,
 ) -> Result<Report, Error> {
+    if kind == Kind::Station
+        && let Some(why) = store.not_a_station(remote)
+    {
+        return Err(why);
+    }
     let (mut modem, me) = Modem::open(store, opts, &[])?;
     modem.trace = Some(Arc::clone(trace));
     let said = modem.said_name.clone();
@@ -1799,15 +1857,24 @@ fn ask_for_files(client: &mut Client, store: &Store, say: &mut dyn FnMut(&str)) 
 }
 
 /// Waits for a station to call: its link's `connected`, its callsign and the callsign it
-/// called, or `None` when the program said stop first.
+/// called, or `None` when the program said stop first. With `at`, where the station listens is
+/// kept current — the dial as it changes, and the modem asked every [`WHERE_EVERY`] — and told
+/// when it changes.
 fn wait_for_call(
     modem: &mut Modem,
     opts: &Options,
+    mut at: Option<(&mut Where, &mut dyn FnMut(Listening))>,
 ) -> Result<Option<(Event, String, String)>, Error> {
     modem
         .conn
         .set_timeout(Some(POLL))
         .map_err(|e| e.to_string())?;
+    let mut watch = at.take().map(|(at, told)| WhereWatch {
+        at,
+        told,
+        asked: None,
+        since: Instant::now(),
+    });
     // alerts sent on this connection, by their requests' `id`, to their references (RP-8 §6);
     // and the tunes asked for them, by `id`, to the dial asked for
     let mut alerting: HashMap<String, String> = HashMap::new();
@@ -1842,9 +1909,15 @@ fn wait_for_call(
                 modem.send(&request)?;
             }
         }
+        if let Some(w) = watch.as_mut() {
+            w.ask_if_due(modem)?;
+        }
         let Some(e) = modem.poll()? else {
             continue;
         };
+        if let Some(w) = watch.as_mut() {
+            w.saw(&e);
+        }
         if let Some(c) = &opts.alerts {
             let now = crate::presence::unix_now();
             match &e {
@@ -1898,6 +1971,53 @@ fn wait_for_call(
     Ok(Some(called))
 }
 
+/// Where a station listening is called, kept current while it waits for a call: its modem asked
+/// every [`WHERE_EVERY`], and the dial followed as it changes; told when it changes.
+struct WhereWatch<'a> {
+    at: &'a mut Where,
+    told: &'a mut dyn FnMut(Listening),
+    /// The `status` asked for and not yet answered, by its `id`.
+    asked: Option<String>,
+    /// When it was last asked.
+    since: Instant,
+}
+
+impl WhereWatch<'_> {
+    fn ask_if_due(&mut self, modem: &mut Modem) -> Result<(), Error> {
+        if self.asked.is_none() && self.since.elapsed() >= WHERE_EVERY {
+            let status = modem.host.status();
+            self.asked = status.get("id").map(ToString::to_string);
+            self.since = Instant::now();
+            modem.send(&status)?;
+        }
+        Ok(())
+    }
+
+    fn saw(&mut self, e: &Event) {
+        let seen = match e {
+            Event::Status { id: Some(i), .. }
+                if self.asked.as_deref() == Some(i.to_string().as_str()) =>
+            {
+                self.asked = None;
+                Where::of(e)
+            }
+            // the knob, or another program's tune: the dial listened on moves with it; a scan's
+            // own hops are not where the station listens
+            Event::Dial { id: None, dial_hz } if self.at.scanning.is_empty() => Some(Where {
+                dial_hz: Some(*dial_hz),
+                ..self.at.clone()
+            }),
+            _ => None,
+        };
+        if let Some(seen) = seen
+            && seen != *self.at
+        {
+            *self.at = seen;
+            (self.told)(Listening::Waiting(self.at.clone()));
+        }
+    }
+}
+
 /// Whether the program said stop.
 fn stopped(opts: &Options) -> bool {
     opts.stop
@@ -1909,6 +2029,8 @@ fn stopped(opts: &Options) -> bool {
 /// on (RP-4 §4), so that the modem answers calls to them. The client's other callsigns come with
 /// their homes (wishlist W46).
 struct Listener {
+    /// Where the modem says the station listens.
+    at: Where,
     modem: Modem,
     /// The callsign of the home that opened it.
     me: String,
@@ -1931,6 +2053,7 @@ impl Listener {
             .collect();
         let extra: Vec<String> = others.iter().map(|(c, _)| c.clone()).collect();
         let (mut modem, me) = Modem::open(store, opts, &extra)?;
+        modem.tune_to_listen(opts.dial_hz, say);
         let listen = modem.host.listen(true);
         if let Err(why) = modem.ask(&listen) {
             modem.conn.close();
@@ -1941,7 +2064,13 @@ impl Listener {
             .collect::<Vec<_>>()
             .join(", ");
         tell(say, &format!("listening as {all}"));
-        Ok(Listener { modem, me, others })
+        let at = modem.where_now().unwrap_or_default();
+        Ok(Listener {
+            at,
+            modem,
+            me,
+            others,
+        })
     }
 
     /// Carries the session of a call that came (RP-3 §10), in the home whose callsign was called
@@ -1999,7 +2128,7 @@ pub fn answer(
     say: &mut dyn FnMut(&str),
 ) -> Result<Report, Error> {
     let mut listener = Listener::open(store, opts, say)?;
-    let called = match wait_for_call(&mut listener.modem, opts) {
+    let called = match wait_for_call(&mut listener.modem, opts, None) {
         Ok(Some(called)) => called,
         Ok(None) => {
             tell(say, "stopped listening");
@@ -2026,12 +2155,60 @@ pub fn answer(
 /// could not be reached: as the app's connection between calls does ([`crate::presence`]).
 pub const LISTEN_RETRY: Duration = Duration::from_secs(5);
 
+/// How often a station listening asks its modem where it listens: a scan another program starts
+/// or stops, or the bandwidth it answers in, is no event of this connection's (RP-4 §4).
+pub const WHERE_EVERY: Duration = Duration::from_secs(30);
+
+/// Where a station listening is called, as its modem says (RP-4 §4 `status`): what the operator
+/// needs to tell a station that will call. The portable's 2300 Hz call to KK4ODA went unanswered
+/// because a profile had left the home station at 500 Hz, and nothing in `RadioPost` said so
+/// (2026-11-23).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Where {
+    /// The radio's dial, when the modem can say.
+    pub dial_hz: Option<u64>,
+    /// The bandwidths a call is answered in now; empty when the modem does not say.
+    pub answers: Vec<u64>,
+    /// The dials the station scans, a gateway's on the same station; empty when it scans none.
+    pub scanning: Vec<u64>,
+}
+
+impl Where {
+    /// What a `status` answer says, or nothing for another event.
+    fn of(e: &Event) -> Option<Where> {
+        match e {
+            Event::Status {
+                dial_hz,
+                answers,
+                scanning,
+                ..
+            } => Some(Where {
+                dial_hz: *dial_hz,
+                answers: answers.clone(),
+                scanning: scanning.clone(),
+            }),
+            _ => None,
+        }
+    }
+
+    /// As the panel carries it.
+    #[must_use]
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "dial_hz": self.dial_hz,
+            "answers": self.answers,
+            "scanning": self.scanning,
+        })
+    }
+}
+
 /// What a station that keeps listening ([`keep_listening`]) tells its window as it goes, besides
 /// its lines.
 #[derive(Debug)]
 pub enum Listening {
-    /// The client's callsigns are claimed and the modem answers calls to them: waiting for one.
-    Waiting,
+    /// The client's callsigns are claimed and the modem answers calls to them: waiting for one,
+    /// where the modem says it listens. Told again when that changes.
+    Waiting(Where),
     /// This station called: a session begins.
     Called(String),
     /// A session is over, however it ended: what it did, or why it broke.
@@ -2072,8 +2249,8 @@ pub fn keep_listening(
             match Store::open(home).and_then(|store| Listener::open(&store, opts, say)) {
                 Ok(l) => {
                     held = None;
+                    told(Listening::Waiting(l.at.clone()));
                     listener = Some(l);
-                    told(Listening::Waiting);
                 }
                 Err(why) => {
                     if held.as_deref() != Some(why.as_str()) {
@@ -2095,7 +2272,7 @@ pub fn keep_listening(
         let Some(l) = listener.as_mut() else {
             continue;
         };
-        let called = match wait_for_call(&mut l.modem, opts) {
+        let called = match wait_for_call(&mut l.modem, opts, Some((&mut l.at, &mut *told))) {
             Ok(Some(called)) => called,
             Ok(None) => break,
             Err(why) => {
@@ -2131,7 +2308,10 @@ pub fn keep_listening(
             }
         } else if !stopped(opts) {
             tell(say, "listening again");
-            told(Listening::Waiting);
+            if let Some(at) = l.modem.where_now() {
+                l.at = at;
+            }
+            told(Listening::Waiting(l.at.clone()));
         }
     }
     if let Some(l) = listener {

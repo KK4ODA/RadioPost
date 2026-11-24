@@ -555,6 +555,7 @@ function clientApi(world) {
         ? calledOf(world.vhf ? GATEWAYS_VHF : world.hf ? GATEWAYS_HF : GATEWAYS)
         : {gateway: [], station: []};
       case "learned": return LEARNED;
+      case "p2p-chance": return world.p2p || null;
       case "forget": return FORGET;
       case "settings": return {usual_gateways: ["KK4ODA-1"], radio_skips_read: false};
       case "accept": return {entries: ["maria@example.com", "jim@hampost.org", "@hampost.org"]};
@@ -908,6 +909,12 @@ const SHOTS = {
   // a station call: its dial and bandwidth, on a radio whose dial the modem cannot set
   async "client-call-station"(browser) {
     const world = clientWorld({byHand: true, called: true});
+    // N0CALL's gateway is listed: 40 m predicted poor at the hour, 80 m better
+    world.p2p = {gateway: "N0CALL-10",
+                 chosen: {band: "40m", distance_km: 95, chance: 0.12, chance_words: "unlikely to work",
+                          words: "Unlikely to work: links on 12 % of days at 00Z"},
+                 better: {dial_hz: 3_590_000,
+                          hf: {band: "80m", chance: 0.86, chance_words: "likely to work"}}};
     const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(world),
                                                  height: 900});
     await spreadLog(page, "log", T - 1300, 19);
@@ -917,7 +924,7 @@ const SHOTS = {
     await page.selectOption("#bandwidth", "500");
     await page.locator("#dial").dispatchEvent("change");
     await page.locator("#dial").blur();
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(1000);
     await page.evaluate(() => { document.getElementById("toast").hidden = true; });
     await shot(page, "client-call-station", ".station");
     await context.close();
@@ -943,7 +950,10 @@ const SHOTS = {
   // Listen for P2P switched on: sunk in, its lamp lit, reading Listening for P2P; Call greyed
   async "client-listening"(browser) {
     const world = clientWorld({state: {activity: {state: "listening", remote: null, failed: null,
-                                                  listen: true, held: null}}});
+                                                  listen: true, held: null,
+                                                  listening_at: {dial_hz: 7_103_000,
+                                                                 answers: [500, 2300],
+                                                                 scanning: []}}}});
     const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(world),
                                                  height: 900});
     await spreadLog(page, "log", T - 1300, 19);

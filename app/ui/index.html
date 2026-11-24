@@ -61,7 +61,7 @@
           <select id="channel"></select>
         </label>
         <div class="pair" id="station-dial" hidden>
-          <label title="The dial frequency the two of you agreed on, in MHz, upper sideband: 7.101 or 3.5915. Typing it tunes the radio there at once, when the modem can set the radio's dial">Dial, MHz
+          <label title="The dial frequency the two of you agreed on, in MHz, upper sideband: 7.101 or 3.5915. Typing it tunes the radio there at once, when the modem can set the radio's dial. Listen for P2P tunes there too when it starts, unless the station scans a gateway's channels">Dial, MHz
             <input id="dial" inputmode="decimal" placeholder="7.101" autocomplete="off" spellcheck="false">
           </label>
           <label title="The bandwidth the two of you agreed on. Aether moves the station to it for the call, and back after">Bandwidth
@@ -71,6 +71,7 @@
             </select>
           </label>
         </div>
+        <p class="radio-at" id="p2p-chance" role="status" title="How likely a P2P call is to get through on this dial now, predicted at the site of the gateway listed under the station's callsign (its base), with a band of that gateway's that does better. Nothing shows for a station with no listed gateway"></p>
         <div class="tuning" id="tuning" hidden>
           <p class="radio-at" id="radio-at" role="status" title="Where the radio is: the channel picked, or the dial to set by hand when the modem cannot set it"></p>
           <button class="quiet needs-idle" id="tone" title="A steady carrier for ten seconds on the channel picked, for the antenna tuner. Press again to stop it">Tuner tone</button>
@@ -88,6 +89,7 @@
           <button class="go" id="call" title="Call the station on the channel picked and carry a session. The radio is tuned there first if it is not there already">Call</button>
           <button id="listen" class="latch" aria-pressed="false" title="Answer P2P calls to your callsign until you press it again. A gateway on this station keeps answering calls to its own callsign"><span class="lamp" aria-hidden="true"></span><span id="listen-label">Listen for P2P</span></button>
         </div>
+        <p class="radio-at" id="listen-at" role="status" title="Where and how this station answers P2P calls, as the modem says: tell the station that will call you"></p>
         <label title="Aether HF's control API (ws://127.0.0.1:8515/v1, as Aether runs it), or an RPMI adapter's address: radiopost-tcp for a rehearsal over the Internet, rpmi-loopback for tests with no radio">Modem
           <input id="adapter" value="ws://127.0.0.1:8515/v1" spellcheck="false">
         </label>

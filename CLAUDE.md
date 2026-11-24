@@ -100,6 +100,18 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   again, tries a modem that is away every 5 s, and opens the home afresh at each call; the panel's
   `Activity.listen` is the switch and `held` why it cannot listen. `answer` (the command line's
   `listen`) still answers one call. Tested in `tests/listening.rs`.
+  **P2P made plain** (D47, RP-4 1.6.0, 2026-11-24): the Aether adapter asks `bandwidth.set {hz:
+  widest, listening: true}` while its host listens (Aether 0.2.0-beta.174 holds it per connection,
+  below an external program's own, and drops it with the connection; `listen_wide` from
+  `status.bandwidth.listening`), and puts back that request, not `host_hz`, after a call. RPMI
+  `status` carries the station's `dial_hz`, `answers` and `scanning`, read from Aether's `status`
+  (`Event::Status`, `session::Where`). **Listen for P2P** sends the P2P dial typed (`/api/listen
+  {dial_hz}`): `tune_to_listen` tunes there unless the station scans; `wait_for_call` asks
+  `status` every `WHERE_EVERY` (30 s) and follows `dial` events, and `Listening::Waiting(Where)`
+  fills the page's `#listen-at` line. A P2P call to a listed gateway's own callsign is not placed
+  (`Store::gateway_named`, `not_a_station`; the panel answers `{not_a_station}` and the page's
+  toast offers the base callsign). `GET /api/p2p-chance` predicts the P2P dial at the site of the
+  gateway listed under the station's base (`#p2p-chance`).
   Several callsigns (W46, W7; the author's decisions 2026-11-13): each a home of its own, the first
   the home as before and the others in `callsigns/<n>` under it, `chosen` naming the one in use
   (`callsigns.rs`); the panel opens the chosen home at each request and changes it only while idle,
@@ -632,6 +644,9 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   a challenge keeps that proof, and `/direct` takes it with the `HELLO` nonce (`Proofs::nonce`);
   RPMI lines are I-JSON, integers within ±(2^53−1); a list's repeated callsign counts once; the
   300 seconds of RP-3 §8 count from the last bytes (`rpmi::host::Silence`).
+- (2026-11-24) P2P made plain (D47): a listener runs 2300 Hz and answers both bandwidths; Listen
+  tunes to the P2P dial unless a gateway scans, and says where and how it answers; no P2P call to
+  a listed gateway's callsign; a P2P call shows its band's prediction. No retry at 500 Hz.
 - (2026-11-21) An alert to a station whose gateway scans (D46): it goes on the gateway's channel
   predicted best, else the circle's optional watch dial, else where the radio is; copies for the
   gateway's `scan_s`, also for a circle alert when any listed gateway scans the watch dial; answers,

@@ -25,7 +25,7 @@ use common::{loopback, message, scratch, store_for};
 /// What the listening station told, as plain words a test can wait for.
 fn told(what: &Listening) -> String {
     match what {
-        Listening::Waiting => "waiting".into(),
+        Listening::Waiting(_) => "waiting".into(),
         Listening::Called(who) => format!("called by {who}"),
         Listening::Ended(Ok(r)) => match &r.failed {
             None => "ended".into(),
@@ -48,8 +48,19 @@ struct Ana {
 
 impl Ana {
     fn listening(home: PathBuf, adapter: SocketAddr, stop_when_called: bool) -> Ana {
+        Ana::listening_on(home, adapter, stop_when_called, None)
+    }
+
+    /// [`Ana::listening`], the radio tuned to `dial_hz` first (the panel's P2P dial).
+    fn listening_on(
+        home: PathBuf,
+        adapter: SocketAddr,
+        stop_when_called: bool,
+        dial_hz: Option<u64>,
+    ) -> Ana {
         let stop = Arc::new(AtomicBool::new(false));
         let mut opts = Options::new(&adapter.to_string());
+        opts.dial_hz = dial_hz;
         opts.stop = Some(Arc::clone(&stop));
         // a caller that says nothing is given up soon (RP-3 §8), so that a test sees it
         opts.quiet = Duration::from_secs(2);
@@ -313,4 +324,26 @@ fn listening_comes_back_with_the_modem() {
         "claimed again when the modem came back: {said:?}"
     );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Listen tunes the radio to the P2P dial first, as `VarAC` tunes to its calling frequency: on
+/// 2026-11-23 the home radio was set to 7.082 MHz by hand, and nothing in `RadioPost` said where
+/// the station listened.
+#[test]
+fn listening_tunes_to_its_dial_first() {
+    let dir = scratch("listen-dial");
+    store_for(&dir.join("ana"), "device:ana", "ana");
+    let (_server, at_f, at_a) = common::loopback_dialled(Some(7_101_000));
+    let ana = Ana::listening_on(dir.join("ana"), at_a, false, Some(7_082_000));
+    ana.wait_for("waiting");
+    let said = ana.said();
+    assert!(
+        said.iter()
+            .any(|l| l == "tuned the radio to 7.082 MHz to listen"),
+        "{said:?}"
+    );
+    // answering is as before on the channel tuned
+    facundo_calls(&dir, at_f, "facundo-direct");
+    assert_eq!(ana.wait_for("ended"), "ended", "{:?}", ana.said());
+    ana.stop();
 }

@@ -128,6 +128,9 @@ struct Activity {
     listen: bool,
     /// Why the station cannot listen now, while Listen is on: the modem away, tried again.
     held: Option<String>,
+    /// Where the modem says the station listens, while Listen is on: its dial, the dials a
+    /// gateway on the station scans, and the bandwidths a call is answered in.
+    listening_at: Option<session::Where>,
     /// The operator asked the call or session under way to end (**Stop calling**,
     /// **Disconnect**, **Abort**): `disconnect` or `abort`, until it has.
     stopping: Option<&'static str>,
@@ -940,6 +943,7 @@ impl Panel {
         self.state()
     }
 
+    #[allow(clippy::too_many_lines, reason = "the panel's routes, one arm a route")]
     fn api(&self, method: &Method, path: &str, query: &str, body: &Value) -> Result<Value, Error> {
         let param = |name: &str| {
             query
@@ -977,7 +981,9 @@ impl Panel {
                 self.identity(path, body)
             }
             (Method::Post, "/api/call") => self.call(body),
-            (Method::Post, "/api/listen") => self.listen(&text("adapter")),
+            (Method::Post, "/api/listen") => {
+                self.listen(&text("adapter"), dial_of(&body["dial_hz"])?)
+            }
             (Method::Post, "/api/tune") => {
                 let dial = dial_of(&body["dial_hz"])?.ok_or("dial_hz: which dial")?;
                 self.tune(&text("adapter"), dial)
@@ -1011,6 +1017,11 @@ impl Panel {
             (Method::Get, "/api/attempts") => Ok(self.attempts(param("limit").parse().ok())),
             (Method::Get, "/api/called") => Ok(self.called()),
             (Method::Get, "/api/learned") => self.learned(param("callsign").trim()),
+            (Method::Get, "/api/p2p-chance") => self.p2p_chance(
+                param("callsign").trim(),
+                param("dial_hz").parse().ok(),
+                param("bandwidth").parse().unwrap_or(2300),
+            ),
             (_, "/api/forget") => self.forget(method, body),
             (Method::Post, p) if ONLINE.contains(&p) => self.online(path, body),
             (Method::Post, "/api/office") => self.office(body),
@@ -1056,6 +1067,20 @@ impl Panel {
         } else {
             Kind::Gateway
         };
+        // a P2P call to a listed gateway's callsign goes nowhere useful: the page is told whom to
+        // call instead, and offers it
+        if kind == Kind::Station {
+            let store = Store::open(&self.home())?;
+            if let (Some((gateway, instead)), Some(why)) = (
+                store.gateway_named(&callsign),
+                store.not_a_station(&callsign),
+            ) {
+                return Ok(
+                    json!({"not_a_station": {"gateway": gateway, "call": instead,
+                                                   "why": why}}),
+                );
+            }
+        }
         let fetch = match &body["fetch"] {
             Value::Null => Fetch::All,
             Value::String(f) if f == "all" => Fetch::All,
@@ -1601,7 +1626,8 @@ impl Panel {
                        "files": store.files.len(), "waiting": store.waiting_entries().len()},
             "activity": {"state": a.state, "remote": a.remote, "failed": a.failed,
                          "listen": a.listen, "held": a.held, "stopping": a.stopping,
-                         "stopped": a.stopped},
+                         "stopped": a.stopped,
+                         "listening_at": a.listening_at.as_ref().map(session::Where::to_json)},
             "alerts": self.alerts.summary(),
             "progress": self.live.lock().unwrap_or_else(PoisonError::into_inner).summary(),
             "update": self.updates.status(),
@@ -1898,6 +1924,65 @@ impl Panel {
                 "direction": l.direction,
             })),
         }))
+    }
+
+    /// `GET /api/p2p-chance?callsign=&dial_hz=&bandwidth=`: a P2P call's chance on the dial
+    /// picked, predicted as the gateway listed under the station's base callsign would be on it
+    /// (its site is the station's, as KK4ODA-1's is KK4ODA's), with the best of that gateway's
+    /// own channels on another band beside it when it does better. Null when no gateway of that
+    /// base is listed. Three P2P calls on 40 m at about 95 km, an hour and a half after sunset,
+    /// were heard by nobody (2026-11-23): 40 m had closed for so short a path, and nothing said so.
+    fn p2p_chance(
+        &self,
+        callsign: &str,
+        dial: Option<u64>,
+        bandwidth: u64,
+    ) -> Result<Value, Error> {
+        let Some(dial) = dial.filter(|&d| d > 0) else {
+            return Ok(Value::Null);
+        };
+        let store = Store::open(&self.home())?;
+        let Some(gateway) = store
+            .gateway_list
+            .as_ref()
+            .and_then(|l| l["gateways"].as_array())
+            .and_then(|list| {
+                list.iter().find(|g| {
+                    g["callsign"]
+                        .as_str()
+                        .is_some_and(|c| radiopost::callsign::same_base(c, callsign))
+                })
+            })
+            .cloned()
+        else {
+            return Ok(Value::Null);
+        };
+        let mut channels = vec![json!({"dial_hz": dial, "bandwidth_hz": bandwidth,
+                                       "modem": "aether"})];
+        channels.extend(gateway["channels"].as_array().cloned().unwrap_or_default());
+        let mut judged = [gateway];
+        judged[0]["channels"] = Value::Array(channels);
+        let (here, station, bands) = self.position.for_hf();
+        let when = i64::try_from(now()).unwrap_or(i64::MAX);
+        self.hf
+            .judge(here, &station, &bands, &mut judged, (when, true), None);
+        let g = &judged[0];
+        let chosen = g["channels"][0]["hf"].clone();
+        let chance = |c: &Value| c["hf"]["chance"].as_f64();
+        let better = g["channels"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .skip(1)
+            .filter(|c| c["hf"]["band"] != chosen["band"])
+            .filter(|c| chance(c) > chosen["chance"].as_f64())
+            .max_by(|a, b| {
+                chance(a)
+                    .partial_cmp(&chance(b))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|c| json!({"dial_hz": c["dial_hz"], "hf": c["hf"]}));
+        Ok(json!({"gateway": g["callsign"], "chosen": chosen, "better": better}))
     }
 
     /// `GET /api/learned?callsign=`: a gateway's details (§16.4): for each of its channels, what the
@@ -2360,10 +2445,13 @@ impl Panel {
 
     /// Listen pressed: the station listens for P2P calls on a thread of its own, and goes back to
     /// listening after each session and whenever the modem comes back, until Listen is pressed
-    /// again (`/api/stop`). Between sessions the activity is `listening`; in one, `session`.
-    fn listen(&self, adapter: &str) -> Result<Value, Error> {
+    /// again (`/api/stop`). Between sessions the activity is `listening`; in one, `session`. With
+    /// `dial_hz` (the P2P dial typed), the radio is tuned there first, unless the station scans a
+    /// gateway's channels.
+    fn listen(&self, adapter: &str, dial_hz: Option<u64>) -> Result<Value, Error> {
         self.take_station("listening", None)?;
-        let opts = self.station_options(adapter);
+        let mut opts = self.station_options(adapter);
+        opts.dial_hz = dial_hz;
         // read once the activity is set, so the callsign chosen cannot change before it is opened
         let home = self.home();
         let (activity, told_to) = (Arc::clone(&self.activity), Arc::clone(&self.activity));
@@ -2373,9 +2461,10 @@ impl Panel {
             let mut told = |what: session::Listening| {
                 let mut a = lock(&told_to);
                 match what {
-                    session::Listening::Waiting => {
+                    session::Listening::Waiting(at) => {
                         a.state = "listening";
                         a.held = None;
+                        a.listening_at = Some(at);
                     }
                     session::Listening::Called(who) => {
                         // told before the home is opened for the call, under the lock the panel
@@ -2414,6 +2503,7 @@ impl Panel {
             a.state = "idle";
             a.listen = false;
             a.held = None;
+            a.listening_at = None;
         });
         Ok(json!({}))
     }

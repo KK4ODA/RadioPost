@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.5.0 |
-| **Updated** | 2026-11-21 |
+| **Version** | 1.6.0 |
+| **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -69,6 +69,11 @@ callsign. The adapter keeps each host to its own business:
   moves the whole station for that call, and back once it has ended; the adapter refuses it `busy`
   while another program's link or call is up. A tuner tone (§4.3) keys the station's transmitter,
   so it too is refused `busy` while any link or call is up on the station.
+* **A host listening is called in any bandwidth.** The other station chooses a call's bandwidth.
+  While a host listens, an adapter whose modem answers narrower calls in its widest bandwidth runs
+  that one, once the station is idle, and goes back when the host stops listening or leaves. A
+  bandwidth another program chose for the station outranks it. `status` (§4) says which bandwidths
+  a call is answered in now.
 * **A host that leaves takes its callsigns, its call and its links with it.** When the host's
   connection to the adapter closes, calls to its callsigns are no longer answered for it, and the
   adapter ends its call under way and its links as `abort` would, so the station is not left in a
@@ -219,8 +224,20 @@ reports `queued` (§5) as the queue drains. RP-3 sessions are small enough that 
 
 ```json
 {"op": "status", "id": 7, "listening": true, "callsigns": ["N1CALL-10"], "busy": false,
- "links": [{"link": "a1", "remote": "KK4ODA", "direction": "in", "queued": 0}]}
+ "links": [{"link": "a1", "remote": "KK4ODA", "direction": "in", "queued": 0}],
+ "dial_hz": 7082000, "answers": [500, 2300]}
 ```
+
+Three more members are the station's, and each is left out when the adapter cannot say:
+
+| Member | Meaning |
+|---|---|
+| `dial_hz` | The radio's dial, with `caps.dial` (§4.1). |
+| `answers` | The bandwidths, in Hz, a call to this host is answered in now (§1.1). |
+| `scanning` | The dials the station scans, whichever host asked (§4.2). A host that tunes the radio to listen leaves it alone while this is there: a `tune` ends the scan. |
+
+These are what a host shows its operator while it listens: where to call it and in which
+bandwidths.
 
 ### 4.1 The dial
 
@@ -437,7 +454,8 @@ end of this section.
 |---|---|
 | `hello` | `status` and `capabilities`: `caps.shared` is true when `status.claims` is present, and `caps.bandwidths` are the ones Aether runs (`capabilities.bandwidths_hz`, or `bandwidth_hz` alone where an Aether lists none). `delivery`, `broadcast`, `quality`, `busy`, `regulatory` and `tone` are true, and `max_links` is 1. `modem` is `Aether HF` and `status.version`. Then, when shared, `hello {app}` with the host's `app` (below, *A host between calls*). |
 | `callsigns` | `claim {callsigns, app}`, with the host's `app`. Aether takes the callsigns it can and lists each one another program holds in `refused`. RPMI keeps the host's list whole, so on a refusal the adapter claims the host's earlier list again and answers `error` `claimed` naming the refused callsigns. |
-| `listen` | `listen {enabled}` on that claim. A claim starts with it off, as RPMI's does. |
+| `listen` | `listen {enabled}` on that claim. A claim starts with it off, as RPMI's does. From 0.2.0-beta.174 (`status.bandwidth` has `listening`), the adapter then asks `bandwidth.set {hz, listening: true}` with the widest of `caps.bandwidths` while the host listens, and `bandwidth.set {hz: null}` once it stops (§1.1). Aether holds each connection's request apart, in force only while no program has asked for a bandwidth of its own (a host program's `BW500` on its VARA port outranks it), moves once the station is idle, and drops the request when the connection closes. A 2300 Hz Aether answers a 500 Hz call by moving to 500 Hz for the session (its ADR-0026). |
+| `status` | The host's `callsigns`, `listening` and `links`, with the station's from Aether's `status`: `dial_hz` is `frequency_hz`; `answers` are the bandwidths Aether runs at or under `bandwidth.bandwidth_hz`; `scanning` is `scan.dials`, whichever program's scan it is. |
 | `connect` | `connect {remote, callsign}`, with `callsign` set to `as`. The call and its session are the host's. Aether's `claimed`, and `bad_params` for a callsign the claim does not hold, are RPMI's `not-authorized`. `already_connected` is `busy`. `refused` (an answer-only station) and `regulatory` are `refused`. |
 | `connected` | A `state` event `connected` whose `owner` is the claim's `id`. A `detail` of `<remote> (master)` is a call the host placed (`direction` `out`), and `<remote> (slave)` one it answered (`in`). The event's `callsign` is `local`. |
 | `failed` | A `state` event `disconnected` with the claim's `owner` before any `connected`: `no answer` is `timeout`, `aborted` after the host's `abort` is `aborted`, and anything else `refused`. `heard` is whether a `frame` event decoded `from` the station called (whatever its case) arrived during the call, and `snr_db` the strongest of their `snr_db`. |
@@ -454,7 +472,7 @@ end of this section.
 | `scan` | `scan.start {dials}`, or `scan.stop` for no dials, on the host's own connection to Aether, which the scan belongs to (its ADR-0129). Aether scans two to four dials (its ADR-0129 §11): about 4 s on a dial where it hears nothing, and a caller's gap between tries where it hears a call under way. `scan_s` is the answer's, rounded up to whole seconds. `caps.call_s` is true when `status` has `scan` (Aether 0.2.0-beta.162 and later), and `caps.scan` when it also has `can_tune`. Aether's `claimed` is `busy`; its `regulatory` and `bad_params` are `refused`, its `unsupported` `unsupported`. With no scan of its own the host's empty `scan` is answered without asking Aether: a `scan.stop` from a connection that holds no claim stops another program's scan as the operator's. |
 | `scan` event | Aether's `scan` event, with its `why`: `connection closed` is `left`, `tuned by another program` is `tuned`, and `asked`, `knob`, `operator` and `radio` are themselves. |
 | `call_s` (in `connect`) | `connect {…, call_s}` with `caps.call_s`; Aether makes the fewest tries that keep starting that long, and answers how many. Without it, the call is Aether's own length. |
-| `bandwidth` (in `connect`) | A `connect` that names a bandwidth is sent with `keep_bandwidth`, so Aether does not move for the call by itself (its ADR-0102). One that names a bandwidth Aether runs but is not running now moves the station first, as §1.1 says: `status` (`busy` unless `state` is `idle`; `bandwidth.host_hz` is kept), then `bandwidth.set {hz}` (Aether's refusal, something under way on the air, is `busy`), then `connect`. When the call fails, its link ends or the host leaves, `bandwidth.set` puts back the `host_hz` kept, `null` for the station's own; withdrawing always succeeds, and Aether goes back once it is idle. Aether may move between calls (a `bandwidth` event): `connected` carries the bandwidth in use. |
+| `bandwidth` (in `connect`) | A `connect` that names a bandwidth is sent with `keep_bandwidth`, so Aether does not move for the call by itself (its ADR-0102). One that names a bandwidth Aether runs but is not running now moves the station first, as §1.1 says: `status` (`busy` unless `state` is `idle`; `bandwidth.host_hz` is kept), then `bandwidth.set {hz}` (Aether's refusal, something under way on the air, is `busy`), then `connect`. When the call fails, its link ends or the host leaves, `bandwidth.set` puts back the `host_hz` kept, `null` for the station's own; withdrawing always succeeds, and Aether goes back once it is idle. From 0.2.0-beta.174 the call's request is this connection's alone, so the adapter puts back this connection's own instead: the request for listening while the host listens, `null` otherwise. Aether may move between calls (a `bandwidth` event): `connected` carries the bandwidth in use. |
 | `tone` | `tune {duration_s}`, the seconds as `duration_s`, 0 to stop it: `busy` at once while the host has a call or link, or another program's session is up, unless it stops one; Aether's refusals (the channel busy, the rules, a radio keyed by a host program with none attached) are `refused`, with Aether's message. |
 
 Aether checks the band rules before every transmission, and ends each session with the Morse
@@ -746,3 +764,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 1.3.1 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 7; D43). §1: an adapter built into the host may skip §2's transport and framing. §2: lines are I-JSON, and an integer has no fraction or exponent and fits in ±(2^53−1) (the reference and the Rust adapter had parted on `NaN`, lone surrogates and large integers); a request without `id` gets no `ok` but does get an `error`, `status` or `dial` without one; a `data` member is its bytes, its pad bits written as zero. §9.5: what each form of `remote` calls, a name mapped to a bare address calling the name, IPv6 in brackets; the opening line ASCII, its 200 bytes before the LF, its 30 seconds from the connection; the fingerprint is the leaf certificate's; plain TCP only by choice. Test vectors (`rpmi-lines.json`; `rpmi-conversations.json`'s rule: a host's ids and refs are its own, and `data` compares as bytes). PATCH, announced (RP-0 §8.4): nothing for an implementation to do. |
 | 1.4.0 | 2026-11-21 | §5: `failed`'s `heard` and `snr_db`, whether the station called was heard during a call that brought no link and how strongly; `quality`'s `peer_snr_db`, what the other station reports hearing this one at. §9.1: Aether's sources for both (its `frame` events during the call, `metrics.peer_snr_db`). From choosing a gateway (the design's §12.2, Phase 4), which learns each direction of a path and tells "nothing heard" from "heard, but no link". Test vectors: the simulated modem's `failed` `timeout` says `heard` false. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; an adapter that says neither and a host that ignores both lose nothing they had. |
 | 1.5.0 | 2026-11-21 | §6, the dial: a broadcast heard carries `dial_hz`, where it was heard, and a `broadcast` may name a `dial_hz`; a scanning modem takes its scan there to send it, so an answer goes where the frame it answers was heard (RP-8 0.2.0, an alert to a station whose gateway scans). §9.1: Aether's `datagram.send` and `datagram` carry the dial (its ADR-0129 §15). Test vectors (`rpmi-conversations.json`, the scan conversation). MINOR, announced (RP-0 §8.4): two optional members; a modem or host that ignores them works as before, and its answers go where the radio is. |
+| 1.6.0 | 2026-11-24 | §1.1: a host listening is called in any bandwidth: an adapter whose modem answers narrower calls in its widest bandwidth runs that one while a host listens, below a bandwidth another program chose. §4: `status` carries the station's `dial_hz`, `answers` (the bandwidths a call is answered in now) and `scanning` (the dials the station scans, whichever host asked), each left out when the adapter cannot say. §9.1: Aether's `bandwidth.set` with `listening` and `status` (its 0.2.0-beta.174). From the portable's sessions of 2026-11-23: a 2300 Hz P2P call to a home station a profile had left at 500 Hz went unanswered, and nothing in the listening client said where or how it listened. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; an adapter that says none of the three, and a host that ignores them, work as before. |

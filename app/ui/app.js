@@ -465,6 +465,58 @@ function showKind() {
   $("callsign").placeholder = gateway ? "KK4ODA-1" : "N0CALL";
   showCalledButton();
   showTuning();
+  askP2pChance();
+}
+
+// ── a P2P call's chance ────────────────────────────────────────────────────────────────────────
+// Predicted on the dial picked at the site of the gateway listed under the station's base
+// callsign (GET /api/p2p-chance), with a band of that gateway's that does better beside it. Three
+// P2P calls on 40 m at about 95 km, an hour and a half after sunset, were heard by nobody
+// (2026-11-23): the band had closed for so short a path, and nothing said so.
+
+let p2pChanceSerial = 0;
+let p2pChanceTimer = null;
+
+function askP2pChance() {
+  clearTimeout(p2pChanceTimer);
+  p2pChanceTimer = setTimeout(showP2pChance, 600);
+}
+
+async function showP2pChance() {
+  const line = $("p2p-chance");
+  const callsign = $("callsign").value.trim().toUpperCase();
+  const dial = hzOf($("dial").value);
+  const mine = ++p2pChanceSerial;
+  if (kind() !== "station" || !callsign || !dial) {
+    line.textContent = "";
+    return;
+  }
+  try {
+    const r = await api(`p2p-chance?callsign=${encodeURIComponent(callsign)}&dial_hz=${dial}`
+      + `&bandwidth=${$("bandwidth").value}`);
+    if (mine !== p2pChanceSerial) return;
+    const [text, poor] = p2pChanceWords(callsign, r);
+    line.textContent = text;
+    line.classList.toggle("by-hand", poor);
+  } catch {
+    if (mine === p2pChanceSerial) line.textContent = "";
+  }
+}
+
+// the band as people say it: "40 m"
+const bandWords = (band) => String(band || "").replace(/^(\d+)m$/, "$1 m");
+
+function p2pChanceWords(callsign, r) {
+  const hf = r && r.chosen;
+  if (!hf || !hf.words) return ["", false];
+  const far = hf.distance_km != null ? `, ${hf.distance_km} km away` : "";
+  const band = hf.band ? bandWords(hf.band) : "This dial";
+  let text = `${band} to ${callsign}, predicted at ${r.gateway}'s site${far}. ${hf.words}.`;
+  const b = r.better;
+  if (b && b.hf && b.hf.chance_words) {
+    text += ` ${bandWords(b.hf.band)}, ${mhzOf(b.dial_hz)} MHz: ${b.hf.chance_words}.`;
+  }
+  return [text, hf.chance != null && hf.chance < 0.4];
 }
 
 // ── the call box remembers each kind ───────────────────────────────────────────────────────────
@@ -882,19 +934,60 @@ function showListen(s, a, busy) {
   // on, it stays pressable, so that a second press stops listening even during a session
   b.disabled = !s.me || (busy && !on);
   b.title = listenTitle(s, a);
+  const [text, warn] = listenAt(s, a);
+  $("listen-at").textContent = text;
+  $("listen-at").classList.toggle("by-hand", warn);
+}
+
+// Where and how the station answers P2P calls while it listens, as the modem says: the dial, or
+// the channels a gateway on the station scans, and the bandwidths a call is answered in. A
+// profile had left the home station at 500 Hz while it listened, and a 2300 Hz call to it went
+// unanswered with nothing here to say so (2026-11-23). Warned when a 2300 Hz call would not be
+// answered.
+function listenAt(s, a) {
+  const at = a.listen && !a.held ? a.listening_at : null;
+  if (!at) return ["", false];
+  let where = "";
+  if (at.scanning && at.scanning.length) {
+    where = ` on the channels the station scans: ${listOf(at.scanning.map(mhzOf))} MHz`;
+  } else if (at.dial_hz) {
+    where = ` on ${mhzOf(at.dial_hz)} MHz`;
+  }
+  const answers = at.answers || [];
+  const widest = answers.length ? Math.max(...answers) : 0;
+  let how = "";
+  if (answers.length > 1) {
+    const others = answers.filter((hz) => hz !== widest);
+    how = `, ${widest} Hz (answers ${listOf(others.map(String))} Hz calls too)`;
+  } else if (widest) {
+    how = `, ${widest} Hz calls only`;
+  }
+  const warn = answers.length === 1 && widest < 2300;
+  return [`Listening as ${myNames(s)}${where}${how}`, warn];
+}
+
+// "a", "a and b", "a, b and c"
+function listOf(items) {
+  return items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`
+    : items[0] || "";
+}
+
+// Every callsign of this computer, the one chosen first (W46), as a listener answers to them
+function myNames(s) {
+  const mine = s.me ? [s.me.operator] : [];
+  for (const c of s.callsigns || []) {
+    if (c.operator && !mine.includes(c.operator)) mine.push(c.operator);
+  }
+  return mine.length > 1
+    ? `${mine.slice(0, -1).join(", ")} or ${mine[mine.length - 1]}`
+    : mine[0] || "your callsign";
 }
 
 // Listen for P2P's tooltip: the callsigns it answers as (every callsign of this computer, the one
 // chosen first, W46), that it holds until pressed again, and that a gateway on the station is not
 // this client's to answer
 function listenTitle(s, a) {
-  const mine = s.me ? [s.me.operator] : [];
-  for (const c of s.callsigns || []) {
-    if (c.operator && !mine.includes(c.operator)) mine.push(c.operator);
-  }
-  const names = mine.length > 1
-    ? `${mine.slice(0, -1).join(", ")} or ${mine[mine.length - 1]}`
-    : mine[0] || "your callsign";
+  const names = myNames(s);
   if (a.listen && a.held) {
     return `On: waiting for the modem (${a.held}); tried again every 5 s. `
       + "Press again to stop listening";
@@ -3171,6 +3264,30 @@ function tellModem() {
   api("modem", {adapter: adapter()}).catch(() => { /* the next change or call tells it */ });
 }
 
+// A call. A P2P call to a listed gateway's callsign is not placed: the panel says whom to call
+// instead, and the toast's button calls that one (on 2026-11-23 Aether advised the portable to call
+// the gateway KK4ODA-1 for P2P; such a call reaches the gateway, which takes no P2P calls).
+async function placeCall(body) {
+  try {
+    const result = await api("call", body);
+    const refused = result && result.not_a_station;
+    if (refused) {
+      const instead = refused.call;
+      toast(`${refused.why}.`, true, instead ? {
+        label: `Call ${instead}`,
+        run: async () => {
+          $("callsign").value = instead;
+          await placeCall({...body, callsign: instead});
+        },
+      } : null);
+      return;
+    }
+    await refresh();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
 async function act(path, body) {
   try {
     await api(path, body);
@@ -5075,6 +5192,8 @@ function wire() {
   $("channel").addEventListener("change", pickChannel);
   $("dial").value = kept("dial", "");
   $("dial").addEventListener("input", showTuning);
+  $("dial").addEventListener("input", askP2pChance);
+  $("callsign").addEventListener("input", askP2pChance);
   $("dial").addEventListener("change", () => {
     const text = $("dial").value.trim();
     if (text && !hzOf(text)) { toast("The dial is a frequency in MHz, such as 7.101.", true); return; }
@@ -5082,7 +5201,10 @@ function wire() {
     pickChannel();
   });
   $("bandwidth").value = kept("bandwidth", "2300");
-  $("bandwidth").addEventListener("change", () => keep("bandwidth", $("bandwidth").value));
+  $("bandwidth").addEventListener("change", () => {
+    keep("bandwidth", $("bandwidth").value);
+    askP2pChance();
+  });
   $("tone").addEventListener("click", toggleTone);
   showTuning();
   $("call").addEventListener("click", () => {
@@ -5098,7 +5220,7 @@ function wire() {
     // a gateway that scans is found by a call that keeps trying as long as its record says
     const channel = !station && dial && chosenGateway
       ? chosenGateway.channels.find((c) => c.dial_hz === dial) : null;
-    act("call", {
+    placeCall({
       callsign, station, adapter: adapter(),
       fetch: /^[0-9]+$/.test(fetchRule) ? Number(fetchRule) : fetchRule,
       dial_hz: dial || null,
@@ -5111,7 +5233,8 @@ function wire() {
   // one switch: pressed in, it listens; pressed again, it stops
   $("listen").addEventListener("click", () => {
     if ($("listen").getAttribute("aria-pressed") === "true") act("stop", {});
-    else act("listen", {adapter: adapter()});
+    // the P2P dial typed is the channel listened on: the radio goes there first (W15)
+    else act("listen", {adapter: adapter(), dial_hz: hzOf(kept("dial", "")) || null});
   });
   $("update-go").addEventListener("click", () => act("update", {}));
   $("updates-check").addEventListener("click", () => act("update/check", {}));

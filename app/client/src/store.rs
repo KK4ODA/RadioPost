@@ -1084,6 +1084,43 @@ impl Store {
         }
     }
 
+    /// The gateway a P2P call names (RP-5 §4.4: a listed gateway's own callsign), and the
+    /// callsign to call instead: the base of its, when that is not the gateway's too. A gateway
+    /// answers gateway calls (RP-3 §9), not a station's (§10): Aether told the portable to call
+    /// the gateway KK4ODA-1 after a P2P call to KK4ODA went unanswered (2026-11-23), and on
+    /// 2026-11-17 such a call reached `RadioPost` Gateway, whose welcome the client then left.
+    #[must_use]
+    pub fn gateway_named(&self, callsign: &str) -> Option<(String, Option<String>)> {
+        let gateway = self
+            .gateway_list
+            .as_ref()?
+            .get("gateways")?
+            .as_array()?
+            .iter()
+            .filter_map(|g| g["callsign"].as_str())
+            .find(|c| c.eq_ignore_ascii_case(callsign.trim()))?
+            .to_owned();
+        let base = radiopost::callsign::base(&gateway);
+        let instead = (!base.eq_ignore_ascii_case(&gateway)).then_some(base);
+        Some((gateway, instead))
+    }
+
+    /// What a P2P call to a listed gateway is told: that it cannot work, and whom to call.
+    #[must_use]
+    pub fn not_a_station(&self, callsign: &str) -> Option<String> {
+        let (gateway, instead) = self.gateway_named(callsign)?;
+        Some(match instead {
+            Some(station) => format!(
+                "{gateway} is a gateway: it takes gateway calls, not P2P calls. For P2P, call \
+                 the station's own callsign, {station}"
+            ),
+            None => format!(
+                "{gateway} is a gateway: it takes gateway calls, not P2P calls. For P2P, call \
+                 the callsign the operator's RadioPost client listens as"
+            ),
+        })
+    }
+
     /// How long copies of an alert on `dial_hz` must go on for the station alerted to hear one
     /// whole (RP-8 §5): the `scan_s` of a listed gateway whose callsign has the base of `to` and
     /// which scans that dial; for an alert to the whole circle (`to` none), the longest of any
@@ -1455,6 +1492,19 @@ mod tests {
         assert_eq!(store.scan_s_of("KK4ODA-1", None), Some(20));
         assert_eq!(store.scan_s_of("W4MID-1", None), None);
         assert_eq!(store.scan_s_of("N0NE-1", None), None);
+        // a P2P call to a listed gateway's own callsign is refused, the station's base offered;
+        // the station itself, or another SSID, is called as asked
+        assert_eq!(
+            store.gateway_named("kk4oda-1"),
+            Some(("KK4ODA-1".to_owned(), Some("KK4ODA".to_owned())))
+        );
+        assert!(
+            store
+                .not_a_station("KK4ODA-1")
+                .is_some_and(|why| why.ends_with("call the station's own callsign, KK4ODA"))
+        );
+        assert_eq!(store.gateway_named("KK4ODA"), None);
+        assert_eq!(store.gateway_named("KK4ODA-2"), None);
         // RP-8 §5: an alert's copies go on for the scan of the station alerted, found by its
         // callsign's base; for the whole circle, the longest scan of any gateway on the dial
         assert_eq!(store.outlast_s(Some("KK4ODA"), 7_101_000), Some(20));

@@ -257,7 +257,7 @@ fn ana_listening(
     thread::spawn(move || {
         let mut tell = |what: Listening| {
             let _ = tx.send(match what {
-                Listening::Waiting => "waiting".to_owned(),
+                Listening::Waiting(_) => "waiting".to_owned(),
                 Listening::Called(who) => format!("called by {who}"),
                 Listening::Ended(Ok(r)) => match r.failed {
                     None => "ended".into(),

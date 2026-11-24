@@ -651,3 +651,37 @@ fn real_voacap_predicts_a_gateway_both_ways() {
     );
     println!("{}", serde_json::to_string_pretty(forty).expect("JSON"));
 }
+
+/// A P2P call's chance (GET /api/p2p-chance): the dial picked, predicted at the site of the gateway
+/// listed under the station's base callsign; nothing for a station with no gateway listed, or no
+/// dial. Three P2P calls on 40 m at about 95 km after dark were heard by nobody (2026-11-23).
+#[test]
+fn a_p2p_call_is_predicted_at_its_stations_gateway() {
+    let hf = Hf::with_engine(Box::new(MadeUp {
+        runs: Arc::new(AtomicUsize::new(0)),
+    }));
+    let at = panel("hf-p2p", hf, Some("EM73tr"));
+    let v = http(
+        at,
+        "GET",
+        "/api/p2p-chance?callsign=W1AW&dial_hz=7082000&bandwidth=2300",
+        &Value::Null,
+    );
+    assert_eq!(v["gateway"], "W1AW-10", "{v}");
+    assert_eq!(v["chosen"]["state"], "predicted", "{v}");
+    assert!(
+        v["chosen"]["words"].as_str().is_some_and(|w| !w.is_empty()),
+        "{v}"
+    );
+    assert!(v["chosen"]["chance"].is_number(), "{v}");
+    for nothing in [
+        "/api/p2p-chance?callsign=N1NONE&dial_hz=7082000",
+        "/api/p2p-chance?callsign=W1AW",
+    ] {
+        assert_eq!(
+            http(at, "GET", nothing, &Value::Null),
+            Value::Null,
+            "{nothing}"
+        );
+    }
+}
