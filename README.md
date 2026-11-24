@@ -260,6 +260,7 @@ office or modem adapter from the specifications, and it will work with everyone 
 | A gateway | RP-1, RP-2, RP-3, RP-5; RP-4 to drive modems; RP-7 to forward when cut off |
 | A post office | RP-1, RP-2, RP-5, RP-6 |
 | An adapter for a modem | RP-4 |
+| A map or list of gateways | [radiopost.org's directory feed](https://radiopost.org/gateways/feed/); RP-5 §4.4 and §4.6 for each post office's own signed lists |
 
 RP-0 holds the conventions they all share. [The index](spec/README.md) says which parts of each
 apply. The [test vectors](vectors/README.md) give the exact bytes and verdicts: keys, credentials,
@@ -324,6 +325,7 @@ The programs say when a newer release is out and update themselves. On-air tests
 | [The detailed design](docs/design/00-detailed-design.md) | The programs, the connections between them, and the decisions behind them. |
 | [The specifications](spec/README.md) | The protocols: what every client, gateway, post office and modem adapter implements. |
 | [The test vectors](vectors/README.md) | Exact inputs and outputs for the protocols, to check an implementation against. |
+| [The directory feed](https://radiopost.org/gateways/feed/) | Every gateway the post offices list, with its channels, their modems and whether it is on the air, as one JSON file for maps and directories. |
 | [The conformance tester's outline](docs/design/01-conformance.md) | What the tester will check of each role, and what each phase adds to it. |
 
 ## In this repository
