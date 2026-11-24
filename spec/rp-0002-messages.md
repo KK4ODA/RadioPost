@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.4.0 |
+| **Version** | 1.4.1 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -359,8 +359,8 @@ the values in the order of their numbers, text as it is, an integer in decimal, 
 vectors write it: `[1, -2]`, `{1: "a", 2: true}`, map keys in their encoded order, text in double
 quotes with `\`, `"` and line breaks escaped. Then the `body` in the same way.
 
-Test vectors: `vectors/forms.json`: ICS-213's encoding and fingerprint, `shelter3-213`'s text with
-and without its template, and ten sets of values checked against the template; under `every_type`,
+Test vectors: `vectors/forms.json`: each published template's encoding and fingerprint, `shelter3-213`'s text with
+and without its template, and ten sets of values checked against ICS-213; under `every_type`,
 a test template that uses every type, two messages filled in with it, their text with and without the
 template, values written as §8.4 says, values checked against it, and templates that break §8.1's
 rules.
@@ -380,3 +380,4 @@ rules.
 | 1.2.0 | 2026-11-19 | From RadioPostKit, a second implementation (GitHub issue 5; D43). §2: a receiver refuses as `malformed` a message missing a required key or with a key of the wrong type (no receiver had checked); "at least one in `to` or `cc`" binds clients, since a post office makes `to: []` of an email sent by `Bcc` alone (RP-6 §2.4); how a sender turns CR into LF; a receiver neither checks nor changes text, so Unicode versions never change a content ID. §4: compression 1 is exactly one DEFLATE stream, as `messages.json` already had it. §5: a station inflates to 16 MiB at least, and may refuse more as `too-large` (the Rust library had refused past 16 MiB as `malformed`, and the reference had no bound). Test vectors (`messages.json`). MINOR, announced (RP-0 §8.4): no conforming sender makes what is now refused, and a station that takes more refuses nothing it should take. Implementations should check the keys and inflate to 16 MiB. |
 | 1.3.0 | 2026-11-24 | §2: a sender writes `from`, `to` and `cc` in lowercase (RP-0 1.5.0 §6.2); a receiver keeps them as they came and compares them without regard to case. MINOR, announced (RP-0 §8.4): nothing is refused that was taken before; implementations should lowercase addresses as they make a message. |
 | 1.4.0 | 2026-11-24 | Forms for most jobs ([the forms design](../docs/design/06-forms.md), wishlist W32): §8.1's types `position`, `datetime`, `multi`, `rows` and `heading`, a `number`'s `scale` and `unit`, a `rows` field's `columns`, and the rules a template keeps; §8.2's checks for each, written as a list; §8.4's text for each, and a list or a map shown without its template in CBOR diagnostic notation. Test vectors: `forms.json`'s `every_type`. MINOR, announced (RP-0 §8.4): a program that does not know the new types holds no template that uses them, and shows such a form by number as before; only the diagnostic notation for a list or a map is new there. Implementations should show lists and maps so, and may read the new types. |
+| 1.4.1 | 2026-11-24 | §8.4: the test vectors give every published template's encoding and fingerprint: FEMA's ICS 202, 204, 205, 205A, 206, 208, 210, 211, 213RR and 214 and RadioPost's own seven forms joined ICS-213 ([the forms design](../docs/design/06-forms.md), step 2). Nothing to do: templates are published as files (§8.1). |

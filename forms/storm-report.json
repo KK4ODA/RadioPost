@@ -1,0 +1,21 @@
+{
+  "name": "Storm Report",
+  "note": "RadioPost's own form, published under CC BY 4.0. For a weather office: the kinds of event the National Weather Service asks SKYWARN spotters to report. Which an office wants, and from what size or speed, differs: check its spotter guide.",
+  "fields": [
+    {"n": 1, "label": "Location", "type": "position", "required": true},
+    {"n": 2, "label": "Time of the event", "type": "datetime", "required": true},
+    {"n": 3, "label": "Event", "type": "multi", "choices": ["Tornado", "Funnel cloud", "Rotating wall cloud", "Hail", "Damaging wind", "Flooding", "Heavy rain", "Snow or ice", "Other"], "required": true},
+    {"n": 4, "label": "Storm movement (toward, speed)", "type": "line", "max": 40},
+    {"n": 5, "label": "Hail size", "type": "number", "scale": 2, "unit": "in"},
+    {"n": 6, "label": "Wind speed", "type": "number", "unit": "mph"},
+    {"n": 7, "label": "The wind speed was", "type": "choice", "choices": ["Measured", "Estimated"]},
+    {"n": 8, "label": "Rainfall", "type": "number", "scale": 2, "unit": "in"},
+    {"n": 9, "label": "Rainfall over", "type": "line", "max": 40},
+    {"n": 10, "label": "Snow or ice depth", "type": "number", "scale": 1, "unit": "in"},
+    {"n": 11, "label": "Damage", "type": "text"},
+    {"n": 12, "label": "People injured", "type": "number"},
+    {"n": 13, "label": "People killed", "type": "number"},
+    {"n": 14, "label": "Spotter number or callsign", "type": "line", "max": 40},
+    {"n": 15, "label": "Remarks", "type": "text"}
+  ]
+}

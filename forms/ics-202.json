@@ -1,0 +1,20 @@
+{
+  "name": "ICS-202 Incident Objectives",
+  "note": "After FEMA's ICS 202 Incident Objectives (NIMS ICS Forms Booklet, FEMA 502-2), a United States government form in the public domain. Dates and times are UTC; signatures are left to the paper form.",
+  "fields": [
+    {"n": 1, "label": "Incident name", "type": "line", "max": 80},
+    {"n": 2, "label": "Operational period from", "type": "datetime"},
+    {"n": 3, "label": "Operational period to", "type": "datetime"},
+    {"n": 4, "label": "Objectives", "type": "text", "required": true},
+    {"n": 5, "label": "Operational period command emphasis", "type": "text"},
+    {"n": 6, "label": "General situational awareness", "type": "text"},
+    {"n": 7, "label": "Site safety plan required?", "type": "choice", "choices": ["Yes", "No"]},
+    {"n": 8, "label": "Approved site safety plan(s) located at", "type": "line", "max": 80},
+    {"n": 9, "label": "Included in the Incident Action Plan", "type": "multi", "choices": ["ICS 203", "ICS 204", "ICS 205", "ICS 205A", "ICS 206", "ICS 207", "ICS 208", "Map/chart", "Weather forecast/tides/currents"]},
+    {"n": 10, "label": "Other attachments", "type": "text"},
+    {"n": 11, "label": "Prepared by (name and position/title)", "type": "line", "max": 80},
+    {"n": 12, "label": "Date prepared", "type": "date", "bound": "date"},
+    {"n": 13, "label": "Time prepared", "type": "time", "bound": "time"},
+    {"n": 14, "label": "Approved by Incident Commander (name)", "type": "line", "max": 80}
+  ]
+}

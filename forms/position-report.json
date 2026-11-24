@@ -1,0 +1,12 @@
+{
+  "name": "Position Report",
+  "note": "RadioPost's own form, published under CC BY 4.0. Where a station is, for a net or a map.",
+  "fields": [
+    {"n": 1, "label": "Position", "type": "position", "required": true},
+    {"n": 2, "label": "Time of the position", "type": "datetime"},
+    {"n": 3, "label": "Course", "type": "number", "unit": "degrees"},
+    {"n": 4, "label": "Speed", "type": "number", "unit": "km/h"},
+    {"n": 5, "label": "Status", "type": "choice", "choices": ["OK", "Need assistance", "Emergency"]},
+    {"n": 6, "label": "Comment", "type": "line", "max": 120}
+  ]
+}

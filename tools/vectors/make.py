@@ -8563,17 +8563,50 @@ def make_api() -> dict[str, Any]:
 # -- writing and checking ------------------------------------------------------------------------
 
 
+# RP-2 §8.1: the published templates, in the order the programs hold them: ICS-213 first (as it has
+# been since RP-2 1.1.0), FEMA's other ICS forms, then RadioPost's own (the forms design, step 2).
+PUBLISHED_FORMS = [
+    "ics-213",
+    "ics-202",
+    "ics-204",
+    "ics-205",
+    "ics-205a",
+    "ics-206",
+    "ics-208",
+    "ics-210",
+    "ics-211",
+    "ics-213rr",
+    "ics-214",
+    "check-in",
+    "check-out",
+    "comms-log",
+    "damage-report",
+    "position-report",
+    "situation-report",
+    "storm-report",
+]
+
+
 def make_forms() -> dict[str, Any]:
     """RP-2 §8: the published templates, the form message's text, and values checked."""
-    fp = forms.fingerprint(ICS_213)
-    templates = [
-        {
-            "file": "forms/ics-213.json",
-            "diagnostic": cbor.diagnostic(forms.template_map(ICS_213)),
-            "canonical_hex": cbor.encode(forms.template_map(ICS_213)).hex(),
-            "fingerprint_hex": fp.hex(),
-        }
-    ]
+    on_disk = sorted(p.stem for p in FORMS_DIR.glob("*.json"))
+    assert on_disk == sorted(PUBLISHED_FORMS), f"forms/ and the published list differ: {on_disk}"
+    templates = []
+    for name in PUBLISHED_FORMS:
+        t = form_template(name)
+        # RP-2 §8.1: every published template keeps the rules
+        assert forms.template_problem(t) is None, f"{name}: {forms.template_problem(t)}"
+        templates.append(
+            {
+                "file": f"forms/{name}.json",
+                "diagnostic": cbor.diagnostic(forms.template_map(t)),
+                "canonical_hex": cbor.encode(forms.template_map(t)).hex(),
+                "fingerprint_hex": forms.fingerprint(t).hex(),
+            }
+        )
+    # no two published templates share a fingerprint, or a name the composer lists them by
+    assert len({t["fingerprint_hex"] for t in templates}) == len(templates)
+    assert len({form_template(n)["name"] for n in PUBLISHED_FORMS}) == len(templates)
     m = MESSAGES["shelter3-213"]
     shown = [
         {

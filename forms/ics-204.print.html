@@ -1,0 +1,46 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- How an ICS-204 Assignment List prints: as FEMA's ICS 204 Assignment List (NIMS ICS Forms Booklet, FEMA 502-2, a United
+     States government form in the public domain), its blocks numbered as there. The programs put
+     each field's value in the place marked with its number (data-field), as text, and a table's
+     rows in its body (a tbody with data-field), padded to data-rows lines; the signature lines
+     stay blank, to sign on paper. Only for the template with this fingerprint (data-template):
+     another template is another form. -->
+<section class="ics204" data-template="fb40811f7dab39d1">
+<style>
+.ics204 { color: #000; background: #fff; font: 10pt/1.3 Arial, Helvetica, sans-serif; }
+.ics204 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.ics204 table + table { border-top: 0; }
+.ics204 td, .ics204 th { border: 1px solid #000; padding: 3pt 5pt; vertical-align: top; text-align: left; }
+.ics204 th { font-size: 8pt; }
+.ics204 h1 { font-size: 13pt; text-align: center; margin: 0 0 6pt; letter-spacing: .02em; }
+.ics204 b { font-size: 9pt; }
+.ics204 [data-field] { font-size: 10.5pt; overflow-wrap: anywhere; }
+.ics204 .box { white-space: pre-wrap; display: block; margin-top: 3pt; }
+.ics204 tbody[data-field] td { height: 13pt; font-size: 9pt; padding: 1pt 4pt; }
+.ics204 .part { font-size: 9pt; font-weight: bold; text-transform: uppercase; letter-spacing: .04em;
+           border-bottom-width: 2px; }
+.ics204 .foot { border: 0; padding: 3pt 0 0; font-size: 9pt; }
+</style>
+<h1>ASSIGNMENT LIST (ICS 204)</h1>
+<table>
+  <tr><td><b>1. Incident Name:</b> <span data-field="1"></span></td><td><b>2. Operational Period:</b><br><b>Date/Time From:</b> <span data-field="2"></span><br><b>Date/Time To:</b> <span data-field="3"></span></td>
+    <td><b>3. Branch:</b> <span data-field="4"></span><br><b>Division:</b> <span data-field="5"></span><br><b>Group:</b> <span data-field="6"></span><br>
+    <b>Staging Area:</b> <span data-field="7"></span></td></tr>
+  <tr><td colspan="3"><b>4. Operations Personnel:</b></td></tr>
+</table>
+<table><thead><tr><th>Position</th><th>Name</th><th>Contact Number(s)</th></tr></thead><tbody data-field="8" data-rows="3"></tbody></table>
+<table><tr><td><b>5. Resources Assigned:</b></td></tr></table>
+<table><colgroup><col style="width: 16%"><col style="width: 16%"><col style="width: 8%"><col style="width: 25%"><col style="width: 35%"></colgroup><thead><tr><th>Resource Identifier</th><th>Leader</th><th># of Persons</th><th>Contact (e.g., phone, pager, radio frequency, etc.)</th><th>Reporting Location, Special Equipment and Supplies, Remarks, Notes, Information</th></tr></thead><tbody data-field="9" data-rows="10"></tbody></table>
+<table>
+  <tr><td><b>6. Work Assignments:</b> <span class="box" data-field="10" style="min-height: 1.1in"></span></td></tr>
+  <tr><td><b>7. Special Instructions:</b> <span class="box" data-field="11" style="min-height: 0.9in"></span></td></tr>
+  <tr><td><b>8. Communications (radio and/or phone contact numbers needed for this
+    assignment):</b></td></tr>
+</table>
+<table><colgroup><col style="width: 35%"><col style="width: 65%"></colgroup><thead><tr><th>Name/Function</th><th>Primary Contact: indicate cell, pager, or radio (frequency/system/channel)</th></tr></thead><tbody data-field="12" data-rows="4"></tbody></table>
+<table>
+  <tr><td><b>9. Prepared by: Name and Position/Title:</b> <span data-field="13"></span></td><td><b>Signature:</b></td></tr>
+  <tr><td class="foot">ICS 204 &nbsp; IAP Page _____</td>
+    <td class="foot"><b>Date/Time:</b> <span data-field="14"></span> <span data-field="15"></span></td></tr>
+</table>
+</section>

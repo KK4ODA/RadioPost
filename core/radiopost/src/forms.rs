@@ -14,14 +14,46 @@ use serde_json::Value as Json;
 use crate::cbor::Value;
 use crate::message::{Message, key};
 
-/// RadioPost's published templates (RP-2 §8.1), as their JSON files.
-pub const PUBLISHED: &[&str] = &[include_str!("../../../forms/ics-213.json")];
+/// RadioPost's published templates (RP-2 §8.1), as their JSON files: ICS-213 first, FEMA's other
+/// ICS forms, then RadioPost's own (`forms/README.md`; the forms design, step 2).
+pub const PUBLISHED: &[&str] = &[
+    include_str!("../../../forms/ics-213.json"),
+    include_str!("../../../forms/ics-202.json"),
+    include_str!("../../../forms/ics-204.json"),
+    include_str!("../../../forms/ics-205.json"),
+    include_str!("../../../forms/ics-205a.json"),
+    include_str!("../../../forms/ics-206.json"),
+    include_str!("../../../forms/ics-208.json"),
+    include_str!("../../../forms/ics-210.json"),
+    include_str!("../../../forms/ics-211.json"),
+    include_str!("../../../forms/ics-213rr.json"),
+    include_str!("../../../forms/ics-214.json"),
+    include_str!("../../../forms/check-in.json"),
+    include_str!("../../../forms/check-out.json"),
+    include_str!("../../../forms/comms-log.json"),
+    include_str!("../../../forms/damage-report.json"),
+    include_str!("../../../forms/position-report.json"),
+    include_str!("../../../forms/situation-report.json"),
+    include_str!("../../../forms/storm-report.json"),
+];
 
 /// The print layouts the programs hold (`forms/*.print.html`): how a form prints on paper, as the
 /// paper form it comes from. Each names the template it lays out by its fingerprint
 /// (`data-template`) and has a place for each field it shows (`data-field`, the field's number).
 /// A layout is the programs' own, never on the air: a station without one prints the form's rows.
-pub const LAYOUTS: &[&str] = &[include_str!("../../../forms/ics-213.print.html")];
+pub const LAYOUTS: &[&str] = &[
+    include_str!("../../../forms/ics-213.print.html"),
+    include_str!("../../../forms/ics-202.print.html"),
+    include_str!("../../../forms/ics-204.print.html"),
+    include_str!("../../../forms/ics-205.print.html"),
+    include_str!("../../../forms/ics-205a.print.html"),
+    include_str!("../../../forms/ics-206.print.html"),
+    include_str!("../../../forms/ics-208.print.html"),
+    include_str!("../../../forms/ics-210.print.html"),
+    include_str!("../../../forms/ics-211.print.html"),
+    include_str!("../../../forms/ics-213rr.print.html"),
+    include_str!("../../../forms/ics-214.print.html"),
+];
 
 /// The print layout for the template with this fingerprint, when the programs hold one.
 #[must_use]

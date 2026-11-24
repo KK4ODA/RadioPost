@@ -1,0 +1,13 @@
+{
+  "name": "Communications Log",
+  "note": "RadioPost's own form, published under CC BY 4.0. A station's log of the messages it passed.",
+  "fields": [
+    {"n": 1, "label": "Net or incident", "type": "line", "max": 80},
+    {"n": 2, "label": "Station (callsign)", "type": "line", "max": 20, "required": true},
+    {"n": 3, "label": "Operator", "type": "line", "max": 80},
+    {"n": 4, "label": "Location", "type": "position"},
+    {"n": 5, "label": "Frequency or channel", "type": "line", "max": 40},
+    {"n": 6, "label": "Log", "type": "rows", "columns": [{"n": 1, "label": "Time", "type": "datetime", "required": true}, {"n": 2, "label": "From", "type": "line", "max": 20}, {"n": 3, "label": "To", "type": "line", "max": 20}, {"n": 4, "label": "Message", "type": "line", "max": 200, "required": true}], "required": true},
+    {"n": 7, "label": "Prepared by (name)", "type": "line", "max": 80}
+  ]
+}

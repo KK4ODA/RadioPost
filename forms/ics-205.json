@@ -1,0 +1,14 @@
+{
+  "name": "ICS-205 Incident Radio Communications Plan",
+  "note": "After FEMA's ICS 205 Incident Radio Communications Plan (NIMS ICS Forms Booklet, FEMA 502-2), a United States government form in the public domain. Dates and times are UTC; signatures are left to the paper form.",
+  "fields": [
+    {"n": 1, "label": "Incident name", "type": "line", "max": 80},
+    {"n": 2, "label": "Date prepared", "type": "date", "bound": "date"},
+    {"n": 3, "label": "Time prepared", "type": "time", "bound": "time"},
+    {"n": 4, "label": "Operational period from", "type": "datetime"},
+    {"n": 5, "label": "Operational period to", "type": "datetime"},
+    {"n": 6, "label": "Basic radio channel use", "type": "rows", "columns": [{"n": 1, "label": "Zone group", "type": "line", "max": 20}, {"n": 2, "label": "Channel number", "type": "line", "max": 10}, {"n": 3, "label": "Function", "type": "line", "max": 40}, {"n": 4, "label": "Channel name/trunked radio system talkgroup", "type": "line", "max": 40}, {"n": 5, "label": "Assignment", "type": "line", "max": 40}, {"n": 6, "label": "RX frequency, N or W", "type": "line", "max": 20}, {"n": 7, "label": "RX tone/NAC", "type": "line", "max": 20}, {"n": 8, "label": "TX frequency, N or W", "type": "line", "max": 20}, {"n": 9, "label": "TX tone/NAC", "type": "line", "max": 20}, {"n": 10, "label": "Mode (A analog, D digital, M mixed)", "type": "choice", "choices": ["A", "D", "M"]}, {"n": 11, "label": "Remarks", "type": "line", "max": 80}], "max": 32},
+    {"n": 7, "label": "Special instructions", "type": "text"},
+    {"n": 8, "label": "Prepared by (Communications Unit Leader, name)", "type": "line", "max": 80}
+  ]
+}

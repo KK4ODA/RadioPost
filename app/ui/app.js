@@ -2790,8 +2790,10 @@ async function loadForms() {
     templates = [];
   }
   const select = $("c-form");
+  const byName = [...templates].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, {numeric: true}));
   select.replaceChildren(el("option", {value: "", text: "None"}),
-    ...templates.map((t) => el("option", {value: t.template, text: t.name})));
+    ...byName.map((t) => el("option", {value: t.template, text: t.name})));
 }
 
 const DAY_MS = 86400000;
@@ -2862,7 +2864,7 @@ function fieldInput(f, fresh = true, compact = false) {
       (v) => { node.value = v; });
   }
   if (f.type === "choice") {
-    const node = el("select", {}, el("option", {value: "", text: ""}),
+    const node = el("select", {class: "narrow"}, el("option", {value: "", text: ""}),
       ...f.choices.map((c, i) => el("option", {value: String(i), text: c})));
     return plain(node, () => (node.value === "" ? null : Number(node.value)),
       (v) => { node.value = String(v); });
@@ -3273,9 +3275,21 @@ let printTitle = "RadioPost";
 function paper(m, layout) {
   const t = document.createElement("template");
   t.innerHTML = layout;
-  const values = new Map(m.form.rows.map((r) => [String(r.n), r.value]));
+  const rows = new Map(m.form.rows.map((r) => [String(r.n), r]));
   for (const place of t.content.querySelectorAll("[data-field]")) {
-    place.textContent = values.get(place.dataset.field) ?? "";
+    const r = rows.get(place.dataset.field);
+    if (place.tagName !== "TBODY") {
+      place.textContent = r?.value ?? "";
+      continue;
+    }
+    // a table's rows, then empty lines to the paper form's own number of them (data-rows)
+    const columns = place.closest("table").querySelectorAll("thead th").length;
+    const lines = r?.table?.rows ?? [];
+    const blank = Math.max(0, Number(place.dataset.rows || 0) - lines.length);
+    place.replaceChildren(
+      ...lines.map((cells) => el("tr", {}, ...cells.map((c) => el("td", {text: c})))),
+      ...Array.from({length: blank}, () =>
+        el("tr", {}, ...Array.from({length: columns}, () => el("td")))));
   }
   const when = `${new Date(m.date * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC`;
   const out = [t.content, el("p", {class: "paper-line",

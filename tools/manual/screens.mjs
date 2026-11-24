@@ -530,15 +530,19 @@ const TERRAIN_STATUS = {dir: "C:\\Users\\you\\AppData\\Local\\RadioPost\\terrain
     {radius_km: 100, tiles: 8, mb: {glo90: 40, glo30: 360}},
     {radius_km: 150, tiles: 14, mb: {glo90: 70, glo30: 630}}]};
 
-// the forms the panel holds, as /api/forms gives them (RP-2 §8): ICS-213, its fingerprint from
-// vectors/forms.json
-const ICS_213 = JSON.parse(readFileSync(join(ROOT, "forms", "ics-213.json"), "utf8"));
-const FORMS = [{
-  template: JSON.parse(readFileSync(join(ROOT, "vectors", "forms.json"), "utf8"))
-    .templates[0].fingerprint_hex,
-  name: ICS_213.name, note: ICS_213.note,
-  fields: ICS_213.fields.map((f) => ({required: false, choices: [], bound: null, max: null, ...f})),
-}];
+// the forms the panel holds, as /api/forms gives them (RP-2 §8): every published template, in the
+// order vectors/forms.json lists them, with its fingerprint from there
+const formField = (f) => ({required: false, choices: [], bound: null, max: null, scale: null,
+  unit: null, ...f, columns: (f.columns || []).map(formField)});
+const FORMS = JSON.parse(readFileSync(join(ROOT, "vectors", "forms.json"), "utf8")).templates
+  .map((v) => {
+    const t = JSON.parse(readFileSync(join(ROOT, v.file), "utf8"));
+    return {template: v.fingerprint_hex, name: t.name, note: t.note, fields: t.fields.map(formField)};
+  });
+
+// a form's position field, filled from the GPS in use (/api/form-position), and what it goes as
+const FORM_POSITION = {text: "33.78123, -84.38765", says: "From the GPS, 4 s ago."};
+const FORM_POSITION_SHOWN = {value: [337812300, -843876500], shown: "33.78123, -84.38765 (EM73ts)"};
 
 function clientApi(world) {
   return (method, path, query, body) => {
@@ -565,6 +569,7 @@ function clientApi(world) {
       case "accept": return {entries: ["maria@example.com", "jim@hampost.org", "@hampost.org"]};
       case "addresses": return {entries: ADDRESSES};
       case "forms": return FORMS;
+      case "form-position": return body ? FORM_POSITION_SHOWN : FORM_POSITION;
       case "modem": return {};
       // a channel picked is tuned at once (W14): moved there, or, for a radio Aether keys with no
       // CAT, the dial to set by hand
@@ -874,6 +879,28 @@ async function fillForm(page) {
   await field(8).fill("J. Park, Shelter 3 manager");
 }
 
+// a Storm Report written: the position from the GPS, two events ticked, the hail's size and the
+// wind's speed with their units, what was damaged
+async function fillReport(page) {
+  await page.click("#write");
+  const form = page.locator("#composer");
+  await form.locator("input[name=to]").fill("ffc-reports@example.gov");
+  await form.locator("input[name=subject]").fill("Hail and wind, Atlanta");
+  await form.locator("select[name=form]").selectOption({label: "Storm Report"});
+  await page.waitForTimeout(400);
+  const field = (n) => page.locator(`#c-form-fields [data-field="${n}"]`);
+  await field(2).fill("2026-11-14T20:10");
+  const events = field(3).locator("input[type=checkbox]");
+  await events.nth(3).check();
+  await events.nth(4).check();
+  await field(4).fill("NE at 30 mph");
+  await field(5).fill("1.75");
+  await field(6).fill("60");
+  await field(7).selectOption({label: "Measured"});
+  await field(11).fill("Two large limbs down on Peachtree St.\nCar windows broken.");
+  await field(14).fill("KK4ODA");
+}
+
 // a README picture: the whole window, or the box around the elements named
 async function readmeShot(page, name, selectors) {
   const path = join(README_OUT, `${name}.png`);
@@ -1033,6 +1060,16 @@ const SHOTS = {
     await fillForm(page);
     await page.locator("body").click({position: {x: 1200, y: 1200}});
     await shot(page, "client-form");
+    await context.close();
+  },
+
+  async "client-form-report"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+                                                 height: 1300});
+    await spreadLog(page, "log", T - 1300, 19);
+    await fillReport(page);
+    await page.locator("body").click({position: {x: 1200, y: 1200}});
+    await shot(page, "client-form-report");
     await context.close();
   },
 

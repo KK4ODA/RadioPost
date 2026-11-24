@@ -1,0 +1,15 @@
+{
+  "name": "Check-in",
+  "note": "RadioPost's own form, published under CC BY 4.0. A station checking in with a net or an incident.",
+  "fields": [
+    {"n": 1, "label": "Net or incident", "type": "line", "max": 80},
+    {"n": 2, "label": "Callsign", "type": "line", "max": 20, "required": true},
+    {"n": 3, "label": "Name", "type": "line", "max": 80},
+    {"n": 4, "label": "Location", "type": "position", "required": true},
+    {"n": 5, "label": "Status", "type": "choice", "choices": ["Available", "Available, with limits", "Not available"], "required": true},
+    {"n": 6, "label": "Bands and modes", "type": "line", "max": 80},
+    {"n": 7, "label": "Power", "type": "choice", "choices": ["Mains", "Generator", "Battery", "Solar"]},
+    {"n": 8, "label": "Traffic to send", "type": "check"},
+    {"n": 9, "label": "Comments", "type": "text"}
+  ]
+}

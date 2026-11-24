@@ -1,0 +1,19 @@
+{
+  "name": "Damage Report",
+  "note": "RadioPost's own form, published under CC BY 4.0. The damage levels are FEMA's: affected, minor, major, destroyed.",
+  "fields": [
+    {"n": 1, "label": "Incident", "type": "line", "max": 80},
+    {"n": 2, "label": "Location", "type": "position", "required": true},
+    {"n": 3, "label": "Address or description of the place", "type": "line", "max": 200},
+    {"n": 4, "label": "Kind of property", "type": "choice", "choices": ["Single-family home", "Multi-family housing", "Mobile home", "Business", "Public building", "Road or bridge", "Utility", "Other"]},
+    {"n": 5, "label": "Damage", "type": "choice", "choices": ["None", "Affected", "Minor", "Major", "Destroyed"], "required": true},
+    {"n": 6, "label": "Cause", "type": "multi", "choices": ["Wind", "Water", "Fire", "Tree fall", "Earth movement", "Other"]},
+    {"n": 7, "label": "Can people live in it?", "type": "choice", "choices": ["Yes", "No", "Unknown"]},
+    {"n": 8, "label": "Utilities", "type": "choice", "choices": ["Working", "Partly working", "Not working", "Unknown"]},
+    {"n": 9, "label": "Hazards", "type": "multi", "choices": ["Downed power lines", "Gas leak", "Flooding", "Debris on the road", "Structure may collapse"]},
+    {"n": 10, "label": "People injured", "type": "number"},
+    {"n": 11, "label": "People displaced", "type": "number"},
+    {"n": 12, "label": "Description", "type": "text"},
+    {"n": 13, "label": "Reported by (name and callsign)", "type": "line", "max": 80}
+  ]
+}

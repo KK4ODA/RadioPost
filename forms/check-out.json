@@ -1,0 +1,13 @@
+{
+  "name": "Check-out",
+  "note": "RadioPost's own form, published under CC BY 4.0. A station leaving a net or an incident.",
+  "fields": [
+    {"n": 1, "label": "Net or incident", "type": "line", "max": 80},
+    {"n": 2, "label": "Callsign", "type": "line", "max": 20, "required": true},
+    {"n": 3, "label": "Name", "type": "line", "max": 80},
+    {"n": 4, "label": "Location", "type": "position"},
+    {"n": 5, "label": "Reason", "type": "choice", "choices": ["End of shift", "Leaving the area", "Equipment problem", "Other"]},
+    {"n": 6, "label": "Back on the air (expected)", "type": "datetime"},
+    {"n": 7, "label": "Comments", "type": "text"}
+  ]
+}

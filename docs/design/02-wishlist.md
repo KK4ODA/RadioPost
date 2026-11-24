@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.51 |
+| **Version** | 0.3.52 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -135,8 +135,8 @@ rules:
 | W29 | The sender's client follows queued mail | Offline | High | Fits today | Implemented |
 | W30 | Forwarding by radio | Offline | Medium | Fits today | Implemented; trial on the air deferred |
 | W31 | Local delivery at a cut-off gateway | Offline | Medium | Fits today | Implemented |
-| W32 | Forms | Applications | Medium | Optional addition: RP-2 1.1.0 §8, key 13; RP-2 1.4.0's types | Implemented; more in progress |
-| W33 | Position reports | Applications | Low | Application layer (a template, RP-2 1.4.0); optional addition as broadcasts | Planned |
+| W32 | Forms | Applications | Medium | Optional addition: RP-2 1.1.0 §8, key 13; RP-2 1.4.0's types | Implemented; 18 forms |
+| W33 | Position reports | Applications | Low | Application layer (a template, RP-2 1.4.0); optional addition as broadcasts | Template published; broadcasts planned |
 | W34 | Bulletins | Applications | Low | Application layer; optional addition as broadcasts | Planned |
 | W35 | Services that answer by mail | Applications | Low | Application layer | Planned |
 | W36 | One mailbox, by radio and by mail program | Operation | High | Fits today | Implemented |
@@ -976,7 +976,7 @@ readable copy.
 | Effort | Large: a template format, a set of forms, an editor and a viewer. |
 | Priority | **Medium**; likely to rise, since emergency groups ask for forms first. |
 | Recommendation | **Modify**: application layer first. Interoperability needs a published form format either way, but as a file it asks nothing of RP-2 or RP-6. Use key 13 only if a measured air-time saving pays for a specification. Measured (2026-11-15, the author asking that forms take as little air as possible): an ICS-213 with five fields is 253 bytes on the air as values, against 320 as text and 778 as a form file with its text (XML in `files`); key 13 was used. |
-| Status | Implemented; more in progress: [forms for most jobs](06-forms.md), step 1 built (RP-2 1.4.0's types `position`, `datetime`, `multi`, `rows`, `heading`, a number's `scale` and `unit`; the composer, the reader and `compose --field` take them, a position field filled from W55). |
+| Status | Implemented, 18 forms: [forms for most jobs](06-forms.md), step 2 built (FEMA's ICS 202, 204, 205, 205A, 206, 208, 210, 211, 213, 213RR and 214, each printing as FEMA's paper form, and RadioPost's own Check-In, Check-Out, Communications Log, Damage Report, Position Report, Situation Report and Storm Report); step 1 built (RP-2 1.4.0's types `position`, `datetime`, `multi`, `rows`, `heading`, a number's `scale` and `unit`; the composer, the reader and `compose --field` take them, a position field filled from W55). |
 | Author decision | No compatibility with Winlink's programs (CLAUDE.md, decided): templates from FEMA's public forms in an open format (concept §10), not Winlink's. 2026-11-24, with [forms for most jobs](06-forms.md): a post office serves templates by their fingerprint; the ARRL's and the Red Cross's forms wait for their permission, which the author asks; a position goes exactly as it is, by default. |
 
 ### W33. Position reports
@@ -1327,3 +1327,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.49 | 2026-11-21 | W55: places and the GPS built; station profiles to come. |
 | 0.3.50 | 2026-11-24 | W32: [forms for most jobs](06-forms.md) accepted with the author's three answers, step 1 built (RP-2 1.4.0); W33 becomes a template. |
 | 0.3.51 | 2026-11-24 | W14: a gateway call carries its channel's bandwidth (D50). |
+| 0.3.52 | 2026-11-24 | W32: [forms for most jobs](06-forms.md) step 2 built, 18 forms published; W33's Position Report template published. |

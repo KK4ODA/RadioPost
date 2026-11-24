@@ -1,0 +1,17 @@
+{
+  "name": "ICS-214 Activity Log",
+  "note": "After FEMA's ICS 214 Activity Log (NIMS ICS Forms Booklet, FEMA 502-2), a United States government form in the public domain. Dates and times are UTC; signatures are left to the paper form.",
+  "fields": [
+    {"n": 1, "label": "Incident name", "type": "line", "max": 80},
+    {"n": 2, "label": "Operational period from", "type": "datetime"},
+    {"n": 3, "label": "Operational period to", "type": "datetime"},
+    {"n": 4, "label": "Name", "type": "line", "max": 80},
+    {"n": 5, "label": "ICS position", "type": "line", "max": 80},
+    {"n": 6, "label": "Home agency (and unit)", "type": "line", "max": 80},
+    {"n": 7, "label": "Resources assigned", "type": "rows", "columns": [{"n": 1, "label": "Name", "type": "line", "max": 80, "required": true}, {"n": 2, "label": "ICS position", "type": "line", "max": 80}, {"n": 3, "label": "Home agency (and unit)", "type": "line", "max": 80}], "max": 8},
+    {"n": 8, "label": "Activity log", "type": "rows", "columns": [{"n": 1, "label": "Date and time", "type": "datetime", "required": true}, {"n": 2, "label": "Notable activities", "type": "line", "max": 200, "required": true}]},
+    {"n": 9, "label": "Prepared by (name and position/title)", "type": "line", "max": 80},
+    {"n": 10, "label": "Date prepared", "type": "date", "bound": "date"},
+    {"n": 11, "label": "Time prepared", "type": "time", "bound": "time"}
+  ]
+}

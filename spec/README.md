@@ -16,7 +16,7 @@ adapter from them.
 |---|---|---|---|---|
 | [RP-0](rp-0000-conventions.md) | Conventions | Stable | 1.5.0 | Requirement words, encodings, cryptography, identifiers, roles, how specs change, registries |
 | [RP-1](rp-0001-identity.md) | Identity | Stable | 1.2.0 | Keys, credentials, session statements, published keys, revocation |
-| [RP-2](rp-0002-messages.md) | Messages | Stable | 1.4.0 | The message, its air form, its content ID |
+| [RP-2](rp-0002-messages.md) | Messages | Stable | 1.4.1 | The message, its air form, its content ID |
 | [RP-3](rp-0003-session.md) | Session protocol | Stable | 1.1.0 | Client ↔ gateway over the radio |
 | [RP-4](rp-0004-modem-interface.md) | Modem interface | Stable | 1.6.0 | Client or gateway ↔ modem adapter |
 | [RP-5](rp-0005-post-office-api.md) | Post office API | Stable | 1.7.0 | Gateway or client ↔ post office over HTTPS |

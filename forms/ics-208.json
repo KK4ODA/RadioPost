@@ -1,0 +1,15 @@
+{
+  "name": "ICS-208 Safety Message/Plan",
+  "note": "After FEMA's ICS 208 Safety Message/Plan (NIMS ICS Forms Booklet, FEMA 502-2), a United States government form in the public domain. Dates and times are UTC; signatures are left to the paper form.",
+  "fields": [
+    {"n": 1, "label": "Incident name", "type": "line", "max": 80},
+    {"n": 2, "label": "Operational period from", "type": "datetime"},
+    {"n": 3, "label": "Operational period to", "type": "datetime"},
+    {"n": 4, "label": "Safety message/expanded safety message, safety plan, site safety plan", "type": "text", "required": true},
+    {"n": 5, "label": "Site safety plan required?", "type": "choice", "choices": ["Yes", "No"]},
+    {"n": 6, "label": "Approved site safety plan(s) located at", "type": "line", "max": 80},
+    {"n": 7, "label": "Prepared by (name and position/title)", "type": "line", "max": 80},
+    {"n": 8, "label": "Date prepared", "type": "date", "bound": "date"},
+    {"n": 9, "label": "Time prepared", "type": "time", "bound": "time"}
+  ]
+}

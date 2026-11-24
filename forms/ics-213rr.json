@@ -1,0 +1,29 @@
+{
+  "name": "ICS-213RR Resource Request Message",
+  "note": "After FEMA's ICS 213 RR Resource Request Message, its Appendix B example (NIMS ICS Forms Booklet, FEMA 502-2), a United States government form in the public domain. Dates and times are UTC; signatures are left to the paper form.",
+  "fields": [
+    {"n": 1, "label": "Incident name", "type": "line", "max": 80},
+    {"n": 2, "label": "Date", "type": "date", "bound": "date"},
+    {"n": 3, "label": "Time", "type": "time", "bound": "time"},
+    {"n": 4, "label": "Resource request number", "type": "line", "max": 40},
+    {"n": 5, "label": "Requestor", "type": "heading"},
+    {"n": 6, "label": "Order", "type": "rows", "columns": [{"n": 1, "label": "Quantity", "type": "number", "required": true}, {"n": 2, "label": "Kind", "type": "line", "max": 40}, {"n": 3, "label": "Type", "type": "line", "max": 20}, {"n": 4, "label": "Detailed item description (vital characteristics, brand, specs, experience, size)", "type": "line", "max": 200, "required": true}, {"n": 5, "label": "Arrival requested", "type": "datetime"}, {"n": 6, "label": "Arrival estimated", "type": "datetime"}, {"n": 7, "label": "Cost", "type": "line", "max": 20}], "required": true, "max": 10},
+    {"n": 7, "label": "Requested delivery/reporting location", "type": "line", "max": 160},
+    {"n": 8, "label": "Suitable substitutes and/or suggested sources", "type": "text"},
+    {"n": 9, "label": "Requested by (name/position)", "type": "line", "max": 80, "required": true},
+    {"n": 10, "label": "Priority", "type": "choice", "choices": ["Urgent", "Routine", "Low"]},
+    {"n": 11, "label": "Section chief approval (name)", "type": "line", "max": 80},
+    {"n": 12, "label": "Logistics", "type": "heading"},
+    {"n": 13, "label": "Logistics order number", "type": "line", "max": 40},
+    {"n": 14, "label": "Supplier phone/fax/email", "type": "line", "max": 80},
+    {"n": 15, "label": "Name of supplier/POC", "type": "line", "max": 80},
+    {"n": 16, "label": "Notes", "type": "text"},
+    {"n": 17, "label": "Approved by authorized logistics representative (name)", "type": "line", "max": 80},
+    {"n": 18, "label": "Logistics date and time", "type": "datetime"},
+    {"n": 19, "label": "Order placed by", "type": "choice", "choices": ["SPUL", "PROC"]},
+    {"n": 20, "label": "Finance", "type": "heading"},
+    {"n": 21, "label": "Reply/comments from finance", "type": "text"},
+    {"n": 22, "label": "Finance section (name)", "type": "line", "max": 80},
+    {"n": 23, "label": "Finance date and time", "type": "datetime"}
+  ]
+}

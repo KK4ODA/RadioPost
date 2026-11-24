@@ -1033,7 +1033,8 @@ mod tests {
         assert!(missing.contains("a required field missing"), "{missing}");
         let bound = form_from_args("ics-213", &["4=Water".to_owned()]).expect_err("refused");
         assert!(bound.contains("a bound field"), "{bound}");
-        assert!(form_from_args("ics-205", &[]).is_err());
+        // a form this client does not hold (ICS-209 is not published)
+        assert!(form_from_args("ics-209", &[]).is_err());
     }
 
     #[test]

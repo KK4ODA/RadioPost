@@ -1,0 +1,14 @@
+{
+  "name": "ICS-210 Resource Status Change",
+  "note": "After FEMA's ICS 210 Resource Status Change (NIMS ICS Forms Booklet, FEMA 502-2), a United States government form in the public domain. Dates and times are UTC; signatures are left to the paper form.",
+  "fields": [
+    {"n": 1, "label": "Incident name", "type": "line", "max": 80},
+    {"n": 2, "label": "Operational period from", "type": "datetime"},
+    {"n": 3, "label": "Operational period to", "type": "datetime"},
+    {"n": 4, "label": "Changes", "type": "rows", "columns": [{"n": 1, "label": "Resource number", "type": "line", "max": 40, "required": true}, {"n": 2, "label": "New status", "type": "choice", "choices": ["Available", "Assigned", "Out of service"], "required": true}, {"n": 3, "label": "From (assignment and status)", "type": "line", "max": 80}, {"n": 4, "label": "To (assignment and status)", "type": "line", "max": 80}, {"n": 5, "label": "Time and date of change", "type": "datetime"}], "max": 20},
+    {"n": 5, "label": "Comments", "type": "text"},
+    {"n": 6, "label": "Prepared by (name and position/title)", "type": "line", "max": 80},
+    {"n": 7, "label": "Date prepared", "type": "date", "bound": "date"},
+    {"n": 8, "label": "Time prepared", "type": "time", "bound": "time"}
+  ]
+}

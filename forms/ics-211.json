@@ -1,0 +1,15 @@
+{
+  "name": "ICS-211 Incident Check-In List",
+  "note": "After FEMA's ICS 211 Incident Check-In List (NIMS ICS Forms Booklet, FEMA 502-2), a United States government form in the public domain. Dates and times are UTC; signatures are left to the paper form.",
+  "fields": [
+    {"n": 1, "label": "Incident name", "type": "line", "max": 80},
+    {"n": 2, "label": "Incident number", "type": "line", "max": 40},
+    {"n": 3, "label": "Check-in location", "type": "multi", "choices": ["Base", "Staging area", "ICP", "Helibase", "Other"]},
+    {"n": 4, "label": "Check-in location, where", "type": "line", "max": 80},
+    {"n": 5, "label": "Start date and time", "type": "datetime"},
+    {"n": 6, "label": "Check-in information", "type": "rows", "columns": [{"n": 1, "label": "State", "type": "line", "max": 20}, {"n": 2, "label": "Agency", "type": "line", "max": 40}, {"n": 3, "label": "Category", "type": "line", "max": 40}, {"n": 4, "label": "Kind", "type": "line", "max": 40}, {"n": 5, "label": "Type", "type": "line", "max": 20}, {"n": 6, "label": "Resource name or identifier", "type": "line", "max": 80, "required": true}, {"n": 7, "label": "ST or TF", "type": "choice", "choices": ["ST", "TF"]}, {"n": 8, "label": "Order request number", "type": "line", "max": 40}, {"n": 9, "label": "Date and time of check-in", "type": "datetime"}, {"n": 10, "label": "Leader's name", "type": "line", "max": 80}, {"n": 11, "label": "Total number of personnel", "type": "number"}, {"n": 12, "label": "Incident contact information", "type": "line", "max": 80}, {"n": 13, "label": "Home unit or agency", "type": "line", "max": 80}, {"n": 14, "label": "Departure point, date and time", "type": "line", "max": 80}, {"n": 15, "label": "Method of travel", "type": "line", "max": 40}, {"n": 16, "label": "Incident assignment", "type": "line", "max": 80}, {"n": 17, "label": "Other qualifications", "type": "line", "max": 80}, {"n": 18, "label": "Data provided to Resources Unit", "type": "check"}], "max": 40},
+    {"n": 7, "label": "Prepared by (name and position/title)", "type": "line", "max": 80},
+    {"n": 8, "label": "Date prepared", "type": "date", "bound": "date"},
+    {"n": 9, "label": "Time prepared", "type": "time", "bound": "time"}
+  ]
+}

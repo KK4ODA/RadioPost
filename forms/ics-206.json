@@ -1,0 +1,18 @@
+{
+  "name": "ICS-206 Medical Plan",
+  "note": "After FEMA's ICS 206 Medical Plan (NIMS ICS Forms Booklet, FEMA 502-2), a United States government form in the public domain. Dates and times are UTC; signatures are left to the paper form.",
+  "fields": [
+    {"n": 1, "label": "Incident name", "type": "line", "max": 80},
+    {"n": 2, "label": "Operational period from", "type": "datetime"},
+    {"n": 3, "label": "Operational period to", "type": "datetime"},
+    {"n": 4, "label": "Medical aid stations", "type": "rows", "columns": [{"n": 1, "label": "Name", "type": "line", "max": 80, "required": true}, {"n": 2, "label": "Location", "type": "line", "max": 80}, {"n": 3, "label": "Contact number(s)/frequency", "type": "line", "max": 80}, {"n": 4, "label": "Paramedics on site?", "type": "choice", "choices": ["Yes", "No"]}], "max": 6},
+    {"n": 5, "label": "Transportation (indicate air or ground)", "type": "rows", "columns": [{"n": 1, "label": "Ambulance service", "type": "line", "max": 80, "required": true}, {"n": 2, "label": "Location", "type": "line", "max": 80}, {"n": 3, "label": "Contact number(s)/frequency", "type": "line", "max": 80}, {"n": 4, "label": "Level of service", "type": "choice", "choices": ["ALS", "BLS"]}], "max": 4},
+    {"n": 6, "label": "Hospitals", "type": "rows", "columns": [{"n": 1, "label": "Hospital name", "type": "line", "max": 80, "required": true}, {"n": 2, "label": "Address", "type": "line", "max": 120}, {"n": 3, "label": "Helipad position", "type": "position"}, {"n": 4, "label": "Contact number(s)/frequency", "type": "line", "max": 80}, {"n": 5, "label": "Travel time, air", "type": "line", "max": 20}, {"n": 6, "label": "Travel time, ground", "type": "line", "max": 20}, {"n": 7, "label": "Trauma center", "type": "choice", "choices": ["Yes", "No"]}, {"n": 8, "label": "Trauma center level", "type": "line", "max": 10}, {"n": 9, "label": "Burn center", "type": "choice", "choices": ["Yes", "No"]}, {"n": 10, "label": "Helipad", "type": "choice", "choices": ["Yes", "No"]}], "max": 5},
+    {"n": 7, "label": "Special medical emergency procedures", "type": "text"},
+    {"n": 8, "label": "Aviation assets are used for rescue (coordinate with Air Operations)", "type": "check"},
+    {"n": 9, "label": "Prepared by (Medical Unit Leader, name)", "type": "line", "max": 80},
+    {"n": 10, "label": "Approved by (Safety Officer, name)", "type": "line", "max": 80},
+    {"n": 11, "label": "Date prepared", "type": "date", "bound": "date"},
+    {"n": 12, "label": "Time prepared", "type": "time", "bound": "time"}
+  ]
+}

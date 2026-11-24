@@ -38,14 +38,36 @@ fn http(
         body.len()
     )
     .expect("sent");
-    let mut text = String::new();
-    s.read_to_string(&mut text).expect("an answer");
-    let status = text[9..12].parse().expect("a status");
-    let body = text
-        .split_once("\r\n\r\n")
-        .map(|(_, b)| b.to_owned())
-        .unwrap_or_default();
-    (status, body)
+    let mut answer = Vec::new();
+    s.read_to_end(&mut answer).expect("an answer");
+    let split = answer
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .expect("a head");
+    let head = String::from_utf8_lossy(&answer[..split]).to_ascii_lowercase();
+    let status = head[9..12].parse().expect("a status");
+    let mut body = answer[split + 4..].to_vec();
+    // a long answer (over 32 kB: the forms) comes in chunks
+    if head.contains("transfer-encoding: chunked") {
+        body = unchunked(&body);
+    }
+    (status, String::from_utf8(body).expect("UTF-8"))
+}
+
+/// A chunked body's bytes (RFC 9112 §7.1): each chunk's size in hex on a line, then the chunk.
+fn unchunked(mut rest: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    loop {
+        let eol = rest.windows(2).position(|w| w == b"\r\n").expect("a size");
+        let size_text = String::from_utf8_lossy(&rest[..eol]);
+        let size = usize::from_str_radix(size_text.split(';').next().unwrap_or("").trim(), 16)
+            .expect("a size in hex");
+        if size == 0 {
+            return out;
+        }
+        out.extend_from_slice(&rest[eol + 2..eol + 2 + size]);
+        rest = &rest[eol + 4 + size..];
+    }
 }
 
 struct Client {

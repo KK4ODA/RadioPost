@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Accepted, in progress |
-| **Version** | 0.1.0 |
+| **Version** | 0.2.0 |
 | **Updated** | 2026-11-24 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -13,7 +13,7 @@ Emergency groups and the agencies they serve work with dozens of forms: messages
 requests, radio plans, logs, status grids, weather and damage reports, position reports. RadioPost
 has one, ICS-213. This document says how RadioPost can carry most of the forms groups use,
 including those that carry a position, without writing program code for each one. The author
-accepted it on 2026-11-24 with the three answers in §9. Step 1 (§8) is built.
+accepted it on 2026-11-24 with the three answers in §9. Steps 1 and 2 (§8) are built.
 
 **How facts are marked.** **[P]**: read on a primary source. **[S]**: found only secondhand, in a
 search result's summary. **[T]**: measured here. Facts about RadioPost were read in this repository
@@ -45,7 +45,7 @@ The library is large, but nearly every form has one of five shapes.
 |---|---|---|
 | Flat fields | ICS-213, a relayed message, check-in and check-out | Today's seven types. |
 | Status grids | Rows of Yes, No and Unknown; red, amber and green; hospital and shelter status | Today's `choice`, many times over. |
-| Tables and logs | ICS-205 (radio channels), 211 (check-in list), 214 (activity log), 217A, 309 (communications log) | Repeating rows. |
+| Tables and logs | ICS-205 (radio channels), 211 (check-in list), 214 (activity log), 217A, and the communications logs groups keep (the widely used ICS 309 is not FEMA's) | Repeating rows. |
 | Observations | Weather, storm and damage reports | Decimals with units, a date with its time, "check all that apply", a position. |
 | Position and situation reports | The forms that Winlink's program maps | A position, and a receiver that maps and exports the reports. |
 
@@ -141,13 +141,13 @@ air time matters.
 
 | Source | Forms | Terms | Plan |
 |---|---|---|---|
-| FEMA | ICS 201 to 221, ICS 309 | United States government works, in the public domain | Publish (step 2). ICS-213 is published. |
-| The National Weather Service | Storm reports, after SKYWARN's reporting criteria | United States government works, in the public domain | Publish (step 2). |
+| FEMA | The NIMS ICS Forms Booklet (FEMA 502-2): ICS 201 to 225, and ICS 213 RR as its Appendix B example | A United States government publication, in the public domain | ICS 202, 204, 205, 205A, 206, 208, 210, 211, 213, 213 RR and 214 published, each with its paper form (step 2). |
+| The National Weather Service | What its offices ask SKYWARN spotters to report **[P]** (the offices' spotter guides: the events agree, the sizes and speeds differ) | Guidance, not a form | RadioPost's own Storm Report asks for those events, published (step 2). |
 | California EMSA | HICS, the hospital forms | To be checked before publishing | Check the terms. |
 | The ARRL | The radiogram | Permission needed | The author asks (§9). The template waits for the answer. |
 | The American Red Cross | Its forms | Permission needed | The author asks (§9). The templates wait for the answer. |
 | SHARES, MARS | Their programmes' forms | Their programmes' own | Not planned: only with their say-so. |
-| No public original | Check-in and check-out, a situation report, a damage report, a position report | RadioPost's own, under CC BY 4.0 | Write them for the job (step 2). |
+| No public original | Check-in and check-out, a communications log, a situation report, a damage report, a position report | RadioPost's own, under CC BY 4.0 | Published (step 2). The communications log does the job of the ICS 309, which is not FEMA's and whose terms are not known. |
 
 Each published template follows `forms/README.md`: written once, never changed, a new one for any
 change. A paper form gets a print layout (W53).
@@ -194,7 +194,7 @@ way, as data.
 | Step | What | Status |
 |---|---|---|
 | 1 | RP-2 1.4.0: the six additions, their test vectors, the Rust library, the composer and the reader; a position field filled from W55. | Built |
-| 2 | Templates: FEMA's ICS forms, a storm report, check-in and check-out, a situation report, a damage report and a position report, with print layouts for the paper forms. | Planned |
+| 2 | Templates: FEMA's ICS forms, a storm report, check-in and check-out, a situation report, a damage report and a position report, with print layouts for the paper forms. | Built |
 | 3 | The Reports view: map, CSV and GeoJSON; a `geo:` link in email (RP-6). | Planned |
 | 4 | Templates by fingerprint (§6): RP-5, RP-2 §8.3, the post office, the client. | Planned |
 | 5 | Position reports as broadcasts, only if a net asks. | Not planned |
@@ -218,6 +218,28 @@ starts with W55's position, says where it came from and shows exactly what goes
 heading across the form and a table as a table. ICS-213's composer, reader and paper form render
 exactly as before.
 
+**What step 2 built.** Eighteen published templates, in the order the programs hold them:
+
+* FEMA's, from the NIMS ICS Forms Booklet (FEMA 502-2) read on 2026-11-24 **[P]**: ICS-213 (as
+  before), 202, 204, 205, 205A, 206, 208, 210, 211, 213RR and 214. Each block is a field, in the
+  form's order and words. A table is a `rows` field; a block of several dates and times (an
+  operational period) is two `datetime` fields; the date and time the form was prepared are the
+  message's own (bound), as ICS-213's are; a name with its signature is the name alone, the
+  signature left to paper. Where a column holds two things, it became two columns: ICS-206's
+  *Address, Latitude & Longitude if Helipad* is an address and a `position`. Each prints as
+  FEMA's paper form (`forms/ics-*.print.html`), its tables padded with empty lines as on paper.
+* RadioPost's own: Check-In, Check-Out, Communications Log, Damage Report (FEMA's damage levels:
+  affected, minor, major, destroyed), Position Report, Situation Report and Storm Report (the
+  events the National Weather Service's offices ask spotters to report, with the storm's movement
+  and whether a wind speed was measured or estimated, as they ask). They print as they show.
+
+Left for later: FEMA's ICS 201 (its sketch map is a picture), 203, 207 (an organization chart),
+209 (over fifty blocks), 215 and 215A (planning worksheets), 218, 219 (cards), 220, 221 and 225;
+HICS until its terms are checked; the ARRL's and the Red Cross's until they answer.
+
+Dates and times are UTC on every form, as on ICS-213, though FEMA's instructions say local time is
+typical: one clock for every station on a net, and the one the message's own date is in.
+
 ---
 
 ## 9. The author's decisions (2026-11-24)
@@ -234,3 +256,4 @@ exactly as before.
 | Version | Date | Change |
 |---|---|---|
 | 0.1.0 | 2026-11-24 | First version, accepted with the author's three answers (§9); step 1 built (§8). |
+| 0.2.0 | 2026-11-24 | Step 2 built (§8): eleven of FEMA's ICS forms with their paper forms, and seven of RadioPost's own. §2, §5: the ICS 309 is not FEMA's; ICS 213 RR is FEMA's Appendix B example; the storm report follows the National Weather Service's spotter guidance. |

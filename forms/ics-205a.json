@@ -1,0 +1,13 @@
+{
+  "name": "ICS-205A Communications List",
+  "note": "After FEMA's ICS 205A Communications List (NIMS ICS Forms Booklet, FEMA 502-2), a United States government form in the public domain. Dates and times are UTC; signatures are left to the paper form.",
+  "fields": [
+    {"n": 1, "label": "Incident name", "type": "line", "max": 80},
+    {"n": 2, "label": "Operational period from", "type": "datetime"},
+    {"n": 3, "label": "Operational period to", "type": "datetime"},
+    {"n": 4, "label": "Basic local communications information", "type": "rows", "columns": [{"n": 1, "label": "Incident assigned position", "type": "line", "max": 80, "required": true}, {"n": 2, "label": "Name", "type": "line", "max": 80}, {"n": 3, "label": "Method(s) of contact (phone, pager, cell)", "type": "line", "max": 120}], "max": 40},
+    {"n": 5, "label": "Prepared by (name and position/title)", "type": "line", "max": 80},
+    {"n": 6, "label": "Date prepared", "type": "date", "bound": "date"},
+    {"n": 7, "label": "Time prepared", "type": "time", "bound": "time"}
+  ]
+}

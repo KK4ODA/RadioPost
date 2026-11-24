@@ -1,0 +1,59 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- How an ICS-213RR Resource Request Message prints: as FEMA's ICS 213 RR Resource Request Message (its Appendix B example) (NIMS ICS Forms Booklet, FEMA 502-2, a United
+     States government form in the public domain), its blocks numbered as there. The programs put
+     each field's value in the place marked with its number (data-field), as text, and a table's
+     rows in its body (a tbody with data-field), padded to data-rows lines; the signature lines
+     stay blank, to sign on paper. Only for the template with this fingerprint (data-template):
+     another template is another form. -->
+<section class="ics213rr" data-template="48d358185d4ef34b">
+<style>
+.ics213rr { color: #000; background: #fff; font: 10pt/1.3 Arial, Helvetica, sans-serif; }
+.ics213rr table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.ics213rr table + table { border-top: 0; }
+.ics213rr td, .ics213rr th { border: 1px solid #000; padding: 3pt 5pt; vertical-align: top; text-align: left; }
+.ics213rr th { font-size: 8pt; }
+.ics213rr h1 { font-size: 13pt; text-align: center; margin: 0 0 6pt; letter-spacing: .02em; }
+.ics213rr b { font-size: 9pt; }
+.ics213rr [data-field] { font-size: 10.5pt; overflow-wrap: anywhere; }
+.ics213rr .box { white-space: pre-wrap; display: block; margin-top: 3pt; }
+.ics213rr tbody[data-field] td { height: 13pt; font-size: 8pt; padding: 1pt 4pt; }
+.ics213rr .part { font-size: 9pt; font-weight: bold; text-transform: uppercase; letter-spacing: .04em;
+           border-bottom-width: 2px; }
+.ics213rr .foot { border: 0; padding: 3pt 0 0; font-size: 9pt; }
+</style>
+<h1>RESOURCE REQUEST MESSAGE (ICS 213 RR)</h1>
+<table>
+  <tr><td style="width: 45%"><b>1. Incident Name:</b> <span data-field="1"></span></td>
+    <td><b>2. Date/Time:</b> <span data-field="2"></span> <span data-field="3"></span></td>
+    <td><b>3. Resource Request Number:</b> <span data-field="4"></span></td></tr>
+</table>
+<table>
+  <tr><td class="part" colspan="3">Requestor</td></tr>
+  <tr><td colspan="3"><b>4. Order (Use additional forms when requesting different resource sources
+    of supply.):</b></td></tr>
+  <tr><td colspan="3" style="padding: 0; border: 0">
+<table><colgroup><col style="width: 6%"><col style="width: 11%"><col style="width: 8%"><col style="width: 39%"><col style="width: 13%"><col style="width: 13%"><col style="width: 10%"></colgroup><thead><tr><th>Qty.</th><th>Kind</th><th>Type</th><th>Detailed Item Description: (Vital characteristics, brand, specs, experience, size, etc.)</th><th>Arrival Date and Time Requested</th><th>Arrival Date and Time Estimated</th><th>Cost</th></tr></thead><tbody data-field="6" data-rows="8"></tbody></table></td></tr>
+  <tr><td colspan="3"><b>5. Requested Delivery/Reporting Location:</b> <span data-field="7"></span></td></tr>
+  <tr><td colspan="3"><b>6. Suitable Substitutes and/or Suggested Sources:</b>
+    <span class="box" data-field="8" style="min-height: 0.4in"></span></td></tr>
+  <tr><td><b>7. Requested by Name/Position:</b> <span data-field="9"></span></td><td><b>8. Priority:</b> <span data-field="10"></span></td>
+    <td><b>9. Section Chief Approval:</b> <span data-field="11"></span></td></tr>
+</table>
+<table>
+  <tr><td class="part" colspan="2">Logistics</td></tr>
+  <tr><td><b>10. Logistics Order Number:</b> <span data-field="13"></span></td>
+    <td><b>11. Supplier Phone/Fax/Email:</b> <span data-field="14"></span></td></tr>
+  <tr><td colspan="2"><b>12. Name of Supplier/POC:</b> <span data-field="15"></span></td></tr>
+  <tr><td colspan="2"><b>13. Notes:</b> <span class="box" data-field="16" style="min-height: 0.6in"></span></td></tr>
+  <tr><td><b>14. Approval Signature of Auth Logistics Rep:</b> <span data-field="17"></span></td>
+    <td><b>15. Date/Time:</b> <span data-field="18"></span></td></tr>
+  <tr><td colspan="2"><b>16. Order placed by (check box):</b> <span data-field="19"></span></td></tr>
+</table>
+<table>
+  <tr><td class="part" colspan="2">Finance</td></tr>
+  <tr><td colspan="2"><b>17. Reply/Comments from Finance:</b> <span class="box" data-field="21" style="min-height: 0.6in"></span></td></tr>
+  <tr><td><b>18. Finance Section Signature:</b> <span data-field="22"></span></td>
+    <td><b>19. Date/Time:</b> <span data-field="23"></span></td></tr>
+  <tr><td class="foot" colspan="2">ICS 213 RR, Page 1</td></tr>
+</table>
+</section>

@@ -1,0 +1,23 @@
+{
+  "name": "Situation Report",
+  "note": "RadioPost's own form, published under CC BY 4.0. What a station sees around it, for an incident's planners.",
+  "fields": [
+    {"n": 1, "label": "Incident", "type": "line", "max": 80},
+    {"n": 2, "label": "Location", "type": "position", "required": true},
+    {"n": 3, "label": "Observed", "type": "datetime"},
+    {"n": 4, "label": "Overall", "type": "choice", "choices": ["Normal", "Disrupted", "Severe"], "required": true},
+    {"n": 5, "label": "Services", "type": "heading"},
+    {"n": 6, "label": "Power", "type": "choice", "choices": ["Working", "Partly working", "Not working", "Unknown"]},
+    {"n": 7, "label": "Water", "type": "choice", "choices": ["Working", "Partly working", "Not working", "Unknown"]},
+    {"n": 8, "label": "Telephone", "type": "choice", "choices": ["Working", "Partly working", "Not working", "Unknown"]},
+    {"n": 9, "label": "Cell phones", "type": "choice", "choices": ["Working", "Partly working", "Not working", "Unknown"]},
+    {"n": 10, "label": "Internet", "type": "choice", "choices": ["Working", "Partly working", "Not working", "Unknown"]},
+    {"n": 11, "label": "Roads", "type": "choice", "choices": ["Open", "Partly open", "Closed", "Unknown"]},
+    {"n": 12, "label": "Fuel", "type": "choice", "choices": ["Available", "Limited", "None", "Unknown"]},
+    {"n": 13, "label": "Needs", "type": "heading"},
+    {"n": 14, "label": "Needed", "type": "multi", "choices": ["Water", "Food", "Shelter", "Medical", "Power", "Fuel", "Communications", "Transport"]},
+    {"n": 15, "label": "Needs in detail", "type": "text"},
+    {"n": 16, "label": "Comments", "type": "text"},
+    {"n": 17, "label": "Reported by (name and callsign)", "type": "line", "max": 80}
+  ]
+}

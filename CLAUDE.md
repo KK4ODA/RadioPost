@@ -29,7 +29,10 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   workspace (the core library, the gateway, the service), `app/` (the Tauri client) and `adapters/`.
   Forms (W32, RP-2 1.1.0 §8): a form travels as its template's fingerprint (8 bytes of SHA-256 of
   the template's CBOR) and its values by field number; `forms/*.json` are the published templates
-  (ICS-213 first), `radiopost::forms` reads them (`Template::published`, compiled in), checks values
+  (18 since 2026-11-24: ICS-213 first, FEMA's ICS 202, 204, 205, 205A, 206, 208, 210, 211, 213RR
+  and 214 from the NIMS ICS Forms Booklet, FEMA 502-2, and RadioPost's own seven; the order is
+  `PUBLISHED_FORMS` in `make.py` and `forms::PUBLISHED`, and the composer lists them by name; the
+  ICS 309 is not FEMA's), `radiopost::forms` reads them (`Template::published`, compiled in), checks values
   (`problem`) and makes the text (`shown`); `rpref/forms.py` and `vectors/forms.json` are its
   reference. RP-2 1.4.0 (D49, `docs/design/06-forms.md`, 2026-11-24) added `position` (`[lat,
   lon]` in ten-millionths of a degree, or with a distance in metres), `datetime`, `multi` (bits),
@@ -41,7 +44,8 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `forms`; the post office writes a form's text into the email (RP-6 1.1.0 §3.1). A new template
   goes in `forms/` and in `make.py`, never a change to a published one.
   A form prints as its paper form (W53): `forms/*.print.html`, named by the template's
-  fingerprint, each field placed by number (`radiopost::forms::layout`); the reader's **Print**
+  fingerprint, each field placed by number, a table's rows in a `tbody` padded to `data-rows`
+  (`radiopost::forms::layout`); the reader's **Print**
   prints in place by the page's print styles (the app's window prints itself at `/print`, Tauri's
   `print`: macOS's webview ignores `window.print()`), and **Save** writes a file to Downloads under
   a safe name, never over another, marked as downloaded on Windows (`downloads.rs`, `/api/save`).
