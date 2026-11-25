@@ -1605,11 +1605,26 @@ const SHOTS = {
     await context.close();
   },
 
+  // the Reports view down to its map: the Damage Reports received and sent, coloured by damage,
+  // one picked
+  async "readme-reports"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(clientWorld()),
+                                                 width: 1180, height: 1300});
+    await page.click('[data-folder="reports"]');
+    await page.waitForTimeout(300);
+    await page.locator("#report-form").selectOption({label: "Damage Report"});
+    await page.waitForTimeout(300);
+    await page.locator("#report-rows tr").first().click();
+    await page.waitForTimeout(300);
+    await readmeShot(page, "readme-reports", ["#reports-view > .head", "#reports-view > .card"]);
+    await context.close();
+  },
+
   // the Gateways page down to its map, N1CALL-10 picked in the list
   async "readme-gateways"(browser) {
     const {page, context} = await open(browser, {ui: CLIENT_UI,
                                                  api: clientApi(clientWorld({hf: true})),
-                                                 width: 1280, height: 1000});
+                                                 width: 1280, height: 1100});
     await page.click("#gateways-open");
     await page.waitForTimeout(300);
     await page.locator("#gateway-rows tr", {hasText: "N1CALL-10"}).locator("td").nth(1).click();

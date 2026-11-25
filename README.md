@@ -64,11 +64,13 @@ Email by radio is not new. This is what RadioPost does differently:
   received, through any gateway.
 * **A key for each computer.** Each computer signs your sessions with a key of its own that never
   leaves it, and your post office can revoke one device without touching the others.
-* **Forms by their values.** An ICS-213 goes as the values you typed, in about a fifth less air
-  time than its text. It shows as the form at the other station and prints as FEMA's paper
-  ICS 213.
+* **Forms by their values.** Eighteen forms, FEMA's ICS forms among them, go as the values you
+  typed, in less air time than their text. Each shows as the form at the other station, and FEMA's
+  print as FEMA's paper forms. A form with a position puts its report on a map. A group can add
+  forms of its own, and every station can fetch them.
 * **Alerts with no session.** A one-line alert reaches one station or a whole circle as a short
   broadcast, on a path too weak for a session, and can sound an alarm there until someone answers.
+  A position report can go to a circle the same way, again every 10 to 60 minutes as you move.
 
 ## How it works
 
@@ -96,15 +98,28 @@ stations can also send mail to each other directly, with no gateway and no Inter
 message in the outbox until it goes. Print a message or make a PDF of it, and save the files it
 carries. A large attachment waits at your post office until you ask for it on a call.
 
-<p align="center"><img src="docs/images/readme-reader.png" width="620" alt="A message open in RadioPost, with Reply, Reply all and Forward, and an attachment held at the post office with a button to ask for it on the next call"></p>
+<p align="center"><img src="docs/images/readme-reader.png" width="620" alt="A message open in RadioPost, with Reply, Reply all, Forward and Print, a file it carries with Save, and an attachment held at the post office with a button to ask for it on the next call"></p>
 
-**Send a form in less air time.** Choose ICS-213 General Message under **Form** and fill in its
-fields. Only what you type goes on the air, so a short ICS-213 takes about a fifth less time than
-the same text typed out. The station that receives it shows the whole form and prints it as
-FEMA's paper ICS 213, and someone reading by email gets it as text with its labels.
+**Send a form in less air time.** Choose a form under **Form** and fill in its fields. RadioPost
+holds eighteen: FEMA's ICS 202, 204, 205, 205A, 206, 208, 210, 211, 213, 213RR and 214, and its own
+Check-in, Check-out, Communications Log, Damage Report, Position Report, Situation Report and Storm
+Report. Only what you type goes on the air, so a short ICS-213 takes about a fifth less time than
+the same text typed out. The station that receives it shows the whole form, and prints FEMA's as
+FEMA's paper forms. Someone reading by email gets it as text with its labels, and a map link for
+each position. A group can write forms of its own: import one, and RadioPost hands it to your post
+office, where any station can fetch it with **Get the form**.
 [Writing a message](docs/manual/manual.md#7-writing-a-message) says more.
 
 <p align="center"><img src="docs/images/readme-form.png" width="620" alt="The New message form with ICS-213 General Message chosen: To, Subject, and the form's fields filled in for a shelter asking a county EOC for cots and water"></p>
+
+**See the reports on a map.** A damage report, a check-in, a storm report and other forms carry a
+position: your GPS's fix, a place you saved, degrees or a grid square, sent exactly as shown.
+**Reports** puts the ones you received and sent on a map, coloured by one of the form's choices,
+such as the damage. Open each report's message or its place on OpenStreetMap, and save them as CSV
+for a spreadsheet or GeoJSON for QGIS, ArcGIS or CalTopo. [Reports](docs/manual/manual.md#91-reports)
+says how.
+
+<p align="center"><img src="docs/images/readme-reports.png" width="700" alt="The Reports view: damage reports round Atlanta on a map with its Maidenhead subsquares, coloured from None in green to Destroyed in red, one picked, with Open the message, OpenStreetMap, and Save as CSV and Save as GeoJSON above"></p>
 
 **Find a gateway near you.** The list comes from your post office and the ones it knows, sorted
 by distance from where you are (a place you saved, or your GPS), with each gateway's channels and
@@ -113,20 +128,26 @@ it is now and the great circle to the one you pick; it needs no Internet either.
 says how likely a link is this hour, or at any hour you pick, and how fast it would go each way:
 VOACAP, run on your computer both ways, read through the modem's own measured speeds. A VHF channel
 says how the path goes over the terrain. Pick a channel and RadioPost tunes the radio there, and
-keys a tuner tone when you ask. A gateway that scans several channels is reached on any of them:
-RadioPost keeps calling until it comes round.
+keys a tuner tone when you ask; the call goes at the channel's bandwidth. A gateway that scans
+several channels is reached on any of them: RadioPost keeps calling until it comes round.
 
 <p align="center"><img src="docs/images/readme-gateways.png" width="700" alt="The Gateways page's map: the gateways round Atlanta in their Maidenhead squares, you, and the great circle to N1CALL-10 in Austin, 1309 km at 257 degrees, with a Choose button"></p>
 
 **Mail station to station**, with no gateway and no Internet. Switch on **Listen for P2P** and
-RadioPost answers calls to any of your callsigns, session after session, until you switch it off.
-To call, give the other station's callsign, the dial and the bandwidth. When you next have the
-Internet, **Send reports** tells your post office, which marks the mail delivered.
+RadioPost tunes the radio to the dial you agreed and answers calls to any of your callsigns, at
+either bandwidth, session after session, until you switch it off. A line under the switch says
+where and how the station answers, to pass on to whoever will call. To call, give the other
+station's callsign, the dial and the bandwidth. When that station has a gateway listed under its
+callsign, RadioPost predicts the band from the gateway's site, and says when another band would
+work better. When you next have the Internet, **Send reports** tells your post office, which
+marks the mail delivered.
 
 **Raise an alert.** Stations that share a keyword make a circle: a family, a net, a team. An
 alert to one of them, or to all of them, needs no call. At the other station it can sound an
 alarm and bring RadioPost to the front until someone answers: *Received*, *Calling you now*, or a
-line of their own. Anyone can read an alert, but only the circle's stations can raise one.
+line of their own. Anyone can read an alert, but only the circle's stations can raise one. A form
+with a position, such as a Position Report or a Storm Report, can go to the circle the same way,
+once or again every 10 to 60 minutes, and lands on each station's **Reports** map.
 [Alerts](docs/manual/manual.md#101-alerts) says how.
 
 <p align="center"><img src="docs/manual/screens/client-alarm.png" width="620" alt="An alert from KK4ODA in the circle Family, Please call me on 146.52 now, with Acknowledge, Call back, three quick replies and a line of your own"></p>
@@ -198,7 +219,10 @@ delivery curves and the constellations, is in
 
 On 2026-11-17 and 18 the same two stations worked 40 m at 2300 Hz, the gateway scanning 7.101
 and 3.590 MHz: a 52 kB attachment crossed at about 920 bit/s, and P2P mail crossed between two
-RadioPost clients under heavy QRM, an ICS-213 among it.
+RadioPost clients under heavy QRM, an ICS-213 among it. On 2026-11-21 the gateway scanned three
+bands, 3.590, 7.101 and 14.107 MHz, and the mobile's mail checks on 80 m and 40 m each found it.
+On 2026-11-23 a portable station at 10 W, about 95 km away, checked its mail through the gateway
+and worked the home station P2P, on 40 m.
 
 Aether keys the radio, checks the band rules before every transmission and identifies the
 station, in Morse or in its data signal. One Aether station serves RadioPost and Winlink programs
@@ -275,7 +299,7 @@ office or modem adapter from the specifications, and it will work with everyone 
 
 | You are building | Start with |
 |---|---|
-| A client | RP-1, RP-2, RP-3; RP-4 to drive a modem; RP-8 for alerts |
+| A client | RP-1, RP-2, RP-3; RP-4 to drive a modem; RP-8 for alerts and reports |
 | A gateway | RP-1, RP-2, RP-3, RP-5; RP-4 to drive modems; RP-7 to forward when cut off |
 | A post office | RP-1, RP-2, RP-5, RP-6 |
 | An adapter for a modem | RP-4 |
@@ -292,16 +316,29 @@ against RadioPost's over the Internet.
 
 **RP-0 to RP-6 are Stable** (1.0.0 on 2026-11-15): radiopost.org's pilot runs them, and a change
 an existing implementation cannot ignore now comes only with a new protocol version (RP-0 §8.3).
-Since then they have changed only in minor and patch versions: forms (RP-2 and RP-6 1.1.0),
-gateways that scan and the tuner tone (RP-4 1.1.0 and 1.2.0, RP-5 1.1.0), alerts (RP-0 1.1.0 and
-RP-4 1.3.0), withdrawing a gateway's registration (RP-5 1.2.0), and the answers to 35 questions
-from RadioPostKit, a second implementation, each keeping what conforming programs already send
-(RP-0 1.2.0, RP-1 1.1.0, RP-2 1.2.0, RP-3 1.1.0, RP-4 1.3.1, RP-5 1.3.0), and when a gateway
-listens and was last seen, and where its antennas are and how it transmits, for choosing one
-(RP-5 1.4.0 and 1.5.0, RP-0 1.3.0), and whether a gateway is on the air now, as it reports to its
-post office (RP-5 1.6.0, RP-0 1.4.0). RP-4 also describes
-the VARA, ARDOP and packet adapters. RP-7, forwarding between gateways, and RP-8, alerts, are
-drafts. All nine are written, with test vectors for RP-1 to RP-8.
+Since then they have changed only in minor and patch versions, each announced in the release
+notes:
+
+* forms by their values (RP-2 and RP-6 1.1.0), then forms for most jobs: positions, dates with
+  times, several choices, tables and the eighteen published templates (RP-2 1.4.0 and 1.4.1), map
+  links in emailed forms (RP-6 1.3.0), and a group's own templates fetched by fingerprint (RP-2
+  1.5.0, RP-5 1.8.0);
+* gateways that scan, the tuner tone, and where a station listens for P2P and in which bandwidths
+  (RP-4 1.1.0, 1.2.0 and 1.6.0, RP-5 1.1.0);
+* alerts, the dial they go on, and reports by broadcast (RP-0 1.1.0 and 1.6.0, RP-4 1.3.0, 1.5.0
+  and 1.6.1);
+* withdrawing a gateway's registration (RP-5 1.2.0);
+* the answers to 35 questions from RadioPostKit, a second implementation, each keeping what
+  conforming programs already send (RP-0 1.2.0, RP-1 1.1.0, RP-2 1.2.0, RP-3 1.1.0, RP-4 1.3.1,
+  RP-5 1.3.0);
+* for choosing a gateway: when it listens and was last seen, where its antennas are and how it
+  transmits, and whether it is on the air now (RP-0 1.3.0 and 1.4.0, RP-5 1.4.0 to 1.6.0), and
+  whether the station called was heard during a call that failed (RP-4 1.4.0);
+* addresses written in lowercase, compared without regard to case (RP-0 1.5.0, RP-1 1.2.0,
+  RP-2 1.3.0, RP-5 1.7.0, RP-6 1.2.0).
+
+RP-4 also describes the VARA, ARDOP and packet adapters. RP-7, forwarding between gateways, and
+RP-8, alerts and reports, are drafts. All nine are written, with test vectors for RP-1 to RP-8.
 
 The programs follow the [order of work](docs/design/00-detailed-design.md#9-order-of-work), in
 Rust, each checked against the test vectors:
@@ -312,9 +349,9 @@ Rust, each checked against the test vectors:
   open-source HF modem, one for the Mercury HF modem, one for VARA HF and VARA FM through their
   published commands, one for ARDOP (ardopcf), one for AX.25 packet through a TNC's AGWPE port
   (Dire Wolf), and one for TCP.
-* **The client** ([`app/client`](app/client/README.md)): mail to another station or through a
-  gateway, and alerts to a circle, on the command line, from its panel in a browser, or as a
-  desktop application.
+* **The client** ([`app/client`](app/client/README.md)): mail and forms to another station or
+  through a gateway, reports on a map, and alerts and reports to a circle, on the command line,
+  from its panel in a browser, or as a desktop application.
 * **The gateway**: it answers users' calls, on one modem or several, scanning its channels with
   Aether, and carries their sessions to
   their post offices, as a desktop application of its own, RadioPost Gateway
@@ -356,7 +393,7 @@ The programs say when a newer release is out and update themselves. On-air tests
 | [`vectors/`](vectors/README.md) | The test vectors, generated by `tools/vectors/make.py`, never edited by hand. |
 | [`core/`](core/README.md) | The Rust workspace: the core library, the modem interface, the gateway, the post office service, the conformance tester. |
 | `adapters/` | The modem adapters: Aether HF, Mercury, VARA, ARDOP, AX.25 packet and TCP. |
-| [`forms/`](forms/README.md) | The published form templates, ICS-213 first. A changed template is a new template. |
+| [`forms/`](forms/README.md) | The eighteen published form templates, ICS-213 first, and the layouts that print FEMA's as FEMA's paper forms. A changed template is a new template. |
 | [`app/`](app/client/README.md) | The client (the `radiopost` program, its panel and the desktop application) and RadioPost Gateway ([`app/gateway`](app/gateway/README.md)). |
 | [`tools/`](tools/) | The vectors' reference, the figures' generators and the documents' checker (Python, standard library only). |
 
