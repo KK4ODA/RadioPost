@@ -655,6 +655,56 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   CC BY 4.0 (`LICENSE-CC-BY-4.0`, stated in each spec's header table and RP-0 §8.5); code under
   MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`), each code file starting with an SPDX line.
 
+## How to write
+
+The author's rule for everything written here: replies, documents, code comments and commit
+messages. It joins the humanizer skill's checks with the author's own habits, drawn from his
+letters and reviews. The aim is plain, exact prose in which every sentence adds a fact the reader
+did not have. It governs new writing; older text is changed only when it is being edited anyway.
+
+**Lead with the answer.** The first sentence says what was found, decided or done. The evidence
+follows. A long text says the verdict again at its end.
+
+**Be exact.** A number, a name or a path does the work of an adjective: "1309 bit/s", not "fast";
+"fails 2 of 8 draws", not "unreliable". Say what was not checked.
+
+**Take a position.** One qualifier at most, and only where the evidence calls for it. No stacked
+hedges, and no balancing pairs ("on the one hand ... on the other").
+
+**Short sentences.** Most under 20 words. A run of long sentences that carry evidence ends in a
+short one that carries the verdict. Use the active voice and name who acts.
+
+**Plain words.** Prefer "is", "has" and "uses". Do not write: delve, leverage, robust (outside
+statistics), comprehensive, holistic, nuanced, underscore, showcase, testament, crucial, pivotal,
+seamless, key (as an adjective), landscape or navigate (figurative), "it is important to note".
+
+**State; do not stage.** No "not X but Y" and no "not only X but also Y", unless the reader really
+believed X. No one-line closer that repeats its paragraph ("That is the real win."). No
+"Importantly", "Notably" or "Here's the thing". Do not answer an objection nobody raised.
+
+**Write about the subject, not the document.** A heading names its content ("Study design and
+sample totals"), never the document's own structure ("How the three parts fit together"), and
+never takes the form "X, and why Y". Do not open a section by counting what follows ("Three things
+to note"), narrate the reader's path ("as we saw above") or comment on your own reasoning. The
+test: delete the headings, and the text must still read.
+
+**Punctuation.** No em or en dashes between clauses: use a period, comma, colon or parentheses.
+Hyphens in code, paths and ranges stay. Oxford comma. No arrows in prose. Straight quotes.
+
+**Formatting.** Bold only for words on a screen and for labels a reader scans for, never for
+emphasis. Sentence-case headings, no emoji. A list only for real items; reasons go in prose.
+
+**Rule of three.** Three items only when there are three. Two or four are fine.
+
+**Criticism** is aimed at a claim, a method or a result, never at a person.
+
+**Contractions** are fine in chat and in short guides. Leave them out of specifications, the manual
+and formal letters.
+
+**In chat.** No greeting, no praise of the question, no recap of what the user said, no "I hope
+this helps". Ask a question only when the work needs the answer. End on the last fact, or on the
+one decision left to the user.
+
 ## Decided by the author
 - The name RadioPost; the project's post office domain `radiopost.org` (registered 2026-11-09;
   its mail live since 2026-11-11: MX `po.radiopost.org`, SPF `mx`, DMARC `quarantine` with reports
