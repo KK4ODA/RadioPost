@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.55.0 |
+| **Version** | 1.56.0 |
 | **Updated** | 2026-11-26 |
 | **Describes** | RadioPost 0.1.0-beta.40 |
 | **Licence** | CC BY 4.0 |
@@ -961,17 +961,22 @@ server's name in a web browser, such as `https://po.radiopost.org`, and sign in 
 If you lose the password, ask your operator for a new one ([section 27](#27-accounts-and-devices)).
 Your RadioPost computers go on working.
 
-**The settings.** Some mail programs find them from your address. If yours does not, type them in:
+**The settings.** Some mail programs find them from your address. If yours does not, type them in.
+In Thunderbird, add the account with your address and the mailbox's password, click **Configure
+manually**, and fill in:
 
-| Setting | What to type |
-|---|---|
-| User name | Your address, such as `ana@radiopost.org`. |
-| Password | The mailbox's password. |
-| Incoming mail | IMAP, server `po.radiopost.org`, port 993, SSL/TLS. |
-| Outgoing mail | SMTP, server `po.radiopost.org`, port 465, SSL/TLS, with the same user name and password. |
+| Field | Incoming server | Outgoing server |
+|---|---|---|
+| **Protocol** | IMAP | SMTP |
+| **Hostname** | `po.radiopost.org` | `po.radiopost.org` |
+| **Port** | 993 | 465 |
+| **Connection security** | SSL/TLS | SSL/TLS |
+| **Authentication method** | Normal password | Normal password |
+| **Username** | Your address, such as `ana@radiopost.org` | Your address, such as `ana@radiopost.org` |
 
-`po.radiopost.org` is the mail server of `radiopost.org`. At another post office, use the server
-its welcome email names, or ask its operator.
+Other mail programs ask for the same values under similar names. `po.radiopost.org` is the mail
+server of `radiopost.org`. At another post office, use the server its welcome email names, or ask
+its operator.
 
 **What the two share.** Each shows what you did in the other:
 
@@ -2754,3 +2759,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.53.0 | 2026-11-24 | Forms for most jobs, step 4 (RP-2 1.5.0, RP-5 1.8.0). §7: a group's own forms, held like RadioPost's and handed to your post office. §9: **Get the form**, for a form this computer does not hold, from your post office or the sender's. §12 *Forms kept here*: **Import a form…**, **Export** and **Remove**, and the forms handed to the post office (new Figure 37; later figures renumbered). |
 | 1.54.0 | 2026-11-24 | Forms for most jobs, step 5 (RP-8 0.3.0). §10.5 *Send a report*: a form with a position sent by broadcast to a circle, once or again every 10 to 60 minutes while the window is open, its position brought up to date, for four hours at most; nobody answers it (new Figure 31; later figures renumbered; Figure 29 retaken with the card folded). §9.1: reports sent and heard by broadcast in **Reports**. |
 | 1.55.0 | 2026-11-26 | §9.2 *In a mail program*: reading the RadioPost mailbox on the Internet in Thunderbird, Outlook or a phone's mail app, with the mailbox's password from the welcome email or the operator, IMAP on 993 and SMTP on 465; what the mail program and the radio share (read marks, the Sent folder, **Skip mail I have read in a mail program**, the accept list); mail written there to another RadioPost user goes on the air as third-party traffic. §12 *Usual gateways* links to it, and §37 has two rows for it. The client fetches mail only by radio, and the manual had never said how to read it on the Internet. |
+| 1.56.0 | 2026-11-26 | §9.2: the settings are Thunderbird's manual configuration, field by field (**Protocol**, **Hostname**, **Port**, **Connection security**, **Authentication method**, **Username**) for the incoming and the outgoing server; a user setting up Thunderbird was asked for a hostname the table had called the server. |
