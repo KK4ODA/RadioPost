@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.54.0 |
-| **Updated** | 2026-11-24 |
+| **Version** | 1.55.0 |
+| **Updated** | 2026-11-26 |
 | **Describes** | RadioPost 0.1.0-beta.40 |
 | **Licence** | CC BY 4.0 |
 
@@ -946,6 +946,58 @@ Riverside net*, with the sender's callsign ([10.5](#105-send-a-report)).
 
 *Figure 24. Damage reports, coloured by damage.*
 
+### 9.2 In a mail program
+
+When you have the Internet, an ordinary mail program reads your RadioPost mailbox: Thunderbird,
+Outlook, or the mail app on a phone. The RadioPost client has no button for this, since it fetches
+mail only by radio. The mailbox is on your post office's mail server: RadioPost reaches it by radio
+through a gateway, the mail program over the Internet.
+
+**The password.** The post office makes your mailbox with your account and gives its password
+once. If you applied, it is in the welcome email sent to **Your email now**. If you enrolled with
+a code, the operator gives it to you with the code. It is the mailbox's password only: RadioPost
+never uses it. Change it the first time you sign in, on the mail server's web page: open the
+server's name in a web browser, such as `https://po.radiopost.org`, and sign in with your address.
+If you lose the password, ask your operator for a new one ([section 27](#27-accounts-and-devices)).
+Your RadioPost computers go on working.
+
+**The settings.** Some mail programs find them from your address. If yours does not, type them in:
+
+| Setting | What to type |
+|---|---|
+| User name | Your address, such as `ana@radiopost.org`. |
+| Password | The mailbox's password. |
+| Incoming mail | IMAP, server `po.radiopost.org`, port 993, SSL/TLS. |
+| Outgoing mail | SMTP, server `po.radiopost.org`, port 465, SSL/TLS, with the same user name and password. |
+
+`po.radiopost.org` is the mail server of `radiopost.org`. At another post office, use the server
+its welcome email names, or ask its operator.
+
+**What the two share.** Each shows what you did in the other:
+
+- Mail sent to you comes to both: to the mail program as it arrives, to RadioPost on your next
+  call.
+- Mail you pick up by radio is marked read in the mail program within a few minutes.
+- Mail you send by radio appears in the mail program's Sent folder, marked read.
+- Mail you read in the mail program still comes by radio, unless you tick **Skip mail I have read
+  in a mail program** in Setup ([Usual gateways](#usual-gateways)). With it ticked, the post office
+  takes what you read there as picked up: it leaves your waiting mail, and gateways holding copies
+  of it for you drop them.
+- Mail you send from the mail program goes as ordinary email, and its recipients join your accept
+  list, so their answers reach you. RadioPost's **Sent** does not show it: the client lists only
+  what it sent itself.
+
+The read marks, the Sent folder and **Skip mail I have read in a mail program** need your post
+office to reach its mail server's mailboxes
+([the post office guide, chapter 15](../user/post-office.md#15-one-mailbox-radio-and-mail-programs)).
+If they do not work, tell your operator.
+
+**Mail to another RadioPost user.** Mail you write in a mail program to another RadioPost user
+reaches them by radio too, so it goes on the air. Write it as you would by radio: plain text, never
+encrypted, no business ([section 36](#36-the-rules)). The post office cannot tell that a licensed
+amateur wrote it, so it counts as third-party traffic: a gateway hands it only to stations in its
+own country, or in one with a third-party arrangement.
+
 ## 10. Station to station
 
 Two RadioPost stations can send mail to each other directly by radio. No gateway, no post office
@@ -1291,8 +1343,8 @@ there while the Internet or your post office is down
 ([section 14](#14-when-the-internet-is-down)).
 
 1. Tick the gateways you call most. Each one says whether it *holds copies*.
-2. Tick **Skip mail I have read in a mail program** if you also read your mail on the Internet:
-   mail you already read there is not offered by radio.
+2. Tick **Skip mail I have read in a mail program** if you also read your mail on the Internet
+   ([section 9.2](#92-in-a-mail-program)): mail you already read there is not offered by radio.
 3. Click **Save**. Your post office keeps the setting. **Read** fetches it again.
 
 The list needs the Internet and a gateway list ([section 8.1](#81-choose-a-gateway)).
@@ -2433,6 +2485,8 @@ These notes follow the US rules (Part 97). Check your own country's.
 | *it is queued at …, which will pass it on as it is, so it can no longer be changed* | That gateway holds it. Write a new message to correct it. |
 | Setup says the credential ran out | Ask your operator for a new code, then **Enroll again with a new code**. |
 | *Your settings could not be read* | Usual gateways need the Internet. Try **Read** again when you have it. |
+| A mail program refuses your password | It needs the mailbox's password, from the welcome email or the operator. RadioPost holds no copy. If it is lost, ask your operator for a new one ([section 9.2](#92-in-a-mail-program)). |
+| Mail you read in a mail program still comes by radio | Tick **Skip mail I have read in a mail program** in Setup, **Usual gateways**, and click **Save** ([section 9.2](#92-in-a-mail-program)). |
 | *No gateway list yet* | Open **Choose a gateway** and **Refresh over the Internet** while you have the Internet. |
 | A message tagged *queued at …* | A gateway took it while cut off. It is offered again until a gateway that reaches the Internet confirms it. |
 | A message tagged *may have been dropped* | Queued for 30 days with no word. It is still offered on each call. |
@@ -2699,3 +2753,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.52.0 | 2026-11-24 | Forms for most jobs, step 3. §9.1 *Reports*: the forms with positions on a map and in a list, by form and age, coloured by one of the form's choices, opened on OpenStreetMap, and saved as CSV or GeoJSON in the Downloads folder (new Figure 24; later figures renumbered). §6: **Alerts** and **Reports** among the folders. §7: an emailed form has a map link for each position (RP-6 1.3.0). The client's screenshots retaken with **Reports** in the left-hand column. |
 | 1.53.0 | 2026-11-24 | Forms for most jobs, step 4 (RP-2 1.5.0, RP-5 1.8.0). §7: a group's own forms, held like RadioPost's and handed to your post office. §9: **Get the form**, for a form this computer does not hold, from your post office or the sender's. §12 *Forms kept here*: **Import a form…**, **Export** and **Remove**, and the forms handed to the post office (new Figure 37; later figures renumbered). |
 | 1.54.0 | 2026-11-24 | Forms for most jobs, step 5 (RP-8 0.3.0). §10.5 *Send a report*: a form with a position sent by broadcast to a circle, once or again every 10 to 60 minutes while the window is open, its position brought up to date, for four hours at most; nobody answers it (new Figure 31; later figures renumbered; Figure 29 retaken with the card folded). §9.1: reports sent and heard by broadcast in **Reports**. |
+| 1.55.0 | 2026-11-26 | §9.2 *In a mail program*: reading the RadioPost mailbox on the Internet in Thunderbird, Outlook or a phone's mail app, with the mailbox's password from the welcome email or the operator, IMAP on 993 and SMTP on 465; what the mail program and the radio share (read marks, the Sent folder, **Skip mail I have read in a mail program**, the accept list); mail written there to another RadioPost user goes on the air as third-party traffic. §12 *Usual gateways* links to it, and §37 has two rows for it. The client fetches mail only by radio, and the manual had never said how to read it on the Internet. |
