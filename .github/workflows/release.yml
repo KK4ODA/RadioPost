@@ -161,12 +161,17 @@ jobs:
           cp LICENSE-MIT LICENSE-APACHE app/client/README.md "out/$tools/"
           # the version the archive is: `update` checks it against the version on offer
           echo "$VERSION" > "out/$tools/VERSION"
-          # bsdtar (Windows, macOS) writes a zip; GNU tar (Linux) cannot
+          # bsdtar writes a zip; GNU tar cannot. On Windows, bash's `tar` is Git's GNU tar, which
+          # ignores -a and wrote a tar under the .zip name (0.1.0-beta.40), so name Windows' own
           if [ "$RUNNER_OS" = "Linux" ]; then
             (cd out && zip -qr "$tools.zip" "$tools")
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            (cd out && /c/Windows/System32/tar.exe -a -c -f "$tools.zip" "$tools")
           else
             (cd out && tar -a -c -f "$tools.zip" "$tools")
           fi
+          # a zip starts with PK: Explorer and `update` read nothing else
+          [ "$(head -c 2 "out/$tools.zip")" = "PK" ] || { echo "out/$tools.zip is not a zip"; exit 1; }
           rm -r "out/$tools"
           # the tools archive signed, for `radiopost-po update` and the other programs' own
           npx --yes @tauri-apps/cli@2 signer sign "out/$tools.zip"
