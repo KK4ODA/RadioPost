@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.57.0 |
+| **Version** | 1.58.0 |
 | **Updated** | 2026-11-26 |
 | **Describes** | RadioPost 0.1.0-beta.40 |
 | **Licence** | CC BY 4.0 |
@@ -1663,11 +1663,12 @@ Click **Set up the gateway**. Setup has three steps.
 
 1. **Callsign**: yours with an SSID, such as `KK4ODA-1`. Callers call this.
 2. **Modem**: leave `ws://127.0.0.1:8515/v1`, where Aether listens on the same computer.
-3. **More modems**: leave it empty, unless the gateway is to answer on other modems too (see
-   *More than one modem* below).
+3. **More modems**: leave it empty, unless the gateway is to answer on other modems too
+   ([More than one modem](#more-than-one-modem)).
 4. **Country**: where the gateway operates, in two letters, such as `US`. It decides which
    third-party mail the gateway may hand over.
-5. Leave **The modem does not check the band rules: I do** clear. Aether checks them.
+5. Leave **The modem does not check the band rules: I do** clear while Aether is the only modem:
+   Aether checks them. With more modems, tick it.
 6. Keep **Answer calls when the app opens** ticked for a gateway left on its own.
 7. Keep **Report its status to its post office, for anyone to see** ticked, unless you would
    rather not. Callers then see whether the gateway is on the air (see *Its status* in
@@ -1678,20 +1679,6 @@ Click **Set up the gateway**. Setup has three steps.
 9. Click **Save**. The gateway makes its key, shown under the form.
 
 If you change the copies setting later, register again (step 2) so your post office knows.
-
-#### More than one modem
-
-A gateway can answer on several modems: Aether and Mercury on one radio, or Aether on HF and
-packet on VHF. Each modem other than Aether runs with its adapter, a small program in RadioPost's
-tools (`radiopost-mercury`, `radiopost-vara`). Put each adapter's address in **More modems**, one a
-line, such as `127.0.0.1:8601`.
-
-* The gateway carries **one session at a time**. While it carries one, the other modems do not
-  answer. A call another modem answered just before is ended.
-* Calls to partners ([section 22](#22-partners-forwarding-by-radio)) go on the first modem.
-* On one radio, the modems must share its keying, through rigctld or FLRig: only one program can
-  hold a radio's CAT port.
-* In step 2, add a channel for each modem, with its **Modem**.
 
 ### Step 2. Registration
 
@@ -1777,6 +1764,123 @@ the gateway says so and keeps its registration. Ask that post office's operators
 The gateway finds each user's post office on the Internet by itself. Name one here only while its
 records are not published yet: its **Domain** and its **API address** (`https://…/rp/v1`).
 
+### More than one modem
+
+A gateway can answer on several modems: Aether and Mercury on one radio, or Aether on HF and
+packet on VHF, each on a radio of its own. Aether is the first modem, in **Modem**. Each other
+modem is reached through its adapter, a small program in the tools archive, and the adapter's
+address goes in **More modems**, one a line.
+
+- The gateway carries **one session at a time**. While a session runs on one modem, the others do
+  not answer. A call another modem answered just before is ended once the session is over.
+- Calls to partners ([section 22](#22-partners-forwarding-by-radio)) go on the first modem.
+- Only Aether checks the band rules. The gateway uses another modem only with **The modem does
+  not check the band rules: I do** ticked, and that modem's transmissions are yours to keep within
+  the rules ([The rules](#36-the-rules)).
+- Only Aether scans. Leave **Scan these channels** clear when another modem shares Aether's radio.
+
+Only Aether has carried RadioPost on the air so far. A report from a gateway running two modems is
+welcome.
+
+#### The adapters
+
+| Adapter | Modem | Where it reaches the modem, unless told |
+|---|---|---|
+| `radiopost-mercury` | Mercury | `--mercury 127.0.0.1:8300`, Mercury's control port; its data port is the next |
+| `radiopost-vara` | VARA HF, or VARA FM with `--fm` | `--vara 127.0.0.1:8300`, VARA's command port; its data port is the next |
+| `radiopost-ardop` | ARDOP (ardopcf) | `--ardop 127.0.0.1:8515` |
+| `radiopost-packet` | A packet TNC's AGWPE port, such as Dire Wolf's | `--tnc 127.0.0.1:8000`, and `--port 0`, the TNC's first radio port |
+
+Every adapter waits for the gateway at `127.0.0.1:8600` unless given `--listen`. Give each one its
+own port, from 8601 up. Some of these modems' own ports are Aether's: 8300 and 8301 are Aether's
+external programs port, 8100 its KISS port and 8515 its control port. Run such a modem on other
+ports, and tell its adapter where.
+
+#### Aether and Mercury on one radio
+
+![The gateway's computer: RadioPost Gateway reaches Aether directly and Mercury through its adapter; both modems key the radio through rigctld and share its sound card](fig/two-modems.svg)
+
+*Figure 43. Aether and Mercury on one radio.*
+
+Both modems hear the radio's receive audio all the time, and only one transmits at a time. Only
+one program can hold the radio's CAT port, so both key the radio through rigctld, Hamlib's radio
+server, which serves several programs at once. Set it up once:
+
+1. **rigctld.** Close any program that holds the radio's CAT port, then start rigctld for the
+   radio:
+
+   ```
+   rigctld -m MODEL -r PORT -s RATE
+   ```
+
+   `MODEL` is the radio's Hamlib number (`rigctld -l` lists them), `PORT` its CAT port, such as
+   `COM5` or `/dev/ttyUSB0`, and `RATE` its CAT rate. It listens at `127.0.0.1:4532`. Start it
+   before Aether and Mercury, each time the computer starts.
+2. **Aether.** In Aether's Setup, step 2, set **Radio control** to **rigctld**, at
+   `127.0.0.1:4532`, and save
+   ([Aether's manual](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-2-radio-interface)).
+3. **Mercury.** Start Mercury on its own ports, keying the radio through rigctld. On Windows this
+   is `mercury.exe`, the program without a window.
+
+   ```
+   mercury -p 8400 -b 8410 -R 2 -A 127.0.0.1:4532 -i CAPTURE -o PLAYBACK
+   ```
+
+   - `-p 8400`: Mercury's control port; its data port is 8401. Its own, 8300 and 8301, are
+     Aether's external programs port.
+   - `-b 8410`: its broadcast port. Its own, 8100, is Aether's KISS port.
+   - `-R 2 -A 127.0.0.1:4532`: key the radio through rigctld (Hamlib's model 2). Without them
+     Mercury keys nothing, and its adapter does not either: Mercury would play its audio with the
+     radio not transmitting.
+   - `-i` and `-o`: the radio's sound card, the one Aether uses, its capture and its playback.
+     `mercury -z` lists the sound cards.
+
+   `mercury -R 2 -A 127.0.0.1:4532 -Q` keys the radio for one second and stops: a test of the
+   keying. Set Mercury's transmit level as its own documentation says. Aether's level does not
+   change it.
+4. **The adapter**, from the tools archive:
+
+   ```
+   radiopost-mercury --listen 127.0.0.1:8601 --mercury 127.0.0.1:8400
+   ```
+
+   It says *RPMI on 127.0.0.1:8601, Mercury's control port at 127.0.0.1:8400* and keeps running:
+   leave its window open. Mercury serves one program at a time, so while the adapter holds it, no
+   other program reaches Mercury.
+5. **The gateway's Setup, step 1.** Put `127.0.0.1:8601` in **More modems**. Tick **The modem
+   does not check the band rules: I do**: Mercury neither checks them nor says where the radio's
+   dial is, and without the tick the gateway leaves it unused (the log says *127.0.0.1:8601 will
+   not be used: …*). Aether still checks its own transmissions. Mercury's are yours: keep the
+   radio on a dial where an unattended station may send Mercury's signal. Click **Save**.
+6. **Step 2.** Add a channel on Aether's dial with **Modem** **Mercury** and the **Bandwidth**
+   callers should call at: 500, 2300 or 2750 Hz. Leave **Scan these channels** clear: a scan
+   would move the radio under Mercury, and the gateway refuses to scan a dial listed twice. Click
+   **Register with …**.
+7. **Start.** The log says *also listening on 127.0.0.1:8601*, and **Modem** names both modems.
+   *waiting for 127.0.0.1:8601: …* means the adapter or Mercury is not running. The gateway tries
+   again every 5 seconds, so start the one missing and leave the gateway running.
+
+After each Mercury session the adapter identifies the station with Mercury's CQ frame, which
+carries the callsign in Mercury's own signal. Mercury sends no Morse identifier.
+
+On Windows, both programs open the radio's sound card at once. On Linux, a sound card one program
+opens directly (Mercury's `plughw:…`) is closed to the other: put both behind PulseAudio or
+PipeWire (Mercury's `-x pulse`). This has not been tried with Aether yet.
+
+#### A modem on a second radio
+
+A modem with a radio of its own shares nothing: it has its own keying and its own sound card. For
+packet on VHF, run Dire Wolf on the VHF radio, then its adapter:
+
+```
+radiopost-packet --listen 127.0.0.1:8602 --tnc 127.0.0.1:8000
+```
+
+Put `127.0.0.1:8602` in **More modems** and tick **The modem does not check the band rules: I
+do**, as for Mercury. In step 2, add its channel with **Modem** **Packet**: on FM the frequency is
+the channel's, and the bandwidth its width, 12500 or 25000 Hz. While one radio carries a session,
+the other does not answer.
+
 ### Updates
 
 Below the steps, **Updates** says which RadioPost Gateway you are running, when it last asked for
@@ -1788,7 +1892,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 ![The RadioPost Gateway window with numbered marks on its parts](screens/gateway-window.png)
 
-*Figure 43. The RadioPost Gateway window.*
+*Figure 44. The RadioPost Gateway window.*
 
 1. **The gateway's callsign**, and the account it is registered under. To its left, beside
    *RadioPost Gateway*, is the version you are running.
@@ -1823,7 +1927,7 @@ While a session runs, a box shows who called, the account, since when, and the m
 
 ![The window during a session, with the Session under way box and its Disconnect button](screens/gateway-session.png)
 
-*Figure 44. A session at the gateway.*
+*Figure 45. A session at the gateway.*
 
 **Ending one session.** The box has a button that ends this session only. The gateway goes on
 answering:
@@ -1932,7 +2036,7 @@ text), each session waiting to be reported with its last try, and the last repor
 
 ![The Partners, Callers refused and Copies placed ahead panels, opened](screens/gateway-held.png)
 
-*Figure 45. What the gateway holds, its partners and the callers it refuses.*
+*Figure 46. What the gateway holds, its partners and the callers it refuses.*
 
 ## 22. Partners: forwarding by radio
 
@@ -2069,7 +2173,7 @@ on this tab.
 
 ![The Applications tab: one application waiting with its licence check, and the Decided list](screens/desk-applications.png)
 
-*Figure 46. Applications.*
+*Figure 47. Applications.*
 
 Each application shows the person's name, callsign and when they asked, the **Address** they
 want, their **Email now**, and what the post office found of the callsign:
@@ -2113,7 +2217,7 @@ the mailbox was made (*mailbox*, or *no mailbox* in red) and the applicant email
 
 ![The Accounts tab: five accounts with their names, devices and mail waiting](screens/desk-accounts.png)
 
-*Figure 47. Accounts.*
+*Figure 48. Accounts.*
 
 Every account, one a row:
 
@@ -2151,7 +2255,7 @@ Revoking the computer you are using takes the desk away from it: the button says
 
 ![The Gateways tab: two gateways, the account each was registered from, and Unregister](screens/desk-gateways.png)
 
-*Figure 48. Gateways.*
+*Figure 49. Gateways.*
 
 The **Gateways** tab lists each gateway registered with your post office, one a row:
 
@@ -2175,7 +2279,7 @@ that exists. Use it for someone you know holds the callsign.
 
 ![The New code tab: an address, a callsign and a name filled in, the licence checked, and the code made](screens/desk-code.png)
 
-*Figure 49. Making a code.*
+*Figure 50. Making a code.*
 
 1. Open **New code**.
 2. Fill in:
@@ -2225,7 +2329,7 @@ Know only post offices whose operators you trust to check callsigns. At first no
 
 ![The Post offices tab: one post office known, one seen, none blocked](screens/desk-others.png)
 
-*Figure 50. Other post offices.*
+*Figure 51. Other post offices.*
 
 - **Known**: the post offices you know, who runs each, when its records were last fetched, and
   whether DNSSEC signed them. They are fetched again every six hours. **Forget** stops knowing one;
@@ -2246,7 +2350,7 @@ when a check turns red, and again when all pass.
 
 ![The Health tab: eleven checks passed and one amber line about backups](screens/desk-health.png)
 
-*Figure 51. Health.*
+*Figure 52. Health.*
 
 Each line is one check:
 
@@ -2274,7 +2378,7 @@ The **Server** tab lets you look after the server without logging in to it.
 
 ![The Server tab: the jobs, one with its output open, and When you need more](screens/desk-server.png)
 
-*Figure 52. Jobs and a terminal.*
+*Figure 53. Jobs and a terminal.*
 
 **Jobs** are a fixed list of tasks the server's administrator account runs for you:
 
@@ -2309,7 +2413,7 @@ says the one command to run on the server, once.
 
 ![The Backups and DKIM keys boxes on the Server tab](screens/desk-backups.png)
 
-*Figure 53. Backups and DKIM keys.*
+*Figure 54. Backups and DKIM keys.*
 
 ### Backups
 
@@ -2366,7 +2470,7 @@ when they are older than 180 days.
 
 ![The Settings tab: applications, licence lookups, mailboxes and this post office](screens/desk-settings.png)
 
-*Figure 54. Settings.*
+*Figure 55. Settings.*
 
 ### Applications
 
@@ -2524,6 +2628,8 @@ These notes follow the US rules (Part 97). Check your own country's.
 | Unregister: *… still wait to be reported* | Sessions carried with the Internet down hold users' mail. **Start** the gateway with the Internet up, let it report them, then unregister. |
 | Unregister: *… keeps KK4ODA-1 on its gateway list* | That post office does not take withdrawals yet. Ask its operators to remove the gateway, then click **Unregister** again. |
 | *This modem neither checks the band rules nor says where the radio's dial is* | Aether's rules are off, as they are when an external program keys the radio, and it cannot read the dial. Set Aether's keying and rules (its Setup, steps 1 and 2). |
+| *127.0.0.1:8601 will not be used: this modem neither checks the band rules …* | A modem in **More modems**, such as Mercury, checks no rules. Tick **The modem does not check the band rules: I do** in Setup, step 1, and keep its transmissions within the rules yourself ([More than one modem](#more-than-one-modem)). |
+| *waiting for 127.0.0.1:8601: cannot reach the modem* | That adapter is not running. Start it, and its modem before it. The gateway tries again every 5 seconds. |
 | *The radio is at … MHz: … outside the segments*, badge **Not answering here** | Aether's rules are off, so the gateway judges the dial itself. Turn the radio to the gateway's channel. |
 | *could not tune the radio back* | The radio stayed on the partner's or gateway's channel after a call. Tune it back in Aether. |
 | *listening on … MHz only, until the scan runs again* | The scan ended ([When a scan stops](#when-a-scan-stops)); the gateway registered again with that channel alone. Click **Stop** and **Start** to scan again. |
@@ -2765,3 +2871,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.55.0 | 2026-11-26 | §9.2 *In a mail program*: reading the RadioPost mailbox on the Internet in Thunderbird, Outlook or a phone's mail app, with the mailbox's password from the welcome email or the operator, IMAP on 993 and SMTP on 465; what the mail program and the radio share (read marks, the Sent folder, **Skip mail I have read in a mail program**, the accept list); mail written there to another RadioPost user goes on the air as third-party traffic. §12 *Usual gateways* links to it, and §37 has two rows for it. The client fetches mail only by radio, and the manual had never said how to read it on the Internet. |
 | 1.56.0 | 2026-11-26 | §9.2: the settings are Thunderbird's manual configuration, field by field (**Protocol**, **Hostname**, **Port**, **Connection security**, **Authentication method**, **Username**) for the incoming and the outgoing server; a user setting up Thunderbird was asked for a hostname the table had called the server. |
 | 1.57.0 | 2026-11-26 | §9.2 *Mail to another RadioPost user*: mail written in a mail program to a user of the same post office is refused when it is encrypted or has a program attached (RP-6 1.4.0 §2.6), the mail program shows the refusal's words, and nobody on the message gets it. The post office had taken such mail and put it on the air. |
+| 1.58.0 | 2026-11-26 | §18 *More than one modem* becomes a section of its own, after step 3: the adapters and their ports; Aether and Mercury on one radio step by step (rigctld for both, Mercury on ports 8400, 8401 and 8410 and keyed through rigctld, its adapter, **More modems**, **The modem does not check the band rules: I do** ticked, a second channel on Aether's dial, no scan; new Figure 43; later figures renumbered); a modem on a second radio. Step 1: tick that box with more modems. §37: the gateway's two lines about a modem in **More modems**. |

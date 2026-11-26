@@ -81,8 +81,13 @@ radio, or Aether on HF and packet on VHF. Give each modem's RPMI adapter (`radio
 `radiopost-vara`, from the tools archive), one a line, as `host:port`. The gateway carries one
 session at a time: while it carries one, it tells the other modems not to answer, and a call one of
 them answered before it heard is ended (`abort`) once the session is over. Calls to partners
-(RP-7 §2) go on the first **Modem**. Two modems on one radio must share its keying through rigctld
-or FLRig, since only one program can hold a CAT port; each hears the other's signal as busy.
+(RP-7 §2) go on the first **Modem**. Every modem but Aether checks no band rules, so the gateway
+uses one only with **The modem does not check the band rules: I do** ticked, and its operator keeps
+that modem's transmissions within the rules (RP-4 §8). Two modems on one radio key it through
+rigctld, since only one program can hold a CAT port, and the gateway does not scan. The manual's
+*More than one modem* (§18) sets up Aether and Mercury on one radio step by step: Mercury on ports
+8400, 8401 and 8410, clear of Aether's 8300, 8301 and 8100, and keyed with `-R 2 -A
+127.0.0.1:4532`.
 
 **2. Registration.** **RadioPost app's home** is the folder where the RadioPost app on this
 computer keeps its keys and credentials (`.radiopost` in your user folder): leave it. **Account**

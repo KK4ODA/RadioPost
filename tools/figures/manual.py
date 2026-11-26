@@ -562,6 +562,106 @@ def fig_gateway() -> None:
     f.save(OUT / "gateway.svg")
 
 
+def fig_two_modems() -> None:
+    f = Plate(1000, 446, "Aether and Mercury on one radio")
+    f.computer(24, 20, 772, 300, "The gateway's computer")
+    f.box(
+        44,
+        58,
+        168,
+        240,
+        "gateway",
+        tag="RadioPost Gateway",
+        title="Answers on both",
+        rows=["one session at a", "time: the other", "modem does not", "answer meanwhile"],
+        icon="antenna",
+    )
+    f.box(
+        262,
+        58,
+        310,
+        104,
+        "neutral",
+        tag="Aether HF, the first modem",
+        title="ws://127.0.0.1:8515/v1",
+        rows=["checks the band rules for", "its own transmissions"],
+        title_size=14,
+    )
+    f.box(
+        262,
+        194,
+        142,
+        104,
+        "neutral",
+        tag="radiopost-mercury",
+        title="Its adapter",
+        mono_rows=["127.0.0.1:8601"],
+    )
+    f.box(
+        430,
+        194,
+        142,
+        104,
+        "neutral",
+        tag="Mercury",
+        title="Ports 8400",
+        rows=["and 8401;", "broadcasts 8410"],
+    )
+    f.box(
+        622,
+        58,
+        154,
+        104,
+        "paper",
+        tag="Shared by both",
+        title="rigctld",
+        rows=["keys the radio,", "127.0.0.1:4532"],
+    )
+    f.box(
+        622,
+        194,
+        154,
+        104,
+        "paper",
+        tag="Shared by both",
+        title="Sound card",
+        rows=["both hear it; one", "transmits at a time"],
+        size=12.5,
+    )
+    f.link([(214, 110), (258, 110)], "local", head=False)
+    f.link([(214, 246), (258, 246)], "local", head=False)
+    f.link([(406, 246), (426, 246)], "local", head=False)
+    # each modem reaches both: rigctld and the sound card
+    f.link([(574, 110), (618, 110)], "local", head=False)
+    f.link([(574, 246), (618, 246)], "local", head=False)
+    f.link([(596, 110), (596, 246)], "local", head=False)
+    f.box(
+        840,
+        118,
+        136,
+        120,
+        "neutral",
+        tag="The radio",
+        title="One HF radio",
+        rows=["on USB: its CAT", "port and its", "sound card"],
+        size=12.5,
+    )
+    f.link([(778, 110), (836, 150)], "internet", label="CAT", dx=16, dy=-12, both=True)
+    f.link([(778, 246), (836, 206)], "internet", label="Audio", dx=18, dy=24, both=True)
+
+    f.panel(24, 340, 952, 64, "Before the gateway starts")
+    f.note(
+        38,
+        380,
+        [
+            "rigctld runs first. Mercury and Aether both key the radio through it, since only one"
+            " program can hold the radio's CAT port.",
+        ],
+    )
+    f.legend(430, [LOCAL, ("internet", "A cable to the radio")])
+    f.save(OUT / "two-modems.svg")
+
+
 # ------------------------------------------------------------------------------------------------
 # When the Internet is down
 # ------------------------------------------------------------------------------------------------
@@ -674,6 +774,7 @@ FIGURES = [
     fig_direct,
     fig_callsigns,
     fig_gateway,
+    fig_two_modems,
     fig_cutoff,
 ]
 
