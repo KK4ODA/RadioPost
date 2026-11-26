@@ -335,7 +335,9 @@ notes:
   transmits, and whether it is on the air now (RP-0 1.3.0 and 1.4.0, RP-5 1.4.0 to 1.6.0), and
   whether the station called was heard during a call that failed (RP-4 1.4.0);
 * addresses written in lowercase, compared without regard to case (RP-0 1.5.0, RP-1 1.2.0,
-  RP-2 1.3.0, RP-5 1.7.0, RP-6 1.2.0).
+  RP-2 1.3.0, RP-5 1.7.0, RP-6 1.2.0);
+* mail a user sends from a mail program to another user of the same post office refused when it
+  is encrypted or carries a program, as at the door, since it goes on the air (RP-6 1.4.0).
 
 RP-4 also describes the VARA, ARDOP and packet adapters. RP-7, forwarding between gateways, and
 RP-8, alerts and reports, are drafts. All nine are written, with test vectors for RP-1 to RP-8.

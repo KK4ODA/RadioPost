@@ -635,9 +635,10 @@ To: Jose <jose@test.example>, Maria <maria@example.com>\r\nSubject: From my lapt
 Date: Fri, 13 Nov 2026 20:00:00 +0000\r\nMessage-ID: <tb.1@laptop.example>\r\n\
 MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nWritten in Thunderbird.\r\n";
 
-/// RP-6 §2.6, RP-5 §6.5: mail a signed-in user sends from a mail program is not judged; each
-/// recipient who is an account here gets its radio copy (third-party until G16 is settled), and
-/// the recipients join the sender's accept list. As the draft calls the hook, the same.
+/// RP-6 §2.6, RP-5 §6.5: mail a signed-in user sends from a mail program is not judged by its
+/// sender; each recipient who is an account here gets its radio copy (third-party until G16 is
+/// settled), and the recipients join the sender's accept list. As the draft calls the hook, the
+/// same.
 #[test]
 fn mail_a_user_submits_reaches_the_radio_and_fills_the_accept_list() {
     let dir = scratch("submitted");
@@ -779,6 +780,125 @@ fn the_services_own_submissions_file_nothing() {
         &["test.example".to_owned()]
     ));
     assert!(!serve_email::is_service_login("radiopost", None, &[]));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// `FROM_THUNDERBIRD` with another body: its headers up to the content type, then `content`.
+fn thunderbird_with(content: &str) -> String {
+    let (head, _) = FROM_THUNDERBIRD
+        .split_once("Content-Type:")
+        .expect("a content type");
+    format!("{head}{content}")
+}
+
+/// The door's refusal, read from either shape of answer: code, enhanced code, text.
+fn refusal(body: &str) -> (Json, Json, String) {
+    let answer: Json = serde_json::from_str(body).expect("JSON");
+    let (code, enhanced, text) = if answer["action"] == "reject" {
+        let r = &answer["response"];
+        (&r["status"], &r["enhanced_status"], &r["message"])
+    } else {
+        assert_eq!(answer["set"][0]["value"], "reject", "{body}");
+        let r = &answer["set"][1]["value"];
+        (&r["code"], &r["enhancedCode"], &r["message"])
+    };
+    let text = text.as_str().unwrap_or_default().to_owned();
+    (code.clone(), enhanced.clone(), text)
+}
+
+/// RP-6 §2.6, §5.2: a submission's message for a user here goes on the air, so one that is
+/// encrypted, or carries a program, is refused at `DATA` with the door's own answer, for every
+/// recipient, and nothing of it is kept: no radio copy, no accept-list entry. `RCPT TO` is not
+/// judged. With no recipient here it is the mail server's to send.
+#[test]
+fn a_submission_for_the_radio_is_neither_encrypted_nor_carries_a_program() {
+    let dir = scratch("submitted-refused");
+    let running = post_office(&dir);
+    with_users(&running);
+    let door = serve::serve_hooks(running.clone(), "127.0.0.1:0").expect("the door");
+    let pgp = thunderbird_with(
+        "Content-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\"; \
+         boundary=\"e\"\r\n\r\n--e\r\nContent-Type: application/pgp-encrypted\r\n\r\n\
+         Version: 1\r\n--e\r\nContent-Type: application/octet-stream\r\n\r\nhQEMA1x\r\n--e--\r\n",
+    );
+    let program = thunderbird_with(
+        "Content-Type: multipart/mixed; boundary=\"x\"\r\n\r\n--x\r\n\
+         Content-Type: text/plain\r\n\r\nThe logging program.\r\n--x\r\n\
+         Content-Type: application/octet-stream\r\n\
+         Content-Disposition: attachment; filename=\"Setup.exe\"\r\n\
+         Content-Transfer-Encoding: base64\r\n\r\nTVqQAAMAAAAEAAAA\r\n--x--\r\n",
+    );
+    let to = ["jose@test.example", "maria@example.com"];
+    let facundo = "facundo@test.example";
+    for (what, email) in [("encrypted", &pgp), ("a program", &program)] {
+        let (_, body) = post(
+            &door,
+            "door-secret",
+            &submitted("rcpt", facundo, facundo, &to, email),
+        );
+        assert_eq!(body, r#"{"action":"accept"}"#, "{what}: RCPT TO not judged");
+        let (_, body) = post(
+            &door,
+            "door-secret",
+            &submitted("data", facundo, facundo, &to, email),
+        );
+        let (code, enhanced, text) = refusal(&body);
+        assert_eq!(
+            (code, enhanced),
+            (json!(554), json!("5.7.1")),
+            "{what}: {body}"
+        );
+        assert!(
+            text.contains("Mail to test.example travels by amateur radio"),
+            "{what}: the door's words: {text}"
+        );
+    }
+    {
+        let office = running.office();
+        assert!(
+            !office.state.mailboxes.contains_key("jose@test.example"),
+            "no radio copy for Jose"
+        );
+        assert!(
+            !office.state.accept.contains_key(facundo),
+            "mail refused fills no accept list"
+        );
+    }
+
+    // the draft's shape, refused the same way
+    let mut call = draft("data", Some(facundo), "jose@test.example", &pgp);
+    call["auth"] = json!({"login": facundo, "method": "plain"});
+    let (status, body) = post(&door, "door-secret", &call);
+    assert_eq!(status, 200);
+    let (code, enhanced, _) = refusal(&body);
+    assert_eq!((code, enhanced), (json!(554), json!("5.7.1")), "{body}");
+
+    // to Maria alone it never reaches the radio: the mail server's to send
+    let (_, body) = post(
+        &door,
+        "door-secret",
+        &submitted("data", facundo, facundo, &["maria@example.com"], &pgp),
+    );
+    assert_eq!(body, r#"{"action":"accept"}"#, "nothing here to judge");
+    assert!(
+        !running
+            .office()
+            .state
+            .mailboxes
+            .contains_key("jose@test.example")
+    );
+
+    // written plainly, the same mail reaches Jose by radio
+    let (_, body) = post(
+        &door,
+        "door-secret",
+        &submitted("data", facundo, facundo, &to, FROM_THUNDERBIRD),
+    );
+    assert_eq!(body, r#"{"action":"accept"}"#);
+    assert_eq!(
+        subjects(&running, "jose@test.example"),
+        [("From my laptop".to_owned(), true)]
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 

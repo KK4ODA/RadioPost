@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.56.0 |
+| **Version** | 1.57.0 |
 | **Updated** | 2026-11-26 |
 | **Describes** | RadioPost 0.1.0-beta.40 |
 | **Licence** | CC BY 4.0 |
@@ -999,9 +999,13 @@ If they do not work, tell your operator.
 
 **Mail to another RadioPost user.** Mail you write in a mail program to another RadioPost user
 reaches them by radio too, so it goes on the air. Write it as you would by radio: plain text, never
-encrypted, no business ([section 36](#36-the-rules)). The post office cannot tell that a licensed
-amateur wrote it, so it counts as third-party traffic: a gateway hands it only to stations in its
-own country, or in one with a third-party arrangement.
+encrypted, no business ([section 36](#36-the-rules)). Your post office refuses mail to a user of
+its own that is encrypted or has a program attached (a file such as `.exe`, `.bat` or `.js`), and
+your mail program shows why: *Mail to radiopost.org travels by amateur radio, where encryption is
+not allowed and programs are not carried.* Then it goes to nobody on the message. Send it again
+without the encryption or the program, or send it to the others alone. The post office cannot tell
+that a licensed amateur wrote it, so it counts as third-party traffic: a gateway hands it only to
+stations in its own country, or in one with a third-party arrangement.
 
 ## 10. Station to station
 
@@ -2760,3 +2764,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.54.0 | 2026-11-24 | Forms for most jobs, step 5 (RP-8 0.3.0). §10.5 *Send a report*: a form with a position sent by broadcast to a circle, once or again every 10 to 60 minutes while the window is open, its position brought up to date, for four hours at most; nobody answers it (new Figure 31; later figures renumbered; Figure 29 retaken with the card folded). §9.1: reports sent and heard by broadcast in **Reports**. |
 | 1.55.0 | 2026-11-26 | §9.2 *In a mail program*: reading the RadioPost mailbox on the Internet in Thunderbird, Outlook or a phone's mail app, with the mailbox's password from the welcome email or the operator, IMAP on 993 and SMTP on 465; what the mail program and the radio share (read marks, the Sent folder, **Skip mail I have read in a mail program**, the accept list); mail written there to another RadioPost user goes on the air as third-party traffic. §12 *Usual gateways* links to it, and §37 has two rows for it. The client fetches mail only by radio, and the manual had never said how to read it on the Internet. |
 | 1.56.0 | 2026-11-26 | §9.2: the settings are Thunderbird's manual configuration, field by field (**Protocol**, **Hostname**, **Port**, **Connection security**, **Authentication method**, **Username**) for the incoming and the outgoing server; a user setting up Thunderbird was asked for a hostname the table had called the server. |
+| 1.57.0 | 2026-11-26 | §9.2 *Mail to another RadioPost user*: mail written in a mail program to a user of the same post office is refused when it is encrypted or has a program attached (RP-6 1.4.0 §2.6), the mail program shows the refusal's words, and nobody on the message gets it. The post office had taken such mail and put it on the air. |

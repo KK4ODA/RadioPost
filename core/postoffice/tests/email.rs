@@ -165,6 +165,46 @@ fn the_door_answers_as_rp6_2_1_says() {
     }
 }
 
+/// RP-6 §2.6: mail a signed-in user submits. `RCPT TO` is never judged (the hook answers it
+/// before reading anything), and `DATA` by `submitted_why` alone.
+#[test]
+fn submissions_are_judged_as_rp6_2_6_says() {
+    let file = vectors("email-door.json");
+    let accounts: BTreeMap<String, Vec<String>> = file["context"]["accounts"]
+        .as_object()
+        .expect("accounts")
+        .iter()
+        .map(|(a, l)| (a.clone(), strings(l)))
+        .collect();
+    let cases = file["submissions"].as_array().expect("submissions");
+    assert_eq!(cases.len(), 11, "the submissions to replay");
+    for case in cases {
+        let what = case["what"].as_str().expect("what");
+        assert_eq!(case["expect"]["rcpt"], mail::OK_RCPT, "{what}: RCPT TO");
+        let (reply, why) = mail::submitted_why(
+            &strings(&case["rcpt_to"]),
+            case["email"].as_str().expect("email").as_bytes(),
+            &accounts,
+        );
+        assert_eq!(reply, case["expect"]["data"], "{what}: DATA");
+        let want = match what {
+            "PGP/MIME to a user here"
+            | "inline PGP to a user here"
+            | "S/MIME enveloped-data to a user here"
+            | "PGP/MIME to an address elsewhere and a user here" => "encrypted",
+            "an executable attachment to a user here"
+            | "an executable to a user here, signed in as an email-only member" => {
+                "an executable attachment"
+            }
+            "PGP/MIME to an address elsewhere only" | "PGP/MIME to `postmaster@`, no account" => {
+                "no account here: the mail server's"
+            }
+            _ => "taken",
+        };
+        assert_eq!(why, want, "{what}: the reason");
+    }
+}
+
 /// Everything but the text, for a message whose text came from HTML.
 fn without_body(m: &Message) -> Vec<(Value, Value)> {
     m.map()

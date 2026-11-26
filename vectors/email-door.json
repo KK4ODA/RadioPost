@@ -2,7 +2,7 @@
   "radiopost_vectors": "Email at the door: taken or refused",
   "format": 1,
   "specs": {
-    "RP-6": "§2.1, §2.2"
+    "RP-6": "§2.1, §2.2, §2.6"
   },
   "made_by": "tools/vectors/make.py",
   "rule": "A post office with `context`'s accounts, accept lists and known post offices, given the envelope, the email and the mail server's DMARC and DKIM verdicts, answers `RCPT TO` and then `DATA` with `expect` (code and enhanced status; the text is its own). `data` is null when the recipient was refused. A case's `max_email_bytes` replaces the context's.",
@@ -243,6 +243,154 @@
       "expect": {
         "rcpt": "250 2.1.5",
         "data": "550 5.7.1"
+      }
+    }
+  ],
+  "submissions_rule": "RP-6 §2.6: mail a user submits signed in to the mail server (`login`). Every `RCPT TO` is answered `250 2.1.5`: its sender and size are not judged, nor its DMARC. At `DATA`, when any of `rcpt_to` is one of `context`'s accounts, a message that §2.1 finds encrypted or carrying an executable attachment is refused with `554 5.7.1` for every recipient, since its RadioPost message goes on the air; anything else is taken `250 2.0.0`. A case's `max_email_bytes` replaces the context's.",
+  "submissions": [
+    {
+      "what": "plain, to a user here not listing the sender",
+      "login": "facundo@radiopost.org",
+      "mail_from": "facundo@radiopost.org",
+      "rcpt_to": [
+        "shelter3@radiopost.org"
+      ],
+      "email": "From: Facundo <facundo@radiopost.org>\r\nTo: shelter3@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "250 2.0.0"
+      }
+    },
+    {
+      "what": "plain, over the post office's `max_email_bytes` (here 100)",
+      "login": "facundo@radiopost.org",
+      "mail_from": "facundo@radiopost.org",
+      "rcpt_to": [
+        "shelter3@radiopost.org"
+      ],
+      "email": "From: Facundo <facundo@radiopost.org>\r\nTo: shelter3@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\nHello.\r\n",
+      "max_email_bytes": 100,
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "250 2.0.0"
+      }
+    },
+    {
+      "what": "PGP/MIME to a user here",
+      "login": "facundo@radiopost.org",
+      "mail_from": "facundo@radiopost.org",
+      "rcpt_to": [
+        "shelter3@radiopost.org"
+      ],
+      "email": "From: Facundo <facundo@radiopost.org>\r\nTo: shelter3@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"e\"\r\n\r\n--e\r\nContent-Type: application/pgp-encrypted\r\n\r\nVersion: 1\r\n--e\r\nContent-Type: application/octet-stream\r\n\r\nhQEMA1x\r\n--e--\r\n",
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "554 5.7.1"
+      }
+    },
+    {
+      "what": "inline PGP to a user here",
+      "login": "facundo@radiopost.org",
+      "mail_from": "facundo@radiopost.org",
+      "rcpt_to": [
+        "shelter3@radiopost.org"
+      ],
+      "email": "From: Facundo <facundo@radiopost.org>\r\nTo: shelter3@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\n-----BEGIN PGP MESSAGE-----\r\nhQEMA1x\r\n-----END PGP MESSAGE-----\r\n",
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "554 5.7.1"
+      }
+    },
+    {
+      "what": "S/MIME enveloped-data to a user here",
+      "login": "facundo@radiopost.org",
+      "mail_from": "facundo@radiopost.org",
+      "rcpt_to": [
+        "shelter3@radiopost.org"
+      ],
+      "email": "From: Facundo <facundo@radiopost.org>\r\nTo: shelter3@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: application/pkcs7-mime; smime-type=enveloped-data; name=\"smime.p7m\"\r\nContent-Transfer-Encoding: base64\r\n\r\nMIAGCSqGSIb3DQEHA6CAMIACAQAxggE=\r\n",
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "554 5.7.1"
+      }
+    },
+    {
+      "what": "S/MIME signed to a user here",
+      "login": "facundo@radiopost.org",
+      "mail_from": "facundo@radiopost.org",
+      "rcpt_to": [
+        "shelter3@radiopost.org"
+      ],
+      "email": "From: Facundo <facundo@radiopost.org>\r\nTo: shelter3@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: multipart/signed; protocol=\"application/pkcs7-signature\"; micalg=sha-256; boundary=\"s\"\r\n\r\n--s\r\nContent-Type: text/plain\r\n\r\nSigned, not encrypted.\r\n--s\r\nContent-Type: application/pkcs7-signature; name=\"smime.p7s\"\r\nContent-Transfer-Encoding: base64\r\n\r\nMIAGCSqGSIb3DQEHAqCAMIACAQEx\r\n--s--\r\n",
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "250 2.0.0"
+      }
+    },
+    {
+      "what": "an executable attachment to a user here",
+      "login": "facundo@radiopost.org",
+      "mail_from": "facundo@radiopost.org",
+      "rcpt_to": [
+        "shelter3@radiopost.org"
+      ],
+      "email": "From: Facundo <facundo@radiopost.org>\r\nTo: shelter3@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"x\"\r\n\r\n--x\r\nContent-Type: text/plain\r\n\r\nSee the program.\r\n--x\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"Photos.EXE\"\r\nContent-Transfer-Encoding: base64\r\n\r\nTVqQAAMAAAAEAAAA\r\n--x--\r\n",
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "554 5.7.1"
+      }
+    },
+    {
+      "what": "PGP/MIME to an address elsewhere only",
+      "login": "facundo@radiopost.org",
+      "mail_from": "facundo@radiopost.org",
+      "rcpt_to": [
+        "maria@example.com"
+      ],
+      "email": "From: Facundo <facundo@radiopost.org>\r\nTo: maria@example.com\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"e\"\r\n\r\n--e\r\nContent-Type: application/pgp-encrypted\r\n\r\nVersion: 1\r\n--e\r\nContent-Type: application/octet-stream\r\n\r\nhQEMA1x\r\n--e--\r\n",
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "250 2.0.0"
+      }
+    },
+    {
+      "what": "PGP/MIME to an address elsewhere and a user here",
+      "login": "facundo@radiopost.org",
+      "mail_from": "facundo@radiopost.org",
+      "rcpt_to": [
+        "maria@example.com",
+        "shelter3@radiopost.org"
+      ],
+      "email": "From: Facundo <facundo@radiopost.org>\r\nTo: maria@example.com, shelter3@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"e\"\r\n\r\n--e\r\nContent-Type: application/pgp-encrypted\r\n\r\nVersion: 1\r\n--e\r\nContent-Type: application/octet-stream\r\n\r\nhQEMA1x\r\n--e--\r\n",
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "554 5.7.1"
+      }
+    },
+    {
+      "what": "PGP/MIME to `postmaster@`, no account",
+      "login": "facundo@radiopost.org",
+      "mail_from": "facundo@radiopost.org",
+      "rcpt_to": [
+        "postmaster@radiopost.org"
+      ],
+      "email": "From: Facundo <facundo@radiopost.org>\r\nTo: postmaster@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"e\"\r\n\r\n--e\r\nContent-Type: application/pgp-encrypted\r\n\r\nVersion: 1\r\n--e\r\nContent-Type: application/octet-stream\r\n\r\nhQEMA1x\r\n--e--\r\n",
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "250 2.0.0"
+      }
+    },
+    {
+      "what": "an executable to a user here, signed in as an email-only member",
+      "login": "club@radiopost.org",
+      "mail_from": "club@radiopost.org",
+      "rcpt_to": [
+        "shelter3@radiopost.org"
+      ],
+      "email": "From: Club <club@radiopost.org>\r\nTo: shelter3@radiopost.org\r\nSubject: Test\r\nDate: Mon, 09 Nov 2026 14:40:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"x\"\r\n\r\n--x\r\nContent-Type: text/plain\r\n\r\nSee the program.\r\n--x\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"Photos.EXE\"\r\nContent-Transfer-Encoding: base64\r\n\r\nTVqQAAMAAAAEAAAA\r\n--x--\r\n",
+      "expect": {
+        "rcpt": "250 2.1.5",
+        "data": "554 5.7.1"
       }
     }
   ]

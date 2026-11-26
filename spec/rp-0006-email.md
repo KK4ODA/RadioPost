@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.3.0 |
-| **Updated** | 2026-11-24 |
+| **Version** | 1.4.0 |
+| **Updated** | 2026-11-26 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-1, RP-2, RP-5 |
@@ -180,13 +180,21 @@ A user's account has two views of one mailbox: the radio's (RP-5 §5) and the ma
 ordinary mail programs read (RP-5 §4.1 `mail`). Mail that reaches either reaches the other:
 
 * **Mail a user submits.** Mail a user sends from a mail program, signed in to the post office's
-  mail server, is not judged at the door (§2.1): the user signed in, and the mail server's own
-  rules govern what they may send. Each recipient who is an account of this post office gets its
-  RadioPost message, made as §2.4 makes one and with the account's next serial. It is third-party
-  mail by §5.1, as every message made from an email is. When the user who signed in is an account
-  here, the submission's recipients join their accept list (RP-5 §6.5). A mail server that names
+  mail server, is not judged by its sender or its size (§2.1): the user signed in, and the mail
+  server's own rules govern what they may send. Each recipient who is an account of this post
+  office gets its RadioPost message, made as §2.4 makes one and with the account's next serial,
+  and that message goes on the air. So when any recipient is an account here, a submission that
+  §2.1 finds encrypted, or carrying an executable attachment, is refused at `DATA` with
+  `554 5.7.1` and §2.3's text. SMTP gives one reply to `DATA`, so the refusal is for every
+  recipient, as at the door: the user's mail program shows it, and the user can send the message
+  to the others alone. A submission with no recipient who is an account here is the mail
+  server's to send: none of it goes on the air from here, and another RadioPost post office
+  judges it at its own door. A message made of a submission is third-party mail by §5.1, as
+  every message made from an email is. When the user who signed in is an account here, the
+  recipients of a submission taken join their accept list (RP-5 §6.5). A mail server that names
   the user to the door (Stalwart's MTA hooks give `context.sasl.login`) lets the post office tell
-  this mail from mail arriving from the Internet.
+  this mail from mail arriving from the Internet. Test vectors: `submissions` in
+  `vectors/email-door.json`.
 * **Mail sent by radio.** A message handed in by radio (RP-5 §5.4, §5.6, §6.6) for an account of
   this post office is put in its radio mailbox at once, and is also handed to the mail server as
   the email §3.1 makes, without §4's part, so that a mail program shows it. A recipient at its
@@ -429,7 +437,9 @@ and the session files.
 
 * **Business.** The refusal text and the footer say amateur radio carries no business; operators
   stop traffic that breaks the rules once they know of it (§97.219(c)).
-* **Encryption** is refused at the door (§2.1), so nothing encrypted reaches the air.
+* **Encryption** is refused wherever an email becomes a RadioPost message: at the door (§2.1),
+  and in mail a user submits to an account here (§2.6). So no email puts anything encrypted on
+  the air (§97.113(a)(4)).
 
 ---
 
@@ -454,3 +464,4 @@ and the session files.
 | 1.1.0 | 2026-11-15 | §3.1: a message with a form becomes the form's text (RP-2 1.1.0 §8.4). A post office that does not yet write it sends the message's `body` as before, which is all it must do until it holds the templates. Test vectors: `shelter3-213` in `email-out.json`. |
 | 1.2.0 | 2026-11-24 | §2.4: the message made of an email has its addresses in lowercase, both parts (RP-0 1.5.0 §6.2); only the domains had been. §4: the message's `from` is the statement's address as RP-0 §6.2 compares them. Test vectors: `jorge-outlook` in `email-in.json` writes its addresses in capitals. MINOR, announced (RP-0 §8.4): a post office should lowercase the addresses it takes from an email; nothing a receiver takes changes. |
 | 1.3.0 | 2026-11-24 | §3.1: a form's positions get a map link each in the email, an OpenStreetMap link and a `geo:` URI (RFC 5870) under `Maps:` after the form's lines ([the forms design](../docs/design/06-forms.md), step 3; the author's choice of both links). Test vectors: `shelter3-storm` and `shelter3-206` and the zooms (`map_zooms`) in `email-out.json`. MINOR, announced (RP-0 §8.4): a SHOULD; a post office that writes no maps still sends the form's text. Post offices should add them. |
+| 1.4.0 | 2026-11-26 | §2.6: mail a user submits from a mail program is refused at `DATA` (`554 5.7.1`) when a recipient is an account here and §2.1 finds it encrypted or carrying an executable attachment; a submission with no recipient here is the mail server's alone. §5.2 names both places. Such mail had become a RadioPost message unjudged, so a user could put encrypted mail on the air, against §97.113(a)(4). Test vectors: `submissions` in `email-door.json`. MINOR, announced (RP-0 §8.4): nothing another program sends or reads changes; a post office that makes messages of submitted mail should add the refusal. |

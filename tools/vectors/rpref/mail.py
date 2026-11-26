@@ -235,6 +235,18 @@ def door(envelope: dict[str, Any], raw: bytes, ctx: dict[str, Any]) -> dict[str,
     return {"rcpt": OK_RCPT, "data": OK_DATA}
 
 
+def submitted(envelope: dict[str, Any], raw: bytes, ctx: dict[str, Any]) -> dict[str, str]:
+    """§2.6: mail a signed-in user submits. Every RCPT TO is taken, whoever signed in; at DATA,
+    with any recipient an account here, §2.1's encryption and executable checks refuse it for
+    all, since its message goes on the air. Sender and size are not judged."""
+    here = [r for r in envelope["rcpt_to"] if r.lower() in ctx["accounts"]]
+    if here:
+        message = parse(raw)
+        if encrypted(message) or executable(message):
+            return {"rcpt": OK_RCPT, "data": NOT_ALLOWED}
+    return {"rcpt": OK_RCPT, "data": OK_DATA}
+
+
 # -- §2.4: email to message ----------------------------------------------------------------------
 
 

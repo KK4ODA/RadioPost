@@ -7893,9 +7893,11 @@ DOOR_CONTEXT = {
 }
 
 
-def door_email(sender: str, extra: str = "", body: str = "Hello.\n") -> bytes:
+def door_email(
+    sender: str, extra: str = "", body: str = "Hello.\n", to: str = "facundo@radiopost.org"
+) -> bytes:
     return crlf(
-        f"From: {sender}\nTo: facundo@radiopost.org\nSubject: Test\n"
+        f"From: {sender}\nTo: {to}\nSubject: Test\n"
         f"Date: {mail_date(T_SESSION, 0)}\nMIME-Version: 1.0\n{extra}"
         + ("" if "Content-Type" in extra else 'Content-Type: text/plain; charset="utf-8"\n')
         + "\n"
@@ -7905,38 +7907,40 @@ def door_email(sender: str, extra: str = "", body: str = "Hello.\n") -> bytes:
 
 def make_email_door() -> dict[str, Any]:
     maria = door_email("Maria Alvarez <maria@example.com>")
-    pgp = door_email(
-        "maria@example.com",
-        body="-----BEGIN PGP MESSAGE-----\nhQEMA1x\n-----END PGP MESSAGE-----\n",
-    )
-    smime_enc = door_email(
-        "maria@example.com",
-        'Content-Type: application/pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"\n'
-        "Content-Transfer-Encoding: base64\n",
-        "MIAGCSqGSIb3DQEHA6CAMIACAQAxggE=\n",
-    )
-    smime_signed = door_email(
-        "maria@example.com",
-        'Content-Type: multipart/signed; protocol="application/pkcs7-signature"; '
-        'micalg=sha-256; boundary="s"\n',
-        "--s\nContent-Type: text/plain\n\nSigned, not encrypted.\n--s\n"
-        'Content-Type: application/pkcs7-signature; name="smime.p7s"\n'
-        "Content-Transfer-Encoding: base64\n\nMIAGCSqGSIb3DQEHAqCAMIACAQEx\n--s--\n",
-    )
-    encrypted = door_email(
-        "maria@example.com",
-        'Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; boundary="e"\n',
-        "--e\nContent-Type: application/pgp-encrypted\n\nVersion: 1\n--e\n"
-        "Content-Type: application/octet-stream\n\nhQEMA1x\n--e--\n",
-    )
-    exe = door_email(
-        "maria@example.com",
-        'Content-Type: multipart/mixed; boundary="x"\n',
-        "--x\nContent-Type: text/plain\n\nSee the program.\n--x\n"
-        "Content-Type: application/octet-stream\n"
-        'Content-Disposition: attachment; filename="Photos.EXE"\n'
-        "Content-Transfer-Encoding: base64\n\nTVqQAAMAAAAEAAAA\n--x--\n",
-    )
+    # each kind of content the door judges, as (headers, body), for the door and for submissions
+    kinds = {
+        "pgp": ("", "-----BEGIN PGP MESSAGE-----\nhQEMA1x\n-----END PGP MESSAGE-----\n"),
+        "smime_enc": (
+            'Content-Type: application/pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"\n'
+            "Content-Transfer-Encoding: base64\n",
+            "MIAGCSqGSIb3DQEHA6CAMIACAQAxggE=\n",
+        ),
+        "smime_signed": (
+            'Content-Type: multipart/signed; protocol="application/pkcs7-signature"; '
+            'micalg=sha-256; boundary="s"\n',
+            "--s\nContent-Type: text/plain\n\nSigned, not encrypted.\n--s\n"
+            'Content-Type: application/pkcs7-signature; name="smime.p7s"\n'
+            "Content-Transfer-Encoding: base64\n\nMIAGCSqGSIb3DQEHAqCAMIACAQEx\n--s--\n",
+        ),
+        "encrypted": (
+            'Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; '
+            'boundary="e"\n',
+            "--e\nContent-Type: application/pgp-encrypted\n\nVersion: 1\n--e\n"
+            "Content-Type: application/octet-stream\n\nhQEMA1x\n--e--\n",
+        ),
+        "exe": (
+            'Content-Type: multipart/mixed; boundary="x"\n',
+            "--x\nContent-Type: text/plain\n\nSee the program.\n--x\n"
+            "Content-Type: application/octet-stream\n"
+            'Content-Disposition: attachment; filename="Photos.EXE"\n'
+            "Content-Transfer-Encoding: base64\n\nTVqQAAMAAAAEAAAA\n--x--\n",
+        ),
+    }
+    pgp = door_email("maria@example.com", *kinds["pgp"])
+    smime_enc = door_email("maria@example.com", *kinds["smime_enc"])
+    smime_signed = door_email("maria@example.com", *kinds["smime_signed"])
+    encrypted = door_email("maria@example.com", *kinds["encrypted"])
+    exe = door_email("maria@example.com", *kinds["exe"])
     report = dsn()
     spam = door_email("MAILER-DAEMON@mx.example.com")
     sent = {facundo_reply_id(): encoded("facundo-reply")[1].hex()}
@@ -8094,7 +8098,7 @@ def make_email_door() -> dict[str, Any]:
         },
         lambda c: (c["expect"]["rcpt"], c["expect"]["data"]),
     )
-    out = header("Email at the door: taken or refused", {"RP-6": "§2.1, §2.2"})
+    out = header("Email at the door: taken or refused", {"RP-6": "§2.1, §2.2, §2.6"})
     out["rule"] = (
         "A post office with `context`'s accounts, accept lists and known post offices, given the "
         "envelope, the email and the mail server's DMARC and DKIM verdicts, answers `RCPT TO` and "
@@ -8103,7 +8107,103 @@ def make_email_door() -> dict[str, Any]:
     )
     out["context"] = DOOR_CONTEXT | {"sent_by_this_post_office": sent}
     out["cases"] = cases
+    out["submissions_rule"] = (
+        "RP-6 §2.6: mail a user submits signed in to the mail server (`login`). Every `RCPT TO` "
+        "is answered `250 2.1.5`: its sender and size are not judged, nor its DMARC. At `DATA`, "
+        "when any of `rcpt_to` is one of `context`'s accounts, a message that §2.1 finds "
+        "encrypted or carrying an executable attachment is refused with `554 5.7.1` for every "
+        "recipient, since its RadioPost message goes on the air; anything else is taken "
+        "`250 2.0.0`. A case's `max_email_bytes` replaces the context's."
+    )
+    out["submissions"] = submissions(kinds)
     return out
+
+
+def submissions(kinds: dict[str, tuple[str, str]]) -> list[dict[str, Any]]:
+    """`email-door.json`'s submissions (RP-6 §2.6): Facundo, or an email-only member, writing in
+    a mail program to Shelter 3 here, to an address elsewhere, or to `postmaster@`."""
+    facundo = "Facundo <facundo@radiopost.org>"
+    here, elsewhere = "shelter3@radiopost.org", "maria@example.com"
+    shelter = {k: door_email(facundo, *v, to=here) for k, v in kinds.items()}
+    plain = door_email(facundo, to=here)
+    cases_in: list[tuple[str, str, list[str], bytes, dict[str, Any]]] = [
+        ("plain, to a user here not listing the sender", "facundo", [here], plain, {}),
+        (
+            "plain, over the post office's `max_email_bytes` (here 100)",
+            "facundo",
+            [here],
+            plain,
+            {"max_email_bytes": 100},
+        ),
+        ("PGP/MIME to a user here", "facundo", [here], shelter["encrypted"], {}),
+        ("inline PGP to a user here", "facundo", [here], shelter["pgp"], {}),
+        ("S/MIME enveloped-data to a user here", "facundo", [here], shelter["smime_enc"], {}),
+        ("S/MIME signed to a user here", "facundo", [here], shelter["smime_signed"], {}),
+        ("an executable attachment to a user here", "facundo", [here], shelter["exe"], {}),
+        (
+            "PGP/MIME to an address elsewhere only",
+            "facundo",
+            [elsewhere],
+            door_email(facundo, *kinds["encrypted"], to=elsewhere),
+            {},
+        ),
+        (
+            "PGP/MIME to an address elsewhere and a user here",
+            "facundo",
+            [elsewhere, here],
+            door_email(facundo, *kinds["encrypted"], to=f"{elsewhere}, {here}"),
+            {},
+        ),
+        (
+            "PGP/MIME to `postmaster@`, no account",
+            "facundo",
+            ["postmaster@radiopost.org"],
+            door_email(facundo, *kinds["encrypted"], to="postmaster@radiopost.org"),
+            {},
+        ),
+        (
+            "an executable to a user here, signed in as an email-only member",
+            "club",
+            [here],
+            door_email("Club <club@radiopost.org>", *kinds["exe"], to=here),
+            {},
+        ),
+    ]
+    logins = {"facundo": "facundo@radiopost.org", "club": "club@radiopost.org"}
+    cases = []
+    for what, who, rcpt, raw, extra in cases_in:
+        login = logins[who]
+        ctx = DOOR_CONTEXT | extra
+        case = {
+            "what": what,
+            "login": login,
+            "mail_from": login,
+            "rcpt_to": rcpt,
+            "email": raw.decode("utf-8"),
+        }
+        if "max_email_bytes" in extra:
+            case["max_email_bytes"] = extra["max_email_bytes"]
+        replies = mail.submitted({"mail_from": login, "rcpt_to": rcpt}, raw, ctx)
+        cases.append(case | {"expect": replies})
+    taken, refused = ("250 2.1.5", "250 2.0.0"), ("250 2.1.5", "554 5.7.1")
+    confirm(  # RP-6 §2.6: only encryption and executables, and only with a recipient here
+        cases,
+        {
+            "plain, to a user here not listing the sender": taken,
+            "plain, over the post office's `max_email_bytes` (here 100)": taken,
+            "PGP/MIME to a user here": refused,
+            "inline PGP to a user here": refused,
+            "S/MIME enveloped-data to a user here": refused,
+            "S/MIME signed to a user here": taken,
+            "an executable attachment to a user here": refused,
+            "PGP/MIME to an address elsewhere only": taken,
+            "PGP/MIME to an address elsewhere and a user here": refused,
+            "PGP/MIME to `postmaster@`, no account": taken,
+            "an executable to a user here, signed in as an email-only member": refused,
+        },
+        lambda c: (c["expect"]["rcpt"], c["expect"]["data"]),
+    )
+    return cases
 
 
 # -- dns.json and api.json -----------------------------------------------------------------------

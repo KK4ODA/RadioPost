@@ -309,6 +309,36 @@ pub fn door(
     (r, Some(data(sender, recipient, raw, verdicts, door)))
 }
 
+/// §2.6 at `DATA`: the reply to mail a signed-in user submits, given all its recipients and the
+/// post office's accounts (by address in lowercase), and why. Its sender and size are not
+/// judged. But each recipient here gets a RadioPost message that goes on the air, so with any
+/// recipient here §2.1's encryption and executable checks refuse it, for every recipient: SMTP
+/// gives one reply to `DATA`.
+#[must_use]
+pub fn submitted_why(
+    recipients: &[String],
+    raw: &[u8],
+    accounts: &BTreeMap<String, Vec<String>>,
+) -> (&'static str, &'static str) {
+    if !recipients
+        .iter()
+        .any(|r| accounts.contains_key(&r.to_lowercase()))
+    {
+        return (OK_DATA, "no account here: the mail server's");
+    }
+    // unreadable, it makes no RadioPost message either (`to_message` reads it the same way)
+    let Some(email) = parse(raw) else {
+        return (OK_DATA, "not readable as an email: nothing for the radio");
+    };
+    if encrypted(&email) {
+        return (NOT_ALLOWED, "encrypted");
+    }
+    if executable(&email) {
+        return (NOT_ALLOWED, "an executable attachment");
+    }
+    (OK_DATA, "taken")
+}
+
 // -- §2.4: email to message ----------------------------------------------------------------------
 
 /// RP-0 §6.2: written in lowercase, both parts.

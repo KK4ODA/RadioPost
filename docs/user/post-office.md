@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.4.0 |
-| **Updated** | 2026-11-21 |
+| **Version** | 1.5.0 |
+| **Updated** | 2026-11-26 |
 | **Describes** | RadioPost 0.1.0-beta.40 |
 | **Licence** | CC BY 4.0 |
 
@@ -432,7 +432,8 @@ RadioPost station and an ordinary email account elsewhere.
 5. **Large attachments wait.** Send an email with two photos of about 40 kB each: together over
    64 kB, so it comes down with both listed as held. The user clicks **Ask on the next call** on
    one and calls twice: the second call brings it, from `postmaster@`.
-6. **Encrypted mail is refused.** Send a PGP-encrypted email: it is refused.
+6. **Encrypted mail is refused.** Send a PGP-encrypted email from outside: it is refused. Send
+   one from the user's own mail program to another user here: it is refused too.
 7. **`postmaster@` works.** Write to it from outside: it arrives in Stalwart's mailbox for it.
 
 When all seven pass, the post office is live. Tell your users where to apply, or give them codes.
@@ -704,7 +705,9 @@ office publishes its routes, signed, for anyone to read.
 
 Each user has one mailbox, read by radio and in a mail program:
 
-- Mail a user sends from a mail program to another user here reaches the radio too.
+- Mail a user sends from a mail program to another user here reaches the radio too, so the post
+  office refuses it when it is encrypted or carries a program. The user's mail program shows the
+  refusal.
 - Mail sent by radio to a user here reaches their mail program too, as an email.
 - Mail a user sends by radio goes into their **Sent** folder, and mail they pick up by radio is
   marked read in their mail program.
@@ -718,10 +721,17 @@ office says so in its log, and the radio works as before.
 
 - that the sender is on the user's accept list;
 - SPF, DKIM and DMARC, itself, never trusting what the message says of itself;
-- that the email is not encrypted, and not over the size limit.
+- that the email is not encrypted and carries no program (an attachment such as `.exe`, `.bat`
+  or `.js`);
+- that it is not over the size limit.
 
 A check that cannot finish answers *try again later* (`451`), and the sending server does.
 Addresses that are not RadioPost accounts (`postmaster@`, `abuse@`) are Stalwart's alone.
+
+Mail a user sends from a mail program, signed in to Stalwart, meets only the third check, and
+only when a recipient is a RadioPost user here: that user's copy goes on the air. Refused, it goes
+to nobody on the message, and the log says `door: refused mail submitted by` with the addresses
+and the reason. Mail a user sends only to addresses elsewhere is Stalwart's to send.
 
 ## 16. A backup mail server
 
@@ -1156,3 +1166,4 @@ drawn by `tools/figures/server.py`; its screenshots of the desk are the user's m
 | 1.3.0 | 2026-11-18 | **New password** on the desk's Accounts tab and `password` on the server: a new password for a user who lost theirs (Stalwart has none of its own), only the password changed. The API key's rights gain `sysAccountUpdate`. Troubleshooting: a mailbox refused with *invalidPatch* (a post office before 0.1.0-beta.29 sent the password in a form Stalwart refuses), and a forgotten password. |
 | 1.3.1 | 2026-11-19 | Section 5.2: the API key's permissions named as Stalwart's page shows them, *Same as account*; the guide had said *Inherit*, Stalwart's word in its code. |
 | 1.4.0 | 2026-11-21 | Caddy lets any web page read the gateways' status list (RP-5 §4.6), which radiopost.org's directory now reads from each visitor's browser: the installer's Caddyfile and section 18.2 gain the `header` line, chapter 10 says how to add it to a post office set up before 0.1.0-beta.35, and chapter 17 says so. |
+| 1.5.0 | 2026-11-26 | Chapter 15: mail a user sends from a mail program to another user here is refused when it is encrypted or carries a program (RP-6 1.4.0 §2.6), and the log names it; the door's checks list programs, which they always refused. Chapter 7's sixth test sends encrypted mail from a user's mail program too. Such mail had reached the radio unjudged. |

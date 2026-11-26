@@ -665,7 +665,7 @@ from the ARRL or counsel, and other countries' rules differ.
 | Rule | What it asks | How the design answers |
 |---|---|---|
 | §97.119 | Identify the station | The modem sends the identifier; the callsign is in every session and in `Radio-Path`. |
-| §97.113(a)(4) | No messages encoded to obscure their meaning | No encryption on the air, and encrypted mail is refused at the door. The specification and compression are published. Signatures leave the text readable. |
+| §97.113(a)(4) | No messages encoded to obscure their meaning | No encryption on the air. Encrypted mail is refused wherever an email would become a message for the radio: at the door, and when a user sends it from a mail program to another user here. The specification and compression are published. Signatures leave the text readable. |
 | §97.113(a)(3), (a)(5) | No business; not regularly in place of other services | The SMTP refusal and the footer say so. Accept lists apply, and operators stop violating traffic once they know of it (§97.219(c)). |
 | §97.115 | Third-party traffic; international only with agreement countries | Mail from people who are not amateurs is third-party traffic. A table of agreements is checked against the gateway's country and the recipient's. |
 | §97.219 | The originator is accountable; the first forwarding station authenticates the sender or takes responsibility | Every gateway authenticates the sender by credential and signature. `Radio-Path` records the station. |

@@ -16,11 +16,13 @@
 //!
 //! **Mail a user submits** (RP-6 §2.6). The mail server calls the same hook for mail its users
 //! send from their own mail programs, signed in: Stalwart says who in `context.sasl.login`, the
-//! draft in `auth.login`. That mail is not judged (the user signed in, and the mail server's own
-//! rules govern what they may send): at `DATA` each recipient who is an account here gets its
-//! RadioPost message, made as from any email (§2.4), and the sender's accept list gains the
-//! recipients (RP-5 §6.5). What the service itself submits, signed in as its own account, is
-//! radio mail going out, already filed: the door lets it pass and files nothing.
+//! draft in `auth.login`. Its sender and size are not judged (the user signed in, and the mail
+//! server's own rules govern what they may send): at `DATA` each recipient who is an account here
+//! gets its RadioPost message, made as from any email (§2.4), and the sender's accept list gains
+//! the recipients (RP-5 §6.5). That message goes on the air, so with a recipient here an
+//! encrypted message, or one carrying an executable, is refused with the door's `554 5.7.1`.
+//! What the service itself submits, signed in as its own account, is radio mail going out,
+//! already filed: the door lets it pass and files nothing.
 //!
 //! **The sender.** Mail a user sent to addresses this post office does not serve waits in
 //! `outgoing`. Each is made into an email (§3.1) and submitted, one SMTP transaction for the
@@ -493,10 +495,12 @@ impl Running {
         hook_answer(hook.draft, ok, "")
     }
 
-    /// Mail a signed-in user submits from a mail program (RP-6 §2.6): never judged. At `DATA`
-    /// each recipient who is an account here gets its RadioPost message, and the sender's
-    /// accept list gains the recipients (RP-5 §6.5). The service's own submissions, radio mail
-    /// already filed, pass untouched.
+    /// Mail a signed-in user submits from a mail program (RP-6 §2.6): its sender and size are
+    /// not judged. At `DATA` each recipient who is an account here gets its RadioPost message,
+    /// which goes on the air, so with any recipient here an encrypted message or one carrying
+    /// an executable is refused for all (`mail::submitted_why`), before anything is kept. A
+    /// submission taken fills the sender's accept list with its recipients (RP-5 §6.5). The
+    /// service's own submissions, radio mail already filed, pass untouched.
     fn submitted(&self, hook: &Hook, login: &str) -> (u16, String) {
         let ok = if hook.stage == "data" {
             mail::OK_DATA
@@ -525,6 +529,23 @@ impl Running {
             .map(|r| r.to_lowercase())
             .filter(|r| accounts.contains_key(r))
             .collect();
+        let (reply, why) = mail::submitted_why(&hook.recipients, raw, &accounts);
+        if reply != mail::OK_DATA {
+            eprintln!(
+                "radiopost-po: {}",
+                door_log(
+                    "refused mail submitted by",
+                    login,
+                    &ours,
+                    "data",
+                    reply,
+                    why
+                )
+            );
+            let here = ours.first().map_or("", String::as_str);
+            let text = refusal_text(reply, here, settings.info.max_email_bytes);
+            return hook_answer(hook.draft, reply, &text);
+        }
         for r in &hook.recipients {
             if !self.ours(r) {
                 self.met(&mail::domain_of(r), "outgoing"); // RP-1 §7.5: a domain written to
