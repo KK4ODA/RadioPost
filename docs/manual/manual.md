@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.58.0 |
+| **Version** | 1.59.0 |
 | **Updated** | 2026-11-26 |
 | **Describes** | RadioPost 0.1.0-beta.40 |
 | **Licence** | CC BY 4.0 |
@@ -226,6 +226,21 @@ Leave Aether's **External programs** box unchecked for RadioPost, as it says bes
 The same page has **RadioPost Gateway**, the program for running a gateway
 ([Part 3](#part-3-radiopost-gateway)), a tools archive with the command-line programs, and (after
 0.1.0-beta.20) this manual as a PDF.
+
+On Windows, the tools archive of RadioPost 0.1.0-beta.40, `radiopost-tools-windows-x64.zip`, is a
+tar archive under a zip's name, and Explorer says it is empty. Windows' own `tar` opens it. In
+PowerShell:
+
+```
+mkdir C:\RadioPost-tools
+```
+
+```
+C:\Windows\System32\tar.exe -xf "$HOME\Downloads\radiopost-tools-windows-x64.zip" -C C:\RadioPost-tools
+```
+
+The programs are then in `C:\RadioPost-tools\radiopost-tools-windows-x64`. The next release's
+archive is a real zip.
 
 **Updates.** When a newer release is out, a line at the top of RadioPost's window says so. Click
 **Update and restart**. RadioPost downloads it, checks that the project signed it, installs it
@@ -854,6 +869,42 @@ red. A call you stopped does not count against the gateway in what your calls te
 
 Closing the window during a call or a session asks first, then aborts it the same way before
 RadioPost closes.
+
+### 8.4 Calling with Mercury
+
+RadioPost calls through the modem its **Modem** box names. A gateway that also answers on Mercury
+([More than one modem](#more-than-one-modem)) can be called with Mercury:
+
+1. Start Mercury, keying your radio itself. With an interface keyed by its RTS line, such as a
+   DigiRig on COM9, in PowerShell in Mercury's folder:
+
+   ```
+   .\mercury.exe -P serial -A COM9 -i 'CAPTURE-ID' -o 'PLAYBACK-ID'
+   ```
+
+   `.\mercury.exe -z` lists the sound cards and their IDs, and the same command with `-Q` in place
+   of `-i` and `-o` keys the radio for one second, to test the keying
+   ([section 18](#aether-and-mercury-on-one-radio) has both). Close Aether first if it holds the
+   same port. If Aether runs on this computer with its external programs port or its KISS port on,
+   start Mercury with `-p 8400 -b 8410` as a gateway does, and give its adapter
+   `--mercury 127.0.0.1:8400`.
+2. Start Mercury's adapter, `radiopost-mercury.exe` from the tools archive. Its own settings fit:
+   it waits at `127.0.0.1:8600` and finds Mercury at `127.0.0.1:8300`.
+3. In RadioPost, put `127.0.0.1:8600` in **Modem**.
+4. Choose the gateway, set the radio's dial yourself, and call, as in [8.2](#82-tune-and-call).
+
+With Mercury:
+
+- The line under **Channel** says *Set the radio's dial to … yourself: the modem cannot set it*.
+  Mercury reaches no dial. There is no **Tuner tone** either, and no alerts.
+- **Channel** does not name a channel's modem. A gateway that answers on two modems on one dial
+  lists that dial twice, in the same words, and either line does: the call goes through the modem
+  in **Modem**. Its operator can tell you which of its dials have Mercury.
+- Mercury checks no band rules. Keep your transmissions within them yourself.
+- After the session the adapter identifies your station with Mercury's CQ frame, which carries
+  your callsign. Mercury sends no Morse identifier.
+
+Only Aether has carried RadioPost on the air so far.
 
 ## 9. Reading your mail
 
@@ -1804,68 +1855,170 @@ ports, and tell its adapter where.
 
 Both modems hear the radio's receive audio all the time, and only one transmits at a time. Only
 one program can hold the radio's CAT port, so both key the radio through rigctld, Hamlib's radio
-server, which serves several programs at once. Set it up once:
+server, which serves several programs at once.
 
-1. **rigctld.** Close any program that holds the radio's CAT port, then start rigctld for the
-   radio:
+The steps set up an FTDX10 on Windows, its CAT on COM6 at 38400 baud. Use your own radio's model,
+port and rate. The commands go in PowerShell. The gateway is off the air from step 1 to step 10.
+
+1. **Free the radio's CAT port.** In RadioPost Gateway, click **Stop** and close it. Close Aether
+   too: keyed over CAT, it holds the port.
+2. **Get Hamlib.** Download the newest `hamlib-w64-….zip` from
+   [Hamlib's releases](https://github.com/Hamlib/Hamlib/releases) and unzip it to `C:\Hamlib`.
+   Its programs are in `C:\Hamlib\bin`. Open PowerShell there and find your radio's model number:
 
    ```
-   rigctld -m MODEL -r PORT -s RATE
+   .\rigctld.exe -l | Select-String FTDX
    ```
 
-   `MODEL` is the radio's Hamlib number (`rigctld -l` lists them), `PORT` its CAT port, such as
-   `COM5` or `/dev/ttyUSB0`, and `RATE` its CAT rate. It listens at `127.0.0.1:4532`. Start it
-   before Aether and Mercury, each time the computer starts.
-2. **Aether.** In Aether's Setup, step 2, set **Radio control** to **rigctld**, at
-   `127.0.0.1:4532`, and save
+   The FTDX10's line starts `1042  Yaesu  FTDX-10`. Aether's Setup, step 2, shows the CAT port and
+   rate Aether used.
+3. **Start rigctld**, and leave its window open:
+
+   ```
+   .\rigctld.exe -m 1042 -r COM6 -s 38400 -T 127.0.0.1
+   ```
+
+   `-T 127.0.0.1` keeps rigctld to this computer. To check it, open a second PowerShell window in
+   the same folder and ask for the dial:
+
+   ```
+   .\rigctl.exe -m 2 -r 127.0.0.1:4532 f
+   ```
+
+   It prints the dial in hertz, such as `7101000`. Model 2 is Hamlib's network client: it talks to
+   rigctld, not to the radio.
+4. **Point Aether at rigctld.** Open Aether. In its Setup, step 2, set **Radio control** to
+   **rigctld**, at `127.0.0.1:4532`, and save
    ([Aether's manual](https://github.com/KK4ODA/aether-hf/blob/master/docs/manual/manual.md#step-2-radio-interface)).
-3. **Mercury.** Start Mercury on its own ports, keying the radio through rigctld. On Windows this
-   is `mercury.exe`, the program without a window.
+   **Dial** then reads *Aether, through rigctld*, and Aether's header shows the dial. On the
+   Session tab, under **Keying and drive**, **Key 1 s** keys the radio for one second with no
+   audio.
+5. **Install Mercury** from [Mercury's releases](https://github.com/Rhizomatica/mercury/releases)
+   (`Mercury_HF_Modem_Setup.exe`). Open PowerShell in its folder, `C:\Program Files\MercuryHF`,
+   and run Mercury from there: it reads its settings from `mercury.ini` in the folder it starts in.
+   Use `mercury.exe`, the program without a window; `mercury-ui.exe` is the one with a window.
+   List the sound cards:
 
    ```
-   mercury -p 8400 -b 8410 -R 2 -A 127.0.0.1:4532 -i CAPTURE -o PLAYBACK
+   .\mercury.exe -z
+   ```
+
+   Each card has a name and an ID: the playback cards first, then the capture cards. Note the two
+   IDs of the radio's card, such as `FTDX10 (USB AUDIO  CODEC)`. The capture ID starts `{0.0.1.`
+   and the playback ID `{0.0.0.`. Then test Mercury's keying through rigctld:
+
+   ```
+   .\mercury.exe -R 2 -A 127.0.0.1:4532 -Q
+   ```
+
+   The radio transmits for one second, with no audio, and Mercury says *PTT OFF. Test complete.*
+6. **Start Mercury** on its own ports, keyed through rigctld, on the radio's card. Leave its window
+   open:
+
+   ```
+   .\mercury.exe -p 8400 -b 8410 -R 2 -A 127.0.0.1:4532 -i 'CAPTURE-ID' -o 'PLAYBACK-ID'
    ```
 
    - `-p 8400`: Mercury's control port; its data port is 8401. Its own, 8300 and 8301, are
      Aether's external programs port.
    - `-b 8410`: its broadcast port. Its own, 8100, is Aether's KISS port.
-   - `-R 2 -A 127.0.0.1:4532`: key the radio through rigctld (Hamlib's model 2). Without them
-     Mercury keys nothing, and its adapter does not either: Mercury would play its audio with the
-     radio not transmitting.
-   - `-i` and `-o`: the radio's sound card, the one Aether uses, its capture and its playback.
-     `mercury -z` lists the sound cards.
+   - `-R 2 -A 127.0.0.1:4532`: key the radio through rigctld. Without them Mercury keys nothing,
+     and its adapter does not either: Mercury would play its audio with the radio not
+     transmitting.
+   - `-i` and `-o`: the capture and playback IDs from step 5, such as
+     `'{0.0.1.00000000}.{a99eb1c1-90c3-4555-a8b8-416f79b14b47}'`. Keep the single quotes:
+     without them PowerShell reads the braces as code.
 
-   `mercury -R 2 -A 127.0.0.1:4532 -Q` keys the radio for one second and stops: a test of the
-   keying. Set Mercury's transmit level as its own documentation says. Aether's level does not
-   change it.
-4. **The adapter**, from the tools archive:
+   Mercury names the card it opened, both ways, and says *Listening on TCP port 8400* and *8401*.
+   Its `mercury.ini` also opens a feed for Mercury's own window on port 10000, to any network. If
+   Windows Defender Firewall asks about Mercury, click **Cancel**: Mercury's ports take any
+   connection without a password, and programs on this computer still reach them.
+
+   Check that Aether's waterfall still moves: the two programs now share the radio's card. If it
+   stopped, Mercury took the card for itself; stop Mercury and do not go on.
+
+   Set Mercury's transmit level as its own documentation says. Aether's level does not change it.
+7. **Start the adapter.** It is `radiopost-mercury.exe`, in the tools archive
+   ([section 4](#4-installing-radiopost) says how to open it). In a third PowerShell window, in
+   its folder:
 
    ```
-   radiopost-mercury --listen 127.0.0.1:8601 --mercury 127.0.0.1:8400
+   .\radiopost-mercury.exe --listen 127.0.0.1:8601 --mercury 127.0.0.1:8400
    ```
 
-   It says *RPMI on 127.0.0.1:8601, Mercury's control port at 127.0.0.1:8400* and keeps running:
-   leave its window open. Mercury serves one program at a time, so while the adapter holds it, no
-   other program reaches Mercury.
-5. **The gateway's Setup, step 1.** Put `127.0.0.1:8601` in **More modems**. Tick **The modem
-   does not check the band rules: I do**: Mercury neither checks them nor says where the radio's
-   dial is, and without the tick the gateway leaves it unused (the log says *127.0.0.1:8601 will
-   not be used: …*). Aether still checks its own transmissions. Mercury's are yours: keep the
-   radio on a dial where an unattended station may send Mercury's signal. Click **Save**.
-6. **Step 2.** Add a channel on Aether's dial with **Modem** **Mercury** and the **Bandwidth**
-   callers should call at: 500, 2300 or 2750 Hz. Leave **Scan these channels** clear: a scan
-   would move the radio under Mercury, and the gateway refuses to scan a dial listed twice. Click
+   It says *RPMI on 127.0.0.1:8601, Mercury's control port at 127.0.0.1:8400*. Leave its window
+   open. Mercury serves one program at a time: while the adapter holds it, no other program
+   reaches Mercury.
+8. **The gateway's Setup, step 1.** Open RadioPost Gateway and click **Setup**. Put
+   `127.0.0.1:8601` in **More modems**. Tick **The modem does not check the band rules: I do**:
+   Mercury neither checks them nor says where the radio's dial is, and without the tick the
+   gateway leaves it unused (the log says *127.0.0.1:8601 will not be used: …*). Aether still
+   checks its own transmissions. Mercury's are yours: keep the radio on a dial where an unattended
+   station may send Mercury's signal. On 7.101 MHz it stays within 3 kHz above the dial, inside
+   40 m's automatic-control segment, 7.100 to 7.105 MHz. Click **Save**. The gateway says
+   *Saved. Register again so the post office knows.*
+9. **Step 2, the registration.** Clear **Scan these channels**: a scan would move the radio under
+   Mercury, and the gateway refuses to scan a dial listed twice. Under **Channels**, keep only the
+   dial the radio stays on, with **Modem** set to **Aether HF**, and remove the others: without a scan the
+   gateway listens nowhere else. Click **Add a channel** and give the same dial, **Modem**
+   set to **Mercury**, and the **Bandwidth** callers should call at: 500, 2300 or 2750 Hz. Click
    **Register with …**.
-7. **Start.** The log says *also listening on 127.0.0.1:8601*, and **Modem** names both modems.
-   *waiting for 127.0.0.1:8601: …* means the adapter or Mercury is not running. The gateway tries
-   again every 5 seconds, so start the one missing and leave the gateway running.
+
+   A gateway that scanned gives up its other channels while Mercury shares its radio. To scan
+   again later, remove the Mercury channel first.
+10. **Start.** Click **Start**. The log says:
+
+    - *listening as KK4ODA-1 on ws://127.0.0.1:8515/v1 and 127.0.0.1:8601*;
+    - *registered again, since what it listens on changed: …*, when the gateway scanned before;
+    - *also listening on 127.0.0.1:8601*: Mercury answers.
+
+    The last line is the check. The **Modem** box names both modems as Setup has them, whether or
+    not they answer. *waiting for 127.0.0.1:8601: …* means the adapter or Mercury is not running.
+    The gateway tries again every 5 seconds, so start the one missing and leave the gateway
+    running.
 
 After each Mercury session the adapter identifies the station with Mercury's CQ frame, which
 carries the callsign in Mercury's own signal. Mercury sends no Morse identifier.
 
-On Windows, both programs open the radio's sound card at once. On Linux, a sound card one program
-opens directly (Mercury's `plughw:…`) is closed to the other: put both behind PulseAudio or
-PipeWire (Mercury's `-x pulse`). This has not been tried with Aether yet.
+On Linux, a sound card that one program opens directly (Mercury's `plughw:…`) is closed to the
+other: put both behind PulseAudio or PipeWire (Mercury's `-x pulse`). This has not been tried with
+Aether yet.
+
+#### Starting them with Windows
+
+rigctld, Mercury and the adapter start in that order: Mercury needs rigctld when it starts, and the
+adapter needs Mercury. Aether and RadioPost Gateway can start in any order. Aether reaches rigctld
+only when it needs the radio, and the gateway tries the adapter again every 5 seconds.
+
+A file in Windows' Startup folder starts the three at each login. Open it in Notepad:
+
+```
+notepad "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\gateway-helpers.bat"
+```
+
+Let Notepad create it, paste this in with your radio's numbers, Mercury's card IDs and the
+adapter's folder, and save:
+
+```bat
+@echo off
+start "rigctld" /min C:\Hamlib\bin\rigctld.exe -m 1042 -r COM6 -s 38400 -T 127.0.0.1
+timeout /t 3 /nobreak >nul
+start "Mercury" /min /d "C:\Program Files\MercuryHF" "C:\Program Files\MercuryHF\mercury.exe" -p 8400 -b 8410 -R 2 -A 127.0.0.1:4532 -i "CAPTURE-ID" -o "PLAYBACK-ID"
+timeout /t 5 /nobreak >nul
+start "radiopost-mercury" /min C:\RadioPost-tools\radiopost-tools-windows-x64\radiopost-mercury.exe --listen 127.0.0.1:8601 --mercury 127.0.0.1:8400
+```
+
+Here the IDs go in double quotes. `/d` starts Mercury in its own folder, so it reads `mercury.ini`
+and writes its log there.
+
+To try the file without restarting the computer:
+
+1. Close the three PowerShell windows: rigctld, Mercury and the adapter.
+2. Double-click `gateway-helpers.bat` in the Startup folder. Three minimized windows appear on
+   the taskbar.
+3. The gateway's log says *the adapter of 127.0.0.1:8601 went away …*, then *also listening on
+   127.0.0.1:8601* once the adapter is back.
+4. In Aether, click **Key 1 s** again: the radio keys, so Aether found rigctld again.
 
 #### A modem on a second radio
 
@@ -1877,7 +2030,7 @@ radiopost-packet --listen 127.0.0.1:8602 --tnc 127.0.0.1:8000
 ```
 
 Put `127.0.0.1:8602` in **More modems** and tick **The modem does not check the band rules: I
-do**, as for Mercury. In step 2, add its channel with **Modem** **Packet**: on FM the frequency is
+do**, as for Mercury. In step 2, add its channel with **Modem** set to **Packet**: on FM the frequency is
 the channel's, and the bandwidth its width, 12500 or 25000 Hz. While one radio carries a session,
 the other does not answer.
 
@@ -1899,7 +2052,8 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 2. **What it is doing** (the table below).
 3. **Start** and **Stop**.
 4. **Setup**. Settings change only while the gateway is stopped.
-5. **Modem**: where it reaches Aether and any more modems, and since when it listens. A gateway
+5. **Modem**: where it reaches Aether and any more modems, as Setup has them, and since when it
+   listens. Whether another modem answers is in the log: *also listening on 127.0.0.1:8601*. A gateway
    that scans adds *Scanning 3 channels, on 7.101 MHz: a call must keep trying 40 s*, or why it is
    not scanning.
 6. **Post offices**: whether each post office let the gateway log in at the last check. It checks
@@ -2630,6 +2784,9 @@ These notes follow the US rules (Part 97). Check your own country's.
 | *This modem neither checks the band rules nor says where the radio's dial is* | Aether's rules are off, as they are when an external program keys the radio, and it cannot read the dial. Set Aether's keying and rules (its Setup, steps 1 and 2). |
 | *127.0.0.1:8601 will not be used: this modem neither checks the band rules …* | A modem in **More modems**, such as Mercury, checks no rules. Tick **The modem does not check the band rules: I do** in Setup, step 1, and keep its transmissions within the rules yourself ([More than one modem](#more-than-one-modem)). |
 | *waiting for 127.0.0.1:8601: cannot reach the modem* | That adapter is not running. Start it, and its modem before it. The gateway tries again every 5 seconds. |
+| *the adapter of 127.0.0.1:8601 went away … opening it again* | Its window was closed, or the computer is starting. Start it again, or run `gateway-helpers.bat` ([Starting them with Windows](#starting-them-with-windows)). |
+| Explorer says `radiopost-tools-windows-x64.zip` is empty | 0.1.0-beta.40's tools archive is a tar archive. Open it with Windows' own `tar` ([section 4](#4-installing-radiopost)). |
+| Aether's waterfall stops when Mercury starts | Mercury took the radio's sound card for itself. Stop Mercury; Aether hears again. |
 | *The radio is at … MHz: … outside the segments*, badge **Not answering here** | Aether's rules are off, so the gateway judges the dial itself. Turn the radio to the gateway's channel. |
 | *could not tune the radio back* | The radio stayed on the partner's or gateway's channel after a call. Tune it back in Aether. |
 | *listening on … MHz only, until the scan runs again* | The scan ended ([When a scan stops](#when-a-scan-stops)); the gateway registered again with that channel alone. Click **Stop** and **Start** to scan again. |
@@ -2872,3 +3029,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.56.0 | 2026-11-26 | §9.2: the settings are Thunderbird's manual configuration, field by field (**Protocol**, **Hostname**, **Port**, **Connection security**, **Authentication method**, **Username**) for the incoming and the outgoing server; a user setting up Thunderbird was asked for a hostname the table had called the server. |
 | 1.57.0 | 2026-11-26 | §9.2 *Mail to another RadioPost user*: mail written in a mail program to a user of the same post office is refused when it is encrypted or has a program attached (RP-6 1.4.0 §2.6), the mail program shows the refusal's words, and nobody on the message gets it. The post office had taken such mail and put it on the air. |
 | 1.58.0 | 2026-11-26 | §18 *More than one modem* becomes a section of its own, after step 3: the adapters and their ports; Aether and Mercury on one radio step by step (rigctld for both, Mercury on ports 8400, 8401 and 8410 and keyed through rigctld, its adapter, **More modems**, **The modem does not check the band rules: I do** ticked, a second channel on Aether's dial, no scan; new Figure 43; later figures renumbered); a modem on a second radio. Step 1: tick that box with more modems. §37: the gateway's two lines about a modem in **More modems**. |
+| 1.59.0 | 2026-11-26 | From setting up Aether and Mercury on KK4ODA-1's FTDX10. §18 *Aether and Mercury on one radio* walks it through on Windows: freeing the CAT port, Hamlib and the radio's model number, rigctld and its check with `rigctl`, Aether's **Radio control** and **Key 1 s**, Mercury's card IDs from `-z` (single quotes in PowerShell), its keying test with `-Q`, its `mercury.ini`, the firewall and port 10000, Aether's waterfall as the check that the card is shared, the gateway's messages at each step, and *also listening on …* as the proof that Mercury answers. *Starting them with Windows*: a startup file for rigctld, Mercury and the adapter, in that order, and how to try it. §4: opening 0.1.0-beta.40's Windows tools archive, which is a tar archive. §8.4 *Calling with Mercury*: Mercury keyed by the radio's interface, its adapter, **Modem**, and that **Channel** does not name a channel's modem. §19: **Modem** repeats Setup. §37: three more rows. |
