@@ -123,7 +123,7 @@ says how.
 
 **Find a gateway near you.** The list comes from your post office and the ones it knows, sorted
 by distance from where you are (a place you saved, or your GPS), with each gateway's channels and
-hours. It is kept for when there is no Internet. A map shows the gateways, you, the night side as
+hours. Each channel names its modem, and the list offers the channels your own modem can call. It is kept for when there is no Internet. A map shows the gateways, you, the night side as
 it is now and the great circle to the one you pick; it needs no Internet either. Each HF channel
 says how likely a link is this hour, or at any hour you pick, and how fast it would go each way:
 VOACAP, run on your computer both ways, read through the modem's own measured speeds. A VHF channel
