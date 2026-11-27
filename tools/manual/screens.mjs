@@ -670,11 +670,11 @@ const GW_SETTINGS = {callsign: "KK4ODA-1", modem: "ws://127.0.0.1:8515/v1", coun
   copies: {users: 50, days: 7, max_air_bytes: 16384}, post_offices: {}};
 const GW_SESSIONS = [
   {started: T - 1300, ended: T - 1148, remote: "N0CALL", account: "ana@radiopost.org",
-   handed_in: 1, picked_up: 2, result: "over"},
+   handed_in: 1, picked_up: 2, result: "completed"},
   {started: T - 9800, ended: T - 9512, remote: "KK4ODA", account: "facundo@radiopost.org",
-   handed_in: 3, picked_up: 0, result: "over"},
+   handed_in: 3, picked_up: 0, result: "completed"},
   {started: T - 15400, ended: T - 15100, remote: "N2CALL", account: "pat@radiopost.org",
-   handed_in: 0, picked_up: 0, result: "nothing heard for 300 seconds"},
+   handed_in: 0, picked_up: 1, result: "link-lost", detail: "link timeout"},
   {started: T - DAY - 600, ended: T - DAY - 588, remote: "N3CALL", account: null,
    handed_in: 0, picked_up: 0, result: "refused", refused: "N3CALL"},
 ];

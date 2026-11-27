@@ -153,11 +153,7 @@ fn the_operator_ends_a_session_and_the_gateway_answers_on() {
     wait_for(&monitor, &says, "listening");
     let last = &monitor.sessions()[0];
     assert_eq!(last.remote, "WD5EMA");
-    assert_eq!(
-        last.result.as_deref(),
-        Some("the operator disconnected"),
-        "{last:?}"
-    );
+    assert_eq!(last.result.as_deref(), Some("disconnected"), "{last:?}");
     assert_eq!(monitor.status().stopping, None);
 
     // the next call: the word was the last session's, so this one stands until it is said
@@ -172,10 +168,7 @@ fn the_operator_ends_a_session_and_the_gateway_answers_on() {
     monitor.end_session(Stop::Abort).expect("a session to end");
     assert_eq!(disconnected(&mut caller), "remote");
     wait_for(&monitor, &says, "listening");
-    assert_eq!(
-        monitor.sessions()[0].result.as_deref(),
-        Some("the operator aborted the session")
-    );
+    assert_eq!(monitor.sessions()[0].result.as_deref(), Some("aborted"));
     let (logged, _) = monitor.log_since(0);
     let said: Vec<&str> = logged.iter().map(|(_, l)| l.as_str()).collect();
     assert!(
@@ -216,7 +209,7 @@ fn a_call_to_a_partner_is_stopped() {
     assert!(asked.elapsed() < Duration::from_secs(3), "{asked:?}");
     assert_eq!(
         monitor.sessions()[0].result.as_deref(),
-        Some("the operator stopped the call")
+        Some("call-stopped")
     );
     monitor.stop();
     thread.join().expect("the answering loop");

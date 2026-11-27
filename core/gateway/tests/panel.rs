@@ -333,7 +333,7 @@ fn a_gateway_set_up_registered_and_run_from_its_panel() {
         (s["handed_in"].as_u64(), s["picked_up"].as_u64()),
         (Some(1), Some(0))
     );
-    assert_eq!(s["result"], "over");
+    assert_eq!(s["result"], "completed");
     page.wait_for("listening");
     let log = page.log();
     assert!(log.iter().any(|l| l == "WD5EMA called"), "{log:?}");
@@ -382,6 +382,7 @@ fn a_gateway_set_up_registered_and_run_from_its_panel() {
         std::thread::sleep(Duration::from_millis(50));
     };
     assert_eq!(sessions[0]["refused"], "WD5EMA", "{sessions}");
+    assert_eq!(sessions[0]["result"], "refused", "{sessions}");
     assert!(sessions[1].get("refused").is_none(), "{sessions}");
     page.wait_for("listening");
     assert!(

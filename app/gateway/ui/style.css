@@ -91,7 +91,9 @@ p.card.notice { margin: 0 0 14px; }
 .list td { padding: 7px 8px; border-bottom: 1px solid var(--line); }
 .list td:first-child { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .list .n { text-align: right; font-variant-numeric: tabular-nums; }
-.list tr.failed td:last-child { color: var(--bad); }
+.list td.ok { color: var(--ok); }
+.list td.warn { color: var(--busy); }
+.list td.bad { color: var(--bad); }
 .empty { color: var(--muted); }
 
 #setup { max-width: 720px; }

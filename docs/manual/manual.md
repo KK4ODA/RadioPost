@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.61.0 |
+| **Version** | 1.62.0 |
 | **Updated** | 2026-11-27 |
 | **Describes** | RadioPost 0.1.0-beta.40 |
 | **Licence** | CC BY 4.0 |
@@ -2076,7 +2076,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 10. **Partners**: gateways this one forwards to by radio
     ([section 22](#22-partners-forwarding-by-radio)).
 11. **Sessions**: each session carried, newest first: who called, the account, how long, the
-    messages sent and picked up, and how it ended.
+    messages sent and picked up, and how it ended (**Result**, in the table below).
 12. **The log**: what the gateway does, with the time.
 
 | The badge says | Means |
@@ -2086,6 +2086,31 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 | Listening | It holds its callsign at Aether and answers calls. |
 | Not answering here | The modem does not check the band rules, and the radio is outside the segments where an unattended station may answer. The gateway answers again once the radio is back in one. With Aether's rules on, you do not see this. |
 | Session | A user's session is under way. |
+
+**Result** is green for a session that was done, amber for one cut short, red for one that
+failed, and plain when you ended it. Point at it to read more: the modem's reason for a lost link,
+or the code a refusal carried. Whatever did not cross is offered again on the station's next call.
+
+| Result | Means |
+|---|---|
+| Completed | The caller hung up with the session done. For a call to a partner, the gateway hung up once its session was over; the tooltip says what it forwarded. |
+| Cut short | A station hung up before the session was done, or with a message part sent. |
+| Link lost | The modem lost the link, usually a fade: Aether's link timeout. |
+| Timed out | Nothing was heard for five minutes, so the gateway hung up. |
+| Refused by you | The caller is on your **Refused** list ([section 20](#20-refusing-a-caller)). |
+| Refused: … | The gateway refused the caller: its credential, for example, is missing or invalid. |
+| Post office unreachable | The caller's post office did not answer. The caller was told. |
+| Post office not found | The gateway could not find the caller's post office. |
+| Post office refused: … | The caller's post office refused the session: its credential expired, for example. |
+| Error from caller: … | The caller ended the session with an error, such as a credential of this gateway it did not accept. |
+| Disconnected by you | You clicked **Disconnect**. |
+| Aborted by you | You clicked **Abort**. |
+| Call stopped by you | You clicked **Stop calling** on a call to a partner. |
+| Gateway stopped | You clicked **Stop**, or closed the window, during the session. |
+| Modem error | The gateway lost its connection to the modem. |
+| No answer | A call to a partner: no link came up. |
+| Call failed | A call to a partner: the modem said why it failed. |
+| Ended | Kept by RadioPost Gateway 0.1.0-beta.40 or earlier, which did not say whether a session was done. |
 
 While a session runs, a box shows who called, the account, since when, and the messages so far.
 
@@ -2103,8 +2128,8 @@ answering:
   the call stops at once.
 
 Nothing is lost. What did not cross is offered again on the station's next call, and a message
-sent in part goes on from where it stopped. **Sessions** says *the operator disconnected*, *the
-operator aborted the session* or *the operator stopped the call*.
+sent in part goes on from where it stopped. **Sessions** says *Disconnected by you*, *Aborted by
+you* or *Call stopped by you*.
 
 **Stopping and closing.** **Stop** ends a session under way and lets Aether go: the gateway stops
 answering. Closing the window stops the gateway too. If it is answering, it asks first and says
@@ -3042,3 +3067,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.59.0 | 2026-11-26 | From setting up Aether and Mercury on KK4ODA-1's FTDX10. §18 *Aether and Mercury on one radio* walks it through on Windows: freeing the CAT port, Hamlib and the radio's model number, rigctld and its check with `rigctl`, Aether's **Radio control** and **Key 1 s**, Mercury's card IDs from `-z` (single quotes in PowerShell), its keying test with `-Q`, its `mercury.ini`, the firewall and port 10000, Aether's waterfall as the check that the card is shared, the gateway's messages at each step, and *also listening on …* as the proof that Mercury answers. *Starting them with Windows*: a startup file for rigctld, Mercury and the adapter, in that order, and how to try it. §4: opening 0.1.0-beta.40's Windows tools archive, which is a tar archive. §8.4 *Calling with Mercury*: Mercury keyed by the radio's interface, its adapter, **Modem**, and that **Channel** does not name a channel's modem. §19: **Modem** repeats Setup. §37: three more rows. |
 | 1.60.0 | 2026-11-27 | A channel names its modem, and **Channel** offers the modem's own. §6: **Modem** for another modem. §8.1: a channel's words name the modem the gateway answers on there (a gateway with two modems can list one dial twice), and **Channel** offers only the channels of the modem in **Modem**, which RadioPost asks its name, or all of them, with a line saying so, when the gateway lists none for it. §8.4: Mercury's channels only. Figures 14 and 20 retaken. |
 | 1.61.0 | 2026-11-27 | §8.4 and §18 *More than one modem*: Mercury has carried RadioPost on the air, and KK4ODA-1 answered on Aether and Mercury at once (27 November 2026, 7.101 MHz, 2300 Hz); they had said only Aether had. |
+| 1.62.0 | 2026-11-27 | Section 19: the **Sessions** table's **Result** says how each session ended in words of its own (*Completed*, *Cut short*, *Link lost*, *Timed out*, the refusals, what you ended, a partner call's failures), in colour, with more in its tooltip; it had said *over* for a session done and for a link lost alike. Figure 44 retaken. |

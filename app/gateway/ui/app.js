@@ -46,10 +46,75 @@ function length(from, to) {
   return s % 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s / 60} min`;
 }
 
-// how a post office failed a session, in words
-function postOffice(code) {
-  if (code === "post-office-unreachable") return "the post office did not answer";
-  return `the post office said ${code.replaceAll("-", " ")}`;
+// an error code in words: `credential-invalid` is "credential invalid"
+const words = (code) => (code || "").replaceAll("-", " ");
+
+// `lead`, then the record's detail when it has one
+const more = (lead, detail) => detail ? `${lead}: ${detail}` : lead;
+
+// a sentence the gateway kept, with a capital: "No link to N1CALL-10 in 180 seconds"
+const sentence = (text) => text && text[0].toUpperCase() + text.slice(1);
+
+// What a session's `result` says, in the table's words (the manual's section 19): its label, the
+// tooltip that says more, and its colour (`ok`, `warn`, `bad`, or none for the operator's own word)
+function ending(r) {
+  const who = r.placed ? "the partner" : "the caller";
+  const again = "What did not cross goes on the next call.";
+  switch (r.result) {
+    case "completed":
+      return {label: "Completed", tone: "ok", title: sentence(r.detail)
+        || "The caller hung up with the session done"};
+    case "cut-short":
+      return {label: "Cut short", tone: "warn",
+        title: `A station hung up before the session was done. ${again}`};
+    case "link-lost":
+      return {label: "Link lost", tone: "bad",
+        title: `${more("The modem lost the link", r.detail)}. ${again}`};
+    case "silent":
+      return {label: "Timed out", tone: "bad",
+        title: "Nothing heard for 5 minutes: the gateway hung up"};
+    case "refused":
+      if (r.refused) {
+        return {label: "Refused by you", tone: "bad",
+          title: `You refuse ${r.refused} (Refused)`};
+      }
+      return {
+        label: `Refused: ${r.detail === "refused-by-policy" ? "not a partner" : words(r.detail)}`,
+        tone: "bad", title: `The gateway refused ${who}: ${r.detail}`,
+      };
+    case "post-office": {
+      const code = r.post_office || "";
+      const label = code === "post-office-unreachable" ? "Post office unreachable"
+        : code === "unknown-post-office" ? "Post office not found"
+        : `Post office refused: ${words(code)}`;
+      return {label, tone: "bad", title: `The caller's post office: ${code}`};
+    }
+    case "error":
+      return {label: `Error from ${r.placed ? "partner" : "caller"}: ${words(r.detail)}`,
+        tone: "bad", title: `${r.remote} sent ERROR ${r.detail}`};
+    case "disconnected":
+      return {label: "Disconnected by you", tone: "",
+        title: `You clicked Disconnect. ${again}`};
+    case "aborted":
+      return {label: "Aborted by you", tone: "",
+        title: `${more("You clicked Abort", r.detail)}. ${again}`};
+    case "call-stopped":
+      return {label: "Call stopped by you", tone: "", title: "You clicked Stop calling"};
+    case "stopped":
+      return {label: "Gateway stopped", tone: "", title: "The gateway stopped during the session"};
+    case "modem":
+      return {label: "Modem error", tone: "bad",
+        title: more("The connection to the modem failed", r.detail)};
+    case "no-answer":
+      return {label: "No answer", tone: "bad", title: sentence(r.detail) || "No link came up"};
+    case "call-failed":
+      return {label: "Call failed", tone: "bad", title: more("The call failed", r.detail)};
+    case "ended":
+      return {label: "Ended", tone: "", title: sentence(r.detail)
+        || "Kept by an older version, which did not say whether the session was done"};
+    default:
+      return {label: sentence(r.result) || "", tone: "", title: sentence(r.detail) || ""};
+  }
 }
 
 const STATES = {
@@ -639,20 +704,21 @@ async function refreshSessions() {
   shownSessions = sessions.length;
   $("rows").replaceChildren(...sessions.map((r) => {
     const tr = document.createElement("tr");
-    const ended = r.result === "over" && !r.refused;
-    tr.className = ended ? "" : "failed";
+    const end = ending(r);
     const cells = [
       when(r.started), r.remote, r.account || "—",
       r.ended ? length(r.started, r.ended) : "",
-      r.handed_in, r.picked_up,
-      r.refused ? `refused: you refuse ${r.refused}`
-        : ended ? "over" : r.result + (r.post_office ? `; ${postOffice(r.post_office)}` : ""),
+      r.handed_in, r.picked_up, end.label,
     ];
     cells.forEach((text, i) => {
       const td = document.createElement("td");
       td.textContent = text;
       if (i === 4 || i === 5) td.className = "n";
       if (i === 3) td.className = "nowrap";
+      if (i === 6) {
+        td.className = end.tone;
+        td.title = end.title;
+      }
       tr.append(td);
     });
     return tr;

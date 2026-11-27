@@ -42,12 +42,211 @@ pub struct SessionRecord {
     /// The operator refuses this caller (wishlist W24): the entry that refused it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refused: Option<String>,
-    /// How it ended: `over` when the caller hung up, else why; `None` while under way.
+    /// How it ended: an [`End`]'s word, which the panel puts in plain words; `None` while under
+    /// way.
     pub result: Option<String>,
+    /// What the word leaves out: the modem's reason for a lost link, the code a refusal or an
+    /// `ERROR` carried, the adapter's error, or what a forwarding call did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    /// This gateway placed the call, to a partner (RP-7 §2).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub placed: bool,
     /// A call this gateway placed (RP-7 §2) whose link never came up: no session was carried, so
     /// it is not the last session its status reports (RP-5 §5.9, `carried`).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub unlinked: bool,
+}
+
+/// How a session ended: its record's `result`. Each has a word of its own, which the panel shows as
+/// a label (the manual's section 19). What the record's `detail` holds is said of each.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum End {
+    /// The session was done: the caller hung up (RP-3 §8) with no message left part sent, or, on a
+    /// call this gateway placed, it hung up itself once its session was over. `detail`: what a
+    /// placed call did.
+    Completed,
+    /// A station hung up before the session was done, or with a message part sent (the rest goes
+    /// on the next call); or the modem ended the link unasked.
+    CutShort,
+    /// The modem lost the link (`timeout` or `failure`, RP-4 §5). `detail`: the modem's text, or
+    /// its reason when it gave none.
+    LinkLost,
+    /// Nothing heard for 300 seconds: the gateway hung up (RP-3 §8).
+    Silent,
+    /// The gateway refused the caller: its operator refuses it (W24; the record's `refused` names
+    /// the entry), or its `HELLO` or credential did not pass (`detail`: the code sent).
+    Refused,
+    /// The caller's post office could not be reached or refused the session: the record's
+    /// `post_office` has the code.
+    PostOffice,
+    /// The other station sent `ERROR`. `detail`: its code.
+    Error,
+    /// The operator clicked **Disconnect**.
+    Disconnected,
+    /// The operator clicked **Abort**. `detail`, when the modem never said the link had ended.
+    Aborted,
+    /// The operator clicked **Stop calling**.
+    CallStopped,
+    /// The operator stopped the gateway.
+    Stopped,
+    /// The connection to the modem's adapter failed. `detail`: the error.
+    Modem,
+    /// A call this gateway placed: no link in the time allowed. `detail`: how long.
+    NoAnswer,
+    /// A call this gateway placed: the modem said it failed, or it could not start. `detail`: why.
+    CallFailed,
+    /// Kept by a version before 0.1.0-beta.41 as `over`: the link ended without an error, whether
+    /// the session was done or not. `detail`: an older sentence this version does not read.
+    Ended,
+}
+
+impl End {
+    /// Every end.
+    pub const ALL: [End; 15] = [
+        End::Completed,
+        End::CutShort,
+        End::LinkLost,
+        End::Silent,
+        End::Refused,
+        End::PostOffice,
+        End::Error,
+        End::Disconnected,
+        End::Aborted,
+        End::CallStopped,
+        End::Stopped,
+        End::Modem,
+        End::NoAnswer,
+        End::CallFailed,
+        End::Ended,
+    ];
+
+    /// The word the record keeps.
+    #[must_use]
+    pub fn word(self) -> &'static str {
+        match self {
+            End::Completed => "completed",
+            End::CutShort => "cut-short",
+            End::LinkLost => "link-lost",
+            End::Silent => "silent",
+            End::Refused => "refused",
+            End::PostOffice => "post-office",
+            End::Error => "error",
+            End::Disconnected => "disconnected",
+            End::Aborted => "aborted",
+            End::CallStopped => "call-stopped",
+            End::Stopped => "stopped",
+            End::Modem => "modem",
+            End::NoAnswer => "no-answer",
+            End::CallFailed => "call-failed",
+            End::Ended => "ended",
+        }
+    }
+}
+
+/// How a session ended, with the words the log says of it: what a session's loop returns.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Over {
+    /// How.
+    pub end: End,
+    /// What the word leaves out, for the record's `detail`.
+    pub detail: Option<String>,
+}
+
+impl Over {
+    /// An end with nothing more to say.
+    #[must_use]
+    pub fn just(end: End) -> Over {
+        Over { end, detail: None }
+    }
+
+    /// An end and what it leaves out.
+    #[must_use]
+    pub fn with(end: End, detail: impl Into<String>) -> Over {
+        Over {
+            end,
+            detail: Some(detail.into()),
+        }
+    }
+
+    /// What the log says of it, after "ended: ".
+    #[must_use]
+    pub fn said(&self) -> String {
+        let d = self.detail.as_deref();
+        let after = |text: &str, sep: &str| match d {
+            Some(d) => format!("{text}{sep}{d}"),
+            None => text.to_owned(),
+        };
+        match self.end {
+            End::Completed => after("it was completed", ": "),
+            End::CutShort => "it was cut short".to_owned(),
+            End::LinkLost => match d {
+                Some(d) => format!("the modem lost the link ({d})"),
+                None => "the modem lost the link".to_owned(),
+            },
+            End::Silent => "nothing heard for 300 seconds".to_owned(),
+            End::Refused => after("the caller was refused", ": "),
+            End::PostOffice => "its post office failed the session".to_owned(),
+            End::Error => after("the other station sent ERROR", " "),
+            End::Disconnected => "the operator disconnected".to_owned(),
+            End::Aborted => after("the operator aborted the session", "; "),
+            End::CallStopped => "the operator stopped the call".to_owned(),
+            End::Stopped => "the operator stopped the gateway".to_owned(),
+            End::Modem => after("the modem's adapter", ": "),
+            End::NoAnswer => d.unwrap_or("no link came up").to_owned(),
+            End::CallFailed => after("the call failed", ": "),
+            End::Ended => after("it ended", ": "),
+        }
+    }
+}
+
+impl SessionRecord {
+    /// A record kept by a version before 0.1.0-beta.41, whose `result` was `over` or a sentence,
+    /// read as the words kept now.
+    fn read_old(&mut self) {
+        const MODEM: &str = "the modem's adapter: ";
+        const CALL_FAILED: &str = "the call failed: ";
+        let Some(said) = self.result.clone() else {
+            return;
+        };
+        if End::ALL.iter().any(|e| e.word() == said) {
+            return;
+        }
+        let (end, detail) = if self.refused.is_some() {
+            (End::Refused, None)
+        } else if self.post_office.is_some() {
+            (End::PostOffice, None)
+        } else if said == "over" {
+            (End::Ended, None)
+        } else if said == "the operator disconnected" {
+            (End::Disconnected, None)
+        } else if said == "the operator aborted the session" {
+            (End::Aborted, None)
+        } else if said == "the operator stopped the call" {
+            (End::CallStopped, None)
+        } else if said == "the operator stopped the gateway" {
+            (End::Stopped, None)
+        } else if said.starts_with("nothing heard for ") {
+            (End::Silent, None)
+        } else if said.starts_with("the modem did not say the link had ended") {
+            (End::Aborted, Some(said))
+        } else if let Some(rest) = said.strip_prefix(MODEM) {
+            (End::Modem, Some(rest.to_owned()))
+        } else if said.starts_with("no link to ") {
+            (End::NoAnswer, Some(said))
+        } else if let Some(rest) = said.strip_prefix(CALL_FAILED) {
+            (End::CallFailed, Some(rest.to_owned()))
+        } else {
+            (End::Ended, Some(said))
+        };
+        self.result = Some(end.word().to_owned());
+        if self.detail.is_none() {
+            self.detail = detail;
+        }
+        if matches!(end, End::NoAnswer | End::CallFailed | End::CallStopped) {
+            self.placed = true;
+        }
+    }
 }
 
 /// How a post office answered the gateway's login.
@@ -216,10 +415,14 @@ impl Monitor {
     #[must_use]
     pub fn keeping(dir: &Path) -> Monitor {
         let mut m = Monitor::new();
-        m.lock().sessions = std::fs::read_to_string(dir.join("sessions.json"))
+        let mut sessions: Vec<SessionRecord> = std::fs::read_to_string(dir.join("sessions.json"))
             .ok()
             .and_then(|t| serde_json::from_str(&t).ok())
             .unwrap_or_default();
+        for s in &mut sessions {
+            s.read_old();
+        }
+        m.lock().sessions = sessions;
         m.keep = Some(dir.to_owned());
         m
     }
@@ -283,6 +486,7 @@ impl Monitor {
     pub fn calling(&self, partner: &str) {
         self.begin(partner);
         if let Some(s) = self.lock().session.as_mut() {
+            s.placed = true;
             s.unlinked = true;
         }
     }
@@ -373,17 +577,15 @@ impl Monitor {
         }
     }
 
-    /// The session ended: `over`, or why it ended otherwise. It is kept.
-    pub fn end(&self, result: &Result<(), String>) {
+    /// The session ended as `over` says. It is kept.
+    pub fn end(&self, over: &Over) {
         let mut i = self.lock();
         let Some(mut s) = i.session.take() else {
             return;
         };
         s.ended = Some(now());
-        s.result = Some(match result {
-            Ok(()) => "over".to_owned(),
-            Err(e) => e.clone(),
-        });
+        s.result = Some(over.end.word().to_owned());
+        s.detail.clone_from(&over.detail);
         i.sessions.push(s);
         let excess = i.sessions.len().saturating_sub(SESSIONS_KEPT);
         i.sessions.drain(..excess);
@@ -491,5 +693,108 @@ impl Monitor {
     /// Clears a stop asked for, before the loop starts again.
     pub fn clear_stop(&self) {
         self.stop.store(false, Ordering::Relaxed);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn kept(result: &str) -> SessionRecord {
+        SessionRecord {
+            remote: "WD5EMA".into(),
+            result: Some(result.into()),
+            ..SessionRecord::default()
+        }
+    }
+
+    /// A `sessions.json` written before 0.1.0-beta.41 reads as the words kept now, and is written
+    /// back in them.
+    #[test]
+    fn old_records_read_as_words() {
+        let dir = std::env::temp_dir().join(format!("gateway-old-sessions-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("a scratch folder");
+        let mut refused = kept("over");
+        refused.refused = Some("N3CALL".into());
+        let mut post_office = kept("over");
+        post_office.post_office = Some("post-office-unreachable".into());
+        let old = vec![
+            kept("over"),
+            refused,
+            post_office,
+            kept("the operator disconnected"),
+            kept("the operator aborted the session"),
+            kept("the operator stopped the call"),
+            kept("the operator stopped the gateway"),
+            kept("nothing heard for 300 seconds"),
+            kept("the modem's adapter: connection reset"),
+            kept("no link to KK4ODA-2 in 180 seconds"),
+            kept("the call failed: busy (the channel is busy)"),
+            kept(&format!(
+                "{}: the session is ended here",
+                "the modem did not say the link had ended"
+            )),
+            kept("could not scan: no modem"),
+            kept("link-lost"),
+        ];
+        let text = serde_json::to_string(&old).expect("JSON");
+        std::fs::write(dir.join("sessions.json"), text).expect("written");
+        let m = Monitor::keeping(&dir);
+        let read: Vec<(Option<String>, Option<String>, bool)> = m
+            .lock()
+            .sessions
+            .iter()
+            .map(|s| (s.result.clone(), s.detail.clone(), s.placed))
+            .collect();
+        let w = |e: End| Some(e.word().to_owned());
+        let d = |t: &str| Some(t.to_owned());
+        assert_eq!(
+            read,
+            vec![
+                (w(End::Ended), None, false),
+                (w(End::Refused), None, false),
+                (w(End::PostOffice), None, false),
+                (w(End::Disconnected), None, false),
+                (w(End::Aborted), None, false),
+                (w(End::CallStopped), None, true),
+                (w(End::Stopped), None, false),
+                (w(End::Silent), None, false),
+                (w(End::Modem), d("connection reset"), false),
+                (
+                    w(End::NoAnswer),
+                    d("no link to KK4ODA-2 in 180 seconds"),
+                    true
+                ),
+                (w(End::CallFailed), d("busy (the channel is busy)"), true),
+                (
+                    w(End::Aborted),
+                    d("the modem did not say the link had ended: the session is ended here"),
+                    false
+                ),
+                (w(End::Ended), d("could not scan: no modem"), false),
+                (w(End::LinkLost), None, false),
+            ]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Every end has a word of its own, and the record keeps it with its detail.
+    #[test]
+    fn each_end_is_kept_as_its_word() {
+        let mut words: Vec<&str> = End::ALL.iter().map(|e| e.word()).collect();
+        words.sort_unstable();
+        words.dedup();
+        assert_eq!(words.len(), End::ALL.len());
+        let m = Monitor::new();
+        m.begin("WD5EMA");
+        m.end(&Over::with(End::LinkLost, "link timeout"));
+        let s = &m.sessions()[0];
+        assert_eq!(s.result.as_deref(), Some("link-lost"));
+        assert_eq!(s.detail.as_deref(), Some("link timeout"));
+        assert!(!s.placed);
+        assert_eq!(
+            Over::with(End::LinkLost, "link timeout").said(),
+            "the modem lost the link (link timeout)"
+        );
     }
 }

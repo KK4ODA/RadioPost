@@ -22,7 +22,7 @@ use rpmi::tcp::Connection;
 use serde::{Deserialize, Serialize};
 
 use crate::forward::{Outcome, Partner};
-use crate::monitor::{Check, Monitor, Stop};
+use crate::monitor::{Check, End, Monitor, Over, Stop};
 use crate::offline::{Fallback, Offline};
 use crate::store::Shared;
 use crate::upstream::{self, Account};
@@ -1561,12 +1561,13 @@ fn carry_call(
         tell("this session uses the gateway's renewed credential");
     }
     monitor.begin(remote);
-    let result = carry(station, modem, event, monitor);
-    match &result {
-        Ok(()) => tell(&format!("the session with {remote} is over")),
-        Err(e) => tell(&format!("the session with {remote} ended: {e}")),
+    let over = carry(station, modem, event, monitor);
+    if over.end == End::Completed {
+        tell(&format!("the session with {remote} is over"));
+    } else {
+        tell(&format!("the session with {remote} ended: {}", over.said()));
     }
-    monitor.end(&result);
+    monitor.end(&over);
 }
 
 /// How long a read from one of the gateway's other modems waits, between sessions: each is asked
@@ -1915,12 +1916,21 @@ fn calls_between_sessions(
         others.hold(None);
         let result = forward(station, modem, partner, monitor, (records, dial));
         others.release(None, tell);
-        match &result {
-            Ok(line) => tell(line),
-            Err(e) => tell(&format!("the call to {partner} failed: {e}")),
-        }
         let through = result.is_ok();
-        monitor.end(&result.map(|_| ()));
+        let over = match result {
+            Ok((line, over)) => {
+                tell(&line);
+                if over.end != End::Completed {
+                    tell(&format!("the call to {partner} ended: {}", over.said()));
+                }
+                over
+            }
+            Err(over) => {
+                tell(&format!("the call to {partner} failed: {}", over.said()));
+                over
+            }
+        };
+        monitor.end(&over);
         if modem.outside.is_none() {
             monitor.set_state("listening", None);
         } else {
@@ -2015,24 +2025,114 @@ impl Ending {
         matches!(self.0, Some((Stop::Abort, at)) if at.elapsed() >= ABORT_PATIENCE)
     }
 
-    /// How the session ended, when it ended on the operator's word: the result its record keeps.
-    fn result(&self) -> Result<(), String> {
+    /// How the session ended, when it ended on the operator's word.
+    fn word(&self) -> Option<Over> {
         match self.0 {
-            None => Ok(()),
-            Some((Stop::Disconnect, _)) => Err("the operator disconnected".into()),
-            Some((Stop::Abort, _)) => Err("the operator aborted the session".into()),
+            None => None,
+            Some((Stop::Disconnect, _)) => Some(Over::just(End::Disconnected)),
+            Some((Stop::Abort, _)) => Some(Over::just(End::Aborted)),
+        }
+    }
+
+    /// An abort the modem never answered: the session is ended here.
+    fn abort_unanswered() -> Over {
+        Over::with(End::Aborted, ABORT_UNANSWERED)
+    }
+}
+
+/// What a session's link and engine said of how it ended, gathered as it runs: the [`End`] its
+/// record keeps when the link ended on its own.
+#[derive(Default)]
+struct Course {
+    /// The modem's `disconnected` for the session's link: its `reason` and text (RP-4 §5).
+    link: Option<(String, Option<String>)>,
+    /// This side's engine was over before the link ended: a caller's session was done.
+    done: bool,
+    /// The code this side refused the other with.
+    refused: Option<ErrorCode>,
+    /// The code of an `ERROR` that was the last thing the other station said: one about a single
+    /// message lets the session go on (RP-3 §5.9).
+    error: Option<ErrorCode>,
+    /// A message arrived only in part.
+    partial: bool,
+}
+
+impl Course {
+    /// One event from the modem, before the carrier has it: `over` is whether this side's engine is
+    /// over now.
+    fn heard(&mut self, event: &Event, link: Option<&str>, over: bool) {
+        if let Event::Disconnected {
+            link: l,
+            reason,
+            text,
+        } = event
+            && link == Some(l.as_str())
+        {
+            self.link = Some((reason.clone(), text.clone()));
+            self.done = over;
+        }
+    }
+
+    /// What the engine said.
+    fn said(&mut self, events: &[SessionEvent]) {
+        for e in events {
+            match e {
+                SessionEvent::Refused(code) => self.refused = Some(*code),
+                SessionEvent::Error { code, .. } => self.error = Some(*code),
+                SessionEvent::Held(_) => self.partial = true,
+                SessionEvent::End => {}
+                // the session went on after it
+                _ => self.error = None,
+            }
+        }
+    }
+
+    /// How a session whose link ended on its own ended: `notes` are the gateway's notes, when this
+    /// side answered the call, and `placed` says this side called.
+    fn end(&self, notes: &[Note], placed: bool) -> Over {
+        let mut partial = self.partial;
+        for note in notes {
+            match note {
+                Note::PostOffice(_) => return Over::just(End::PostOffice),
+                Note::Refused(_) => return Over::just(End::Refused),
+                Note::Upload { held, .. } if !held.is_empty() => partial = true,
+                _ => {}
+            }
+        }
+        if let Some(code) = self.refused {
+            return Over::with(End::Refused, code.name());
+        }
+        if let Some(code) = self.error {
+            return Over::with(End::Error, code.name());
+        }
+        let Some((reason, text)) = &self.link else {
+            return Over::just(End::LinkLost);
+        };
+        // the caller hangs up once its session is done (RP-3 §8)
+        let done = if placed {
+            self.done
+        } else {
+            reason == "remote"
+        };
+        if done && !partial {
+            Over::just(End::Completed)
+        } else if reason == "remote" || reason == "local" {
+            Over::just(End::CutShort)
+        } else {
+            // the modem's own words say more than RP-4's reason: Aether's `link timeout`
+            Over::with(
+                End::LinkLost,
+                text.clone()
+                    .filter(|t| !t.is_empty())
+                    .unwrap_or_else(|| reason.clone()),
+            )
         }
     }
 }
 
 /// One session, from the link coming up until the caller hangs up, the link is quiet too long, the
 /// operator ends it ([`Ending`]), or the gateway is asked to stop.
-fn carry(
-    station: &mut Station,
-    modem: &mut Modem,
-    connected: &Event,
-    monitor: &Monitor,
-) -> Result<(), String> {
+fn carry(station: &mut Station, modem: &mut Modem, connected: &Event, monitor: &Monitor) -> Over {
     let country = station.settings.country.clone();
     let config = station.config();
     let at = config.time;
@@ -2052,6 +2152,7 @@ fn carry(
         _ => String::new(),
     };
     let mut ending = Ending::default();
+    let mut course = Course::default();
     let hang_up = |carrier: &mut Carrier<Answering>, modem: &mut Modem| {
         if let Some(link) = carrier.link() {
             let bye = modem.host.disconnect(link);
@@ -2061,7 +2162,9 @@ fn carry(
     };
     let result = loop {
         if let Some(e) = event.take() {
+            course.heard(&e, carrier.link(), carrier.engine().is_over());
             let (requests, events) = carrier.on_event(&mut modem.host, &e);
+            course.said(&events);
             for e in &events {
                 monitor.event(e);
             }
@@ -2073,23 +2176,23 @@ fn carry(
             };
             if let Some(err) = requests.iter().find_map(|r| modem.conn.send(r).err()) {
                 carrier.engine_mut().link_lost();
-                break Err(format!("the modem's adapter: {err}"));
+                break Some(Over::with(End::Modem, err.to_string()));
             }
         }
         if carrier.is_ended() {
-            break ending.result();
+            break ending.word();
         }
         if monitor.stopping() {
             hang_up(&mut carrier, modem);
-            break Err("the operator stopped the gateway".to_owned());
+            break Some(Over::just(End::Stopped));
         }
         if let Err(err) = ending.heed(monitor, modem, carrier.link(), &remote) {
             carrier.engine_mut().link_lost();
-            break Err(format!("the modem's adapter: {err}"));
+            break Some(Over::with(End::Modem, err.to_string()));
         }
         if ending.unanswered() {
             hang_up(&mut carrier, modem);
-            break Err(ABORT_UNANSWERED.to_owned());
+            break Some(Ending::abort_unanswered());
         }
         match modem.next() {
             Ok(Some(e)) => {
@@ -2099,16 +2202,17 @@ fn carry(
             Ok(None) => {}
             Err(e) => {
                 carrier.engine_mut().link_lost();
-                break Err(format!("the modem's adapter: {e}"));
+                break Some(Over::with(End::Modem, e.to_string()));
             }
         }
         if silence.over(QUIET) {
             // RP-3 §8: the station called asks the modem to disconnect
             hang_up(&mut carrier, modem);
-            break Err("nothing heard for 300 seconds".to_owned());
+            break Some(Over::just(End::Silent));
         }
     };
     let notes = carrier.engine_mut().0.take_notes();
+    let over = result.unwrap_or_else(|| course.end(&notes, false));
     for note in &notes {
         match note {
             Note::PostOffice(code) => monitor.post_office_failed(*code),
@@ -2131,7 +2235,7 @@ fn carry(
             }
         });
     }
-    result
+    over
 }
 
 /// What a forwarding session asks to come unasked: every forward item the partner holds for this
@@ -2190,52 +2294,61 @@ fn forwarding_client(
 /// Calls `partner` on `modem`: its `connected`, once the link is up. The operator's word to end
 /// the session (either one) stops the call: the modem's `abort` ends it, with `failed` `aborted`.
 /// A link that came up as the word was said is handed on, and the session's loop ends it at once.
-fn call_up(modem: &mut Modem, partner: &str, monitor: &Monitor) -> Result<Event, String> {
+fn call_up(modem: &mut Modem, partner: &str, monitor: &Monitor) -> Result<Event, Over> {
     let connect = modem.host.connect(partner, None, None);
     let id = connect.get("id").cloned();
-    modem.ask(&connect)?;
+    modem
+        .ask(&connect)
+        .map_err(|e| Over::with(End::CallFailed, e))?;
     let since = Instant::now();
     // when the operator's word went to the modem as `abort`
     let mut aborted: Option<Instant> = None;
     loop {
         if monitor.stopping() {
-            return Err("the operator stopped the gateway".into());
+            return Err(Over::just(End::Stopped));
         }
         if aborted.is_none() && monitor.end_asked().is_some() {
             let abort = modem.host.abort(None);
             modem
                 .conn
                 .send(&abort)
-                .map_err(|e| format!("the modem's adapter: {e}"))?;
+                .map_err(|e| Over::with(End::Modem, e.to_string()))?;
             monitor.log(&format!(
                 "stopping the call to {partner}, as the operator asked"
             ));
             aborted = Some(Instant::now());
         }
         if aborted.is_some_and(|at| at.elapsed() >= ABORT_PATIENCE) {
-            return Err("the operator stopped the call".into());
+            return Err(Over::just(End::CallStopped));
         }
         if since.elapsed() > CALL_WAIT {
-            return Err(format!(
-                "no link to {partner} in {} seconds",
-                CALL_WAIT.as_secs()
+            return Err(Over::with(
+                End::NoAnswer,
+                format!("no link to {partner} in {} seconds", CALL_WAIT.as_secs()),
             ));
         }
         match modem
             .next()
-            .map_err(|e| format!("the modem's adapter: {e}"))?
+            .map_err(|e| Over::with(End::Modem, e.to_string()))?
         {
             Some(e @ Event::Connected { id: Some(_), .. }) if e_id(&e) == id => return Ok(e),
             Some(Event::Failed { id: i, .. }) if i == id && aborted.is_some() => {
-                return Err("the operator stopped the call".into());
+                return Err(Over::just(End::CallStopped));
             }
             Some(Event::Failed {
                 id: i, code, text, ..
             }) if i == id => {
-                return Err(format!(
-                    "the call failed: {code}{}",
+                let why = format!(
+                    "{code}{}",
                     text.map(|t| format!(" ({t})")).unwrap_or_default()
-                ));
+                );
+                // RP-4 §5: `timeout` is a call nobody answered
+                let end = if code == "timeout" {
+                    End::NoAnswer
+                } else {
+                    End::CallFailed
+                };
+                return Err(Over::with(end, why));
             }
             _ => {}
         }
@@ -2244,28 +2357,30 @@ fn call_up(modem: &mut Modem, partner: &str, monitor: &Monitor) -> Result<Event,
 
 /// Calls the partner `partner` on `modem` and carries a forwarding session (RP-7 §2): the
 /// gateway's queue out, the forward items its partner holds for it in, each event kept in the
-/// store as it comes. Returns what it came to.
+/// store as it comes. Returns what it came to, and how the link ended once it came up.
 ///
 /// # Errors
 ///
-/// The call failed or did not come up, the link broke, or the operator stopped the gateway.
+/// The call failed or did not come up, the modem's adapter failed, or the operator ended the
+/// session or stopped the gateway.
 fn forward(
     station: &mut Station,
     modem: &mut Modem,
     partner: &str,
     monitor: &Monitor,
     (records, dial): (bool, Option<u64>),
-) -> Result<String, String> {
+) -> Result<(String, Over), Over> {
+    let modem_failed = |e: String| Over::with(End::Modem, e);
     // a scan stops for the call and starts again after it, in place of tuning back (W50)
     let scanned = if dial.is_some() {
-        modem.stop_scan()?
+        modem.stop_scan().map_err(modem_failed)?
     } else {
         Vec::new()
     };
     // in the partner's window the radio goes to its channel, and back after (RP-4 §4.1)
     let back = match dial {
         Some(hz) if modem.dial => {
-            let back = modem.tune_away(hz)?;
+            let back = modem.tune_away(hz).map_err(modem_failed)?;
             if back.is_some() {
                 monitor.log(&format!(
                     "tuned the radio to {} MHz, {partner}'s channel",
@@ -2313,10 +2428,11 @@ fn forward_here(
     partner: &str,
     monitor: &Monitor,
     records: bool,
-) -> Result<String, String> {
+) -> Result<(String, Over), Over> {
     let at = now();
     let own = radiopost::cbor::hex(&radiopost::credential::hash(&station.account.credential));
-    let client = forwarding_client(station, partner, (at, records), &own)?;
+    let client = forwarding_client(station, partner, (at, records), &own)
+        .map_err(|e| Over::with(End::CallFailed, e))?;
     let connected = call_up(modem, partner, monitor)?;
     monitor.linked();
     let mut carrier = Carrier::new(Calling(client));
@@ -2325,9 +2441,12 @@ fn forward_here(
     // RP-3 §8: from the last bytes, stopped while the modem receives
     let mut silence = Silence::new();
     let mut ending = Ending::default();
+    let mut course = Course::default();
     let result = loop {
         if let Some(e) = event.take() {
+            course.heard(&e, carrier.link(), carrier.engine().is_over());
             let (requests, events) = carrier.on_event(&mut modem.host, &e);
+            course.said(&events);
             let _ = station.store.change(|s| {
                 for e in &events {
                     outcome.apply(s, partner, e, at);
@@ -2343,11 +2462,11 @@ fn forward_here(
             };
             if let Some(err) = requests.iter().find_map(|r| modem.conn.send(r).err()) {
                 carrier.engine_mut().link_lost();
-                break Err(format!("the modem's adapter: {err}"));
+                break Err(Over::with(End::Modem, err.to_string()));
             }
         }
         if carrier.is_ended() {
-            break ending.result();
+            break ending.word().map_or_else(|| Ok(course.end(&[], true)), Err);
         }
         if monitor.stopping() {
             if let Some(link) = carrier.link() {
@@ -2355,11 +2474,11 @@ fn forward_here(
                 let _ = modem.conn.send(&bye);
             }
             carrier.engine_mut().link_lost();
-            break Err("the operator stopped the gateway".to_owned());
+            break Err(Over::just(End::Stopped));
         }
         if let Err(err) = ending.heed(monitor, modem, carrier.link(), partner) {
             carrier.engine_mut().link_lost();
-            break Err(format!("the modem's adapter: {err}"));
+            break Err(Over::with(End::Modem, err.to_string()));
         }
         if ending.unanswered() {
             if let Some(link) = carrier.link() {
@@ -2367,7 +2486,7 @@ fn forward_here(
                 let _ = modem.conn.send(&bye);
             }
             carrier.engine_mut().link_lost();
-            break Err(ABORT_UNANSWERED.to_owned());
+            break Err(Ending::abort_unanswered());
         }
         match modem.next() {
             Ok(Some(e)) => {
@@ -2377,7 +2496,7 @@ fn forward_here(
             Ok(None) => {}
             Err(e) => {
                 carrier.engine_mut().link_lost();
-                break Err(format!("the modem's adapter: {e}"));
+                break Err(Over::with(End::Modem, e.to_string()));
             }
         }
         if silence.over(QUIET) {
@@ -2386,12 +2505,12 @@ fn forward_here(
                 let _ = modem.conn.send(&bye);
             }
             carrier.engine_mut().link_lost();
-            break Err(format!("nothing heard for {} seconds", QUIET.as_secs()));
+            break Err(Over::just(End::Silent));
         }
     };
     let summary = match &result {
-        Ok(()) => outcome.summary(partner),
-        Err(e) => format!("{}; then {e}", outcome.summary(partner)),
+        Ok(over) if over.end == End::Completed => outcome.summary(partner),
+        Ok(over) | Err(over) => format!("{}; then {}", outcome.summary(partner), over.said()),
     };
     let _ = station.store.change(|s| {
         let p = s.partners.entry(partner.to_owned()).or_default();
@@ -2405,7 +2524,10 @@ fn forward_here(
     for line in &outcome.problems {
         monitor.log(line);
     }
-    result.map(|()| summary)
+    result.map(|over| match over.end {
+        End::Completed => (summary.clone(), Over::with(End::Completed, summary)),
+        _ => (summary, over),
+    })
 }
 
 /// A `connected` event's `id`, when it has one.
@@ -2439,6 +2561,119 @@ pub fn forward_once(dir: &Path, partner: &str, say: &mut dyn FnMut(&str)) -> Res
     let off = modem.host.listen(false);
     let _ = modem.conn.send(&off);
     modem.conn.close();
-    say(&result?);
+    let (line, over) = result.map_err(|over| over.said())?;
+    say(&line);
+    if over.end != End::Completed {
+        say(&format!("the call to {partner} ended: {}", over.said()));
+    }
     Ok(())
+}
+
+#[cfg(test)]
+mod course {
+    use super::*;
+
+    fn gone(reason: &str, text: Option<&str>) -> Event {
+        Event::Disconnected {
+            link: "c1".into(),
+            reason: reason.into(),
+            text: text.map(str::to_owned),
+        }
+    }
+
+    fn ended(event: &Event, done: bool) -> Course {
+        let mut c = Course::default();
+        c.heard(event, Some("c1"), done);
+        c
+    }
+
+    fn word(over: &Over) -> &'static str {
+        over.end.word()
+    }
+
+    /// A caller that hangs up has done its session (RP-3 §8), unless a message of its arrived in
+    /// part; the modem's timeout or failure is a lost link, with its reason.
+    #[test]
+    fn an_answered_session_ends_as_its_link_says() {
+        let c = ended(&gone("remote", None), false);
+        assert_eq!(word(&c.end(&[], false)), "completed");
+        let part = Note::Upload {
+            address: "ana@radiopost.org".into(),
+            id: ContentId::of(b"m"),
+            held: vec![1, 2, 3],
+            total: 10,
+        };
+        assert_eq!(word(&c.end(&[part], false)), "cut-short");
+        let whole = Note::Upload {
+            address: "ana@radiopost.org".into(),
+            id: ContentId::of(b"m"),
+            held: Vec::new(),
+            total: 0,
+        };
+        assert_eq!(word(&c.end(&[whole], false)), "completed");
+        let lost = ended(&gone("timeout", Some("link timeout")), false).end(&[], false);
+        assert_eq!(lost, Over::with(End::LinkLost, "link timeout"));
+        let failed = ended(&gone("failure", None), false).end(&[], false);
+        assert_eq!(failed, Over::with(End::LinkLost, "failure"));
+        // another link's end is not this session's
+        let mut other = Course::default();
+        other.heard(&gone("remote", None), Some("c2"), false);
+        assert_eq!(word(&other.end(&[], false)), "link-lost");
+    }
+
+    /// What the session refused, or was told, comes before how the link ended.
+    #[test]
+    fn a_refusal_or_an_error_says_more_than_the_link() {
+        let mut c = ended(&gone("remote", None), false);
+        assert_eq!(
+            word(&c.end(&[Note::PostOffice(ErrorCode::PostOfficeUnreachable)], false)),
+            "post-office"
+        );
+        assert_eq!(
+            word(&c.end(&[Note::Refused("WD5EMA".into())], false)),
+            "refused"
+        );
+        c.said(&[SessionEvent::Error {
+            code: ErrorCode::CredentialInvalid,
+            text: None,
+        }]);
+        assert_eq!(
+            c.end(&[], false),
+            Over::with(End::Error, "credential-invalid")
+        );
+        // one about a single message, and the session went on
+        c.said(&[SessionEvent::Delivered(ContentId::of(b"m"))]);
+        assert_eq!(word(&c.end(&[], false)), "completed");
+        c.said(&[SessionEvent::Error {
+            code: ErrorCode::CredentialInvalid,
+            text: None,
+        }]);
+        c.said(&[SessionEvent::Refused(ErrorCode::Malformed)]);
+        assert_eq!(c.end(&[], false), Over::with(End::Refused, "malformed"));
+    }
+
+    /// A call this gateway placed is done when its own engine was over as the link ended.
+    #[test]
+    fn a_placed_call_is_done_when_its_engine_was() {
+        assert_eq!(
+            word(&ended(&gone("local", None), true).end(&[], true)),
+            "completed"
+        );
+        assert_eq!(
+            word(&ended(&gone("remote", None), false).end(&[], true)),
+            "cut-short"
+        );
+        let mut c = ended(&gone("local", None), true);
+        c.said(&[SessionEvent::Held(radiopost::session::Partial {
+            id: ContentId::of(b"m"),
+            held: vec![1],
+            total: 4,
+            serial: None,
+        })]);
+        assert_eq!(word(&c.end(&[], true)), "cut-short");
+        assert_eq!(
+            ended(&gone("timeout", None), false).end(&[], true),
+            Over::with(End::LinkLost, "timeout")
+        );
+    }
 }
