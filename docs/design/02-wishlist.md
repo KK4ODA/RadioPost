@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.57 |
+| **Version** | 0.3.58 |
 | **Updated** | 2026-11-27 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -162,6 +162,7 @@ rules:
 | W56 | VHF and UHF gateways judged by the terrain | Radio | Medium | Fits today; optional addition (RP-5 `site`, `station`) | Accepted |
 | W57 | Learning from every call | Radio | High | Fits today; optional additions (RP-4 `peer_snr_db`, `failed.heard`; RP-5 `seen`) | In progress |
 | W58 | Gateways ranked by how soon the mail is done | Radio | Medium | Fits today | Accepted |
+| W59 | P2P stations heard, beacons, and calling them from Call | Radio | High | Optional addition (RP-4 `heard` members, `stations`, `beacon`) | Proposed |
 
 Groups: *Mail* (§4), *Setup* (§5), *Radio* (§6), *Operation* (§7), *Offline* (§8),
 *Applications* (§9), *Adapters* (§10), *Rules* (§11). Consolidated and deferred wishes are in §14.
@@ -709,6 +710,26 @@ slow gateway first for a short message, a faster one for a large attachment.
 | Status | Accepted; its Phase 5. |
 | Author decision | Accepted with the proposal, 2026-11-20: the time done four times in five; 30 minutes for priority mail and 10 for emergency; after a failure the client suggests the next candidate and never calls by itself. |
 | Notes | Expected time is a straight line in the transaction's size, so where two gateways swap places can be shown. |
+
+### W59. P2P stations heard, beacons, and calling them from Call
+
+RadioPost shows which stations the modem has heard, how strongly, where and how long ago, in the
+**Call** box, and beacons for its operator, now or every few minutes, so that P2P works with no
+Internet and without opening the modem's own window.
+
+| | |
+|---|---|
+| Requested by | The author, 2026-11-27. Requesters: 1. |
+| Component | Client; the Aether, Mercury and VARA adapters; Aether. |
+| Compatibility | **Optional protocol additions** to RP-4 (MINOR, announced): `heard`'s `dial_hz`, `kind`, `to`, `answers` and `at`; the `stations` request; `beacon` and `beacon-sent`; `status`'s `beaconing`. No change to RP-3 or any message. In Aether: a program's beacon under its claim (daemon only), and a bit in the beacon saying calls to it are answered (a new meaning on the air, no protocol version). |
+| Existing coverage | **Call**'s ▾ lists the stations called before (`/api/called`). Aether keeps the stations it hears and beacons, once or on a timer; RPMI's `heard` exists but no adapter sends it, and RPMI has no beacon. |
+| Dependencies | W15 (listening), W57 (the attempt records), D47. |
+| Effort | Medium: the store and the list; the schedule; the adapters; two Aether changes. |
+| Priority | **High.** P2P is what works when the Internet is down, and today the operator must find the other station in Aether's window or by voice. |
+| Recommendation | **Accept**, as [finding, beaconing and calling P2P stations](07-p2p-stations.md) designs it, in five phases; the first needs no transmission and no Aether release. |
+| Status | Proposed. |
+| Author decision | Eleven questions in the proposal's §10, the first whether the client may transmit on a timer at all (D44, W57). |
+| Notes | A RadioPost beacon is the modem's own; nothing RadioPost-specific goes on the air. A presence broadcast was weighed and not proposed: 11 to 27 s on Aether against a beacon's 5.4 s, and only on modems with broadcasts. |
 
 ---
 
@@ -1334,3 +1355,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.55 | 2026-11-24 | W33: implemented, [forms for most jobs](06-forms.md) step 5: reports by broadcast to a circle (RP-8 0.3.0), with the author's four decisions. |
 | 0.3.56 | 2026-11-26 | Gap G24, settled and built: mail a user submits from a mail program to an account here is refused when encrypted or carrying an executable (RP-6 1.4.0 §2.6); W36's coverage says so. |
 | 0.3.57 | 2026-11-27 | W20: Mercury on the air, through a gateway answering on Aether and Mercury at once (W26). |
+| 0.3.58 | 2026-11-27 | W59, proposed: [finding, beaconing and calling P2P stations](07-p2p-stations.md). |
