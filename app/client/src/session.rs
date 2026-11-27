@@ -788,6 +788,47 @@ pub fn tune(
     Ok(picked)
 }
 
+/// The words the modem at `opts.adapter` names itself by in its `hello` (RP-4 §3), such as
+/// "Aether HF 0.2.0" or "Mercury": reached with `hello` alone and let go, as [`tune`] reaches it.
+/// Empty when the adapter names none.
+///
+/// # Errors
+///
+/// The adapter cannot be reached, or it turned the `hello` away: another program holds it.
+pub fn modem_said(store: &Store, opts: &Options) -> Result<String, Error> {
+    let modem = Modem::reach(store, opts)?;
+    modem.conn.close();
+    Ok(modem.said_name)
+}
+
+/// The RP-0 §9.4 name of the modem whose `hello` says `said`: the one place the client turns an
+/// adapter's words into the name a gateway's channel gives its modem (RP-5 §4.4). RP-4 §3 leaves
+/// `hello`'s `modem` free text, so each adapter's own words are matched here, with whatever
+/// follows them (Aether's adapter adds Aether's version). `None` for words no name has, such as
+/// the simulated channel's: the page then lists every channel.
+#[must_use]
+pub fn modem_kind(said: &str) -> Option<&'static str> {
+    // each adapter's words (RP-4 §9) and the name they stand for; "AX.25" covers "AX.25 packet"
+    const WORDS: [(&str, &str); 8] = [
+        ("aether hf", "aether"),
+        ("aether fm", "aether-fm"),
+        ("mercury", "mercury"),
+        ("vara hf", "vara-hf"),
+        ("vara fm", "vara-fm"),
+        ("ardop", "ardop"),
+        ("ax.25", "ax25"),
+        ("radiopost-tcp", "tcp"),
+    ];
+    let said = said.trim().to_ascii_lowercase();
+    WORDS
+        .iter()
+        .find(|(words, _)| {
+            said.strip_prefix(words)
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with(' '))
+        })
+        .map(|(_, name)| *name)
+}
+
 impl Modem {
     /// Where the radio's dial is now, when the modem can say (RP-4 §4.1); `None` otherwise, or
     /// when asking fails: a call is made all the same.
@@ -2477,7 +2518,32 @@ mod tests {
     use rpmi::host::Event;
     use serde_json::json;
 
-    use super::{Live, Store, station_call_s};
+    use super::{Live, Store, modem_kind, station_call_s};
+
+    /// Each adapter's words in `hello` (RP-4 §9) give the RP-0 §9.4 name its channels carry, with
+    /// a version after them or not, in any case; words no name has, or a name's start that runs
+    /// on into another word, give none.
+    #[test]
+    fn an_adapters_words_name_its_modem() {
+        for (said, name) in [
+            ("Aether HF 0.2.0-beta.177", Some("aether")),
+            ("Aether HF", Some("aether")),
+            ("Aether FM 0.1.0", Some("aether-fm")),
+            ("Mercury", Some("mercury")),
+            ("VARA HF", Some("vara-hf")),
+            ("VARA FM", Some("vara-fm")),
+            ("ARDOP", Some("ardop")),
+            ("AX.25 packet", Some("ax25")),
+            ("radiopost-tcp 0.1.0-beta.40 (TLS)", Some("tcp")),
+            ("  mercury  ", Some("mercury")),
+            ("the loopback adapter", None),
+            ("Mercury2", None),
+            ("Aether", None),
+            ("", None),
+        ] {
+            assert_eq!(modem_kind(said), name, "{said:?}");
+        }
+    }
 
     /// A P2P call to a station whose gateway scans the dial keeps trying as long as the scan, the
     /// station's radio being wherever its gateway is; on a dial the gateway does not scan, or

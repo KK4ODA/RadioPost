@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.59.0 |
-| **Updated** | 2026-11-26 |
+| **Version** | 1.60.0 |
+| **Updated** | 2026-11-27 |
 | **Describes** | RadioPost 0.1.0-beta.40 |
 | **Licence** | CC BY 4.0 |
 
@@ -393,7 +393,7 @@ again with a new code**.
    click it and it stays in, its lamp lit, and reads **Listening for P2P**. RadioPost then answers
    station-to-station calls to your callsign until you click it again. **Modem** is where
    RadioPost finds Aether, `ws://127.0.0.1:8515/v1`. Change it only if Aether's control port is
-   not the usual one.
+   not the usual one, or to call with another modem ([8.4](#84-calling-with-mercury)).
 6. **The folder or message you are looking at.** Click a row to read it. A paperclip marks a
    message with files. A faded one means its files are held at the post office
    ([9](#9-reading-your-mail)). Rest the mouse on it to see how many and how large.
@@ -563,12 +563,20 @@ A call to a gateway sends your outbox and fetches what waits for you, in one ses
    **Places** says which position that is, such as *In use: the GPS, EM73tr, 2 s ago* or *In use:
    Home, EM73tr*. Your places and your GPS are set in **Setup**, under
    [Places and GPS](#places-and-gps); **Places** takes you there.
-4. Each gateway shows its **Channels** (dial frequency, upper sideband, and the bandwidth a call
-   there goes at; on an FM channel, *FM* and the channel's width, such as *145.050 MHz, FM, 12.5 kHz*)
-   and its **Hours**. A channel marked *scanned* is one of several the gateway listens
-   on in turn with one radio. Click **Choose** beside the one you want. Its callsign goes in
-   **Call**, its channels in **Channel**, and the radio is tuned to the first channel at once
-   ([8.2](#82-tune-and-call)).
+4. Each gateway shows its **Channels** (dial frequency, upper sideband, the modem the gateway
+   answers on there, and the bandwidth a call there goes at; on an FM channel, *FM* and the
+   channel's width, such as *145.050 MHz, Aether FM, FM, 12.5 kHz*) and its **Hours**. A gateway
+   with two modems can list one dial twice, once for each, such as *7.1035 MHz, Aether HF, 500 Hz*
+   and *7.1035 MHz, Mercury, 2300 Hz*. A channel marked *scanned* is one of several the gateway
+   listens on in turn with one radio. Click **Choose** beside the one you want. Its callsign goes
+   in **Call**, and the radio is tuned at once ([8.2](#82-tune-and-call)) to the first of its
+   channels in **Channel**.
+
+   **Channel** offers only the channels of the modem in **Modem**: RadioPost asks that modem its
+   name when the window opens and when **Modem** changes. It offers them all while it does not
+   know the modem yet, and when the gateway lists none for it. Then the line under **Channel**
+   says so, such as *N2CALL-5 lists no Mercury channel, only Aether HF: a call from this modem is
+   not answered there.*
 
 ![The Gateways page: gateways with their place, distance, channels and last call, each HF channel with its chance at 20Z, a favourite starred and a gateway of your own](screens/client-gateways.png)
 
@@ -897,9 +905,9 @@ With Mercury:
 
 - The line under **Channel** says *Set the radio's dial to … yourself: the modem cannot set it*.
   Mercury reaches no dial. There is no **Tuner tone** either, and no alerts.
-- **Channel** does not name a channel's modem. A gateway that answers on two modems on one dial
-  lists that dial twice, in the same words, and either line does: the call goes through the modem
-  in **Modem**. Its operator can tell you which of its dials have Mercury.
+- **Channel** offers the gateway's Mercury channels only, such as *7.101 MHz, Mercury, 2300 Hz*.
+  A gateway with no Mercury channel stays in the box, its other channels listed, and the line
+  under **Channel** says it lists none for Mercury: a call from Mercury is not answered there.
 - Mercury checks no band rules. Keep your transmissions within them yourself.
 - After the session the adapter identifies your station with Mercury's CQ frame, which carries
   your callsign. Mercury sends no Morse identifier.
@@ -3030,3 +3038,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.57.0 | 2026-11-26 | §9.2 *Mail to another RadioPost user*: mail written in a mail program to a user of the same post office is refused when it is encrypted or has a program attached (RP-6 1.4.0 §2.6), the mail program shows the refusal's words, and nobody on the message gets it. The post office had taken such mail and put it on the air. |
 | 1.58.0 | 2026-11-26 | §18 *More than one modem* becomes a section of its own, after step 3: the adapters and their ports; Aether and Mercury on one radio step by step (rigctld for both, Mercury on ports 8400, 8401 and 8410 and keyed through rigctld, its adapter, **More modems**, **The modem does not check the band rules: I do** ticked, a second channel on Aether's dial, no scan; new Figure 43; later figures renumbered); a modem on a second radio. Step 1: tick that box with more modems. §37: the gateway's two lines about a modem in **More modems**. |
 | 1.59.0 | 2026-11-26 | From setting up Aether and Mercury on KK4ODA-1's FTDX10. §18 *Aether and Mercury on one radio* walks it through on Windows: freeing the CAT port, Hamlib and the radio's model number, rigctld and its check with `rigctl`, Aether's **Radio control** and **Key 1 s**, Mercury's card IDs from `-z` (single quotes in PowerShell), its keying test with `-Q`, its `mercury.ini`, the firewall and port 10000, Aether's waterfall as the check that the card is shared, the gateway's messages at each step, and *also listening on …* as the proof that Mercury answers. *Starting them with Windows*: a startup file for rigctld, Mercury and the adapter, in that order, and how to try it. §4: opening 0.1.0-beta.40's Windows tools archive, which is a tar archive. §8.4 *Calling with Mercury*: Mercury keyed by the radio's interface, its adapter, **Modem**, and that **Channel** does not name a channel's modem. §19: **Modem** repeats Setup. §37: three more rows. |
+| 1.60.0 | 2026-11-27 | A channel names its modem, and **Channel** offers the modem's own. §6: **Modem** for another modem. §8.1: a channel's words name the modem the gateway answers on there (a gateway with two modems can list one dial twice), and **Channel** offers only the channels of the modem in **Modem**, which RadioPost asks its name, or all of them, with a line saying so, when the gateway lists none for it. §8.4: Mercury's channels only. Figures 14 and 20 retaken. |

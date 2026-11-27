@@ -219,7 +219,7 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 .radio-at:empty { display: none; }
 .radio-at.ok { color: var(--ok); }
 .radio-at.ok::before { content: "\2713  "; }
-.radio-at.by-hand { color: var(--busy); font-weight: 600; }
+.radio-at.by-hand, .radio-at.caution { color: var(--busy); font-weight: 600; }
 .radio-at.bad { color: var(--bad); }
 #tone { height: 28px; padding: 0 10px; font-size: 13px; }
 #tone[data-on] { border-color: var(--tx); color: var(--tx); }

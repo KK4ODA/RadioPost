@@ -92,6 +92,20 @@ pub fn loopback_with(
     dial_hz: Option<u64>,
     call_timeout: Duration,
 ) -> (Server, SocketAddr, SocketAddr) {
+    loopback_full(dial_hz, call_timeout, "the loopback adapter")
+}
+
+/// The loopback adapter, its modems naming themselves `modem` in `hello` (RP-4 §3), as Mercury's
+/// adapter says "Mercury".
+pub fn loopback_named(modem: &str) -> (Server, SocketAddr, SocketAddr) {
+    loopback_full(None, Duration::from_secs(10), modem)
+}
+
+fn loopback_full(
+    dial_hz: Option<u64>,
+    call_timeout: Duration,
+    modem: &str,
+) -> (Server, SocketAddr, SocketAddr) {
     let caps = Caps {
         bandwidths: vec![500, 2300],
         max_links: 1,
@@ -109,7 +123,7 @@ pub fn loopback_with(
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),
-        modem: "the loopback adapter".into(),
+        modem: modem.into(),
         caps: caps.clone(),
         prefix: prefix.into(),
         frame_bytes: 128,

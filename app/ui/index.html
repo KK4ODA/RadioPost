@@ -58,9 +58,10 @@
             <ul class="suggestions called" id="called-list" role="listbox" hidden></ul>
           </span>
         </label>
-        <label id="channel-label" title="The chosen gateway's channel: its dial, and the bandwidth the call goes at. Picking it tunes the radio there at once, when the modem can set the radio's dial (Aether with CAT, rigctld or FLRig), so you can set the antenna tuner before you call; with another modem, set the dial yourself" hidden>Channel
+        <label id="channel-label" title="The chosen gateway's channel: its dial, the modem it answers on there, and the bandwidth the call goes at. Only the channels of the modem in the Modem box are listed, once RadioPost has asked the modem its name. Picking it tunes the radio there at once, when the modem can set the radio's dial (Aether with CAT, rigctld or FLRig), so you can set the antenna tuner before you call; with another modem, set the dial yourself" hidden>Channel
           <select id="channel"></select>
         </label>
+        <p class="radio-at caution" id="channel-note" role="status" title="The chosen gateway lists no channel for the modem in the Modem box: its channels are for other modems, and a call from this one is not answered there"></p>
         <div class="pair" id="station-dial" hidden>
           <label title="The dial frequency the two of you agreed on, in MHz, upper sideband: 7.101 or 3.5915. Typing it tunes the radio there at once, when the modem can set the radio's dial. Listen for P2P tunes there too when it starts, unless the station scans a gateway's channels">Dial, MHz
             <input id="dial" inputmode="decimal" placeholder="7.101" autocomplete="off" spellcheck="false">

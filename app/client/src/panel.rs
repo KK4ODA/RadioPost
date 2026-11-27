@@ -174,7 +174,28 @@ pub struct Panel {
     terrain: Arc<Terrain>,
     /// HF channels predicted both ways by VOACAP, the runs kept (choosing a gateway, §10).
     hf: Arc<Hf>,
+    /// What the modem in the page's Modem box calls itself, so the page lists only the channels
+    /// that modem can call on.
+    modem_named: Arc<Mutex<ModemNamed>>,
 }
+
+/// What the modem in the page's Modem box calls itself (RP-4 §3 `hello`), learned by a short
+/// `hello` between sessions: when the page opens, when the box changes, and again now and then
+/// while the adapter has not answered.
+#[derive(Debug, Default)]
+struct ModemNamed {
+    /// The Modem box's address the words are for.
+    adapter: String,
+    /// The adapter's words, once it answered.
+    said: Option<String>,
+    /// When it was last asked.
+    asked: Option<std::time::Instant>,
+    /// A `hello` is on its way.
+    asking: bool,
+}
+
+/// How long a modem that has not answered is left before it is asked again.
+const MODEM_ASK_AGAIN: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// When the panel renews the credential: first after `first`, then every `every`, once it has
 /// `within` seconds or less to run.
@@ -345,6 +366,7 @@ impl Panel {
             position: Arc::new(position_of(home)),
             terrain: Arc::new(Terrain::new(&terrain::cache_dir())),
             hf: Arc::new(Hf::new()),
+            modem_named: Arc::default(),
         }
     }
 
@@ -1112,8 +1134,10 @@ impl Panel {
             }
             (Method::Post, "/api/modem") => {
                 // the page's Modem box, when it loads and when it changes: the app's connection
-                // between calls follows it (only to Aether)
-                self.presence.set_modem(&modem_or_default(&text("adapter")));
+                // between calls follows it (only to Aether), and the modem is asked its name
+                let adapter = modem_or_default(&text("adapter"));
+                self.presence.set_modem(&adapter);
+                self.learn_modem(&adapter, true);
                 Ok(json!({}))
             }
             (_, "/api/gateways" | "/api/grid" | "/api/waiting" | "/api/fetch") => {
@@ -1861,9 +1885,21 @@ impl Panel {
             .map(|k| radiopost::cbor::hex(&k.verifying_key().to_bytes()));
         let mut trusted: Vec<String> = store.trust()?.keys.into_keys().collect();
         trusted.sort();
+        // a modem that has not answered yet is asked again, now and then, between sessions
+        let told = self
+            .modem_named
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .adapter
+            .clone();
+        if !told.is_empty() {
+            self.learn_modem(&told, false);
+        }
+        let modem = self.modem_view();
         let a = lock(&self.activity);
         Ok(json!({
             "me": me, "device": device, "trusted": trusted, "post_office": store.post_office,
+            "modem": modem,
             "application": store.application,
             "callsigns": callsigns::list(&self.base).iter().map(callsigns::Entry::json)
                 .collect::<Vec<_>>(),
@@ -2518,6 +2554,68 @@ impl Panel {
         let adapter = modem_or_default(adapter);
         self.presence.set_modem(&adapter);
         Options::new(&adapter)
+    }
+
+    /// Asks the modem at `adapter` its name, on a thread of its own: `now` when the page opens or
+    /// its Modem box changes, else only while the modem has not answered and was last asked over
+    /// [`MODEM_ASK_AGAIN`] ago. Only between sessions: a `hello` to an adapter that serves one
+    /// program would be turned away while a call or listening holds it, and would take a moment
+    /// from that program otherwise, so the name learned before stands meanwhile.
+    fn learn_modem(&self, adapter: &str, now: bool) {
+        if lock(&self.activity).state != "idle" {
+            return;
+        }
+        let mut m = self
+            .modem_named
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if m.adapter != adapter {
+            *m = ModemNamed {
+                adapter: adapter.to_owned(),
+                ..ModemNamed::default()
+            };
+        }
+        // Aether's control API is Aether, reached through its adapter in this process (RP-4
+        // §9.1): nothing to ask, and no second connection beside the app's between calls
+        if adapter.starts_with("ws://") {
+            m.said = Some("Aether HF".to_owned());
+            return;
+        }
+        let lately = m.asked.is_some_and(|t| t.elapsed() < MODEM_ASK_AGAIN);
+        if m.asking || (!now && (m.said.is_some() || lately)) {
+            return;
+        }
+        m.asking = true;
+        m.asked = Some(std::time::Instant::now());
+        drop(m);
+        let named = Arc::clone(&self.modem_named);
+        let home = self.home();
+        let adapter = adapter.to_owned();
+        thread::spawn(move || {
+            let said = Store::open(&home)
+                .and_then(|store| session::modem_said(&store, &Options::new(&adapter)));
+            let mut m = named.lock().unwrap_or_else(PoisonError::into_inner);
+            if m.adapter == adapter {
+                m.asking = false;
+                if let Ok(said) = said {
+                    m.said = Some(said);
+                }
+            }
+        });
+    }
+
+    /// The modem the page names, as the page shows it: its address, its words, and the RP-0 §9.4
+    /// name of its channels (null for a modem none is, or one that has not answered yet).
+    fn modem_view(&self) -> Value {
+        let m = self
+            .modem_named
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if m.adapter.is_empty() {
+            return Value::Null;
+        }
+        json!({"adapter": m.adapter, "said": m.said,
+               "kind": m.said.as_deref().and_then(session::modem_kind)})
     }
 
     /// Says `line` in the panel's log, as a session's lines are.

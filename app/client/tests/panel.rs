@@ -13,7 +13,9 @@ use radiopost_client::panel::Panel;
 use radiopost_client::session::{self, Options};
 use serde_json::{Value, json};
 
-use common::{loopback, loopback_dialled, loopback_with, message, scratch, store_for};
+use common::{
+    loopback, loopback_dialled, loopback_named, loopback_with, message, scratch, store_for,
+};
 
 /// One HTTP exchange: the status and the body.
 fn http(
@@ -1869,4 +1871,54 @@ fn a_form_is_imported_exported_and_removed_from_setup() {
         c.get("/api/forms").as_array().expect("forms").len(),
         published
     );
+}
+
+/// The page lists only the channels its modem can call on, so the panel asks the modem in the
+/// Modem box its name, by `hello` alone, when the page tells it the box (RP-4 §3), and gives it
+/// in the state with the RP-0 §9.4 name a gateway's channels carry (RP-5 §4.4). A modem no name
+/// fits is named all the same, with none: the page then lists every channel.
+#[test]
+fn the_panel_asks_the_modem_its_name() {
+    let dir = scratch("panel-modem-name");
+    store_for(&dir.join("facundo"), "device:facundo", "facundo");
+    let c = Client {
+        at: Panel::new(&dir.join("facundo"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    assert_eq!(
+        c.get("/api/state")["modem"],
+        Value::Null,
+        "no modem told yet"
+    );
+    // Aether's control API is Aether: named at once, nothing reached
+    let aether = "ws://127.0.0.1:9/v1";
+    c.post("/api/modem", &json!({"adapter": aether}))
+        .expect("told");
+    assert_eq!(
+        c.get("/api/state")["modem"],
+        json!({"adapter": aether, "said": "Aether HF", "kind": "aether"})
+    );
+    let (_mercury, at_m, _) = loopback_named("Mercury");
+    let (_plain, at_p, _) = loopback();
+    for (at, said, kind) in [
+        (at_m, "Mercury", json!("mercury")),
+        (at_p, "the loopback adapter", Value::Null),
+    ] {
+        c.post("/api/modem", &json!({"adapter": at.to_string()}))
+            .expect("told");
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let modem = loop {
+            let m = c.get("/api/state")["modem"].clone();
+            if m["said"].is_string() || Instant::now() > deadline {
+                break m;
+            }
+            thread::sleep(Duration::from_millis(50));
+        };
+        assert_eq!(
+            modem,
+            json!({"adapter": at.to_string(), "said": said, "kind": kind})
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
 }

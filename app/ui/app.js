@@ -444,15 +444,51 @@ function kind() {
   return document.querySelector("input[name=kind]:checked").value;
 }
 
-// the gateway chosen from the list, and its channels: picking one tunes the radio there (W14)
+// the gateway chosen from the list, and its channels: picking one tunes the radio there (W14).
+// `channels` are all it lists, `shown` those the Channel list offers (the modem's own, when it
+// lists any), each option's value its place in `shown`: one dial may carry two modems
 let chosenGateway = null;
+
+// the modem in the Modem box, by its RP-0 §9.4 name, as the panel learned it from the modem's
+// hello (GET /api/state, `modem`); null while it is not known
+let modemKind = null;
+
+// RP-0 §9.4's modem names as people read them, as RadioPost Gateway's Setup writes them
+const MODEM_LABELS = {aether: "Aether HF", "aether-fm": "Aether FM", mercury: "Mercury",
+                      "vara-hf": "VARA HF", "vara-fm": "VARA FM", ardop: "ARDOP", ax25: "Packet",
+                      tcp: "TCP"};
+const modemLabel = (name) => MODEM_LABELS[name] || name;
+
+// the channels of a gateway's that the modem in the Modem box can call on: those naming it, or
+// all of them when the modem is not known or the gateway lists none for it. A channel kept from
+// an old call names no modem, and is offered whatever the modem
+function forModem(channels) {
+  if (!modemKind) return channels;
+  const mine = channels.filter((c) => !c.modem || c.modem === modemKind);
+  return mine.length ? mine : channels;
+}
+
+// the channel picked in the Channel list, or null
+function chosenChannel() {
+  const gw = chosenGateway;
+  if (!gw || $("channel-label").hidden) return null;
+  return gw.shown[Number($("channel").value)] || null;
+}
 
 function showChannels() {
   const gw = chosenGateway;
   const fits = gw && kind() === "gateway"
-    && $("callsign").value.trim().toUpperCase() === gw.callsign && gw.channels.length > 0;
+    && $("callsign").value.trim().toUpperCase() === gw.callsign && gw.shown.length > 0;
   // hidden, not emptied: the gateway's callsign typed again brings its channels back
   $("channel-label").hidden = !fits;
+  // a gateway with no channel for this modem stays choosable, and says so
+  const named = fits && modemKind ? gw.shown.filter((c) => c.modem) : [];
+  const none = named.length > 0 && !named.some((c) => c.modem === modemKind);
+  const theirs = [...new Set(named.map((c) => modemLabel(c.modem)))].join(", ");
+  $("channel-note").textContent = none
+    ? `${gw.callsign} lists no ${modemLabel(modemKind)} channel, only ${theirs}: `
+      + "a call from this modem is not answered there."
+    : "";
   showTuning();
 }
 
@@ -556,13 +592,32 @@ function channelsOf(gw) {
     .sort((a, b) => Number(Boolean(b.favourite)) - Number(Boolean(a.favourite)));
 }
 
-// a gateway in the box with its channels, the one at `dialHz` picked when it is one of them
-function putGateway(callsign, channels, dialHz) {
-  chosenGateway = {callsign, channels};
+// a gateway in the box with its channels, those the modem can call on offered, the one at
+// `dialHz` picked when it is one of them (of the modem `modem`, when the dial carries two)
+function putGateway(callsign, channels, dialHz, modem) {
+  const shown = forModem(channels);
+  chosenGateway = {callsign, channels, shown};
   $("callsign").value = callsign;
-  $("channel").replaceChildren(...channels.map((c) =>
-    el("option", {value: String(c.dial_hz), text: channelWords(c)})));
-  if (channels.some((c) => c.dial_hz === dialHz)) $("channel").value = String(dialHz);
+  $("channel").replaceChildren(...shown.map((c, i) =>
+    el("option", {value: String(i), text: channelWords(c)})));
+  const onDial = shown.map((c, i) => [c, i]).filter(([c]) => c.dial_hz === dialHz);
+  const pick = onDial.find(([c]) => c.modem === (modem || modemKind)) || onDial[0];
+  if (pick) $("channel").value = String(pick[1]);
+  showChannels();
+}
+
+// the modem named anew: the gateway in the box offers its channels again, the one picked kept,
+// and the callsign typed left as it is
+function showModem(m) {
+  const kindNow = (m && m.kind) || null;
+  if (kindNow === modemKind) return;
+  modemKind = kindNow;
+  const gw = chosenGateway;
+  if (!gw) return;
+  const was = chosenChannel();
+  const typed = $("callsign").value;
+  putGateway(gw.callsign, gw.channels, was && was.dial_hz, was && was.modem);
+  $("callsign").value = typed;
   showChannels();
 }
 
@@ -590,14 +645,15 @@ function switchKind(k, fill = true) {
   if (boxKind !== k) {
     if (boxKind) {
       leftAs[boxKind] = {callsign: $("callsign").value, gateway: chosenGateway,
-                         channel: $("channel").value};
+                         channel: chosenChannel()};
     }
     const back = leftAs[k];
     if (!fill) {
       // the caller puts in its own
     } else if (back) {
       if (k === "gateway" && back.gateway) {
-        putGateway(back.gateway.callsign, back.gateway.channels, Number(back.channel));
+        putGateway(back.gateway.callsign, back.gateway.channels,
+                   back.channel && back.channel.dial_hz, back.channel && back.channel.modem);
       } else if (k === "gateway") {
         chosenGateway = null;
       }
@@ -723,7 +779,8 @@ function hzOf(text) {
 // the dial of the call box as it stands: the gateway's channel, or the station call's dial
 function currentDial() {
   if (kind() === "gateway") {
-    return $("channel-label").hidden ? null : Number($("channel").value) || null;
+    const c = chosenChannel();
+    return c ? c.dial_hz : null;
   }
   return hzOf($("dial").value);
 }
@@ -850,6 +907,7 @@ function soundsOfState(s, a) {
 
 async function refresh() {
   const s = await api("state");
+  showModem(s.modem);
   showUpdate(s.update, "RadioPost");
   showVersion(s.update, "RadioPost");
   myVersion = (s.update && s.update.current) || "";
@@ -1347,12 +1405,14 @@ async function openGateways(refreshing = false) {
   }
 }
 
-// a channel as the page writes it: the dial in MHz to the kilohertz or finer, the bandwidth (an FM
-// channel's width in kHz), and whether the gateway scans it with others (RP-5 §4.4)
+// a channel as the page writes it: the dial in MHz to the kilohertz or finer, its modem, the
+// bandwidth (an FM channel's width in kHz), and whether the gateway scans it with others (RP-5
+// §4.4)
 function channelWords(c) {
+  const modem = c.modem ? `, ${modemLabel(c.modem)}` : "";
   const width = c.bandwidth_hz == null ? ""
     : c.mode === "FM" ? `, FM, ${c.bandwidth_hz / 1000} kHz` : `, ${c.bandwidth_hz} Hz`;
-  return `${mhzOf(c.dial_hz)} MHz${width}${c.scan_s != null ? ", scanned" : ""}`;
+  return `${mhzOf(c.dial_hz)} MHz${modem}${width}${c.scan_s != null ? ", scanned" : ""}`;
 }
 
 // days or hours since a moment, for the ages the page shows
@@ -2102,14 +2162,16 @@ function chooseGateway(gw, dialHz = null) {
   switchKind("gateway", false);
   putGateway(gw.callsign, channels, dialHz);
   showKind();
-  const first = channels.find((c) => c.dial_hz === dialHz) || channels[0];
+  // the channel put in the box: the modem's own, when the gateway lists any
+  const first = chosenChannel();
   const scanned = first && first.scan_s != null
     ? ` It scans its channels: the call keeps trying for ${first.scan_s} s or more.`
     : "";
   if (!first) {
     toast(`${gw.callsign} chosen. ${gw.channels && gw.channels.length ? "Every channel is left out." : "Its record names no channel."}`);
   } else {
-    toast(`${gw.callsign} chosen, on ${mhzOf(first.dial_hz)} MHz.${scanned}`);
+    const modem = first.modem ? `, ${modemLabel(first.modem)}` : "";
+    toast(`${gw.callsign} chosen, on ${mhzOf(first.dial_hz)} MHz${modem}.${scanned}`);
     pickChannel();
   }
 }
@@ -5771,8 +5833,7 @@ function wire() {
     const fetchRule = $("fetch").value;
     const dial = currentDial();
     // a gateway that scans is found by a call that keeps trying as long as its record says
-    const channel = !station && dial && chosenGateway
-      ? chosenGateway.channels.find((c) => c.dial_hz === dial) : null;
+    const channel = !station ? chosenChannel() : null;
     placeCall({
       callsign, station, adapter: adapter(),
       fetch: /^[0-9]+$/.test(fetchRule) ? Number(fetchRule) : fetchRule,
