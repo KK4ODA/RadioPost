@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.60.0 |
+| **Version** | 1.61.0 |
 | **Updated** | 2026-11-27 |
 | **Describes** | RadioPost 0.1.0-beta.40 |
 | **Licence** | CC BY 4.0 |
@@ -912,7 +912,8 @@ With Mercury:
 - After the session the adapter identifies your station with Mercury's CQ frame, which carries
   your callsign. Mercury sends no Morse identifier.
 
-Only Aether has carried RadioPost on the air so far.
+Mercury first carried RadioPost on the air on 27 November 2026: a mobile's two sessions with the
+KK4ODA-1 gateway on 7.101 MHz at 2300 Hz.
 
 ## 9. Reading your mail
 
@@ -1838,7 +1839,8 @@ address goes in **More modems**, one a line.
   the rules ([The rules](#36-the-rules)).
 - Only Aether scans. Leave **Scan these channels** clear when another modem shares Aether's radio.
 
-Only Aether has carried RadioPost on the air so far. A report from a gateway running two modems is
+The KK4ODA-1 gateway first answered on Aether and Mercury at once, on one radio, on 27 November
+2026 (7.101 MHz, 2300 Hz), and carried a mobile's mail over each. A report from your gateway is
 welcome.
 
 #### The adapters
@@ -3039,3 +3041,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.58.0 | 2026-11-26 | §18 *More than one modem* becomes a section of its own, after step 3: the adapters and their ports; Aether and Mercury on one radio step by step (rigctld for both, Mercury on ports 8400, 8401 and 8410 and keyed through rigctld, its adapter, **More modems**, **The modem does not check the band rules: I do** ticked, a second channel on Aether's dial, no scan; new Figure 43; later figures renumbered); a modem on a second radio. Step 1: tick that box with more modems. §37: the gateway's two lines about a modem in **More modems**. |
 | 1.59.0 | 2026-11-26 | From setting up Aether and Mercury on KK4ODA-1's FTDX10. §18 *Aether and Mercury on one radio* walks it through on Windows: freeing the CAT port, Hamlib and the radio's model number, rigctld and its check with `rigctl`, Aether's **Radio control** and **Key 1 s**, Mercury's card IDs from `-z` (single quotes in PowerShell), its keying test with `-Q`, its `mercury.ini`, the firewall and port 10000, Aether's waterfall as the check that the card is shared, the gateway's messages at each step, and *also listening on …* as the proof that Mercury answers. *Starting them with Windows*: a startup file for rigctld, Mercury and the adapter, in that order, and how to try it. §4: opening 0.1.0-beta.40's Windows tools archive, which is a tar archive. §8.4 *Calling with Mercury*: Mercury keyed by the radio's interface, its adapter, **Modem**, and that **Channel** does not name a channel's modem. §19: **Modem** repeats Setup. §37: three more rows. |
 | 1.60.0 | 2026-11-27 | A channel names its modem, and **Channel** offers the modem's own. §6: **Modem** for another modem. §8.1: a channel's words name the modem the gateway answers on there (a gateway with two modems can list one dial twice), and **Channel** offers only the channels of the modem in **Modem**, which RadioPost asks its name, or all of them, with a line saying so, when the gateway lists none for it. §8.4: Mercury's channels only. Figures 14 and 20 retaken. |
+| 1.61.0 | 2026-11-27 | §8.4 and §18 *More than one modem*: Mercury has carried RadioPost on the air, and KK4ODA-1 answered on Aether and Mercury at once (27 November 2026, 7.101 MHz, 2300 Hz); they had said only Aether had. |

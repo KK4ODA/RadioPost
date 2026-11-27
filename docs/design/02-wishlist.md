@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.56 |
-| **Updated** | 2026-11-26 |
+| **Version** | 0.3.57 |
+| **Updated** | 2026-11-27 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Follows** | [The detailed design](00-detailed-design.md), §9 and §10 |
@@ -1070,7 +1070,7 @@ HF modem, as a client or a gateway.
 | Effort | Medium: one adapter, with each modem's differences. |
 | Priority | **Medium.** The author asks for Mercury, and the two modems reach many users. |
 | Recommendation | **Modify**: one adapter for both, built and tested against Mercury first. Mercury is open source and runs on Linux, so the adapter and the tester's A-01 to A-04 can run against a real modem in CI; VARA is proprietary and is never run by the project, so it follows from its published commands. Whether Mercury joins Phase 5's adapters, ahead of ARDOP, is the author's call. |
-| Status | Implemented: Mercury built and run against the real modem; VARA built from its published commands, tried against a stand-in only. |
+| Status | Implemented: Mercury built, run against the real modem and on the air (2026-11-27, a mobile to the KK4ODA-1 gateway on 7.101 MHz, the gateway answering on Aether and Mercury at once); VARA built from its published commands, tried against a stand-in only. |
 | Author decision | VARA is a black box (CLAUDE.md): only its published command list is used. |
 | Notes | Mercury's air interface is published (FreeDV and codec2 OFDM modes, documented in its repository), so an open monitor (W42) can read sessions over it, which it cannot over VARA. Mercury is GPL-3.0; the adapter talks to it over TCP, as the post office talks to Stalwart, so RadioPost's licences are unaffected. Writing the adapter found that Mercury does not identify the station: its CALL carries the caller's callsign, its ACCEPT only a CRC of the called station's, and a session's frames none (RP-4 §9.6). A gateway answering by Mercury never put its callsign on the air in a form anyone could read. The author's decision (2026-11-12): the adapter sends `CQFRAME` after each session, which carries a callsign any Mercury decodes; the station called first, the caller once it has heard it (RP-4 §9.6). Not covered: a session longer than ten minutes is not identified within it. |
 
@@ -1333,3 +1333,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.54 | 2026-11-24 | W32: [forms for most jobs](06-forms.md) step 4 built: templates by fingerprint (RP-5 1.8.0, RP-2 1.5.0), a group's own forms imported, exported, fetched and handed in. |
 | 0.3.55 | 2026-11-24 | W33: implemented, [forms for most jobs](06-forms.md) step 5: reports by broadcast to a circle (RP-8 0.3.0), with the author's four decisions. |
 | 0.3.56 | 2026-11-26 | Gap G24, settled and built: mail a user submits from a mail program to an account here is refused when encrypted or carrying an executable (RP-6 1.4.0 §2.6); W36's coverage says so. |
+| 0.3.57 | 2026-11-27 | W20: Mercury on the air, through a gateway answering on Aether and Mercury at once (W26). |

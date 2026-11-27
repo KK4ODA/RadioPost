@@ -224,6 +224,13 @@ bands, 3.590, 7.101 and 14.107 MHz, and the mobile's mail checks on 80 m and 40 
 On 2026-11-23 a portable station at 10 W, about 95 km away, checked its mail through the gateway
 and worked the home station P2P, on 40 m.
 
+On 2026-11-27 the gateway answered on Aether and Mercury at once, on one radio
+([More than one modem](docs/manual/manual.md#more-than-one-modem)). The mobile called it on 7.101
+MHz at 2300 Hz, first with Aether and then with Mercury, and both carried its mail: Mercury's second
+session sent a message in 85 s, in its most robust mode throughout. In the Aether sessions minutes
+before, on the same path, the gateway heard the mobile at -2.7 to +3.9 dB SNR and the mobile heard
+the gateway at +7.0 to +8.5 dB. Mercury's logs give no SNR.
+
 Aether keys the radio, checks the band rules before every transmission and identifies the
 station, in Morse or in its data signal. One Aether station serves RadioPost and Winlink programs
 side by side, on one radio.
@@ -236,7 +243,7 @@ runs beside it ([RP-4](spec/rp-0004-modem-interface.md)). RadioPost's tools hold
 | Modem | Adapter | Tried so far |
 |---|---|---|
 | [Aether HF](https://github.com/KK4ODA/aether-hf) | Built into RadioPost | On the air since 2026-11-12 |
-| Mercury HF | `radiopost-mercury` | On the bench, against two real Mercury modems |
+| Mercury HF | `radiopost-mercury` | On the air since 2026-11-27; on the bench, against two real Mercury modems |
 | VARA HF and VARA FM | `radiopost-vara` | Against a stand-in written from VARA's published commands |
 | ARDOP (ardopcf) | `radiopost-ardop` | Against a stand-in written from ardopcf's documents and source |
 | AX.25 packet, on a TNC's AGWPE port (Dire Wolf and others) | `radiopost-packet` | Against a stand-in written from the AGWPE interface |
@@ -245,8 +252,8 @@ Start the adapter and put its address, such as `127.0.0.1:8600`, in RadioPost's 
 gateway adds its modems under **More modems**
 ([More than one modem](docs/manual/manual.md#more-than-one-modem)). The adapters are in the tools
 archive on the [releases page](https://github.com/KK4ODA/RadioPost/releases). Alerts, scanning
-and the tuner tone need Aether. Only Aether has carried RadioPost on the air so far, so a report
-from a station on any of the others is welcome. A sixth adapter, `radiopost-tcp`,
+and the tuner tone need Aether. Aether and Mercury have carried RadioPost on the air so far, so a
+report from a station on any of the others is welcome. A sixth adapter, `radiopost-tcp`,
 joins two stations over the Internet, to try RadioPost before going on the air.
 
 ## Get started
