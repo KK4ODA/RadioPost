@@ -6,6 +6,8 @@
   --mono: ui-monospace, "SF Mono", Consolas, "Liberation Mono", monospace;
   --face: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --control-h: 32px;
+  /* the log's height: its top edge moves (app.js, wireGrip) */
+  --log-h: 102px;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -110,13 +112,24 @@ p.card.notice { margin: 0 0 14px; }
 details { margin-top: 8px; color: var(--muted); font-size: 13px; }
 details summary { cursor: pointer; margin-bottom: 8px; }
 
-.log { border-top: 1px solid var(--line); background: var(--panel); }
-.log pre { margin: 0; padding: 8px 16px; height: 8.5em; overflow: auto; font-family: var(--mono);
+.log { border-top: 1px solid var(--line); background: var(--panel); position: relative; }
+.log pre { margin: 0; padding: 8px 16px; height: var(--log-h); overflow: auto; font-family: var(--mono);
            font-size: 12px; color: var(--muted); }
 .log pre:empty::before { content: "What the gateway does shows here."; }
-.toast { position: fixed; right: 16px; bottom: 150px; background: var(--key); color: var(--key-text);
-         padding: 8px 14px; border-radius: 6px; max-width: 460px; }
+.toast { position: fixed; right: 16px; bottom: calc(var(--log-h) + 48px); background: var(--key);
+         color: var(--key-text); padding: 8px 14px; border-radius: 6px; max-width: 460px; }
 .toast.bad { background: var(--bad); color: #fff; }
+/* the log's top edge moves: a strip 8 px high over the border, lit while the mouse is on it, while it
+   is dragged and when the keyboard is on it (app.js, wireGrip) */
+.grip { position: absolute; z-index: 4; touch-action: none; }
+.grip::after { content: ""; position: absolute; background: var(--accent); opacity: 0;
+               transition: opacity .15s; }
+.grip:hover::after, .grip:focus-visible::after, .grip[data-dragging]::after { opacity: 1; }
+.grip:focus { outline: none; }
+.log-grip { top: -4px; left: 0; right: 0; height: 8px; cursor: row-resize; }
+.log-grip::after { left: 0; right: 0; top: 2px; height: 3px; }
+/* while it is dragged the whole page shows its cursor, and nothing on it is selected */
+:root[data-dragging] * { user-select: none; cursor: row-resize !important; }
 
 @media (max-width: 860px) {
   .cards { grid-template-columns: 1fr; gap: 0; }

@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.69.0 |
+| **Version** | 1.70.0 |
 | **Updated** | 2026-11-28 |
 | **Describes** | RadioPost 0.1.0-beta.41 |
 | **Licence** | CC BY 4.0 |
@@ -2227,6 +2227,11 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 failed, and plain when you ended it. Point at it to read more: the modem's reason for a lost link,
 or the code a refusal carried. Whatever did not cross is offered again on the station's next call.
 
+The border above the log moves, as in the client: drag it up or down, or press **Tab** until its
+blue line shows and use the arrow keys (10 pixels a press, 50 with **Shift**). A double click puts
+it back. RadioPost Gateway keeps the height for the next time it starts, and the log stops 160
+pixels under the top bar.
+
 | Result | Means |
 |---|---|
 | Completed | The caller hung up with the session done. For a call to a partner, the gateway hung up once its session was over; the tooltip says what it forwarded. |
@@ -3215,3 +3220,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.67.0 | 2026-11-28 | Section 6: the border above the log and the border to the right of the left column move. Drag them, or use the arrow keys; a double click puts them back, and RadioPost keeps both sizes. The window's screenshots do not change: the borders look the same until the mouse is on them. |
 | 1.68.0 | 2026-11-28 | Section 10.2: each circle's keyword is kept, hidden; **Show** and **Hide** in the circle's new **Keyword** column, *Not kept* for a circle added before, and its keyword typed again to keep it. **Delete** in a circle's row (it was a trash can that showed only under the pointer) and what it stops. Figure 32 retaken with Family's keyword shown. |
 | 1.69.0 | 2026-11-28 | The manual and the licences installed with the programs. §1, *Which version this is*: releases after 0.1.0-beta.41 install this manual as a PDF with the client, RadioPost Gateway and the tools archive. §12: **Setup**'s **Manual and licences** (**Open the manual**, **Licences**), and §18 the same in the gateway's Setup. |
+| 1.70.0 | 2026-11-28 | Section 19, RadioPost Gateway's window: the border above the log moves, as in the client (1.67.0). Drag it, or use the arrow keys; a double click puts it back, and the gateway keeps the height. The window's screenshots do not change. |

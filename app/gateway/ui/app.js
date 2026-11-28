@@ -954,6 +954,70 @@ $("po-form").addEventListener("submit", (e) => {
   });
 });
 
+// The log's top edge moves (style.css, .grip): dragged, or by the arrow keys once it has the focus
+// (10 px a press, 50 with Shift; Home and End for its least and most), and a double click puts it
+// back. The height asked for is kept in this browser; what shows is that height held inside the
+// window, so a window made smaller and then larger again gets it back. The log runs from 36 px up
+// to 160 px under the top bar.
+function wireGrip() {
+  const USUAL = 102;
+  const KEY = "radiopost-gateway.logHeight";
+  const root = document.documentElement;
+  const grip = $("log-grip");
+  const least = () => 36;
+  const most = () => Math.max(36, innerHeight - document.querySelector(".top").offsetHeight - 160);
+  let asked = USUAL;
+  try { asked = Number(localStorage.getItem(KEY)) || USUAL; } catch { /* not kept */ }
+  let shown = 0;
+  const show = (px) => {
+    shown = Math.round(Math.min(Math.max(px, least()), most()));
+    root.style.setProperty("--log-h", `${shown}px`);
+    grip.setAttribute("aria-valuenow", String(shown));
+    grip.setAttribute("aria-valuemin", String(least()));
+    grip.setAttribute("aria-valuemax", String(most()));
+  };
+  const settle = (px) => {
+    show(px);
+    asked = shown;
+    try { localStorage.setItem(KEY, String(asked)); } catch { /* not kept */ }
+  };
+  show(asked);
+  window.addEventListener("resize", () => show(asked));
+  grip.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    grip.focus();
+    grip.setPointerCapture(e.pointerId);
+    const from = shown;
+    const start = e.clientY;
+    grip.dataset.dragging = "";
+    root.dataset.dragging = "";
+    // the log grows as its top edge goes up
+    const move = (m) => show(from - (m.clientY - start));
+    const end = () => {
+      grip.removeEventListener("pointermove", move);
+      grip.removeEventListener("pointerup", end);
+      grip.removeEventListener("pointercancel", end);
+      delete grip.dataset.dragging;
+      delete root.dataset.dragging;
+      settle(shown);
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", end);
+    grip.addEventListener("pointercancel", end);
+  });
+  grip.addEventListener("dblclick", () => settle(USUAL));
+  grip.addEventListener("keydown", (e) => {
+    const step = {ArrowUp: 1, ArrowDown: -1}[e.key];
+    if (step) settle(shown + step * (e.shiftKey ? 50 : 10));
+    else if (e.key === "Home") settle(least());
+    else if (e.key === "End") settle(most());
+    else return;
+    e.preventDefault();
+  });
+}
+
+wireGrip();
 show("station");
 await tick();
 setInterval(tick, 1000);
