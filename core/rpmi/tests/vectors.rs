@@ -109,6 +109,8 @@ fn replay_adapters(conversation: &Json, file: &Json) {
     let name = conversation["name"].as_str().expect("a name");
     let steps = conversation["steps"].as_array().expect("steps");
     let mut ch = Channel::new();
+    // the simulated modem's one time, which says when a station was heard (RP-4 §4.4)
+    ch.set_now(file["modem"]["now"].as_u64().unwrap_or(0));
     let mut stations: Vec<String> = Vec::new();
     let mut produced: VecDeque<Out> = VecDeque::new();
     for (i, step) in steps.iter().enumerate() {
@@ -190,7 +192,7 @@ fn replay_adapters(conversation: &Json, file: &Json) {
 fn every_conversation_from_the_adapters() {
     let file = vectors("rpmi-conversations.json");
     let conversations = file["conversations"].as_array().expect("conversations");
-    assert_eq!(conversations.len(), 6);
+    assert_eq!(conversations.len(), 7);
     for c in conversations {
         replay_adapters(c, &file);
     }

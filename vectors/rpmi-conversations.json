@@ -10,7 +10,8 @@
     "name": "rpref simulated modem 1",
     "received_bytes_at_most": 128,
     "link_ids": "each adapter's own: a letter for the station and a count from 1",
-    "dial_hz": 7101000
+    "dial_hz": 7101000,
+    "now": 1795213320
   },
   "conversations": [
     {
@@ -3746,6 +3747,908 @@
             "id": 3,
             "code": "unsupported",
             "text": "this modem does not scan"
+          }
+        }
+      ]
+    },
+    {
+      "name": "beacons and the stations heard",
+      "story": "Adapters with `caps.heard`, `caps.beacon` and `caps.position` (RP-4 §4.4). N2CALL's modem has heard nobody yet. KK4ODA beacons with its exact position, and N2CALL, which listens, with its position as a 6-character square: each hears the other's beacon with whether calls to it are answered, the time, the dial and the position (the square at its centre, with its locator), and the sender is told `beacon-sent`. A host between calls on N4CALL, whose modem has neither dial nor positions, hears the beacons without them, and may not beacon with no callsigns. Then the refusals: an `as` not its own, a dial the radio is not on with no scan, `within_s` of 0 and a latitude past 90 (`malformed`), and a modem without the caps (`unsupported`). Each modem lists what it heard, each callsign once. No beacon while a link is up on the station. Last, KK4ODA beacons on its own dial with a 4-character square and no `ref`, and N2CALL's list keeps only that latest beacon of KK4ODA's.",
+      "steps": [
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "connection": "opened"
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost client 0.1.0"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": false,
+              "dial": true,
+              "heard": true,
+              "beacon": true,
+              "position": true
+            }
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "KK4ODA"
+            ]
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "connection": "opened"
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost client 0.1.0"
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": false,
+              "dial": true,
+              "heard": true,
+              "beacon": true,
+              "position": true
+            }
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "N2CALL"
+            ]
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "listen",
+            "id": 3,
+            "on": true
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 3
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "connection": "opened"
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost client 0.1.0"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": false
+            }
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "callsigns",
+            "id": 2,
+            "callsigns": [
+              "N3CALL"
+            ]
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 2
+          }
+        },
+        {
+          "station": "N4CALL",
+          "host": "app",
+          "connection": "opened"
+        },
+        {
+          "station": "N4CALL",
+          "host": "app",
+          "to": "adapter",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": [
+              1,
+              1
+            ],
+            "app": "RadioPost client 0.1.0"
+          }
+        },
+        {
+          "station": "N4CALL",
+          "host": "app",
+          "to": "host",
+          "message": {
+            "op": "hello",
+            "id": 1,
+            "version": 1,
+            "modem": "rpref simulated modem 1",
+            "caps": {
+              "bandwidths": [
+                500,
+                2300
+              ],
+              "max_links": 1,
+              "delivery": true,
+              "broadcast": true,
+              "quality": false,
+              "busy": true,
+              "regulatory": false,
+              "max_queue": 65536,
+              "shared": true,
+              "heard": true,
+              "beacon": true
+            }
+          }
+        },
+        {
+          "note": "Nothing has been heard yet."
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "stations",
+            "id": 4
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "stations",
+            "id": 4,
+            "stations": []
+          }
+        },
+        {
+          "note": "KK4ODA beacons with its exact position; N2CALL listens, KK4ODA does not."
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "beacon",
+            "id": 3,
+            "ref": "k1",
+            "position": {
+              "lat": 33.78123,
+              "lon": -84.38765,
+              "precision": "exact"
+            }
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 3
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "heard",
+            "callsign": "KK4ODA",
+            "kind": "beacon",
+            "answers": false,
+            "at": 1795213320,
+            "dial_hz": 7101000,
+            "position": {
+              "lat": 33.78123,
+              "lon": -84.38765,
+              "precision": "exact"
+            }
+          }
+        },
+        {
+          "station": "N4CALL",
+          "host": "app",
+          "to": "host",
+          "message": {
+            "op": "heard",
+            "callsign": "KK4ODA",
+            "kind": "beacon",
+            "answers": false,
+            "at": 1795213320
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "beacon-sent",
+            "sent": true,
+            "ref": "k1",
+            "dial_hz": 7101000
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "beacon",
+            "id": 5,
+            "position": {
+              "lat": 34.4621,
+              "lon": -83.7514,
+              "precision": "grid6"
+            }
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 5
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "heard",
+            "callsign": "N2CALL",
+            "kind": "beacon",
+            "answers": true,
+            "at": 1795213320,
+            "dial_hz": 7101000,
+            "position": {
+              "lat": 34.47916666666667,
+              "lon": -83.79166666666667,
+              "precision": "grid6",
+              "grid": "EM84cl"
+            }
+          }
+        },
+        {
+          "station": "N4CALL",
+          "host": "app",
+          "to": "host",
+          "message": {
+            "op": "heard",
+            "callsign": "N2CALL",
+            "kind": "beacon",
+            "answers": true,
+            "at": 1795213320
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "beacon-sent",
+            "sent": true,
+            "dial_hz": 7101000
+          }
+        },
+        {
+          "note": "The refusals."
+        },
+        {
+          "station": "N4CALL",
+          "host": "app",
+          "to": "adapter",
+          "message": {
+            "op": "beacon",
+            "id": 2
+          }
+        },
+        {
+          "station": "N4CALL",
+          "host": "app",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 2,
+            "code": "refused",
+            "text": "no callsigns yet"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "beacon",
+            "id": 4,
+            "as": "N0CALL"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 4,
+            "code": "not-authorized",
+            "text": "N0CALL is not this host's"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "beacon",
+            "id": 5,
+            "dial_hz": 3590000
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 5,
+            "code": "refused",
+            "text": "the radio is not on 3590000 Hz"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "beacon",
+            "id": 6,
+            "within_s": 0
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 6,
+            "code": "malformed",
+            "text": "`within_s` is not of its type"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "beacon",
+            "id": 7,
+            "position": {
+              "lat": 91,
+              "lon": 0,
+              "precision": "exact"
+            }
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 7,
+            "code": "malformed",
+            "text": "`position` is not of its type"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "beacon",
+            "id": 3
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 3,
+            "code": "unsupported",
+            "text": "this modem sends no beacons"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "stations",
+            "id": 4
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 4,
+            "code": "unsupported",
+            "text": "this modem keeps no stations heard"
+          }
+        },
+        {
+          "note": "What each modem has heard."
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "stations",
+            "id": 8
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "stations",
+            "id": 8,
+            "stations": [
+              {
+                "callsign": "N2CALL",
+                "kind": "beacon",
+                "answers": true,
+                "at": 1795213320,
+                "dial_hz": 7101000,
+                "position": {
+                  "lat": 34.47916666666667,
+                  "lon": -83.79166666666667,
+                  "precision": "grid6",
+                  "grid": "EM84cl"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "stations",
+            "id": 6
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "stations",
+            "id": 6,
+            "stations": [
+              {
+                "callsign": "KK4ODA",
+                "kind": "beacon",
+                "answers": false,
+                "at": 1795213320,
+                "dial_hz": 7101000,
+                "position": {
+                  "lat": 33.78123,
+                  "lon": -84.38765,
+                  "precision": "exact"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "note": "No beacon while a link is up on the station."
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "connect",
+            "id": 9,
+            "remote": "N2CALL"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 9
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "incoming",
+            "remote": "KK4ODA",
+            "local": "N2CALL"
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "connected",
+            "link": "b1",
+            "remote": "KK4ODA",
+            "local": "N2CALL",
+            "direction": "in"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "connected",
+            "id": 9,
+            "link": "a1",
+            "remote": "N2CALL",
+            "local": "KK4ODA",
+            "direction": "out"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "busy",
+            "busy": true
+          }
+        },
+        {
+          "station": "N4CALL",
+          "host": "app",
+          "to": "host",
+          "message": {
+            "op": "busy",
+            "busy": true
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "beacon",
+            "id": 7
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "error",
+            "id": 7,
+            "code": "busy",
+            "text": "a link or a call is up on the station"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "disconnect",
+            "id": 10,
+            "link": "a1"
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 10
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "disconnected",
+            "link": "a1",
+            "reason": "local"
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "disconnected",
+            "link": "b1",
+            "reason": "remote"
+          }
+        },
+        {
+          "station": "N3CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "busy",
+            "busy": false
+          }
+        },
+        {
+          "station": "N4CALL",
+          "host": "app",
+          "to": "host",
+          "message": {
+            "op": "busy",
+            "busy": false
+          }
+        },
+        {
+          "note": "KK4ODA beacons again, its position as a 4-character square, with no `ref`."
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "beacon",
+            "id": 11,
+            "as": "KK4ODA",
+            "within_s": 600,
+            "dial_hz": 7101000,
+            "position": {
+              "lat": 33.78123,
+              "lon": -84.38765,
+              "precision": "grid4"
+            }
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 11
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "heard",
+            "callsign": "KK4ODA",
+            "kind": "beacon",
+            "answers": false,
+            "at": 1795213320,
+            "dial_hz": 7101000,
+            "position": {
+              "lat": 33.5,
+              "lon": -85.0,
+              "precision": "grid4",
+              "grid": "EM73"
+            }
+          }
+        },
+        {
+          "station": "N4CALL",
+          "host": "app",
+          "to": "host",
+          "message": {
+            "op": "heard",
+            "callsign": "KK4ODA",
+            "kind": "beacon",
+            "answers": false,
+            "at": 1795213320
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "beacon-sent",
+            "sent": true,
+            "dial_hz": 7101000
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "stations",
+            "id": 8
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "stations",
+            "id": 8,
+            "stations": [
+              {
+                "callsign": "KK4ODA",
+                "kind": "beacon",
+                "answers": false,
+                "at": 1795213320,
+                "dial_hz": 7101000,
+                "position": {
+                  "lat": 33.5,
+                  "lon": -85.0,
+                  "precision": "grid4",
+                  "grid": "EM73"
+                }
+              }
+            ]
           }
         }
       ]

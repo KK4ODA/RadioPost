@@ -254,6 +254,9 @@ fn loopback_with(dial_hz: Option<u64>, scans: bool) -> (Server, SocketAddr, Sock
         scan: false,
         call_s: scans,
         tone: false,
+        heard: false,
+        beacon: false,
+        position: false,
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),

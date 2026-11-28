@@ -2391,6 +2391,7 @@ def make_pdus() -> dict[str, Any]:
 RPMI_MODEM = "rpref simulated modem 1"
 RPMI_FRAME = 128  # the most bytes one `received` carries on the simulated modem
 RPMI_DIAL = 7_101_000  # where a simulated radio with `caps.dial` starts (RP-4 §4.1)
+RPMI_NOW = 1_795_213_320  # the simulated modem's one time, in Unix seconds (RP-4 §4.4's `at`)
 
 
 def rpmi_adapter(
@@ -2402,6 +2403,9 @@ def rpmi_adapter(
     dial_hz: int | None = None,
     scans: bool = False,
     tone: bool = False,
+    heard: bool = False,
+    beacon: bool = False,
+    position: bool = False,
 ) -> rpmi.Adapter:
     caps = {
         "bandwidths": [500, 2300],
@@ -2421,6 +2425,12 @@ def rpmi_adapter(
         caps["call_s"] = True  # and keeps a call going as long as asked
     if tone:
         caps["tone"] = True  # RP-4 §4.3: it keys a tuner tone
+    if heard:
+        caps["heard"] = True  # RP-4 §4.4: it reports the stations it hears
+    if beacon:
+        caps["beacon"] = True  # and sends beacons
+    if position:
+        caps["position"] = True  # which may say where the station is
     return rpmi.Adapter(
         world,
         station,
@@ -2705,7 +2715,69 @@ def rpmi_answers(steps: list[dict[str, Any]]) -> dict[str, str]:
     return out
 
 
-RPMI_ANSWERS = {"ok", "error", "hello", "status", "dial", "scan"}
+RPMI_ANSWERS = {"ok", "error", "hello", "status", "dial", "scan", "stations"}
+
+
+APP = "RadioPost client 0.1.0"
+HERE = {"lat": 33.78123, "lon": -84.38765}  # KK4ODA's made-up position
+THERE = {"lat": 34.4621, "lon": -83.7514}  # N2CALL's
+
+
+def rpmi_beacons() -> list[dict[str, Any]]:
+    """Beacons and the stations heard (RP-4 §4.4): two clients with every cap, a third with
+    none, and a host between calls on a fourth whose modem reports what it hears but has no dial
+    and no positions."""
+    w = rpmi.World(now=RPMI_NOW)
+    every = {"dial_hz": RPMI_DIAL, "heard": True, "beacon": True, "position": True}
+    a = rpmi_adapter(w, "KK4ODA", "a", shared=False, **every)
+    b = rpmi_adapter(w, "N2CALL", "b", shared=False, **every)
+    c = rpmi_adapter(w, "N3CALL", "c", shared=False)
+    d = rpmi_adapter(w, "N4CALL", "d", shared=True, heard=True, beacon=True)
+    rpmi_start(a, "client", APP, ["KK4ODA"], listen=False)
+    rpmi_start(b, "client", APP, ["N2CALL"], listen=True)
+    rpmi_start(c, "client", APP, ["N3CALL"], listen=False)
+    d.open("app")
+    d.request("app", {"op": "hello", "id": 1, "version": [1, 1], "app": APP})
+    w.note("Nothing has been heard yet.")
+    b.request("client", {"op": "stations", "id": 4})
+    w.note("KK4ODA beacons with its exact position; N2CALL listens, KK4ODA does not.")
+    a.request(
+        "client",
+        {"op": "beacon", "id": 3, "ref": "k1", "position": HERE | {"precision": "exact"}},
+    )
+    b.request("client", {"op": "beacon", "id": 5, "position": THERE | {"precision": "grid6"}})
+    w.note("The refusals.")
+    d.request("app", {"op": "beacon", "id": 2})
+    a.request("client", {"op": "beacon", "id": 4, "as": "N0CALL"})
+    a.request("client", {"op": "beacon", "id": 5, "dial_hz": 3_590_000})
+    a.request("client", {"op": "beacon", "id": 6, "within_s": 0})
+    a.request(
+        "client",
+        {"op": "beacon", "id": 7, "position": {"lat": 91, "lon": 0, "precision": "exact"}},
+    )
+    c.request("client", {"op": "beacon", "id": 3})
+    c.request("client", {"op": "stations", "id": 4})
+    w.note("What each modem has heard.")
+    a.request("client", {"op": "stations", "id": 8})
+    b.request("client", {"op": "stations", "id": 6})
+    w.note("No beacon while a link is up on the station.")
+    a.request("client", {"op": "connect", "id": 9, "remote": "N2CALL"})
+    b.request("client", {"op": "beacon", "id": 7})
+    a.request("client", {"op": "disconnect", "id": 10, "link": link_of(a, "client")})
+    w.note("KK4ODA beacons again, its position as a 4-character square, with no `ref`.")
+    a.request(
+        "client",
+        {
+            "op": "beacon",
+            "id": 11,
+            "as": "KK4ODA",
+            "within_s": 600,
+            "dial_hz": RPMI_DIAL,
+            "position": HERE | {"precision": "grid4"},
+        },
+    )
+    b.request("client", {"op": "stations", "id": 8})
+    return w.log
 
 
 def make_rpmi_conversations() -> dict[str, Any]:
@@ -2727,13 +2799,15 @@ def make_rpmi_conversations() -> dict[str, Any]:
         "link_ids": "each adapter's own: a letter for the station and a count from 1",
         "dial_hz": RPMI_DIAL,
     }
-    session, errors, shared, broadcast, dial, scan = (
+    out["modem"]["now"] = RPMI_NOW
+    session, errors, shared, broadcast, dial, scan, beacons = (
         rpmi_session(),
         rpmi_errors(),
         rpmi_shared(),
         rpmi_broadcast(),
         rpmi_dial(),
         rpmi_scan(),
+        rpmi_beacons(),
     )
     gateway_start = {
         "N1CALL-10 gateway hello 1": "hello",
@@ -2854,6 +2928,36 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "N1CALL radiopost broadcast 11": "malformed",  # a dial above 0 (§4)
             },
         ),
+        (
+            beacons,
+            {  # RP-4 §4.4
+                "KK4ODA client hello 1": "hello",
+                "KK4ODA client callsigns 2": "ok",
+                "N2CALL client hello 1": "hello",
+                "N2CALL client callsigns 2": "ok",
+                "N2CALL client listen 3": "ok",
+                "N3CALL client hello 1": "hello",
+                "N3CALL client callsigns 2": "ok",
+                "N4CALL app hello 1": "hello",
+                "N2CALL client stations 4": "stations",  # none heard yet
+                "KK4ODA client beacon 3": "ok",
+                "N2CALL client beacon 5": "ok",
+                "N4CALL app beacon 2": "refused",  # no callsigns (§4)
+                "KK4ODA client beacon 4": "not-authorized",  # `as` not its own
+                "KK4ODA client beacon 5": "refused",  # a dial the radio is not on, no scan
+                "KK4ODA client beacon 6": "malformed",  # within_s from 1 to 600
+                "KK4ODA client beacon 7": "malformed",  # a latitude past 90
+                "N3CALL client beacon 3": "unsupported",  # no `caps.beacon`
+                "N3CALL client stations 4": "unsupported",  # no `caps.heard`
+                "KK4ODA client stations 8": "stations",
+                "N2CALL client stations 6": "stations",
+                "KK4ODA client connect 9": "ok, then connected",
+                "N2CALL client beacon 7": "busy",  # a link is up on the station
+                "KK4ODA client disconnect 10": "ok",
+                "KK4ODA client beacon 11": "ok",
+                "N2CALL client stations 8": "stations",
+            },
+        ),
     ]:
         got = rpmi_answers(steps)
         assert got == wanted, {
@@ -2951,6 +3055,69 @@ def make_rpmi_conversations() -> dict[str, Any]:
         s["message"]["ref"] for s in errors if s.get("message", {}).get("op") == "delivered"
     ]
     assert reported == [7], reported
+
+    # RP-4 §4.4, worked from the text: what each host was told of the beacons. A beacon heard says
+    # whether calls to its callsign are answered (N2CALL listens, KK4ODA does not), when, the dial
+    # with `caps.dial`, and the position with `caps.position` at both ends: exact as sent; a
+    # 6-character square, EM84cl, at its centre, 34 + 23/48 N, 83 + 19/24 W; a 4-character one,
+    # EM73, at 33.5 N, 85 W. A host between calls hears them too, without dial or position.
+    def told(station: str, host: str, op: str) -> list[dict[str, Any]]:
+        return [
+            s["message"]
+            for s in beacons
+            if (s.get("station"), s.get("host"), s.get("to")) == (station, host, "host")
+            and s["message"]["op"] == op
+        ]
+
+    def close(m: dict[str, Any], lat: float, lon: float) -> bool:
+        p = m["position"]
+        return abs(p["lat"] - lat) < 1e-9 and abs(p["lon"] - lon) < 1e-9
+
+    base = {"op": "heard", "kind": "beacon", "at": RPMI_NOW}
+    at_b = told("N2CALL", "client", "heard")
+    assert len(at_b) == 2, at_b
+    assert at_b[0] == base | {
+        "callsign": "KK4ODA",
+        "answers": False,
+        "dial_hz": RPMI_DIAL,
+        "position": {"lat": 33.78123, "lon": -84.38765, "precision": "exact"},
+    }, at_b[0]
+    assert {k: v for k, v in at_b[1].items() if k != "position"} == base | {
+        "callsign": "KK4ODA",
+        "answers": False,
+        "dial_hz": RPMI_DIAL,
+    }, at_b[1]
+    assert at_b[1]["position"]["precision"] == "grid4" and at_b[1]["position"]["grid"] == "EM73"
+    assert close(at_b[1], 33.5, -85.0), at_b[1]
+    at_a = told("KK4ODA", "client", "heard")
+    assert len(at_a) == 1, at_a
+    assert {k: v for k, v in at_a[0].items() if k != "position"} == base | {
+        "callsign": "N2CALL",
+        "answers": True,
+        "dial_hz": RPMI_DIAL,
+    }, at_a[0]
+    assert at_a[0]["position"]["precision"] == "grid6" and at_a[0]["position"]["grid"] == "EM84cl"
+    assert close(at_a[0], 34 + 23 / 48, -(83 + 19 / 24)), at_a[0]
+    assert told("N4CALL", "app", "heard") == [
+        base | {"callsign": "KK4ODA", "answers": False},
+        base | {"callsign": "N2CALL", "answers": True},
+        base | {"callsign": "KK4ODA", "answers": False},
+    ], told("N4CALL", "app", "heard")
+    assert told("N3CALL", "client", "heard") == []
+    # `beacon-sent` after each beacon that went: its `ref` when it had one, and the dial
+    assert told("KK4ODA", "client", "beacon-sent") == [
+        {"op": "beacon-sent", "ref": "k1", "sent": True, "dial_hz": RPMI_DIAL},
+        {"op": "beacon-sent", "sent": True, "dial_hz": RPMI_DIAL},
+    ], told("KK4ODA", "client", "beacon-sent")
+    # `stations`: nothing at first; then each callsign once, its last, as `heard` said it
+    listed = {m["id"]: m["stations"] for m in told("N2CALL", "client", "stations")}
+    assert listed[4] == [], listed
+    assert [e["callsign"] for e in listed[6]] == ["KK4ODA"], listed
+    assert listed[6][0]["position"]["precision"] == "exact", listed
+    assert [e["callsign"] for e in listed[8]] == ["KK4ODA"], listed
+    assert listed[8][0] == {k: v for k, v in at_b[1].items() if k != "op"}, listed
+    mine = told("KK4ODA", "client", "stations")
+    assert [[e["callsign"] for e in m["stations"]] for m in mine] == [["N2CALL"]], mine
     out["conversations"] = [
         {
             "name": "session-01 over RPMI",
@@ -3026,6 +3193,25 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "client calls a gateway that scans with `call_s`."
             ),
             "steps": scan,
+        },
+        {
+            "name": "beacons and the stations heard",
+            "story": (
+                "Adapters with `caps.heard`, `caps.beacon` and `caps.position` (RP-4 §4.4). "
+                "N2CALL's modem has heard nobody yet. KK4ODA beacons with its exact position, and "
+                "N2CALL, which listens, with its position as a 6-character square: each hears the "
+                "other's beacon with whether calls to it are answered, the time, the dial and the "
+                "position (the square at its centre, with its locator), and the sender is told "
+                "`beacon-sent`. A host between calls on N4CALL, whose modem has neither dial nor "
+                "positions, hears the beacons without them, and may not beacon with no "
+                "callsigns. Then the refusals: an `as` not its own, a dial the radio is not on "
+                "with no scan, `within_s` of 0 and a latitude past 90 (`malformed`), and a modem "
+                "without the caps (`unsupported`). Each modem lists what it heard, each callsign "
+                "once. No beacon while a link is up on the station. Last, KK4ODA beacons on its "
+                "own dial with a 4-character square and no `ref`, and N2CALL's list keeps only "
+                "that latest beacon of KK4ODA's."
+            ),
+            "steps": beacons,
         },
     ]
     return out
@@ -3104,6 +3290,23 @@ RPMI_LINES = [
         '{"op": "send", "id": 44, "link": "c1", "data": "QR=="}',
         "base64 whose pad bits are not zero: its bytes are read",
     ),
+    # RP-4 1.7.0 §4, §4.4: a beacon's members
+    ('{"op": "beacon", "id": 45, "within_s": 601}', "a beacon waiting longer than 600 s"),
+    ('{"op": "beacon", "id": 46, "as": 7}', "a beacon's as that is not a string"),
+    (
+        '{"op": "beacon", "id": 47, "position": {"lat": 33.7, "lon": -84.3}}',
+        "a position without its precision",
+    ),
+    (
+        '{"op": "beacon", "id": 48, "position": {"lat": 33.7, "lon": 181, "precision": "exact"}}',
+        "a longitude past 180",
+    ),
+    (
+        '{"op": "beacon", "id": 49, "position": {"lat": 33.7, "lon": -84.3, "precision": "grid8"}}',
+        "a precision it does not know",
+    ),
+    ('{"op": "beacon", "id": 50}', "a good beacon on a modem without beacons", "beacon"),
+    ('{"op": "stations", "id": 51}', "stations on a modem that keeps none", "heard"),
 ]
 
 
@@ -3112,11 +3315,14 @@ def make_rpmi_lines() -> dict[str, Any]:
     adapter = rpmi_adapter(w, "KK4ODA", "c", shared=False)
     rpmi_start(adapter, "client", "RadioPost client 0.1.0", ["KK4ODA"], listen=False)
     cases = []
-    for line, what in RPMI_LINES:
+    for line, what, *unless in RPMI_LINES:
         before = len(w.log)
         adapter.request_line("client", line)
         answers = [e["message"] for e in w.log[before + 1 :]]
-        cases.append({"what": what, "line": line, "answers": answers})
+        case = {"what": what, "line": line, "answers": answers}
+        if unless:
+            case["unless"] = unless[0]
+        cases.append(case)
     confirm(  # RP-4 §2: (the answer's op, its code, its id)
         cases,
         {
@@ -3174,6 +3380,13 @@ def make_rpmi_lines() -> dict[str, Any]:
                 "not-connected",
                 44,
             ),
+            "a beacon waiting longer than 600 s": ("error", "malformed", 45),
+            "a beacon's as that is not a string": ("error", "malformed", 46),
+            "a position without its precision": ("error", "malformed", 47),
+            "a longitude past 180": ("error", "malformed", 48),
+            "a precision it does not know": ("error", "malformed", 49),
+            "a good beacon on a modem without beacons": ("error", "unsupported", 50),
+            "stations on a modem that keeps none": ("error", "unsupported", 51),
         },
         lambda c: (
             (c["answers"][0]["op"], c["answers"][0].get("code"), c["answers"][0].get("id"))
@@ -3187,7 +3400,9 @@ def make_rpmi_lines() -> dict[str, Any]:
         "reads each `line` (one line of JSON Lines, without its LF) and answers with `answers`, "
         "which may be none: a request without `id` gets no `ok` (RP-4 §2). A line that is not "
         "I-JSON (RFC 7493) is answered as one that is not JSON. Messages compare as JSON values, "
-        "a `data` member as its bytes; `text` need not match."
+        "a `data` member as its bytes; `text` need not match. A case with `unless` is answered "
+        "so by an adapter whose caps lack that cap; one whose caps have it answers the request "
+        "itself (RP-4 §4.4)."
     )
     out["lines"] = cases
     return out

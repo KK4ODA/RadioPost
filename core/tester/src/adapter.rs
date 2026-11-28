@@ -331,8 +331,15 @@ fn without_text(m: &Message) -> Json {
 fn a01(plan: &Plan, log: &mut Vec<String>) -> Outcome {
     let file: Json = serde_json::from_str(crate::RPMI_LINES_JSON).map_err(|e| e.to_string())?;
     let mut near = Side::open(&plan.at, "host", log)?;
-    near.open_as(&["KK4ODA"], false)?;
+    let caps = near.open_as(&["KK4ODA"], false)?.to_json();
     for case in file["lines"].as_array().into_iter().flatten() {
+        // a case refused only for want of a cap the adapter has is answered instead (RP-4 §4.4)
+        if case["unless"]
+            .as_str()
+            .is_some_and(|cap| caps[cap] == Json::Bool(true))
+        {
+            continue;
+        }
         let what = case["what"].as_str().unwrap_or_default();
         let line = case["line"].as_str().unwrap_or_default();
         near.line(line)?;

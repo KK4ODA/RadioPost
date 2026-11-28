@@ -60,6 +60,8 @@ pub struct Carrier {
     pub gate: Arc<dyn Fn(bool) -> bool + Send + Sync>,
     /// A line for the panel's log.
     pub say: Arc<dyn Fn(&str) + Send + Sync>,
+    /// The stations the modem has heard (RP-4 §4.4, [`crate::stations`]).
+    pub stations: crate::stations::Stations,
 }
 
 impl std::fmt::Debug for Carrier {
@@ -69,6 +71,23 @@ impl std::fmt::Debug for Carrier {
 }
 
 impl Carrier {
+    /// What a modem says it has heard (RP-4 §4.4), on any connection: a `heard`, or the stations
+    /// a `stations` answer lists. `modem` is the kind of the modem that heard them. Anything else
+    /// is let go.
+    pub fn sighted(&self, e: &Event, modem: Option<&str>) {
+        let now = unix_now();
+        match e {
+            Event::Heard(s) => self.stations.heard(s, modem, now),
+            Event::Stations { stations, .. } => {
+                for s in stations {
+                    self.stations.heard(s, modem, now);
+                }
+            }
+            _ => return,
+        }
+        self.stations.save_if_due();
+    }
+
     /// A broadcast heard on any connection: checked, kept, answered (RP-8 §4, §5), on the dial
     /// the modem heard it on, where its answers go.
     pub fn heard(&self, data: &[u8], dial_hz: Option<u64>) {
@@ -378,7 +397,7 @@ fn answered(
     mut conn: Connection,
     modem: &str,
     retry: Duration,
-) -> Result<(Connection, bool, bool), Ended> {
+) -> Result<(Connection, rpmi::wire::Caps, String), Ended> {
     let lost = |why: String| Ended::Lost { why, wait: retry };
     let asked = Instant::now();
     let aether = modem.starts_with("ws://");
@@ -388,8 +407,8 @@ fn answered(
             return Err(Ended::Stopped);
         }
         match next(&mut conn) {
-            Ok(Some(Event::Hello { caps, .. })) if caps.shared => {
-                return Ok((conn, caps.broadcast, caps.dial));
+            Ok(Some(Event::Hello { caps, modem, .. })) if caps.shared => {
+                return Ok((conn, caps, modem));
             }
             Ok(Some(Event::Hello { .. })) if !aether => {
                 conn.close();
@@ -441,10 +460,12 @@ fn hold(shared: &Shared, modem: &str, retry: Duration, said: &mut Said) -> Ended
         return lost(format!("the adapter's connection failed: {e}"));
     }
     let aether = modem.starts_with("ws://");
-    let (mut conn, broadcasts, dials) = match answered(shared, conn, modem, retry) {
+    let (mut conn, caps, modem_said) = match answered(shared, conn, modem, retry) {
         Ok(caps) => caps,
         Err(ended) => return ended,
     };
+    let (broadcasts, dials) = (caps.broadcast, caps.dial);
+    let kind = session::modem_kind(&modem_said);
     if aether {
         say(
             said,
@@ -454,6 +475,13 @@ fn hold(shared: &Shared, modem: &str, retry: Duration, said: &mut Said) -> Ended
     }
     // the radio's dial, read once; every change after is told (RP-4 §4.1)
     if dials && let Err(e) = conn.send(&host.dial()) {
+        return lost(format!("the adapter's connection failed: {e}"));
+    }
+    // the stations the modem heard while the app was away, once; each heard after is told
+    // (RP-4 §4.4)
+    if caps.heard
+        && let Err(e) = conn.send(&host.stations())
+    {
         return lost(format!("the adapter's connection failed: {e}"));
     }
     let mut checked = Instant::now();
@@ -481,6 +509,11 @@ fn hold(shared: &Shared, modem: &str, retry: Duration, said: &mut Said) -> Ended
             Ok(Some(Event::Broadcast { data, dial_hz, .. })) => {
                 if let Some(c) = &carrier {
                     c.heard(&data, dial_hz);
+                }
+            }
+            Ok(Some(e @ (Event::Heard(_) | Event::Stations { .. }))) => {
+                if let Some(c) = &carrier {
+                    c.sighted(&e, kind);
                 }
             }
             Ok(Some(Event::Dial { dial_hz, .. })) => shared.set_dial(Some(dial_hz)),

@@ -271,6 +271,10 @@ impl Bridge {
                 let text = "AGWPE has no tuner tone";
                 out.push(Out::Host(error(rid_ref, "unsupported", text)));
             }
+            Request::Stations | Request::Beacon { .. } => {
+                let text = "this adapter reports no stations heard and sends no beacons yet";
+                out.push(Out::Host(error(rid_ref, "unsupported", text)));
+            }
             Request::Status => out.push(Out::Host(self.status(rid_ref))),
         }
         out
@@ -293,6 +297,9 @@ impl Bridge {
             scan: false,
             call_s: false,
             tone: false,
+            heard: false,
+            beacon: false,
+            position: false,
         };
         out.push(Out::Host(answer_with(
             "hello",

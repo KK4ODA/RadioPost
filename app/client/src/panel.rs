@@ -162,6 +162,8 @@ pub struct Panel {
     presence: Presence,
     /// Alerts between stations that share a keyword (RP-8).
     alerts: Alerts,
+    /// The stations the modem has heard (RP-4 §4.4), for **Call**'s list in P2P.
+    stations: crate::stations::Stations,
     /// Set, the thread that fetches the post office's backups looks now, not at its hour.
     backups_now: Arc<AtomicBool>,
     /// How often that thread looks: [`crate::backups::EVERY`], shorter in tests.
@@ -360,6 +362,7 @@ impl Panel {
             office_token: Arc::default(),
             presence: Presence::new(home),
             alerts: Alerts::open(home),
+            stations: crate::stations::Stations::open(home),
             backups_now: Arc::new(AtomicBool::new(true)),
             backups_every: crate::backups::EVERY,
             downloads: crate::downloads::folder(home),
@@ -474,6 +477,7 @@ impl Panel {
             base: self.base.clone(),
             gate: Arc::new(gate),
             say: Arc::new(say),
+            stations: self.stations.clone(),
         }
     }
 
@@ -1158,6 +1162,11 @@ impl Panel {
             }
             (Method::Get, "/api/attempts") => Ok(self.attempts(param("limit").parse().ok())),
             (Method::Get, "/api/called") => Ok(self.called()),
+            (Method::Get, "/api/stations") => Ok(self.stations_view(param("dial_hz").parse().ok())),
+            (Method::Post, "/api/stations") if body["clear"] == true => {
+                self.stations.clear();
+                Ok(self.stations_view(None))
+            }
             (Method::Get, "/api/learned") => self.learned(param("callsign").trim()),
             (Method::Get, "/api/p2p-chance") => self.p2p_chance(
                 param("callsign").trim(),
@@ -2365,6 +2374,63 @@ impl Panel {
             .and_then(|v| v["gateways"].as_array().cloned())
             .unwrap_or_default();
         directory::called(&attempts::read(&self.base), &listed, CALLED_KEPT)
+    }
+
+    /// `GET /api/stations`: **Call**'s list in P2P, the stations the modem heard (RP-4 §4.4,
+    /// [`crate::stations::view`]), against the radio's dial as the modem last said it, else the
+    /// P2P dial typed (`dial_hz`). The station's own callsigns and the listed gateways' are left
+    /// out (D47), and each says when a P2P session last came up with it and how it heard this
+    /// station then, from the call records.
+    fn stations_view(&self, dial_hz: Option<u64>) -> Value {
+        let mut leave_out: std::collections::HashSet<String> =
+            crate::alerts::callsigns_of(&self.base)
+                .into_iter()
+                .map(|c| c.to_ascii_uppercase())
+                .collect();
+        if let Ok(store) = Store::open(&self.home()) {
+            leave_out.extend(
+                store
+                    .gateway_list
+                    .as_ref()
+                    .and_then(|l| l["gateways"].as_array())
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|g| g["callsign"].as_str().map(str::to_ascii_uppercase)),
+            );
+        }
+        let mut worked = std::collections::HashMap::new();
+        let mut heard_there = std::collections::HashMap::new();
+        for r in attempts::read(&self.base) {
+            let (Some(remote), Some(end)) = (r["remote"].as_str(), r["end"].as_u64()) else {
+                continue;
+            };
+            if r["kind"] != "station" || !r["link"].is_object() {
+                continue;
+            }
+            let remote = remote.to_ascii_uppercase();
+            if worked.get(&remote).is_none_or(|&at| end > at) {
+                worked.insert(remote.clone(), end);
+                if let Some(snr) = r["link"]["peer_snr_db"]["median"].as_f64() {
+                    heard_there.insert(remote, snr);
+                }
+            }
+        }
+        let ctx = crate::stations::Context {
+            radio_hz: self.presence.dial().or(dial_hz),
+            here: self.position.here().here.map(|h| (h.lat, h.lon)),
+            leave_out,
+            worked,
+            modem: self.modem_view()["kind"].as_str().map(str::to_owned),
+        };
+        let mut view = crate::stations::view(&self.stations.all(), &ctx, now());
+        if let Some(lines) = view["stations"].as_array_mut() {
+            for line in lines {
+                if let Some(snr) = line["callsign"].as_str().and_then(|c| heard_there.get(c)) {
+                    line["worked_heard_db"] = json!(snr);
+                }
+            }
+        }
+        view
     }
 
     /// `/api/forget`: the operator's forgetting rules (§12.9), `GET` to list them with the counts,

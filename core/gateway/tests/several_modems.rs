@@ -133,6 +133,9 @@ fn channel(user: &str) -> (Server, SocketAddr, SocketAddr) {
         scan: false,
         call_s: false,
         tone: false,
+        heard: false,
+        beacon: false,
+        position: false,
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),

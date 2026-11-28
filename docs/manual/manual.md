@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.62.0 |
-| **Updated** | 2026-11-27 |
+| **Version** | 1.63.0 |
+| **Updated** | 2026-11-28 |
 | **Describes** | RadioPost 0.1.0-beta.40 |
 | **Licence** | CC BY 4.0 |
 
@@ -1118,8 +1118,8 @@ During a session, **Write** and the buttons that change messages are greyed unti
 
 1. Under **Station**, choose **P2P (another client's station)**. **Call** shows the last station
    you called, with that call's **Dial, MHz** and **Bandwidth**.
-2. In **Call**, type the other station's callsign, or pick one you called before under **▾**
-   (below).
+2. In **Call**, type the other station's callsign, or pick one your modem heard or you called
+   before under **▾** (below).
 3. In **Dial, MHz**, type the frequency you agreed, such as `7.103`. RadioPost tunes the radio
    there at once, or says which dial to set yourself, as in [8.2](#82-tune-and-call).
    **Tuner tone** keys ten seconds of carrier for your antenna tuner.
@@ -1144,17 +1144,38 @@ stopped the scan and tuned there.
 
 *Figure 27. A station call: the band predicted, on a radio whose dial Aether cannot set.*
 
-**A station you called before.** Click **▾** at the right of **Call**, or press the down arrow in
-it. The list shows each station you called once, newest first, with the dial and bandwidth of that
-call and how long ago. Click one, or move to it with the arrows and press Enter: its callsign, dial
-and bandwidth go in, and the radio is tuned to the dial at once. Escape closes the list. Choosing
-**A gateway** again brings back the gateway that was in **Call**, on its channel
+**The stations your modem heard.** In P2P, the number beside **▾** at the right of **Call** says
+how many stations your modem heard in the last half hour. Click **▾**, or press the down arrow in
+**Call**, to see them. The list groups them by where they were heard: *On 7.101 MHz, where the
+radio is*, then the other dials of the same band, then the other bands. Each line gives the
+callsign, the strength your station heard it at and how long ago, and under it what was heard: a
+beacon, a station calling another, a session with you. A beacon from an Aether that says so tells
+whether the station answers calls now, and where it is: the line gives its distance and bearing
+from you. *P2P worked Nov 12* means a session with that station came up before. Lines more than
+half an hour old are faded, and those more than six hours old wait behind **Show older**. After
+the stations heard come the stations you called before and have not heard lately, with the dial
+and bandwidth of that call.
+
+Click a line, or move to it with the arrows and press Enter: its callsign, the dial it was heard
+on and the bandwidth it runs go in, and the radio is tuned there at once. Type in **Call** to
+narrow the list to the callsigns that start with what you typed. Escape closes the list. While the
+list is open it does not reorder: readings change in place, and a new station joins the end of its
+group.
+
+The strength is what your station heard: one direction only. A beacon reads low on a strong or
+fading path, so a station heard at +5 dB may be stronger. A modem hears only stations of its own
+kind: Aether hears Aether stations, and Mercury hears Mercury's CQ frames. With Mercury the list
+fills while you listen or call; VARA lists nothing yet. Gateways and your own callsigns are left
+out. RadioPost keeps what it heard for seven days, each station once a band, in `stations.json` in
+your home folder.
+
+Choosing **A gateway** again brings back the gateway that was in **Call**, on its channel
 ([8.2](#82-tune-and-call)), and choosing P2P again brings back this station. Switching tunes
 nothing.
 
-![The Station box on P2P: WD5EMA, the last station called, in Call, and the list under it showing WD5EMA on 7.101 MHz at 2300 Hz and N4CALL on 3.5915 MHz at 500 Hz, with how long ago](screens/client-called.png)
+![The Station box on P2P with the list under Call open: on 7.101 MHz, N2CALL at +8 dB 2 minutes ago, a beacon that answers calls, 2300 Hz, 95 km at 40 degrees; N6CALL, worked before; N5CALL-7 calling N3CALL; on 40 m at another dial N4CALL; on 80 m N7CALL, faded; then the heading of the stations called before](screens/client-called.png)
 
-*Figure 28. The stations you called before.*
+*Figure 28. The stations your modem heard, and those you called before.*
 
 Mail addressed to the other station's address crosses. Each side keeps a record of the session.
 When you next have the Internet, a line under the Station box says how many sessions wait to be
@@ -2925,7 +2946,7 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
    **Listen for P2P**, which tunes there and answers 500 and 2300 Hz calls. It stays on until
    clicked again.
 2. The other chooses **P2P (another client's station)**, types the callsign, the **Dial, MHz** and the
-   **Bandwidth**, or picks a station called before under **▾**, then **Call**.
+   **Bandwidth**, or picks a station heard or called before under **▾**, then **Call**.
 3. With a station that runs a gateway, call its operator's own callsign, not the gateway's.
 4. Later, with the Internet: **Send reports**.
 
@@ -3068,3 +3089,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.60.0 | 2026-11-27 | A channel names its modem, and **Channel** offers the modem's own. §6: **Modem** for another modem. §8.1: a channel's words name the modem the gateway answers on there (a gateway with two modems can list one dial twice), and **Channel** offers only the channels of the modem in **Modem**, which RadioPost asks its name, or all of them, with a line saying so, when the gateway lists none for it. §8.4: Mercury's channels only. Figures 14 and 20 retaken. |
 | 1.61.0 | 2026-11-27 | §8.4 and §18 *More than one modem*: Mercury has carried RadioPost on the air, and KK4ODA-1 answered on Aether and Mercury at once (27 November 2026, 7.101 MHz, 2300 Hz); they had said only Aether had. |
 | 1.62.0 | 2026-11-27 | Section 19: the **Sessions** table's **Result** says how each session ended in words of its own (*Completed*, *Cut short*, *Link lost*, *Timed out*, the refusals, what you ended, a partner call's failures), in colour, with more in its tooltip; it had said *over* for a session done and for a link lost alike. Figure 44 retaken. |
+| 1.63.0 | 2026-11-28 | The stations your modem heard (RP-4 1.7.0, wishlist W59). §10: in P2P, **▾** beside **Call** carries how many stations were heard in the last half hour and lists them by where they were heard, with strength, age, what was heard, whether a beacon's station answers calls, its distance and bearing, and *P2P worked*; the stations called before follow; typing narrows the list. §40 to match. Figure 28 retaken. |

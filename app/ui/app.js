@@ -502,6 +502,7 @@ function showKind() {
   showCalledButton();
   showTuning();
   askP2pChance();
+  loadHeard();
 }
 
 // ── a P2P call's chance ────────────────────────────────────────────────────────────────────────
@@ -579,11 +580,18 @@ function offered(k) {
 function showCalledButton() {
   const k = kind();
   const b = $("called-open");
-  b.hidden = !offered(k).length;
+  const heard = k === "station" ? (heardView.stations || []).length : 0;
+  b.hidden = !offered(k).length && !heard;
+  const recent = k === "station" ? heardView.recent || 0 : 0;
+  const count = b.querySelector(".n");
+  if (count) count.textContent = recent ? String(recent) : "";
+  b.classList.toggle("counted", recent > 0);
+  $("callsign").classList.toggle("counted", recent > 0);
   b.title = k === "gateway"
     ? "The gateways you called before, newest first, each on the channel you called it on"
-    : "The stations you called before, newest first, each with the dial and bandwidth of that call";
-  b.setAttribute("aria-label", k === "gateway" ? "Gateways called before" : "Stations called before");
+    : `The stations your modem heard${recent ? `, ${recent} in the last half hour` : ""}, `
+      + "by where they were heard, and the stations you called before";
+  b.setAttribute("aria-label", k === "gateway" ? "Gateways called before" : "Stations heard");
 }
 
 // a gateway record's channels the box offers: favourites first, those left out dropped
@@ -668,26 +676,136 @@ function switchKind(k, fill = true) {
   showKind();
 }
 
-// ▾ beside Call: the calls of the kind shown. Arrows move, Enter takes one, Escape closes. The list
-// is read again as it opens, so a call just made is in it
+// ── the stations heard, in Call (W59, the P2P design §5.2, RP-4 §4.4) ──────────────────────────
+// In P2P, ▾ lists the stations the modem heard (GET /api/stations), one line a callsign, grouped
+// by where each was heard against the radio's dial, the most recently heard first; then the
+// stations called before and not heard lately. ▾ carries how many were heard in the last half
+// hour. A line under half an hour old is plain, one up to six hours faded, and older ones wait
+// behind Show older. Picking a line puts its callsign, the dial it was heard on and the
+// bandwidth it stated in the call box, and tunes the radio there. The list opens over the page:
+// the side column scrolls, and would cut it at its edge.
+
+let heardView = {stations: [], recent: 0};
+const HEARD_FADED_S = 30 * 60;
+const HEARD_HIDDEN_S = 6 * 3600;
+const HEARD_REFRESH_MS = 15000;
+
+async function loadHeard() {
+  if (kind() !== "station") return;
+  const dial = hzOf($("dial").value);
+  try {
+    heardView = await api(`stations${dial ? `?dial_hz=${dial}` : ""}`);
+  } catch { /* the list stays as it was */ }
+  showCalledButton();
+}
+
+// how long ago, short: "2 min", "3 h", "2 days"
+function agoShort(s) {
+  if (s < 90) return "now";
+  if (s < 3600) return `${Math.round(s / 60)} min`;
+  if (s < 2 * 86400) return `${Math.round(s / 3600)} h`;
+  return `${Math.round(s / 86400)} days`;
+}
+
+const dateShort = (t) => new Date(t * 1000).toLocaleDateString(undefined,
+  {month: "short", day: "numeric"});
+
+const HEARD_KINDS = {beacon: () => "beacon", call: (to) => `calling ${to || "a station"}`,
+  answer: (to) => `answering ${to || "a call"}`, probe: (to) => `probing ${to || "a station"}`,
+  session: () => "in a session with you", datagram: () => "a broadcast", id: () => "identifying"};
+
+// a station heard, as its second line says it
+function heardWords(s) {
+  const parts = [];
+  if (s.where === "band" && s.dial_hz) parts.push(`${mhzOf(s.dial_hz)} MHz`);
+  if ((s.where === "other" || s.where === "unknown") && (s.band || s.dial_hz)) {
+    parts.push([s.band && bandWords(s.band), s.dial_hz && `${mhzOf(s.dial_hz)} MHz`]
+      .filter(Boolean).join(" · "));
+  }
+  const said = HEARD_KINDS[s.kind];
+  if (said) parts.push(said(s.to));
+  if (s.kind === "beacon" && s.answers === true) parts.push(["answers", "answers calls"]);
+  if (s.kind === "beacon" && s.answers === false) parts.push("not answering calls");
+  if (s.bandwidth) parts.push(`${s.bandwidth} Hz`);
+  if (s.km != null) parts.push(`${s.km} km, ${String(s.bearing).padStart(3, "0")}°`);
+  if (s.worked_at) parts.push(`P2P worked ${dateShort(s.worked_at)}`);
+  if (s.other_modem) parts.push(["caution", `heard by ${modemLabel(s.modem)}, not this modem`]);
+  return parts;
+}
+
+// the stations heard, and those called before not among them, as the list's items: a heading
+// is {head}, a line {heard} or {called}
+function stationItems(filter, older) {
+  const typed = filter.trim().toUpperCase();
+  const fits = (c) => !typed || c.startsWith(typed);
+  const items = [];
+  const heading = {here: `On ${heardView.radio_hz ? mhzOf(heardView.radio_hz) : "?"} MHz, where the radio is`,
+    band: `${bandWords(heardView.band || "")}, other dials`, other: "Other bands",
+    unknown: "Heard (the modem cannot read the dial)"};
+  let group = null;
+  let hidden = 0;
+  for (const s of heardView.stations || []) {
+    if (!fits(s.callsign)) continue;
+    if (s.age_s > HEARD_HIDDEN_S && !older && !s.worked_at) {
+      hidden += 1;
+      continue;
+    }
+    if (s.where !== group) {
+      group = s.where;
+      items.push({head: heading[group] || heading.unknown});
+    }
+    items.push({heard: s});
+  }
+  const heardCalls = new Set((heardView.stations || []).map((s) => s.callsign));
+  const called = offered("station").filter((e) => !heardCalls.has(e.callsign) && fits(e.callsign));
+  if (called.length) items.push({head: "Called before, not heard lately"});
+  for (const e of called) items.push({called: e});
+  if (hidden) items.push({more: hidden});
+  return items;
+}
+
+// ▾ beside Call: the calls of the kind shown, or in P2P the stations heard. Arrows move, Enter
+// takes one, Escape closes. The list is read again as it opens, so a call just made is in it; in
+// P2P its lines change in place while it is open, and nothing moves under the operator
 function wireCalled() {
   const input = $("callsign");
   const list = $("called-list");
   const opener = $("called-open");
   let shown = [];
   let active = -1;
+  let older = false;
+  let refresh = null;
+  const pickable = (item) => item && !item.head;
   const close = () => {
     list.hidden = true;
     shown = [];
     active = -1;
+    older = false;
+    clearInterval(refresh);
+    refresh = null;
     opener.setAttribute("aria-expanded", "false");
     input.setAttribute("aria-expanded", "false");
     input.removeAttribute("aria-activedescendant");
+    list.classList.remove("heard");
+    list.removeAttribute("style");
   };
-  const take = (e) => {
+  const take = (item) => {
+    if (item.more) {
+      older = true;
+      shown = stationItems(input.value, true);
+      active = Math.min(active, shown.length - 1);
+      render();
+      return;
+    }
     close();
     const k = kind();
-    putCalled(k, e);
+    if (item.heard) {
+      const s = item.heard;
+      putCalled("station", {callsign: s.callsign, dial_hz: s.dial_hz,
+                            bandwidth_hz: s.bandwidth || null});
+    } else {
+      putCalled(k, item.called || item);
+    }
     if (k === "station") {
       keep("dial", $("dial").value);
       keep("bandwidth", $("bandwidth").value);
@@ -696,37 +814,122 @@ function wireCalled() {
     input.focus();
     pickChannel();
   };
-  const render = () => {
-    const k = kind();
-    list.replaceChildren(...shown.map((e, i) => {
-      const bandwidth = e.bandwidth_hz ? `, ${e.bandwidth_hz} Hz` : "";
-      const where = e.dial_hz ? `${mhzOf(e.dial_hz)} MHz${bandwidth}`
-        : k === "gateway" ? "no channel named" : "no dial named";
+  // over the page, as a popover is: the side column scrolls, and would cut the list at its edge
+  // the room below Call, or above it when there is more there: the list never runs off the window
+  const place = () => {
+    if (kind() !== "station") return;
+    const r = input.getBoundingClientRect();
+    const below = window.innerHeight - r.bottom - 12;
+    const above = r.top - 12;
+    const down = below >= 220 || below >= above;
+    list.classList.add("heard");
+    Object.assign(list.style, {position: "fixed", left: `${r.left}px`, right: "auto",
+      top: down ? `${r.bottom + 4}px` : "auto",
+      bottom: down ? "auto" : `${window.innerHeight - r.top + 4}px`,
+      maxHeight: `${Math.max(120, Math.min(416, down ? below : above))}px`,
+      width: STACKED.matches ? `${r.width}px` : ""});
+  };
+  const lineOf = (item, i) => {
+    if (item.head) return el("li", {class: "s-head", role: "presentation", text: item.head});
+    if (item.more) {
+      return el("li", {role: "option", id: `called-${i}`, class: "more",
+        text: `Show older (${item.more})`, title: "Stations heard more than six hours ago"});
+    }
+    if (item.heard) {
+      const s = item.heard;
+      const parts = heardWords(s);
+      const line = el("span", {class: "s-addr"});
+      parts.forEach((p, n) => {
+        if (n) line.append(" · ");
+        if (Array.isArray(p)) line.append(el("span", {class: p[0], text: p[1]}));
+        else line.append(p);
+      });
       const li = el("li", {role: "option", id: `called-${i}`,
-        title: `${e.callsign}, called ${day(e.at)}${e.dial_hz ? ` on ${mhzOf(e.dial_hz)} MHz` : ""}`
-          + (k === "gateway" && !e.gateway ? ". It is not in the gateway list now" : "")},
-        el("span", {class: "s-name", text: e.callsign}),
-        el("span", {class: "s-addr", text: `${where} · ${age(e.at)}`}));
-      li.setAttribute("aria-selected", String(i === active));
-      li.addEventListener("mousedown", (event) => { event.preventDefault(); take(e); });
-      // inside the Call label: a click there is not the label's
-      li.addEventListener("click", (event) => event.preventDefault());
+        class: s.age_s > HEARD_FADED_S ? "stale" : "",
+        title: `${s.callsign}, heard ${day(s.at)}${s.dial_hz ? ` on ${mhzOf(s.dial_hz)} MHz` : ""}`
+          + `${s.snr_db != null ? ` at ${db(s.snr_db)}` : ""}. What this station heard of it: one `
+          + "direction only. A beacon's or a call's strength reads low on a strong or fading path"},
+        el("span", {class: "s-top"},
+          el("span", {class: "s-name", text: s.callsign}),
+          el("span", {class: "s-snr", text: db(s.snr_db)}),
+          el("span", {class: "s-age", text: agoShort(s.age_s)})),
+        line);
+      return li;
+    }
+    const e = item.called || item;
+    const k = kind();
+    const bandwidth = e.bandwidth_hz ? `, ${e.bandwidth_hz} Hz` : "";
+    const where = e.dial_hz ? `${mhzOf(e.dial_hz)} MHz${bandwidth}`
+      : k === "gateway" ? "no channel named" : "no dial named";
+    return el("li", {role: "option", id: `called-${i}`, class: item.called ? "stale" : "",
+      title: `${e.callsign}, called ${day(e.at)}${e.dial_hz ? ` on ${mhzOf(e.dial_hz)} MHz` : ""}`
+        + (k === "gateway" && !e.gateway ? ". It is not in the gateway list now" : "")},
+      el("span", {class: "s-name", text: e.callsign}),
+      el("span", {class: "s-addr", text: `${where} · ${age(e.at)}`}));
+  };
+  const render = () => {
+    list.replaceChildren(...shown.map((item, i) => {
+      const li = lineOf(item, i);
+      if (pickable(item)) {
+        li.setAttribute("aria-selected", String(i === active));
+        li.addEventListener("mousedown", (event) => { event.preventDefault(); take(item); });
+        // inside the Call label: a click there is not the label's
+        li.addEventListener("click", (event) => event.preventDefault());
+      }
       return li;
     }));
     list.hidden = false;
+    place();
     opener.setAttribute("aria-expanded", "true");
     input.setAttribute("aria-expanded", "true");
     input.setAttribute("aria-activedescendant", `called-${active}`);
     const item = list.children[active];
     if (item) item.scrollIntoView({block: "nearest"});
   };
-  const open = async () => {
-    await loadCalled();
-    shown = offered(kind());
+  // the next line that can be picked, from `from` in steps of `step`
+  const step = (from, by) => {
+    for (let n = 1; n <= shown.length; n += 1) {
+      const i = (from + by * n + shown.length * n) % shown.length;
+      if (pickable(shown[i])) return i;
+    }
+    return -1;
+  };
+  // while open, the lines change in place: the order holds, a new station joins the end
+  const update = async () => {
+    await loadHeard();
+    if (list.hidden || kind() !== "station") return;
+    const fresh = new Map((heardView.stations || []).map((s) => [s.callsign, s]));
+    const there = new Set();
+    shown = shown.map((item) => {
+      if (!item.heard) return item;
+      there.add(item.heard.callsign);
+      return {heard: fresh.get(item.heard.callsign) || item.heard};
+    });
+    const typed = input.value.trim().toUpperCase();
+    for (const s of heardView.stations || []) {
+      if (!there.has(s.callsign) && (!typed || s.callsign.startsWith(typed))
+          && s.age_s <= HEARD_HIDDEN_S) {
+        shown.push({heard: s});
+      }
+    }
+    render();
+  };
+  const open = async (filter = "") => {
+    const k = kind();
+    if (k === "station") {
+      await Promise.all([loadCalled(), loadHeard()]);
+      shown = stationItems(filter, older);
+    } else {
+      await loadCalled();
+      shown = offered(k);
+    }
     if (!shown.length) { close(); return; }
     const typed = input.value.trim().toUpperCase();
-    active = Math.max(0, shown.findIndex((e) => e.callsign === typed));
+    const at = shown.findIndex((item) => pickable(item)
+      && ((item.heard || item.called || item).callsign === typed));
+    active = at >= 0 ? at : step(-1, 1);
     render();
+    if (k === "station" && !refresh) refresh = setInterval(update, HEARD_REFRESH_MS);
   };
   // the button keeps the focus in Call, so that leaving Call closes the list
   opener.addEventListener("mousedown", (event) => event.preventDefault());
@@ -735,28 +938,37 @@ function wireCalled() {
     input.focus();
     if (list.hidden) open(); else close();
   });
-  input.addEventListener("input", close);
+  // typing filters the stations heard; a gateway's list closes
+  input.addEventListener("input", () => {
+    if (kind() === "station" && input.value.trim()) open(input.value);
+    else close();
+  });
   // leaving Call closes the list, unless Call has the focus again by then
   input.addEventListener("blur", () => setTimeout(() => {
     if (document.activeElement !== input) close();
   }, 120));
+  window.addEventListener("resize", close);
   input.addEventListener("keydown", (event) => {
     if (list.hidden) {
-      if (event.key === "ArrowDown" && offered(kind()).length) { event.preventDefault(); open(); }
+      const any = offered(kind()).length || (kind() === "station" && heardView.stations.length);
+      if (event.key === "ArrowDown" && any) { event.preventDefault(); open(); }
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      active = (active + (event.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length;
+      const next = step(active, event.key === "ArrowDown" ? 1 : -1);
+      if (next >= 0) active = next;
       render();
     } else if (event.key === "Enter") {
       event.preventDefault();
-      if (active >= 0) take(shown[active]);
+      if (active >= 0 && pickable(shown[active])) take(shown[active]);
     } else if (event.key === "Escape" || event.key === "Tab") {
       if (event.key === "Escape") event.preventDefault();
       close();
     }
   });
+  // the count beside ▾ is kept fresh in P2P
+  setInterval(loadHeard, HEARD_REFRESH_MS);
 }
 
 // ── the channel picked, tuned at once (W14, RP-4 §4.1) ─────────────────────────────────────────

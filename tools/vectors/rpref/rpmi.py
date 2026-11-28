@@ -128,6 +128,68 @@ def is_dial_list(value: Any) -> bool:
 TONE_MAX_S = 10
 """The longest tuner tone a host may ask for, in seconds (RP-4 §4.3)."""
 
+WITHIN_MAX_S = 600
+"""The longest a beacon may wait for a clear channel, in seconds (RP-4 §4.4)."""
+
+PRECISIONS = ("grid4", "grid6", "exact")
+"""How precisely a beacon says where its station is (RP-4 §4.4)."""
+
+
+def is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def is_position(value: Any) -> bool:
+    """RP-4 §4.4: `lat` and `lon` in degrees, in range, and one of the precisions."""
+    return (
+        isinstance(value, dict)
+        and is_number(value.get("lat"))
+        and is_number(value.get("lon"))
+        and -90 <= value["lat"] <= 90
+        and -180 <= value["lon"] <= 180
+        and value.get("precision") in PRECISIONS
+    )
+
+
+def locator(lat: float, lon: float, chars: int) -> str:
+    """The Maidenhead locator of 4 or 6 characters that holds the position."""
+    x, y = lon + 180, lat + 90
+    field_x, field_y = min(int(x // 20), 17), min(int(y // 10), 17)
+    square_x, square_y = min(int(x % 20 // 2), 9), min(int(y % 10), 9)
+    out = f"{chr(65 + field_x)}{chr(65 + field_y)}{square_x}{square_y}"
+    if chars == 6:
+        sub_x = min(int(x % 2 * 12), 23)
+        sub_y = min(int(y % 1 * 24), 23)
+        out += f"{chr(97 + sub_x)}{chr(97 + sub_y)}"
+    return out
+
+
+def square_centre(grid: str) -> tuple[float, float]:
+    """The centre of a 4- or 6-character Maidenhead square, as (lat, lon). Worked in whole
+    twenty-fourths and forty-eighths of a degree, and divided once, so that every program that
+    reads the same square gets the same two numbers to the last bit."""
+    field_x, field_y = ord(grid[0]) - 65, ord(grid[1]) - 65
+    square_x, square_y = int(grid[2]), int(grid[3])
+    if len(grid) == 4:
+        return float(-90 + (field_y * 10 + square_y)) + 0.5, float(
+            -180 + (field_x * 20 + square_x * 2) + 1
+        )
+    sub_x, sub_y = ord(grid[4]) - 97, ord(grid[5]) - 97
+    lon_24ths = (field_x * 20 + square_x * 2) * 24 + sub_x * 2 + 1
+    lat_48ths = (field_y * 10 + square_y) * 48 + sub_y * 2 + 1
+    return -90 + lat_48ths / 48, -180 + lon_24ths / 24
+
+
+def position_heard(sent: dict[str, Any]) -> dict[str, Any]:
+    """What a station hears of a position a beacon carried (RP-4 §4.4): the latitude and
+    longitude themselves for `exact`, the square's centre and its locator for a grid."""
+    if sent["precision"] == "exact":
+        return {"lat": sent["lat"], "lon": sent["lon"], "precision": "exact"}
+    grid = locator(sent["lat"], sent["lon"], 4 if sent["precision"] == "grid4" else 6)
+    lat, lon = square_centre(grid)
+    return {"lat": lat, "lon": lon, "precision": sent["precision"], "grid": grid}
+
+
 SCAN_DWELL_S = 10
 """How long the simulated modem stays on each dial of a scan (RP-4 §4.2): the modem's own choice,
 from its own calls, here a round figure. `scan_s` is the dials less one, times it."""
@@ -168,6 +230,14 @@ MEMBERS: dict[str, list[tuple[str, bool, Any]]] = {
             True,
             lambda v: is_int(v) and 0 <= v <= TONE_MAX_S,
         ),
+    ],
+    "stations": [],
+    "beacon": [
+        ("as", False, lambda v: isinstance(v, str)),
+        ("ref", False, is_id),
+        ("within_s", False, lambda v: is_int(v) and 1 <= v <= WITHIN_MAX_S),
+        ("dial_hz", False, lambda v: is_int(v) and v > 0),
+        ("position", False, is_position),
     ],
 }
 
@@ -221,12 +291,14 @@ class Call:
 
 
 class World:
-    """One channel. `log` holds every line exchanged on every station, in order."""
+    """One channel. `log` holds every line exchanged on every station, in order. `now` is the
+    one time the simulated modem has, in Unix seconds: it says when a station was heard."""
 
-    def __init__(self) -> None:
+    def __init__(self, now: int = 0) -> None:
         self.adapters: list[Adapter] = []
         self.calls: list[Call] = []
         self.log: list[dict[str, Any]] = []
+        self.now = now
 
     def record(self, station: str, host: str, entry: dict[str, Any]) -> None:
         self.log.append({"station": station, "host": host, **entry})
@@ -325,6 +397,9 @@ class Adapter:
         self.scanning: tuple[str, list[int]] | None = None
         self.ends: list[End] = []
         self.links = 0
+        # the stations this modem has heard, with `caps.heard` (RP-4 §4.4): each callsign's last,
+        # the most recently heard first
+        self.heard: list[dict[str, Any]] = []
         world.adapters.append(self)
 
     # -- the connection to a host ----------------------------------------------------------------
@@ -389,6 +464,8 @@ class Adapter:
             "tune": self._dial,
             "scan": self._scan,
             "tone": self._tone,
+            "stations": self._stations,
+            "beacon": self._beacon,
         }.get(op)
         if handler is None:
             self.emit(host, error(rid, "unsupported", f"no op {op}"))
@@ -632,3 +709,66 @@ class Adapter:
         self.emit(h.name, answer("scan", rid, dials=dials, scan_s=scan_s))
         if self.dial_hz not in dials:
             self._go_to(dials[0])
+
+    def _stations(self, h: Host, m: Message, rid: Any) -> None:
+        """RP-4 §4.4: the stations this modem has heard, the most recently heard first."""
+        if not self.caps.get("heard"):
+            self.emit(h.name, error(rid, "unsupported", "this modem keeps no stations heard"))
+            return
+        self.emit(h.name, answer("stations", rid, stations=[dict(e) for e in self.heard]))
+
+    def _beacon(self, h: Host, m: Message, rid: Any) -> None:
+        """RP-4 §4.4: one frame with a callsign, addressed to nobody. The simulated channel is
+        always clear, so a beacon taken goes at once; every other station whose modem reports
+        the stations it hears hears it. It goes only while nothing is up on the station."""
+        if not self.caps.get("beacon"):
+            self.emit(h.name, error(rid, "unsupported", "this modem sends no beacons"))
+            return
+        if not h.callsigns:
+            self.emit(h.name, error(rid, "refused", "no callsigns yet"))
+            return
+        callsign = m.get("as", h.callsigns[0])
+        if callsign not in h.callsigns:
+            self.emit(h.name, error(rid, "not-authorized", f"{callsign} is not this host's"))
+            return
+        if self.ends or any(c.adapter is self for c in self.world.calls):
+            self.emit(h.name, error(rid, "busy", "a link or a call is up on the station"))
+            return
+        wanted = m.get("dial_hz") if self.caps.get("dial") else None
+        # the radio's dial, or a dial of a running scan, which goes there to send it (§4.4, §6)
+        if (
+            wanted is not None
+            and wanted != self.dial_hz
+            and (self.scanning is None or wanted not in self.scanning[1])
+        ):
+            self.emit(h.name, error(rid, "refused", f"the radio is not on {wanted} Hz"))
+            return
+        self.ok(h, rid)
+        if wanted is not None:
+            self._go_to(wanted)
+        position = m.get("position") if self.caps.get("position") else None
+        for adapter in self.world.adapters:
+            if adapter is self or not adapter.caps.get("heard"):
+                continue
+            entry: dict[str, Any] = {
+                "callsign": callsign,
+                "kind": "beacon",
+                # whether calls to its callsign are answered now: the host listens, and holds it
+                "answers": h.listening,
+                "at": self.world.now,
+            }
+            if adapter.caps.get("dial"):
+                entry["dial_hz"] = adapter.dial_hz
+            if position is not None and adapter.caps.get("position"):
+                entry["position"] = position_heard(position)
+            adapter.heard = [e for e in adapter.heard if e["callsign"] != callsign]
+            adapter.heard.insert(0, entry)
+            for other in adapter.hosts.values():
+                if other.hello:
+                    adapter.emit(other.name, answer("heard", None, **entry))
+        sent = answer("beacon-sent", None, sent=True)
+        if "ref" in m:
+            sent["ref"] = m["ref"]
+        if self.caps.get("dial"):
+            sent["dial_hz"] = self.dial_hz
+        self.emit(h.name, sent)

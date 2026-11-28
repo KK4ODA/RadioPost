@@ -120,6 +120,9 @@ fn loopback_full(
         scan: false,
         call_s: false,
         tone: dial_hz.is_some(),
+        heard: false,
+        beacon: false,
+        position: false,
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),

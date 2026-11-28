@@ -55,6 +55,9 @@ fn main() -> ExitCode {
                     scan: false,
                     call_s: false,
                     tone: false,
+                    heard: false,
+                    beacon: false,
+                    position: false,
                 },
                 // link IDs: a letter for the station and a count, as in the vectors
                 prefix: char::from(b'a' + u8::try_from(i % 26).unwrap_or(0)).to_string(),

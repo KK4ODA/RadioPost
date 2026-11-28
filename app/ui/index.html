@@ -51,10 +51,10 @@
             <input type="radio" name="kind" value="station"> P2P (another client's station)
           </label>
         </div>
-        <label title="The callsign to call. Switching between a gateway and P2P brings back the last of each you called; ▾ lists the others">Call
+        <label title="The callsign to call. Switching between a gateway and P2P brings back the last of each you called; ▾ lists the others. In P2P, ▾ lists the stations your modem heard, with how many in the last half hour beside it, and typing narrows the list">Call
           <span class="combo">
             <input id="callsign" placeholder="KK4ODA-1" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="none" aria-controls="called-list" aria-expanded="false">
-            <button type="button" class="combo-open" id="called-open" tabindex="-1" hidden><svg class="icon" aria-hidden="true"><use href="#i-down"/></svg></button>
+            <button type="button" class="combo-open" id="called-open" tabindex="-1" hidden><span class="n" aria-hidden="true"></span><svg class="icon" aria-hidden="true"><use href="#i-down"/></svg></button>
             <ul class="suggestions called" id="called-list" role="listbox" hidden></ul>
           </span>
         </label>

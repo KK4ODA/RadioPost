@@ -43,6 +43,9 @@ pub trait TncBridge {
     fn host_left(&mut self) -> Vec<Out>;
     /// Nothing the last host left is on the air any more: the modem may be let go.
     fn settled(&self) -> bool;
+    /// The Unix time, in milliseconds, at the `tick` clock's start: what a station heard is
+    /// dated by (RP-4 §4.4). A bridge that dates nothing ignores it.
+    fn epoch(&mut self, _unix_ms: u64) {}
 }
 
 impl TncBridge for Bridge {
@@ -66,6 +69,9 @@ impl TncBridge for Bridge {
     }
     fn settled(&self) -> bool {
         Bridge::settled(self)
+    }
+    fn epoch(&mut self, unix_ms: u64) {
+        Bridge::epoch(self, unix_ms);
     }
 }
 
@@ -272,6 +278,8 @@ struct Station<'a, B> {
     kind: Kind<B>,
     note: &'a Note,
     start: Instant,
+    /// The Unix time at `start`, in milliseconds.
+    epoch_ms: u64,
     modem: Option<Modem>,
     bridge: B,
     host: Option<Arrival>,
@@ -281,11 +289,16 @@ struct Station<'a, B> {
 
 impl<'a, B: TncBridge> Station<'a, B> {
     fn new(mercury: &'a str, kind: Kind<B>, note: &'a Note) -> Station<'a, B> {
-        let bridge = (kind.fresh)();
+        let mut bridge = (kind.fresh)();
+        let epoch_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(0));
+        bridge.epoch(epoch_ms);
         Station {
             mercury,
             kind,
             note,
+            epoch_ms,
             start: Instant::now(),
             modem: None,
             bridge,
@@ -327,6 +340,7 @@ impl<'a, B: TncBridge> Station<'a, B> {
                 Ok(m) => {
                     self.modem = Some(m);
                     self.bridge = (self.kind.fresh)();
+                    self.bridge.epoch(self.epoch_ms);
                 }
                 Err(why) => {
                     let why = format!("{name} at {} could not be reached: {why}", self.mercury);
@@ -390,6 +404,7 @@ impl<'a, B: TncBridge> Station<'a, B> {
                 // closing the control port is how another program is let have Mercury
                 self.modem = None;
                 self.bridge = (self.kind.fresh)();
+                self.bridge.epoch(self.epoch_ms);
             }
         }
     }

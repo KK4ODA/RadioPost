@@ -206,14 +206,13 @@ impl Trace {
         match e {
             Event::Busy(b) => self.busy = Some(*b),
             Event::Dial { dial_hz, .. } => self.dial_hz = Some(*dial_hz),
-            Event::Heard {
-                callsign, snr_db, ..
-            } if self.call_started.is_some()
-                && self.connected.is_none()
-                && callsign.eq_ignore_ascii_case(&self.remote) =>
+            Event::Heard(heard)
+                if self.call_started.is_some()
+                    && self.connected.is_none()
+                    && heard.callsign.eq_ignore_ascii_case(&self.remote) =>
             {
                 self.heard_remote = true;
-                if let Some(s) = snr_db {
+                if let Some(s) = &heard.snr_db {
                     self.heard_snr_db = Some(self.heard_snr_db.map_or(*s, |b| b.max(*s)));
                 }
             }
@@ -717,10 +716,11 @@ mod tests {
 
     #[test]
     fn the_station_called_counts_as_heard_only_during_the_call() {
-        let heard = |callsign: &str| Event::Heard {
-            callsign: callsign.into(),
-            snr_db: Some(-12.0),
-            bandwidth: None,
+        let heard = |callsign: &str| {
+            Event::Heard(rpmi::host::Sighting {
+                snr_db: Some(-12.0),
+                ..rpmi::host::Sighting::of(callsign)
+            })
         };
         let mut t = Trace::new("KK4ODA-1");
         t.saw(&heard("KK4ODA-1"));

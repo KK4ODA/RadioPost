@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Accepted, not built |
-| **Version** | 0.2.0 |
+| **Status** | Accepted; Phase 1 built |
+| **Version** | 0.3.0 |
 | **Updated** | 2026-11-28 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -508,3 +508,4 @@ Aether release; Phase 2 is one Aether beta with four ADRs.
 |---|---|---|
 | 0.1.0 | 2026-11-27 | First draft, from the author's request: beacons, the stations heard, and calling them from **Call**. Review of the client and Aether, RP-4 additions, Aether's A1 to A3, mockups, phases, tests and eleven decisions. |
 | 0.2.0 | 2026-11-28 | Accepted, with the author's answers (§11) and the position in the beacon (A4, §7) added at the author's ask: A1 gains `dial_hz`, A3 is built with the beacons, a scanning station beacons on its dials in turn, the extras are built, and the mockups show distance, bearing and the position's precision. |
+| 0.3.0 | 2026-11-28 | Phase 1 built: RP-4 1.7.0 with its vectors (the reference's simulated modem beacons, `rpmi-lines.json`'s cases marked `unless` for an adapter with the cap); `rpmi::position`; the Aether adapter's `heard` and `stations` from Aether's own; Mercury's CQ frames as stations heard; VARA's left off until checked; the client's `stations.rs` and `/api/stations`; **Call**'s list in P2P (manual 1.63.0). |

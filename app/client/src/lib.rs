@@ -21,6 +21,7 @@
 //! * [`presence`]: the panel's connection to Aether between calls, which names the app there and
 //!   claims nothing.
 //! * [`selection`]: the record of every call placed, and why each failed, to choose gateways by.
+//! * [`stations`]: the stations the modem has heard, by band, for **Call**'s list in P2P.
 //! * [`terminal`]: a terminal on the post office's server, over SSH, for its operators.
 //!
 //! `radiopost` is its command-line program; the desktop application (Tauri, D27) is built on the
@@ -47,6 +48,7 @@ pub mod renewal;
 pub mod reports;
 pub mod selection;
 pub mod session;
+pub mod stations;
 pub mod store;
 pub mod templates;
 pub mod terminal;

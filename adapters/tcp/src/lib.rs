@@ -77,6 +77,9 @@ pub fn caps() -> Caps {
         scan: false,
         call_s: false,
         tone: false,
+        heard: false,
+        beacon: false,
+        position: false,
     }
 }
 
@@ -233,6 +236,25 @@ pub struct Adapter {
     /// Told when the host that had the modem has gone.
     freed: Arc<Condvar>,
     cfg: Arc<Config>,
+}
+
+/// RP-4 §4 `status`: the host's own, and the channel never busy over TCP.
+fn status_of(
+    listening: bool,
+    callsigns: &[String],
+    links: Vec<Value>,
+    id: Option<&Value>,
+) -> Message {
+    answer_with(
+        "status",
+        id,
+        &[
+            ("listening", listening.into()),
+            ("callsigns", json!(callsigns)),
+            ("busy", false.into()),
+            ("links", Value::Array(links)),
+        ],
+    )
 }
 
 fn link_status(l: &Link) -> Value {
@@ -488,21 +510,17 @@ impl Adapter {
             Request::Broadcast { .. } => {
                 conn.emit(error(id, "unsupported", "no broadcasts over TCP"));
             }
-            Request::Dial | Request::Tune(_) | Request::Scan(_) | Request::Tone(_) => {
+            Request::Dial
+            | Request::Tune(_)
+            | Request::Scan(_)
+            | Request::Tone(_)
+            | Request::Stations
+            | Request::Beacon { .. } => {
                 conn.emit(error(id, "unsupported", "no radio over TCP"));
             }
             Request::Status => {
                 let links: Vec<Value> = conn.link.iter().map(link_status).collect();
-                conn.emit(answer_with(
-                    "status",
-                    id,
-                    &[
-                        ("listening", conn.listening.into()),
-                        ("callsigns", json!(conn.callsigns)),
-                        ("busy", false.into()),
-                        ("links", Value::Array(links)),
-                    ],
-                ));
+                conn.emit(status_of(conn.listening, &conn.callsigns, links, id));
             }
         }
     }

@@ -214,6 +214,26 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 .suggestions.called li { flex-direction: column; align-items: stretch; gap: 1px; }
 .called .s-name { font-family: var(--mono); font-size: 13px; }
 .called .s-addr { font-family: inherit; font-size: 12px; white-space: normal; }
+/* in P2P, the stations heard (W59): wider than the column, opened over the page (app.js places
+   it), a heading for each place they were heard, a line a station */
+.heard { min-width: 23rem; max-height: 26rem; z-index: 20; }
+.heard li.s-head { cursor: default; font-size: 12px; font-weight: 600; color: var(--muted);
+                   padding: 8px 8px 2px; }
+.heard li.s-head:first-child { padding-top: 4px; }
+.heard .s-top { display: flex; align-items: baseline; gap: 10px; }
+.heard .s-top .s-name { flex: 1; font-size: 14px; }
+.heard .s-snr, .heard .s-age { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.heard .s-snr { font-weight: 600; min-width: 4.6em; text-align: right; }
+.heard .s-age { color: var(--muted); min-width: 4.6em; text-align: right; }
+.heard .answers { color: var(--ok); font-weight: 600; }
+.heard .caution { color: var(--busy); font-weight: 600; }
+.called li.stale { opacity: .6; }
+.called li.more { color: var(--accent); font-size: 13px; }
+.combo-open .n { font-size: 11px; font-weight: 600; color: var(--muted); }
+.combo-open .n:empty { display: none; }
+.combo-open.counted { width: auto; padding: 0 6px 0 8px; gap: 2px; grid-auto-flow: column; }
+.combo input.counted { padding-right: 52px; }
+@media (max-width: 720px) { .heard { min-width: 0; } }
 .tuning { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: -2px 0 10px; }
 .radio-at { margin: 0; font-size: 13px; color: var(--muted); }
 .radio-at:empty { display: none; }

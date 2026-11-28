@@ -170,6 +170,41 @@ impl Host {
     pub fn tone(&mut self, seconds: u64) -> Message {
         self.with_id("tone", &[("seconds", seconds.into())])
     }
+
+    /// `stations`: the stations the modem has heard (RP-4 §4.4).
+    pub fn stations(&mut self) -> Message {
+        self.with_id("stations", &[])
+    }
+
+    /// `beacon`: one beacon carrying `as_call` (the first callsign when none), with `reference`
+    /// for its `beacon-sent`, waiting at most `within_s` for a clear channel, on `dial_hz`, and
+    /// with `position` when the modem carries one (RP-4 §4.4).
+    pub fn beacon(
+        &mut self,
+        as_call: Option<&str>,
+        reference: Option<&str>,
+        within_s: Option<u64>,
+        dial_hz: Option<u64>,
+        position: Option<&crate::position::Position>,
+    ) -> Message {
+        let mut members: Vec<(&str, Value)> = Vec::new();
+        if let Some(c) = as_call {
+            members.push(("as", c.into()));
+        }
+        if let Some(r) = reference {
+            members.push(("ref", r.into()));
+        }
+        if let Some(s) = within_s {
+            members.push(("within_s", s.into()));
+        }
+        if let Some(hz) = dial_hz {
+            members.push(("dial_hz", hz.into()));
+        }
+        if let Some(p) = position {
+            members.push(("position", p.to_json()));
+        }
+        self.with_id("beacon", &members)
+    }
 }
 
 /// Which station placed the call.
@@ -179,6 +214,104 @@ pub enum Direction {
     In,
     /// A call this host placed.
     Out,
+}
+
+/// A station heard (RP-4 §4.4): a `heard` event, or one entry of `stations`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Sighting {
+    /// Its callsign.
+    pub callsign: String,
+    /// The SNR it was heard at.
+    pub snr_db: Option<f64>,
+    /// The bandwidth it runs, in Hz.
+    pub bandwidth: Option<i64>,
+    /// What was heard: `beacon`, `call`, `answer`, `probe`, `session`, `datagram` or `id`.
+    pub kind: Option<String>,
+    /// Whom a call, an answer or a probe was addressed to.
+    pub to: Option<String>,
+    /// For a beacon: whether calls to its callsign are answered now.
+    pub answers: Option<bool>,
+    /// The radio's dial when it was heard.
+    pub dial_hz: Option<u64>,
+    /// Where its beacon says its station is.
+    pub position: Option<crate::position::Position>,
+    /// When it was heard, Unix seconds.
+    pub at: Option<u64>,
+}
+
+impl Sighting {
+    /// A station heard with nothing but its callsign.
+    #[must_use]
+    pub fn of(callsign: &str) -> Sighting {
+        Sighting {
+            callsign: callsign.into(),
+            snr_db: None,
+            bandwidth: None,
+            kind: None,
+            to: None,
+            answers: None,
+            dial_hz: None,
+            position: None,
+            at: None,
+        }
+    }
+
+    /// A sighting from a `heard` message or a `stations` entry. A member of the wrong type is
+    /// left out, as one a host does not know would be (§2); only the callsign is needed.
+    ///
+    /// # Errors
+    ///
+    /// When the callsign is missing.
+    pub fn read(m: &Message) -> Result<Sighting, String> {
+        Ok(Sighting {
+            callsign: text(m, "callsign")?,
+            snr_db: m.get("snr_db").and_then(Value::as_f64),
+            bandwidth: m.get("bandwidth").and_then(Value::as_i64),
+            kind: optional_text(m, "kind"),
+            to: optional_text(m, "to"),
+            answers: m.get("answers").and_then(Value::as_bool),
+            dial_hz: m
+                .get("dial_hz")
+                .and_then(Value::as_u64)
+                .filter(|&hz| hz > 0),
+            position: m
+                .get("position")
+                .and_then(crate::position::Position::from_json),
+            at: m.get("at").and_then(Value::as_u64),
+        })
+    }
+
+    /// Its members as a `heard` message or a `stations` entry carries them, `op` aside.
+    #[must_use]
+    pub fn to_message(&self) -> Message {
+        let mut m = Message::new();
+        m.insert("callsign".into(), self.callsign.clone().into());
+        if let Some(v) = self.snr_db {
+            m.insert("snr_db".into(), serde_json::json!(v));
+        }
+        if let Some(v) = self.bandwidth {
+            m.insert("bandwidth".into(), v.into());
+        }
+        if let Some(v) = &self.kind {
+            m.insert("kind".into(), v.clone().into());
+        }
+        if let Some(v) = &self.to {
+            m.insert("to".into(), v.clone().into());
+        }
+        if let Some(v) = self.answers {
+            m.insert("answers".into(), v.into());
+        }
+        if let Some(v) = self.dial_hz {
+            m.insert("dial_hz".into(), v.into());
+        }
+        if let Some(v) = &self.position {
+            m.insert("position".into(), v.to_json());
+        }
+        if let Some(v) = self.at {
+            m.insert("at".into(), v.into());
+        }
+        m
+    }
 }
 
 /// One of the host's links in `status`.
@@ -303,14 +436,25 @@ pub enum Event {
     },
     /// Whether others use the channel.
     Busy(bool),
-    /// A station was heard.
-    Heard {
-        /// Its callsign.
-        callsign: String,
-        /// Its SNR.
-        snr_db: Option<f64>,
-        /// Its bandwidth.
-        bandwidth: Option<i64>,
+    /// A station was heard (§4.4).
+    Heard(Sighting),
+    /// The answer to `stations` (§4.4): what the modem has heard, the most recently heard first.
+    Stations {
+        /// The request's `id`.
+        id: Option<Value>,
+        /// Each station once, as the modem last heard it.
+        stations: Vec<Sighting>,
+    },
+    /// A beacon of this host's has gone out, or will not (§4.4).
+    BeaconSent {
+        /// The `beacon`'s `ref`.
+        reference: Option<Value>,
+        /// Whether it went out.
+        sent: bool,
+        /// The dial it went on, with `caps.dial`.
+        dial_hz: Option<u64>,
+        /// For people: why it did not go.
+        text: Option<String>,
     },
     /// A broadcast heard (§6).
     Broadcast {
@@ -351,6 +495,8 @@ pub enum Event {
         answers: Vec<u64>,
         /// The dials the station scans, whichever host asked (§4.2); empty when it scans none.
         scanning: Vec<u64>,
+        /// The interval of a beacon the modem repeats by itself, in seconds (§4.4).
+        beaconing: Option<u64>,
     },
     /// The host's scan (§4.2): the answer to `scan`, or, with no `id`, its dials changed or,
     /// with none and a `why`, its end.
@@ -420,6 +566,33 @@ fn broadcast(m: &Message) -> Result<Event, String> {
     })
 }
 
+/// The answer to `stations` (§4.4): an entry without a callsign is left out.
+fn stations(m: &Message, id: Option<Value>) -> Result<Event, String> {
+    Ok(Event::Stations {
+        id,
+        stations: m
+            .get("stations")
+            .and_then(Value::as_array)
+            .ok_or("no `stations`")?
+            .iter()
+            .filter_map(|e| e.as_object().and_then(|o| Sighting::read(o).ok()))
+            .collect(),
+    })
+}
+
+/// What became of a beacon (§4.4).
+fn beacon_sent(m: &Message) -> Result<Event, String> {
+    Ok(Event::BeaconSent {
+        reference: m.get("ref").cloned(),
+        sent: flag(m, "sent")?,
+        dial_hz: m
+            .get("dial_hz")
+            .and_then(Value::as_u64)
+            .filter(|&hz| hz > 0),
+        text: optional_text(m, "text"),
+    })
+}
+
 fn status(m: &Message, id: Option<Value>) -> Result<Event, String> {
     let links = m
         .get("links")
@@ -457,6 +630,7 @@ fn status(m: &Message, id: Option<Value>) -> Result<Event, String> {
             .filter(|&hz| hz > 0),
         answers: numbers(m, "answers"),
         scanning: numbers(m, "scanning"),
+        beaconing: m.get("beaconing").and_then(Value::as_u64),
     })
 }
 
@@ -545,11 +719,9 @@ impl Event {
                 peer_snr_db: m.get("peer_snr_db").and_then(Value::as_f64),
             },
             "busy" => Event::Busy(flag(m, "busy")?),
-            "heard" => Event::Heard {
-                callsign: text(m, "callsign")?,
-                snr_db: m.get("snr_db").and_then(Value::as_f64),
-                bandwidth: m.get("bandwidth").and_then(Value::as_i64),
-            },
+            "heard" => Event::Heard(Sighting::read(m)?),
+            "stations" => stations(m, id)?,
+            "beacon-sent" => beacon_sent(m)?,
             "broadcast" => broadcast(m)?,
             "broadcast-sent" => Event::BroadcastSent {
                 reference: m.get("ref").cloned(),

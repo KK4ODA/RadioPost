@@ -71,6 +71,12 @@ const HEARD_MS: u64 = 700;
 /// CQ frame, the size of a CALL, is 3.74 s on DATAC16 and 27 s on the 500 Hz floor of a station
 /// that sends only MFSK (Mercury's `docs/TNC.md`).
 const PEER_ID_MS: u64 = 35_000;
+/// How long after an `SN` a CQ frame heard is taken to be the frame it measured.
+const SN_FRESH_MS: u64 = 2000;
+
+/// How many stations heard are kept for `stations` (RP-4 §4.4).
+const HEARD_KEPT: usize = 200;
+
 /// How long a `CQFRAME` is given to be sent: Mercury says nothing of one it could not build.
 const IDENT_MS: u64 = 60_000;
 /// The bandwidth a `CQFRAME` names when the session's is not known.
@@ -316,6 +322,13 @@ pub struct Bridge {
     links_made: u64,
     early: VecDeque<(u64, Vec<u8>)>,
     snr_db: Option<f64>,
+    /// The last `SN` and when it came: the strength of the frame reported next.
+    sn_at: Option<(f64, u64)>,
+    /// The Unix time at the clock's start, milliseconds, when the server has said it.
+    epoch_ms: Option<u64>,
+    /// The CQ frames heard since the host's `hello`, each callsign's last, the most recent first
+    /// (RP-4 §4.4: Mercury keeps no list of its own).
+    heard: Vec<Message>,
     rate_bps: Option<u64>,
     channel_busy: bool,
     busy_told: bool,
@@ -400,6 +413,9 @@ impl Bridge {
             links_made: 0,
             early: VecDeque::new(),
             snr_db: None,
+            sn_at: None,
+            epoch_ms: None,
+            heard: Vec::new(),
             rate_bps: None,
             channel_busy: false,
             busy_told: false,
@@ -504,6 +520,11 @@ impl Bridge {
             scan: false,
             call_s: false,
             tone: false,
+            // Mercury reports each CQ frame it hears; VARA's `CQFRAME` waits to be read in its
+            // published command list (RP-4 §9.2)
+            heard: !self.dialect.is_vara(),
+            beacon: false,
+            position: false,
         };
         out.push(Out::Host(answer_with(
             "hello",
@@ -516,6 +537,44 @@ impl Bridge {
         )));
         self.busy_told = false;
         self.update_busy(out);
+    }
+
+    /// The Unix time, in milliseconds, at the start of the clock [`Bridge::tick`] is given: what a
+    /// station heard is dated by (RP-4 §4.4).
+    pub fn epoch(&mut self, unix_ms: u64) {
+        self.epoch_ms = Some(unix_ms);
+    }
+
+    /// A CQ frame heard (RP-4 §4.4, §9.6): a station beaconing or identifying, `heard` to the host
+    /// and kept for `stations`. Its strength is the `SN` just before it, when one came in the last
+    /// two seconds. VARA's `CQFRAME` is not used until it is read in VARA's published commands.
+    fn note_heard(&mut self, callsign: &str, bandwidth: Option<i64>, out: &mut Vec<Out>) {
+        if self.dialect.is_vara() || callsign.is_empty() {
+            return;
+        }
+        let mut entry = Message::new();
+        entry.insert("callsign".into(), callsign.into());
+        entry.insert("kind".into(), "beacon".into());
+        if let Some(bw) = bandwidth {
+            entry.insert("bandwidth".into(), bw.into());
+        }
+        if let Some((snr, at)) = self.sn_at
+            && self.now.saturating_sub(at) <= SN_FRESH_MS
+        {
+            entry.insert("snr_db".into(), serde_json::json!(snr));
+        }
+        if let Some(epoch) = self.epoch_ms {
+            entry.insert("at".into(), ((epoch + self.now) / 1000).into());
+        }
+        self.heard
+            .retain(|e| e.get("callsign") != entry.get("callsign"));
+        self.heard.insert(0, entry.clone());
+        self.heard.truncate(HEARD_KEPT);
+        if self.hello {
+            let mut m = entry;
+            m.insert("op".into(), "heard".into());
+            out.push(Out::Host(m));
+        }
     }
 
     /// A line the host wrote, without its LF.
@@ -594,6 +653,19 @@ impl Bridge {
                 out.push(Out::Host(error(rid_ref, "unsupported", &text)));
             }
             Request::Status => out.push(Out::Host(self.status(rid_ref))),
+            Request::Stations if !self.dialect.is_vara() => {
+                let list: Vec<Value> = self.heard.iter().cloned().map(Value::Object).collect();
+                let m = answer_with("stations", rid_ref, &[("stations", list.into())]);
+                out.push(Out::Host(m));
+            }
+            Request::Stations => {
+                let text = format!("this adapter reports no stations heard on {}", self.name());
+                out.push(Out::Host(error(rid_ref, "unsupported", &text)));
+            }
+            Request::Beacon { .. } => {
+                let text = format!("this adapter sends no beacons on {}", self.name());
+                out.push(Out::Host(error(rid_ref, "unsupported", &text)));
+            }
         }
         out
     }
@@ -1063,11 +1135,14 @@ impl Bridge {
             }
             "CQFRAME" => {
                 // a station identifying, or calling CQ: the one this station waits for, perhaps
-                let heard = rest.split_whitespace().next().unwrap_or("");
+                let mut words = rest.split_whitespace();
+                let heard = words.next().unwrap_or("");
                 if self.ident_peer.as_deref().is_some_and(|p| same(p, heard)) {
                     self.ident_peer = None;
                     self.ident_after = self.now + HEARD_MS;
                 }
+                let bandwidth = words.next().and_then(|b| b.parse::<i64>().ok());
+                self.note_heard(heard, bandwidth, &mut out);
             }
             "BUFFER" => {
                 if let Ok(n) = rest.parse::<u64>() {
@@ -1079,6 +1154,7 @@ impl Bridge {
                 if let Ok(snr) = rest.parse::<f64>()
                     && snr.is_finite()
                 {
+                    self.sn_at = Some((snr, self.now));
                     self.snr_db = Some(snr);
                     self.tell_quality(&mut out);
                 }

@@ -165,7 +165,8 @@ fn hello_asks_what_only_mercury_answers_and_gives_its_caps() {
             json!({"op": "hello", "id": "h", "version": 1, "modem": "Mercury",
                "caps": {"bandwidths": [500, 2300, 2750], "max_links": 1, "delivery": true,
                         "broadcast": false, "quality": true, "busy": true,
-                        "regulatory": false, "max_queue": 65536, "shared": false}})
+                        "regulatory": false, "max_queue": 65536, "shared": false,
+                        "heard": true}})
         ]
     );
     let mut rig = Rig::new();
@@ -759,12 +760,15 @@ fn quality_and_busy_are_mercurys_lines() {
         "IAMALIVE",
         "PTT ON",
         "PTT OFF",
-        "CQFRAME W1AW 2300",
         "MONITOR DATAC16 CQ FROM=W1AW BW=2300 SNR=3.0",
         "",
     ] {
         assert_eq!(rig.modem(other), Vec::<Out>::new(), "{other}");
     }
+    // a CQ frame is a station heard (RP-4 §4.4), and changes nothing of the link's quality
+    let heard = told(&rig.modem("CQFRAME W1AW 2300"));
+    assert_eq!(heard.len(), 1);
+    assert_eq!(heard[0]["op"], "heard");
 }
 
 #[test]
@@ -923,9 +927,11 @@ fn the_caller_identifies_after_the_station_it_called() {
         Vec::<Out>::new(),
         "N1CALL-10 identifies first"
     );
-    // another station's CQ is not the one waited for
-    assert_eq!(rig.modem("CQFRAME W1AW 2300"), Vec::<Out>::new());
-    assert_eq!(rig.modem("CQFRAME n1call-10 2300"), Vec::<Out>::new());
+    // another station's CQ is not the one waited for; each is a station heard, and no more
+    let heard =
+        |outs: &[Out]| told(outs).iter().all(|m| m["op"] == "heard") && asked(outs).is_empty();
+    assert!(heard(&rig.modem("CQFRAME W1AW 2300")));
+    assert!(heard(&rig.modem("CQFRAME n1call-10 2300")));
     // as Mercury waits before it answers a frame: the frame decodes before its sender unkeys
     assert_eq!(rig.later(699), Vec::<Out>::new());
     assert_eq!(asked(&rig.later(1)), ["CQFRAME KK4ODA 2300"]);
@@ -1025,6 +1031,10 @@ fn rpmi_lines_are_read_or_answered_with_an_error() {
     let cases = file["lines"].as_array().expect("lines");
     assert!(cases.len() > 30);
     for case in cases {
+        // refused only by an adapter without the cap `unless` names; this one may have it
+        if case.get("unless").is_some() {
+            continue;
+        }
         let outs = rig.bridge.from_host(case["line"].as_str().expect("a line"));
         let want: Vec<Value> = case["answers"]
             .as_array()
@@ -1039,4 +1049,66 @@ fn rpmi_lines_are_read_or_answered_with_an_error() {
         assert_eq!(told(&outs), want, "{}", case["what"]);
         assert_eq!(asked(&outs), Vec::<String>::new(), "{}", case["what"]);
     }
+}
+
+/// RP-4 §4.4, §9.6: each CQ frame Mercury hears is a station heard, with the `SN` just before it
+/// as its strength, its bandwidth, and the time from the server's clock; `stations` lists each
+/// callsign's last since the host's `hello`. An `SN` too old to be the frame's is left out.
+#[test]
+fn a_cq_frame_heard_is_a_station_heard() {
+    let mut rig = Rig::with(&["KK4ODA"]);
+    rig.bridge.epoch(1_795_213_000_000);
+    assert_eq!(
+        told(&rig.host(&json!({"op": "stations", "id": 4}))),
+        [json!({"op": "stations", "id": 4, "stations": []})]
+    );
+    rig.later(1000);
+    rig.modem("SN 7.5");
+    let outs = rig.modem("CQFRAME N2CALL 500");
+    let at = (1_795_213_000_000 + rig.now) / 1000;
+    assert_eq!(
+        told(&outs),
+        [
+            json!({"op": "heard", "callsign": "N2CALL", "kind": "beacon", "bandwidth": 500,
+                "snr_db": 7.5, "at": at})
+        ]
+    );
+    rig.later(5000);
+    let outs = rig.modem("CQFRAME N3CALL 2300");
+    assert!(
+        told(&outs)[0].get("snr_db").is_none(),
+        "the SN was another frame's"
+    );
+    rig.modem("CQFRAME N2CALL 2300");
+    let listed = told(&rig.host(&json!({"op": "stations", "id": 5})));
+    let calls: Vec<&str> = listed[0]["stations"]
+        .as_array()
+        .expect("stations")
+        .iter()
+        .filter_map(|e| e["callsign"].as_str())
+        .collect();
+    assert_eq!(calls, ["N2CALL", "N3CALL"], "each once, the latest first");
+    assert_eq!(listed[0]["stations"][0]["bandwidth"], 2300);
+    assert_eq!(
+        told(&rig.host(&json!({"op": "beacon", "id": 6})))[0]["code"],
+        "unsupported"
+    );
+}
+
+/// RP-4 §9.2: the VARA adapter uses no `CQFRAME` until it is read in VARA's published commands.
+#[test]
+fn vara_reports_no_stations_heard_yet() {
+    use radiopost_mercury::bridge::Dialect;
+    let mut bridge = Bridge::speaking(Dialect::VaraHf);
+    let outs = bridge
+        .from_host(&json!({"op": "hello", "id": 1, "version": [1, 1], "app": "test"}).to_string());
+    assert_eq!(asked(&outs), ["CHAT OFF"]);
+    let hello = told(&bridge.from_modem("OK"));
+    assert!(hello[0]["caps"].get("heard").is_none(), "{hello:?}");
+    assert_eq!(
+        told(&bridge.from_modem("CQFRAME N2CALL 500")),
+        Vec::<Value>::new()
+    );
+    let refused = told(&bridge.from_host(&json!({"op": "stations", "id": 2}).to_string()));
+    assert_eq!(refused[0]["code"], "unsupported");
 }

@@ -477,6 +477,8 @@ struct Modem {
     /// The record of the call under way, fed every event and request (choosing a gateway,
     /// §12.1), when there is one.
     trace: Option<Arc<Mutex<Trace>>>,
+    /// Where the stations the modem hears are kept (RP-4 §4.4), when the panel runs.
+    carrier: Option<crate::presence::Carrier>,
 }
 
 impl Modem {
@@ -519,6 +521,7 @@ impl Modem {
                 quiet: opts.quiet,
                 said_name: String::new(),
                 trace: None,
+                carrier: opts.alerts.clone(),
             };
             let hello = modem.host.hello(&opts.app);
             match modem.ask(&hello) {
@@ -567,7 +570,31 @@ impl Modem {
         let e = Event::read(&m)
             .map_err(|why| format!("the adapter wrote what RP-4 does not: {why}"))?;
         self.note(|t| t.saw(&e));
+        self.sighted(&e);
         Ok(e)
+    }
+
+    /// Listening starts: each read waits [`POLL`], and the modem is asked for the stations it
+    /// heard, for **Call**'s list (RP-4 §4.4): a modem that serves one program is held by no
+    /// connection between calls, so it is asked whenever listening starts.
+    /// The answer comes as an event, kept by [`Modem::sighted`].
+    fn start_waiting(&mut self) -> Result<(), Error> {
+        self.conn
+            .set_timeout(Some(POLL))
+            .map_err(|e| e.to_string())?;
+        if self.caps.heard && self.carrier.is_some() {
+            let ask = self.host.stations();
+            self.send(&ask)?;
+        }
+        Ok(())
+    }
+
+    /// A station the modem heard, kept for **Call**'s list (RP-4 §4.4), whatever this connection
+    /// is doing.
+    fn sighted(&self, e: &Event) {
+        if let Some(c) = &self.carrier {
+            c.sighted(e, modem_kind(&self.said_name));
+        }
     }
 
     /// The adapter's next event, or `None` when a quarter of a second passes without one.
@@ -577,6 +604,7 @@ impl Modem {
                 let e = Event::read(&m)
                     .map_err(|why| format!("the adapter wrote what RP-4 does not: {why}"))?;
                 self.note(|t| t.saw(&e));
+                self.sighted(&e);
                 Ok(Some(e))
             }
             Ok(None) => {
@@ -1978,10 +2006,7 @@ fn wait_for_call(
     opts: &Options,
     mut at: Option<(&mut Where, &mut dyn FnMut(Listening))>,
 ) -> Result<Option<(Event, String, String)>, Error> {
-    modem
-        .conn
-        .set_timeout(Some(POLL))
-        .map_err(|e| e.to_string())?;
+    modem.start_waiting()?;
     let mut watch = at.take().map(|(at, told)| WhereWatch {
         at,
         told,

@@ -26,6 +26,10 @@
 //! with `listening`, which Aether holds below any program's own and drops with the connection).
 //! `status` is the host's own with the station's dial, the bandwidths a call is answered in, and
 //! the dials scanned, read from Aether's. A tuner tone is Aether's `tune`.
+//!
+//! The stations Aether hears are RPMI's `heard` (RP-4 §4.4): Aether's `heard` events, each its
+//! entry for the station, and `stations` is its `heard.list`. A frame of another program's session
+//! is that program's link, and its station is not told to this host (§1.1).
 
 use std::collections::HashMap;
 
@@ -116,6 +120,10 @@ enum Waiting {
     Status {
         rid: Option<Value>,
     },
+    /// RP-4 §4.4 `stations`: Aether's `heard.list`.
+    Stations {
+        rid: Option<Value>,
+    },
     Nothing,
 }
 
@@ -187,6 +195,57 @@ pub struct Bridge {
     /// Scan requests not yet answered: Aether's `scan` events meanwhile are their own echo.
     scan_asking: u32,
     log: Option<String>,
+}
+
+/// RP-4 §9.1: what an entry of Aether's stations heard (`heard.list`, a `heard` event's data)
+/// says in RPMI's `heard` (§4.4), `op` aside. `own_link` says whether the station is the far end
+/// of this host's own link: an entry heard last in a session that is not the host's has no `kind`,
+/// since the session is another program's (§1.1). `None` for an entry with no callsign.
+#[must_use]
+pub fn sighting(entry: &Value, own_link: bool) -> Option<Message> {
+    let callsign = entry["callsign"].as_str().filter(|c| !c.is_empty())?;
+    let mut m = Message::new();
+    m.insert("callsign".into(), callsign.into());
+    let kind = match entry["activity"].as_str() {
+        Some("beacon") => Some("beacon"),
+        Some("calling") => Some("call"),
+        Some("answering") => Some("answer"),
+        Some("probing") => Some("probe"),
+        Some("connected") if own_link => Some("session"),
+        Some("datagram") => Some("datagram"),
+        Some("identified") => Some("id"),
+        _ => None,
+    };
+    if let Some(kind) = kind {
+        m.insert("kind".into(), kind.into());
+        if matches!(kind, "call" | "answer" | "probe")
+            && let Some(to) = entry["detail"].as_str().filter(|t| !t.is_empty())
+        {
+            m.insert("to".into(), to.into());
+        }
+    }
+    if let Some(snr) = entry["snr_db"].as_f64() {
+        m.insert("snr_db".into(), json!(snr));
+    }
+    if let Some(hz) = entry["bandwidth_hz"].as_i64() {
+        m.insert("bandwidth".into(), hz.into());
+    }
+    if let Some(hz) = entry["frequency_hz"].as_u64().filter(|&hz| hz > 0) {
+        m.insert("dial_hz".into(), hz.into());
+    }
+    if let Some(ms) = entry["last_heard_ms"].as_u64() {
+        m.insert("at".into(), (ms / 1000).into());
+    }
+    // what a beacon says of itself, from the Aether whose beacons carry it (its ADR-0140, 0142)
+    if kind == Some("beacon") {
+        if let Some(answers) = entry["answering"].as_bool() {
+            m.insert("answers".into(), answers.into());
+        }
+        if let Some(position) = rpmi::position::Position::from_json(&entry["position"]) {
+            m.insert("position".into(), position.to_json());
+        }
+    }
+    Some(m)
 }
 
 /// RP-4 §9.1: why Aether ended a scan, in RPMI's words.
@@ -423,8 +482,22 @@ impl Bridge {
                 self.on_radio(radio, rid, &mut out);
             }
             Request::Tone(seconds) => self.on_tone(seconds, rid, &mut out),
+            heard @ (Request::Stations | Request::Beacon { .. }) => {
+                self.on_heard_request(&heard, rid, &mut out);
+            }
         }
         out
+    }
+
+    /// RP-4 §4.4: the stations heard are Aether's `heard.list`; a beacon waits for the Aether
+    /// that takes one from a program (its ADR-0139).
+    fn on_heard_request(&mut self, request: &Request, rid: Option<Value>, out: &mut Vec<Out>) {
+        if matches!(request, Request::Stations) {
+            out.push(self.ask("heard.list", json!({}), Waiting::Stations { rid }));
+        } else {
+            let text = "this Aether takes no beacon from a program";
+            out.push(Out::Host(error(rid.as_ref(), "unsupported", text)));
+        }
     }
 
     /// RP-4 §4.1, §4.2: the radio's dial, read and set through Aether, and its scan.
@@ -637,7 +710,39 @@ impl Bridge {
         if !scanning.is_empty() {
             m.insert("scanning".into(), scanning.into());
         }
+        // Aether's own repeating beacon, its panel's Repeat (RP-4 §4.4)
+        if let Some(every) = station["beacon"]["every_s"].as_f64().filter(|s| *s > 0.0) {
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "an interval of minutes, above 0"
+            )]
+            let whole = every.round() as u64;
+            m.insert("beaconing".into(), whole.into());
+        }
         m
+    }
+
+    /// A station heard (RP-4 §4.4): to every host that has said hello, but never a frame of
+    /// another program's session, which is that program's link (§1.1).
+    fn on_heard(&self, data: &Value, out: &mut Vec<Out>) {
+        let callsign = data["callsign"].as_str().unwrap_or("");
+        let own = self.own_link_with(callsign);
+        let theirs = data["activity"] == "connected" && !own;
+        if self.hello
+            && !theirs
+            && let Some(mut m) = sighting(data, own)
+        {
+            m.insert("op".into(), "heard".into());
+            out.push(Out::Host(m));
+        }
+    }
+
+    /// Whether `callsign` is the far end of this host's own link.
+    fn own_link_with(&self, callsign: &str) -> bool {
+        self.link
+            .as_ref()
+            .is_some_and(|l| l.remote.eq_ignore_ascii_case(callsign))
     }
 
     fn host_status(&self, rid: Option<&Value>) -> Message {
@@ -878,6 +983,10 @@ impl Bridge {
                     scan: self.scans,
                     call_s: self.lasts,
                     tone: true,
+                    // every Aether keeps the stations it hears (`heard.list`, `heard` events)
+                    heard: true,
+                    beacon: false,
+                    position: false,
                 };
                 let modem = format!(
                     "Aether HF {}",
@@ -1043,6 +1152,28 @@ impl Bridge {
                 let station = if ok { result.clone() } else { Value::Null };
                 out.push(Out::Host(self.status(rid.as_ref(), &station)));
             }
+            Waiting::Stations { rid } => {
+                let stations: Vec<Value> = result["stations"]
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|e| {
+                                let own = e["callsign"]
+                                    .as_str()
+                                    .is_some_and(|c| self.own_link_with(c));
+                                sighting(e, own)
+                            })
+                            .map(Value::Object)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if ok {
+                    let m = answer_with("stations", rid.as_ref(), &[("stations", stations.into())]);
+                    out.push(Out::Host(m));
+                } else {
+                    out.push(Out::Host(error(rid.as_ref(), "refused", &message)));
+                }
+            }
             Waiting::Tune { rid } | Waiting::Tone { rid } => {
                 if ok {
                     Self::ok(rid.as_ref(), &mut out);
@@ -1179,6 +1310,7 @@ impl Bridge {
                 }
             }
             "scan" => self.on_scan(data, &mut out),
+            "heard" => self.on_heard(data, &mut out),
             // every change of the radio's dial, a tune or the knob, is told to every host (§4.1)
             "dial" => {
                 if self.hello
@@ -1444,7 +1576,8 @@ impl Bridge {
                 | Waiting::BandwidthStatus { rid, .. }
                 | Waiting::BandwidthSet { rid, .. }
                 | Waiting::Tone { rid }
-                | Waiting::Status { rid } => rid,
+                | Waiting::Status { rid }
+                | Waiting::Stations { rid } => rid,
                 Waiting::Nothing => None,
             };
             if rid.is_some() {

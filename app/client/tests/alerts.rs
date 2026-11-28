@@ -45,6 +45,9 @@ fn shared_loopback() -> (Server, String, String) {
         scan: false,
         call_s: false,
         tone: false,
+        heard: false,
+        beacon: false,
+        position: false,
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),
@@ -102,6 +105,7 @@ fn carrying(home: &Path, modem: &str, lends: &Lends) -> (Presence, Alerts) {
             true
         }),
         say: Arc::new(|_line: &str| {}),
+        stations: radiopost_client::stations::Stations::in_memory(),
     });
     presence.start();
     presence.set_modem(modem);

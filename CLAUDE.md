@@ -125,6 +125,15 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   header names the app between calls. No callsigns on it: under Aether's ADR-0108 any claim speaks
   for the station. The page tells the panel its modem (`POST /api/modem`); only `ws://` and only a
   shared Aether get the connection, never in conformance mode; retries every 5 s, logged once.
+  **The stations heard** (W59, D51, `docs/design/07-p2p-stations.md`, RP-4 1.7.0 §4.4): an adapter
+  with `caps.heard` sends `heard` and answers `stations` (Aether's `heard` events and `heard.list`;
+  Mercury's CQ frames; VARA's `CQFRAME` left off until read in its published commands), and
+  `rpmi-lines.json` marks a case refused only for want of a cap with `unless`. The client keeps
+  them by callsign and band for seven days (`stations.rs`, `stations.json` in the first home),
+  fed by every connection (`presence::Carrier::sighted`, `Modem::sighted`), and `/api/stations`
+  is **Call**'s list in P2P: grouped by where each was heard against the radio's dial, gateways'
+  and its own callsigns left out, with *P2P worked* from the call records. `rpmi::position` is a
+  beacon's position and the Maidenhead squares, worked as the reference works them.
   **Listen for P2P** latches (W15, the 40 m sessions of 2026-11-18): `session::keep_listening`
   keeps one connection, its claims and `listen` on across sessions (Aether ends a claim with its
   connection, so closing it after each session had stopped the answering), opens a failed one

@@ -41,6 +41,10 @@ struct Aether {
     listening_requests: bool,
     /// `status.scan`'s dials, a scan another program runs; none when empty.
     scan_dials: Vec<u64>,
+    /// The stations heard, as `heard.list` answers them.
+    heard: Value,
+    /// `status.beacon.every_s`: the panel's repeating beacon.
+    beacon_every_s: Option<f64>,
     asked: Vec<Value>,
 }
 
@@ -62,6 +66,8 @@ impl Aether {
             tone_refused: false,
             listening_requests: false,
             scan_dials: Vec::new(),
+            heard: json!([]),
+            beacon_every_s: None,
             asked: Vec::new(),
         }
     }
@@ -97,6 +103,7 @@ impl Aether {
                 if self.listening_requests {
                     status["bandwidth"]["listening"] = json!(false);
                 }
+                status["beacon"] = json!({"every_s": self.beacon_every_s, "waiting": false});
                 ok(status)
             }
             "capabilities" => ok(json!({"bandwidth_hz": 2300, "bandwidths_hz": [2300, 500]})),
@@ -155,6 +162,8 @@ impl Aether {
             "tune" if self.tone_refused => refused("refused"),
             "tune" if params["duration_s"] == 0 => ok(json!({"stopped": true})),
             "tune" => ok(json!({"accepted": true, "duration_s": params["duration_s"]})),
+            "heard.list" => ok(json!({"stations": self.heard, "limit": 200,
+                                      "path": "/x/heard.json"})),
             "hello" if self.hello => ok(json!({"id": 7, "app": params["app"]})),
             "hello" => refused("unknown_method"),
             other => panic!("the adapter asked Aether for {other}"),
@@ -256,7 +265,7 @@ fn hello_is_status_and_capabilities() {
             json!({"op": "hello", "id": 1, "version": 1, "modem": "Aether HF 0.2.0-beta.146",
                 "caps": {"bandwidths": [500, 2300], "max_links": 1, "delivery": true,
                          "broadcast": true, "quality": true, "busy": true, "regulatory": true,
-                         "max_queue": 65536, "shared": true, "tone": true}})
+                         "max_queue": 65536, "shared": true, "tone": true, "heard": true}})
         ]
     );
     let methods: Vec<&str> = a
@@ -439,6 +448,10 @@ fn every_line_is_read_or_refused() {
         serde_json::from_str(&std::fs::read_to_string(path).expect("the vectors")).expect("JSON");
     let (mut b, mut a) = opened(true, false);
     for case in file["lines"].as_array().expect("lines") {
+        // refused only by an adapter without the cap `unless` names; this one may have it
+        if case.get("unless").is_some() {
+            continue;
+        }
         let said = line(&mut b, &mut a, case["line"].as_str().expect("a line"));
         let want: Vec<Value> = case["answers"]
             .as_array()
@@ -1525,4 +1538,99 @@ fn status_says_where_and_how_the_station_is_called() {
         status["scanning"],
         json!([7_101_000, 3_590_000, 14_107_000])
     );
+}
+
+/// An entry of Aether's stations heard, as `heard.list` and the `heard` event carry it.
+fn entry(callsign: &str, activity: &str, detail: Option<&str>, ms: u64) -> Value {
+    json!({"callsign": callsign, "first_heard_ms": 1_795_000_000_000_u64, "last_heard_ms": ms,
+           "count": 3, "snr_db": -4.5, "best_snr_db": 2.0, "frequency_hz": 7_101_000,
+           "mode": 0, "activity": activity, "detail": detail, "connected": false,
+           "beacons": 1, "last_beacon_ms": ms, "bandwidth_hz": 500})
+}
+
+/// RP-4 §4.4, §9.1: `stations` is Aether's `heard.list`, and each `heard` event goes to the host
+/// in RPMI's words: the activity as `kind`, whom it called as `to`, the dial, the time in seconds.
+/// A beacon's own word on answering and its position pass through. Another program's session is
+/// its link (§1.1): a frame of it is not told, and its station is listed without a kind.
+#[test]
+fn the_stations_heard_are_aethers() {
+    let (mut b, mut a) = opened(true, true);
+    let mut beacon = entry("N2CALL", "beacon", None, 1_795_213_320_500);
+    beacon["answering"] = json!(true);
+    beacon["position"] = json!({"lat": 34.47916666666667, "lon": -83.79166666666667,
+                                "precision": "grid6", "grid": "EM84cl"});
+    a.heard = json!([
+        beacon,
+        entry("N5CALL-7", "calling", Some("N3CALL"), 1_795_213_000_000),
+        entry("N3CALL", "connected", None, 1_795_212_000_000),
+    ]);
+    let said = line(&mut b, &mut a, r#"{"op":"stations","id":4}"#);
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "stations", "id": 4, "stations": [
+            {"callsign": "N2CALL", "kind": "beacon", "snr_db": -4.5, "bandwidth": 500,
+             "dial_hz": 7_101_000, "at": 1_795_213_320_u64, "answers": true,
+             "position": {"lat": 34.47916666666667, "lon": -83.79166666666667,
+                          "precision": "grid6", "grid": "EM84cl"}},
+            {"callsign": "N5CALL-7", "kind": "call", "to": "N3CALL", "snr_db": -4.5,
+             "bandwidth": 500, "dial_hz": 7_101_000, "at": 1_795_213_000_u64},
+            {"callsign": "N3CALL", "snr_db": -4.5, "bandwidth": 500, "dial_hz": 7_101_000,
+             "at": 1_795_212_000_u64}]})]
+    );
+    // a frame of another program's session is not this host's to hear of
+    let said = event(
+        &mut b,
+        &mut a,
+        "heard",
+        &entry("N3CALL", "connected", None, 1),
+    );
+    assert!(said.is_empty(), "{said:?}");
+    // a beacon is, with nothing it did not say
+    let said = event(
+        &mut b,
+        &mut a,
+        "heard",
+        &entry("N4CALL", "beacon", None, 9_999),
+    );
+    assert_eq!(
+        lines(&said),
+        [
+            json!({"op": "heard", "callsign": "N4CALL", "kind": "beacon", "snr_db": -4.5,
+                "bandwidth": 500, "dial_hz": 7_101_000, "at": 9})
+        ]
+    );
+    // and so is the far end of the host's own link, whose frames are a session
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"connect","id":5,"remote":"N1CALL-10"}"#,
+    );
+    event(
+        &mut b,
+        &mut a,
+        "state",
+        &mine("connected", "N1CALL-10 (master)"),
+    );
+    let said = event(
+        &mut b,
+        &mut a,
+        "heard",
+        &entry("N1CALL-10", "connected", None, 20_000),
+    );
+    assert_eq!(lines(&said)[0]["kind"], "session");
+}
+
+/// RP-4 §4.4: Aether's own repeating beacon, its panel's Repeat, is `status`'s `beaconing`; a
+/// program's beacon waits for the Aether that takes one (its ADR-0139).
+#[test]
+fn the_panels_repeating_beacon_is_said_and_a_beacon_waits_for_aether() {
+    let (mut b, mut a) = opened(true, false);
+    a.beacon_every_s = Some(900.0);
+    let said = line(&mut b, &mut a, r#"{"op":"status","id":4}"#);
+    assert_eq!(lines(&said)[0]["beaconing"], 900);
+    a.beacon_every_s = None;
+    let said = line(&mut b, &mut a, r#"{"op":"status","id":5}"#);
+    assert!(lines(&said)[0].get("beaconing").is_none());
+    let said = line(&mut b, &mut a, r#"{"op":"beacon","id":6}"#);
+    assert_eq!(lines(&said)[0]["code"], "unsupported");
 }

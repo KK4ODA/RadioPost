@@ -12,6 +12,7 @@
 //! * [`tcp`]: the channel served on loopback ports, and a host's connection to any adapter.
 //! * [`polled`]: a TCP connection read a while at a time without a read timeout on its socket,
 //!   which Windows does not keep safely: a host's connection, and an adapter's to its modem.
+//! * [`position`]: where a beacon says its station is, and the Maidenhead squares (RP-4 §4.4).
 //!
 //! None of it but [`tcp`] and [`polled`] does input or output, and nothing has a clock.
 
@@ -20,6 +21,7 @@ pub mod channel;
 pub mod host;
 pub mod lobby;
 pub mod polled;
+pub mod position;
 pub mod tcp;
 pub mod wire;
 

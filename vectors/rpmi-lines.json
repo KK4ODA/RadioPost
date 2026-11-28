@@ -5,7 +5,7 @@
     "RP-4": "§2, §4, §7"
   },
   "made_by": "tools/vectors/make.py",
-  "rule": "An adapter that has said `hello` to a host with the callsign KK4ODA, and has no links, reads each `line` (one line of JSON Lines, without its LF) and answers with `answers`, which may be none: a request without `id` gets no `ok` (RP-4 §2). A line that is not I-JSON (RFC 7493) is answered as one that is not JSON. Messages compare as JSON values, a `data` member as its bytes; `text` need not match.",
+  "rule": "An adapter that has said `hello` to a host with the callsign KK4ODA, and has no links, reads each `line` (one line of JSON Lines, without its LF) and answers with `answers`, which may be none: a request without `id` gets no `ok` (RP-4 §2). A line that is not I-JSON (RFC 7493) is answered as one that is not JSON. Messages compare as JSON values, a `data` member as its bytes; `text` need not match. A case with `unless` is answered so by an adapter whose caps lack that cap; one whose caps have it answers the request itself (RP-4 §4.4).",
   "lines": [
     {
       "what": "a string id, an unknown member",
@@ -602,6 +602,92 @@
           "text": "no such link of this host's"
         }
       ]
+    },
+    {
+      "what": "a beacon waiting longer than 600 s",
+      "line": "{\"op\": \"beacon\", \"id\": 45, \"within_s\": 601}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 45,
+          "code": "malformed",
+          "text": "`within_s` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "a beacon's as that is not a string",
+      "line": "{\"op\": \"beacon\", \"id\": 46, \"as\": 7}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 46,
+          "code": "malformed",
+          "text": "`as` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "a position without its precision",
+      "line": "{\"op\": \"beacon\", \"id\": 47, \"position\": {\"lat\": 33.7, \"lon\": -84.3}}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 47,
+          "code": "malformed",
+          "text": "`position` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "a longitude past 180",
+      "line": "{\"op\": \"beacon\", \"id\": 48, \"position\": {\"lat\": 33.7, \"lon\": 181, \"precision\": \"exact\"}}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 48,
+          "code": "malformed",
+          "text": "`position` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "a precision it does not know",
+      "line": "{\"op\": \"beacon\", \"id\": 49, \"position\": {\"lat\": 33.7, \"lon\": -84.3, \"precision\": \"grid8\"}}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 49,
+          "code": "malformed",
+          "text": "`position` is not of its type"
+        }
+      ]
+    },
+    {
+      "what": "a good beacon on a modem without beacons",
+      "line": "{\"op\": \"beacon\", \"id\": 50}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 50,
+          "code": "unsupported",
+          "text": "this modem sends no beacons"
+        }
+      ],
+      "unless": "beacon"
+    },
+    {
+      "what": "stations on a modem that keeps none",
+      "line": "{\"op\": \"stations\", \"id\": 51}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 51,
+          "code": "unsupported",
+          "text": "this modem keeps no stations heard"
+        }
+      ],
+      "unless": "heard"
     }
   ]
 }

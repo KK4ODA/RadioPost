@@ -302,6 +302,10 @@ impl Bridge {
                 let text = "ARDOP's host commands have no tuner tone";
                 out.push(Out::Host(error(rid_ref, "unsupported", text)));
             }
+            Request::Stations | Request::Beacon { .. } => {
+                let text = "this adapter reports no stations heard and sends no beacons on ARDOP";
+                out.push(Out::Host(error(rid_ref, "unsupported", text)));
+            }
             Request::Status => out.push(Out::Host(self.status(rid_ref))),
         }
         self.advance_call(&mut out);
@@ -324,6 +328,9 @@ impl Bridge {
             scan: false,
             call_s: false,
             tone: false,
+            heard: false,
+            beacon: false,
+            position: false,
         };
         out.push(Out::Host(answer_with(
             "hello",

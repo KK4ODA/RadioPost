@@ -240,10 +240,31 @@ pub enum Request {
     /// Key a steady tone for an antenna tuner for this many seconds, 1 to [`TONE_MAX_S`]; 0 stops
     /// one (§4.3).
     Tone(u64),
+    /// The stations the modem has heard (§4.4).
+    Stations,
+    /// One beacon (§4.4).
+    Beacon {
+        /// The host's callsign it carries; the first when absent.
+        as_call: Option<String>,
+        /// The `ref` to report `beacon-sent` with.
+        reference: Option<Value>,
+        /// How long it may wait for a clear channel, 1 to [`WITHIN_MAX_S`] seconds.
+        within_s: Option<u64>,
+        /// The dial it goes on.
+        dial_hz: Option<u64>,
+        /// Where the station is, as the host lets it go (§4.4); a valid position's object.
+        position: Option<Value>,
+    },
 }
 
 /// The longest tuner tone a host may ask for, in seconds (RP-4 §4.3).
 pub const TONE_MAX_S: u64 = 10;
+
+/// The longest a beacon may wait for a clear channel, in seconds (RP-4 §4.4).
+pub const WITHIN_MAX_S: u64 = 600;
+
+/// How long a beacon waits for a clear channel when its `within_s` is not given (RP-4 §4.4).
+pub const WITHIN_DEFAULT_S: u64 = 120;
 
 fn text(m: &Message, key: &str) -> Result<String, String> {
     match m.get(key) {
@@ -402,6 +423,29 @@ impl Request {
             },
             "status" => Request::Status,
             "dial" | "tune" | "scan" | "tone" => radio(m)?,
+            "stations" => Request::Stations,
+            "beacon" => {
+                let within_s = match m.get("within_s") {
+                    None => None,
+                    Some(v) => Some(
+                        natural(v)
+                            .filter(|s| (1..=WITHIN_MAX_S).contains(s))
+                            .ok_or("`within_s` is not an integer from 1 to 600")?,
+                    ),
+                };
+                let position = match m.get("position") {
+                    None => None,
+                    Some(v) if crate::position::is_position(v) => Some(v.clone()),
+                    Some(_) => return Err("`position` is not a position (RP-4 §4.4)".into()),
+                };
+                Request::Beacon {
+                    as_call: optional_text(m, "as")?,
+                    reference: reference(m)?,
+                    within_s,
+                    dial_hz: optional_dial(m)?,
+                    position,
+                }
+            }
             _ => return Ok(None),
         };
         Ok(Some(request))
@@ -464,11 +508,17 @@ pub struct Caps {
     pub call_s: bool,
     /// The adapter keys a tuner tone (§4.3).
     pub tone: bool,
+    /// The adapter reports the stations the modem hears and answers `stations` (§4.4).
+    pub heard: bool,
+    /// The adapter sends beacons (§4.4).
+    pub beacon: bool,
+    /// A beacon may carry the station's position, and a station heard may say where it is (§4.4).
+    pub position: bool,
 }
 
 impl Caps {
-    /// The `caps` member of `hello`; `dial`, `scan`, `call_s` and `tone` only when the adapter
-    /// has them, as §3 lets them be absent.
+    /// The `caps` member of `hello`; `dial`, `scan`, `call_s`, `tone`, `heard`, `beacon` and
+    /// `position` only when the adapter has them, as §3 lets them be absent.
     #[must_use]
     pub fn to_json(&self) -> Value {
         let mut caps = serde_json::json!({
@@ -487,6 +537,9 @@ impl Caps {
             ("scan", self.scan),
             ("call_s", self.call_s),
             ("tone", self.tone),
+            ("heard", self.heard),
+            ("beacon", self.beacon),
+            ("position", self.position),
         ] {
             if set {
                 caps[key] = Value::Bool(true);
@@ -522,6 +575,9 @@ impl Caps {
             scan: flag("scan"),
             call_s: flag("call_s"),
             tone: flag("tone"),
+            heard: flag("heard"),
+            beacon: flag("beacon"),
+            position: flag("position"),
         }
     }
 }

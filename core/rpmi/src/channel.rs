@@ -110,6 +110,8 @@ struct Station {
     dial_hz: Option<u64>,
     /// The scan under way (§4.2): the host it is for, and its dials, the first the home.
     scanning: Option<(String, Vec<u64>)>,
+    /// The stations heard, with `caps.heard` (§4.4): each callsign's last, the most recent first.
+    heard: Vec<Message>,
 }
 
 /// One channel and the stations on it.
@@ -121,6 +123,8 @@ pub struct Channel {
     calls_made: u64,
     placed: Vec<Placed>,
     out: Vec<Out>,
+    /// The one time the simulated modem has, Unix seconds: when a station was heard (§4.4).
+    now: u64,
 }
 
 /// A call a host asked for, placed or refused `busy`: what a test reads to time a program's
@@ -154,8 +158,15 @@ impl Channel {
             hosts: Vec::new(),
             links_made: 0,
             scanning: None,
+            heard: Vec::new(),
         });
         self.stations.len() - 1
+    }
+
+    /// Sets the time the simulated modem says a station was heard at, Unix seconds (§4.4). The
+    /// channel has no clock: the program that drives it says the time, as the vectors' `now`.
+    pub fn set_now(&mut self, now: u64) {
+        self.now = now;
     }
 
     /// The station's configuration.
@@ -313,6 +324,22 @@ impl Channel {
             Request::Tune(hz) => self.on_dial(station, host, Some(hz), id),
             Request::Scan(dials) => self.on_scan(station, host, &dials, id),
             Request::Tone(seconds) => self.on_tone(station, host, seconds, id),
+            Request::Stations => self.on_stations(station, host, id),
+            Request::Beacon {
+                as_call,
+                reference,
+                within_s: _, // the simulated channel is always clear: a beacon goes at once
+                dial_hz,
+                position,
+            } => self.on_beacon(
+                station,
+                h,
+                as_call,
+                reference,
+                dial_hz,
+                position.as_ref(),
+                id,
+            ),
         }
     }
 
@@ -937,6 +964,129 @@ impl Channel {
         self.ok(station, host, id);
     }
 
+    /// §4.4: the stations this modem has heard, the most recently heard first.
+    fn on_stations(&mut self, station: usize, host: &str, id: Option<&Value>) {
+        if !self.stations[station].cfg.caps.heard {
+            let m = error(id, "unsupported", "this modem keeps no stations heard");
+            self.emit(station, host, m);
+            return;
+        }
+        let list: Vec<Value> = self.stations[station]
+            .heard
+            .iter()
+            .cloned()
+            .map(Value::Object)
+            .collect();
+        let m = answer_with("stations", id, &[("stations", Value::Array(list))]);
+        self.emit(station, host, m);
+    }
+
+    /// §4.4: one frame with a callsign, addressed to nobody. The simulated channel is always
+    /// clear, so a beacon taken goes at once, and every other station whose modem reports the
+    /// stations it hears hears it. It goes only while nothing is up on the station.
+    #[allow(clippy::too_many_arguments)]
+    fn on_beacon(
+        &mut self,
+        station: usize,
+        h: usize,
+        as_call: Option<String>,
+        reference: Option<Value>,
+        dial_hz: Option<u64>,
+        position: Option<&Value>,
+        id: Option<&Value>,
+    ) {
+        let host = &self.stations[station].hosts[h];
+        let name = host.name.clone();
+        let caps = self.stations[station].cfg.caps.clone();
+        if !caps.beacon {
+            let m = error(id, "unsupported", "this modem sends no beacons");
+            self.emit(station, &name, m);
+            return;
+        }
+        let Some(first) = host.callsigns.first().cloned() else {
+            self.emit(station, &name, error(id, "refused", "no callsigns yet"));
+            return;
+        };
+        let callsign = as_call.unwrap_or(first);
+        if !host.callsigns.contains(&callsign) {
+            let text = format!("{callsign} is not this host's");
+            self.emit(station, &name, error(id, "not-authorized", &text));
+            return;
+        }
+        let listening = host.listening;
+        if self.ends_at(station) > 0 || self.calls.iter().any(|c| c.station == station) {
+            let text = "a link or a call is up on the station";
+            self.emit(station, &name, error(id, "busy", text));
+            return;
+        }
+        // the radio's dial, or a dial of a running scan, which goes there to send it (§4.4, §6)
+        let wanted = dial_hz.filter(|_| caps.dial);
+        if let Some(hz) = wanted
+            && Some(hz) != self.stations[station].dial_hz
+            && !self.stations[station]
+                .scanning
+                .as_ref()
+                .is_some_and(|(_, dials)| dials.contains(&hz))
+        {
+            let text = format!("the radio is not on {hz} Hz");
+            self.emit(station, &name, error(id, "refused", &text));
+            return;
+        }
+        self.ok(station, &name, id);
+        if let Some(hz) = wanted {
+            self.go_to(station, hz);
+        }
+        let position = position
+            .filter(|_| caps.position)
+            .and_then(crate::position::Position::from_json);
+        for s in 0..self.stations.len() {
+            if s == station || !self.stations[s].cfg.caps.heard {
+                continue;
+            }
+            let mut entry = Message::new();
+            entry.insert("callsign".into(), callsign.clone().into());
+            entry.insert("kind".into(), "beacon".into());
+            // whether calls to its callsign are answered now: the host listens, and holds it
+            entry.insert("answers".into(), listening.into());
+            entry.insert("at".into(), self.now.into());
+            if self.stations[s].cfg.caps.dial
+                && let Some(hz) = self.stations[s].dial_hz
+            {
+                entry.insert("dial_hz".into(), hz.into());
+            }
+            if let Some(p) = position
+                .as_ref()
+                .filter(|_| self.stations[s].cfg.caps.position)
+            {
+                entry.insert("position".into(), p.heard().to_json());
+            }
+            let heard = &mut self.stations[s].heard;
+            heard.retain(|e| e.get("callsign") != Some(&Value::String(callsign.clone())));
+            heard.insert(0, entry.clone());
+            let hearing: Vec<String> = self.stations[s]
+                .hosts
+                .iter()
+                .filter(|o| o.hello)
+                .map(|o| o.name.clone())
+                .collect();
+            for other in hearing {
+                let mut m = entry.clone();
+                m.insert("op".into(), "heard".into());
+                self.emit(s, &other, m);
+            }
+        }
+        let mut sent = answer_with("beacon-sent", None, &[("sent", true.into())]);
+        if let Some(r) = reference {
+            sent.insert("ref".into(), r);
+        }
+        if caps.dial
+            && let Some(hz) = self.stations[station].dial_hz
+        {
+            sent.insert("dial_hz".into(), hz.into());
+        }
+        self.emit(station, &name, sent);
+    }
+
     fn on_status(&mut self, station: usize, h: usize, id: Option<&Value>) {
         let host = &self.stations[station].hosts[h];
         let name = host.name.clone();
@@ -1009,6 +1159,9 @@ mod tests {
                 scan: false,
                 call_s: false,
                 tone: false,
+                heard: false,
+                beacon: false,
+                position: false,
             },
             prefix: "c".into(),
             frame_bytes: 128,

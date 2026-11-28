@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.6.1 |
-| **Updated** | 2026-11-24 |
+| **Version** | 1.7.0 |
+| **Updated** | 2026-11-28 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0 |
@@ -30,6 +30,8 @@ adapter for it, and a modem may speak RPMI itself.
 * A **link** is one connection to one remote station: a reliable, ordered, two-way byte stream, as
   RP-3 §1 needs. The adapter names each link with a string ID.
 * A modem that carries datagrams (one-to-many frames, no connection) MAY offer **broadcasts**.
+* A modem MAY send **beacons** (one frame carrying a callsign, addressed to nobody) and report the
+  **stations it hears** (§4.4).
 * A modem MAY be **shared**: several programs, each through its own connection, use one modem
   and one radio. An example is a gateway that carries RadioPost and another system's mail on the
   same station. §1.1 says what each host can rely on.
@@ -164,6 +166,9 @@ The adapter answers:
 | `scan` | The adapter scans the radio over a list of dials (§4.2). Absent means false. Only with `dial`. |
 | `call_s` | The adapter keeps a call going as long as `connect`'s `call_s` asks (§4). Absent means false. |
 | `tone` | The adapter keys a tuner tone (§4.3). Absent means false. |
+| `heard` | The adapter reports the stations the modem hears with `heard` (§5) and answers `stations` (§4.4). Absent means false. |
+| `beacon` | The adapter sends beacons (§4.4). Absent means false. |
+| `position` | A beacon may carry the station's position, and a station heard may say where it is (§4.4). Absent means false. Only with `beacon` or `heard`. |
 
 If no version is in common the adapter answers `error` `unsupported-version` and closes. An adapter
 that is not shared (§1.1) answers the `hello` of a second host, while a host that has said `hello`
@@ -196,11 +201,14 @@ it is sent, such as `busy`.
 | `tune` | `dial_hz` | Sets the radio's dial (§4.1). `ok` once the radio is there. |
 | `scan` | `dials` (list), `id` | Listens on each dial in turn (§4.2); an empty list stops it. Answered with `scan`. |
 | `tone` | `seconds` | Keys a steady tone for an antenna tuner for `seconds`; 0 stops it (§4.3). |
+| `stations` | — | The adapter answers `stations` with the stations the modem has heard (§4.4). |
+| `beacon` | `as`?, `ref`?, `within_s`?, `dial_hz`?, `position`? | Sends one beacon (§4.4); `beacon-sent` follows. |
 
 **Types.** `version` is a list of two integers, the lowest and the highest version the host
 speaks; `callsigns` is a list of strings; `on` is true or false; `bandwidth` and `dial_hz` are
 integers, `dial_hz` above 0; `dials` is a list of integers, each above 0; `call_s` is an
-integer, 0 or above; `seconds` is an integer from 0 to 10; `app`,
+integer, 0 or above; `seconds` is an integer from 0 to 10; `within_s` is an integer from 1 to
+600; `position` is an object (§4.4); `app`,
 `remote`, `as` and `link` are strings. `ref`, like `id`, is a string or an integer, and the adapter
 copies it unchanged into `delivered` or `broadcast-sent`. A `connect` needs its `id`, which its
 `connected` or `failed` carries: one without is `malformed`.
@@ -235,6 +243,7 @@ Three more members are the station's, and each is left out when the adapter cann
 | `dial_hz` | The radio's dial, with `caps.dial` (§4.1). |
 | `answers` | The bandwidths, in Hz, a call to this host is answered in now (§1.1). |
 | `scanning` | The dials the station scans, whichever host asked (§4.2). A host that tunes the radio to listen leaves it alone while this is there: a `tune` ends the scan. |
+| `beaconing` | The interval, in whole seconds, of a beacon the modem repeats by itself, whichever program or operator set it going (§4.4). A host that repeats its own beacons does not double it. |
 
 These are what a host shows its operator while it listens: where to call it and in which
 bandwidths.
@@ -327,6 +336,61 @@ A tone is refused with `unsupported` without `caps.tone`, with `busy` while any 
 on the station (§1.1), and with `refused` when the modem will not key now (the channel in use, a
 rule it checks, §8); `text` says why. A stop is never refused for being busy.
 
+### 4.4 Beacons and the stations heard
+
+A **beacon** is one frame that carries a callsign and is addressed to nobody: it tells whoever
+listens that the station is there, and how strongly it is heard. An adapter with `caps.beacon`
+sends one when the host asks:
+
+```json
+{"op": "beacon", "id": 11, "ref": "k1", "within_s": 120,
+ "position": {"lat": 33.78123, "lon": -84.38765, "precision": "exact"}}
+```
+
+* `as` is the callsign the beacon carries, one of this host's (its first by default).
+* The modem sends it in the mode its weakest listeners hear, when the channel is clear and nothing
+  else of the station's is on the air, within `within_s` seconds of the request (120 when not
+  given), or not at all. The modem never repeats a beacon on its own: a host that wants one every
+  so often asks each time.
+* With `dial_hz` and `caps.dial`, the beacon goes on that dial: the radio's dial, or a dial of a
+  scan that runs, the modem taking its scan there as it does for a broadcast (§6). On any other
+  dial it is refused. A modem without `caps.dial` ignores the member.
+* With `position` and `caps.position`, the beacon carries where the station is: `lat` and `lon` in
+  degrees (north and east positive, from −90 to 90 and from −180 to 180), and `precision`, one of
+  `grid4` (the 4-character Maidenhead square), `grid6` (the 6-character one) or `exact`. The
+  modem sends as much as `precision` says, never more. A modem without `caps.position` ignores
+  the member.
+
+The adapter answers `ok` once the modem has taken the beacon, and `beacon-sent` (§5) once it has
+gone or will not: `sent` true with the dial it went on, or false with `text` saying why (the
+channel stayed busy, a session started, a rule refused it at keying). It answers at once with
+`error` `unsupported` without `caps.beacon`; `refused` before callsigns (§4), on a dial it will
+not go to, or under rules it checks (a station under automatic control, the band, §8);
+`not-authorized` for an `as` that is not the host's; and `busy` while any link or call is up on
+the station, the host's or another program's (§1.1), or while another beacon waits.
+
+An adapter with `caps.heard` reports the **stations the modem hears**: each frame that carries
+another station's callsign (a beacon, a call to someone, an answer, an identifier) is a `heard`
+event (§5) to every host that has said `hello`, whether or not it has callsigns, as a broadcast is
+(§6). A frame of a link that is another program's is not reported: that would report the
+program's link (§1.1). `stations` asks for the modem's own list of the stations heard, the most
+recently heard first, each once:
+
+```json
+{"op": "stations", "id": 12, "stations": [
+  {"callsign": "N2CALL", "at": 1795213320, "kind": "beacon", "answers": true,
+   "dial_hz": 7101000, "snr_db": 8, "bandwidth": 2300,
+   "position": {"lat": 34.47916666666667, "lon": -83.79166666666667, "precision": "grid6",
+                "grid": "EM84cl"}}]}
+```
+
+Each entry has `heard`'s members, the last the modem has of the station, `at` always given. A modem
+that keeps no list answers with the stations heard since the host's `hello`.
+
+A position heard is the one the beacon carried: for `exact`, the latitude and longitude the modem
+decoded; for a grid, the square's centre and `grid`, its locator. What a host does with a position
+is its own; the modem tells everyone listening, so a host lets its operator choose what goes.
+
 ---
 
 ## 5. Events from the adapter
@@ -342,7 +406,9 @@ rule it checks, §8); `text` says why. A stop is never refused for being busy.
 | `disconnected` | `link`, `reason`, `text`? | The link is gone. `reason`: `local` (the host asked), `remote` (the other station hung up), `timeout`, `failure`. |
 | `quality` | `link`?, `snr_db`?, `rate_bps`?, `receiving`?, `peer_snr_db`? | What the modem knows about the path: the last SNR heard, the data rate it is using, whether it is receiving right now (RP-3 §8 uses this to tell a slow link from a dead one), and the SNR the other station reports hearing this one at, where the modem learns it: a link is two paths, and `snr_db` is only the one this station hears. Only with `quality`. |
 | `busy` | `busy` (bool) | Whether the channel is in use by others, including other programs on a shared modem (§1.1). Only with `busy`. |
-| `heard` | `callsign`, `snr_db`?, `bandwidth`? | A station was heard (a beacon, a call to someone else). Optional. |
+| `heard` | `callsign`, `snr_db`?, `bandwidth`?, `kind`?, `to`?, `answers`?, `dial_hz`?, `position`?, `at`? | A station was heard (§4.4). `kind` says what: `beacon`, `call` (to `to`), `answer` (to `to`), `probe` (to `to`), `session` (a frame of this host's own link), `datagram` or `id` (its identification). `answers`, for a beacon, says whether calls to its callsign are answered now, when the beacon says. `dial_hz` is the radio's dial when it was heard, with `caps.dial`; `position` where the beacon says its station is, with `caps.position`; `at` when, in Unix seconds. An adapter without `caps.heard` may still send the first three. |
+| `stations` | `id`, `stations` | The answer to `stations` (§4.4). |
+| `beacon-sent` | `ref`?, `sent` (bool), `dial_hz`?, `text`? | A beacon went (`sent` true, on `dial_hz` with `caps.dial`), or will not (`text` says why). It carries the `beacon`'s `ref` when it had one (§4.4). |
 | `dial` | `dial_hz`, `id`? | The radio's dial: the answer to `dial`, with its `id`, and, without one, each time the dial changes (§4.1). Only with `caps.dial`. |
 | `scan` | `dials`, `scan_s`?, `why`?, `id`? | The answer to `scan`; and, without an `id`, when the scan's dials change or it ends (no dials, and `why`). Only with `caps.scan` (§4.2). |
 | `broadcast` | `source`, `data`, `snr_db`?, `dial_hz`? | §6. |
@@ -404,8 +470,9 @@ Adapters use RP-0 §9.3's codes where one fits, and these words in `code` otherw
 ## 8. The rules on the air
 
 An adapter MUST NOT make the modem transmit except to carry out its host's requests (calls,
-answers when `listen` is on, data, disconnects, broadcasts, a tuner tone) and what the modem itself
-needs for them (acknowledgements, identification). On a shared modem, another program's transmissions are
+answers when `listen` is on, data, disconnects, broadcasts, beacons, a tuner tone) and what the
+modem itself needs for them (acknowledgements, identification). It never repeats a beacon by
+itself (§4.4). On a shared modem, another program's transmissions are
 that program's business; this host hears of them only as `busy`.
 
 Whether a transmission is allowed on this band, at this time, under this kind of control, is the
@@ -473,6 +540,10 @@ end of this section.
 | `scan` event | Aether's `scan` event, with its `why`: `connection closed` is `left`, `tuned by another program` is `tuned`, and `asked`, `knob`, `operator` and `radio` are themselves. |
 | `call_s` (in `connect`) | `connect {…, call_s}` with `caps.call_s`; Aether makes the fewest tries that keep starting that long, and answers how many. Without it, the call is Aether's own length. |
 | `bandwidth` (in `connect`) | A `connect` that names a bandwidth is sent with `keep_bandwidth`, so Aether does not move for the call by itself (its ADR-0102). One that names a bandwidth Aether runs but is not running now moves the station first, as §1.1 says: `status` (`busy` unless `state` is `idle`; `bandwidth.host_hz` is kept), then `bandwidth.set {hz}` (Aether's refusal, something under way on the air, is `busy`), then `connect`. When the call fails, its link ends or the host leaves, `bandwidth.set` puts back the `host_hz` kept, `null` for the station's own; withdrawing always succeeds, and Aether goes back once it is idle. From 0.2.0-beta.174 the call's request is this connection's alone, so the adapter puts back this connection's own instead: the request for listening while the host listens, `null` otherwise. Aether may move between calls (a `bandwidth` event): `connected` carries the bandwidth in use. |
+| `heard` | Aether's `heard` events, each the entry its stations heard keep: `activity` as `kind` (`beacon`; `calling` is `call`, `answering` is `answer`, `probing` is `probe`, `connected` is `session`, `identified` is `id`, `datagram`), `detail` as `to`, `frequency_hz` as `dial_hz`, `last_heard_ms` as `at` (whole seconds), `snr_db`, `bandwidth_hz` as `bandwidth`, and, from the Aether whose beacons carry them (its ADR-0140 and ADR-0142), `answering` as `answers` and `position`. An entry whose activity is `connected` is passed only while the host's own link with that station is up. `caps.heard` is true when Aether answers `heard.list`. |
+| `stations` | `heard.list`, each entry as `heard` above; one whose last activity was another program's session is listed without `kind`. |
+| `beacon` | `beacon {callsign, ref, within_s, dial_hz, position}` on the host's connection, `callsign` set to `as` (from Aether's ADR-0139, which `capabilities.beacon` announces; `capabilities.beacon.position` is `caps.position`). Aether's `beacon-sent` event, with the same `ref`, is RPMI's. Its refusals: `not_idle` is `busy`, `claimed` and `bad_params` for a callsign are `not-authorized`, `refused` and `regulatory` are `refused`. An earlier Aether has no `capabilities.beacon`, and `caps.beacon` is false. |
+| `beaconing` (in `status`) | `status.beacon.every_s`, Aether's own repeating beacon (its panel's **Repeat**). |
 | `tone` | `tune {duration_s}`, the seconds as `duration_s`, 0 to stop it: `busy` at once while the host has a call or link, or another program's session is up, unless it stops one; Aether's refusals (the channel busy, the rules, a radio keyed by a host program with none attached) are `refused`, with Aether's message. |
 
 Aether checks the band rules before every transmission, and ends each session with the Morse
@@ -542,6 +613,10 @@ program that holds it, so the adapter has the modem to itself (`shared` false), 
 **Identification.** The published commands have nothing for it: the station identifies as its
 operator sets VARA up, and the adapter sends nothing for it (Mercury's adapter sends `CQFRAME`,
 §9.6, because Mercury does not identify the station).
+
+**Beacons and the stations heard.** VARA's `CQFRAME <callsign> <bandwidth>` would carry `beacon`
+and `heard` as Mercury's does (§9.6). The adapter does not use it, and says neither `caps.beacon`
+nor `caps.heard`, until `CQFRAME` has been read in VARA's published command list itself.
 
 ### 9.3 ARDOP
 
@@ -674,6 +749,9 @@ the session's bytes on a data port, the next one. The adapter talks to it over T
 | `quality` | `SN <dB>` and `BITRATE (<mode>) <bps> BPS`. |
 | `busy` | `BUSY ON` / `BUSY OFF`, from Mercury's busy detector, which is off unless its operator turns it on. Not reported while the host's own link is up. |
 | `incoming` | `CONNECTED` for a call Mercury answered, to the callsign it names. `PENDING` and `CANCELPENDING` say a call is being answered; no `connect` is placed meanwhile (`busy`). |
+| `heard` | `CQFRAME <callsign> <bandwidth>` heard: `kind` `beacon`, the `SN` before it as `snr_db`, the bandwidth, `at`. Mercury cannot tell a beacon from another station's identification (below): both are `beacon`. `caps.heard` is true. |
+| `stations` | Mercury keeps no list: the CQ frames heard since the host's `hello`, each callsign's last. |
+| `beacon` | `CQFRAME <as> <bandwidth>` at the bandwidth Mercury is on, under the same rule as the adapter's own identification (below): only when nothing of the station's is under way, Mercury is answering no call, and its busy detector says `BUSY OFF`; within `within_s`, or `beacon-sent` false. `beacon-sent` true when Mercury's `CANCELPENDING` ends the frame's transmission. Mercury keys a CQ frame whatever is on the air, so `caps.beacon` is true only when `BUSYDETECT` answered `ON`. No `dial_hz` and no position: Mercury has neither. |
 
 **One program at a time.** Mercury serves one program, and gives its control port to the newest
 that connects, ending the session of the one before. The adapter connects to Mercury when a host
@@ -766,3 +844,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 1.5.0 | 2026-11-21 | §6, the dial: a broadcast heard carries `dial_hz`, where it was heard, and a `broadcast` may name a `dial_hz`; a scanning modem takes its scan there to send it, so an answer goes where the frame it answers was heard (RP-8 0.2.0, an alert to a station whose gateway scans). §9.1: Aether's `datagram.send` and `datagram` carry the dial (its ADR-0129 §15). Test vectors (`rpmi-conversations.json`, the scan conversation). MINOR, announced (RP-0 §8.4): two optional members; a modem or host that ignores them works as before, and its answers go where the radio is. |
 | 1.6.0 | 2026-11-24 | §1.1: a host listening is called in any bandwidth: an adapter whose modem answers narrower calls in its widest bandwidth runs that one while a host listens, below a bandwidth another program chose. §4: `status` carries the station's `dial_hz`, `answers` (the bandwidths a call is answered in now) and `scanning` (the dials the station scans, whichever host asked), each left out when the adapter cannot say. §9.1: Aether's `bandwidth.set` with `listening` and `status` (its 0.2.0-beta.174). From the portable's sessions of 2026-11-23: a 2300 Hz P2P call to a home station a profile had left at 500 Hz went unanswered, and nothing in the listening client said where or how it listened. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; an adapter that says none of the three, and a host that ignores them, work as before. |
 | 1.6.1 | 2026-11-24 | §6: position reports are RP-8's reports (RP-8 0.3.0), no longer a later specification's. PATCH, announced (RP-0 §8.4): nothing for an implementation to do. |
+| 1.7.0 | 2026-11-28 | Beacons and the stations heard (§4.4; [finding, beaconing and calling P2P stations](../docs/design/07-p2p-stations.md), D51, wishlist W59): `caps.heard`, `caps.beacon` and `caps.position` (§3); the `stations` and `beacon` requests and their members (§4); `heard`'s `kind`, `to`, `answers`, `dial_hz`, `position` and `at`, and the `stations` and `beacon-sent` events (§5); `status`'s `beaconing` (§4); beacons among what a host may make the modem transmit, never repeated by the adapter (§8). §9.1, Aether's heard list and beacons; §9.2, VARA's `CQFRAME` not used until checked; §9.6, Mercury's `CQFRAME`. Test vectors: `rpmi-conversations.json`'s *beacons and the stations heard*, `rpmi-lines.json`'s malformed `beacon` members. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; an adapter that says none of the three caps and a host that ignores them work as before. |

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.59 |
+| **Version** | 0.3.60 |
 | **Updated** | 2026-11-28 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -162,7 +162,7 @@ rules:
 | W56 | VHF and UHF gateways judged by the terrain | Radio | Medium | Fits today; optional addition (RP-5 `site`, `station`) | Accepted |
 | W57 | Learning from every call | Radio | High | Fits today; optional additions (RP-4 `peer_snr_db`, `failed.heard`; RP-5 `seen`) | In progress |
 | W58 | Gateways ranked by how soon the mail is done | Radio | Medium | Fits today | Accepted |
-| W59 | P2P stations heard, beacons with a position, and calling them from Call | Radio | High | Optional addition (RP-4 1.7.0: `heard` members, `stations`, `beacon`) | Accepted |
+| W59 | P2P stations heard, beacons with a position, and calling them from Call | Radio | High | Optional addition (RP-4 1.7.0: `heard` members, `stations`, `beacon`) | In progress |
 
 Groups: *Mail* (§4), *Setup* (§5), *Radio* (§6), *Operation* (§7), *Offline* (§8),
 *Applications* (§9), *Adapters* (§10), *Rules* (§11). Consolidated and deferred wishes are in §14.
@@ -727,7 +727,7 @@ in the beacon, so that P2P works with no Internet and without opening the modem'
 | Effort | Large: the store and the list; the schedule; the adapters; four Aether changes; the map and band prediction. |
 | Priority | **High.** P2P is what works when the Internet is down, and today the operator must find the other station in Aether's window or by voice. |
 | Recommendation | **Accept**, as [finding, beaconing and calling P2P stations](07-p2p-stations.md) designs it, in five phases; the first needs no transmission and no Aether release. |
-| Status | Accepted, not built; its Phase 1 next. |
+| Status | In progress: Phase 1 built (RP-4 1.7.0; the stations heard in **Call**, from Aether and Mercury). |
 | Author decision | 2026-11-28, the design's §11 (D51): the client may beacon on a timer on D49's terms (the operator starts it, four hours at most), keeps the schedule, and beacons by default only while listening; the position goes exactly by default, in Aether's beacon; a beacon is identified as today; the extras are built. |
 | Notes | A RadioPost beacon is the modem's own; nothing RadioPost-specific goes on the air. A presence broadcast was weighed and not proposed: 11 to 27 s on Aether against a beacon's 5.4 s, and only on modems with broadcasts. |
 
@@ -1357,3 +1357,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.57 | 2026-11-27 | W20: Mercury on the air, through a gateway answering on Aether and Mercury at once (W26). |
 | 0.3.58 | 2026-11-27 | W59, proposed: [finding, beaconing and calling P2P stations](07-p2p-stations.md). |
 | 0.3.59 | 2026-11-28 | W59 accepted (D51), with the station's position in the beacon. |
+| 0.3.60 | 2026-11-28 | W59: Phase 1 built, the stations heard in **Call** (RP-4 1.7.0). |

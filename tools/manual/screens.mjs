@@ -285,6 +285,21 @@ const RECENT = {recent: [
 ]};
 // whom the call box offers under ▾ (GET /api/called): RECENT's calls, once each and newest first,
 // a gateway with its record from the list in use, and a station called before RECENT's week
+// the stations the modem heard, as GET /api/stations answers on 7.101 MHz (W59, RP-4 §4.4): made
+// up, each with what the panel works out (where, age, distance and bearing, P2P worked)
+const heardLine = (callsign, where, ago, snr, more) => ({callsign, where, at: T - ago, age_s: ago,
+  snr_db: snr, band: "40m", dial_hz: 7101000, kind: "beacon", count: 3, elsewhere: [],
+  modem: "aether", ...more});
+const STATIONS = {radio_hz: 7101000, band: "40m", recent: 4, stations: [
+  heardLine("N2CALL", "here", 120, 8, {answers: true, bandwidth: 2300, km: 95, bearing: 40}),
+  heardLine("N6CALL", "here", 360, 14, {answers: true, bandwidth: 500, km: 310, bearing: 12,
+                                        worked_at: T - 2 * DAY}),
+  heardLine("N5CALL-7", "here", 540, 3, {kind: "call", to: "N3CALL", bandwidth: 2300}),
+  heardLine("N3CALL", "here", 1080, -4, {answers: false, bandwidth: 2300, km: 41, bearing: 275}),
+  heardLine("N4CALL", "band", 1500, 6, {dial_hz: 7083000, bandwidth: 500, km: 520, bearing: 350}),
+  heardLine("N7CALL", "other", 3600, -2, {band: "80m", dial_hz: 3591500, km: 140, bearing: 190}),
+]};
+
 function calledOf(gateways) {
   const out = {gateway: [], station: []};
   const calls = [...RECENT.recent, {at: T - 12 * DAY, kind: "station", remote: "N4CALL",
@@ -620,6 +635,7 @@ function clientApi(world) {
       case "places": return PLACES;
       case "attempts": return RECENT;
       // only the shots of the Station box show the calls made before; the others keep it empty
+      case "stations": return world.called ? STATIONS : {stations: [], recent: 0};
       case "called": return world.called
         ? calledOf(world.vhf ? GATEWAYS_VHF : world.hf ? GATEWAYS_HF : GATEWAYS)
         : {gateway: [], station: []};
@@ -1030,10 +1046,12 @@ const SHOTS = {
   async "client-called"(browser) {
     const {page, context} = await open(browser, {ui: CLIENT_UI,
                                                  api: clientApi(clientWorld({called: true})),
-                                                 height: 900});
+                                                 height: 1300});
     await spreadLog(page, "log", T - 1300, 19);
     await page.waitForTimeout(300);
     await page.check("input[name=kind][value=station]");
+    // set as a pick would leave it, without the typing that narrows the list
+    await page.$eval("#callsign", (input) => { input.value = "N2CALL"; });
     await page.click("#called-open");
     await page.waitForTimeout(300);
     await page.screenshot({path: join(OUT, "client-called.png"),
