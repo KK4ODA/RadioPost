@@ -164,6 +164,8 @@ pub struct Panel {
     alerts: Alerts,
     /// The stations the modem has heard (RP-4 §4.4), for **Call**'s list in P2P.
     stations: crate::stations::Stations,
+    /// The station's beacons (W59): **Beacon**'s settings and the one asked for.
+    beacons: crate::beacons::Beacons,
     /// Set, the thread that fetches the post office's backups looks now, not at its hour.
     backups_now: Arc<AtomicBool>,
     /// How often that thread looks: [`crate::backups::EVERY`], shorter in tests.
@@ -212,11 +214,20 @@ fn lock(a: &Mutex<Activity>) -> MutexGuard<'_, Activity> {
     a.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// Gives the station back after a beacon, when it is still the beacon's.
+fn release_beacon(activity: &Mutex<Activity>) {
+    let mut a = lock(activity);
+    if a.state == "beaconing" {
+        a.state = "idle";
+    }
+}
+
 /// Why a request that needs the station is refused while it is in `state`.
 fn why_busy(state: &str) -> Error {
     match state {
         "renewing" => "renewing the credential: try again in a moment",
         "alerting" => "an alert is going out: try again in a moment",
+        "beaconing" => "a beacon is going out: try again in a moment",
         "listening" => {
             "the station is listening for P2P calls: click Listening for P2P to stop it first"
         }
@@ -363,6 +374,7 @@ impl Panel {
             presence: Presence::new(home),
             alerts: Alerts::open(home),
             stations: crate::stations::Stations::open(home),
+            beacons: crate::beacons::Beacons::open(home),
             backups_now: Arc::new(AtomicBool::new(true)),
             backups_every: crate::backups::EVERY,
             downloads: crate::downloads::folder(home),
@@ -472,12 +484,155 @@ impl Panel {
             radiopost::logfile::line(line);
             lock(&activity).log.push(line.to_owned());
         };
+        self.follow_position();
         Carrier {
             alerts: self.alerts.clone(),
             base: self.base.clone(),
             gate: Arc::new(gate),
             say: Arc::new(say),
             stations: self.stations.clone(),
+            beacons: self.beacons.clone(),
+        }
+    }
+
+    /// A beacon says the position in use as it goes (design 07 §7): the beacons read it from here.
+    fn follow_position(&self) {
+        let position = Arc::clone(&self.position);
+        self.beacons
+            .set_here(Arc::new(move || position.for_beacon()));
+    }
+
+    /// **Beacon**'s settings and state for the page (W59).
+    fn beacon_view(&self) -> Value {
+        self.follow_position();
+        self.beacons.json(now())
+    }
+
+    /// `/api/beacon`: **Send a beacon now** (`{send: true}`), **Beacon**'s latch (`{repeat: true}`
+    /// or `false`), or its settings (`{settings: {every_min, only_while_listening, position}}`). A
+    /// beacon goes on the listening connection while the station listens, otherwise on a
+    /// connection of its own while the station is idle: the activity is `beaconing` until it has
+    /// gone or will not.
+    fn beacon_request(&self, adapter: &str, body: &Value) -> Result<Value, Error> {
+        if let Some(settings) = body.get("settings").filter(|v| !v.is_null()) {
+            let settings: crate::beacons::Settings =
+                serde_json::from_value(settings.clone()).map_err(|e| format!("settings: {e}"))?;
+            self.beacons.set(settings)?;
+            return Ok(self.beacon_view());
+        }
+        if let Some(on) = body["repeat"].as_bool() {
+            self.follow_position();
+            if on {
+                self.beacons.start_repeating(now());
+                let every = self.beacons.settings().every_min;
+                self.note(&format!(
+                    "beacon: repeating every {every} min, four hours at most"
+                ));
+            } else {
+                self.beacons.stop_repeating(None);
+                self.note("beacon: repeating stopped");
+            }
+            return Ok(self.beacon_view());
+        }
+        if body["send"] != true {
+            return Err("send, repeat or settings".into());
+        }
+        self.follow_position();
+        {
+            let a = lock(&self.activity);
+            if a.state == "listening" && a.held.is_none() {
+                drop(a);
+                self.beacons.ask_now(now())?;
+                return Ok(self.beacon_view());
+            }
+        }
+        self.take_for_beacon()?;
+        if let Err(why) = self.beacons.ask_now(now()) {
+            release_beacon(&self.activity);
+            return Err(why.into());
+        }
+        self.beacon_alone(adapter);
+        Ok(self.beacon_view())
+    }
+
+    /// Takes the idle station for a beacon: the activity `beaconing`, so no call starts meanwhile.
+    fn take_for_beacon(&self) -> Result<(), Error> {
+        let mut a = lock(&self.activity);
+        if a.state != "idle" {
+            return Err(why_busy(a.state));
+        }
+        a.state = "beaconing";
+        Ok(())
+    }
+
+    /// Sends the beacon asked for on a connection of its own, on a thread of its own, the station
+    /// taken for it ([`Panel::take_for_beacon`]) and given back after.
+    fn beacon_alone(&self, adapter: &str) {
+        let opts = self.station_options(adapter);
+        let home = self.home();
+        let activity = Arc::clone(&self.activity);
+        let beacons = self.beacons.clone();
+        thread::spawn(move || {
+            let Some(due) = beacons.due(now(), &[]) else {
+                release_beacon(&activity);
+                return;
+            };
+            let ended = Store::open(&home).and_then(|store| session::beacon(&store, &opts, &due));
+            let (sent, dial_hz, text) = match ended {
+                Ok(end) => end,
+                Err(why) => (false, None, Some(why)),
+            };
+            beacons.went(&due.reference, sent, dial_hz, text.as_deref(), now());
+            let mut lines = vec![crate::beacons::said(sent, dial_hz, text.as_deref())];
+            // the rules or the modem refused it: repeating stops, since waiting will not help
+            if let Some(why) = text
+                .as_deref()
+                .filter(|t| t.contains("refused beacon: refused"))
+                && let Some(line) = beacons.refused(why)
+            {
+                lines.push(line);
+            }
+            for line in lines {
+                radiopost::logfile::line(&line);
+                lock(&activity).log.push(line);
+            }
+            release_beacon(&activity);
+        });
+    }
+
+    /// The beacon's schedule (design 07 §6), every two seconds: what the station is doing told to
+    /// it, and a beacon that falls due sent. While the station listens, the listening connection
+    /// sends it; while it is idle (with *Only while listening* unticked), a connection of its own.
+    fn keep_beaconing(&self) {
+        loop {
+            thread::sleep(std::time::Duration::from_secs(2));
+            let now = now();
+            let (state, ctx) = {
+                let a = lock(&self.activity);
+                let listening = a.state == "listening" && a.listen && a.held.is_none();
+                let ctx = crate::beacons::Context {
+                    listening,
+                    busy: !matches!(a.state, "idle" | "listening"),
+                    on_air: matches!(a.state, "calling" | "session"),
+                    modem_repeats: a
+                        .listening_at
+                        .as_ref()
+                        .is_some_and(|w| w.beaconing.is_some()),
+                };
+                (a.state, ctx)
+            };
+            if let Some(line) = self.beacons.tick(now, ctx) {
+                radiopost::logfile::line(&line);
+                lock(&self.activity).log.push(line);
+            }
+            if state == "idle"
+                && self.beacons.wants(now)
+                && let Some(modem) = self.presence.modem_in_use()
+                && self.take_for_beacon().is_ok()
+            {
+                self.follow_position();
+                self.beacon_alone(&modem);
+            }
         }
     }
 
@@ -655,6 +810,8 @@ impl Panel {
         thread::spawn(move || renewing.keep_renewed());
         let reporting = self.clone();
         thread::spawn(move || reporting.keep_reporting());
+        let beaconing = self.clone();
+        thread::spawn(move || beaconing.keep_beaconing());
         let backing_up = self.clone();
         thread::spawn(move || backing_up.keep_backed_up());
         thread::spawn(move || {
@@ -1038,6 +1195,7 @@ impl Panel {
                 "idle" => {}
                 "renewing" => return Err("renewing a credential: try again in a moment".into()),
                 "alerting" => return Err("an alert is going out: try again in a moment".into()),
+                "beaconing" => return Err("a beacon is going out: try again in a moment".into()),
                 _ => return Err("a session is under way: change callsign when it ends".into()),
             }
             if !body["choose"].is_null() {
@@ -1163,6 +1321,8 @@ impl Panel {
             (Method::Get, "/api/attempts") => Ok(self.attempts(param("limit").parse().ok())),
             (Method::Get, "/api/called") => Ok(self.called()),
             (Method::Get, "/api/stations") => Ok(self.stations_view(param("dial_hz").parse().ok())),
+            (Method::Get, "/api/beacon") => Ok(self.beacon_view()),
+            (Method::Post, "/api/beacon") => self.beacon_request(&text("adapter"), body),
             (Method::Post, "/api/stations") if body["clear"] == true => {
                 self.stations.clear();
                 Ok(self.stations_view(None))
@@ -1921,6 +2081,7 @@ impl Panel {
                          "stopped": a.stopped,
                          "listening_at": a.listening_at.as_ref().map(session::Where::to_json)},
             "alerts": self.alerts.summary(),
+            "beacon": self.beacon_view(),
             "progress": self.live.lock().unwrap_or_else(PoisonError::into_inner).summary(),
             "update": self.updates.status(),
             "log": a.log.len(),

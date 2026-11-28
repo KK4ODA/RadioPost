@@ -134,6 +134,23 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   is **Call**'s list in P2P: grouped by where each was heard against the radio's dial, gateways'
   and its own callsigns left out, with *P2P worked* from the call records. `rpmi::position` is a
   beacon's position and the Maidenhead squares, worked as the reference works them.
+  **Beacons** (W59 Phase 3, RP-4 1.8.0): `beacon` takes `modem_position` false (the operator's
+  **None**: Aether is then given `position: null`; with no position in use and not that, Aether
+  adds its Setup grid square, its ADR-0142). The Aether adapter maps `beacon` and `beacon-sent`
+  onto Aether's ADR-0139 with references of its own (`beacon_refs`), from `capabilities.beacon`;
+  Mercury's adapter sends `CQFRAME <as> <bw>` once `BUSY OFF` and nothing of the station's is up,
+  reported on its `PENDING`/`CANCELPENDING` bracket (`caps.beacon` only with `BUSYDETECT ON`).
+  The client's `beacons.rs` keeps `beacon.json` (interval, *Only while listening*, the position's
+  precision) and one beacon asked for (`ask_now`, `due`, `went`; a square's centre goes as the
+  square at most, `position_sent`); `/api/beacon` sends one now (the listening connection carries
+  it, `session::Carried`; idle, `session::beacon` on a connection of its own, activity
+  `beaconing`) and sets the settings; `/api/state` carries `beacon`. Repeating (Phase 4):
+  **Beacon**'s left part is a latch (`{repeat: true}`), `Beacons::tick` asks for one an interval
+  (plus 0–60 s) after the callsign was last on the air (`on_air`, told by the panel's
+  `keep_beaconing` every 2 s while a call or session runs), holds while busy, while not listening
+  with *Only while listening*, and while Aether repeats its own (`Where::beaconing` from
+  `status.beaconing`), stops after four hours or a `refused`; a scheduled beacon goes on a
+  scanning gateway's dials in turn (`due(now, scanning)`).
   **Listen for P2P** latches (W15, the 40 m sessions of 2026-11-18): `session::keep_listening`
   keeps one connection, its claims and `listen` on across sessions (Aether ends a claim with its
   connection, so closing it after each session had stopped the answering), opens a failed one

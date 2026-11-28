@@ -331,6 +331,8 @@ impl Channel {
                 within_s: _, // the simulated channel is always clear: a beacon goes at once
                 dial_hz,
                 position,
+                // the simulated modem has no position of its own to leave out
+                modem_position: _,
             } => self.on_beacon(
                 station,
                 h,

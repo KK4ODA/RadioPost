@@ -88,10 +88,34 @@
           </select>
         </label>
         <div class="row">
-          <button class="go" id="call" title="Call the station on the channel picked, at its bandwidth, and carry a session. The radio is tuned there first if it is not there already; Aether moves the station to the bandwidth for the call, and back after">Call</button>
+          <div class="call-row">
+            <button class="go" id="call" title="Call the station on the channel picked, at its bandwidth, and carry a session. The radio is tuned there first if it is not there already; Aether moves the station to the bandwidth for the call, and back after">Call</button>
+            <span class="split" id="beacon-split" hidden>
+              <button type="button" id="beacon" class="latch" aria-pressed="false" title="Repeat your beacon, your callsign on the air addressed to nobody, so that stations listening list you: pressed in, every 15 minutes for four hours at most, until you press it again. A right click, or the arrow beside it, opens its menu"><span class="lamp" aria-hidden="true"></span><span>Beacon</span></button><button type="button" class="more" id="beacon-more" aria-haspopup="menu" aria-expanded="false" aria-controls="beacon-menu" aria-label="Beacon menu" title="The beacon's menu: send one now, and what it says of where you are"><svg class="icon" aria-hidden="true"><use href="#i-down"/></svg></button>
+              <div class="menu" id="beacon-menu" role="menu" aria-label="Beacon" hidden>
+                <button type="button" class="item" id="beacon-now" role="menuitem" title="One beacon now, on the channel picked or where the radio is. It waits up to two minutes for a clear channel">Send a beacon now</button>
+                <div class="sep" role="separator"></div>
+                <p class="m-head" id="beacon-repeat-head">Repeat</p>
+                <div class="every" role="group" aria-labelledby="beacon-repeat-head" id="beacon-repeat">
+                  <button type="button" data-every="0" title="No beacon on a timer">Off</button><button type="button" data-every="10" title="A beacon every 10 minutes, counted from when your callsign was last on the air, for four hours at most">10 min</button><button type="button" data-every="15" title="A beacon every 15 minutes, counted from when your callsign was last on the air, for four hours at most">15 min</button><button type="button" data-every="30" title="A beacon every 30 minutes, counted from when your callsign was last on the air, for four hours at most">30 min</button><button type="button" data-every="60" title="A beacon every hour, counted from when your callsign was last on the air, for four hours at most">60 min</button>
+                </div>
+                <button type="button" class="item" id="beacon-listening" role="menuitemcheckbox" aria-checked="true" title="Repeating beacons go only while Listen for P2P is on, so that a station that lists you can call you. Unticked, they go whether or not you listen, and say you do not answer"><span class="mark" aria-hidden="true"></span>Only while listening for P2P</button>
+                <p class="m-head" id="beacon-position-head">Position in the beacon</p>
+                <div class="every" role="group" aria-labelledby="beacon-position-head" id="beacon-position">
+                  <button type="button" data-precision="none" title="Your beacons say nothing of where you are">None</button><button type="button" data-precision="grid4" title="The 4-character grid square: 2° by 1°, about 110 km by 220 km">4-char grid</button><button type="button" data-precision="grid6" title="The 6-character grid square: 5′ by 2.5′, about 5 km by 9 km">6-char grid</button><button type="button" data-precision="exact" title="Where you are, to a metre or two. Everyone listening hears it">Exact</button>
+                </div>
+                <p class="info" id="beacon-position-says" title="What your next beacon says of where you are, and where that came from: the position in use, from Setup's places or the GPS"></p>
+                <div class="sep" role="separator"></div>
+                <p class="info" id="beacon-next" title="When the next repeating beacon falls due: an interval after your callsign was last on the air, and up to a minute more"></p>
+                <p class="info" id="beacon-last" title="What your last beacon did"></p>
+                <p class="info" id="beacon-until" title="Repeating stops by itself four hours after it started: press Beacon again for four more"></p>
+              </div>
+            </span>
+          </div>
           <button id="listen" class="latch" aria-pressed="false" title="Answer P2P calls to your callsign until you press it again. A gateway on this station keeps answering calls to its own callsign"><span class="lamp" aria-hidden="true"></span><span id="listen-label">Listen for P2P</span></button>
         </div>
         <p class="radio-at" id="listen-at" role="status" title="Where and how this station answers P2P calls, as the modem says: tell the station that will call you"></p>
+        <p class="radio-at" id="beacon-at" role="status" title="What your beacon is doing, or what the last one did"></p>
         <label title="Aether HF's control API (ws://127.0.0.1:8515/v1, as Aether runs it), or an RPMI adapter's address: radiopost-tcp for a rehearsal over the Internet, rpmi-loopback for tests with no radio">Modem
           <input id="adapter" value="ws://127.0.0.1:8515/v1" spellcheck="false">
         </label>

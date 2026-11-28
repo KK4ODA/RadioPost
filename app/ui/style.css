@@ -200,6 +200,35 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
    its shape when it reads Listening: as wide as the column, and stacked as wide as its words (above) */
 .station .row { flex-direction: column; }
 .station .row #call { align-self: flex-start; }
+/* Call and Beacon on one row (the P2P design §5) */
+.call-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.split { display: inline-flex; position: relative; }
+.split > .latch { border-radius: 6px 0 0 6px; padding: 0 10px; }
+.split > .more { border-radius: 0 6px 6px 0; border-left: 0; width: 28px; padding: 0;
+                 display: grid; place-items: center; color: var(--muted); }
+.split > .more .icon { width: 14px; height: 14px; }
+.split > .more[aria-expanded="true"] { color: var(--text); }
+/* the beacon's lamp: amber while one waits for the channel, orange on the air */
+#beacon[data-state="waiting"] { border-color: var(--busy); }
+#beacon[data-state="waiting"] .lamp { background: var(--busy); box-shadow: 0 0 7px 1px var(--busy); }
+#beacon[data-state="air"] { border-color: var(--tx); }
+#beacon[data-state="air"] .lamp { background: var(--tx); box-shadow: 0 0 7px 1px var(--tx); }
+.menu { position: fixed; z-index: 12; min-width: 17rem; max-width: calc(100vw - 16px); margin: 0;
+        padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+        box-shadow: 0 8px 24px rgb(0 0 0 / .14); font-size: 14px; }
+.menu .item { display: flex; width: 100%; height: auto; padding: 6px 8px; border: 0;
+              border-radius: 6px; background: transparent; text-align: left; }
+.menu .item:hover:not(:disabled), .menu .item:focus-visible { background: var(--bg); }
+.menu .sep { margin: 4px 0; border-top: 1px solid var(--line); }
+.menu .m-head { margin: 0; font-size: 12px; color: var(--muted); padding: 4px 8px 0; }
+.menu .info { margin: 0; font-size: 13px; color: var(--muted); padding: 2px 8px; }
+.menu .info:empty { display: none; }
+.menu .every { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 8px 6px; }
+.menu .every button { height: 26px; padding: 0 8px; font-size: 13px; white-space: nowrap; }
+.menu .every button[aria-pressed="true"] { border-color: var(--ok); font-weight: 600; }
+.menu .item { gap: 8px; align-items: center; }
+.menu .mark { width: 14px; text-align: center; color: var(--ok); font-weight: 700; }
+.menu .item[aria-checked="true"] .mark::before { content: "✓"; }
 .station .row #listen { justify-content: center; }
 .pair { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .pair select { width: auto; }

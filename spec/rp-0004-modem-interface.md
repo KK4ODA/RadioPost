@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Stable |
-| **Version** | 1.7.0 |
+| **Version** | 1.8.0 |
 | **Updated** | 2026-11-28 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -202,7 +202,7 @@ it is sent, such as `busy`.
 | `scan` | `dials` (list), `id` | Listens on each dial in turn (§4.2); an empty list stops it. Answered with `scan`. |
 | `tone` | `seconds` | Keys a steady tone for an antenna tuner for `seconds`; 0 stops it (§4.3). |
 | `stations` | — | The adapter answers `stations` with the stations the modem has heard (§4.4). |
-| `beacon` | `as`?, `ref`?, `within_s`?, `dial_hz`?, `position`? | Sends one beacon (§4.4); `beacon-sent` follows. |
+| `beacon` | `as`?, `ref`?, `within_s`?, `dial_hz`?, `position`?, `modem_position`? | Sends one beacon (§4.4); `beacon-sent` follows. |
 
 **Types.** `version` is a list of two integers, the lowest and the highest version the host
 speaks; `callsigns` is a list of strings; `on` is true or false; `bandwidth` and `dial_hz` are
@@ -360,6 +360,10 @@ sends one when the host asks:
   `grid4` (the 4-character Maidenhead square), `grid6` (the 6-character one) or `exact`. The
   modem sends as much as `precision` says, never more. A modem without `caps.position` ignores
   the member.
+* A modem may carry a position of its own in a beacon given none (Aether puts its Setup grid
+  square in). `modem_position` false says the station's position goes in no form: given no
+  `position`, the beacon carries none. Its operator chose to say nothing, which is not the same as
+  a host that has no position to give.
 
 The adapter answers `ok` once the modem has taken the beacon, and `beacon-sent` (§5) once it has
 gone or will not: `sent` true with the dial it went on, or false with `text` saying why (the
@@ -542,7 +546,7 @@ end of this section.
 | `bandwidth` (in `connect`) | A `connect` that names a bandwidth is sent with `keep_bandwidth`, so Aether does not move for the call by itself (its ADR-0102). One that names a bandwidth Aether runs but is not running now moves the station first, as §1.1 says: `status` (`busy` unless `state` is `idle`; `bandwidth.host_hz` is kept), then `bandwidth.set {hz}` (Aether's refusal, something under way on the air, is `busy`), then `connect`. When the call fails, its link ends or the host leaves, `bandwidth.set` puts back the `host_hz` kept, `null` for the station's own; withdrawing always succeeds, and Aether goes back once it is idle. From 0.2.0-beta.174 the call's request is this connection's alone, so the adapter puts back this connection's own instead: the request for listening while the host listens, `null` otherwise. Aether may move between calls (a `bandwidth` event): `connected` carries the bandwidth in use. |
 | `heard` | Aether's `heard` events, each the entry its stations heard keep: `activity` as `kind` (`beacon`; `calling` is `call`, `answering` is `answer`, `probing` is `probe`, `connected` is `session`, `identified` is `id`, `datagram`), `detail` as `to`, `frequency_hz` as `dial_hz`, `last_heard_ms` as `at` (whole seconds), `snr_db`, `bandwidth_hz` as `bandwidth`, and, from the Aether whose beacons carry them (its ADR-0140 and ADR-0142), `answering` as `answers` and `position`. An entry whose activity is `connected` is passed only while the host's own link with that station is up. `caps.heard` is true when Aether answers `heard.list`. |
 | `stations` | `heard.list`, each entry as `heard` above; one whose last activity was another program's session is listed without `kind`. |
-| `beacon` | `beacon {callsign, ref, within_s, dial_hz, position}` on the host's connection, `callsign` set to `as` (from Aether's ADR-0139, which `capabilities.beacon` announces; `capabilities.beacon.position` is `caps.position`). Aether's `beacon-sent` event, with the same `ref`, is RPMI's. Its refusals: `not_idle` is `busy`, `claimed` and `bad_params` for a callsign are `not-authorized`, `refused` and `regulatory` are `refused`. An earlier Aether has no `capabilities.beacon`, and `caps.beacon` is false. |
+| `beacon` | `beacon {callsign, ref, within_s, dial_hz, position}` on the host's connection, `callsign` set to `as` and `within_s` to 120 when not given (from Aether's ADR-0139, which `capabilities.beacon` announces; `capabilities.beacon.position` is `caps.position`). Given no `position`, Aether is given none and adds its own Setup grid square (ADR-0142); with `modem_position` false it is given `position: null`, and adds nothing. Aether's `beacon-sent` event, with the same `ref`, is RPMI's. Its refusals: `not_idle` is `busy`, `claimed` and `bad_params` for a callsign are `not-authorized`, `refused` and `regulatory` are `refused`. An earlier Aether has no `capabilities.beacon`, and `caps.beacon` is false. |
 | `beaconing` (in `status`) | `status.beacon.every_s`, Aether's own repeating beacon (its panel's **Repeat**). |
 | `tone` | `tune {duration_s}`, the seconds as `duration_s`, 0 to stop it: `busy` at once while the host has a call or link, or another program's session is up, unless it stops one; Aether's refusals (the channel busy, the rules, a radio keyed by a host program with none attached) are `refused`, with Aether's message. |
 
@@ -845,3 +849,4 @@ must. Mercury's broadcasts, KISS frames on a port of their own, are not carried 
 | 1.6.0 | 2026-11-24 | §1.1: a host listening is called in any bandwidth: an adapter whose modem answers narrower calls in its widest bandwidth runs that one while a host listens, below a bandwidth another program chose. §4: `status` carries the station's `dial_hz`, `answers` (the bandwidths a call is answered in now) and `scanning` (the dials the station scans, whichever host asked), each left out when the adapter cannot say. §9.1: Aether's `bandwidth.set` with `listening` and `status` (its 0.2.0-beta.174). From the portable's sessions of 2026-11-23: a 2300 Hz P2P call to a home station a profile had left at 500 Hz went unanswered, and nothing in the listening client said where or how it listened. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; an adapter that says none of the three, and a host that ignores them, work as before. |
 | 1.6.1 | 2026-11-24 | §6: position reports are RP-8's reports (RP-8 0.3.0), no longer a later specification's. PATCH, announced (RP-0 §8.4): nothing for an implementation to do. |
 | 1.7.0 | 2026-11-28 | Beacons and the stations heard (§4.4; [finding, beaconing and calling P2P stations](../docs/design/07-p2p-stations.md), D51, wishlist W59): `caps.heard`, `caps.beacon` and `caps.position` (§3); the `stations` and `beacon` requests and their members (§4); `heard`'s `kind`, `to`, `answers`, `dial_hz`, `position` and `at`, and the `stations` and `beacon-sent` events (§5); `status`'s `beaconing` (§4); beacons among what a host may make the modem transmit, never repeated by the adapter (§8). §9.1, Aether's heard list and beacons; §9.2, VARA's `CQFRAME` not used until checked; §9.6, Mercury's `CQFRAME`. Test vectors: `rpmi-conversations.json`'s *beacons and the stations heard*, `rpmi-lines.json`'s malformed `beacon` members. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; an adapter that says none of the three caps and a host that ignores them work as before. |
+| 1.8.0 | 2026-11-28 | `beacon`'s `modem_position` (§4.4): false, the beacon carries no position of the modem's own when given none. Test vectors: a beacon with it in *beacons and the stations heard*, a malformed one in `rpmi-lines.json`. MINOR, announced (RP-0 §8.4): nothing for an implementation to do; an adapter that ignores the member sends what it would have. |

@@ -206,6 +206,33 @@ impl Position {
         Some(record)
     }
 
+    /// The position in use as a beacon says it (W59): its latitude and longitude, the square it is
+    /// the centre of when the place is a grid square, and where it came from.
+    #[must_use]
+    pub fn for_beacon(&self) -> Option<crate::beacons::Spot> {
+        let here = self.here().here?;
+        let (square, from) = match &here.from {
+            radioprop_place::place::From::Gps { age_s, .. } => {
+                (None, format!("the GPS, {age_s} s ago"))
+            }
+            radioprop_place::place::From::Place { id, name, source } => {
+                let square = (*source == Origin::Grid)
+                    .then(|| {
+                        let g = self.lock();
+                        g.book.places.iter().find(|p| &p.id == id)?.grid.clone()
+                    })
+                    .flatten();
+                (square, name.clone())
+            }
+        };
+        Some(crate::beacons::Spot {
+            lat: here.lat,
+            lon: here.lon,
+            square,
+            from,
+        })
+    }
+
     /// The position in use for a form's position field (RP-2 §8.1): `text` to put in the field
     /// (a place entered as a grid square as that square, whose centre then goes with how far off
     /// it may be; any other position in decimal degrees), and `says`, where it came from. Empty

@@ -101,10 +101,30 @@ pub fn loopback_named(modem: &str) -> (Server, SocketAddr, SocketAddr) {
     loopback_full(None, Duration::from_secs(10), modem)
 }
 
+/// The loopback adapter as a modem that beacons and says the stations it hears (RP-4 §4.4), its
+/// radios on 7.101 MHz and its clock the computer's.
+pub fn loopback_beaconing() -> (Server, SocketAddr, SocketAddr) {
+    loopback_caps(
+        Some(7_101_000),
+        Duration::from_secs(10),
+        "the loopback adapter",
+        true,
+    )
+}
+
 fn loopback_full(
     dial_hz: Option<u64>,
     call_timeout: Duration,
     modem: &str,
+) -> (Server, SocketAddr, SocketAddr) {
+    loopback_caps(dial_hz, call_timeout, modem, false)
+}
+
+fn loopback_caps(
+    dial_hz: Option<u64>,
+    call_timeout: Duration,
+    modem: &str,
+    beacons: bool,
 ) -> (Server, SocketAddr, SocketAddr) {
     let caps = Caps {
         bandwidths: vec![500, 2300],
@@ -120,9 +140,9 @@ fn loopback_full(
         scan: false,
         call_s: false,
         tone: dial_hz.is_some(),
-        heard: false,
-        beacon: false,
-        position: false,
+        heard: beacons,
+        beacon: beacons,
+        position: beacons,
     };
     let station = |name: &str, prefix: &str| StationConfig {
         name: name.into(),
@@ -133,6 +153,9 @@ fn loopback_full(
         dial_hz,
     };
     let mut ch = Channel::new();
+    if beacons {
+        ch.set_now(radiopost_client::presence::unix_now());
+    }
     let f = ch.add_station(station("KK4ODA", "c"));
     let a = ch.add_station(station("N0CALL", "a"));
     let server = Server::new(ch, call_timeout);

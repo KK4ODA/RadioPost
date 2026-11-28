@@ -254,7 +254,39 @@ pub enum Request {
         dial_hz: Option<u64>,
         /// Where the station is, as the host lets it go (§4.4); a valid position's object.
         position: Option<Value>,
+        /// `false`: the station's position goes in no form, the modem's own included (§4.4).
+        modem_position: Option<bool>,
     },
+}
+
+/// RP-4 §4.4 `beacon`'s members, checked.
+fn beacon(m: &Message) -> Result<Request, String> {
+    let within_s = match m.get("within_s") {
+        None => None,
+        Some(v) => Some(
+            natural(v)
+                .filter(|s| (1..=WITHIN_MAX_S).contains(s))
+                .ok_or("`within_s` is not an integer from 1 to 600")?,
+        ),
+    };
+    let position = match m.get("position") {
+        None => None,
+        Some(v) if crate::position::is_position(v) => Some(v.clone()),
+        Some(_) => return Err("`position` is not a position (RP-4 §4.4)".into()),
+    };
+    let modem_position = match m.get("modem_position") {
+        None => None,
+        Some(Value::Bool(b)) => Some(*b),
+        Some(_) => return Err("`modem_position` is not true or false".into()),
+    };
+    Ok(Request::Beacon {
+        as_call: optional_text(m, "as")?,
+        reference: reference(m)?,
+        within_s,
+        dial_hz: optional_dial(m)?,
+        position,
+        modem_position,
+    })
 }
 
 /// The longest tuner tone a host may ask for, in seconds (RP-4 §4.3).
@@ -424,28 +456,7 @@ impl Request {
             "status" => Request::Status,
             "dial" | "tune" | "scan" | "tone" => radio(m)?,
             "stations" => Request::Stations,
-            "beacon" => {
-                let within_s = match m.get("within_s") {
-                    None => None,
-                    Some(v) => Some(
-                        natural(v)
-                            .filter(|s| (1..=WITHIN_MAX_S).contains(s))
-                            .ok_or("`within_s` is not an integer from 1 to 600")?,
-                    ),
-                };
-                let position = match m.get("position") {
-                    None => None,
-                    Some(v) if crate::position::is_position(v) => Some(v.clone()),
-                    Some(_) => return Err("`position` is not a position (RP-4 §4.4)".into()),
-                };
-                Request::Beacon {
-                    as_call: optional_text(m, "as")?,
-                    reference: reference(m)?,
-                    within_s,
-                    dial_hz: optional_dial(m)?,
-                    position,
-                }
-            }
+            "beacon" => beacon(m)?,
             _ => return Ok(None),
         };
         Ok(Some(request))

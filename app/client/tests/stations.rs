@@ -95,9 +95,18 @@ fn stations_heard_before_and_after_the_panel_connects_reach_its_list() {
     let first = ch.add_station(station("N2CALL", "a"));
     let second = ch.add_station(station("N3CALL", "b"));
     let server = Server::new(ch, Duration::from_secs(10));
-    let at_mine = server.listen(mine, "127.0.0.1:0").expect("a port").to_string();
-    let at_first = server.listen(first, "127.0.0.1:0").expect("a port").to_string();
-    let at_second = server.listen(second, "127.0.0.1:0").expect("a port").to_string();
+    let at_mine = server
+        .listen(mine, "127.0.0.1:0")
+        .expect("a port")
+        .to_string();
+    let at_first = server
+        .listen(first, "127.0.0.1:0")
+        .expect("a port")
+        .to_string();
+    let at_second = server
+        .listen(second, "127.0.0.1:0")
+        .expect("a port")
+        .to_string();
 
     // heard while the client was away: its station's modem keeps it
     let exact = Position {
@@ -121,6 +130,7 @@ fn stations_heard_before_and_after_the_panel_connects_reach_its_list() {
         gate: Arc::new(|_| true),
         say: Arc::new(|_line: &str| {}),
         stations: stations.clone(),
+        beacons: radiopost_client::beacons::Beacons::in_memory(),
     });
     presence.start();
     presence.set_modem(&at_mine);
@@ -130,7 +140,10 @@ fn stations_heard_before_and_after_the_panel_connects_reach_its_list() {
     assert_eq!(n2.band.as_deref(), Some("40m"));
     assert_eq!(n2.kind.as_deref(), Some("beacon"));
     assert_eq!(n2.answers, Some(false), "nobody listens at N2CALL");
-    assert_eq!(n2.position.as_ref().and_then(|p| p["precision"].as_str()), Some("exact"));
+    assert_eq!(
+        n2.position.as_ref().and_then(|p| p["precision"].as_str()),
+        Some("exact")
+    );
 
     // heard while the client is here: a `heard`, its square at the centre
     let square = Position {
@@ -139,6 +152,9 @@ fn stations_heard_before_and_after_the_panel_connects_reach_its_list() {
     };
     beacon_from(&at_second, "N3CALL", &square);
     let n3 = waits_for(&stations, "N3CALL");
-    assert_eq!(n3.position.as_ref().and_then(|p| p["grid"].as_str()), Some("EM84cl"));
+    assert_eq!(
+        n3.position.as_ref().and_then(|p| p["grid"].as_str()),
+        Some("EM84cl")
+    );
     presence.stop();
 }

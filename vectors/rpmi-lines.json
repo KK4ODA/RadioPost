@@ -664,6 +664,18 @@
       ]
     },
     {
+      "what": "a beacon's modem_position that is not a boolean",
+      "line": "{\"op\": \"beacon\", \"id\": 52, \"modem_position\": \"no\"}",
+      "answers": [
+        {
+          "op": "error",
+          "id": 52,
+          "code": "malformed",
+          "text": "`modem_position` is not of its type"
+        }
+      ]
+    },
+    {
       "what": "a good beacon on a modem without beacons",
       "line": "{\"op\": \"beacon\", \"id\": 50}",
       "answers": [

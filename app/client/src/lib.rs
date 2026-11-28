@@ -35,6 +35,7 @@ pub const LOG_FILE: &str = "radiopost.log";
 pub mod addresses;
 pub mod alerts;
 pub mod backups;
+pub mod beacons;
 pub mod callsigns;
 pub mod compose;
 pub mod contacts;

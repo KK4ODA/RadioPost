@@ -498,6 +498,8 @@ function showKind() {
   $("fetch-label").hidden = !gateway;
   $("gateways-open").hidden = !gateway;
   $("station-dial").hidden = gateway;
+  $("beacon-split").hidden = gateway;
+  if (gateway) closeBeaconMenu();
   $("callsign").placeholder = gateway ? "KK4ODA-1" : "N0CALL";
   showCalledButton();
   showTuning();
@@ -1141,7 +1143,8 @@ async function refresh() {
   const label = {idle: "Idle", calling: `Calling ${a.remote || ""}`,
                  listening: a.held ? "Waiting for the modem" : "Listening",
                  session: `In session with ${a.remote || ""}`,
-                 renewing: "Renewing credential", alerting: "Sending an alert"}[a.state];
+                 renewing: "Renewing credential", alerting: "Sending an alert",
+                 beaconing: "Sending a beacon"}[a.state];
   const stopping = a.state === "calling" ? "Stopping the call"
     : a.stopping === "abort" ? `Aborting the session with ${a.remote || ""}`
     : `Disconnecting from ${a.remote || ""}`;
@@ -1163,6 +1166,7 @@ async function refresh() {
     ? "Listening for P2P: press Listening for P2P to stop it, then call"
     : CALL_TITLE;
   showListen(s, a, busy);
+  showBeacon(s, a);
   $("write").disabled = held || !s.me;
   $("device").textContent = s.device || "No key yet.";
   myDevice = s.device ? hexToB64u(s.device) : "";
@@ -1180,7 +1184,7 @@ async function refresh() {
   // a session that ends shows what it brought, whether the station is idle or listening again; a
   // renewal or an alert changes no folder, and must not close a message being written
   if ((lastState !== "idle" && lastState !== "renewing" && lastState !== "alerting"
-       && a.state === "idle")
+       && lastState !== "beaconing" && a.state === "idle")
       || (lastState === "session" && a.state === "listening")) await openFolder(folder);
   lastState = a.state;
   if (s.alerts) await syncAlerts(s.alerts);
@@ -1207,6 +1211,208 @@ function showListen(s, a, busy) {
   const [text, warn] = listenAt(s, a);
   $("listen-at").textContent = text;
   $("listen-at").classList.toggle("by-hand", warn);
+}
+
+// ── Beacon (W59, the P2P design §5.1, §6, §7) ─────────────────────────────────────────────────
+// A split button beside Call in P2P. Its left part is a latch, as Listen for P2P is: pressed in,
+// the beacon repeats, its lamp green, until it is pressed again or four hours pass. ▾, or a right
+// click on either part, opens its menu: Send a beacon now, Repeat, Only while listening, and how
+// much of where the station is the beacon says. The lamp is amber while a beacon waits for the
+// channel. The line under Listen says what the beacon does, or what the last one did.
+
+let beaconView = null;
+
+// "15:21"
+function clockOf(t) {
+  return new Date(t * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+}
+
+// What the last beacon did, in a line: an hour after, it is no longer news
+function beaconDid(b) {
+  const l = b && b.last;
+  if (!l || Date.now() / 1000 - l.at > 3600) return "";
+  if (l.sent) {
+    return `Beacon sent at ${clockOf(l.at)}${l.dial_hz ? ` on ${mhzOf(l.dial_hz)} MHz` : ""}`;
+  }
+  return `Beacon not sent at ${clockOf(l.at)}: ${l.text || "no reason given"}`;
+}
+
+// What the next beacon says of where the station is
+function beaconSays(b) {
+  const p = b.position || {};
+  if (b.settings.position === "none") return "Nothing of where you are.";
+  if (p.goes && p.goes.precision === "exact") {
+    const deg = (v) => v.toFixed(5).replace("-", "\u2212");
+    return `${deg(p.goes.lat)}, ${deg(p.goes.lon)}, from ${p.from}.`;
+  }
+  if (p.goes) return `${p.grid}, from ${p.from}.`;
+  return "No position in use (Setup, Places): the modem puts in its own, if it has one, as "
+    + "Aether's Setup grid square.";
+}
+
+// When the next repeating beacon falls due, in words: "about 15:38, in 14 min"
+function beaconNext(b, a) {
+  const r = b.repeating;
+  if (!r) return "";
+  const at = a.listening_at;
+  if (at && at.beaconing) {
+    return `Aether repeats its own beacon every ${Math.round(at.beaconing / 60)} min: `
+      + "RadioPost sends none of its own";
+  }
+  if (b.settings.only_while_listening && !(a.listen && a.state === "listening")) {
+    return `Every ${b.settings.every_min} min while you listen for P2P`;
+  }
+  const left = Math.max(0, Math.round((r.next - Date.now() / 1000) / 60));
+  return `Next: about ${clockOf(r.next)}${left ? `, in ${left} min` : ""}`;
+}
+
+// The line under Listen: what the beacon does, or what the last one did
+function beaconLine(b, a) {
+  if (b.waiting || a.state === "beaconing") return "Beacon waiting for a clear channel";
+  const did = beaconDid(b);
+  if (b.repeating) {
+    const parts = [`Beacon every ${b.settings.every_min} min`];
+    const next = beaconNext(b, a);
+    if (next.startsWith("Next: ")) parts.push(`next ${next.slice(6)}`);
+    else if (next) return next;
+    if (did && b.last.sent) parts.push(`last ${clockOf(b.last.at)}`);
+    else if (did) parts.push(did.replace(/^Beacon /, "last "));
+    return parts.join(" · ");
+  }
+  if (b.ended) return `Beacon stopped repeating ${b.ended}: press Beacon to start again`;
+  return did;
+}
+
+function showBeacon(s, a) {
+  const b = s.beacon;
+  if (!b) return;
+  beaconView = b;
+  const latch = $("beacon");
+  const waiting = b.waiting || a.state === "beaconing";
+  latch.setAttribute("aria-pressed", String(Boolean(b.repeating)));
+  latch.dataset.state = waiting ? "waiting" : "";
+  latch.disabled = !s.me;
+  latch.title = b.repeating
+    ? `On: a beacon every ${b.settings.every_min} min until ${clockOf(b.repeating.until)}, `
+      + "four hours from the start. Press again to stop"
+    : `Repeat your beacon every ${b.settings.every_min} min for four hours at most, until you `
+      + "press it again. A right click, or the arrow beside it, opens its menu";
+  $("beacon-more").disabled = !s.me;
+  $("beacon-at").textContent = beaconLine(b, a);
+  fillBeaconMenu(s, a, b);
+}
+
+function fillBeaconMenu(s, a, b) {
+  const now = $("beacon-now");
+  const free = ["idle", "listening"].includes(a.state);
+  now.disabled = !s.me || b.waiting || Boolean(b.again_in_s) || !free;
+  now.title = b.waiting ? "A beacon is waiting for a clear channel"
+    : b.again_in_s ? `Another may go in ${b.again_in_s} s: a minute after the last`
+    : !free ? "The station is busy: a beacon goes when it is idle or listening"
+    : "One beacon now, on the channel picked or where the radio is. It waits up to two minutes "
+      + "for a clear channel";
+  for (const button of $("beacon-position").querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.precision === b.settings.position));
+  }
+  const every = b.repeating ? String(b.settings.every_min) : "0";
+  for (const button of $("beacon-repeat").querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.every === every));
+  }
+  $("beacon-listening").setAttribute("aria-checked", String(b.settings.only_while_listening));
+  $("beacon-position-says").textContent = beaconSays(b);
+  $("beacon-next").textContent = beaconNext(b, a);
+  $("beacon-last").textContent = beaconDid(b) ? `Last: ${beaconDid(b).replace(/^Beacon /, "")}` : "";
+  $("beacon-until").textContent = b.repeating
+    ? `Repeats until ${clockOf(b.repeating.until)}, four hours from the start` : "";
+}
+
+// Beacon's settings, changed: what the page holds, with `change` over it
+async function setBeacon(change) {
+  if (!beaconView) return;
+  try {
+    await api("beacon", {settings: {...beaconView.settings, ...change}});
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function openBeaconMenu() {
+  const menu = $("beacon-menu");
+  const r = $("beacon-split").getBoundingClientRect();
+  menu.hidden = false;
+  // under the button, kept on the screen: the side column scrolls and would cut it
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8));
+  const below = r.bottom + 4 + menu.offsetHeight <= window.innerHeight;
+  Object.assign(menu.style, {left: `${left}px`,
+    top: below ? `${r.bottom + 4}px` : `${Math.max(8, r.top - 4 - menu.offsetHeight)}px`});
+  for (const id of ["beacon", "beacon-more"]) $(id).setAttribute("aria-expanded", "true");
+  $("beacon-now").focus();
+}
+
+function closeBeaconMenu() {
+  $("beacon-menu").hidden = true;
+  for (const id of ["beacon", "beacon-more"]) $(id).setAttribute("aria-expanded", "false");
+}
+
+function wireBeacon() {
+  // the latch: pressed in, the beacon repeats; pressed again, it stops
+  $("beacon").addEventListener("click", async () => {
+    const on = $("beacon").getAttribute("aria-pressed") !== "true";
+    await act("beacon", {repeat: on});
+  });
+  $("beacon-more").addEventListener("click", (e) => {
+    e.preventDefault();
+    if ($("beacon-menu").hidden) openBeaconMenu();
+    else closeBeaconMenu();
+  });
+  for (const id of ["beacon", "beacon-more"]) {
+    $(id).addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      openBeaconMenu();
+    });
+  }
+  // an interval chosen starts repeating at it; Off stops it
+  for (const button of $("beacon-repeat").querySelectorAll("button")) {
+    button.addEventListener("click", async () => {
+      const every = Number(button.dataset.every);
+      if (every) {
+        await setBeacon({every_min: every});
+        await act("beacon", {repeat: true});
+      } else {
+        await act("beacon", {repeat: false});
+      }
+    });
+  }
+  $("beacon-listening").addEventListener("click", async () => {
+    await setBeacon({only_while_listening: !beaconView.settings.only_while_listening});
+    await refresh().catch(() => {});
+  });
+  $("beacon-now").addEventListener("click", async () => {
+    closeBeaconMenu();
+    try {
+      await api("beacon", {send: true, adapter: adapter()});
+      toast("Beacon asked for: it goes when the channel is clear.");
+    } catch (e) {
+      toast(e.message, true);
+    }
+    await refresh().catch(() => {});
+  });
+  for (const button of $("beacon-position").querySelectorAll("button")) {
+    button.addEventListener("click", async () => {
+      await setBeacon({position: button.dataset.precision});
+      await refresh().catch(() => {});
+    });
+  }
+  document.addEventListener("click", (e) => {
+    if (!$("beacon-menu").hidden && !$("beacon-split").contains(e.target)) closeBeaconMenu();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("beacon-menu").hidden) {
+      closeBeaconMenu();
+      $("beacon-more").focus();
+    }
+  });
+  window.addEventListener("resize", closeBeaconMenu);
 }
 
 // Where and how the station answers P2P calls while it listens, as the modem says: the dial, or
@@ -6059,6 +6265,7 @@ function wire() {
     });
   });
   $("hang-up").addEventListener("click", () => act("hang-up", {how: $("hang-up").dataset.how}));
+  wireBeacon();
   // one switch: pressed in, it listens; pressed again, it stops
   $("listen").addEventListener("click", () => {
     if ($("listen").getAttribute("aria-pressed") === "true") act("stop", {});

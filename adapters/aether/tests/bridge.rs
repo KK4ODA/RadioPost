@@ -45,6 +45,10 @@ struct Aether {
     heard: Value,
     /// `status.beacon.every_s`: the panel's repeating beacon.
     beacon_every_s: Option<f64>,
+    /// A program's beacon taken (`capabilities.beacon`, 0.2.0-beta.183), and refused with this
+    /// code.
+    beacons: bool,
+    beacon_refused: Option<&'static str>,
     asked: Vec<Value>,
 }
 
@@ -68,10 +72,16 @@ impl Aether {
             scan_dials: Vec::new(),
             heard: json!([]),
             beacon_every_s: None,
+            beacons: false,
+            beacon_refused: None,
             asked: Vec::new(),
         }
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one arm for each of Aether's methods the adapter asks for"
+    )]
     fn answer(&mut self, request: &Value) -> Value {
         self.asked.push(request.clone());
         let id = request["id"].clone();
@@ -106,7 +116,14 @@ impl Aether {
                 status["beacon"] = json!({"every_s": self.beacon_every_s, "waiting": false});
                 ok(status)
             }
+            "capabilities" if self.beacons => ok(json!({
+                "bandwidth_hz": 2300, "bandwidths_hz": [2300, 500],
+                "beacon": {"program": true, "answers": true, "position": true}})),
             "capabilities" => ok(json!({"bandwidth_hz": 2300, "bandwidths_hz": [2300, 500]})),
+            "beacon" => match self.beacon_refused {
+                Some(code) => refused(code),
+                None => ok(json!({"accepted": true})),
+            },
             "claim" => {
                 let wanted: Vec<&str> = params["callsigns"]
                     .as_array()
@@ -1622,6 +1639,133 @@ fn the_stations_heard_are_aethers() {
 
 /// RP-4 §4.4: Aether's own repeating beacon, its panel's Repeat, is `status`'s `beaconing`; a
 /// program's beacon waits for the Aether that takes one (its ADR-0139).
+/// The adapter over an Aether that takes a program's beacon, its host holding KK4ODA.
+fn opened_beaconing() -> (Bridge, Aether) {
+    let mut b = Bridge::new();
+    let mut a = Aether::new(true);
+    a.beacons = true;
+    a.dial = Some(7_101_000);
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"hello","id":1,"version":[1,1],"app":"RadioPost client 0.1.0"}"#,
+    );
+    line(
+        &mut b,
+        &mut a,
+        r#"{"op":"callsigns","id":2,"callsigns":["KK4ODA"]}"#,
+    );
+    (b, a)
+}
+
+#[test]
+fn a_beacon_is_aethers_with_a_reference_of_its_own_and_comes_back_as_beacon_sent() {
+    // RP-4 1.7.0 §4.4 and §9.1 over Aether's ADR-0139: the host's callsign, a reference the
+    // adapter made, the window, the dial and the position (null for none, or Aether sends its own
+    // grid); Aether's `beacon-sent` comes back with the host's reference
+    let (mut b, mut a) = opened_beaconing();
+    let hello = a.asked.iter().position(|r| r["method"] == "capabilities");
+    assert!(hello.is_some());
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"beacon","id":5,"ref":"k1","dial_hz":7101000,
+            "position":{"lat":34.4621,"lon":-83.7514,"precision":"grid6"}}"#,
+    );
+    assert_eq!(lines(&said), [json!({"op": "ok", "id": 5})]);
+    let asked = a.asked.last().expect("asked").clone();
+    assert_eq!(asked["method"], "beacon");
+    assert_eq!(asked["params"]["callsign"], "KK4ODA");
+    assert_eq!(asked["params"]["within_s"], 120);
+    assert_eq!(asked["params"]["dial_hz"], 7_101_000);
+    assert_eq!(asked["params"]["position"]["precision"], "grid6");
+    let theirs = asked["params"]["ref"]
+        .as_str()
+        .expect("a reference")
+        .to_owned();
+    assert_ne!(
+        theirs, "k1",
+        "the adapter's own, so two programs' never meet"
+    );
+
+    // a second while the first waits
+    let said = line(&mut b, &mut a, r#"{"op":"beacon","id":6}"#);
+    assert_eq!(lines(&said)[0]["code"], "busy");
+
+    let said = event(
+        &mut b,
+        &mut a,
+        "beacon-sent",
+        &json!({"ref": theirs, "callsign": "KK4ODA", "sent": true, "dial_hz": 7_101_000,
+                "reason": null}),
+    );
+    assert_eq!(
+        lines(&said),
+        [json!({"op": "beacon-sent", "ref": "k1", "sent": true, "dial_hz": 7_101_000})]
+    );
+    // another program's beacon is not this host's
+    let said = event(
+        &mut b,
+        &mut a,
+        "beacon-sent",
+        &json!({"ref": null, "callsign": "N2CALL", "sent": true, "dial_hz": 7_101_000}),
+    );
+    assert_eq!(lines(&said), Vec::<Value>::new());
+
+    // none given: Aether is given none, and puts its own grid square in
+    let said = line(&mut b, &mut a, r#"{"op":"beacon","id":7,"within_s":30}"#);
+    assert_eq!(lines(&said), [json!({"op": "ok", "id": 7})]);
+    let asked = a.asked.last().expect("asked").clone();
+    assert!(asked["params"].get("position").is_none(), "{asked}");
+    assert_eq!(asked["params"]["within_s"], 30);
+    let theirs = asked["params"]["ref"]
+        .as_str()
+        .expect("a reference")
+        .to_owned();
+    let said = event(
+        &mut b,
+        &mut a,
+        "beacon-sent",
+        &json!({"ref": theirs, "callsign": "KK4ODA", "sent": false,
+                "reason": "the channel stayed busy"}),
+    );
+    assert_eq!(lines(&said), [json!({"op": "beacon-sent", "sent": false})]);
+    // the operator chose to say nothing: Aether is told so, or it would send its own grid square
+    let said = line(
+        &mut b,
+        &mut a,
+        r#"{"op":"beacon","id":10,"modem_position":false}"#,
+    );
+    assert_eq!(lines(&said), [json!({"op": "ok", "id": 10})]);
+    let asked = a.asked.last().expect("asked").clone();
+    assert_eq!(asked["params"]["position"], Value::Null);
+    let theirs = asked["params"]["ref"]
+        .as_str()
+        .expect("a reference")
+        .to_owned();
+    event(
+        &mut b,
+        &mut a,
+        "beacon-sent",
+        &json!({"ref": theirs, "callsign": "KK4ODA", "sent": true}),
+    );
+
+    // what Aether refuses, in RPMI's words
+    for (aether, rpmi) in [
+        ("claimed", "not-authorized"),
+        ("not_idle", "busy"),
+        ("refused", "refused"),
+    ] {
+        a.beacon_refused = Some(aether);
+        let said = line(&mut b, &mut a, r#"{"op":"beacon","id":8}"#);
+        assert_eq!(lines(&said)[0]["code"], rpmi, "{aether}");
+    }
+    // and what RP-4 refuses before Aether is asked
+    a.beacon_refused = None;
+    let said = line(&mut b, &mut a, r#"{"op":"beacon","id":9,"as":"N2CALL"}"#);
+    assert_eq!(lines(&said)[0]["code"], "not-authorized");
+}
+
 #[test]
 fn the_panels_repeating_beacon_is_said_and_a_beacon_waits_for_aether() {
     let (mut b, mut a) = opened(true, false);

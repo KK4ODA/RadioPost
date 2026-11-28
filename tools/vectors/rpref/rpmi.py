@@ -238,6 +238,7 @@ MEMBERS: dict[str, list[tuple[str, bool, Any]]] = {
         ("within_s", False, lambda v: is_int(v) and 1 <= v <= WITHIN_MAX_S),
         ("dial_hz", False, lambda v: is_int(v) and v > 0),
         ("position", False, is_position),
+        ("modem_position", False, lambda v: isinstance(v, bool)),
     ],
 }
 

@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.63.0 |
+| **Version** | 1.65.0 |
 | **Updated** | 2026-11-28 |
 | **Describes** | RadioPost 0.1.0-beta.40 |
 | **Licence** | CC BY 4.0 |
@@ -1177,6 +1177,51 @@ nothing.
 
 *Figure 28. The stations your modem heard, and those you called before.*
 
+**Beacons.** **Beacon**, beside **Call**, puts your callsign on the air, addressed to nobody, so
+that stations listening list you, with how well they hear you. It is a switch, as **Listen for P2P**
+is: click it and it stays in, its lamp green, and RadioPost beacons every 15 minutes for four hours
+at most, until you click it again. Its lamp is amber while a beacon waits for a clear channel. The
+line under **Listen for P2P** says what it does: *Beacon every 15 min · next about 3:38 PM · last
+3:17 PM*.
+
+Click **▾** beside it, or right-click either part, for its menu:
+
+- **Send a beacon now**: one beacon, on the channel picked or where the radio is. It waits up to
+  two minutes for a clear channel. While you listen it goes on the listening connection, and
+  listening goes on; otherwise the Station box reads *Sending a beacon* until it has gone. The line
+  under **Listen for P2P** then says what it did: *Beacon sent at 3:17 PM on 7.101 MHz*, or why it
+  did not go. Another may go a minute after.
+- **Repeat**: **Off**, **10 min**, **15 min**, **30 min** or **60 min**. An interval starts
+  repeating at it; **Off** stops it.
+- **Only while listening for P2P**, ticked at first: beacons go only while **Listen for P2P** is
+  on, so that a station that lists you can call you. Unticked, they go whether you listen or not,
+  and say that you do not answer calls.
+- **Position in the beacon**: **None**, **4-char grid**, **6-char grid** or **Exact**, the
+  default. The line under it says what your next beacon tells of where you are, and where that
+  came from: the GPS, or a place ([Places and GPS](#places-and-gps)). A place given as a grid
+  square goes as that square at most. Everyone listening hears it. With no position in use, Aether
+  puts in its own Setup grid square, if it has one; with **None** it puts in nothing.
+- **Next**, **Last** and **Repeats until**.
+
+The interval counts from when your callsign was last on the air for RadioPost: a beacon, a call or
+a session, so a station in use beacons less. Up to a minute is added at random, so that two
+stations started together drift apart. A beacon waits while you call or are in a session; one that
+cannot go within its two minutes is skipped, and the next keeps to the interval. With a RadioPost
+gateway on the same Aether scanning its channels, each beacon goes on the next of them. While Aether
+repeats a beacon of its own (its **Repeat**), RadioPost sends none. Repeating stops after four hours
+and when the rules refuse a beacon, such as under automatic control. RadioPost does not start it
+again when it restarts. A beacon on a timer is for when you are at the station: a station left
+alone is under automatic control, where a beacon is allowed only in a few segments (§97.203(d)).
+
+A beacon also says whether calls to your callsign are answered now: yes while you listen for P2P.
+It needs a modem that sends beacons: Aether 0.2.0-beta.183 or later, or Mercury with its busy
+detector on. VARA sends none for RadioPost yet. RadioPost keeps your choices in `beacon.json` in
+your home folder.
+
+![The Station box on P2P, listening, with Beacon pressed in and its menu open under its arrow: Send a beacon now; Repeat with 15 min chosen; Only while listening for P2P ticked; Position in the beacon with Exact chosen, saying 33.78123, −84.38765 from the GPS 4 s ago; the next beacon due in 8 minutes, the last sent at 3:17 PM on 7.101 MHz, and repeating until four hours from its start](screens/client-beacon-menu.png)
+
+*Figure 29. Beacon's menu.*
+
 Mail addressed to the other station's address crosses. Each side keeps a record of the session.
 When you next have the Internet, a line under the Station box says how many sessions wait to be
 reported: click **Send reports**. Your post office then marks your sent mail as delivered.
@@ -1219,7 +1264,7 @@ You need:
 
 ![The Alerts view: an alert sent and answered, one heard, Send a report folded, and two circles with their checks](screens/client-alerts.png)
 
-*Figure 29. Alerts.*
+*Figure 30. Alerts.*
 
 ### 10.2 Set up a circle
 
@@ -1291,7 +1336,7 @@ front, and a red box shows the alert, with the dial it was heard on.
 
 ![An alert from KK4ODA in the circle Family, with Acknowledge, Call back, three quick replies and a line of your own](screens/client-alarm.png)
 
-*Figure 30. An alert arriving.*
+*Figure 31. An alert arriving.*
 
 - **Acknowledge** stops the alarm. The other station sees *seen*.
 - **Received**, **Calling you now** and **Can't now** answer with that line, and stop the alarm.
@@ -1324,7 +1369,7 @@ and nobody answers it. Anyone listening can read it.
 
 ![Send a report: a Position Report to Riverside net on its watch dial, every 15 minutes, with the line that says when it goes next and Stop](screens/client-report.png)
 
-*Figure 31. A Position Report going to a circle every 15 minutes.*
+*Figure 32. A Position Report going to a circle every 15 minutes.*
 
 A report sent again goes only while RadioPost's window is open, and for four hours at most. Each
 time, a position that was your station's own (not one you typed) is brought up to date, so the net
@@ -1343,7 +1388,7 @@ its own account, its own address and its own mail.
 
 ![One computer with three callsigns, each its own account, and a shared key, address list and log](fig/callsigns.svg)
 
-*Figure 32. Several callsigns on one computer.*
+*Figure 33. Several callsigns on one computer.*
 
 ### 11.1 Add a callsign
 
@@ -1405,7 +1450,7 @@ Click **Setup** at the bottom of the left-hand column.
 
 ![The Setup page: enrollment, post office, accept list and usual gateways](screens/client-setup.png)
 
-*Figure 33. Setup.*
+*Figure 34. Setup.*
 
 ### Enroll with your post office
 
@@ -1446,7 +1491,7 @@ Where your station is. The gateway list is in order of distance from it
 
 ![Setup's Places and GPS: two places saved, the GPS read from an iPhone over TCP, and the position in use](screens/client-places.png)
 
-*Figure 34. Places and GPS.*
+*Figure 35. Places and GPS.*
 
 The line at the top says which position is in use, and why when it is not the GPS's present fix:
 *In use: the GPS, EM73tr, 2 s ago*, or *GPS silent for 6 minutes: using Home, EM73tr.*
@@ -1496,7 +1541,7 @@ names the profile in use.
 
 ![Setup's Station profiles: a mobile profile and a home one, each value set or assumed](screens/client-stations.png)
 
-*Figure 35. Station profiles.*
+*Figure 36. Station profiles.*
 
 Each profile shows what a prediction would use at **HF** and at **VHF** and above: the power, the
 antenna and its height, its gain, and the feed line's loss, and the **Noise** where it is. A value
@@ -1519,7 +1564,7 @@ when you ask, from the Copernicus DEM's public copy, and kept on this computer.
 
 ![Setup's Terrain: what is held, the area within 50 km being prepared at 90 m, and the notices of the data held](screens/client-terrain-setup.png)
 
-*Figure 36. Terrain.*
+*Figure 37. Terrain.*
 
 The first line says what is held: tiles of a degree square, at 90 m or 30 m, their size, and the
 folder. To have the terrain before you go where there is no Internet, pick how far around the place
@@ -1535,7 +1580,7 @@ RadioPost plays a sound when something happens, and tells you about new mail by 
 
 ![Setup's Sounds and notifications: speakers chosen, a sound for each event, quiet hours, and how mail arrives](screens/client-sounds.png)
 
-*Figure 37. Sounds and notifications.*
+*Figure 38. Sounds and notifications.*
 
 **Mind the radio's sound card.** If this computer's sound goes to the radio's sound card (a
 SignaLink, or the radio's own USB audio), these sounds go on the air, and with VOX they key the
@@ -1584,7 +1629,7 @@ their labels, and gives the form to any station that asks for it.
 
 ![Setup's Forms kept here: two forms of groups' own, each with Export and Remove, and Import a form](screens/client-forms-kept.png)
 
-*Figure 38. Forms kept here.*
+*Figure 39. Forms kept here.*
 
 ### This device's key, Credential, Post offices trusted
 
@@ -1653,7 +1698,7 @@ RadioPost keeps working when the Internet fails at a gateway.
 
 ![Before: the post office copies your mail to your usual gateway. During: the gateway serves the copies and keeps what you send. After: it reports](fig/cutoff.svg)
 
-*Figure 39. When the Internet is down.*
+*Figure 40. When the Internet is down.*
 
 **Before.** Name your usual gateways in Setup ([section 12](#usual-gateways)). Your post office
 then copies each new message for you to them as it arrives.
@@ -1696,7 +1741,7 @@ licensed operator can run one.
 
 ![Two users call the gateway by radio; the gateway's computer runs RadioPost Gateway and Aether HF and reaches each caller's post office](fig/gateway.svg)
 
-*Figure 40. A gateway station.*
+*Figure 41. A gateway station.*
 
 A gateway is usually left answering with nobody at the radio. It is then under **automatic
 control**, and the rules for that apply ([The rules](#36-the-rules)).
@@ -1732,13 +1777,13 @@ Open RadioPost Gateway. Until it is set up and registered, it says what is missi
 
 ![A new RadioPost Gateway: the notice says it is not set up, with Set up the gateway](screens/gateway-first.png)
 
-*Figure 41. RadioPost Gateway before setup.*
+*Figure 42. RadioPost Gateway before setup.*
 
 Click **Set up the gateway**. Setup has three steps.
 
 ![The gateway's Setup page: the gateway, its registration with two channels, and post offices](screens/gateway-setup.png)
 
-*Figure 42. Setting up the gateway.*
+*Figure 43. Setting up the gateway.*
 
 ### Step 1. The gateway
 
@@ -1882,7 +1927,7 @@ ports, and tell its adapter where.
 
 ![The gateway's computer: RadioPost Gateway reaches Aether directly and Mercury through its adapter; both modems key the radio through rigctld and share its sound card](fig/two-modems.svg)
 
-*Figure 43. Aether and Mercury on one radio.*
+*Figure 44. Aether and Mercury on one radio.*
 
 Both modems hear the radio's receive audio all the time, and only one transmits at a time. Only
 one program can hold the radio's CAT port, so both key the radio through rigctld, Hamlib's radio
@@ -2076,7 +2121,7 @@ Click **Start**, at the top. The gateway claims its callsign at Aether and liste
 
 ![The RadioPost Gateway window with numbered marks on its parts](screens/gateway-window.png)
 
-*Figure 44. The RadioPost Gateway window.*
+*Figure 45. The RadioPost Gateway window.*
 
 1. **The gateway's callsign**, and the account it is registered under. To its left, beside
    *RadioPost Gateway*, is the version you are running.
@@ -2137,7 +2182,7 @@ While a session runs, a box shows who called, the account, since when, and the m
 
 ![The window during a session, with the Session under way box and its Disconnect button](screens/gateway-session.png)
 
-*Figure 45. A session at the gateway.*
+*Figure 46. A session at the gateway.*
 
 **Ending one session.** The box has a button that ends this session only. The gateway goes on
 answering:
@@ -2246,7 +2291,7 @@ text), each session waiting to be reported with its last try, and the last repor
 
 ![The Partners, Callers refused and Copies placed ahead panels, opened](screens/gateway-held.png)
 
-*Figure 46. What the gateway holds, its partners and the callers it refuses.*
+*Figure 47. What the gateway holds, its partners and the callers it refuses.*
 
 ## 22. Partners: forwarding by radio
 
@@ -2383,7 +2428,7 @@ on this tab.
 
 ![The Applications tab: one application waiting with its licence check, and the Decided list](screens/desk-applications.png)
 
-*Figure 47. Applications.*
+*Figure 48. Applications.*
 
 Each application shows the person's name, callsign and when they asked, the **Address** they
 want, their **Email now**, and what the post office found of the callsign:
@@ -2427,7 +2472,7 @@ the mailbox was made (*mailbox*, or *no mailbox* in red) and the applicant email
 
 ![The Accounts tab: five accounts with their names, devices and mail waiting](screens/desk-accounts.png)
 
-*Figure 48. Accounts.*
+*Figure 49. Accounts.*
 
 Every account, one a row:
 
@@ -2465,7 +2510,7 @@ Revoking the computer you are using takes the desk away from it: the button says
 
 ![The Gateways tab: two gateways, the account each was registered from, and Unregister](screens/desk-gateways.png)
 
-*Figure 49. Gateways.*
+*Figure 50. Gateways.*
 
 The **Gateways** tab lists each gateway registered with your post office, one a row:
 
@@ -2489,7 +2534,7 @@ that exists. Use it for someone you know holds the callsign.
 
 ![The New code tab: an address, a callsign and a name filled in, the licence checked, and the code made](screens/desk-code.png)
 
-*Figure 50. Making a code.*
+*Figure 51. Making a code.*
 
 1. Open **New code**.
 2. Fill in:
@@ -2539,7 +2584,7 @@ Know only post offices whose operators you trust to check callsigns. At first no
 
 ![The Post offices tab: one post office known, one seen, none blocked](screens/desk-others.png)
 
-*Figure 51. Other post offices.*
+*Figure 52. Other post offices.*
 
 - **Known**: the post offices you know, who runs each, when its records were last fetched, and
   whether DNSSEC signed them. They are fetched again every six hours. **Forget** stops knowing one;
@@ -2560,7 +2605,7 @@ when a check turns red, and again when all pass.
 
 ![The Health tab: eleven checks passed and one amber line about backups](screens/desk-health.png)
 
-*Figure 52. Health.*
+*Figure 53. Health.*
 
 Each line is one check:
 
@@ -2588,7 +2633,7 @@ The **Server** tab lets you look after the server without logging in to it.
 
 ![The Server tab: the jobs, one with its output open, and When you need more](screens/desk-server.png)
 
-*Figure 53. Jobs and a terminal.*
+*Figure 54. Jobs and a terminal.*
 
 **Jobs** are a fixed list of tasks the server's administrator account runs for you:
 
@@ -2623,7 +2668,7 @@ says the one command to run on the server, once.
 
 ![The Backups and DKIM keys boxes on the Server tab](screens/desk-backups.png)
 
-*Figure 54. Backups and DKIM keys.*
+*Figure 55. Backups and DKIM keys.*
 
 ### Backups
 
@@ -2680,7 +2725,7 @@ when they are older than 180 days.
 
 ![The Settings tab: applications, licence lookups, mailboxes and this post office](screens/desk-settings.png)
 
-*Figure 55. Settings.*
+*Figure 56. Settings.*
 
 ### Applications
 
@@ -2896,6 +2941,7 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
 | Aether HF | The open-source HF modem RadioPost uses. It has its own program and manual. |
 | Automatic control | Operating with nobody at the radio, as a gateway left answering does. |
 | Bandwidth | How wide Aether's signal is: 500 or 2300 Hz. Both stations of a session use the same. |
+| Beacon | Your callsign on the air once, addressed to nobody: stations listening list you, with how well they heard you, whether you answer calls, and where you are if you let it say. |
 | Channel | A gateway's dial frequency, with the bandwidth it uses there: a call there goes at it. Picking one tunes the radio. |
 | Check (of a circle) | Eight characters made from a circle's keyword. The same check means the same keyword. |
 | Circle | The stations whose operators typed the same keyword, and so can alert each other. |
@@ -2949,6 +2995,8 @@ Aether's **Send files…** on its Log tab. It sends Aether's recording with both
    **Bandwidth**, or picks a station heard or called before under **▾**, then **Call**.
 3. With a station that runs a gateway, call its operator's own callsign, not the gateway's.
 4. Later, with the Internet: **Send reports**.
+5. To be listed by the stations listening: **Beacon**, which repeats while you listen, or **▾**
+   beside it and **Send a beacon now**.
 
 **Alert a station**
 
@@ -3090,3 +3138,5 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.61.0 | 2026-11-27 | §8.4 and §18 *More than one modem*: Mercury has carried RadioPost on the air, and KK4ODA-1 answered on Aether and Mercury at once (27 November 2026, 7.101 MHz, 2300 Hz); they had said only Aether had. |
 | 1.62.0 | 2026-11-27 | Section 19: the **Sessions** table's **Result** says how each session ended in words of its own (*Completed*, *Cut short*, *Link lost*, *Timed out*, the refusals, what you ended, a partner call's failures), in colour, with more in its tooltip; it had said *over* for a session done and for a link lost alike. Figure 44 retaken. |
 | 1.63.0 | 2026-11-28 | The stations your modem heard (RP-4 1.7.0, wishlist W59). §10: in P2P, **▾** beside **Call** carries how many stations were heard in the last half hour and lists them by where they were heard, with strength, age, what was heard, whether a beacon's station answers calls, its distance and bearing, and *P2P worked*; the stations called before follow; typing narrows the list. §40 to match. Figure 28 retaken. |
+| 1.64.0 | 2026-11-28 | Beacons (wishlist W59). §10: **Beacon** beside **Call** in P2P, its menu's **Send a beacon now** and **Position in the beacon**, the line under **Listen for P2P**, and what a beacon says (new Figure 29; later figures renumbered). §39 *Beacon*, §40 step 5 of *Station to station*. Figure 27 retaken taller, with **Beacon**. |
+| 1.65.0 | 2026-11-28 | Repeating beacons (wishlist W59). §10: **Beacon** is a switch that repeats the beacon every 10, 15, 30 or 60 minutes for four hours at most, counted from when your callsign was last on the air; its menu's **Repeat**, **Only while listening for P2P**, **Next**, **Last** and **Repeats until**; what it waits for and when it stops. Figure 29 retaken. §40 step 5. |

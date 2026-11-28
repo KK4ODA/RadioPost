@@ -62,6 +62,9 @@ pub struct Carrier {
     pub say: Arc<dyn Fn(&str) + Send + Sync>,
     /// The stations the modem has heard (RP-4 §4.4, [`crate::stations`]).
     pub stations: crate::stations::Stations,
+    /// The station's beacons (W59, [`crate::beacons`]): one asked for while it listens goes on
+    /// the listening connection.
+    pub beacons: crate::beacons::Beacons,
 }
 
 impl std::fmt::Debug for Carrier {
@@ -193,6 +196,12 @@ impl Presence {
             }),
             retry: RETRY,
         }
+    }
+
+    /// The modem the page last named (its Modem box): where a beacon goes between calls.
+    #[must_use]
+    pub fn modem_in_use(&self) -> Option<String> {
+        self.shared.modem()
     }
 
     /// The radio's dial as the modem last said it, while the connection is held: what the

@@ -4549,6 +4549,63 @@
           }
         },
         {
+          "note": "N2CALL beacons saying nothing of where it is, the modem's own position included."
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "adapter",
+          "message": {
+            "op": "beacon",
+            "id": 9,
+            "modem_position": false
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "ok",
+            "id": 9
+          }
+        },
+        {
+          "station": "KK4ODA",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "heard",
+            "callsign": "N2CALL",
+            "kind": "beacon",
+            "answers": true,
+            "at": 1795213320,
+            "dial_hz": 7101000
+          }
+        },
+        {
+          "station": "N4CALL",
+          "host": "app",
+          "to": "host",
+          "message": {
+            "op": "heard",
+            "callsign": "N2CALL",
+            "kind": "beacon",
+            "answers": true,
+            "at": 1795213320
+          }
+        },
+        {
+          "station": "N2CALL",
+          "host": "client",
+          "to": "host",
+          "message": {
+            "op": "beacon-sent",
+            "sent": true,
+            "dial_hz": 7101000
+          }
+        },
+        {
           "note": "KK4ODA beacons again, its position as a 4-character square, with no `ref`."
         },
         {

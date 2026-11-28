@@ -166,7 +166,7 @@ fn hello_asks_what_only_mercury_answers_and_gives_its_caps() {
                "caps": {"bandwidths": [500, 2300, 2750], "max_links": 1, "delivery": true,
                         "broadcast": false, "quality": true, "busy": true,
                         "regulatory": false, "max_queue": 65536, "shared": false,
-                        "heard": true}})
+                        "heard": true, "beacon": true}})
         ]
     );
     let mut rig = Rig::new();
@@ -1093,6 +1093,62 @@ fn a_cq_frame_heard_is_a_station_heard() {
         told(&rig.host(&json!({"op": "beacon", "id": 6})))[0]["code"],
         "unsupported"
     );
+}
+
+/// RP-4 §4.4 and §9.6: a host's beacon is a `CQFRAME` of its callsign, sent once Mercury's busy
+/// detector says the channel is clear and nothing of the station's is on the air, and reported
+/// when Mercury's `PENDING` and `CANCELPENDING` around it close. One that cannot go within its
+/// window is given up and said; without the detector, beacons are not offered.
+#[test]
+fn a_beacon_is_a_cq_frame_sent_when_the_channel_is_clear() {
+    let mut rig = Rig::greeted("ON");
+    rig.host(&json!({"op": "callsigns", "id": 2, "callsigns": ["KK4ODA"]}));
+    rig.modem("OK");
+    rig.modem("BUSY ON");
+    let outs = rig.host(&json!({"op": "beacon", "id": 5, "ref": "k1", "within_s": 30}));
+    assert_eq!(told(&outs), [json!({"op": "ok", "id": 5})]);
+    assert_eq!(
+        asked(&outs),
+        Vec::<String>::new(),
+        "the channel is busy: it waits"
+    );
+    let outs = rig.host(&json!({"op": "beacon", "id": 6}));
+    assert_eq!(told(&outs)[0]["code"], "busy", "one at a time");
+    let outs = rig.modem("BUSY OFF");
+    assert_eq!(asked(&outs), ["CQFRAME KK4ODA 2300"]);
+    assert_eq!(told(&rig.modem("OK")), Vec::<Value>::new());
+    assert_eq!(
+        told(&rig.modem("PENDING")),
+        Vec::<Value>::new(),
+        "on the air"
+    );
+    assert_eq!(
+        told(&rig.modem("CANCELPENDING")),
+        [json!({"op": "beacon-sent", "ref": "k1", "sent": true})]
+    );
+
+    // a beacon the channel never lets go
+    rig.modem("BUSY ON");
+    rig.host(&json!({"op": "beacon", "id": 7, "within_s": 10}));
+    rig.later(9_000);
+    let outs = rig.later(2_000);
+    let ended = told(&outs);
+    assert_eq!(ended.len(), 1, "{ended:?}");
+    assert_eq!(ended[0]["op"], "beacon-sent");
+    assert_eq!(ended[0]["sent"], false);
+    assert!(ended[0].get("ref").is_none(), "it had none");
+    assert_eq!(
+        asked(&rig.modem("BUSY OFF")),
+        Vec::<String>::new(),
+        "given up: not sent late"
+    );
+
+    // a callsign not the host's, and a detector that is off
+    let outs = rig.host(&json!({"op": "beacon", "id": 8, "as": "N2CALL"}));
+    assert_eq!(told(&outs)[0]["code"], "not-authorized");
+    let mut rig = Rig::with(&["KK4ODA"]);
+    let outs = rig.host(&json!({"op": "beacon", "id": 9}));
+    assert_eq!(told(&outs)[0]["code"], "unsupported");
 }
 
 /// RP-4 §9.2: the VARA adapter uses no `CQFRAME` until it is read in VARA's published commands.

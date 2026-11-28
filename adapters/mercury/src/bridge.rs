@@ -203,6 +203,7 @@ enum Waiting {
         call: u64,
     },
     Ident,
+    Beacon,
     Plain(&'static str),
 }
 
@@ -286,6 +287,19 @@ struct Ident {
     keyed: bool,
 }
 
+/// A host's beacon (RP-4 §4.4, §9.6): a `CQFRAME` of its callsign, sent once the air is clear,
+/// within the host's window, and reported when Mercury's bracket of it closes.
+#[derive(Debug)]
+struct Beacon {
+    host: u64,
+    callsign: String,
+    reference: Option<Value>,
+    /// Until it may wait; once sent to Mercury, until it is given to go on the air.
+    until: u64,
+    sent: bool,
+    keyed: bool,
+}
+
 /// One host's side of the adapter. It outlives its host by the end of what the host left on the
 /// air ([`Bridge::settled`]), and may be given the next host meanwhile.
 #[derive(Debug)]
@@ -340,6 +354,8 @@ pub struct Bridge {
     /// The other station, whose `CQFRAME` heard ends the wait.
     ident_peer: Option<String>,
     ident: Option<Ident>,
+    /// The host's beacon, until it has gone or will not.
+    beacon: Option<Beacon>,
     /// Mercury keyed while answering a call that has not come up.
     answer_keyed: bool,
 }
@@ -424,6 +440,7 @@ impl Bridge {
             ident_after: 0,
             ident_peer: None,
             ident: None,
+            beacon: None,
             answer_keyed: false,
         }
     }
@@ -523,7 +540,8 @@ impl Bridge {
             // Mercury reports each CQ frame it hears; VARA's `CQFRAME` waits to be read in its
             // published command list (RP-4 §9.2)
             heard: !self.dialect.is_vara(),
-            beacon: false,
+            // a beacon waits for a clear channel, which only Mercury's busy detector says
+            beacon: self.beacons(),
             position: false,
         };
         out.push(Out::Host(answer_with(
@@ -661,6 +679,14 @@ impl Bridge {
             Request::Stations => {
                 let text = format!("this adapter reports no stations heard on {}", self.name());
                 out.push(Out::Host(error(rid_ref, "unsupported", &text)));
+            }
+            Request::Beacon {
+                as_call,
+                reference,
+                within_s,
+                ..
+            } if self.beacons() => {
+                self.on_beacon(as_call, reference, within_s, rid_ref, &mut out);
             }
             Request::Beacon { .. } => {
                 let text = format!("this adapter sends no beacons on {}", self.name());
@@ -1037,6 +1063,7 @@ impl Bridge {
             self.ident = None;
         }
         self.identify(&mut out);
+        self.send_beacon(&mut out);
         self.advance_call(&mut out);
         self.settle();
         self.progress(&mut out);
@@ -1063,14 +1090,120 @@ impl Bridge {
         self.ident_after = self.ident_after.max(self.now + wait);
     }
 
-    /// Sends the next `CQFRAME` owed, when nothing is on the air for the station and its turn has
-    /// come.
-    fn identify(&mut self, out: &mut Vec<Out>) {
-        let clear = self.link.is_none()
+    /// Whether nothing is on the air for the station: no link, no call placed, no answer or
+    /// teardown under way.
+    fn clear(&self) -> bool {
+        self.link.is_none()
             && self.ghost.is_none()
             && self.tail.is_none()
             && !self.pending
-            && !self.call.as_ref().is_some_and(|c| c.placed);
+            && !self.call.as_ref().is_some_and(|c| c.placed)
+    }
+
+    /// Whether this adapter sends a host's beacon: on Mercury, whose busy detector says when the
+    /// channel is clear (RP-4 §9.6). VARA's `CQFRAME` waits to be read in its published commands.
+    fn beacons(&self) -> bool {
+        !self.dialect.is_vara() && self.detector == Some(true)
+    }
+
+    /// RP-4 §4.4 `beacon`: the host's callsign as a `CQFRAME`, held until the channel is clear
+    /// and nothing of the station's is on the air, within `within_s` (120 s when not given).
+    fn on_beacon(
+        &mut self,
+        as_call: Option<String>,
+        reference: Option<Value>,
+        within_s: Option<u64>,
+        rid_ref: Option<&Value>,
+        out: &mut Vec<Out>,
+    ) {
+        let Some(first) = self.callsigns.first() else {
+            out.push(Out::Host(error(rid_ref, "refused", "no callsigns yet")));
+            return;
+        };
+        let callsign = as_call.unwrap_or_else(|| first.clone());
+        if !self.callsigns.iter().any(|c| same(c, &callsign)) {
+            let text = format!("{callsign} is not this host's");
+            out.push(Out::Host(error(rid_ref, "not-authorized", &text)));
+            return;
+        }
+        if !self.clear() || self.beacon.is_some() {
+            let text = "a link, a call or a beacon is under way on the station";
+            out.push(Out::Host(error(rid_ref, "busy", text)));
+            return;
+        }
+        let within = within_s.unwrap_or(rpmi::wire::WITHIN_DEFAULT_S);
+        self.beacon = Some(Beacon {
+            host: self.host,
+            callsign,
+            reference,
+            until: self.now + within * 1000,
+            sent: false,
+            keyed: false,
+        });
+        Self::ok(rid_ref, out);
+        self.send_beacon(out);
+    }
+
+    /// Sends the host's beacon when it may go, and gives it up when its time has run out.
+    fn send_beacon(&mut self, out: &mut Vec<Out>) {
+        let Some(b) = self.beacon.as_ref() else {
+            return;
+        };
+        if self.now >= b.until {
+            let why = if b.sent {
+                format!("{} never sent the CQ frame", self.name())
+            } else if self.channel_busy {
+                "the channel stayed busy".to_owned()
+            } else {
+                "the station stayed busy".to_owned()
+            };
+            self.beacon_over(false, Some(why), out);
+            return;
+        }
+        let ready = !b.sent
+            && self.clear()
+            && !self.channel_busy
+            && self.ident.is_none()
+            && self.owed.is_empty()
+            && !self.modem_lost
+            && self.now >= self.ident_after;
+        if !ready {
+            return;
+        }
+        let line = format!(
+            "CQFRAME {} {}",
+            b.callsign,
+            self.bandwidth.unwrap_or(IDENT_BW)
+        );
+        if let Some(b) = self.beacon.as_mut() {
+            b.sent = true;
+            b.until = self.now + IDENT_MS;
+        }
+        self.command(&line, Waiting::Beacon, out);
+    }
+
+    /// The beacon's end: `beacon-sent` to the host that asked, when it is still the host.
+    fn beacon_over(&mut self, sent: bool, why: Option<String>, out: &mut Vec<Out>) {
+        let Some(b) = self.beacon.take() else {
+            return;
+        };
+        if b.host != self.host {
+            return;
+        }
+        let mut m = answer_with("beacon-sent", None, &[("sent", sent.into())]);
+        if let Some(r) = b.reference {
+            m.insert("ref".into(), r);
+        }
+        if let Some(why) = why {
+            m.insert("text".into(), why.into());
+        }
+        out.push(Out::Host(m));
+    }
+
+    /// Sends the next `CQFRAME` owed, when nothing is on the air for the station and its turn has
+    /// come.
+    fn identify(&mut self, out: &mut Vec<Out>) {
+        let clear = self.clear() && !self.beacon.as_ref().is_some_and(|b| b.sent);
         if self.owed.is_empty()
             || self.ident.is_some()
             || !clear
@@ -1110,6 +1243,11 @@ impl Bridge {
                     i.keyed = true;
                     return out;
                 }
+                if let Some(b) = self.beacon.as_mut().filter(|b| b.sent && !b.keyed) {
+                    // the beacon's CQ frame is on the air
+                    b.keyed = true;
+                    return out;
+                }
                 // Mercury is back to answering: the last session's teardown is over
                 self.pending = true;
                 self.answer_keyed = false;
@@ -1119,6 +1257,8 @@ impl Bridge {
             "CANCELPENDING" => {
                 if self.ident.as_ref().is_some_and(|i| i.keyed) {
                     self.ident = None;
+                } else if self.beacon.as_ref().is_some_and(|b| b.keyed) {
+                    self.beacon_over(true, None, &mut out);
                 } else {
                     self.pending = false;
                     if std::mem::take(&mut self.answer_keyed) {
@@ -1131,6 +1271,7 @@ impl Bridge {
                     self.settle_listen(&mut out);
                 }
                 self.identify(&mut out);
+                self.send_beacon(&mut out);
                 self.advance_call(&mut out);
             }
             "CQFRAME" => {
@@ -1169,6 +1310,7 @@ impl Bridge {
             "BUSY" => {
                 self.channel_busy = rest == "ON";
                 self.update_busy(&mut out);
+                self.send_beacon(&mut out);
             }
             _ => {} // REGISTERED, IAMALIVE, CQFRAME, MONITOR and what a later Mercury adds
         }
@@ -1292,6 +1434,12 @@ impl Bridge {
                     self.ident = None;
                     self.identify(out);
                     self.advance_call(out);
+                }
+            }
+            Waiting::Beacon => {
+                if !ok {
+                    let why = format!("{} refused the CQ frame", self.name());
+                    self.beacon_over(false, Some(why), out);
                 }
             }
             Waiting::Plain(what) => {

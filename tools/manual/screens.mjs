@@ -380,6 +380,12 @@ function clientState(over = {}) {
     modem: {adapter: "ws://127.0.0.1:8515/v1", said: "Aether HF 0.2.0", kind: "aether"},
     progress: null, update: UPDATE, log: CLIENT_LOG.length,
     alerts: {seq: 1, alarming: false, circles: ALERT_CIRCLES.length},
+    // Beacon's settings and the last one, sent seven minutes ago (W59)
+    beacon: {settings: {every_min: 15, only_while_listening: true, position: "exact"},
+             intervals_min: [10, 15, 30, 60], waiting: false, again_in_s: null,
+             last: {at: T - 420, sent: true, dial_hz: 7101000, text: null},
+             position: {goes: {lat: 33.78123, lon: -84.38765, precision: "exact"}, grid: null,
+                        from: "the GPS, 4 s ago", modems_own: false}},
     ...over,
   };
 }
@@ -1027,7 +1033,7 @@ const SHOTS = {
                  better: {dial_hz: 3_590_000,
                           hf: {band: "80m", chance: 0.86, chance_words: "likely to work"}}};
     const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(world),
-                                                 height: 900});
+                                                 height: 1150});
     await spreadLog(page, "log", T - 1300, 19);
     await page.check("input[name=kind][value=station]");
     await page.fill("#callsign", "N0CALL");
@@ -1061,6 +1067,29 @@ const SHOTS = {
   },
 
   // Listen for P2P switched on: sunk in, its lamp lit, reading Listening for P2P; Call greyed
+  // P2P chosen, and Beacon's menu open: send one now, and how much of where the station is it says
+  async "client-beacon-menu"(browser) {
+    // listening, Beacon pressed in: the next due in eight minutes
+    const world = clientWorld({state: {
+      activity: {state: "listening", remote: null, failed: null, listen: true, held: null,
+                 listening_at: {dial_hz: 7_101_000, answers: [500, 2300], scanning: []}},
+      beacon: {...clientState().beacon,
+               repeating: {since: T - 1300, until: T - 1300 + 4 * 3600, next: T + 480}},
+    }});
+    const {page, context} = await open(browser, {ui: CLIENT_UI, api: clientApi(world),
+                                                 height: 1000});
+    await spreadLog(page, "log", T - 1300, 19);
+    await page.waitForTimeout(300);
+    await page.check("input[name=kind][value=station]");
+    await page.waitForTimeout(300);
+    await page.click("#beacon-more");
+    await page.waitForTimeout(300);
+    await page.screenshot({path: join(OUT, "client-beacon-menu.png"),
+                           clip: await unionClip(page, [".station", "#beacon-menu"])});
+    console.log("docs/manual/screens/client-beacon-menu.png");
+    await context.close();
+  },
+
   async "client-listening"(browser) {
     const world = clientWorld({state: {activity: {state: "listening", remote: null, failed: null,
                                                   listen: true, held: null,

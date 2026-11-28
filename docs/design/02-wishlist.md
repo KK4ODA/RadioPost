@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.60 |
+| **Version** | 0.3.62 |
 | **Updated** | 2026-11-28 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -1358,3 +1358,5 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.58 | 2026-11-27 | W59, proposed: [finding, beaconing and calling P2P stations](07-p2p-stations.md). |
 | 0.3.59 | 2026-11-28 | W59 accepted (D51), with the station's position in the beacon. |
 | 0.3.60 | 2026-11-28 | W59: Phase 1 built, the stations heard in **Call** (RP-4 1.7.0). |
+| 0.3.61 | 2026-11-28 | W59: Phases 2 and 3 built, Aether's beacons for programs (0.2.0-beta.183) and **Send a beacon now** (RP-4 1.8.0). |
+| 0.3.62 | 2026-11-28 | W59: Phase 4 built, repeating beacons. |

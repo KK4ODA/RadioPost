@@ -106,6 +106,7 @@ fn carrying(home: &Path, modem: &str, lends: &Lends) -> (Presence, Alerts) {
         }),
         say: Arc::new(|_line: &str| {}),
         stations: radiopost_client::stations::Stations::in_memory(),
+        beacons: radiopost_client::beacons::Beacons::in_memory(),
     });
     presence.start();
     presence.set_modem(modem);

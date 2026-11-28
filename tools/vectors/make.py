@@ -2764,6 +2764,8 @@ def rpmi_beacons() -> list[dict[str, Any]]:
     a.request("client", {"op": "connect", "id": 9, "remote": "N2CALL"})
     b.request("client", {"op": "beacon", "id": 7})
     a.request("client", {"op": "disconnect", "id": 10, "link": link_of(a, "client")})
+    w.note("N2CALL beacons saying nothing of where it is, the modem's own position included.")
+    b.request("client", {"op": "beacon", "id": 9, "modem_position": False})
     w.note("KK4ODA beacons again, its position as a 4-character square, with no `ref`.")
     a.request(
         "client",
@@ -2954,6 +2956,7 @@ def make_rpmi_conversations() -> dict[str, Any]:
                 "KK4ODA client connect 9": "ok, then connected",
                 "N2CALL client beacon 7": "busy",  # a link is up on the station
                 "KK4ODA client disconnect 10": "ok",
+                "N2CALL client beacon 9": "ok",  # nothing of where it is
                 "KK4ODA client beacon 11": "ok",
                 "N2CALL client stations 8": "stations",
             },
@@ -3090,7 +3093,7 @@ def make_rpmi_conversations() -> dict[str, Any]:
     assert at_b[1]["position"]["precision"] == "grid4" and at_b[1]["position"]["grid"] == "EM73"
     assert close(at_b[1], 33.5, -85.0), at_b[1]
     at_a = told("KK4ODA", "client", "heard")
-    assert len(at_a) == 1, at_a
+    assert len(at_a) == 2, at_a
     assert {k: v for k, v in at_a[0].items() if k != "position"} == base | {
         "callsign": "N2CALL",
         "answers": True,
@@ -3098,8 +3101,12 @@ def make_rpmi_conversations() -> dict[str, Any]:
     }, at_a[0]
     assert at_a[0]["position"]["precision"] == "grid6" and at_a[0]["position"]["grid"] == "EM84cl"
     assert close(at_a[0], 34 + 23 / 48, -(83 + 19 / 24)), at_a[0]
+    # N2CALL's second beacon says nothing of where it is: the simulated modem has no position of
+    # its own to leave out, so it carries none either way
+    assert at_a[1] == base | {"callsign": "N2CALL", "answers": True, "dial_hz": RPMI_DIAL}, at_a[1]
     assert told("N4CALL", "app", "heard") == [
         base | {"callsign": "KK4ODA", "answers": False},
+        base | {"callsign": "N2CALL", "answers": True},
         base | {"callsign": "N2CALL", "answers": True},
         base | {"callsign": "KK4ODA", "answers": False},
     ], told("N4CALL", "app", "heard")
@@ -3305,6 +3312,10 @@ RPMI_LINES = [
         '{"op": "beacon", "id": 49, "position": {"lat": 33.7, "lon": -84.3, "precision": "grid8"}}',
         "a precision it does not know",
     ),
+    (
+        '{"op": "beacon", "id": 52, "modem_position": "no"}',
+        "a beacon's modem_position that is not a boolean",
+    ),
     ('{"op": "beacon", "id": 50}', "a good beacon on a modem without beacons", "beacon"),
     ('{"op": "stations", "id": 51}', "stations on a modem that keeps none", "heard"),
 ]
@@ -3385,6 +3396,7 @@ def make_rpmi_lines() -> dict[str, Any]:
             "a position without its precision": ("error", "malformed", 47),
             "a longitude past 180": ("error", "malformed", 48),
             "a precision it does not know": ("error", "malformed", 49),
+            "a beacon's modem_position that is not a boolean": ("error", "malformed", 52),
             "a good beacon on a modem without beacons": ("error", "unsupported", 50),
             "stations on a modem that keeps none": ("error", "unsupported", 51),
         },

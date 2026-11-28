@@ -574,6 +574,40 @@ impl Modem {
         Ok(e)
     }
 
+    /// A beacon asked for on this connection, and its end awaited.
+    fn beacon(&mut self, due: &crate::beacons::Due) -> Result<BeaconEnd, Error> {
+        if !self.caps.beacon {
+            return Err("this modem sends no beacons".into());
+        }
+        let position = due.position.as_ref().filter(|_| self.caps.position);
+        let request = self.host.beacon_saying(
+            None,
+            Some(&due.reference),
+            Some(due.within_s),
+            due.dial_hz.filter(|_| self.caps.dial),
+            position,
+            due.modem_position,
+        );
+        self.ask(&request)?;
+        self.conn
+            .set_timeout(Some(POLL))
+            .map_err(|e| e.to_string())?;
+        let until = Instant::now() + Duration::from_secs(due.within_s + crate::beacons::GRACE_S);
+        while Instant::now() < until {
+            if let Some(Event::BeaconSent {
+                reference: Some(r),
+                sent,
+                dial_hz,
+                text,
+            }) = self.poll()?
+                && r.as_str() == Some(due.reference.as_str())
+            {
+                return Ok((sent, dial_hz, text));
+            }
+        }
+        Err("the modem never said it went out".into())
+    }
+
     /// Listening starts: each read waits [`POLL`], and the modem is asked for the stations it
     /// heard, for **Call**'s list (RP-4 §4.4): a modem that serves one program is held by no
     /// connection between calls, so it is asked whenever listening starts.
@@ -814,6 +848,27 @@ pub fn tune(
     let picked = result?;
     tell(say, &picked.said);
     Ok(picked)
+}
+
+/// What became of a beacon: whether it went, on which dial, and why not.
+pub type BeaconEnd = (bool, Option<u64>, Option<String>);
+
+/// One beacon (RP-4 §4.4, wishlist W59), on a connection of its own: the station's callsign
+/// claimed, the beacon asked for, and its `beacon-sent` awaited, at most its window and
+/// [`crate::beacons::GRACE_S`] more. The connection closes after, and the claim with it.
+///
+/// # Errors
+///
+/// The adapter cannot be reached, takes no beacons, or refused this one.
+pub fn beacon(
+    store: &Store,
+    opts: &Options,
+    due: &crate::beacons::Due,
+) -> Result<BeaconEnd, Error> {
+    let (mut modem, _) = Modem::open(store, opts, &[])?;
+    let result = modem.beacon(due);
+    modem.conn.close();
+    result
 }
 
 /// The words the modem at `opts.adapter` names itself by in its `hello` (RP-4 §3), such as
@@ -1997,6 +2052,129 @@ fn ask_for_files(client: &mut Client, store: &Store, say: &mut dyn FnMut(&str)) 
     }
 }
 
+/// What a listening station sends for the panel on the connection that holds its callsigns, and
+/// what it hears of it: alerts (RP-8 §6) with the tunes asked for them, and the beacon (W59, design
+/// 07 §3.4). Each request is kept by its `id`, to its reference or dial.
+#[derive(Default)]
+struct Carried {
+    alerting: HashMap<String, String>,
+    tuning: HashMap<String, u64>,
+    beaconing: HashMap<String, String>,
+}
+
+impl Carried {
+    /// Sends what waits: the beacon asked for, and the alerts due.
+    fn send(
+        &mut self,
+        modem: &mut Modem,
+        c: &crate::presence::Carrier,
+        scanning: &[u64],
+    ) -> Result<(), Error> {
+        let now = crate::presence::unix_now();
+        if modem.caps.beacon
+            && let Some(due) = c.beacons.due(now, scanning)
+        {
+            let position = due.position.as_ref().filter(|_| modem.caps.position);
+            let request = modem.host.beacon_saying(
+                None,
+                Some(&due.reference),
+                Some(due.within_s),
+                due.dial_hz.filter(|_| modem.caps.dial),
+                position,
+                due.modem_position,
+            );
+            if let Some(id) = request.get("id") {
+                self.beaconing.insert(id.to_string(), due.reference.clone());
+            }
+            modem.send(&request)?;
+        }
+        if !modem.caps.broadcast {
+            return Ok(());
+        }
+        c.alerts.tick(now);
+        while let Some(due) = c.alerts.due_with(now) {
+            // an alert of this station's goes on its dial: the radio tuned there first; the
+            // adapter takes the two in order (RP-8 §7)
+            if due.tune
+                && let Some(hz) = due.dial_hz
+                && modem.caps.dial
+            {
+                let tune = modem.host.tune(hz);
+                if let Some(id) = tune.get("id") {
+                    self.tuning.insert(id.to_string(), hz);
+                }
+                modem.send(&tune)?;
+            }
+            let (reference, frame) = (due.reference, due.frame);
+            let request = modem
+                .host
+                .broadcast_on(&frame, Some(&reference), due.dial_hz);
+            if let Some(id) = request.get("id") {
+                self.alerting.insert(id.to_string(), reference);
+            }
+            modem.send(&request)?;
+        }
+        Ok(())
+    }
+
+    /// What an event says of what was sent, or a broadcast heard.
+    fn saw(&mut self, c: &crate::presence::Carrier, e: &Event) {
+        let now = crate::presence::unix_now();
+        match e {
+            Event::Broadcast { data, dial_hz, .. } => c.heard(data, *dial_hz),
+            Event::Ok { id } => {
+                self.tuning.remove(&id.to_string());
+            }
+            Event::BroadcastSent {
+                reference: Some(r),
+                sent,
+                text,
+            } => {
+                if let Some(r) = r.as_str() {
+                    c.alerts.went(r, *sent, text.as_deref(), now);
+                }
+            }
+            Event::BeaconSent {
+                reference: Some(r),
+                sent,
+                dial_hz,
+                text,
+            } => {
+                if let Some(r) = r.as_str() {
+                    c.beacons.went(r, *sent, *dial_hz, text.as_deref(), now);
+                    (c.say)(&crate::beacons::said(*sent, *dial_hz, text.as_deref()));
+                }
+            }
+            Event::Error {
+                id: Some(i),
+                code,
+                text,
+            } => {
+                let why = text.clone().unwrap_or_else(|| code.clone());
+                if let Some(r) = self.beaconing.remove(&i.to_string()) {
+                    c.beacons.went(&r, false, None, Some(&why), now);
+                    (c.say)(&crate::beacons::said(false, None, Some(&why)));
+                    // the rules or the modem refused it: waiting will not change that
+                    if code == "refused"
+                        && let Some(line) = c.beacons.refused(&why)
+                    {
+                        (c.say)(&line);
+                    }
+                } else if let Some(r) = self.alerting.remove(&i.to_string()) {
+                    c.alerts.went(&r, false, Some(&why), now);
+                } else if let Some(hz) = self.tuning.remove(&i.to_string()) {
+                    (c.say)(&format!(
+                        "alerts: the radio could not be tuned to {} MHz ({why}): the alert goes \
+                         where the radio is",
+                        mhz(hz)
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Waits for a station to call: its link's `connected`, its callsign and the callsign it
 /// called, or `None` when the program said stop first. With `at`, where the station listens is
 /// kept current — the dial as it changes, and the modem asked every [`WHERE_EVERY`] — and told
@@ -2013,39 +2191,18 @@ fn wait_for_call(
         asked: None,
         since: Instant::now(),
     });
-    // alerts sent on this connection, by their requests' `id`, to their references (RP-8 §6);
-    // and the tunes asked for them, by `id`, to the dial asked for
-    let mut alerting: HashMap<String, String> = HashMap::new();
-    let mut tuning: HashMap<String, u64> = HashMap::new();
+    let mut carried = Carried::default();
     let called = loop {
         if stopped(opts) {
             return Ok(None);
         }
-        if let Some(c) = opts.alerts.as_ref().filter(|_| modem.caps.broadcast) {
-            let now = crate::presence::unix_now();
-            c.alerts.tick(now);
-            while let Some(due) = c.alerts.due_with(now) {
-                // an alert of this station's goes on its dial: the radio tuned there first; the
-                // adapter takes the two in order (RP-8 §7)
-                if due.tune
-                    && let Some(hz) = due.dial_hz
-                    && modem.caps.dial
-                {
-                    let tune = modem.host.tune(hz);
-                    if let Some(id) = tune.get("id") {
-                        tuning.insert(id.to_string(), hz);
-                    }
-                    modem.send(&tune)?;
-                }
-                let (reference, frame) = (due.reference, due.frame);
-                let request = modem
-                    .host
-                    .broadcast_on(&frame, Some(&reference), due.dial_hz);
-                if let Some(id) = request.get("id") {
-                    alerting.insert(id.to_string(), reference);
-                }
-                modem.send(&request)?;
-            }
+        if let Some(c) = &opts.alerts {
+            // a scheduled beacon goes on each dial a gateway on the station scans, in turn
+            let scanning = watch
+                .as_ref()
+                .map(|w| w.at.scanning.clone())
+                .unwrap_or_default();
+            carried.send(modem, c, &scanning)?;
         }
         if let Some(w) = watch.as_mut() {
             w.ask_if_due(modem)?;
@@ -2057,39 +2214,7 @@ fn wait_for_call(
             w.saw(&e);
         }
         if let Some(c) = &opts.alerts {
-            let now = crate::presence::unix_now();
-            match &e {
-                Event::Broadcast { data, dial_hz, .. } => c.heard(data, *dial_hz),
-                Event::Ok { id } => {
-                    tuning.remove(&id.to_string());
-                }
-                Event::BroadcastSent {
-                    reference: Some(r),
-                    sent,
-                    text,
-                } => {
-                    if let Some(r) = r.as_str() {
-                        c.alerts.went(r, *sent, text.as_deref(), now);
-                    }
-                }
-                Event::Error {
-                    id: Some(i),
-                    code,
-                    text,
-                } => {
-                    let why = text.clone().unwrap_or_else(|| code.clone());
-                    if let Some(r) = alerting.remove(&i.to_string()) {
-                        c.alerts.went(&r, false, Some(&why), now);
-                    } else if let Some(hz) = tuning.remove(&i.to_string()) {
-                        (c.say)(&format!(
-                            "alerts: the radio could not be tuned to {} MHz ({why}): the \
-                             alert goes where the radio is",
-                            mhz(hz)
-                        ));
-                    }
-                }
-                _ => {}
-            }
+            carried.saw(c, &e);
         }
         if let Event::Connected {
             direction: Direction::In,
@@ -2309,6 +2434,8 @@ pub struct Where {
     pub answers: Vec<u64>,
     /// The dials the station scans, a gateway's on the same station; empty when it scans none.
     pub scanning: Vec<u64>,
+    /// The interval of a beacon the modem repeats by itself (Aether's **Repeat**), in seconds.
+    pub beaconing: Option<u64>,
 }
 
 impl Where {
@@ -2319,11 +2446,13 @@ impl Where {
                 dial_hz,
                 answers,
                 scanning,
+                beaconing,
                 ..
             } => Some(Where {
                 dial_hz: *dial_hz,
                 answers: answers.clone(),
                 scanning: scanning.clone(),
+                beaconing: *beaconing,
             }),
             _ => None,
         }
@@ -2336,6 +2465,7 @@ impl Where {
             "dial_hz": self.dial_hz,
             "answers": self.answers,
             "scanning": self.scanning,
+            "beaconing": self.beaconing,
         })
     }
 }

@@ -124,6 +124,11 @@ enum Waiting {
     Stations {
         rid: Option<Value>,
     },
+    /// RP-4 §4.4 `beacon`: Aether's `beacon` (its ADR-0139), with the reference made for it.
+    Beacon {
+        rid: Option<Value>,
+        aether_ref: String,
+    },
     Nothing,
 }
 
@@ -181,6 +186,13 @@ pub struct Bridge {
     refs_made: u64,
     refs: HashMap<String, Value>,
     datagram_refs: HashMap<String, Value>,
+    /// The host's beacon Aether has taken and not ended, by the reference made for it, with the
+    /// host's own `ref` (null for none): one at a time (RP-4 §4.4).
+    beacon_refs: HashMap<String, Value>,
+    /// Aether takes a program's beacon (`capabilities.beacon.program`, its ADR-0139) and sends a
+    /// position given (`capabilities.beacon.position`, ADR-0142).
+    beacons: bool,
+    positions: bool,
     others: bool,
     channel_busy: bool,
     session_on_air: bool,
@@ -483,21 +495,101 @@ impl Bridge {
             }
             Request::Tone(seconds) => self.on_tone(seconds, rid, &mut out),
             heard @ (Request::Stations | Request::Beacon { .. }) => {
-                self.on_heard_request(&heard, rid, &mut out);
+                self.on_heard_request(heard, rid, &mut out);
             }
         }
         out
     }
 
-    /// RP-4 §4.4: the stations heard are Aether's `heard.list`; a beacon waits for the Aether
-    /// that takes one from a program (its ADR-0139).
-    fn on_heard_request(&mut self, request: &Request, rid: Option<Value>, out: &mut Vec<Out>) {
-        if matches!(request, Request::Stations) {
-            out.push(self.ask("heard.list", json!({}), Waiting::Stations { rid }));
-        } else {
-            let text = "this Aether takes no beacon from a program";
-            out.push(Out::Host(error(rid.as_ref(), "unsupported", text)));
+    /// RP-4 §4.4: the stations heard are Aether's `heard.list`; a beacon is Aether's `beacon`
+    /// from the Aether that takes one from a program (its ADR-0139).
+    fn on_heard_request(&mut self, request: Request, rid: Option<Value>, out: &mut Vec<Out>) {
+        match request {
+            Request::Beacon {
+                as_call,
+                reference,
+                within_s,
+                dial_hz,
+                position,
+                modem_position,
+            } => {
+                // given none, Aether puts its own Setup grid square in (its ADR-0142); told the
+                // station's position goes in no form, it is given none to put in
+                let position = match (position, modem_position) {
+                    (Some(p), _) => Some(p),
+                    (None, Some(false)) => Some(Value::Null),
+                    (None, _) => None,
+                };
+                self.on_beacon(as_call, reference, within_s, dial_hz, position, rid, out);
+            }
+            _ => out.push(self.ask("heard.list", json!({}), Waiting::Stations { rid })),
         }
+    }
+
+    /// RP-4 §4.4 `beacon`, as RP-4 §9.1 maps it: the host's callsign, Aether's own reference for
+    /// the host's, the window (120 s when not given), the dial when Aether reads one, and the
+    /// position: an object, `null` for none at all, or none given (Aether's own grid square goes).
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the request's members, each its own"
+    )]
+    fn on_beacon(
+        &mut self,
+        as_call: Option<String>,
+        reference: Option<Value>,
+        within_s: Option<u64>,
+        dial_hz: Option<u64>,
+        position: Option<Value>,
+        rid: Option<Value>,
+        out: &mut Vec<Out>,
+    ) {
+        let rid_ref = rid.as_ref();
+        if !self.beacons {
+            let text = "this Aether takes no beacon from a program";
+            out.push(Out::Host(error(rid_ref, "unsupported", text)));
+            return;
+        }
+        let Some(first) = self.callsigns.first() else {
+            out.push(Out::Host(error(rid_ref, "refused", "no callsigns yet")));
+            return;
+        };
+        let callsign = as_call.unwrap_or_else(|| first.clone());
+        if !self.callsigns.contains(&callsign) {
+            let text = format!("{callsign} is not this host's");
+            out.push(Out::Host(error(rid_ref, "not-authorized", &text)));
+            return;
+        }
+        if self.call.is_some() || self.link.is_some() || self.others {
+            let text = "a link or a call is up on the station";
+            out.push(Out::Host(error(rid_ref, "busy", text)));
+            return;
+        }
+        if !self.beacon_refs.is_empty() {
+            let text = "a beacon of this host's is still waiting";
+            out.push(Out::Host(error(rid_ref, "busy", text)));
+            return;
+        }
+        self.refs_made += 1;
+        let aether_ref = format!("rp{}", self.refs_made);
+        let mut params = json!({
+            "callsign": callsign,
+            "ref": aether_ref,
+            "within_s": within_s.unwrap_or(rpmi::wire::WITHIN_DEFAULT_S),
+        });
+        if let Some(hz) = dial_hz.filter(|_| self.dial) {
+            params["dial_hz"] = hz.into();
+        }
+        match position {
+            // a position given goes when Aether sends one (`caps.position`)
+            Some(p) if p.is_object() && self.positions => params["position"] = p,
+            Some(p) if p.is_object() => {}
+            // none at all: Aether is told, or it would send its own grid square
+            Some(p) => params["position"] = p,
+            None => {}
+        }
+        self.beacon_refs
+            .insert(aether_ref.clone(), reference.unwrap_or(Value::Null));
+        out.push(self.ask("beacon", params, Waiting::Beacon { rid, aether_ref }));
     }
 
     /// RP-4 §4.1, §4.2: the radio's dial, read and set through Aether, and its scan.
@@ -948,6 +1040,9 @@ impl Bridge {
                     return out;
                 }
                 self.bandwidth_hz = result["bandwidth_hz"].as_i64();
+                // a program's beacon, from 0.2.0-beta.183 (its ADR-0139 and ADR-0142)
+                self.beacons = result["beacon"]["program"].as_bool() == Some(true);
+                self.positions = result["beacon"]["position"].as_bool() == Some(true);
                 // every bandwidth Aether runs: a call in another moves the station for it
                 self.bandwidths = result["bandwidths_hz"]
                     .as_array()
@@ -985,8 +1080,8 @@ impl Bridge {
                     tone: true,
                     // every Aether keeps the stations it hears (`heard.list`, `heard` events)
                     heard: true,
-                    beacon: false,
-                    position: false,
+                    beacon: self.beacons,
+                    position: self.positions,
                 };
                 let modem = format!(
                     "Aether HF {}",
@@ -1123,6 +1218,19 @@ impl Bridge {
                     out.push(Out::Host(error(rid.as_ref(), rpmi, &message)));
                 }
             }
+            Waiting::Beacon { rid, aether_ref } => {
+                if ok {
+                    Self::ok(rid.as_ref(), &mut out);
+                } else {
+                    self.beacon_refs.remove(&aether_ref);
+                    let rpmi = match code.as_str() {
+                        "claimed" => "not-authorized",
+                        "not_idle" => "busy",
+                        _ => "refused",
+                    };
+                    out.push(Out::Host(error(rid.as_ref(), rpmi, &message)));
+                }
+            }
             Waiting::Dial { rid } => match result["frequency_hz"].as_u64() {
                 Some(hz) if ok => out.push(Out::Host(answer_with(
                     "dial",
@@ -1233,6 +1341,27 @@ impl Bridge {
         self.claim.is_some() && data["owner"].as_u64() == self.claim
     }
 
+    /// Aether's `beacon-sent`: RPMI's, with the host's own `ref`, when the beacon was this
+    /// host's (RP-4 §4.4).
+    fn on_beacon_sent(&mut self, data: &Value, out: &mut Vec<Out>) {
+        let theirs = data["ref"].as_str().unwrap_or("");
+        let Some(ours) = self.beacon_refs.remove(theirs) else {
+            return;
+        };
+        let sent = data["sent"].as_bool().unwrap_or(false);
+        let mut m = answer_with("beacon-sent", None, &[("sent", sent.into())]);
+        if !ours.is_null() {
+            m.insert("ref".into(), ours);
+        }
+        if let Some(hz) = data["dial_hz"].as_u64().filter(|&hz| hz > 0 && self.dial) {
+            m.insert("dial_hz".into(), hz.into());
+        }
+        if let Some(why) = data["reason"].as_str() {
+            m.insert("text".into(), why.into());
+        }
+        out.push(Out::Host(m));
+    }
+
     fn on_event(&mut self, event: &str, data: &Value) -> Vec<Out> {
         let mut out = Vec::new();
         match event {
@@ -1289,6 +1418,7 @@ impl Bridge {
                     out.push(Out::Host(m));
                 }
             }
+            "beacon-sent" => self.on_beacon_sent(data, &mut out),
             "datagram-sent" => {
                 let theirs = data["ref"].as_str().unwrap_or("");
                 if let Some(ours) = self.datagram_refs.remove(theirs) {
@@ -1577,7 +1707,8 @@ impl Bridge {
                 | Waiting::BandwidthSet { rid, .. }
                 | Waiting::Tone { rid }
                 | Waiting::Status { rid }
-                | Waiting::Stations { rid } => rid,
+                | Waiting::Stations { rid }
+                | Waiting::Beacon { rid, .. } => rid,
                 Waiting::Nothing => None,
             };
             if rid.is_some() {
@@ -1587,6 +1718,15 @@ impl Bridge {
                     "Aether went away",
                 )));
             }
+        }
+        // a beacon taken will not go now (RP-4 §4.4: `beacon-sent` once it will not)
+        for (_, ours) in self.beacon_refs.drain() {
+            let mut m = answer_with("beacon-sent", None, &[("sent", false.into())]);
+            if !ours.is_null() {
+                m.insert("ref".into(), ours);
+            }
+            m.insert("text".into(), "Aether went away".into());
+            out.push(Out::Host(m));
         }
         out
     }

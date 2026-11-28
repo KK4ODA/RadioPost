@@ -1922,3 +1922,187 @@ fn the_panel_asks_the_modem_its_name() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// What the other station's host hears of a beacon: its next `heard` (RP-4 §4.4).
+fn heard_at(at: SocketAddr) -> rpmi::tcp::Connection {
+    let mut conn = rpmi::tcp::Connection::open(at.to_string()).expect("the adapter");
+    conn.set_timeout(Some(Duration::from_millis(200)))
+        .expect("a timeout");
+    conn.send(&rpmi::host::Host::new().hello("a listener 1.0"))
+        .expect("hello");
+    conn
+}
+
+fn next_heard(conn: &mut rpmi::tcp::Connection) -> Value {
+    let end = Instant::now() + Duration::from_secs(20);
+    while Instant::now() < end {
+        if let Ok(Some(m)) = conn.read_message()
+            && m.get("op").and_then(Value::as_str) == Some("heard")
+        {
+            return Value::Object(m);
+        }
+    }
+    panic!("no beacon was heard");
+}
+
+/// **Send a beacon now** (W59, design 07 §5.1): from an idle station on a connection of its own,
+/// the activity `beaconing` until it has gone; from a listening one on the listening connection.
+/// The other station hears it, and the panel says it went and when another may go.
+#[test]
+fn a_beacon_sent_now_from_the_panel_is_heard() {
+    let dir = scratch("panel-beacon");
+    store_for(&dir.join("ana"), "device:ana", "ana");
+    let c = Client {
+        at: Panel::new(&dir.join("ana"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let (_server, at_f, at_a) = common::loopback_beaconing();
+    let mut other = heard_at(at_f);
+    let adapter = at_a.to_string();
+    let view = c.get("/api/beacon");
+    assert_eq!(view["settings"]["position"], "exact", "the default");
+    assert_eq!(view["waiting"], false);
+
+    let asked = c
+        .post("/api/beacon", &json!({"send": true, "adapter": adapter}))
+        .expect("idle");
+    assert_eq!(asked["waiting"], true);
+    let heard = next_heard(&mut other);
+    assert_eq!(heard["callsign"], "N0CALL");
+    assert_eq!(heard["kind"], "beacon");
+    assert_eq!(heard["dial_hz"], 7_101_000);
+    assert!(heard.get("position").is_none(), "no position in use here");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while c.get("/api/beacon")["last"]["sent"] != true {
+        assert!(Instant::now() < deadline, "{}", c.get("/api/beacon"));
+        thread::sleep(Duration::from_millis(20));
+    }
+    while c.get("/api/state")["activity"]["state"] != "idle" {
+        assert!(Instant::now() < deadline, "the station stayed beaconing");
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(c.get("/api/beacon")["last"]["dial_hz"], 7_101_000);
+    assert!(
+        c.get("/api/log?since=0")
+            .to_string()
+            .contains("beacon: sent on 7.101 MHz")
+    );
+    assert_eq!(
+        c.post("/api/beacon", &json!({"send": true, "adapter": adapter})),
+        Err("a beacon went less than a minute ago".into())
+    );
+
+    // the settings are the page's to change
+    let set = c
+        .post(
+            "/api/beacon",
+            &json!({"settings": {"every_min": 30, "only_while_listening": true,
+                                 "position": "grid6"}}),
+        )
+        .expect("kept");
+    assert_eq!(set["settings"]["every_min"], 30);
+    assert!(
+        c.post("/api/beacon", &json!({"settings": {"every_min": 7}}))
+            .is_err()
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// While the station listens for P2P, a beacon asked for goes on the listening connection, which
+/// holds the station's callsign (design 07 §3.4): listening goes on.
+#[test]
+fn a_beacon_asked_while_listening_goes_on_the_listening_connection() {
+    let dir = scratch("panel-beacon-listening");
+    store_for(&dir.join("ana"), "device:ana", "ana");
+    let c = Client {
+        at: Panel::new(&dir.join("ana"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let (_server, at_f, at_a) = common::loopback_beaconing();
+    let mut other = heard_at(at_f);
+    let adapter = at_a.to_string();
+    c.post("/api/listen", &json!({"adapter": adapter}))
+        .expect("listening");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !c
+        .get("/api/log?since=0")
+        .to_string()
+        .contains("listening as N0CALL")
+    {
+        assert!(Instant::now() < deadline, "never listened");
+        thread::sleep(Duration::from_millis(20));
+    }
+    c.post("/api/beacon", &json!({"send": true, "adapter": adapter}))
+        .expect("listening carries it");
+    assert_eq!(next_heard(&mut other)["callsign"], "N0CALL");
+    while c.get("/api/beacon")["last"]["sent"] != true {
+        assert!(Instant::now() < deadline, "{}", c.get("/api/beacon"));
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(c.get("/api/state")["activity"]["state"], "listening");
+    c.post("/api/stop", &json!({})).expect("stopped");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// **Beacon**'s latch (W59, design 07 §6): pressed in, the first beacon goes at once while the
+/// station listens, and with *Only while listening* unticked a beacon goes from an idle station
+/// on a connection of its own. Released, nothing more goes.
+#[test]
+fn a_repeating_beacon_goes_while_listening_and_from_an_idle_station() {
+    let dir = scratch("panel-beacon-repeat");
+    store_for(&dir.join("ana"), "device:ana", "ana");
+    let c = Client {
+        at: Panel::new(&dir.join("ana"), None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let (_server, at_f, at_a) = common::loopback_beaconing();
+    let mut other = heard_at(at_f);
+    let adapter = at_a.to_string();
+    c.post("/api/modem", &json!({"adapter": adapter}))
+        .expect("the modem");
+    // pressed while idle, with Only while listening: nothing goes until the station listens
+    let on = c
+        .post("/api/beacon", &json!({"repeat": true}))
+        .expect("repeating");
+    assert!(on["repeating"].is_object(), "{on}");
+    thread::sleep(Duration::from_secs(3));
+    assert_eq!(
+        c.get("/api/beacon")["last"],
+        Value::Null,
+        "it went while not listening"
+    );
+    c.post("/api/listen", &json!({"adapter": adapter}))
+        .expect("listening");
+    assert_eq!(next_heard(&mut other)["callsign"], "N0CALL");
+    c.post("/api/stop", &json!({})).expect("stopped");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while c.get("/api/state")["activity"]["state"] != "idle" {
+        assert!(Instant::now() < deadline, "never stopped listening");
+        thread::sleep(Duration::from_millis(20));
+    }
+    // unticked, and started again: an idle station sends at once, on a connection of its own
+    c.post("/api/beacon", &json!({"repeat": false}))
+        .expect("stopped");
+    c.post(
+        "/api/beacon",
+        &json!({"settings": {"every_min": 10, "only_while_listening": false,
+                             "position": "exact"}}),
+    )
+    .expect("kept");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    c.post("/api/beacon", &json!({"repeat": true}))
+        .expect("repeating");
+    assert_eq!(next_heard(&mut other)["callsign"], "N0CALL");
+    while c.get("/api/state")["activity"]["state"] != "idle" {
+        assert!(Instant::now() < deadline, "the station stayed beaconing");
+        thread::sleep(Duration::from_millis(20));
+    }
+    let off = c
+        .post("/api/beacon", &json!({"repeat": false}))
+        .expect("stopped");
+    assert_eq!(off["repeating"], Value::Null);
+    let _ = std::fs::remove_dir_all(&dir);
+}

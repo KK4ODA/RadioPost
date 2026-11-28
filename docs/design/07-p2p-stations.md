@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Accepted; Phase 1 built |
-| **Version** | 0.3.0 |
+| **Status** | Accepted; Phases 1 to 4 built |
+| **Version** | 0.5.0 |
 | **Updated** | 2026-11-28 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -509,3 +509,5 @@ Aether release; Phase 2 is one Aether beta with four ADRs.
 | 0.1.0 | 2026-11-27 | First draft, from the author's request: beacons, the stations heard, and calling them from **Call**. Review of the client and Aether, RP-4 additions, Aether's A1 to A3, mockups, phases, tests and eleven decisions. |
 | 0.2.0 | 2026-11-28 | Accepted, with the author's answers (§11) and the position in the beacon (A4, §7) added at the author's ask: A1 gains `dial_hz`, A3 is built with the beacons, a scanning station beacons on its dials in turn, the extras are built, and the mockups show distance, bearing and the position's precision. |
 | 0.3.0 | 2026-11-28 | Phase 1 built: RP-4 1.7.0 with its vectors (the reference's simulated modem beacons, `rpmi-lines.json`'s cases marked `unless` for an adapter with the cap); `rpmi::position`; the Aether adapter's `heard` and `stations` from Aether's own; Mercury's CQ frames as stations heard; VARA's left off until checked; the client's `stations.rs` and `/api/stations`; **Call**'s list in P2P (manual 1.63.0). |
+| 0.4.0 | 2026-11-28 | Phases 2 and 3 built. Aether 0.2.0-beta.183: ADR-0139 (a program's beacon, `beacon-sent`), ADR-0140 (the answers bit), ADR-0141 (the radio's own transmitting, over CAT, rigctld or FLRig) and ADR-0142 (the position), with a harness scenario that passes both ways against beta.182. RP-4 1.8.0: `beacon`'s `modem_position` false, so that **None** keeps Aether's own grid square out, while a station with no position in use lets it in (§7). The Aether adapter's `beacon` and `beacon-sent`; Mercury's `CQFRAME`, with its busy detector on; the client's `beacons.rs`, `/api/beacon`, **Beacon**'s menu with **Send a beacon now** and **Position in the beacon** (manual 1.64.0). Repeating, its latch and its line are Phase 4. |
+| 0.5.0 | 2026-11-28 | Phase 4 built: `beacons.rs`'s schedule (`start_repeating`, `tick` with the station's `Context`, `on_air`, the jitter, four hours, `refused`), the panel's `keep_beaconing` every 2 s (the listening connection sends a beacon due; an idle station, with *Only while listening* unticked, a connection of its own), a scanning station's dials in turn, `status.beaconing` read into `Where` so the client sends none beside Aether's own; **Beacon**'s latch, **Repeat**, **Only while listening for P2P**, **Next**, **Last** and **Repeats until**, and the line under **Listen** (manual 1.65.0). The lamp's orange *on the air* is not built: RPMI tells no keying to a host. |

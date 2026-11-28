@@ -187,6 +187,20 @@ impl Host {
         dial_hz: Option<u64>,
         position: Option<&crate::position::Position>,
     ) -> Message {
+        self.beacon_saying(as_call, reference, within_s, dial_hz, position, None)
+    }
+
+    /// [`Host::beacon`], with `modem_position` (§4.4): `Some(false)` says the station's position
+    /// goes in no form, the modem's own included.
+    pub fn beacon_saying(
+        &mut self,
+        as_call: Option<&str>,
+        reference: Option<&str>,
+        within_s: Option<u64>,
+        dial_hz: Option<u64>,
+        position: Option<&crate::position::Position>,
+        modem_position: Option<bool>,
+    ) -> Message {
         let mut members: Vec<(&str, Value)> = Vec::new();
         if let Some(c) = as_call {
             members.push(("as", c.into()));
@@ -202,6 +216,9 @@ impl Host {
         }
         if let Some(p) = position {
             members.push(("position", p.to_json()));
+        }
+        if let Some(own) = modem_position {
+            members.push(("modem_position", own.into()));
         }
         self.with_id("beacon", &members)
     }
