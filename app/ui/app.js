@@ -169,9 +169,20 @@ async function loadPlaces(fill) {
   renderPlaces(v, fill);
 }
 
+// the position in use as Setup's Terrain card was last drawn for it, to the hundredth of a degree
+let terrainFor;
+
 function renderPlaces(v, fill) {
   $("here-line").textContent = v.broken ? v.broken : hereWords(v.here, v.note);
   $("here-line").classList.toggle("warn", Boolean(v.broken));
+  // Terrain prepares the area around the position in use: a place saved, chosen or removed, or a
+  // GPS fix, redraws it (it had kept "where you are is not known" until Setup was opened again)
+  const here = v.here ? `${v.here.lat.toFixed(2)},${v.here.lon.toFixed(2)}` : "";
+  if (here !== terrainFor) {
+    const first = terrainFor === undefined;
+    terrainFor = here;
+    if (!first && !$("setup").hidden) loadTerrainSetup();
+  }
   $("gps-state").textContent = gpsWords(v);
   const fresh = v.status && ["current", "recent"].includes(v.status.freshness);
   $("place-add-gps").disabled = !fresh;

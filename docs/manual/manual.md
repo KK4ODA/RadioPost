@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.66.0 |
+| **Version** | 1.66.1 |
 | **Updated** | 2026-11-28 |
 | **Describes** | RadioPost 0.1.0-beta.41 |
 | **Licence** | CC BY 4.0 |
@@ -1597,6 +1597,8 @@ times the size), then click **Prepare this area**. The line under it says how ma
 how many MB, at most: the sea has no tiles, and what is held is not fetched again. While tiles are
 fetched, a line says which, and **Cancel** stops after the one under way. A tile that could not be
 fetched is named, with why. The notices under them are what the data's licence asks to be said.
+The card follows the position in use: save, choose or remove a place, or let the GPS find a fix,
+and its lines change at once.
 
 ### Sounds and notifications
 
@@ -3165,3 +3167,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.64.0 | 2026-11-28 | Beacons (wishlist W59). §10: **Beacon** beside **Call** in P2P, its menu's **Send a beacon now** and **Position in the beacon**, the line under **Listen for P2P**, and what a beacon says (new Figure 29; later figures renumbered). §39 *Beacon*, §40 step 5 of *Station to station*. Figure 27 retaken taller, with **Beacon**. |
 | 1.65.0 | 2026-11-28 | Repeating beacons (wishlist W59). §10: **Beacon** is a switch that repeats the beacon every 10, 15, 30 or 60 minutes for four hours at most, counted from when your callsign was last on the air; its menu's **Repeat**, **Only while listening for P2P**, **Next**, **Last** and **Repeats until**; what it waits for and when it stops. Figure 29 retaken. §40 step 5. |
 | 1.66.0 | 2026-11-28 | Positions and favourites (wishlist W59). §10: a station's details from a right click or Shift+F10 on the list, **Pin to the top** and its star, **Show on the map** (new Figures 30 and 31; later figures renumbered); a station call predicted where the station's beacon said it is when no gateway is listed. §8.1: a gateway your modem heard says when. §12: *A favourite station heard again after three hours* among the sounds, none at first. Figure 28 retaken with a favourite, Figure 40 with the new sound. |
+| 1.66.1 | 2026-11-28 | Section 12, *Terrain*: the card follows the position in use. It had kept *Where you are is not known* and **Prepare this area** greyed after a place was saved, until Setup was opened again. |
