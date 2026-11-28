@@ -598,6 +598,9 @@ details.hint code, .note code { font-family: var(--mono); font-size: 12px; backg
 .tag.busy { color: var(--busy); border-color: var(--busy); }
 #circle-rows td { cursor: default; }
 #circle-rows .check-text { font-family: var(--mono); font-size: 14px; letter-spacing: .04em; }
+#circle-rows .keyword-cell { display: inline-flex; align-items: center; gap: 8px; }
+#circle-rows .keyword-text { font-family: var(--mono); font-size: 14px; }
+#circle-rows .keyword-text.hidden { color: var(--muted); letter-spacing: .1em; }
 #circle-rows select { width: auto; }
 .list td select.level { width: auto; height: 28px; font-size: 13px; padding: 2px 6px; }
 .list td.level-cell { cursor: default; }

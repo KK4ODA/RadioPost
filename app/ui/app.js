@@ -54,20 +54,21 @@ function toast(text, bad = false, action = null) {
 }
 
 // a button that asks for a second click before it does what cannot be undone
+// a button that asks to be clicked again: what it held (words, or an icon) comes back after
 function armed(button, sure, run) {
   if (button.dataset.armed) {
     delete button.dataset.armed;
-    button.textContent = button.dataset.label;
+    button.replaceChildren(...button.held);
     run();
     return;
   }
-  button.dataset.label = button.textContent;
+  button.held = [...button.childNodes];
   button.dataset.armed = "1";
   button.textContent = sure;
   setTimeout(() => {
     if (!button.dataset.armed) return;
     delete button.dataset.armed;
-    button.textContent = button.dataset.label;
+    button.replaceChildren(...button.held);
   }, 4000);
 }
 
@@ -124,6 +125,8 @@ function show(view) {
                     "reports-view", "reader", "composer", "setup", "office"]) {
     $(id).hidden = id !== view;
   }
+  // a circle's keyword shown stays shown only while Alerts is
+  if (view !== "alerts-view") shownKeywords.clear();
   // the usual gateways are read afresh each time, for the callsign in use now
   if (view === "setup") {
     loadUsual();
@@ -5536,6 +5539,7 @@ let alertsLog = [];
 let alertCircles = [];
 let alertDials = {radio: null, scanned: []};  // the radio's dial, and the dials this station's gateway scans
 let alertGateways = [];  // the gateway list, for an alert's Dial (RP-8 §7)
+const shownKeywords = new Map();  // the circles whose keyword the operator asked to see, by name
 
 const OUT_STATES = {waiting: "waiting for the modem", sent: "on the air", heard: "heard",
                     seen: "seen", replied: "answered", "not heard": "not heard",
@@ -5961,24 +5965,52 @@ function renderAlerts() {
     answer.checked = c.answer;
     answer.addEventListener("change", () => api("circles", {set: {name: c.name, answer: answer.checked}})
       .then(() => syncAlerts(null, true)).catch((e) => toast(e.message, true)));
-    const forget = el("button", {type: "button", class: "act danger",
-      title: `Forget ${c.name}: its alerts are no longer heard here`,
-      "aria-label": `Forget ${c.name}`});
-    forget.append(icon("trash"));
-    forget.addEventListener("click", () => armed(forget, "Forget?", async () => {
-      try { await api("circles", {remove: c.name}); } catch (e) { toast(e.message, true); }
+    const remove = el("button", {type: "button", class: "quiet danger", text: "Delete",
+      title: `Delete ${c.name} from this computer, its keyword with it: its alerts are no longer heard or sent here. The other stations keep theirs.`});
+    remove.addEventListener("click", (e) => armed(e.currentTarget, "Click again to delete", async () => {
+      try {
+        await api("circles", {remove: c.name});
+        shownKeywords.delete(c.name);
+        toast(`${c.name} deleted`);
+      } catch (err) { toast(err.message, true); }
       await syncAlerts(null, true);
     }));
     return el("tr", {},
       el("td", {text: c.name}),
       el("td", {class: "check-text", text: c.check}),
+      el("td", {}, keywordCell(c)),
       el("td", {}, watch),
       el("td", {}, level),
       el("td", {}, answer),
-      el("td", {class: "acts"}, forget));
+      el("td", {class: "acts"}, remove));
   }));
   $("circles-empty").textContent = "No circle yet. Add one with a keyword the others type too.";
   $("circles-empty").hidden = alertCircles.length > 0;
+}
+
+// a circle's keyword: hidden until asked for, to tell someone joining in person (RP-8 §2)
+function keywordCell(c) {
+  if (!c.keyword_kept) {
+    return el("span", {class: "note", text: "Not kept",
+      title: "Added before RadioPost kept keywords. To keep it, type its keyword again under Circles: the circle keeps its name, check and settings."});
+  }
+  const shown = shownKeywords.get(c.name);
+  const text = el("span", {class: shown ? "keyword-text" : "keyword-text hidden",
+    text: shown ?? "••••••••",
+    title: shown ? `${c.name}'s keyword: tell it by voice or in person, never on the air` : "Hidden"});
+  const toggle = el("button", {type: "button", class: "quiet", text: shown ? "Hide" : "Show",
+    title: shown ? "Hide the keyword again"
+      : `Show ${c.name}'s keyword here, to tell it to someone joining the circle. It is hidden again when you leave Alerts.`});
+  toggle.addEventListener("click", async () => {
+    if (shownKeywords.has(c.name)) {
+      shownKeywords.delete(c.name);
+    } else {
+      try { shownKeywords.set(c.name, (await api("circles", {reveal: c.name})).keyword); }
+      catch (e) { toast(e.message, true); return; }
+    }
+    renderAlerts();
+  });
+  return el("span", {class: "keyword-cell"}, text, toggle);
 }
 
 function alertLeft() {
@@ -6121,12 +6153,15 @@ async function addCircle(event) {
   const add = $("circle-add");
   add.disabled = true;
   try {
-    await api("circles", {add: {name, keyword, level: $("circle-level").value, watch_hz}});
+    const view = await api("circles", {add: {name, keyword, level: $("circle-level").value, watch_hz}});
     $("circle-name").value = "";
     $("circle-keyword").value = "";
     $("circle-watch").value = "";
+    $("circle-keyword").type = "password";
+    $("circle-show").checked = false;
     keywordStrength();
-    toast(`${name} kept: read its check to the others`);
+    const kept = view.kept || {};
+    toast(kept.filled ? `${kept.name} now keeps its keyword` : `${name} kept: read its check to the others`);
   } catch (e) {
     toast(e.message, true);
   }

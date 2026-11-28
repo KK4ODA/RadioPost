@@ -550,7 +550,10 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `answer`); HMAC and PBKDF2 are hand-built on `sha2` in `crypto` (RFC 4231 and RFC 7914 tests),
   and `[profile.dev.package.sha2]` is optimized so tests that make a key take a second, not
   ten. `rpref/alert.py` and `vectors/alerts.json` are its reference. The client's `alerts` keeps
-  `circles.json` (keys, never keywords), `alerts.json` (the log) and `notify.json` (the page's
+  `circles.json` (each circle's key and normalised keyword, D52: the page's list says only
+  `keyword_kept`, and `/api/circles {reveal}` gives one keyword when **Show** is clicked;
+  `remove_circle` drops what was still to go for it), `alerts.json` (the log) and
+  `notify.json` (the page's
   sound and level settings) in the first home, and `circle-reports.json`: RP-8 0.3.0's reports
   (the forms design's step 5) sent and heard, the last 200. `Alerts::report` sends a form once or
   every 10, 15, 30 or 60 minutes, for four hours at most; the panel's `keep_reporting` thread

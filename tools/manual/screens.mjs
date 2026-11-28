@@ -367,10 +367,14 @@ const ALERT_LOG = [
     text: "Net control tonight?", time: T - DAY, at: T - DAY, state: "not heard", tries: 2}),
 ];
 const ALERT_CIRCLES = [
-  {name: "Family", check: "9853 7abf", level: "time-sensitive", answer: true, watch_hz: 7101000},
+  {name: "Family", check: "9853 7abf", level: "time-sensitive", answer: true, watch_hz: 7101000,
+   keyword_kept: true},
   {name: "Riverside net", check: "8aec 0d0e", level: "important", answer: false,
-   watch_hz: 3591500},
+   watch_hz: 3591500, keyword_kept: true},
 ];
+// the keywords a circle's Show brings up: the test vectors' two circles, whose checks are above
+const ALERT_KEYWORDS = {"Family": "kimo dali sune pato",
+                        "Riverside net": "shelter 3 water before noon"};
 const ARRIVING = alert({tag: "a0", circle: "Family", from: "KK4ODA", to: "N0CALL",
   text: "Please call me on 146.52 now", time: T - 20, at: T - 4, state: "new", alarm: true,
   dial_hz: 7101000});
@@ -681,6 +685,7 @@ function clientApi(world) {
       }
       case "tone": return {on: body.on, seconds: body.on ? 10 : 0};
       case "alerts": case "circles":
+        if (body && body.reveal) return {name: body.reveal, keyword: ALERT_KEYWORDS[body.reveal]};
         return {seq: s.alerts.seq, circles: ALERT_CIRCLES, log: world.alerts,
                 alarming: world.alerts.some((e) => e.alarm),
                 radio_hz: 7101000, scanned_hz: [], reports: [],
@@ -1386,6 +1391,9 @@ const SHOTS = {
     await page.locator("#alert-to").dispatchEvent("input");
     await page.fill("#alert-text", "Net in 10 minutes on 3.590");
     await page.locator("#alert-text").dispatchEvent("input");
+    // Family's keyword shown, the net's hidden
+    await page.click("#circle-rows tr:first-child .keyword-cell button");
+    await page.waitForTimeout(200);
     await page.locator("body").click({position: {x: 1250, y: 30}});
     await shot(page, "client-alerts", "#alerts-view");
     await context.close();

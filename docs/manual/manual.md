@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.67.0 |
+| **Version** | 1.68.0 |
 | **Updated** | 2026-11-28 |
 | **Describes** | RadioPost 0.1.0-beta.41 |
 | **Licence** | CC BY 4.0 |
@@ -1294,7 +1294,7 @@ You need:
 - RadioPost open. Alerts arrive only while its window is open (or `radiopost panel` runs).
 - A clock right to a few minutes. An alert more than ten minutes from your clock is not taken.
 
-![The Alerts view: an alert sent and answered, one heard, Send a report folded, and two circles with their checks](screens/client-alerts.png)
+![The Alerts view: an alert sent and answered, one heard, Send a report folded, and two circles with their checks, Family's keyword shown](screens/client-alerts.png)
 
 *Figure 32. Alerts.*
 
@@ -1314,14 +1314,27 @@ more. RadioPost can make one for you.
    (see [Sounds and notifications](#sounds-and-notifications)).
 6. Click **Add the circle**.
 7. Read the circle's **Check**, such as `9853 7abf`, to the others. The same check at every station
-   means the same keyword. A different check means a typing mistake: forget it and add it again.
+   means the same keyword. A different check means a typing mistake: delete it and add it again.
 
-RadioPost keeps the circle's key, not the keyword. Short keywords can be guessed from one alert
-heard on the air, so RadioPost refuses one under 8 characters and warns under four words.
+Short keywords can be guessed from one alert heard on the air, so RadioPost refuses one under 8
+characters and warns under four words.
+
+RadioPost keeps each circle's keyword on this computer, hidden. To tell it to someone who joins
+the circle later, click **Show** in the circle's **Keyword** column: the words appear, in lower
+case with single spaces, as the circle's key is made from them. **Hide** covers them again, and
+they are hidden again when you leave Alerts. Tell them by voice or in person, never on the air.
+A circle added before RadioPost kept keywords says *Not kept*. Type its keyword again under
+**Circles** and click **Add the circle**: the circle keeps its name, check and settings, and its
+keyword is kept from then on.
+
+**Delete** at the end of a circle's row removes the circle from this computer, its keyword with
+it. Click it, then click **Click again to delete** within four seconds. Its alerts are no longer
+heard or sent here, and its alerts and reports still waiting for the modem do not go out. The
+other stations keep the circle. To join it again, add it with its keyword.
 
 **Answer by itself**, ticked, sends *heard* as soon as an alert for you arrives, even when nobody
 is at the radio. That is an automatic transmission: untick it where your rules allow those only in
-some segments ([section 36](#36-the-rules)). The trash can forgets a circle.
+some segments ([section 36](#36-the-rules)).
 
 **Keep your radio on the watch dial.** Alerts to the whole circle go there. If your radio is on
 another dial, a red line at the top of the Alerts view says so. If your station also runs
@@ -3177,3 +3190,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.66.0 | 2026-11-28 | Positions and favourites (wishlist W59). §10: a station's details from a right click or Shift+F10 on the list, **Pin to the top** and its star, **Show on the map** (new Figures 30 and 31; later figures renumbered); a station call predicted where the station's beacon said it is when no gateway is listed. §8.1: a gateway your modem heard says when. §12: *A favourite station heard again after three hours* among the sounds, none at first. Figure 28 retaken with a favourite, Figure 40 with the new sound. |
 | 1.66.1 | 2026-11-28 | Section 12, *Terrain*: the card follows the position in use. It had kept *Where you are is not known* and **Prepare this area** greyed after a place was saved, until Setup was opened again. |
 | 1.67.0 | 2026-11-28 | Section 6: the border above the log and the border to the right of the left column move. Drag them, or use the arrow keys; a double click puts them back, and RadioPost keeps both sizes. The window's screenshots do not change: the borders look the same until the mouse is on them. |
+| 1.68.0 | 2026-11-28 | Section 10.2: each circle's keyword is kept, hidden; **Show** and **Hide** in the circle's new **Keyword** column, *Not kept* for a circle added before, and its keyword typed again to keep it. **Delete** in a circle's row (it was a trash can that showed only under the pointer) and what it stops. Figure 32 retaken with Family's keyword shown. |

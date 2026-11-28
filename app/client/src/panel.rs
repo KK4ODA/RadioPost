@@ -747,7 +747,8 @@ impl Panel {
         }
     }
 
-    /// `/api/circles`: add a circle from its keyword, change how it arrives, or forget it.
+    /// `/api/circles`: add a circle from its keyword, change how it arrives, delete it, or show
+    /// its keyword (`reveal`: the one answer that carries a keyword, given only when asked).
     fn circle_request(&self, body: &Value) -> Result<Value, Error> {
         let level = |v: &Value| match v.as_str() {
             None => Ok(None),
@@ -760,11 +761,17 @@ impl Panel {
             let keyword = add["keyword"].as_str().unwrap_or("");
             let level = level(&add["level"])?.unwrap_or(Level::TimeSensitive);
             let watch = dial_member(&add["watch_hz"], "watch_hz")?;
-            self.alerts.add_circle(name, keyword, level)?;
+            // a keyword typed again for a circle kept without one fills it in, by its own name
+            let kept = self.alerts.add_circle(name, keyword, level)?;
+            let name = kept["name"].as_str().unwrap_or(name);
             if watch.is_some() {
-                self.alerts
-                    .set_circle(name.trim(), None, None, Some(watch))?;
+                self.alerts.set_circle(name, None, None, Some(watch))?;
             }
+            let mut view = self.alerts_view();
+            view["kept"] = kept;
+            return Ok(view);
+        } else if let Some(name) = body["reveal"].as_str() {
+            return Ok(json!({"name": name, "keyword": self.alerts.keyword(name)?}));
         } else if let Some(set) = body.get("set") {
             let name = set["name"].as_str().unwrap_or("");
             // the watch dial: a number sets it, null clears it, absent leaves it
@@ -777,7 +784,7 @@ impl Panel {
         } else if let Some(name) = body["remove"].as_str() {
             self.alerts.remove_circle(name)?;
         } else {
-            return Err("add, set or remove a circle".into());
+            return Err("add, set, remove or reveal a circle".into());
         }
         Ok(self.alerts_view())
     }

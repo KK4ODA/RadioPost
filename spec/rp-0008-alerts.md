@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.0 |
-| **Updated** | 2026-11-24 |
+| **Version** | 0.4.0 |
+| **Updated** | 2026-11-28 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Depends on** | RP-0, RP-2, RP-4, RP-5 |
@@ -57,7 +57,9 @@ same key:
 The circle's **key** is PBKDF2 with HMAC-SHA256 (RFC 8018 §5.2) of the normalised keyword's UTF-8
 bytes, with the ASCII bytes of the context `RadioPost-circle-v1` as the salt, 600 000 iterations,
 and 32 bytes of output. A program works the key out once, when the keyword is typed, and keeps the
-key, not the keyword.
+key. It MAY keep the normalised keyword too, so that its operator can tell it to someone who joins
+the circle later. It then shows the keyword only when the operator asks, and MUST NOT send it
+anywhere: not on the air, to a modem, or to a post office.
 
 The circle's **ID** is the first 4 bytes of HMAC-SHA256 under the key of the context
 `RadioPost-circle-id-v1` and one zero byte (RP-0 §5, with no bytes after the zero). Every alert
@@ -265,7 +267,12 @@ An alert is meant to be hard to miss. The RadioPost client:
   that is not a gateway keeps its radio there; one whose gateway scans has the watch dial among
   the gateway's channels, which the client checks, since an automatic answer must go in an
   automatic-control segment (§8);
-* puts the dial an alert was heard on beside it, and **Call back** fills the call's dial with it.
+* puts the dial an alert was heard on beside it, and **Call back** fills the call's dial with it;
+* keeps each circle's keyword, hidden until its operator clicks **Show**, so the operator can tell
+  it in person to someone joining; a circle kept before it kept keywords gets its keyword when the
+  keyword is typed again;
+* deletes a circle when asked, its key and keyword with it: its alerts and reports still waiting
+  are not sent, answers to its alerts are not sent, and a report sent again stops.
 
 Any member of a circle can make an alert from any callsign: the tag says the alert came from the
 circle, not from whom. A circle of two members knows. Where proof of the person matters, that is
@@ -328,3 +335,4 @@ A gateway program neither sends nor shows reports.
 | 0.1.0 | 2026-11-18 | First draft (wishlist W52): circles from a keyword, the alert frame and its tag, the order of checks, the answers, the sender trying again, carried as RP-4 broadcasts. Sizes and air times measured. |
 | 0.2.0 | 2026-11-21 | An alert to a station whose gateway scans (D46): §5, answers go on the dial the alert was heard on; copies sent for the gateway's `scan_s`, stopped by a `heard`; a `heard` sent again unless the last has not gone out. §6, the dial (RP-4 1.5.0). §7, the dial an alert goes on and a circle's watch dial. No frame or check changes, and the test vectors stand. |
 | 0.3.0 | 2026-11-24 | Reports ([the forms design](../docs/design/06-forms.md), step 5; wishlist W33): §3, kind 5 `report` and key 8 `form`, RP-2 §8.2's map; a frame of any kind at most 512 bytes; §4, a report's verdicts; §5, a report is never answered, nor sent again for want of an answer; §7, sending one once or again every few minutes, its positions brought up to date; §8, repeats under the operator's control. Title *Alerts and reports*. Test vectors: the reports' frames and their hearing. |
+| 0.4.0 | 2026-11-28 | §2: a program may keep a circle's keyword, shown only when its operator asks and sent nowhere, so the operator can tell it to someone joining. §7: the client keeps it hidden behind **Show**, and deleting a circle stops what was still to go for it. No frame or check changes, and the test vectors stand. |

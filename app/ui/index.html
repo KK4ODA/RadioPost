@@ -417,7 +417,7 @@
         </table>
         <p class="empty" id="alerts-empty" hidden></p>
         <h2 class="section" title="Each circle is a keyword the stations in it typed">Circles</h2>
-        <p class="note">A circle is the stations whose operators typed the same keyword. Tell the keyword to the others by voice or in person, never on the air, and read your checks to each other: the same check means the same keyword.</p>
+        <p class="note">A circle is the stations whose operators typed the same keyword. Tell the keyword to the others by voice or in person, never on the air, and read your checks to each other: the same check means the same keyword. Each circle's keyword is kept here, hidden: click Show in its row to tell it to someone joining.</p>
         <form class="card" id="circle-form">
           <div class="grid2">
             <label title="What you call it here; the others may call it something else">Name
@@ -443,10 +443,10 @@
           </label>
           <label class="check"><input type="checkbox" id="circle-show"> Show the keyword</label>
           <p class="note" id="circle-strength"></p>
-          <div class="row"><button type="submit" id="circle-add" title="Keep the circle: its key is kept, never the keyword">Add the circle</button></div>
+          <div class="row"><button type="submit" id="circle-add" title="Keep the circle on this computer, its keyword with it, hidden until you ask to see it">Add the circle</button></div>
         </form>
         <table class="list" aria-label="Circles">
-          <thead><tr><th title="Its name here">Circle</th><th title="Read it to the others: the same check means the same keyword">Check</th><th title="The dial its stations keep their radios on; alerts to the whole circle go there">Watch dial, MHz</th><th title="How its alerts arrive here">When an alert arrives</th><th title="This station says heard by itself when an alert for it arrives: an automatic transmission">Answer by itself</th><th class="acts"></th></tr></thead>
+          <thead><tr><th title="Its name here">Circle</th><th title="Read it to the others: the same check means the same keyword">Check</th><th title="Hidden until you click Show, to tell it to someone joining in person">Keyword</th><th title="The dial its stations keep their radios on; alerts to the whole circle go there">Watch dial, MHz</th><th title="How its alerts arrive here">When an alert arrives</th><th title="This station says heard by itself when an alert for it arrives: an automatic transmission">Answer by itself</th><th class="acts"></th></tr></thead>
           <tbody id="circle-rows"></tbody>
         </table>
         <p class="empty" id="circles-empty" hidden></p>

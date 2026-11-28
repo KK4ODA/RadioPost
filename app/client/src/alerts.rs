@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Alerts between stations (RP-8, wishlist W52), and the settings the panel sounds by (W51).
 //!
-//! * **Circles.** Each is a keyword the operator typed, kept as its key (never the keyword) in
-//!   `circles.json` in the first home, with how loud its alerts are and whether the station says
-//!   `heard` by itself. The computer's, not a callsign's: one alarm for every callsign it works.
+//! * **Circles.** Each is a keyword the operator typed, kept as its key and its normalised
+//!   keyword in `circles.json` in the first home, with how loud its alerts are and whether the
+//!   station says `heard` by itself. The page shows the keyword only when asked
+//!   ([`Alerts::keyword`]), so the operator can tell it in person to someone joining (RP-8 §2).
+//!   The computer's, not a callsign's: one alarm for every callsign it works.
 //! * **The log.** Alerts sent and heard, with their answers, in `alerts.json` beside it: the last
 //!   [`KEPT`].
 //! * **Carried by whoever holds the modem.** A broadcast heard comes in through [`Alerts::heard`]
@@ -113,6 +115,9 @@ pub struct Kept {
     pub name: String,
     /// Its key and ID.
     pub circle: Circle,
+    /// Its keyword, normalised (RP-8 §2), to tell someone joining. `None` for a circle kept
+    /// before keywords were kept (0.1.0-beta.41 and earlier) until it is typed again.
+    pub keyword: Option<String>,
     /// How its alerts arrive.
     pub level: Level,
     /// The station says `heard` by itself (RP-8 §5, §8).
@@ -124,8 +129,8 @@ pub struct Kept {
 
 impl Kept {
     fn json(&self) -> Value {
-        json!({"name": self.name, "key": hex(&self.circle.key), "level": self.level.name(),
-               "answer": self.answer, "watch_hz": self.watch_hz})
+        json!({"name": self.name, "key": hex(&self.circle.key), "keyword": self.keyword,
+               "level": self.level.name(), "answer": self.answer, "watch_hz": self.watch_hz})
     }
 
     fn from_json(v: &Value) -> Option<Kept> {
@@ -133,6 +138,7 @@ impl Kept {
         Some(Kept {
             name: v["name"].as_str()?.to_owned(),
             circle: Circle::from_key(key),
+            keyword: v["keyword"].as_str().map(str::to_owned),
             level: v["level"]
                 .as_str()
                 .and_then(Level::named)
@@ -142,10 +148,12 @@ impl Kept {
         })
     }
 
-    /// What the page shows of it: never the key.
+    /// What the page shows of it: never the key, and whether its keyword is kept but not the
+    /// keyword itself, which [`Alerts::keyword`] gives when the operator asks.
     fn shown(&self) -> Value {
         json!({"name": self.name, "check": self.circle.check(), "level": self.level.name(),
-               "answer": self.answer, "watch_hz": self.watch_hz})
+               "answer": self.answer, "watch_hz": self.watch_hz,
+               "keyword_kept": self.keyword.is_some()})
     }
 }
 
@@ -557,7 +565,9 @@ impl Alerts {
         Value::Array(self.lock().circles.iter().map(Kept::shown).collect())
     }
 
-    /// Keeps a circle from its keyword (RP-8 §2).
+    /// Keeps a circle from its keyword (RP-8 §2), with the keyword. The keyword of a circle kept
+    /// before keywords were kept fills it in: the circle keeps its name and settings, and what is
+    /// returned says `"filled": true`.
     ///
     /// # Errors
     /// No name, a name or a keyword another circle has, a keyword too short, or a file that
@@ -569,16 +579,26 @@ impl Alerts {
         }
         // the slow part, outside the lock
         let circle = Circle::from_keyword(keyword)?;
+        let keyword = alert::normalise_keyword(keyword);
         let mut s = self.lock();
+        if let Some(same) = s.circles.iter_mut().find(|c| c.circle.id == circle.id) {
+            if same.keyword.is_some() {
+                return Err(format!("that keyword is already the circle {}", same.name));
+            }
+            same.keyword = Some(keyword);
+            let mut shown = same.shown();
+            shown["filled"] = json!(true);
+            s.save_circles()?;
+            s.seq += 1;
+            return Ok(shown);
+        }
         if s.circles.iter().any(|c| c.name.eq_ignore_ascii_case(name)) {
             return Err(format!("a circle is already called {name}"));
-        }
-        if let Some(same) = s.circles.iter().find(|c| c.circle.id == circle.id) {
-            return Err(format!("that keyword is already the circle {}", same.name));
         }
         let kept = Kept {
             name: name.to_owned(),
             circle,
+            keyword: Some(keyword),
             level,
             answer: true,
             watch_hz: None,
@@ -622,7 +642,29 @@ impl Alerts {
         Ok(())
     }
 
-    /// Forgets a circle: its alerts are no longer heard nor sent. The log keeps what it holds.
+    /// A circle's keyword, normalised, for its operator to tell someone joining (RP-8 §2).
+    ///
+    /// # Errors
+    /// No such circle, or one kept before keywords were kept.
+    pub fn keyword(&self, name: &str) -> Result<String, Error> {
+        let s = self.lock();
+        let kept = s
+            .circles
+            .iter()
+            .find(|c| c.name == name)
+            .ok_or_else(|| format!("no circle called {name}"))?;
+        kept.keyword.clone().ok_or_else(|| {
+            format!(
+                "{name} was added before RadioPost kept keywords: add it again with its keyword \
+                 to keep it"
+            )
+        })
+    }
+
+    /// Deletes a circle, its key and its keyword: its alerts are no longer heard nor sent. What
+    /// was still to go for it does not go: its alerts and reports waiting or to be tried again
+    /// are marked failed, answers to its alerts are dropped, and a report sent again stops. A
+    /// frame the modem already has goes. The log keeps what it holds.
     ///
     /// # Errors
     /// No such circle, or a file that cannot be written.
@@ -634,7 +676,31 @@ impl Alerts {
             return Err(format!("no circle called {name}"));
         }
         s.save_circles()?;
-        s.seq += 1;
+        let why = "its circle was deleted";
+        let mut dropped: HashSet<[u8; 8]> = HashSet::new();
+        for e in s.entries.iter_mut().filter(|e| e.circle == name) {
+            dropped.insert(e.tag);
+            if e.out && (e.state == "waiting" || e.state == "sent") {
+                e.state = "failed";
+                e.why = Some(why.into());
+            }
+        }
+        for r in s.reports.iter_mut().filter(|r| r.circle == name) {
+            dropped.insert(r.tag);
+            if r.out && r.state == "waiting" {
+                r.state = "failed";
+            }
+        }
+        s.queue.retain(|o| {
+            ![o.alert, o.answers, o.report]
+                .into_iter()
+                .flatten()
+                .any(|t| dropped.contains(&t))
+        });
+        if s.repeat.as_ref().is_some_and(|r| r.circle == name) {
+            s.repeat = None;
+        }
+        s.changed();
         Ok(())
     }
 
@@ -1927,6 +1993,105 @@ mod tests {
             .set_circle("Family", None, None, Some(None))
             .expect("cleared");
         assert!(Alerts::open(&a).circles()[0]["watch_hz"].is_null());
+        let _ = std::fs::remove_dir_all(&a);
+    }
+
+    /// RP-8 §2: the keyword is kept, normalised, through a restart; the page's list says only
+    /// that it is kept, and the keyword comes when asked.
+    #[test]
+    fn a_circle_keeps_its_keyword_shown_only_when_asked() {
+        let a = scratch("keyword");
+        let alerts = Alerts::open(&a);
+        alerts
+            .add_circle("Home", "  KIMO dali\tSune PATO", Level::TimeSensitive)
+            .expect("kept");
+        let shown = &alerts.circles()[0];
+        assert_eq!(shown["keyword_kept"], true);
+        assert!(shown.get("keyword").is_none(), "not in the list: {shown}");
+        assert!(
+            !alerts.json().to_string().contains("kimo"),
+            "nor in the view"
+        );
+        assert_eq!(alerts.keyword("Home").expect("kept"), KEYWORD);
+        assert_eq!(Alerts::open(&a).keyword("Home").expect("kept"), KEYWORD);
+        assert!(alerts.keyword("Away").is_err());
+        let _ = std::fs::remove_dir_all(&a);
+    }
+
+    /// A circle kept before keywords were kept has none to show; typing its keyword again fills
+    /// it in, whatever name is typed, and the circle keeps its name and settings.
+    #[test]
+    fn a_circle_kept_without_its_keyword_is_given_it_again() {
+        let a = scratch("old");
+        let key = radiopost::alert::Circle::from_keyword(KEYWORD)
+            .expect("a circle")
+            .key;
+        let old = serde_json::json!([{"name": "Family", "key": hex(&key),
+            "level": "important", "answer": false, "watch_hz": DIAL}]);
+        std::fs::create_dir_all(&a).expect("made");
+        std::fs::write(a.join(super::CIRCLES), old.to_string()).expect("written");
+        let alerts = Alerts::open(&a);
+        assert_eq!(alerts.circles()[0]["keyword_kept"], false);
+        let why = alerts.keyword("Family").expect_err("none kept");
+        assert!(why.contains("add it again"), "{why}");
+        let filled = alerts
+            .add_circle("Family", "Kimo Dali Sune Pato", Level::TimeSensitive)
+            .expect("filled in");
+        assert_eq!(filled["filled"], true);
+        assert_eq!(filled["name"], "Family");
+        let reopened = Alerts::open(&a);
+        assert_eq!(reopened.keyword("Family").expect("kept"), KEYWORD);
+        let c = &reopened.circles()[0];
+        assert_eq!(c["level"], "important", "its settings stay");
+        assert_eq!(c["answer"], false);
+        assert_eq!(c["watch_hz"], DIAL);
+        assert_eq!(reopened.circles().as_array().map(Vec::len), Some(1));
+        let again = alerts
+            .add_circle("Other", KEYWORD, Level::Normal)
+            .expect_err("kept already");
+        assert!(again.contains("already the circle Family"), "{again}");
+        let _ = std::fs::remove_dir_all(&a);
+    }
+
+    /// Deleting a circle takes its keyword with it, and what was still to go for it does not go:
+    /// an alert waiting, and a report sent again.
+    #[test]
+    fn deleting_a_circle_stops_what_was_to_go() {
+        let a = scratch("delete");
+        let alerts = Alerts::open(&a);
+        alerts
+            .add_circle("Family", KEYWORD, Level::TimeSensitive)
+            .expect("kept");
+        alerts
+            .add_circle("Net", "riva toke lume sadi", Level::Normal)
+            .expect("kept");
+        alerts
+            .send("Family", None, "Call me", "KK4ODA", T)
+            .expect("written");
+        alerts
+            .report(
+                "Family",
+                None,
+                position_report(337_812_300),
+                "KK4ODA",
+                T,
+                Sending::default(),
+                Some(600),
+                vec![1],
+            )
+            .expect("written");
+        alerts.remove_circle("Family").expect("deleted");
+        assert!(alerts.due(T).is_none(), "nothing of Family goes");
+        assert!(alerts.repeat_due(T + 600).is_none(), "the report stops");
+        let log = alerts.json();
+        assert_eq!(log["log"][0]["state"], "failed");
+        assert_eq!(log["log"][0]["why"], "its circle was deleted");
+        assert_eq!(alerts.reports()[0].state, "failed");
+        assert!(alerts.keyword("Family").is_err());
+        let left = Alerts::open(&a).circles();
+        assert_eq!(left.as_array().map(Vec::len), Some(1));
+        assert_eq!(left[0]["name"], "Net");
+        assert!(alerts.remove_circle("Family").is_err(), "gone already");
         let _ = std::fs::remove_dir_all(&a);
     }
 }
