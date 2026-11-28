@@ -290,14 +290,28 @@ const RECENT = {recent: [
 const heardLine = (callsign, where, ago, snr, more) => ({callsign, where, at: T - ago, age_s: ago,
   snr_db: snr, band: "40m", dial_hz: 7101000, kind: "beacon", count: 3, elsewhere: [],
   modem: "aether", ...more});
-const STATIONS = {radio_hz: 7101000, band: "40m", recent: 4, stations: [
-  heardLine("N2CALL", "here", 120, 8, {answers: true, bandwidth: 2300, km: 95, bearing: 40}),
+// where their beacons said they are: a square's centre and its locator, or the position itself
+const square = (grid, lat, lon, precision) => ({position: {lat, lon, precision, grid}});
+const exact = (lat, lon) => ({position: {lat, lon, precision: "exact"}});
+const STATIONS = {radio_hz: 7101000, band: "40m", recent: 4,
+  here: {lat: 33.78123, lon: -84.38765}, stations: [
   heardLine("N6CALL", "here", 360, 14, {answers: true, bandwidth: 500, km: 310, bearing: 12,
-                                        worked_at: T - 2 * DAY}),
+                                        worked_at: T - 2 * DAY, worked_heard_db: 3,
+                                        pinned: true, ...exact(36.50613, -83.66679)}),
+  heardLine("N2CALL", "here", 120, 8, {answers: true, bandwidth: 2300, km: 95, bearing: 40,
+                                       ...square("EM84dk", 34.4375, -83.70833333333333, "grid6")}),
   heardLine("N5CALL-7", "here", 540, 3, {kind: "call", to: "N3CALL", bandwidth: 2300}),
-  heardLine("N3CALL", "here", 1080, -4, {answers: false, bandwidth: 2300, km: 41, bearing: 275}),
-  heardLine("N4CALL", "band", 1500, 6, {dial_hz: 7083000, bandwidth: 500, km: 520, bearing: 350}),
-  heardLine("N7CALL", "other", 3600, -2, {band: "80m", dial_hz: 3591500, km: 140, bearing: 190}),
+  heardLine("N3CALL", "here", 1080, -4, {answers: false, bandwidth: 2300, km: 41, bearing: 275,
+                                         ...square("EM73ot", 33.8125, -84.79166666666667,
+                                                   "grid6")}),
+  heardLine("N4CALL", "band", 1500, 6, {dial_hz: 7083000, bandwidth: 500, km: 520, bearing: 350,
+                                        count: 6,
+                                        readings: [[T - 9000, 2], [T - 5400, 4], [T - 1500, 6]],
+                                        elsewhere: [{band: "80m", dial_hz: 3591500,
+                                                     at: T - DAY, snr_db: -1}],
+                                        ...square("EM78", 38.5, -85, "grid4")}),
+  heardLine("N7CALL", "other", 3600, -2, {band: "80m", dial_hz: 3591500, km: 140, bearing: 190,
+                                          ...exact(32.54104, -84.64698)}),
 ]};
 
 function calledOf(gateways) {
@@ -1087,6 +1101,42 @@ const SHOTS = {
     await page.screenshot({path: join(OUT, "client-beacon-menu.png"),
                            clip: await unionClip(page, [".station", "#beacon-menu"])});
     console.log("docs/manual/screens/client-beacon-menu.png");
+    await context.close();
+  },
+
+  // P2P, the list open, and a right click on N4CALL: what the client knows of it
+  async "client-station-details"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI,
+                                                 api: clientApi(clientWorld({called: true})),
+                                                 height: 1300});
+    await spreadLog(page, "log", T - 1300, 19);
+    await page.waitForTimeout(300);
+    await page.check("input[name=kind][value=station]");
+    await page.$eval("#callsign", (input) => { input.value = ""; });
+    await page.click("#called-open");
+    await page.waitForTimeout(300);
+    await page.locator("#called-list li", {hasText: "N4CALL"}).first().click({button: "right"});
+    await page.waitForTimeout(300);
+    await page.screenshot({path: join(OUT, "client-station-details.png"),
+                           clip: await unionClip(page, ["#called-list", "#station-details"])});
+    console.log("docs/manual/screens/client-station-details.png");
+    await context.close();
+  },
+
+  // the stations heard whose beacons gave a position, on the world map
+  async "client-heard-map"(browser) {
+    const {page, context} = await open(browser, {ui: CLIENT_UI,
+                                                 api: clientApi(clientWorld({called: true})),
+                                                 height: 900});
+    await spreadLog(page, "log", T - 1300, 19);
+    await page.waitForTimeout(300);
+    await page.check("input[name=kind][value=station]");
+    await page.click("#called-open");
+    await page.waitForTimeout(300);
+    await page.locator("#called-list li", {hasText: "Show on the map"}).first()
+      .dispatchEvent("mousedown");
+    await page.waitForTimeout(500);
+    await shot(page, "client-heard-map", "#heard-map-panel");
     await context.close();
   },
 

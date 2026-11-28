@@ -685,3 +685,43 @@ fn a_p2p_call_is_predicted_at_its_stations_gateway() {
         );
     }
 }
+
+/// With no gateway listed under its callsign, a P2P call is predicted where the station's own
+/// beacon said it is, in the last seven days (W59, the P2P design §7).
+#[test]
+fn a_p2p_call_is_predicted_where_the_stations_beacon_said_it_is() {
+    let hf = Hf::with_engine(Box::new(MadeUp {
+        runs: Arc::new(AtomicUsize::new(0)),
+    }));
+    let dir = scratch("hf-p2p-beacon");
+    let home = dir.join("facundo");
+    let mut store = store_for(&home, "device:facundo", "facundo");
+    store.set_grid(Some("EM73tr")).expect("a grid square");
+    store.save().expect("saved");
+    let now = radiopost_client::presence::unix_now();
+    let stations = json!({"schema": 1, "pinned": [], "seen": [
+        {"callsign": "N2CALL", "band": "40m", "dial_hz": 7_101_000, "at": now - 600,
+         "snr_db": 6.0, "readings": [[now - 600, 6.0]], "kind": "beacon", "count": 1,
+         "position": {"lat": 34.47916666666667, "lon": -83.79166666666667,
+                      "precision": "grid6", "grid": "EM84cl"}}]});
+    std::fs::write(
+        home.join(radiopost_client::stations::FILE),
+        serde_json::to_vec(&stations).expect("JSON"),
+    )
+    .expect("written");
+    let at = Panel::new(&home, None)
+        .with_hf(hf)
+        .start("127.0.0.1:0")
+        .expect("a port");
+    let v = http(
+        at,
+        "GET",
+        "/api/p2p-chance?callsign=N2CALL&dial_hz=7101000&bandwidth=2300",
+        &Value::Null,
+    );
+    assert_eq!(v["station"], "N2CALL", "{v}");
+    assert!(v.get("gateway").is_none(), "{v}");
+    assert_eq!(v["chosen"]["state"], "predicted", "{v}");
+    assert!(v["chosen"]["distance_km"].is_number(), "{v}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

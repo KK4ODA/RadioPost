@@ -15,7 +15,9 @@
 //! * **Sans clock**: every call takes `now`, Unix seconds.
 //!
 //! [`view`] is what the panel shows: one line a callsign, the sighting that says most about
-//! calling it now, grouped by where it was heard against the radio's dial.
+//! calling it now, grouped by where it was heard against the radio's dial, the operator's
+//! favourites (pinned) first in each group. A favourite heard again after [`QUIET_S`] unheard is
+//! marked ([`Stations::heard_again`]), for the page's sound (W51), which is off by default.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -42,6 +44,8 @@ pub const SAVE_EVERY: Duration = Duration::from_secs(5);
 pub const RECENT_S: u64 = 30 * 60;
 /// A station heard within this of the radio's dial is on it: its signal was in the passband.
 pub const SAME_DIAL_HZ: u64 = 1000;
+/// A favourite heard after this long unheard is heard again (the design's §8).
+pub const QUIET_S: u64 = 3 * 3600;
 
 /// One callsign on one band.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -93,10 +97,16 @@ pub struct Seen {
 struct File {
     schema: u32,
     seen: Vec<Seen>,
+    /// The operator's favourites, by callsign: pinned at the top of their group.
+    #[serde(default)]
+    pinned: Vec<String>,
 }
 
 struct Inner {
     seen: Vec<Seen>,
+    pinned: HashSet<String>,
+    /// The last favourite heard again after [`QUIET_S`] unheard, and when.
+    heard_again: Option<(String, u64)>,
     dirty: bool,
     saved: Option<Instant>,
 }
@@ -111,6 +121,43 @@ pub struct Stations {
 impl std::fmt::Debug for Stations {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Stations")
+    }
+}
+
+impl Stations {
+    /// The latest sighting of a callsign, on any band, in the last [`KEEP_S`]: a gateway heard,
+    /// for the gateway list (the design's §8).
+    #[must_use]
+    pub fn latest(&self, callsign: &str, now: u64) -> Option<Seen> {
+        self.lock()
+            .seen
+            .iter()
+            .filter(|s| s.callsign.eq_ignore_ascii_case(callsign.trim()))
+            .filter(|s| s.at + KEEP_S >= now)
+            .max_by_key(|s| s.at)
+            .cloned()
+    }
+
+    /// Where a station's beacon last said it is, in the last [`KEEP_S`]: its position, and the
+    /// 6-character square that holds it (a square heard gives its own). For predicting a P2P call
+    /// to it (the design's §7).
+    #[must_use]
+    pub fn position_of(&self, callsign: &str, now: u64) -> Option<(Value, String)> {
+        let inner = self.lock();
+        let seen = inner
+            .seen
+            .iter()
+            .filter(|s| s.callsign.eq_ignore_ascii_case(callsign.trim()))
+            .filter(|s| s.at + KEEP_S >= now)
+            .filter(|s| s.position.is_some())
+            .max_by_key(|s| s.at)?;
+        let position = seen.position.clone()?;
+        let parsed = rpmi::position::Position::from_json(&position)?;
+        let grid = parsed
+            .grid
+            .clone()
+            .unwrap_or_else(|| rpmi::position::locator(parsed.lat, parsed.lon, 6));
+        Some((position, grid))
     }
 }
 
@@ -146,13 +193,14 @@ impl Stations {
     #[must_use]
     pub fn open(base: &Path) -> Stations {
         let path = base.join(FILE);
-        let seen = std::fs::read_to_string(&path)
+        let file = std::fs::read_to_string(&path)
             .ok()
             .and_then(|t| serde_json::from_str::<File>(&t).ok())
             .filter(|f| f.schema == 1)
-            .map(|f| f.seen)
             .unwrap_or_default();
-        Stations::with(Some(path), seen)
+        let stations = Stations::with(Some(path), file.seen);
+        stations.lock().pinned = file.pinned.into_iter().collect();
+        stations
     }
 
     /// Stations kept in memory only, for tests.
@@ -166,6 +214,8 @@ impl Stations {
             path,
             inner: Arc::new(Mutex::new(Inner {
                 seen,
+                pinned: HashSet::new(),
+                heard_again: None,
                 dirty: false,
                 saved: None,
             })),
@@ -187,6 +237,13 @@ impl Stations {
         }
         let band = s.dial_hz.and_then(band_of).map(str::to_owned);
         let mut inner = self.lock();
+        // a favourite last heard, on any band, three hours or more before this
+        let last_any = inner
+            .seen
+            .iter()
+            .filter(|e| e.callsign == callsign)
+            .map(|e| e.at)
+            .max();
         let found = inner
             .seen
             .iter()
@@ -217,6 +274,9 @@ impl Stations {
             });
             inner.seen.len() - 1
         };
+        if inner.pinned.contains(&callsign) && last_any.is_some_and(|last| at >= last + QUIET_S) {
+            inner.heard_again = Some((callsign.clone(), at));
+        }
         let line = &mut inner.seen[index];
         line.at = at;
         line.count = line.count.saturating_add(1);
@@ -258,6 +318,32 @@ impl Stations {
         all
     }
 
+    /// Pins a station to the top of its group, a favourite, or unpins it; kept at once.
+    pub fn pin(&self, callsign: &str, on: bool) {
+        let callsign = callsign.trim().to_ascii_uppercase();
+        let mut inner = self.lock();
+        let changed = if on {
+            inner.pinned.insert(callsign)
+        } else {
+            inner.pinned.remove(&callsign)
+        };
+        inner.dirty |= changed;
+        drop(inner);
+        self.save();
+    }
+
+    /// The favourites.
+    #[must_use]
+    pub fn pinned(&self) -> HashSet<String> {
+        self.lock().pinned.clone()
+    }
+
+    /// The last favourite heard after [`QUIET_S`] unheard, and when: the page sounds once for each.
+    #[must_use]
+    pub fn heard_again(&self) -> Option<(String, u64)> {
+        self.lock().heard_again.clone()
+    }
+
     /// Forget them all.
     pub fn clear(&self) {
         let mut inner = self.lock();
@@ -287,9 +373,12 @@ impl Stations {
         if !inner.dirty {
             return;
         }
+        let mut pinned: Vec<String> = inner.pinned.iter().cloned().collect();
+        pinned.sort();
         let file = File {
             schema: 1,
             seen: inner.seen.clone(),
+            pinned,
         };
         if let Ok(bytes) = serde_json::to_vec_pretty(&file)
             && write(path, &bytes).is_ok()
@@ -326,6 +415,8 @@ pub struct Context {
     pub worked: HashMap<String, u64>,
     /// The modem in the Modem box, by its kind.
     pub modem: Option<String>,
+    /// The operator's favourites: first in their group.
+    pub pinned: HashSet<String>,
 }
 
 /// Where a station was heard, against the radio's dial: the groups of **Call**'s list.
@@ -380,7 +471,13 @@ pub fn view(all: &[Seen], ctx: &Context, now: u64) -> Value {
         .into_values()
         .map(|seen| (place(seen, ctx.radio_hz), seen))
         .collect();
-    lines.sort_by(|(pa, a), (pb, b)| rank(pa).cmp(&rank(pb)).then(b.at.cmp(&a.at)));
+    let pinned = |s: &Seen| !ctx.pinned.contains(&s.callsign);
+    lines.sort_by(|(pa, a), (pb, b)| {
+        rank(pa)
+            .cmp(&rank(pb))
+            .then(pinned(a).cmp(&pinned(b)))
+            .then(b.at.cmp(&a.at))
+    });
     let recent = lines
         .iter()
         .filter(|(_, s)| now.saturating_sub(s.at) <= RECENT_S)
@@ -392,6 +489,7 @@ pub fn view(all: &[Seen], ctx: &Context, now: u64) -> Value {
     json!({
         "radio_hz": ctx.radio_hz,
         "band": ctx.radio_hz.and_then(band_of),
+        "here": ctx.here.map(|(lat, lon)| json!({"lat": lat, "lon": lon})),
         "recent": recent,
         "stations": stations,
     })
@@ -415,6 +513,9 @@ fn line_of(seen: &Seen, place: &str, ctx: &Context, all: &[Seen], now: u64) -> V
     if let Some(at) = ctx.worked.get(&seen.callsign) {
         v["worked_at"] = (*at).into();
     }
+    if ctx.pinned.contains(&seen.callsign) {
+        v["pinned"] = true.into();
+    }
     // a station heard by another modem than the one in the Modem box answers none of its calls
     if let (Some(heard_by), Some(mine)) = (&seen.modem, &ctx.modem)
         && heard_by != mine
@@ -436,9 +537,10 @@ fn line_of(seen: &Seen, place: &str, ctx: &Context, all: &[Seen], now: u64) -> V
 
 #[cfg(test)]
 mod tests {
-    use super::{Context, Stations, band_of, view};
+    use super::{Context, KEEP_S, QUIET_S, Stations, band_of, view};
     use rpmi::host::Sighting;
     use serde_json::json;
+    use std::collections::{HashMap, HashSet};
 
     const NOW: u64 = 1_795_213_320;
 
@@ -559,6 +661,7 @@ mod tests {
             leave_out: ["N1CALL-10".to_owned(), "N0CALL".to_owned()].into(),
             worked: [("N6CALL".to_owned(), NOW - 86_400)].into(),
             modem: Some("aether".into()),
+            pinned: HashSet::new(),
         };
         let v = view(&s.all(), &ctx, NOW);
         let order: Vec<(&str, &str)> = v["stations"]
@@ -626,5 +729,91 @@ mod tests {
         let again = Stations::open(&dir);
         assert_eq!(again.all(), s.all());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_favourite_comes_first_in_its_group_and_is_marked_when_heard_again_after_hours() {
+        let dir = std::env::temp_dir().join(format!("rp-stations-pin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("dir");
+        let s = Stations::open(&dir);
+        s.heard(
+            &heard("N2CALL", 7_101_000, NOW - 300, 8.0),
+            Some("aether"),
+            NOW,
+        );
+        s.heard(
+            &heard("N3CALL", 7_101_000, NOW - 60, 3.0),
+            Some("aether"),
+            NOW,
+        );
+        s.pin("n2call", true);
+        assert_eq!(
+            Stations::open(&dir).pinned(),
+            ["N2CALL".to_owned()].into(),
+            "kept"
+        );
+        let ctx = Context {
+            radio_hz: Some(7_101_000),
+            here: None,
+            leave_out: HashSet::new(),
+            worked: HashMap::new(),
+            modem: Some("aether".into()),
+            pinned: s.pinned(),
+        };
+        let v = view(&s.all(), &ctx, NOW);
+        let calls: Vec<&str> = v["stations"]
+            .as_array()
+            .expect("lines")
+            .iter()
+            .filter_map(|l| l["callsign"].as_str())
+            .collect();
+        assert_eq!(
+            calls,
+            ["N2CALL", "N3CALL"],
+            "the favourite first, though heard earlier"
+        );
+        assert_eq!(v["stations"][0]["pinned"], true);
+        // heard within three hours: nothing; after three hours unheard: marked
+        s.heard(
+            &heard("N2CALL", 7_101_000, NOW - 200, 8.0),
+            Some("aether"),
+            NOW,
+        );
+        assert_eq!(s.heard_again(), None);
+        let later = NOW + QUIET_S;
+        s.heard(
+            &heard("N2CALL", 3_590_000, later, 2.0),
+            Some("aether"),
+            later,
+        );
+        assert_eq!(s.heard_again(), Some(("N2CALL".to_owned(), later)));
+        // a station not pinned is never marked
+        s.heard(
+            &heard("N3CALL", 7_101_000, later + QUIET_S, 2.0),
+            Some("aether"),
+            later + QUIET_S,
+        );
+        assert_eq!(s.heard_again(), Some(("N2CALL".to_owned(), later)));
+        s.pin("N2CALL", false);
+        assert!(s.pinned().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_stations_position_is_its_last_beacons_with_its_square() {
+        let s = Stations::in_memory();
+        let mut sighting = heard("N2CALL", 7_101_000, NOW - 60, 8.0);
+        sighting.position = Some(rpmi::position::Position {
+            lat: 34.4621,
+            lon: -83.7514,
+            precision: rpmi::position::Precision::Exact,
+            grid: None,
+        });
+        s.heard(&sighting, Some("aether"), NOW);
+        let (_, grid) = s.position_of("n2call", NOW).expect("a position");
+        assert_eq!(grid, "EM84cl");
+        assert_eq!(s.position_of("N2CALL", NOW + KEEP_S + 61), None, "too old");
+        assert_eq!(s.position_of("N3CALL", NOW), None);
     }
 }

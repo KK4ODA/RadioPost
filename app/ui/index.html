@@ -1099,6 +1099,12 @@
       <p class="note" id="alarm-more"></p>
     </div>
   </div>
+  <div class="details" id="station-details" role="dialog" aria-label="A station heard" hidden></div>
+  <div class="details heard-map" id="heard-map-panel" role="dialog" aria-labelledby="heard-map-title" hidden>
+    <div class="d-head"><h3 id="heard-map-title">Stations heard</h3><button type="button" class="quiet" id="heard-map-close" title="Close the map">Close</button></div>
+    <svg id="heard-map" class="world-map" role="img" aria-label="The stations heard whose beacons said where they are, and the position in use. Click one to call it"></svg>
+    <p class="note" id="heard-map-note" title="A bright dot was heard in the last half hour, a faded one longer ago"></p>
+  </div>
   <div class="toast" id="toast" role="status" hidden><span id="toast-text"></span><button id="toast-act" hidden></button></div>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>

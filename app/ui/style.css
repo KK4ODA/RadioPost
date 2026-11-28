@@ -229,6 +229,23 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 .menu .item { gap: 8px; align-items: center; }
 .menu .mark { width: 14px; text-align: center; color: var(--ok); font-weight: 700; }
 .menu .item[aria-checked="true"] .mark::before { content: "✓"; }
+/* a station heard: its details, and the map of those whose beacons gave a position (W59) */
+.details { position: fixed; z-index: 13; width: 21rem; max-width: calc(100vw - 16px);
+           padding: 10px 12px; background: var(--panel); border: 1px solid var(--line);
+           border-radius: 8px; box-shadow: 0 8px 24px rgb(0 0 0 / .14); font-size: 13px; }
+.details h3 { margin: 0 0 6px; font: 600 15px var(--mono); }
+.details table { border-collapse: collapse; width: 100%; margin: 4px 0 8px; }
+.details td { padding: 2px 4px; border-bottom: 1px solid var(--line);
+              font-variant-numeric: tabular-nums; }
+.details td.n { text-align: right; }
+.details p { margin: 4px 0; color: var(--muted); }
+.details .d-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.details .d-acts { display: flex; gap: 8px; margin: 6px 0 0; flex-wrap: wrap; }
+.details .d-acts button { height: 28px; padding: 0 10px; font-size: 13px; }
+.details.heard-map { width: min(44rem, calc(100vw - 16px)); left: 50%; top: 10vh;
+                     transform: translateX(-50%); }
+.details.heard-map h3 { font-family: inherit; }
+.heard li.pinned .s-name::before { content: "★ "; color: var(--busy); }
 .station .row #listen { justify-content: center; }
 .pair { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .pair select { width: auto; }

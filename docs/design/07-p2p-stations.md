@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Accepted; Phases 1 to 4 built |
-| **Version** | 0.5.0 |
+| **Status** | Accepted; built |
+| **Version** | 0.6.0 |
 | **Updated** | 2026-11-28 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -511,3 +511,4 @@ Aether release; Phase 2 is one Aether beta with four ADRs.
 | 0.3.0 | 2026-11-28 | Phase 1 built: RP-4 1.7.0 with its vectors (the reference's simulated modem beacons, `rpmi-lines.json`'s cases marked `unless` for an adapter with the cap); `rpmi::position`; the Aether adapter's `heard` and `stations` from Aether's own; Mercury's CQ frames as stations heard; VARA's left off until checked; the client's `stations.rs` and `/api/stations`; **Call**'s list in P2P (manual 1.63.0). |
 | 0.4.0 | 2026-11-28 | Phases 2 and 3 built. Aether 0.2.0-beta.183: ADR-0139 (a program's beacon, `beacon-sent`), ADR-0140 (the answers bit), ADR-0141 (the radio's own transmitting, over CAT, rigctld or FLRig) and ADR-0142 (the position), with a harness scenario that passes both ways against beta.182. RP-4 1.8.0: `beacon`'s `modem_position` false, so that **None** keeps Aether's own grid square out, while a station with no position in use lets it in (§7). The Aether adapter's `beacon` and `beacon-sent`; Mercury's `CQFRAME`, with its busy detector on; the client's `beacons.rs`, `/api/beacon`, **Beacon**'s menu with **Send a beacon now** and **Position in the beacon** (manual 1.64.0). Repeating, its latch and its line are Phase 4. |
 | 0.5.0 | 2026-11-28 | Phase 4 built: `beacons.rs`'s schedule (`start_repeating`, `tick` with the station's `Context`, `on_air`, the jitter, four hours, `refused`), the panel's `keep_beaconing` every 2 s (the listening connection sends a beacon due; an idle station, with *Only while listening* unticked, a connection of its own), a scanning station's dials in turn, `status.beaconing` read into `Where` so the client sends none beside Aether's own; **Beacon**'s latch, **Repeat**, **Only while listening for P2P**, **Next**, **Last** and **Repeats until**, and the line under **Listen** (manual 1.65.0). The lamp's orange *on the air* is not built: RPMI tells no keying to a host. |
+| 0.6.0 | 2026-11-28 | Phase 5 built: a station call predicted where the station's beacon said it is when no gateway is listed (`Stations::position_of`, `/api/p2p-chance`'s `station`); a station's details from a right click or Shift+F10 (readings, other bands, position and distance, P2P sessions, **Call on**, **Pin to the top**); favourites first in their group, kept in `stations.json`, and *A favourite station heard again after three hours* among the sounds, none by default (`heard_again` in `/api/state`); **Show on the map**, the stations heard on the client's world map; a gateway heard says when in the gateway list (manual 1.66.0). Not built: feeding the gateways heard to W57's learning, which learns from call records; a sighting says nothing of how the gateway hears this station. |

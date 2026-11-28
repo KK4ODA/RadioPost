@@ -509,7 +509,8 @@ function showKind() {
 
 // ── a P2P call's chance ────────────────────────────────────────────────────────────────────────
 // Predicted on the dial picked at the site of the gateway listed under the station's base
-// callsign (GET /api/p2p-chance), with a band of that gateway's that does better beside it. Three
+// callsign (GET /api/p2p-chance), with a band of that gateway's that does better beside it, or,
+// with none listed, where the station's own beacon said it is (W59, the P2P design §7). Three
 // P2P calls on 40 m at about 95 km, an hour and a half after sunset, were heard by nobody
 // (2026-11-23): the band had closed for so short a path, and nothing said so.
 
@@ -550,7 +551,9 @@ function p2pChanceWords(callsign, r) {
   if (!hf || !hf.words) return ["", false];
   const far = hf.distance_km != null ? `, ${hf.distance_km} km away` : "";
   const band = hf.band ? bandWords(hf.band) : "This dial";
-  let text = `${band} to ${callsign}, predicted at ${r.gateway}'s site${far}. ${hf.words}.`;
+  // at the site of the gateway listed under its callsign, or where its own beacon said it is
+  const site = r.station ? "the position its beacon gave" : `${r.gateway}'s site`;
+  let text = `${band} to ${callsign}, predicted at ${site}${far}. ${hf.words}.`;
   const b = r.better;
   if (b && b.hf && b.hf.chance_words) {
     text += ` ${bandWords(b.hf.band)}, ${mhzOf(b.dial_hz)} MHz: ${b.hf.chance_words}.`;
@@ -763,7 +766,103 @@ function stationItems(filter, older) {
   if (called.length) items.push({head: "Called before, not heard lately"});
   for (const e of called) items.push({called: e});
   if (hidden) items.push({more: hidden});
+  const placed = (heardView.stations || []).filter((s) => s.position).length;
+  if (placed) items.push({map: placed});
   return items;
+}
+
+// ── a station heard: its details, pinning, and the map (W59, the P2P design §5.3, §7, §8) ──────
+// A right click on a line of the list, or Shift+F10 on the line picked, opens what the client
+// knows of the station: its readings, where else it was heard, where its beacon says it is and how
+// far, the P2P sessions with it, and Pin to the top and Call on its dial. Show on the map, the
+// list's last line, puts the stations whose beacons gave a position on the world map.
+
+let heardMap = null;
+
+function closeDetails() {
+  $("station-details").hidden = true;
+}
+
+// where a station's beacon says it is, in words
+function placeWords(s) {
+  const p = s.position;
+  if (!p) return "";
+  const where = p.grid || `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`.replaceAll("-", "\u2212");
+  const far = s.km != null ? `, ${s.km} km at ${String(s.bearing).padStart(3, "0")}° from you` : "";
+  const within = p.precision === "grid6" ? " (within about 4 km)"
+    : p.precision === "grid4" ? " (within about 100 km)" : "";
+  return `At ${where}${within}${far}, from its beacon.`;
+}
+
+function showDetails(s, at, take) {
+  const box = $("station-details");
+  const rows = [...(s.readings || [])].reverse().map(([t, snr]) =>
+    el("tr", {}, el("td", {text: clockOf(t)}), el("td", {text: s.dial_hz ? `${mhzOf(s.dial_hz)} MHz` : ""}),
+       el("td", {class: "n", text: db(snr)})));
+  for (const e of s.elsewhere || []) {
+    rows.push(el("tr", {}, el("td", {text: dateShort(e.at)}),
+      el("td", {text: [e.band && bandWords(e.band), e.dial_hz && `${mhzOf(e.dial_hz)} MHz`]
+        .filter(Boolean).join(" · ")}),
+      el("td", {class: "n", text: db(e.snr_db)})));
+  }
+  const said = HEARD_KINDS[s.kind];
+  const lines = [
+    `Heard ${s.count || 1} time${s.count === 1 ? "" : "s"}, last ${agoShort(s.age_s)} ago`
+      + `${said ? `: ${said(s.to)}` : ""}${s.bandwidth ? `, ${s.bandwidth} Hz` : ""}.`,
+    s.answers === true ? "Its last beacon said it answers calls."
+      : s.answers === false ? "Its last beacon said it does not answer calls now." : "",
+    placeWords(s),
+    s.worked_at ? `P2P worked ${dateShort(s.worked_at)}`
+      + `${s.worked_heard_db != null ? `; it heard you at ${db(s.worked_heard_db)}` : ""}.` : "",
+  ].filter(Boolean);
+  const pin = el("button", {type: "button", text: s.pinned ? "Unpin" : "Pin to the top",
+    title: s.pinned ? "No longer first in its group" : "First in its group, with a star; Setup's sounds can mark it heard again after three hours unheard",
+    onclick: async () => {
+      try {
+        await api("stations", {pin: s.callsign, on: !s.pinned});
+        await loadHeard();
+      } catch (e) { toast(e.message, true); }
+      closeDetails();
+    }});
+  const call = el("button", {type: "button", class: "primary",
+    text: s.dial_hz ? `Call on ${mhzOf(s.dial_hz)} MHz` : "Put in Call",
+    title: "Its callsign, the dial it was heard on and its bandwidth into the call box",
+    onclick: () => { closeDetails(); take(); }});
+  box.replaceChildren(
+    el("h3", {text: `${s.pinned ? "★ " : ""}${s.callsign}`}),
+    ...lines.map((t) => el("p", {text: t})),
+    rows.length ? el("table", {}, el("tbody", {}, ...rows)) : null,
+    el("div", {class: "d-acts"}, call, pin));
+  box.hidden = false;
+  const left = Math.max(8, Math.min(at.left, window.innerWidth - box.offsetWidth - 8));
+  const top = Math.max(8, Math.min(at.top, window.innerHeight - box.offsetHeight - 8));
+  Object.assign(box.style, {left: `${left}px`, top: `${top}px`});
+  pin.focus();
+}
+
+function showHeardMap(pick) {
+  const panel = $("heard-map-panel");
+  panel.hidden = false;
+  if (!heardMap) {
+    heardMap = new WorldMap($("heard-map"), {
+      onReport: (callsign) => {
+        const s = (heardView.stations || []).find((x) => x.callsign === callsign);
+        if (s) { panel.hidden = true; pick(s); }
+      }});
+  }
+  const placed = (heardView.stations || []).filter((s) => s.position);
+  heardMap.show({here: heardView.here, gateways: []});
+  heardMap.showReports(placed.map((s) => ({id: s.callsign, lat: s.position.lat,
+    lon: s.position.lon,
+    colour: s.age_s <= HEARD_FADED_S ? "var(--ok)" : "var(--muted)",
+    title: `${s.callsign}, ${agoShort(s.age_s)} ago${s.snr_db != null ? ` at ${db(s.snr_db)}` : ""}`
+      + `${s.km != null ? `, ${s.km} km` : ""}`})));
+  heardMap.fit();
+  const unplaced = (heardView.stations || []).length - placed.length;
+  $("heard-map-note").textContent = unplaced
+    ? `${unplaced} station${unplaced === 1 ? "" : "s"} heard gave no position and ${unplaced === 1 ? "is" : "are"} not on it.`
+    : "";
+  $("heard-map-close").focus();
 }
 
 // ▾ beside Call: the calls of the kind shown, or in P2P the stations heard. Arrows move, Enter
@@ -792,6 +891,11 @@ function wireCalled() {
     list.removeAttribute("style");
   };
   const take = (item) => {
+    if (item.map) {
+      close();
+      showHeardMap((s) => take({heard: s}));
+      return;
+    }
     if (item.more) {
       older = true;
       shown = stationItems(input.value, true);
@@ -837,6 +941,11 @@ function wireCalled() {
       return el("li", {role: "option", id: `called-${i}`, class: "more",
         text: `Show older (${item.more})`, title: "Stations heard more than six hours ago"});
     }
+    if (item.map) {
+      return el("li", {role: "option", id: `called-${i}`, class: "more",
+        text: `Show on the map (${item.map})`,
+        title: "The stations heard whose beacons said where they are, on the world map"});
+    }
     if (item.heard) {
       const s = item.heard;
       const parts = heardWords(s);
@@ -847,10 +956,12 @@ function wireCalled() {
         else line.append(p);
       });
       const li = el("li", {role: "option", id: `called-${i}`,
-        class: s.age_s > HEARD_FADED_S ? "stale" : "",
+        class: [s.age_s > HEARD_FADED_S ? "stale" : "", s.pinned ? "pinned" : ""]
+          .filter(Boolean).join(" "),
         title: `${s.callsign}, heard ${day(s.at)}${s.dial_hz ? ` on ${mhzOf(s.dial_hz)} MHz` : ""}`
           + `${s.snr_db != null ? ` at ${db(s.snr_db)}` : ""}. What this station heard of it: one `
-          + "direction only. A beacon's or a call's strength reads low on a strong or fading path"},
+          + "direction only. A beacon's or a call's strength reads low on a strong or fading path. "
+          + "A right click, or Shift+F10, shows what is known of it"},
         el("span", {class: "s-top"},
           el("span", {class: "s-name", text: s.callsign}),
           el("span", {class: "s-snr", text: db(s.snr_db)}),
@@ -874,7 +985,17 @@ function wireCalled() {
       const li = lineOf(item, i);
       if (pickable(item)) {
         li.setAttribute("aria-selected", String(i === active));
-        li.addEventListener("mousedown", (event) => { event.preventDefault(); take(item); });
+        li.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          if (event.button === 0) take(item);
+        });
+        if (item.heard) {
+          li.addEventListener("contextmenu", (event) => {
+            event.preventDefault();
+            showDetails(item.heard, {left: event.clientX, top: event.clientY},
+                        () => take(item));
+          });
+        }
         // inside the Call label: a click there is not the label's
         li.addEventListener("click", (event) => event.preventDefault());
       }
@@ -964,6 +1085,14 @@ function wireCalled() {
     } else if (event.key === "Enter") {
       event.preventDefault();
       if (active >= 0 && pickable(shown[active])) take(shown[active]);
+    } else if ((event.key === "F10" && event.shiftKey) || event.key === "ContextMenu") {
+      event.preventDefault();
+      const item = shown[active];
+      const li = list.children[active];
+      if (item && item.heard && li) {
+        const r = li.getBoundingClientRect();
+        showDetails(item.heard, {left: r.right - 40, top: r.top}, () => take(item));
+      }
     } else if (event.key === "Escape" || event.key === "Tab") {
       if (event.key === "Escape") event.preventDefault();
       close();
@@ -1167,6 +1296,7 @@ async function refresh() {
     : CALL_TITLE;
   showListen(s, a, busy);
   showBeacon(s, a);
+  heardAgain(s.heard_again);
   $("write").disabled = held || !s.me;
   $("device").textContent = s.device || "No key yet.";
   myDevice = s.device ? hexToB64u(s.device) : "";
@@ -1211,6 +1341,15 @@ function showListen(s, a, busy) {
   const [text, warn] = listenAt(s, a);
   $("listen-at").textContent = text;
   $("listen-at").classList.toggle("by-hand", warn);
+}
+
+// A favourite heard again after three hours unheard sounds once, if Setup gives it a sound (W51);
+// none by default
+let heardAgainAt = null;
+function heardAgain(h) {
+  if (!h) return;
+  if (heardAgainAt !== null && h.at !== heardAgainAt) play("favourite");
+  heardAgainAt = h.at;
 }
 
 // ── Beacon (W59, the P2P design §5.1, §6, §7) ─────────────────────────────────────────────────
@@ -1405,13 +1544,20 @@ function wireBeacon() {
   }
   document.addEventListener("click", (e) => {
     if (!$("beacon-menu").hidden && !$("beacon-split").contains(e.target)) closeBeaconMenu();
+    if (!$("station-details").hidden && !$("station-details").contains(e.target)) closeDetails();
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !$("beacon-menu").hidden) {
       closeBeaconMenu();
       $("beacon-more").focus();
     }
+    if (e.key === "Escape" && !$("station-details").hidden) {
+      closeDetails();
+      $("callsign").focus();
+    }
+    if (e.key === "Escape" && !$("heard-map-panel").hidden) $("heard-map-panel").hidden = true;
   });
+  $("heard-map-close").addEventListener("click", () => { $("heard-map-panel").hidden = true; });
   window.addEventListener("resize", closeBeaconMenu);
 }
 
@@ -2203,6 +2349,15 @@ function gatewayRow(gw, twice) {
       text: l.open ? (l.changes ? `listening ${then}, until ${clockAt(l.changes)}` : `listening ${then}`)
         : `not listening ${then}: from ${clockAt(l.changes)}`,
       title: "From the listening times its record gives"}));
+  }
+  // when this station's modem last heard it on the air (W59)
+  if (gw.heard) {
+    const h = gw.heard;
+    where.append(el("div", {class: "note",
+      text: `heard ${age(h.at)}${h.snr_db != null ? ` at ${db(h.snr_db)}` : ""}`
+        + `${h.dial_hz ? ` on ${mhzOf(h.dial_hz)} MHz` : ""}`,
+      title: "When your modem last heard it on the air: a beacon, an identifier or a frame of a "
+        + "session. One direction only"}));
   }
   if (gw.seen) {
     where.append(el("div", {class: "note", text: `seen ${age(gw.seen)}`,
@@ -5168,6 +5323,7 @@ const SOUND_EVENTS = [
   ["session-down", "A session ends", "falling"],
   ["failed", "A call or an alert fails", "low"],
   ["delivered", "A message delivered", "soft"],
+  ["favourite", "A favourite station heard again after three hours", "none"],
 ];
 const ALARM_EVERY_MS = 20000;
 

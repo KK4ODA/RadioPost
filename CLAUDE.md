@@ -150,7 +150,13 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   `keep_beaconing` every 2 s while a call or session runs), holds while busy, while not listening
   with *Only while listening*, and while Aether repeats its own (`Where::beaconing` from
   `status.beaconing`), stops after four hours or a `refused`; a scheduled beacon goes on a
-  scanning gateway's dials in turn (`due(now, scanning)`).
+  scanning gateway's dials in turn (`due(now, scanning)`). Phase 5: `Stations` keeps favourites
+  (`pin`, `stations.json`'s `pinned`, first in their group) and marks one heard again after
+  `QUIET_S` (3 h) unheard (`heard_again`, `/api/state`, the page's `favourite` sound, none by
+  default); `position_of` lets `/api/p2p-chance` predict where a station's beacon said it is when
+  no gateway is listed (`station` in its answer); `latest` marks a gateway heard in the gateway
+  list (`heard`); the page's details popover (right click, Shift+F10) and **Show on the map**
+  (`#heard-map-panel`, a `WorldMap` with the stations as reports).
   **Listen for P2P** latches (W15, the 40 m sessions of 2026-11-18): `session::keep_listening`
   keeps one connection, its claims and `listen` on across sessions (Aether ends a claim with its
   connection, so closing it after each session had stopped the answering), opens a failed one

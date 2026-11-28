@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3.62 |
+| **Version** | 0.3.63 |
 | **Updated** | 2026-11-28 |
 | **Editor** | KK4ODA |
 | **Licence** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
@@ -162,7 +162,7 @@ rules:
 | W56 | VHF and UHF gateways judged by the terrain | Radio | Medium | Fits today; optional addition (RP-5 `site`, `station`) | Accepted |
 | W57 | Learning from every call | Radio | High | Fits today; optional additions (RP-4 `peer_snr_db`, `failed.heard`; RP-5 `seen`) | In progress |
 | W58 | Gateways ranked by how soon the mail is done | Radio | Medium | Fits today | Accepted |
-| W59 | P2P stations heard, beacons with a position, and calling them from Call | Radio | High | Optional addition (RP-4 1.7.0: `heard` members, `stations`, `beacon`) | In progress |
+| W59 | P2P stations heard, beacons with a position, and calling them from Call | Radio | High | Optional addition (RP-4 1.7.0: `heard` members, `stations`, `beacon`) | Built |
 
 Groups: *Mail* (§4), *Setup* (§5), *Radio* (§6), *Operation* (§7), *Offline* (§8),
 *Applications* (§9), *Adapters* (§10), *Rules* (§11). Consolidated and deferred wishes are in §14.
@@ -1360,3 +1360,4 @@ not lost. A wish is reconsidered on new evidence, not on being asked again by th
 | 0.3.60 | 2026-11-28 | W59: Phase 1 built, the stations heard in **Call** (RP-4 1.7.0). |
 | 0.3.61 | 2026-11-28 | W59: Phases 2 and 3 built, Aether's beacons for programs (0.2.0-beta.183) and **Send a beacon now** (RP-4 1.8.0). |
 | 0.3.62 | 2026-11-28 | W59: Phase 4 built, repeating beacons. |
+| 0.3.63 | 2026-11-28 | W59 built: Phase 5, positions, details, favourites, the map, gateways heard. |

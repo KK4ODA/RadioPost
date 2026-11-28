@@ -2106,3 +2106,58 @@ fn a_repeating_beacon_goes_while_listening_and_from_an_idle_station() {
     assert_eq!(off["repeating"], Value::Null);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A station heard is pinned to the top of its group through the API, and kept (W59, the P2P
+/// design §8).
+#[test]
+fn a_station_heard_is_pinned_and_unpinned() {
+    let dir = scratch("panel-pin");
+    let home = dir.join("ana");
+    store_for(&home, "device:ana", "ana");
+    let now = radiopost_client::presence::unix_now();
+    let line = |call: &str, ago: u64| {
+        json!({"callsign": call, "band": "40m", "dial_hz": 7_101_000, "at": now - ago,
+               "snr_db": 3.0, "readings": [], "kind": "beacon", "count": 1})
+    };
+    let stations = json!({"schema": 1, "seen": [line("N2CALL", 900), line("N3CALL", 60)]});
+    std::fs::write(
+        home.join(radiopost_client::stations::FILE),
+        serde_json::to_vec(&stations).expect("JSON"),
+    )
+    .expect("written");
+    let c = Client {
+        at: Panel::new(&home, None)
+            .start("127.0.0.1:0")
+            .expect("a port"),
+    };
+    let order = |v: &Value| -> Vec<String> {
+        v["stations"]
+            .as_array()
+            .expect("lines")
+            .iter()
+            .filter_map(|l| l["callsign"].as_str().map(str::to_owned))
+            .collect()
+    };
+    assert_eq!(
+        order(&c.get("/api/stations?dial_hz=7101000")),
+        ["N3CALL", "N2CALL"]
+    );
+    let pinned = c
+        .post("/api/stations", &json!({"pin": "N2CALL", "on": true}))
+        .expect("pinned");
+    assert_eq!(pinned["stations"][0]["callsign"], "N2CALL");
+    assert_eq!(pinned["stations"][0]["pinned"], true);
+    let kept = std::fs::read_to_string(home.join(radiopost_client::stations::FILE)).expect("kept");
+    assert!(kept.contains("\"pinned\""), "{kept}");
+    c.post("/api/stations", &json!({"pin": "N2CALL", "on": false}))
+        .expect("unpinned");
+    assert_eq!(
+        order(&c.get("/api/stations?dial_hz=7101000")),
+        ["N3CALL", "N2CALL"]
+    );
+    assert!(
+        c.post("/api/stations", &json!({"pin": "N2CALL"})).is_err(),
+        "on: is needed"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

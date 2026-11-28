@@ -1323,6 +1323,12 @@ impl Panel {
             (Method::Get, "/api/stations") => Ok(self.stations_view(param("dial_hz").parse().ok())),
             (Method::Get, "/api/beacon") => Ok(self.beacon_view()),
             (Method::Post, "/api/beacon") => self.beacon_request(&text("adapter"), body),
+            // a favourite, pinned at the top of its group, or unpinned (the P2P design §8)
+            (Method::Post, "/api/stations") if body["pin"].is_string() => {
+                let on = body["on"].as_bool().ok_or("on: true or false")?;
+                self.stations.pin(body["pin"].as_str().unwrap_or(""), on);
+                Ok(self.stations_view(None))
+            }
             (Method::Post, "/api/stations") if body["clear"] == true => {
                 self.stations.clear();
                 Ok(self.stations_view(None))
@@ -2082,6 +2088,9 @@ impl Panel {
                          "listening_at": a.listening_at.as_ref().map(session::Where::to_json)},
             "alerts": self.alerts.summary(),
             "beacon": self.beacon_view(),
+            // the last favourite heard again after hours unheard: the page sounds once for each
+            "heard_again": self.stations.heard_again()
+                .map(|(callsign, at)| json!({"callsign": callsign, "at": at})),
             "progress": self.live.lock().unwrap_or_else(PoisonError::into_inner).summary(),
             "update": self.updates.status(),
             "log": a.log.len(),
@@ -2328,6 +2337,16 @@ impl Panel {
             from,
             now,
         );
+        // when this station's modem last heard each gateway (W59, the P2P design §8)
+        for g in &mut gateways {
+            let heard = g["callsign"]
+                .as_str()
+                .and_then(|c| self.stations.latest(c, now));
+            if let Some(h) = heard {
+                g["heard"] = json!({"at": h.at, "snr_db": h.snr_db, "dial_hz": h.dial_hz,
+                                    "kind": h.kind});
+            }
+        }
         // what the call records taught (§ 12), worked out again only when they or the rules changed
         let learning = terrain.then(|| Learning::cached(&self.base, &seen_of(&gateways), now));
         // another time (§ 14.7): whether each listens then; VHF paths do not change with it
@@ -2395,7 +2414,7 @@ impl Panel {
             return Ok(Value::Null);
         };
         let store = Store::open(&self.home())?;
-        let Some(gateway) = store
+        let listed = store
             .gateway_list
             .as_ref()
             .and_then(|l| l["gateways"].as_array())
@@ -2406,9 +2425,19 @@ impl Panel {
                         .is_some_and(|c| radiopost::callsign::same_base(c, callsign))
                 })
             })
-            .cloned()
-        else {
-            return Ok(Value::Null);
+            .cloned();
+        // no gateway listed under its base: where the station's own beacon said it is, in the
+        // last seven days (design 07 §7)
+        let (gateway, heard) = if let Some(g) = listed {
+            (g, false)
+        } else {
+            let Some((_, grid)) = self.stations.position_of(callsign, now()) else {
+                return Ok(Value::Null);
+            };
+            (
+                json!({"callsign": callsign, "grid": grid, "channels": []}),
+                true,
+            )
         };
         let mut channels = vec![json!({"dial_hz": dial, "bandwidth_hz": bandwidth,
                                        "modem": "aether"})];
@@ -2435,6 +2464,9 @@ impl Panel {
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
             .map(|c| json!({"dial_hz": c["dial_hz"], "hf": c["hf"]}));
+        if heard {
+            return Ok(json!({"station": g["callsign"], "chosen": chosen, "better": better}));
+        }
         Ok(json!({"gateway": g["callsign"], "chosen": chosen, "better": better}))
     }
 
@@ -2582,6 +2614,7 @@ impl Panel {
             leave_out,
             worked,
             modem: self.modem_view()["kind"].as_str().map(str::to_owned),
+            pinned: self.stations.pinned(),
         };
         let mut view = crate::stations::view(&self.stations.all(), &ctx, now());
         if let Some(lines) = view["stations"].as_array_mut() {
