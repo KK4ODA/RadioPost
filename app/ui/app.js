@@ -6624,7 +6624,81 @@ function wire() {
   });
 }
 
+// The borders that move: the left column's right edge and the log's top edge (style.css, .grip).
+// Each is dragged, or moved by the arrow keys once it has the focus (10 px a press, 50 with Shift;
+// Home and End for its least and most), and a double click puts it back. The size asked for is
+// kept in this browser; what shows is that size held inside the window, so a window made smaller
+// and then larger again gets it back. `sign` is which way of the pointer makes it larger: the log
+// grows as its top edge goes up.
+const GRIPS = [
+  {grip: "side-grip", name: "sideWidth", prop: "--side-w", usual: 250, sign: 1, axis: "x",
+   keys: {ArrowLeft: -1, ArrowRight: 1},
+   least: () => 200,
+   // the folder or message keeps 400 px beside it
+   most: () => Math.max(200, Math.min(640, innerWidth - 400))},
+  {grip: "log-grip", name: "logHeight", prop: "--log-h", usual: 90, sign: -1, axis: "y",
+   keys: {ArrowUp: 1, ArrowDown: -1},
+   least: () => 36,
+   // the folder or message keeps 160 px above it
+   most: () => Math.max(36, innerHeight - document.querySelector(".top").offsetHeight - 160)},
+];
+
+function wireGrips() {
+  const root = document.documentElement;
+  for (const g of GRIPS) {
+    const grip = $(g.grip);
+    let asked = Number(kept(g.name, "")) || g.usual;
+    let shown = 0;
+    const show = (px) => {
+      shown = Math.round(Math.min(Math.max(px, g.least()), g.most()));
+      root.style.setProperty(g.prop, `${shown}px`);
+      grip.setAttribute("aria-valuenow", String(shown));
+      grip.setAttribute("aria-valuemin", String(g.least()));
+      grip.setAttribute("aria-valuemax", String(g.most()));
+    };
+    const settle = (px) => {
+      show(px);
+      asked = shown;
+      keep(g.name, String(asked));
+    };
+    show(asked);
+    window.addEventListener("resize", () => show(asked));
+    grip.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      grip.focus();
+      grip.setPointerCapture(e.pointerId);
+      const from = shown;
+      const start = g.axis === "x" ? e.clientX : e.clientY;
+      grip.dataset.dragging = "";
+      root.dataset.dragging = g.axis;
+      const move = (m) => show(from + g.sign * ((g.axis === "x" ? m.clientX : m.clientY) - start));
+      const end = () => {
+        grip.removeEventListener("pointermove", move);
+        grip.removeEventListener("pointerup", end);
+        grip.removeEventListener("pointercancel", end);
+        delete grip.dataset.dragging;
+        delete root.dataset.dragging;
+        settle(shown);
+      };
+      grip.addEventListener("pointermove", move);
+      grip.addEventListener("pointerup", end);
+      grip.addEventListener("pointercancel", end);
+    });
+    grip.addEventListener("dblclick", () => settle(g.usual));
+    grip.addEventListener("keydown", (e) => {
+      const step = g.keys[e.key];
+      if (step) settle(shown + step * (e.shiftKey ? 50 : 10));
+      else if (e.key === "Home") settle(g.least());
+      else if (e.key === "End") settle(g.most());
+      else return;
+      e.preventDefault();
+    });
+  }
+}
+
 async function start() {
+  wireGrips();
   wire();
   wireAlerts();
   // what a composer window of its own put in the outbox, or could not open

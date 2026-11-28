@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.66.1 |
+| **Version** | 1.67.0 |
 | **Updated** | 2026-11-28 |
 | **Describes** | RadioPost 0.1.0-beta.41 |
 | **Licence** | CC BY 4.0 |
@@ -401,6 +401,14 @@ again with a new code**.
 8. **The log**: what RadioPost did, line by line, with the time.
 
 Every button and box has a tooltip: rest the mouse on it to read what it does.
+
+Two borders move. Drag the border above the log up or down to make the log taller or shorter, and
+the border to the right of the left column sideways to make the column wider or narrower. The
+border shows a blue line while the mouse is on it. With the keyboard, press **Tab** until the line
+shows, then use the arrow keys: each press moves the border 10 pixels, or 50 with **Shift**. A
+double click puts a border back where it was. RadioPost keeps both sizes for the next time it
+starts. The folder or message you are looking at always keeps some room: the log stops 160 pixels
+under the top bar, and the column stops 400 pixels from the window's right edge.
 
 When the window is narrow (720 pixels wide or less, at 100 % display scale), its parts stack in
 one column: **Write**, the folders side by side, **Station**, then the folder or message you are
@@ -3168,3 +3176,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.65.0 | 2026-11-28 | Repeating beacons (wishlist W59). §10: **Beacon** is a switch that repeats the beacon every 10, 15, 30 or 60 minutes for four hours at most, counted from when your callsign was last on the air; its menu's **Repeat**, **Only while listening for P2P**, **Next**, **Last** and **Repeats until**; what it waits for and when it stops. Figure 29 retaken. §40 step 5. |
 | 1.66.0 | 2026-11-28 | Positions and favourites (wishlist W59). §10: a station's details from a right click or Shift+F10 on the list, **Pin to the top** and its star, **Show on the map** (new Figures 30 and 31; later figures renumbered); a station call predicted where the station's beacon said it is when no gateway is listed. §8.1: a gateway your modem heard says when. §12: *A favourite station heard again after three hours* among the sounds, none at first. Figure 28 retaken with a favourite, Figure 40 with the new sound. |
 | 1.66.1 | 2026-11-28 | Section 12, *Terrain*: the card follows the position in use. It had kept *Where you are is not known* and **Prepare this area** greyed after a place was saved, until Setup was opened again. |
+| 1.67.0 | 2026-11-28 | Section 6: the border above the log and the border to the right of the left column move. Drag them, or use the arrow keys; a double click puts them back, and RadioPost keeps both sizes. The window's screenshots do not change: the borders look the same until the mouse is on them. |

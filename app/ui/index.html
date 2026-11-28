@@ -28,7 +28,7 @@
   </header>
 
   <div class="frame">
-    <nav class="side" aria-label="Folders">
+    <nav class="side" id="side" aria-label="Folders">
       <button class="primary" id="write" title="Write a message; it waits in the outbox until a session carries it. When this window is narrow, you write it in a window of its own">Write</button>
       <ul class="folders">
         <li><button data-folder="inbox" title="Messages received">Inbox <span class="count" id="n-inbox"></span></button></li>
@@ -126,6 +126,7 @@
       <button class="quiet" id="office-open" title="Run your post office: applications for accounts, the accounts and their devices, codes, mail going out" hidden>Post office <span class="count" id="n-office"></span></button>
       <button class="quiet" id="setup-open" title="This device's key, its credential and the post offices it trusts">Setup</button>
     </nav>
+    <div class="grip side-grip" id="side-grip" role="separator" aria-orientation="vertical" aria-controls="side" aria-label="Width of the left column" tabindex="0" title="Drag to make the left column wider or narrower; the arrow keys move it too. A double click puts it back. The width is kept for next time"></div>
 
     <main>
       <div class="banner" id="banner" role="status" hidden>
@@ -1064,6 +1065,7 @@
   </div>
 
   <footer class="log" aria-label="Session log">
+    <div class="grip log-grip" id="log-grip" role="separator" aria-orientation="horizontal" aria-controls="log" aria-label="Height of the log" tabindex="0" title="Drag to make the log taller or shorter; the arrow keys move it too. A double click puts it back. The height is kept for next time"></div>
     <pre id="log" title="What the sessions said"></pre>
   </footer>
   <div class="transfer" id="transfer" hidden>

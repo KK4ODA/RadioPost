@@ -7,6 +7,8 @@
   --mono: ui-monospace, "SF Mono", Consolas, "Liberation Mono", monospace;
   --face: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --control-h: 32px;
+  /* the left column's width and the log's height: their borders move (app.js, wireGrips) */
+  --side-w: 250px; --log-h: 90px;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -72,7 +74,8 @@ h3 { font-size: 12px; color: var(--muted); margin: 14px 0 6px; font-weight: 600;
 .state[data-state="session"] { color: var(--session); border-color: var(--session); }
 .state[data-state="failed"] { color: var(--bad); border-color: var(--bad); }
 
-.frame { display: grid; grid-template-columns: 250px 1fr; min-height: 0; overflow: hidden; }
+.frame { display: grid; grid-template-columns: var(--side-w) 1fr; min-height: 0; overflow: hidden;
+         position: relative; }
 .side { padding: 16px; border-right: 1px solid var(--line); background: var(--panel);
         display: flex; flex-direction: column; gap: 14px; overflow: auto; }
 .side > .primary { width: 100%; }
@@ -152,7 +155,7 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 @media print {
   :root { --bg: #fff; --panel: #fff; --line: #999; --text: #000; --muted: #333; --accent: #000; }
   body { display: block; height: auto; overflow: visible; background: #fff; color: #000; }
-  .top, .side, .log, .toast, .reader-acts, #reader button { display: none !important; }
+  .top, .side, .grip, .log, .toast, .reader-acts, #reader button { display: none !important; }
   .frame { display: block; overflow: visible; }
   main { padding: 0; overflow: visible; }
   main > :not(#reader) { display: none !important; }
@@ -163,14 +166,31 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px;
         margin-bottom: 14px; }
 
-.log { border-top: 1px solid var(--line); background: var(--panel); }
-.log pre { margin: 0; padding: 8px 16px; height: 7.5em; overflow: auto; font-family: var(--mono);
+.log { border-top: 1px solid var(--line); background: var(--panel); position: relative; }
+.log pre { margin: 0; padding: 8px 16px; height: var(--log-h); overflow: auto; font-family: var(--mono);
            font-size: 12px; color: var(--muted); }
 .log pre:empty::before { content: "No session yet. What a session says shows here."; }
-.toast { position: fixed; right: 20px; bottom: 124px; background: var(--key); color: var(--key-text);
-         padding: 8px 14px; border-radius: 6px; max-width: 420px; }
+.toast { position: fixed; right: 20px; bottom: calc(var(--log-h) + 34px); background: var(--key);
+         color: var(--key-text); padding: 8px 14px; border-radius: 6px; max-width: 420px; }
 .toast.bad { background: var(--bad); color: #fff; }
 #toast-text { overflow-wrap: anywhere; min-width: 0; }
+
+/* the borders that move: the left column's right edge and the log's top edge, each a strip 8 px
+   wide over the border, lit while the mouse is on it, while it is dragged and when the keyboard is
+   on it (app.js, wireGrips) */
+.grip { position: absolute; z-index: 4; touch-action: none; }
+.grip::after { content: ""; position: absolute; background: var(--accent); opacity: 0;
+               transition: opacity .15s; }
+.grip:hover::after, .grip:focus-visible::after, .grip[data-dragging]::after { opacity: 1; }
+.grip:focus { outline: none; }
+.side-grip { top: 0; bottom: 0; left: calc(var(--side-w) - 4px); width: 8px; cursor: col-resize; }
+.side-grip::after { top: 0; bottom: 0; left: 2px; width: 3px; }
+.log-grip { top: -4px; left: 0; right: 0; height: 8px; cursor: row-resize; }
+.log-grip::after { left: 0; right: 0; top: 2px; height: 3px; }
+/* while a border is dragged the whole page shows its cursor, and nothing on it is selected */
+:root[data-dragging] * { user-select: none; }
+:root[data-dragging="x"] * { cursor: col-resize !important; }
+:root[data-dragging="y"] * { cursor: row-resize !important; }
 
 /* stacked in one column (app.js's STACKED: Write opens a window of its own here). The column's
    buttons keep their own widths, not the window's, and the folders go side by side */
@@ -179,6 +199,7 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
   body { height: auto; overflow: visible; }
   .frame { grid-template-columns: 1fr; overflow: visible; }
   .side { border-right: 0; border-bottom: 1px solid var(--line); }
+  .side-grip { display: none; }
   .side > .primary, #office-open, #setup-open { width: auto; align-self: flex-start; }
   .station .row { align-items: flex-start; }
   .folders { display: flex; flex-wrap: wrap; gap: 2px 4px; }
@@ -188,7 +209,7 @@ main { padding: 20px 24px; overflow: auto; min-width: 0; }
 }
 /* a composer window of its own: the composer alone */
 :root[data-window="compose"] body { grid-template-rows: 1fr; }
-:root[data-window="compose"] :is(.top, .side, .log) { display: none; }
+:root[data-window="compose"] :is(.top, .side, .grip, .log) { display: none; }
 :root[data-window="compose"] .frame { grid-template-columns: 1fr; }
 :root[data-window="compose"] .toast { bottom: 20px; }
 .entries { list-style: none; padding: 0; margin: 0 0 8px; }
@@ -394,11 +415,11 @@ h2.section { margin-top: 24px; }
 @media (hover: none) { .s-del { opacity: 1; } }
 
 /* what a session is carrying: two rings round an envelope, out and in */
-.transfer { position: fixed; right: 20px; bottom: 124px; z-index: 5; display: flex; gap: 14px;
-            align-items: center; width: 330px; padding: 12px 16px 12px 12px;
+.transfer { position: fixed; right: 20px; bottom: calc(var(--log-h) + 34px); z-index: 5;
+            display: flex; gap: 14px; align-items: center; width: 330px; padding: 12px 16px 12px 12px;
             border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
             box-shadow: 0 10px 30px rgb(0 0 0 / .12); animation: rise .35s ease-out; }
-.transfer:not([hidden]) ~ .toast { bottom: 236px; }
+.transfer:not([hidden]) ~ .toast { bottom: calc(var(--log-h) + 146px); }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .transfer-rings .rings { width: 64px; height: 64px; display: block; }
 .rings { overflow: visible; }
