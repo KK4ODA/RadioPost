@@ -74,9 +74,37 @@ jobs:
             exit 1
           fi
 
+  # The user's manual and the server guide as PDFs, and the licence texts (RadioPost's, and every
+  # crate's the programs are built from), in one folder that both desktop applications install
+  # among their resources and the tools archive carries beside the programs, so each panel's
+  # Manual and licences opens them with no Internet. Built once, here, where Inter draws the
+  # schematics as they were drawn, and the same PDFs go on the release page. A book that fails
+  # to build holds no release back (stage_docs.py says so and goes on); the licences do.
+  docs:
+    name: docs
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Inter
+        run: sudo apt-get update -q && sudo apt-get install -y -q fonts-inter || true
+
+      - name: Stage the books and the licences
+        run: python3 tools/stage_docs.py
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: docs
+          path: app/docs/
+          retention-days: 3
+
   build:
     name: build · ${{ matrix.name }}
-    needs: preflight
+    needs: [preflight, docs]
     runs-on: ${{ matrix.os }}
     # two Tauri applications and the tools, each a release build
     timeout-minutes: 75
@@ -94,6 +122,13 @@ jobs:
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
+
+      # app/docs: among both applications' resources below, and in the tools archive
+      - name: The manual, the server guide and the licences
+        uses: actions/download-artifact@v8
+        with:
+          name: docs
+          path: app/docs
 
       - name: Install the system libraries
         if: runner.os == 'Linux'
@@ -120,13 +155,16 @@ jobs:
 
       # the VOACAP engine, for the client's HF predictions (choosing a gateway, §11.2): the
       # release of hf-predict's that tools/engine/voacapl.json pins, refused unless its checksum is
-      # the pinned one, among the client's resources (the gateway does not predict)
+      # the pinned one, among the client's resources (the gateway does not predict); and app/docs
+      # among both applications' resources, as `docs` (radiopost_update::docs)
       - name: The VOACAP engine
         shell: bash
         run: |
           python3 tools/engine/fetch.py get ${{ matrix.name }} app/src-tauri/engine
-          client=$(python3 -c 'import json, os; c = json.loads(os.environ["UPDATER"]); c["bundle"]["resources"] = {"engine/": "engine/"}; print(json.dumps(c))')
+          client=$(python3 -c 'import json, os; c = json.loads(os.environ["UPDATER"]); c["bundle"]["resources"] = {"engine/": "engine/", "../docs/": "docs/"}; print(json.dumps(c))')
           echo "CLIENT=${client}" >> "$GITHUB_ENV"
+          gateway=$(python3 -c 'import json, os; c = json.loads(os.environ["UPDATER"]); c["bundle"]["resources"] = {"../../docs/": "docs/"}; print(json.dumps(c))')
+          echo "GATEWAY=${gateway}" >> "$GITHUB_ENV"
 
       - name: The client's installers
         working-directory: app/src-tauri
@@ -136,7 +174,7 @@ jobs:
       - name: The gateway's installers
         working-directory: app/gateway/src-tauri
         shell: bash
-        run: npx --yes @tauri-apps/cli@2 build --bundles ${{ matrix.bundles }} --config "$UPDATER"
+        run: npx --yes @tauri-apps/cli@2 build --bundles ${{ matrix.bundles }} --config "$GATEWAY"
 
       - name: The command-line tools
         working-directory: core
@@ -159,6 +197,8 @@ jobs:
             cp "core/target/release/$b$exe" "out/$tools/"
           done
           cp LICENSE-MIT LICENSE-APACHE app/client/README.md "out/$tools/"
+          # the books and every licence, where the programs' panels look (beside them)
+          cp -r app/docs "out/$tools/docs"
           # the version the archive is: `update` checks it against the version on offer
           echo "$VERSION" > "out/$tools/VERSION"
           # bsdtar writes a zip; GNU tar cannot. On Windows, bash's `tar` is Git's GNU tar, which
@@ -209,10 +249,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      # the builds' files; the docs job's folder apart, since only its PDFs go on the page
       - uses: actions/download-artifact@v8
         with:
+          pattern: radiopost-*
           path: dist
           merge-multiple: true
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: docs
+          path: docs-in
 
       - name: The tag
         id: tag
@@ -236,16 +283,17 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
         run: python3 tools/update_manifests.py dist --tag "$TAG" --repo "$GITHUB_REPOSITORY"
 
-      # The user's manual and the server guide of this release, beside its installers. Chrome is
-      # on the runner, and Inter draws the schematics as they were drawn. A book that fails to
+      # The user's manual and the server guide of this release, beside its installers: the
+      # copies the docs job put inside them, under the release's names. A book that failed to
       # build holds no release back: the run says so, and the release goes out without it.
       - name: The manual and the server guide
-        continue-on-error: true
         run: |
-          sudo apt-get update -q && sudo apt-get install -y -q fonts-inter || true
           v=$(python3 tools/release.py version)
-          python3 tools/manual/build.py pdf manual "dist/RadioPost-Manual-$v.pdf"
-          python3 tools/manual/build.py pdf server "dist/RadioPost-Server-Guide-$v.pdf"
+          for book in "manual.pdf RadioPost-Manual" "server-guide.pdf RadioPost-Server-Guide"; do
+            set -- $book
+            if [ -f "docs-in/$1" ]; then cp "docs-in/$1" "dist/$2-$v.pdf"
+            else echo "::warning::$1 did not build: this release goes out without it"; fi
+          done
 
       - name: Checksums
         working-directory: dist

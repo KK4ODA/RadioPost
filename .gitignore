@@ -8,3 +8,5 @@ app/gateway/src-tauri/gen/
 build/
 # a VOACAP engine fetched for a build (tools/engine/fetch.py get)
 app/src-tauri/engine/
+# the manual, the server guide and the licences a build carries (tools/stage_docs.py)
+app/docs/

@@ -62,6 +62,9 @@ pub struct Panel {
     ui: Option<PathBuf>,
     addr: SocketAddr,
     updates: Arc<Watch>,
+    /// The manual and the licences the release installed (`radiopost_update::docs`): beside the
+    /// program, or among the desktop application's resources ([`Panel::with_docs`]).
+    docs: Option<PathBuf>,
 }
 
 /// A callsign as RP-1 writes one: letters and digits, a `/` part or a `-` SSID allowed.
@@ -86,7 +89,16 @@ impl Panel {
                 env!("CARGO_PKG_VERSION"),
                 &radiopost_update::channel(),
             ),
+            docs: radiopost_update::docs::beside_program(),
         }
+    }
+
+    /// The same panel, opening the manual and the licences from `dir`: the desktop application's
+    /// resources, where its installer put them.
+    #[must_use]
+    pub fn with_docs(mut self, dir: Option<PathBuf>) -> Panel {
+        self.docs = dir;
+        self
     }
 
     /// The same panel, showing `updates` (the desktop application's own, which installs).
@@ -371,6 +383,14 @@ impl Panel {
                 Ok(self.state())
             }
             (Method::Post, "/api/update" | "/api/update/check") => self.update(path),
+            (Method::Post, "/api/doc") => {
+                // the manual or the licences, by name only: the installed copy in the system's
+                // viewer, which needs no Internet, or the online one (radiopost_update::docs)
+                let doc = radiopost_update::docs::Doc::named(text(body, "doc"))
+                    .ok_or("doc: manual or licences")?;
+                let opened = radiopost_update::docs::open(self.docs.as_deref(), doc)?;
+                Ok(json!({"opened": opened}))
+            }
             _ => Err(format!("no {method} {path}")),
         }
     }

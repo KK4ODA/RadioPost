@@ -112,6 +112,12 @@ jobs:
           cd core
           RADIOPOST_VOACAP="$RUNNER_TEMP/engine" cargo test --locked -p radiopost-client --test hf -- --ignored
 
+      # every installer and the tools archive carry the licence of every crate the programs are
+      # built from (tools/stage_docs.py, at release): a new dependency that ships no licence text
+      # the tool can find or hold is caught here, not at the release
+      - name: Every crate's licence has a text
+        run: python3 tools/third_party_licenses.py > /dev/null
+
       - name: The panels parse
         # modules, as the pages load them: .mjs copies, since node reads a .js file as a script
         run: |

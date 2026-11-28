@@ -801,6 +801,10 @@ $("stop").addEventListener("click", async () => {
   $("stop").disabled = false;
 });
 $("updates-check").addEventListener("click", () => act("update/check", {}, render));
+// the window opens no other page: the program opens the installed copy in the system's viewer
+for (const doc of ["manual", "licences"]) {
+  $(`doc-${doc}`).addEventListener("click", () => act("doc", {doc}));
+}
 $("update-go").addEventListener("click", () => {
   if (state && state.update.can_install && state.running
       && !window.confirm("The gateway stops answering while it updates, and starts again after. Update now?")) {

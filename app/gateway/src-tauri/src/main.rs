@@ -21,7 +21,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::net::SocketAddr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use radiopost_gateway::monitor::Status;
@@ -48,15 +48,20 @@ const WINDOW_KEPT: StateFlags = StateFlags::SIZE
 
 /// Starts the gateway's panel for the gateway in `dir`, and the gateway itself when it is set to
 /// answer at start: where the panel is, the gateway's runner, and what the panel shows of
-/// updates.
-fn start(dir: &Path) -> Result<(SocketAddr, Arc<Runner>, Arc<Watch>), String> {
+/// updates. `docs` is where the installer put the manual and the licences.
+fn start(
+    dir: &Path,
+    docs: Option<PathBuf>,
+) -> Result<(SocketAddr, Arc<Runner>, Arc<Watch>), String> {
     let runner = Arc::new(Runner::new(dir));
     let updates = Watch::new(
         Product::Gateway,
         env!("CARGO_PKG_VERSION"),
         &radiopost_update::channel(),
     );
-    let panel = Panel::new(runner.clone(), None).with_updates(Arc::clone(&updates));
+    let panel = Panel::new(runner.clone(), None)
+        .with_updates(Arc::clone(&updates))
+        .with_docs(docs);
     let at = panel
         .clone()
         .start(&format!("127.0.0.1:{PORT}"))
@@ -143,7 +148,13 @@ fn main() {
         "RadioPost Gateway {} starts",
         env!("CARGO_PKG_VERSION")
     ));
-    let (at, runner, updates) = match start(&dir) {
+    // the context first: it says where the installer put the program's resources, the manual
+    // and the licences among them
+    let context = tauri::generate_context!();
+    let docs = tauri::utils::platform::resource_dir(context.package_info(), &tauri::Env::default())
+        .ok()
+        .map(|dir| dir.join("docs"));
+    let (at, runner, updates) = match start(&dir, docs) {
         Ok(started) => started,
         Err(e) => {
             eprintln!("RadioPost Gateway: the panel cannot start: {e}");
@@ -209,7 +220,7 @@ fn main() {
             });
             Ok(())
         })
-        .build(tauri::generate_context!());
+        .build(context);
     let app = match app {
         Ok(app) => app,
         Err(e) => {
@@ -241,7 +252,7 @@ mod tests {
     fn the_panel_the_window_shows() {
         let dir =
             std::env::temp_dir().join(format!("radiopost-gateway-app-{}", std::process::id()));
-        let (at, runner, _) = start(&dir).expect("the panel starts");
+        let (at, runner, _) = start(&dir, None).expect("the panel starts");
         assert!(at.ip().is_loopback());
         assert!(!runner.running(), "nothing to answer as");
         let mut s = TcpStream::connect(at).expect("the panel answers");
@@ -255,7 +266,7 @@ mod tests {
         s.read_to_string(&mut page).expect("read");
         assert!(page.contains("<title>RadioPost Gateway</title>"), "{page}");
         // a second copy of the program takes another port
-        let (other, _, _) = start(&dir).expect("another port");
+        let (other, _, _) = start(&dir, None).expect("another port");
         assert_ne!(other, at);
         let _ = std::fs::remove_dir_all(&dir);
     }

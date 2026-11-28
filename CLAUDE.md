@@ -629,6 +629,20 @@ HF (`KK4ODA/aether-hf`), but RadioPost is modem-independent.
   manual's desk screenshots, its own Version, change log and Describes; the setup by hand is its
   chapter 17. The post office's messages name the desk's place (*Settings, Mailboxes*), not a
   section number.
+- **The books and the licences inside every build** (2026-11-28, the author: the manual offline,
+  searchable). The release's `docs` job runs `tools/stage_docs.py`, which writes `app/docs/`
+  (git-ignored): `manual.pdf`, `server-guide.pdf`, `LICENSE-MIT.txt`, `LICENSE-APACHE.txt`,
+  `LICENSE-CC-BY-4.0.txt` and `THIRD-PARTY-LICENSES.txt` (`tools/third_party_licenses.py`, Aether's
+  tool for three workspaces: `core/`'s every member and both shells; a crate with no licence file
+  takes a same-repository, same-licence sibling's, else a held text; CI's core job fails when a
+  crate has none). The build job downloads it into `app/docs`; the `--config` JSON adds it to both
+  applications' resources as `docs`, and the tools archive carries it as `docs/` beside the
+  programs; the release job copies the PDFs to the page under the release's names. Each panel's
+  Setup has **Manual and licences** (`POST /api/doc {doc: manual|licences}`): the program opens
+  the installed PDF, or the folder, with the system's viewer (`radiopost_update::docs`: the
+  shells hand the resource folder to `Panel::with_docs`, a tools program looks beside itself), or
+  the copy on GitHub when none is installed. No "I agree" page in the installers, by the author's
+  choice: the licences ask nothing of a user.
 - `tools/check_docs.py` — headers against change logs and the index, relative links, `RP-n §x.y`
   references, SPDX lines. `.github/workflows/check.yml` runs it with ruff (pinned 0.16.9: preview
   rules), `make.py --check` and the figure generators (no diff), on Python 3.12 and 3.13, for

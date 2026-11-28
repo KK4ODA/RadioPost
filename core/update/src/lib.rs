@@ -12,7 +12,9 @@
 //! and the same key; [`install_tools`] replaces the command-line programs from the signed tools
 //! archive. [`Watch`] keeps what a program's panel shows: the offer, checked when the program
 //! starts, every six hours and when the user asks (**Check for updates**), and an install under
-//! way.
+//! way. [`docs`] opens the manual and the licences a release installs with the programs.
+
+pub mod docs;
 
 use std::collections::BTreeMap;
 use std::io::{Cursor, Read};

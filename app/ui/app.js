@@ -6476,6 +6476,10 @@ function wire() {
   });
   $("update-go").addEventListener("click", () => act("update", {}));
   $("updates-check").addEventListener("click", () => act("update/check", {}));
+  // the window opens no other page: the program opens the installed copy in the system's viewer
+  for (const doc of ["manual", "licences"]) {
+    $(`doc-${doc}`).addEventListener("click", () => act("doc", {doc}));
+  }
   $("make-key").addEventListener("click", () => act("key", {}));
   $("cred-save").addEventListener("click", async () => {
     await act("credential", {hex: $("cred-hex").value});

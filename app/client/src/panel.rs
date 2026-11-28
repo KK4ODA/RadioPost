@@ -181,6 +181,9 @@ pub struct Panel {
     /// What the modem in the page's Modem box calls itself, so the page lists only the channels
     /// that modem can call on.
     modem_named: Arc<Mutex<ModemNamed>>,
+    /// The manual and the licences the release installed (`radiopost_update::docs`): beside the
+    /// program, or among the desktop application's resources ([`Panel::with_docs`]).
+    docs: Option<PathBuf>,
 }
 
 /// What the modem in the page's Modem box calls itself (RP-4 §3 `hello`), learned by a short
@@ -382,7 +385,16 @@ impl Panel {
             terrain: Arc::new(Terrain::new(&terrain::cache_dir())),
             hf: Arc::new(Hf::new()),
             modem_named: Arc::default(),
+            docs: radiopost_update::docs::beside_program(),
         }
+    }
+
+    /// The same panel, opening the manual and the licences from `dir`: the desktop application's
+    /// resources, where its installer put them.
+    #[must_use]
+    pub fn with_docs(mut self, dir: Option<PathBuf>) -> Panel {
+        self.docs = dir;
+        self
     }
 
     /// The same panel with its HF predictions made by `hf`: for tests, whose engine makes them up.
@@ -1263,6 +1275,14 @@ impl Panel {
                 )?;
                 crate::reports::open_in_browser(&link)?;
                 Ok(json!({"opened": link}))
+            }
+            (Method::Post, "/api/doc") => {
+                // the manual or the licences, by name only: the installed copy in the system's
+                // viewer, which needs no Internet, or the online one (radiopost_update::docs)
+                let doc = radiopost_update::docs::Doc::named(&text("doc"))
+                    .ok_or("doc: manual or licences")?;
+                let opened = radiopost_update::docs::open(self.docs.as_deref(), doc)?;
+                Ok(json!({"opened": opened}))
             }
             (Method::Post, "/api/form-position") => form_position(&text("text")),
             (Method::Get, "/api/settings") => {

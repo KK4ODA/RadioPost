@@ -269,17 +269,19 @@ fn bring_forward(panel: Panel, window: tauri::WebviewWindow) {
 }
 
 /// Starts the panel's server for the home at `home`: where it is, and a handle on its state.
-/// `engine`, the VOACAP engine the installer put among the program's resources, for HF
-/// predictions (choosing a gateway, §11.2).
-fn start_panel(home: &Path, engine: Option<&Path>) -> Result<(SocketAddr, Panel), String> {
+/// `resources` is where the installer put the program's resources: the VOACAP engine, for HF
+/// predictions (choosing a gateway, §11.2), and the manual and the licences.
+fn start_panel(home: &Path, resources: Option<&Path>) -> Result<(SocketAddr, Panel), String> {
     let updates = Watch::new(
         Product::Client,
         env!("CARGO_PKG_VERSION"),
         &radiopost_update::channel(),
     );
+    let engine = resources.map(|dir| dir.join("engine"));
     let panel = Panel::new(home, None)
         .with_updates(updates)
-        .with_hf(Hf::bundled(engine));
+        .with_hf(Hf::bundled(engine.as_deref()))
+        .with_docs(resources.map(|dir| dir.join("docs")));
     let at = panel
         .clone()
         .start(&format!("127.0.0.1:{PORT}"))
@@ -362,14 +364,12 @@ fn main() {
     radiopost_client::logfile::keep_in(&home.join(radiopost_client::LOG_FILE));
     radiopost_client::logfile::record_panics();
     radiopost_client::logfile::line(&format!("RadioPost {} starts", env!("CARGO_PKG_VERSION")));
-    // the context first: it says where the installer put the program's resources, the engine
-    // among them
+    // the context first: it says where the installer put the program's resources, the engine,
+    // the manual and the licences among them
     let context = tauri::generate_context!();
-    let engine =
-        tauri::utils::platform::resource_dir(context.package_info(), &tauri::Env::default())
-            .ok()
-            .map(|dir| dir.join("engine"));
-    let (at, panel) = match start_panel(&home, engine.as_deref()) {
+    let resources =
+        tauri::utils::platform::resource_dir(context.package_info(), &tauri::Env::default()).ok();
+    let (at, panel) = match start_panel(&home, resources.as_deref()) {
         Ok(started) => started,
         Err(e) => {
             eprintln!("RadioPost: the panel cannot start: {e}");

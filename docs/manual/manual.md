@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Current |
-| **Version** | 1.68.0 |
+| **Version** | 1.69.0 |
 | **Updated** | 2026-11-28 |
 | **Describes** | RadioPost 0.1.0-beta.41 |
 | **Licence** | CC BY 4.0 |
@@ -99,10 +99,16 @@ Two numbers at the top of this manual tell you what you are reading:
   [change log](#change-log) at the end says what changed.
 - **Describes** is the RadioPost release the manual is written for. It moves with every release.
 
-The copy in the repository follows the programs as they are being built. Releases after
-0.1.0-beta.20 also carry their own copy as a PDF file, named `RadioPost-Manual-<release>.pdf`,
-beside the installers. Use that one if you want the manual for exactly the version you
-installed.
+The copy in the repository follows the programs as they are being built. The manual for exactly
+the version you installed comes with it:
+
+- **Installed with RadioPost.** Releases after 0.1.0-beta.41 install this manual as a PDF with
+  the client, with RadioPost Gateway and in the tools archive. In either window, open **Setup**,
+  then **Manual and licences**, **Open the manual**
+  ([Manual and licences](#manual-and-licences)). It needs no Internet, and **Ctrl+F** searches
+  it.
+- **On the release page.** Releases after 0.1.0-beta.20 carry the same PDF, named
+  `RadioPost-Manual-<release>.pdf`, beside the installers.
 
 To see which RadioPost you have, look beside the program's name at the top left of its window:
 *RadioPost 0.1.0-beta.29*, or *RadioPost Gateway 0.1.0-beta.29*. The **Updates** box in
@@ -110,8 +116,9 @@ To see which RadioPost you have, look beside the program's name at the top left 
 
 ### Printing the manual
 
-- **Download the PDF** from the release page (see [Installing RadioPost](#4-installing-radiopost)).
-  It is Letter size, with a cover, the contents and page numbers, and prints on A4 too.
+- **Print the PDF** installed with RadioPost (**Setup**, **Open the manual**), or download it
+  from the release page (see [Installing RadioPost](#4-installing-radiopost)). It is Letter
+  size, with a cover, the contents and page numbers, and prints on A4 too.
 - **Make it yourself** from a copy of the repository:
   `python tools/manual/build.py pdf`. It needs Python 3.12 or later and Google Chrome or
   Chromium. Without Chrome, `python tools/manual/build.py html` writes a web page you can open
@@ -1694,6 +1701,19 @@ The version of RadioPost you are running, when it last asked for a newer release
 found. It asks when it opens and every six hours. **Check for updates** asks now. When a newer
 release is out, the line at the top of the window offers **Update and restart**.
 
+### Manual and licences
+
+- **Open the manual** opens this manual, the PDF installed with RadioPost, in your PDF viewer.
+  It needs no Internet, and **Ctrl+F** searches it. The server guide, for a post office's
+  operators, is in the same folder.
+- **Licences** opens the folder of licences installed with RadioPost: its own (MIT or Apache 2.0
+  for the programs, CC BY 4.0 for the documents) and those of the open-source parts it is built
+  from. You agree to nothing to use RadioPost; the licences say what you may do when you copy or
+  change it.
+
+A copy built from the repository has none installed: both buttons open the copies on GitHub
+instead.
+
 ## 13. Addresses and the Trash
 
 **Addresses** is your address list. Everyone you write to is added, with the name you typed before
@@ -2161,6 +2181,9 @@ the other does not answer.
 
 Below the steps, **Updates** says which RadioPost Gateway you are running, when it last asked for
 a newer release, and what it found. **Check for updates** asks now.
+
+Below it, **Manual and licences** opens this manual and the licences installed with RadioPost
+Gateway, as in the client ([Manual and licences](#manual-and-licences)).
 
 ## 19. Running the gateway
 
@@ -3191,3 +3214,4 @@ manual in the same commit. The rule is in `CONTRIBUTING.md`.
 | 1.66.1 | 2026-11-28 | Section 12, *Terrain*: the card follows the position in use. It had kept *Where you are is not known* and **Prepare this area** greyed after a place was saved, until Setup was opened again. |
 | 1.67.0 | 2026-11-28 | Section 6: the border above the log and the border to the right of the left column move. Drag them, or use the arrow keys; a double click puts them back, and RadioPost keeps both sizes. The window's screenshots do not change: the borders look the same until the mouse is on them. |
 | 1.68.0 | 2026-11-28 | Section 10.2: each circle's keyword is kept, hidden; **Show** and **Hide** in the circle's new **Keyword** column, *Not kept* for a circle added before, and its keyword typed again to keep it. **Delete** in a circle's row (it was a trash can that showed only under the pointer) and what it stops. Figure 32 retaken with Family's keyword shown. |
+| 1.69.0 | 2026-11-28 | The manual and the licences installed with the programs. §1, *Which version this is*: releases after 0.1.0-beta.41 install this manual as a PDF with the client, RadioPost Gateway and the tools archive. §12: **Setup**'s **Manual and licences** (**Open the manual**, **Licences**), and §18 the same in the gateway's Setup. |
